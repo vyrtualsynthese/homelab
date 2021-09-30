@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  namespace: homelab
+  name: homelab
+  labels:
+    app: homelab
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: homelab
+  template:
+    metadata:
+      labels:
+        app: homelab
+    spec:
+      containers:
+        - name: homelab
+          image: registry.hub.docker.com/lissy93/homelab:arm64v8
+          ports:
+            - name: web
+              containerPort: 80

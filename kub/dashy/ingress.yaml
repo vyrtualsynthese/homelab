@@ -1,0 +1,14 @@
+apiVersion: traefik.containo.us/v1alpha1
+kind: IngressRoute
+metadata:
+  name: simpleingressroute
+  namespace: homelab
+spec:
+  entryPoints:
+    - web
+  routes:
+  - match: Host(`homelab.local`)
+    kind: Rule
+    services:
+    - name: homelab
+      port: 80
