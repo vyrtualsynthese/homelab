@@ -49,4 +49,4 @@ jobs:
           context: ./apps/home/
           file: ./apps/home/Dockerfile
           platforms: linux/amd64,linux/arm64
-          tags: multi-arch:${SHORTSHA},multi-arch:latest
+          tags: multi-arch:$SHORTSHA,multi-arch:latest
