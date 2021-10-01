@@ -44,4 +44,4 @@ jobs:
           context: ./apps/home/
           file: ./apps/home/Dockerfile
           platforms: linux/amd64,linux/arm64
-          tags: multi-arch-${{ steps.meta.outputs.tags }}
+          tags: ${{ steps.meta.outputs.tags }}
