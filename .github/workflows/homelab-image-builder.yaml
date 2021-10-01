@@ -34,7 +34,7 @@ jobs:
         with:
           images: vyrtualsynthese/home
           tags: |
-            type=sha
+            type=sha,enable=true,priority=100,prefix=,suffix=,format=short
 
       - name: Build and push
         id: docker_build
@@ -44,4 +44,4 @@ jobs:
           context: ./apps/home/
           file: ./apps/home/Dockerfile
           platforms: linux/amd64,linux/arm64
-          tags: ${{ steps.meta.outputs.tags }}
+          tags: multi-arch-${{ steps.meta.outputs.tags }}
