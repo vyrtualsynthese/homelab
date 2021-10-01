@@ -2,7 +2,7 @@ name: homelab image builder
 on:
   push:
     branches:
-      - master
+      - main
 jobs:
   Home-Lab-Builder:
     runs-on: ubuntu-latest
