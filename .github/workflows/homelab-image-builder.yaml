@@ -34,7 +34,7 @@ jobs:
         with:
           images: vyrtualsynthese/home
           tags: |
-            type=sha,enable=true,priority=100,prefix=multi-arch:,suffix=,format=short
+            type=sha,enable=true,priority=100,prefix=multi-arch-,suffix=,format=short
 
       - name: Build and push
         id: docker_build
