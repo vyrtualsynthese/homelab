@@ -35,7 +35,7 @@ jobs:
           images: vyrtualsynthese/home
           flavor: |
             latest=true
-            prefix=multi-arch-
+            prefix=multi-arch-,onlatest=true
             suffix=
           tags: |
             type=sha,enable=true,priority=100,prefix=multi-arch-,suffix=,format=short
