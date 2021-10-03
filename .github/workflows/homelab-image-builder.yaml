@@ -36,9 +36,10 @@ jobs:
           flavor: |
             latest=true
             prefix=multi-arch-
+            onlatest=true
             suffix=
           tags: |
-            type=sha,enable=true,priority=100,prefix=multi-arch-,suffix=,format=short
+            type=sha,enable=true,priority=100,format=short
 
       - name: Build and push
         id: docker_build
