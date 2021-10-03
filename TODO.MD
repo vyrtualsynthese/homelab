@@ -1,10 +1,11 @@
-+ Root
-    + Drop simple text file for all roots with link to dashy and how to modify host file with correct values.
 + Dashy
     + Config :
         + Login and guest accounts
         + Define Themes and design
-        + Links to Saas Solutions and local network ressources.
+        + Links :
+          + Hue Bridge
+          + dashy.local
+          + home.local
     + Build config and sources into static nginx image
     + Dashi CI and terraforming
         + Login mode
@@ -16,7 +17,10 @@
 + Monitoring
     + Grafana
 + n8n.io
-    + Implement Solution
+  + Implement Solution
++ OpenHab
+  + Implement Solution
++ Torrent Web Client
 + Heatzy automation
     + Plugin Heatzy api
     + Plugin Switchbot API
