@@ -1,2 +1,2 @@
 FROM nginx:latest
-COPY index.html /usr/share/nginx/html/
+COPY index.html prism* /usr/share/nginx/html/
