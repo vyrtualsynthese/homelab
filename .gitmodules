@@ -1,0 +1,3 @@
+[submodule "apps/dashy/dashy"]
+	path = apps/dashy/dashy
+	url = git@github.com:Lissy93/dashy.git
