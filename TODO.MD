@@ -6,6 +6,7 @@
           + Hue Bridge
           + dashy.local
           + home.local
+          + home.local/dashboard/
     + Build config and sources into static nginx image
     + Dashi CI and terraforming
         + Login mode
