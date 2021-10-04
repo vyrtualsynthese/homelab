@@ -1,0 +1,34 @@
+appConfig:
+  theme: "colorful"
+  fontAwesomeKey: "0821c65656"
+  layout: "auto"
+  iconSize: "large"
+  webSearch:
+    disableWebSearch: false
+  allowConfigEdit: false
+  disableUpdateChecks: true
+  disableContextMenu: true
+  hideComponents:
+    hideNav: true
+    hideSettings: true
+pageInfo:
+  title: "Homelab Dashy"
+  footerText: "Made by <a href='https://ashudev.com' target='_blank'>Ashu Dev</a> Powered by <a href='https://github.com/Lissy93/dashy' target='_blank'>Dashy</a>"
+  navLinks:
+    - title: "Home"
+      path: "http://dashy.local"
+sections:
+  - name: "Home Lab Links"
+    items:
+      - title: "Home"
+        icon: "fas fa-router"
+        url: "http://home.local"
+        target: "newtab"
+      - title: "Router: Livebox"
+        icon: "fas fa-router"
+        url: "http://192.168.1.1"
+        target: "newtab"
+      - title: "Proxy: Traefik Dashboard"
+        icon: "fas fa-router"
+        url: "http://home.local/dashboard/"
+        target: "newtab"
