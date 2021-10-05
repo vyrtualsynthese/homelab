@@ -9,10 +9,15 @@ jobs:
 
     strategy:
       matrix:
-        project: [ home ]
+        project: [ home, dashy ]
     steps:
       - name: Check out repository code
         uses: actions/checkout@v2
+
+      - name: Checkout submodules
+        uses: srt32/git-actions@v0.0.3
+        with:
+          args: git submodule update --init --recursive
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v1
@@ -32,7 +37,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v3
         with:
-          images: vyrtualsynthese/home
+          images: vyrtualsynthese/${{ matrix.project }}
           flavor: |
             latest=true
             prefix=multi-arch-,onlatest=true
@@ -45,7 +50,7 @@ jobs:
         uses: docker/build-push-action@v2
         with:
           push: true
-          context: ./apps/home/
-          file: ./apps/home/Dockerfile
+          context: ./apps/${{ matrix.project }}/
+          file: ./apps/${{ matrix.project }}/Dockerfile
           platforms: linux/amd64,linux/arm64
           tags: ${{ steps.meta.outputs.tags }}

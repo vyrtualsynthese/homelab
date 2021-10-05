@@ -1,14 +1,6 @@
 + Dashy
-    + Config :
-        + Login and guest accounts
-        + Define Themes and design
-        + Links :
-          + Hue Bridge
-          + dashy.local
-          + home.local
-          + home.local/dashboard/
     + Build config and sources into static nginx image
-    + Dashi CI and terraforming
+    + Dashy CI and terraforming
         + Login mode
         + Guest Mode
         + Add Traefik Dashboard Link
