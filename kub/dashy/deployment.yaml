@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: dashy
-          image: registry.hub.docker.com/lissy93/dashy:arm64v8
+          image: registry.hub.docker.com/vyrtualsynthese/dashy:multi-arch-5a57c60
           ports:
             - name: web
               containerPort: 80
