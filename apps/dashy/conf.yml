@@ -9,8 +9,14 @@ appConfig:
   disableUpdateChecks: true
   disableContextMenu: true
   hideComponents:
-    hideNav: true
     hideSettings: true
+    hideNav: true
+#  auth:
+#    users:
+#      - user: "synthese"
+#        hash: "1FD8128178397A0D18326AAA3952A35F631D2D04780CD4BDCF03F7268E4ADD38"
+#        type: "admin"
+#    enableGuestAccess: true
 pageInfo:
   title: "Homelab Dashy"
   footerText: "Made by <a href='https://ashudev.com' target='_blank'>Ashu Dev</a> Powered by <a href='https://github.com/Lissy93/dashy' target='_blank'>Dashy</a>"
@@ -21,14 +27,18 @@ sections:
   - name: "Home Lab Links"
     items:
       - title: "Home"
-        icon: "fas fa-router"
+        icon: "fas fa-home"
         url: "http://home.local"
         target: "newtab"
       - title: "Router: Livebox"
         icon: "fas fa-router"
-        url: "http://192.168.1.1"
+        url: "http://192.168.1.1/"
         target: "newtab"
       - title: "Proxy: Traefik Dashboard"
-        icon: "fas fa-router"
+        icon: "https://upload.wikimedia.org/wikipedia/commons/thumb/1/1b/Traefik.logo.png/1200px-Traefik.logo.png"
         url: "http://home.local/dashboard/"
+        target: "newtab"
+      - title: "Philips Hue Dashboard"
+        icon: "far fa-lightbulb"
+        url: "http://192.168.1.10/"
         target: "newtab"
