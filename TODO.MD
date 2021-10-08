@@ -1,14 +1,7 @@
-+ Dashy
-    + Build config and sources into static nginx image
-    + Dashy CI and terraforming
-        + Login mode
-        + Guest Mode
-        + Add Traefik Dashboard Link
-        + Build image Dashy
-        + Push to dockerhub repo
-        + update k3s cluster to use new image
 + Monitoring
     + Grafana
+    + Add grafana to Dashy
+    + Add grafana to Home
 + n8n.io
   + Implement Solution
 + OpenHab
@@ -18,12 +11,11 @@
     + Plugin Heatzy api
     + Plugin Switchbot API
     + Create a function that check temps and pilot heatzy
-+ Exporters
-    + Philips Hue prometheus exporter
-    + Switchbot Prometheus exporter
 + Pi-hole
     + Configure Pi-Hole
     + Configure Pi-Hole DNS local network
++ Look into egress to use protonVPN
++ https://greg.jeanmart.me/2020/04/13/self-host-your-media-center-on-kubernetes-wi/
 
       LATER:
 + Setup orange DynDNS
