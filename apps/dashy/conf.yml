@@ -46,3 +46,4 @@ sections:
         icon: "fas fa-tachometer-alt"
         url: "http://grafana.local/"
         target: "newtab"
+        
