@@ -43,6 +43,6 @@ sections:
         url: "http://192.168.1.10/"
         target: "newtab"
       - title: "Monitoring: Grafana"
-        icon: "https://en.wikipedia.org/wiki/Grafana#/media/File:Grafana_logo.svg"
+        icon: "fas fa-tachometer-alt"
         url: "http://grafana.local/"
         target: "newtab"
