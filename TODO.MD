@@ -1,7 +1,5 @@
-+ Monitoring
-    + Grafana
-    + Add grafana to Dashy
-    + Add grafana to Home
++ Leverage docker cache
+  + https://github.com/docker/build-push-action/blob/master/docs/advanced/cache.md
 + n8n.io
   + Implement Solution
 + OpenHab
