@@ -9,7 +9,7 @@ spec:
     - web
   routes:
   - kind:   Rule
-    match:  PathPrefix(`/dashboard`) || PathPrefix(`/api`)
+    match:  Host(`home.local`) && (PathPrefix(`/dashboard`) || PathPrefix(`/api`) || PathPrefix(`/metrics`))
     middlewares:
       - name: traefik-dashboard-basicauth
         namespace: kube-system

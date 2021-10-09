@@ -1357,7 +1357,7 @@ serverFiles:
       - job_name: traefik
         static_configs:
           - targets:
-            - traefik-prometheus:9100
+            - traefik.kube-system.svc.cluster.local:8080
 
       # A scrape configuration for running Prometheus on a Kubernetes cluster.
       # This uses separate scrape configs for cluster components (i.e. API server, node)
