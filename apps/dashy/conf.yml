@@ -50,3 +50,7 @@ sections:
         icon: "fas fa-project-diagram"
         url: "http://n8n.local/"
         target: "newtab"
+      - title: "Monitoring: prometheus"
+        icon: "far fa-eye"
+        url: "http://prom.local/"
+        target: "newtab"

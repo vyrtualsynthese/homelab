@@ -1,15 +1,33 @@
 + n8n.io
-  + Implement Solution
+  + Implement HUE Solutions :
+    + Change default light during day
++ Cluster :
+  + XPS : Disable password login ssh
+  + XPS : SSH cert login
+  + XPS : Disable Sudo login
 + OpenHab
   + Implement Solution
 + Torrent Web Client
-+ Heatzy automation
-    + Plugin Heatzy api
-    + Plugin Switchbot API
-    + Create a function that check temps and pilot heatzy
 + Pi-hole
     + Configure Pi-Hole
     + Configure Pi-Hole DNS local network
++ Secure Cluster
+  + Change Grafana Default Password
+  + Traefik Dashboard Simple Auth
+  + Prometheus Dashboard Simple Auth
+  + n8n auth
++ Nextcloud
+  + Implement solution
++ Certmanager
+  + Implement Working Solution
++ Connect Cluster to internet
+  + home.ashudev.com
+  + dashy.ashudev.com
+  + grafana.ashudev.com
+  + home.ashudev.com/dashboard
+  + prom.ashudev.com
+  + n8n.ashudev.com
+  + Edit Dashy to add From Internet Links
 + Look into egress to use protonVPN
 + https://greg.jeanmart.me/2020/04/13/self-host-your-media-center-on-kubernetes-wi/
 
