@@ -46,4 +46,7 @@ sections:
         icon: "fas fa-tachometer-alt"
         url: "http://grafana.local/"
         target: "newtab"
-        
+      - title: "Automation: n8n"
+        icon: "fas fa-project-diagram"
+        url: "http://n8n.local/"
+        target: "newtab"

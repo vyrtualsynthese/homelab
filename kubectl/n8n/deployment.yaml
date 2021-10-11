@@ -1,0 +1,28 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  namespace: n8n
+  name: n8n
+  labels:
+    app: n8n
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: n8n
+  template:
+    metadata:
+      labels:
+        app: n8n
+    spec:
+      containers:
+        - name: n8n
+          image: registry.hub.docker.com/n8nio/n8n:0.142.0
+          env:
+            - name: GENERIC_TIMEZONE
+              value: "Europe/Paris"
+            - name: N8N_PORT
+              value: "5678"
+          ports:
+            - name: web
+              containerPort: 5678
