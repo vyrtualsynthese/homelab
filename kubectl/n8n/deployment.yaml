@@ -23,6 +23,30 @@ spec:
               value: "Europe/Paris"
             - name: N8N_PORT
               value: "5678"
+            - name: N8N_METRICS
+              value: "true"
+            - name: HEATZY_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: heatzy
+                  key: USERNAME
+            - name: HEATZY_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: heatzy
+                  key: PASSWORD
+            - name: SWITCHBOT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: switchbot
+                  key: SECRET
           ports:
             - name: web
               containerPort: 5678
+          volumeMounts:
+            - name: n8n
+              mountPath: /home/node/.n8n
+      volumes:
+        - name: n8n
+          persistentVolumeClaim:
+            claimName: n8n
