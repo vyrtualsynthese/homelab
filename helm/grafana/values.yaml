@@ -501,6 +501,8 @@ dashboardProviders:
       editable: true
       options:
         path: /var/lib/grafana/dashboards/default
+        # <bool> use folder names from filesystem to create folders in Grafana
+        foldersFromFilesStructure: true
 
 ## Configure grafana dashboard to import
 ## NOTE: To use dashboards you must also enable/configure dashboardProviders
@@ -512,6 +514,12 @@ dashboards:
   default:
     prometheus-dashboard:
       file: dashboards/node-exporter-full.json
+      datasource: Prometheus
+    homelab-monitor:
+      file: dashboards/homelab-monitor.json
+      datasource: Prometheus
+    k3s:
+      file: dashboards/k3s.json
       datasource: Prometheus
 
 
