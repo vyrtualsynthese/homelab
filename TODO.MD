@@ -1,10 +1,6 @@
 + n8n.io
   + Implement HUE Solutions :
     + Change default light during day
-+ Cluster :
-  + XPS : Disable password login ssh
-  + XPS : SSH cert login
-  + XPS : Disable Sudo login
 + OpenHab
   + Implement Solution
 + Torrent Web Client
@@ -16,8 +12,12 @@
   + Traefik Dashboard Simple Auth
   + Prometheus Dashboard Simple Auth
   + n8n auth
-+ Nextcloud
-  + Implement solution
++ Ansible
+  + Implement Ansible
++ CI
+  + Look for open source CI solution for home lab
++ Docker Repo
+  + Look for Docker Repo solution for local server
 + Certmanager
   + Implement Working Solution
 + Connect Cluster to internet
@@ -28,10 +28,27 @@
   + prom.ashudev.com
   + n8n.ashudev.com
   + Edit Dashy to add From Internet Links
++ NAS
+  + Checklist missing part for (minimal setup)
+    + Power Supply
+    + 2 ssd (500go x 2 ?)
+    + 3 HDD
+  + Switch to Fractal Node Mini (final setup)
+    + 3 more HDD
+    + SPF Card
+    + SPF compatible Switch (unify ?)
++ KVM
+  + PiKVM
++ Infra
+  + Use network mount Drives for raspberry state
+  + Add more master nodes
+  + Power Supply
++ Nextcloud
+  + Implement solution
 + Look into egress to use protonVPN
 + https://greg.jeanmart.me/2020/04/13/self-host-your-media-center-on-kubernetes-wi/
 
-      LATER:
+    LATER:
 + Setup orange DynDNS
     + home.ashudev.com to k8s cluster
 + Terraform
