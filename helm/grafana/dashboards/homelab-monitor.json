@@ -740,6 +740,63 @@
     },
     {
       "datasource": null,
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "bytes"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 3,
+        "x": 18,
+        "y": 8
+      },
+      "id": 38,
+      "interval": "5m",
+      "options": {
+        "colorMode": "none",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "text": {},
+        "textMode": "auto"
+      },
+      "pluginVersion": "8.1.6",
+      "targets": [
+        {
+          "exemplar": true,
+          "expr": "sum(node_memory_SwapTotal_bytes - node_memory_SwapFree_bytes)",
+          "interval": "",
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ],
+      "title": "SWAP Used ",
+      "type": "stat"
+    },
+    {
+      "datasource": null,
       "description": "Total SWAP",
       "fieldConfig": {
         "defaults": {
@@ -774,8 +831,8 @@
       },
       "gridPos": {
         "h": 4,
-        "w": 6,
-        "x": 18,
+        "w": 3,
+        "x": 21,
         "y": 8
       },
       "id": 20,
@@ -841,8 +898,8 @@
       "id": 22,
       "interval": "5m",
       "options": {
-        "colorMode": "value",
-        "graphMode": "none",
+        "colorMode": "background",
+        "graphMode": "area",
         "justifyMode": "center",
         "orientation": "vertical",
         "reduceOptions": {
@@ -883,8 +940,16 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
+                "color": "red",
                 "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              },
+              {
+                "color": "green",
+                "value": 524288000
               }
             ]
           },
@@ -900,8 +965,8 @@
       },
       "id": 30,
       "options": {
-        "colorMode": "value",
-        "graphMode": "none",
+        "colorMode": "background",
+        "graphMode": "area",
         "justifyMode": "center",
         "orientation": "vertical",
         "reduceOptions": {
@@ -918,13 +983,77 @@
       "targets": [
         {
           "exemplar": true,
-          "expr": "container_memory_working_set_bytes{id=\"/\"}",
+          "expr": "node_memory_MemFree_bytes",
           "interval": "",
-          "legendFormat": "{{kubernetes_io_hostname}}",
+          "legendFormat": "{{kubernetes_node}}",
           "refId": "A"
         }
       ],
-      "title": "Node Ram Usage",
+      "title": "Node Ram Free",
+      "type": "stat"
+    },
+    {
+      "datasource": null,
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "#EAB839",
+                "value": 1
+              },
+              {
+                "color": "green",
+                "value": 524288000
+              }
+            ]
+          },
+          "unit": "bytes"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 6,
+        "x": 12,
+        "y": 12
+      },
+      "id": 32,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "justifyMode": "center",
+        "orientation": "vertical",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "text": {},
+        "textMode": "auto"
+      },
+      "pluginVersion": "8.1.6",
+      "targets": [
+        {
+          "exemplar": true,
+          "expr": "sum by (instance) (node_filesystem_avail_bytes{mountpoint=\"/\",fstype!=\"rootfs\"})",
+          "interval": "",
+          "legendFormat": "{{instance}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Node Disk Usage",
       "type": "stat"
     },
     {
@@ -941,6 +1070,10 @@
               {
                 "color": "green",
                 "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
               }
             ]
           },
@@ -951,13 +1084,13 @@
       "gridPos": {
         "h": 7,
         "w": 6,
-        "x": 12,
+        "x": 18,
         "y": 12
       },
-      "id": 32,
+      "id": 40,
       "options": {
-        "colorMode": "value",
-        "graphMode": "none",
+        "colorMode": "background",
+        "graphMode": "area",
         "justifyMode": "center",
         "orientation": "vertical",
         "reduceOptions": {
@@ -974,13 +1107,13 @@
       "targets": [
         {
           "exemplar": true,
-          "expr": "sum by (instance) (container_fs_usage_bytes)",
+          "expr": "node_memory_SwapTotal_bytes - node_memory_SwapFree_bytes",
           "interval": "",
           "legendFormat": "{{kubernetes_node}}",
           "refId": "A"
         }
       ],
-      "title": "Panel Title",
+      "title": "Used Swap",
       "type": "stat"
     },
     {
@@ -1024,6 +1157,7 @@
         "y": 19
       },
       "id": 34,
+      "interval": null,
       "options": {
         "colorMode": "background",
         "graphMode": "none",
@@ -1071,12 +1205,8 @@
                 "value": null
               },
               {
-                "color": "#EAB839",
-                "value": 50
-              },
-              {
                 "color": "orange",
-                "value": 70
+                "value": 80
               },
               {
                 "color": "red",
@@ -1091,8 +1221,8 @@
       "gridPos": {
         "h": 6,
         "w": 12,
-        "x": 0,
-        "y": 25
+        "x": 12,
+        "y": 19
       },
       "id": 36,
       "options": {
