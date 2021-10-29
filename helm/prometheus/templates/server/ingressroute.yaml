@@ -1,0 +1,28 @@
+{{- if .Values.server.enabled -}}
+{{- if .Values.server.ingressRoute.enabled -}}
+{{- $releaseName := .Release.Name -}}
+{{- $serviceName := include "prometheus.server.fullname" . }}
+{{- $servicePort := .Values.server.service.servicePort -}}
+{{- $ingressPath := .Values.server.ingressRoute.path -}}
+{{- $ingressPathType := .Values.server.ingressRoute.pathType -}}
+{{- $extraPaths := .Values.server.ingressRoute.extraPaths -}}
+apiVersion: traefik.containo.us/v1alpha1
+kind: IngressRoute
+metadata:
+  labels:
+    {{- include "prometheus.server.labels" . | nindent 4 }}
+  name: {{ template "prometheus.server.fullname" . }}
+{{ include "prometheus.namespace" . | indent 2 }}
+spec:
+  entryPoints: |-
+  {{- range $i, $val := .Values.server.ingressRoute.entryPoints }}
+    - {{ . }}
+  {{- end }}
+  routes:
+    - match: Host(`prom.local`)
+      kind: Rule
+      services:
+        - name: prometheus-server
+          port: 80
+{{- end -}}
+{{- end -}}
