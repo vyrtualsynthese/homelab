@@ -10,4 +10,4 @@ spec:
     - port: 80
       targetPort: web
   selector:
-    app: home
+    {{- include "home.selectorLabels" . | nindent 4 }}
