@@ -9,7 +9,7 @@ WORKDIR ./app
 
 COPY dashy/package.json dashy/yarn.lock ./
 
-RUN yarn
+RUN yarn install --network-timeout 600000
 
 COPY dashy ./
 COPY conf.yml ./public/
