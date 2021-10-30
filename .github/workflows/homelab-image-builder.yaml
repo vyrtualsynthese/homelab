@@ -28,7 +28,7 @@ jobs:
         if: steps.changed-files-specific.outputs.any_changed == 'true'
         uses: docker/setup-qemu-action@v1
         with:
-          platforms: allif: steps.changed-files-specific.outputs.any_changed == 'true'
+          platforms: steps.changed-files-specific.outputs.any_changed == 'true'
 
       - name: Set up Docker Buildx
         if: steps.changed-files-specific.outputs.any_changed == 'true'
