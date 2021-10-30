@@ -9,17 +9,17 @@ WORKDIR ./app
 
 COPY dashy/package.json dashy/yarn.lock ./
 
-RUN yarn install --network-timeout 600000
+RUN npm install
 
 COPY dashy ./
 COPY conf.yml ./public/
 
-RUN yarn build
+RUN yarn run build
 
 # Expose given port
 EXPOSE ${PORT}
 
-CMD yarn build-and-start
+CMD npm run build-and-start
 
 FROM nginx:alpine AS Prod
 
