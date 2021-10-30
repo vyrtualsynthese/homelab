@@ -9,7 +9,7 @@ WORKDIR ./app
 
 COPY dashy/package.json dashy/yarn.lock ./
 
-RUN yarn --verbose
+RUN yarn
 
 COPY dashy ./
 COPY conf.yml ./public/
