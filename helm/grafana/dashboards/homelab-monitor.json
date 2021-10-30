@@ -885,7 +885,8 @@
                 "value": 80
               }
             ]
-          }
+          },
+          "unit": "percent"
         },
         "overrides": []
       },
@@ -916,14 +917,14 @@
       "targets": [
         {
           "exemplar": true,
-          "expr": "100 - (avg by (instance) (rate(node_cpu_seconds_total{mode=\"idle\"}[$__rate_interval])) * 100)",
+          "expr": "100 - (avg by (kubernetes_node) (rate(node_cpu_seconds_total{mode=\"idle\"}[$__rate_interval])) * 100)",
           "interval": "",
           "intervalFactor": 1,
           "legendFormat": "{{kubernetes_node}}",
           "refId": "A"
         }
       ],
-      "title": "Node Load 5",
+      "title": "CPU Usage",
       "type": "stat"
     },
     {

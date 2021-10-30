@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: home
-          image: registry.hub.docker.com/vyrtualsynthese/home:multi-arch-8e4c1f4
+          image: registry.hub.docker.com/vyrtualsynthese/home:multi-arch-f17c637
           ports:
             - name: web
               containerPort: 80
