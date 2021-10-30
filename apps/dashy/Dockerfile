@@ -9,17 +9,17 @@ WORKDIR ./app
 
 COPY dashy/package.json dashy/yarn.lock ./
 
-RUN npm install
+RUN yarn install
 
 COPY dashy ./
 COPY conf.yml ./public/
 
-RUN yarn run build
+RUN yarn build
 
 # Expose given port
 EXPOSE ${PORT}
 
-CMD npm run build-and-start
+CMD yarn build-and-start
 
 FROM nginx:alpine AS Prod
 
