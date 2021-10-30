@@ -815,8 +815,7 @@ server:
     ##
     enabled: true
 
-    entryPoints:
-      - web
+    entryPoints: [web]
 
   ## Server Deployment Strategy type
   # strategy:
@@ -1365,11 +1364,7 @@ serverFiles:
       - job_name: traefik
         static_configs:
           - targets:
-            - traefik.kube-system.svc.cluster.local:8080
-      - job_name: n8n
-        static_configs:
-            - targets:
-              - n8n.n8n.svc.cluster.local:5678
+            - traefik.kube-system.svc.cluster.local:9000
 
       # A scrape configuration for running Prometheus on a Kubernetes cluster.
       # This uses separate scrape configs for cluster components (i.e. API server, node)

@@ -391,7 +391,7 @@
       "targets": [
         {
           "exemplar": true,
-          "expr": "sum (rate (container_cpu_usage_seconds_total[$__rate_interval]))",
+          "expr": "sum(100 - (avg by (instance) (rate(node_cpu_seconds_total{mode=\"idle\"}[$__rate_interval])) * 100)) / count(count(node_cpu_seconds_total{}) by (cpu, instance))",
           "interval": "",
           "legendFormat": "",
           "refId": "A"
@@ -523,7 +523,7 @@
       "targets": [
         {
           "exemplar": true,
-          "expr": "sum (container_memory_working_set_bytes)",
+          "expr": "sum (node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes)",
           "interval": "10s",
           "intervalFactor": 1,
           "legendFormat": "",
@@ -916,7 +916,7 @@
       "targets": [
         {
           "exemplar": true,
-          "expr": "node_load5",
+          "expr": "100 - (avg by (instance) (rate(node_cpu_seconds_total{mode=\"idle\"}[$__rate_interval])) * 100)",
           "interval": "",
           "intervalFactor": 1,
           "legendFormat": "{{kubernetes_node}}",
@@ -983,7 +983,7 @@
       "targets": [
         {
           "exemplar": true,
-          "expr": "node_memory_MemFree_bytes",
+          "expr": "node_memory_MemAvailable_bytes",
           "interval": "",
           "legendFormat": "{{kubernetes_node}}",
           "refId": "A"
