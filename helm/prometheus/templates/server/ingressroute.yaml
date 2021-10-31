@@ -14,10 +14,8 @@ metadata:
   name: {{ template "prometheus.server.fullname" . }}
 {{ include "prometheus.namespace" . | indent 2 }}
 spec:
-  entryPoints: |-
-  {{- range $i, $val := .Values.server.ingressRoute.entryPoints }}
-    - {{ . }}
-  {{- end }}
+  entryPoints:
+    - web
   routes:
     - match: Host(`prom.local`)
       kind: Rule

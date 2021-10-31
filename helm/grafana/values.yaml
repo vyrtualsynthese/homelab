@@ -215,6 +215,13 @@ ingress:
   #    hosts:
   #      - chart-example.local
 
+ingressRoute:
+  ## If true, Prometheus server Ingress will be created
+  ##
+  enabled: true
+
+  entryPoints: [web]
+
 resources: {}
 #  limits:
 #    cpu: 100m
