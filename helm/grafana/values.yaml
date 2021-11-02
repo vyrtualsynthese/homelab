@@ -222,13 +222,13 @@ ingressRoute:
 
   entryPoints: [web]
 
-resources: {}
-#  limits:
-#    cpu: 100m
-#    memory: 128Mi
-#  requests:
-#    cpu: 100m
-#    memory: 128Mi
+resources:
+  limits:
+    cpu: 200m
+    memory: 75Mi
+  requests:
+    cpu: 7m
+    memory: 50Mi
 
 ## Node labels for pod assignment
 ## ref: https://kubernetes.io/docs/user-guide/node-selection/
