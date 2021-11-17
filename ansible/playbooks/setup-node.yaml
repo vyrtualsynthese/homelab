@@ -1,0 +1,11 @@
+- hosts: runner
+  become: yes
+
+  tasks:
+    - name: Validate the sudoers file before saving
+      ansible.builtin.lineinfile:
+        path: /etc/sudoers
+        state: present
+        regexp: '^vronteix ALL=(ALL) NOPASSWD: ALL'
+        line: 'vronteix ALL=(ALL) NOPASSWD: ALL'
+        validate: 'visudo -cf %s'
