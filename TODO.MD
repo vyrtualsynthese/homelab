@@ -1,6 +1,3 @@
-+ n8n.io
-  + Implement HUE Solutions :
-    + Change default light during day
 + OpenHab
   + Implement Solution
 + Torrent Web Client
@@ -8,10 +5,7 @@
     + Configure Pi-Hole
     + Configure Pi-Hole DNS local network
 + Secure Cluster
-  + Change Grafana Default Password
-  + Traefik Dashboard Simple Auth
   + Prometheus Dashboard Simple Auth
-  + n8n auth
 + Ansible
   + Implement Ansible
 + CI
