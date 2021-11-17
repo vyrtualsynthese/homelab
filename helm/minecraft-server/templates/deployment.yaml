@@ -46,9 +46,13 @@ spec:
             - name: EULA
               value: "TRUE"
             - name: WHITELIST
-              value: "vsynthese"
+              value: "vsynthese,Tarrhen"
             - name: ONLINE_MODE
               value: "FALSE"
+            - name: OPS
+              value: "vsynthese"
+            - name: MAX_WORLD_SIZE
+              value: "8000"
           ports:
             - name: mc
               containerPort: 25565
