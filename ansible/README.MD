@@ -1,1 +1,4 @@
-ansible-playbook --user vronteix ./playbooks/upgrade-all.yaml
+Configure client
+`ansible-galaxy collection install ansible.posix`
+
+ansible-playbook --user vronteix -k -K playbooks/setup-node.yaml
