@@ -1,0 +1,9 @@
+- hosts: backup_master
+  remote_user: vronteix
+  become: yes
+
+tasks:
+  - name: create sudoers group
+    ansible.builtin.group:
+      name: admins
+      state: present
