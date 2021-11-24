@@ -1,9 +1,54 @@
+- hosts: all
+  remote_user: vronteix
+  become: yes
+
+  tasks:
+    - name: install restic
+      apt:
+        name: restic
+        state: present
+
 - hosts: backup_master
   remote_user: vronteix
   become: yes
 
-tasks:
-  - name: create sudoers group
-    ansible.builtin.group:
-      name: admins
-      state: present
+  tasks:
+    - name: install restic
+      apt:
+        name: restic
+        state: present
+
+    - name: Create backup folder of master
+      ansible.builtin.file:
+        path: /srv/backup/xps-13
+        state: directory
+        owner: root
+        group: root
+        mode: '0750'
+
+    - name: Create users for all slave backup hosts
+      ansible.builtin.user:
+        name: "{{ item }}"
+        shell: /bin/bash
+      loop: "{{ query('inventory_hostnames', 'backup_slave') }}"
+
+    - name: Create a folder for every slaves
+      ansible.builtin.file:
+        path: /srv/backup/{{ item }}
+        state: directory
+        owner: "{{ item }}"
+        group: "{{ item }}"
+        mode: '0750'
+      loop: "{{ query('inventory_hostnames', 'backup_slave') }}"
+
+# Generate ssh key for every nodes then fetch it to runner
+
+# push all ssh keys to right user home on backup master
+
+# !!!! Write and test backup script for master
+# push backup script to master
+# configure cronjob to master backup script
+
+# !!! Write backup script for slaves
+# push backup script on slaves
+# configure cronjob to master backup script

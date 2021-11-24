@@ -6,3 +6,6 @@ setup-node:
 
 upgrade-all:
 	ansible-playbook playbooks/upgrade-all.yaml
+
+backup-setup:
+	ansible-playbook playbooks/backup-setup.yaml
