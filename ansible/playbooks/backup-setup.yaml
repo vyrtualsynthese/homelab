@@ -8,16 +8,42 @@
         name: restic
         state: present
 
+- hosts: backup_slave
+  remote_user: vronteix
+  become: yes
+
+  tasks:
+    - name: Create backup users for all slaves
+      ansible.builtin.user:
+        name: "{{ inventory_hostname }}"
+        groups: admins
+        state: present
+        append: yes
+        shell: /bin/bash
+
+    - name: Create .ssh folder for all slaves
+      ansible.builtin.file:
+        path: "/home/{{ inventory_hostname }}/.ssh"
+        state: directory
+        owner: "{{ inventory_hostname }}"
+        group: "{{ inventory_hostname }}"
+
+    - name: Generate SSH Key for all slave machines
+      community.crypto.openssh_keypair:
+        path: "/home/{{ inventory_hostname }}/.ssh/id_rsa"
+        owner: "{{ inventory_hostname }}"
+
+    - name: Store file into /tmp/fetched/host.example.com/tmp/somefile
+      ansible.builtin.fetch:
+        src: "/home/{{ inventory_hostname }}/.ssh/id_rsa.pub"
+        dest: "{{ playbook_dir }}/keys/{{ inventory_hostname }}/"
+        flat: yes
+
 - hosts: backup_master
   remote_user: vronteix
   become: yes
 
   tasks:
-    - name: install restic
-      apt:
-        name: restic
-        state: present
-
     - name: Create backup folder of master
       ansible.builtin.file:
         path: /srv/backup/xps-13
@@ -41,7 +67,13 @@
         mode: '0750'
       loop: "{{ query('inventory_hostnames', 'backup_slave') }}"
 
-# Generate ssh key for every nodes then fetch it to runner
+    - name: Copy SSH to remote host
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/keys/{{ item }}/"
+        dest: "/home/{{ item }}/.ssh/"
+        owner: "{{ item }}"
+        group: "{{ item }}"
+      loop: "{{ query('inventory_hostnames', 'backup_slave') }}"
 
 # push all ssh keys to right user home on backup master
 
