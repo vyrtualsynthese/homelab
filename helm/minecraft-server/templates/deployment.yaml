@@ -46,13 +46,41 @@ spec:
             - name: EULA
               value: "TRUE"
             - name: WHITELIST
-              value: "vsynthese,Tarrhen"
+              value: "vsynthese,Tarrhen,PapeCaponche,Carabaf,JambonLeVrai,KaFeuk,LeGrandSimon,Ramzo,Ramzo1506"
             - name: ONLINE_MODE
               value: "FALSE"
             - name: OPS
               value: "vsynthese"
             - name: MAX_WORLD_SIZE
               value: "8000"
+            - name: VERSION
+              value: "1.18"
+            - name: ANNOUNCE_PLAYER_ACHIEVEMENTS
+              value: "FALSE"
+            - name: MODE
+              value: "survival"
+            - name: PVP
+              value: "TRUE"
+            - name: SERVER_NAME
+              value: "ashulab-1.18"
+            - name: VIEW_DISTANCE
+              value: "16"
+            - name: INIT_MEMORY
+              value: "512M"
+            - name: MAX_MEMORY
+              value: "6G"
+            - name: ENABLE_AUTOPAUSE
+              value: "TRUE"
+            - name: MAX_TICK_TIME
+              value: "-1"
+            - name: AUTOPAUSE_TIMEOUT_EST
+              value: "60"
+            - name: AUTOPAUSE_TIMEOUT_INIT
+              value: "60"
+            - name: ENABLE_JMX
+              value: "true"
+            - name: JMX_HOST
+              value: "0.0.0.0"
           ports:
             - name: mc
               containerPort: 25565

@@ -8,6 +8,8 @@
         name: restic
         state: present
 
+# Prepare Users and Folder for Slaves Nodes on Master Nodes
+
 - hosts: backup_slave
   remote_user: vronteix
   become: yes
@@ -33,11 +35,13 @@
         path: "/home/{{ inventory_hostname }}/.ssh/id_rsa"
         owner: "{{ inventory_hostname }}"
 
-    - name: Store file into /tmp/fetched/host.example.com/tmp/somefile
+    - name: Store SSH Keys on Runner Machine
       ansible.builtin.fetch:
         src: "/home/{{ inventory_hostname }}/.ssh/id_rsa.pub"
         dest: "{{ playbook_dir }}/keys/{{ inventory_hostname }}/"
         flat: yes
+
+# Setup on Master Node
 
 - hosts: backup_master
   remote_user: vronteix
@@ -52,13 +56,13 @@
         group: root
         mode: '0750'
 
-    - name: Create users for all slave backup hosts
+    - name: Create users for all slave Nodes
       ansible.builtin.user:
         name: "{{ item }}"
         shell: /bin/bash
       loop: "{{ query('inventory_hostnames', 'backup_slave') }}"
 
-    - name: Create a folder for every slaves
+    - name: Create a backup folder for every slaves
       ansible.builtin.file:
         path: /srv/backup/{{ item }}
         state: directory
@@ -67,7 +71,7 @@
         mode: '0750'
       loop: "{{ query('inventory_hostnames', 'backup_slave') }}"
 
-    - name: Copy SSH to remote host
+    - name: Copy Slave's SSH key to corresponding authorized Key file
       ansible.builtin.copy:
         src: "{{ playbook_dir }}/keys/{{ item }}/"
         dest: "/home/{{ item }}/.ssh/"
@@ -75,7 +79,12 @@
         group: "{{ item }}"
       loop: "{{ query('inventory_hostnames', 'backup_slave') }}"
 
-# push all ssh keys to right user home on backup master
+# Find a way to export restic password from uncommited file in projet
+
+    - name: Setup Local Repository for Master Node Backup
+      ansible.builtin.command: sudo restic init --repo /srv/backup/xps-13
+
+# Prepare Repository for master and child Nodes
 
 # !!!! Write and test backup script for master
 # push backup script to master
