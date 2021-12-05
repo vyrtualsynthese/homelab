@@ -6,3 +6,5 @@ dist
 db
 keys
 *.pub
+helm/overviewer/minecraft-server
+helm/overviewer/render
