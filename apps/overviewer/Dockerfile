@@ -14,5 +14,3 @@ RUN python3 setup.py build
 RUN mkdir -p ~/.minecraft/versions/1.18/ && wget https://overviewer.org/textures/1.18 -O ~/.minecraft/versions/1.18/1.18.jar
 
 CMD ["./overviewer.py", "/app/overviewer/src/Minecraft-Overviewer-master/world", "/app/overviewer/src/Minecraft-Overviewer-master/render"]
-
-
