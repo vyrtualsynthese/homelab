@@ -10,7 +10,7 @@ jobs:
 
     strategy:
       matrix:
-        project: [ home, dashy ]
+        project: [ home, dashy, overviewer ]
     steps:
       - name: Check out repository code
         uses: actions/checkout@v2
