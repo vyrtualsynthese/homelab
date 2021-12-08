@@ -56,7 +56,7 @@ jobs:
             type=sha,enable=true,priority=100,prefix=multi-arch-,suffix=,format=short
 
 #      - name: Build
-#        if: steps.changed-files-specific.outputs.any_changed == 'true' && github.ref == 'refs/heads/master' && github.event_name == 'push' && steps.changed-files-specific.outputs.any_changed == 'true'
+#        if: steps.changed-files-specific.outputs.any_changed == 'true' && github.ref == 'refs/heads/develop' && github.event_name == 'push' && steps.changed-files-specific.outputs.any_changed == 'true'
 #        id: docker_build
 #        uses: docker/build-push-action@v2
 #        with:
@@ -69,7 +69,7 @@ jobs:
 #          cache-to: type=inline
 
       - name: Build and push
-        if: steps.changed-files-specific.outputs.any_changed == 'true' && github.ref == 'refs/heads/master' && github.event_name == 'push' && steps.changed-files-specific.outputs.any_changed == 'true'
+        if: steps.changed-files-specific.outputs.any_changed == 'true' && github.ref == 'refs/heads/main' && github.event_name == 'push' && steps.changed-files-specific.outputs.any_changed == 'true'
         id: docker_build_push
         uses: docker/build-push-action@v2
         with:
