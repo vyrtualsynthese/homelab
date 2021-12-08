@@ -1,0 +1,27 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: overviewer
+spec:
+  schedule: "*/10 * * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          volumes:
+            - name: minecraft-server-volume
+              persistentVolumeClaim:
+                claimName: minecraft-server
+            - name: render-minecraft-server-volume
+              persistentVolumeClaim:
+                claimName: render-minecraft-server
+          containers:
+            - name: overviewer
+              image: registry.hub.docker.com/vyrtualsynthese/overviewer:multi-arch-1d54f78
+              imagePullPolicy: IfNotPresent
+              volumeMounts:
+                - name: minecraft-server-volume
+                  mountPath: /app/overviewer/src/Minecraft-Overviewer-master/world
+                - name: render-minecraft-server-volume
+                  mountPath: /app/overviewer/src/Minecraft-Overviewer-master/render
+          restartPolicy: OnFailure
