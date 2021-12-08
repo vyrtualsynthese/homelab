@@ -80,7 +80,7 @@
       loop: "{{ query('inventory_hostnames', 'backup_slave') }}"
 
 # Find a way to export restic password from uncommited file in projet
-
+    # TODO: Check if repository already setup
     - name: Setup Local Repository for Master Node Backup
       ansible.builtin.command: sudo restic init --repo /srv/backup/xps-13
 

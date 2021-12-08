@@ -81,6 +81,8 @@ spec:
               value: "true"
             - name: JMX_HOST
               value: "0.0.0.0"
+            - name: ENABLE_ROLLING_LOGS
+              value: "true"
           ports:
             - name: mc
               containerPort: 25565
