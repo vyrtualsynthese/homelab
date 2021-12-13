@@ -1,4 +1,4 @@
-worlds["Ashulab"] = "/app/overviewer/src/Minecraft-Overviewer-master/world"
+worlds["Ashulab"] = "/app/overviewer/src/Minecraft-Overviewer-master/world/world"
 
 renders["normalrender"] = {
   "world": "Ashulab",
