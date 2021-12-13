@@ -1,0 +1,28 @@
+worlds["Ashulab"] = "/app/overviewer/src/Minecraft-Overviewer-master/world"
+
+renders["normalrender"] = {
+  "world": "Ashulab",
+  "title": "Overworld",
+  "dimension": "overworld",
+  "imgformat": "jpeg",
+  "imgquality": "85",
+}
+
+renders["nether"] = {
+  "world": "Ashulab",
+  "title": "Nether",
+  "rendermode": "nether",
+  "dimension": "nether",
+  "imgformat": "jpeg",
+  "imgquality": "85",
+}
+
+renders["end"] = {
+  "world": "Ashulab",
+  "title": "End",
+  "dimension": "end",
+  "imgformat": "jpeg",
+  "imgquality": "85",
+}
+
+outputdir = "/app/overviewer/src/Minecraft-Overviewer-master/render"
