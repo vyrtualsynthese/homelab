@@ -3,7 +3,7 @@ kind: CronJob
 metadata:
   name: overviewer
 spec:
-  schedule: "*/10 * * * *"
+  schedule: "0 5 * * *"
   jobTemplate:
     spec:
       template:
@@ -17,7 +17,7 @@ spec:
                 claimName: render-minecraft-server
           containers:
             - name: overviewer
-              image: registry.hub.docker.com/vyrtualsynthese/overviewer:multi-arch-1d54f78
+              image: registry.hub.docker.com/vyrtualsynthese/overviewer:multi-arch-125595c
               imagePullPolicy: IfNotPresent
               volumeMounts:
                 - name: minecraft-server-volume
