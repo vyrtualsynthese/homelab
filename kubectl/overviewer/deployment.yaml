@@ -17,7 +17,7 @@ spec:
                 claimName: render-minecraft-server
           containers:
             - name: overviewer
-              image: registry.hub.docker.com/vyrtualsynthese/overviewer:multi-arch-9438600
+              image: registry.hub.docker.com/vyrtualsynthese/overviewer:multi-arch-cb96364
               imagePullPolicy: IfNotPresent
               volumeMounts:
                 - name: minecraft-server-volume

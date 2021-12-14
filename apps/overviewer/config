@@ -4,15 +4,7 @@ renders["normalrender"] = {
   "world": "Ashulab",
   "title": "Overworld",
   "dimension": "overworld",
-  "imgformat": "jpeg",
-  "imgquality": "85",
-}
-
-renders["nether"] = {
-  "world": "Ashulab",
-  "title": "Nether",
-  "rendermode": "nether",
-  "dimension": "nether",
+  "rendermode": "smooth_lighting",
   "imgformat": "jpeg",
   "imgquality": "85",
 }
