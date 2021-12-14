@@ -46,7 +46,7 @@ spec:
             - name: EULA
               value: "TRUE"
             - name: WHITELIST
-              value: "vsynthese,Tarrhen,PapeCaponche,Carabaf,JambonLeVrai,KaFeuk,LeGrandSimon,Ramzo1506,Ioni,Ionni14,Neka14"
+              value: "vsynthese,Tarrhen,PapeCaponche,Carabaf,JambonLeVrai,KaFeuk,LeGrandSimon,Ramzo1506,Ioni,Neka14"
             - name: ONLINE_MODE
               value: "TRUE"
             - name: OPS
