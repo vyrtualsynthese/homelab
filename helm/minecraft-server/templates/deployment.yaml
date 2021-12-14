@@ -46,15 +46,15 @@ spec:
             - name: EULA
               value: "TRUE"
             - name: WHITELIST
-              value: "vsynthese,Tarrhen,PapeCaponche,Carabaf,JambonLeVrai,KaFeuk,LeGrandSimon,Ramzo,Ramzo1506,Ioni,Ionni14,Neka14"
+              value: "vsynthese,Tarrhen,PapeCaponche,Carabaf,JambonLeVrai,KaFeuk,LeGrandSimon,Ramzo1506,Ioni,Ionni14,Neka14"
             - name: ONLINE_MODE
-              value: "FALSE"
+              value: "TRUE"
             - name: OPS
               value: "vsynthese"
             - name: MAX_WORLD_SIZE
               value: "8000"
             - name: VERSION
-              value: "1.18"
+              value: "1.18.1"
             - name: ANNOUNCE_PLAYER_ACHIEVEMENTS
               value: "FALSE"
             - name: MODE
