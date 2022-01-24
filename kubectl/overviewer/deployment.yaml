@@ -3,7 +3,7 @@ kind: CronJob
 metadata:
   name: overviewer
 spec:
-  schedule: "0 * * * *"
+  schedule: "0 6 * * *"
   jobTemplate:
     spec:
       template:
@@ -17,8 +17,15 @@ spec:
                 claimName: render-minecraft-server
           containers:
             - name: overviewer
-              image: registry.hub.docker.com/vyrtualsynthese/overviewer:multi-arch-cb96364
+              image: registry.hub.docker.com/vyrtualsynthese/overviewer:multi-arch-138d5a2
               imagePullPolicy: IfNotPresent
+              resources:
+                limits:
+                  cpu: 1000m
+                  memory: 1Gi
+                requests:
+                  cpu: 100m
+                  memory: 100Mi
               volumeMounts:
                 - name: minecraft-server-volume
                   mountPath: /app/overviewer/src/Minecraft-Overviewer-master/world

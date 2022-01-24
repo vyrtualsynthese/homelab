@@ -52,7 +52,7 @@ spec:
             - name: OPS
               value: "vsynthese"
             - name: MAX_WORLD_SIZE
-              value: "8000"
+              value: "12500"
             - name: VERSION
               value: "1.18.1"
             - name: ANNOUNCE_PLAYER_ACHIEVEMENTS
