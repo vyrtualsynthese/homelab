@@ -10,3 +10,5 @@ helm/overviewer/minecraft-server
 helm/overviewer/render
 render
 world
+restic_passwords.yaml
+
