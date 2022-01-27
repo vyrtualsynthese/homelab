@@ -3,10 +3,13 @@
   become: yes
 
   tasks:
-    - name: install restic
+    - name: install restic from apt
       apt:
         name: restic
         state: present
+
+    - name: Update restic from sources
+      ansible.builtin.command: sudo restic self-update
 
 # Prepare Users and Folder for Slaves Nodes on Master Nodes
 
@@ -79,10 +82,57 @@
         group: "{{ item }}"
       loop: "{{ query('inventory_hostnames', 'backup_slave') }}"
 
-# Find a way to export restic password from uncommited file in projet
-    # TODO: Check if repository already setup
+- hosts: all
+  remote_user: vronteix
+  become: yes
+
+  tasks:
+    - name: Import Restic passwords
+      include_vars:
+        file: restic_env.yaml
+        name: restic_env
+
+    - name: Set restic password as env variable
+      ansible.builtin.lineinfile:
+        path: /etc/environment
+        state: present
+        regexp: '^RESTIC_PASSWORD'
+        line: 'RESTIC_PASSWORD="{{ restic_env[inventory_hostname].password }}"'
+
+    - name: Set restic path as env variable
+      ansible.builtin.lineinfile:
+        path: /etc/environment
+        state: present
+        regexp: '^RESTIC_REPOSITORY'
+        line: 'RESTIC_REPOSITORY="{{ restic_env[inventory_hostname].path }}"'
+
+- hosts: backup_master
+  remote_user: vronteix
+  become: yes
+  tasks:
+
+    - name: Check if repo already configured
+      ansible.builtin.command: sudo restic snapshots
+      register: repoCheckReturn
+      ignore_errors: yes
+
     - name: Setup Local Repository for Master Node Backup
-      ansible.builtin.command: sudo restic init --repo /srv/backup/xps-13
+      ansible.builtin.command: sudo restic init
+      when: repoCheckReturn.rc != 0
+
+    - name: Import backup script
+      ansible.builtin.copy:
+        src: "scripts/backup.sh"
+        dest: "/home/vronteix/scripts/"
+        owner: "vronteix"
+        group: "vronteix"
+        mode: '0550'
+
+    # TODO: setup remote repo for child nodes
+
+    # TODO: Copy bash script for automate backup
+
+    # TODO: Create cron job with right permission
 
 # Prepare Repository for master and child Nodes
 
