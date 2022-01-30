@@ -11,82 +11,6 @@
     - name: Update restic from sources
       ansible.builtin.command: sudo restic self-update
 
-# Prepare Users and Folder for Slaves Nodes on Master Nodes
-
-- hosts: backup_slave
-  remote_user: vronteix
-  become: yes
-
-  tasks:
-    - name: Create backup users for all slaves
-      ansible.builtin.user:
-        name: "{{ inventory_hostname }}"
-        groups: admins
-        state: present
-        append: yes
-        shell: /bin/bash
-
-    - name: Create .ssh folder for all slaves
-      ansible.builtin.file:
-        path: "/home/{{ inventory_hostname }}/.ssh"
-        state: directory
-        owner: "{{ inventory_hostname }}"
-        group: "{{ inventory_hostname }}"
-
-    - name: Generate SSH Key for all slave machines
-      community.crypto.openssh_keypair:
-        path: "/home/{{ inventory_hostname }}/.ssh/id_rsa"
-        owner: "{{ inventory_hostname }}"
-
-    - name: Store SSH Keys on Runner Machine
-      ansible.builtin.fetch:
-        src: "/home/{{ inventory_hostname }}/.ssh/id_rsa.pub"
-        dest: "{{ playbook_dir }}/keys/{{ inventory_hostname }}/"
-        flat: yes
-
-# Setup on Master Node
-
-- hosts: backup_master
-  remote_user: vronteix
-  become: yes
-
-  tasks:
-    - name: Create backup folder of master
-      ansible.builtin.file:
-        path: /srv/backup/xps-13
-        state: directory
-        owner: root
-        group: root
-        mode: '0750'
-
-    - name: Create users for all slave Nodes
-      ansible.builtin.user:
-        name: "{{ item }}"
-        shell: /bin/bash
-      loop: "{{ query('inventory_hostnames', 'backup_slave') }}"
-
-    - name: Create a backup folder for every slaves
-      ansible.builtin.file:
-        path: /srv/backup/{{ item }}
-        state: directory
-        owner: "{{ item }}"
-        group: "{{ item }}"
-        mode: '0750'
-      loop: "{{ query('inventory_hostnames', 'backup_slave') }}"
-
-    - name: Copy Slave's SSH key to corresponding authorized Key file
-      ansible.builtin.copy:
-        src: "{{ playbook_dir }}/keys/{{ item }}/"
-        dest: "/home/{{ item }}/.ssh/"
-        owner: "{{ item }}"
-        group: "{{ item }}"
-      loop: "{{ query('inventory_hostnames', 'backup_slave') }}"
-
-- hosts: all
-  remote_user: vronteix
-  become: yes
-
-  tasks:
     - name: Import Restic passwords
       include_vars:
         file: restic_env.yaml
@@ -99,17 +23,85 @@
         regexp: '^RESTIC_PASSWORD'
         line: 'RESTIC_PASSWORD="{{ restic_env[inventory_hostname].password }}"'
 
+- hosts: backup_slave
+  remote_user: vronteix
+  become: yes
+
+  tasks:
+
+    - name: Create .ssh folder for all slaves
+      ansible.builtin.file:
+        path: "/root/.ssh"
+        state: directory
+        owner: "{{ ansible_ssh_user }}"
+        group: "{{ ansible_ssh_user }}"
+
+    - name: Generate SSH Key for all slave machines
+      community.crypto.openssh_keypair:
+        path: "/root/.ssh/id_rsa"
+        owner: "{{ ansible_ssh_user }}"
+
+    - name: Store SSH Keys on Runner Machine
+      ansible.builtin.fetch:
+        src: "/root/.ssh/id_rsa.pub"
+        dest: "{{ playbook_dir }}/keys/{{ inventory_hostname }}/"
+        flat: yes
+
+# Setup on Master Node
+
+- hosts: backup_master
+  remote_user: vronteix
+  become: yes
+
+  tasks:
+    - name: Create backup folder of master
+      ansible.builtin.file:
+        path: /srv/backup/{{ inventory_hostname }}
+        state: directory
+        owner: root
+        group: root
+        mode: '0750'
+
+    - name: Create users for all slave Nodes
+      ansible.builtin.user:
+        name: "{{ item }}"
+        shell: /bin/bash
+      loop: "{{ query('inventory_hostnames', 'backup_slave') }}"
+
+    - name: Set rights for srv folder
+      ansible.builtin.file:
+        path: /srv
+        state: directory
+        mode: '755'
+
+    - name: Set rights for backup folder
+      ansible.builtin.file:
+        path: /srv/backup
+        state: directory
+        mode: '755'
+
+    - name: Create a backup folder for every slaves
+      ansible.builtin.file:
+        path: /srv/backup/{{ item }}
+        state: directory
+        owner: "{{ item }}"
+        group: "{{ item }}"
+        mode: '0750'
+      loop: "{{ query('inventory_hostnames', 'backup_slave') }}"
+
+    - name: Set authorized key taken from file
+      ansible.posix.authorized_key:
+        user: "{{ item }}"
+        state: present
+        key: "{{ lookup('file', '{{ playbook_dir }}/keys/{{ item }}/id_rsa.pub') }}"
+      loop: "{{ query('inventory_hostnames', 'backup_slave') }}"
+
     - name: Set restic path as env variable
       ansible.builtin.lineinfile:
         path: /etc/environment
         state: present
         regexp: '^RESTIC_REPOSITORY'
-        line: 'RESTIC_REPOSITORY="{{ restic_env[inventory_hostname].path }}"'
-
-- hosts: backup_master
-  remote_user: vronteix
-  become: yes
-  tasks:
+        line: 'RESTIC_REPOSITORY="/srv/backup/{{ inventory_hostname }}"'
 
     - name: Check if repo already configured
       ansible.builtin.command: sudo restic snapshots
@@ -124,22 +116,62 @@
       ansible.builtin.copy:
         src: "scripts/backup.sh"
         dest: "/home/vronteix/scripts/"
-        owner: "vronteix"
-        group: "vronteix"
+        owner: "{{ ansible_ssh_user }}"
+        group: "{{ ansible_ssh_user }}"
         mode: '0550'
 
-    # TODO: setup remote repo for child nodes
+    - name: Create Cronjob for master backup
+      ansible.builtin.cron:
+        name: "Master Local Backup"
+        minute: "0"
+        hour: "4"
+        user: root
+        job: "/home/{{ ansible_ssh_user }}/scripts/backup.sh"
 
-    # TODO: Copy bash script for automate backup
+- hosts: backup_slave
+  remote_user: vronteix
+  become: yes
 
-    # TODO: Create cron job with right permission
+  tasks:
+    - name: get known_hosts fingerprint for master
+      shell: cat /etc/ssh/ssh_host_ecdsa_key.pub | awk '{ print $1 " " $2 }'
+      delegate_to: 192.168.1.29
+      register: host_key
 
-# Prepare Repository for master and child Nodes
+    - name: add master to known_hosts
+      known_hosts:
+        name: "192.168.1.29"
+        key: "192.168.1.29 {{ host_key.stdout }}"
+        path: "/root/.ssh/known_hosts"
 
-# !!!! Write and test backup script for master
-# push backup script to master
-# configure cronjob to master backup script
+    - name: Set restic path as env variable
+      ansible.builtin.lineinfile:
+        path: /etc/environment
+        state: present
+        regexp: '^RESTIC_REPOSITORY'
+        line: 'RESTIC_REPOSITORY="sftp:{{ inventory_hostname }}@192.168.1.29:/srv/backup/{{ inventory_hostname }}"'
 
-# !!! Write backup script for slaves
-# push backup script on slaves
-# configure cronjob to master backup script
+    - name: Check if repo already configured
+      ansible.builtin.command: sudo restic snapshots
+      register: repoCheckReturn
+      ignore_errors: yes
+
+    - name: Setup remote Repository for Master Node Backup
+      ansible.builtin.command: sudo restic init
+      when: repoCheckReturn.rc != 0
+
+    - name: Import backup script
+      ansible.builtin.copy:
+        src: "scripts/backup.sh"
+        dest: "/home/vronteix/scripts/"
+        owner: "{{ ansible_ssh_user }}"
+        group: "{{ ansible_ssh_user }}"
+        mode: '0550'
+
+    - name: Create Cronjob for remote backup
+      ansible.builtin.cron:
+        name: "Slave remote backup"
+        minute: "0"
+        hour: "4"
+        user: root
+        job: "/home/{{ ansible_ssh_user }}/scripts/backup.sh"
