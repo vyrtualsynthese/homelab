@@ -44,3 +44,6 @@
       service:
         name: sshd
         state: restarted
+
+  # configure log rotate
+  # Configure systemd journal logs size

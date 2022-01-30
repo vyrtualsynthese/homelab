@@ -1,9 +1,6 @@
 rbp0:
   password: "XXX"
-  path: "-r /srv/backup/xps-13"
 rbp1:
   password: "XXX"
-  path: "-r /srv/backup/xps-13"
 xps13:
   password: "XXX"
-  path: "-r /srv/backup/xps-13"
