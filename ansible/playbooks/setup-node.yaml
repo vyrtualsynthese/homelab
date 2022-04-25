@@ -8,7 +8,7 @@
         name: admins
         state: present
 
-    - name: Create and add vsynthese to admin group
+    - name: Create and add vronteix to admin group
       ansible.builtin.user:
         name: vronteix
         state: present

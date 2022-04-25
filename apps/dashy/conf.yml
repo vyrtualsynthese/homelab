@@ -50,4 +50,7 @@ sections:
         icon: "far fa-eye"
         url: "http://prom.local/"
         target: "newtab"
-        
+      - title: "DNS: PiHole"
+        icon: "fa-solid fa-globe"
+        url: "http://192.168.1.38/admin/"
+        target: "newtab"
