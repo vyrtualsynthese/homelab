@@ -1,4 +1,4 @@
-FROM node:lts-alpine3.14 AS dev
+FROM node:lts-alpine AS dev
 
 # Define some ENV Vars
 ENV PORT=80 \
