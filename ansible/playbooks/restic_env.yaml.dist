@@ -4,3 +4,5 @@ rbp1:
   password: "XXX"
 xps13:
   password: "XXX"
+nas:
+  password: "XXX"

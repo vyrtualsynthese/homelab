@@ -1,4 +1,4 @@
-FROM ubuntu:20.04 AS builder
+FROM ubuntu:22.04 AS builder
 
 WORKDIR /app/overviewer
 
@@ -11,7 +11,7 @@ WORKDIR /app/overviewer/src/Minecraft-Overviewer-master
 
 RUN python3 setup.py build
 
-RUN mkdir -p ~/.minecraft/versions/1.18.1/ && wget https://overviewer.org/textures/1.18.1 -O ~/.minecraft/versions/1.18.1/1.18.1.jar
+RUN mkdir -p ~/.minecraft/versions/1.18.2/ && wget https://overviewer.org/textures/1.18.2 -O ~/.minecraft/versions/1.18.2/1.18.2.jar
 
 COPY config .
 
