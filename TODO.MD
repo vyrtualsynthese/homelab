@@ -1,10 +1,13 @@
 + Ansible
   + Update backup script
+  + Install ZSH to every nodes
   + Write Ansible runner setup script
   + Write Script for NaS for setup Windows Network Drive
 + Nextcloud
   + Nextcloud Helm Chart
   + Setup S3 backup
++ Backup
+  + Implement backup script and doc for win 11
 + Doc
   + Implement documentation solution
 + Plex Media Center
