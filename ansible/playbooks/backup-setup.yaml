@@ -58,7 +58,7 @@
   tasks:
     - name: Create backup folder of master
       ansible.builtin.file:
-        path: /srv/backup/{{ inventory_hostname }}
+        path: /media/data/backup/{{ inventory_hostname }}
         state: directory
         owner: root
         group: root
@@ -70,21 +70,21 @@
         shell: /bin/bash
       loop: "{{ query('inventory_hostnames', 'backup_slave') }}"
 
-    - name: Set rights for srv folder
+    - name: Set rights for backup folder
       ansible.builtin.file:
-        path: /srv
+        path: /media/data
         state: directory
         mode: '755'
 
     - name: Set rights for backup folder
       ansible.builtin.file:
-        path: /srv/backup
+        path: /media/data/backup
         state: directory
         mode: '755'
 
     - name: Create a backup folder for every slaves
       ansible.builtin.file:
-        path: /srv/backup/{{ item }}
+        path: /media/data/backup/{{ item }}
         state: directory
         owner: "{{ item }}"
         group: "{{ item }}"
@@ -103,7 +103,7 @@
         path: /etc/environment
         state: present
         regexp: '^RESTIC_REPOSITORY'
-        line: 'RESTIC_REPOSITORY="/srv/backup/{{ inventory_hostname }}"'
+        line: 'RESTIC_REPOSITORY="/media/data/backup/{{ inventory_hostname }}"'
 
     - name: Check if repo already configured
       ansible.builtin.command: sudo restic snapshots
@@ -116,7 +116,7 @@
 
     - name: Import backup script
       ansible.builtin.copy:
-        src: "scripts/backup.sh"
+        src: "scripts/backup-scripts/k3s-nodes/backup.sh"
         dest: "/home/vronteix/scripts/"
         owner: "{{ ansible_ssh_user }}"
         group: "{{ ansible_ssh_user }}"
@@ -137,13 +137,13 @@
   tasks:
     - name: get known_hosts fingerprint for master
       shell: cat /etc/ssh/ssh_host_ecdsa_key.pub | awk '{ print $1 " " $2 }'
-      delegate_to: 192.168.1.29
+      delegate_to: 192.168.1.41
       register: host_key
 
     - name: add master to known_hosts
       known_hosts:
-        name: "192.168.1.29"
-        key: "192.168.1.29 {{ host_key.stdout }}"
+        name: "192.168.1.41"
+        key: "192.168.1.41 {{ host_key.stdout }}"
         path: "/root/.ssh/known_hosts"
 
     - name: Set restic path as env variable
@@ -151,7 +151,7 @@
         path: /etc/environment
         state: present
         regexp: '^RESTIC_REPOSITORY'
-        line: 'RESTIC_REPOSITORY="sftp:{{ inventory_hostname }}@192.168.1.29:/srv/backup/{{ inventory_hostname }}"'
+        line: 'RESTIC_REPOSITORY="sftp:{{ inventory_hostname }}@192.168.1.41:/media/data/backup/{{ inventory_hostname }}"'
 
     - name: Check if repo already configured
       ansible.builtin.command: sudo restic snapshots
@@ -164,11 +164,21 @@
 
     - name: Import backup script
       ansible.builtin.copy:
-        src: "scripts/backup.sh"
+        src: "scripts/backup-scripts/k3s-nodes/backup.sh"
         dest: "/home/vronteix/scripts/"
         owner: "{{ ansible_ssh_user }}"
         group: "{{ ansible_ssh_user }}"
         mode: '0550'
+      when: inventory_hostname != "rbp1"
+
+    - name: Import backup script
+      ansible.builtin.copy:
+        src: "scripts/backup-scripts/runner/backup.sh"
+        dest: "/home/vronteix/scripts/"
+        owner: "{{ ansible_ssh_user }}"
+        group: "{{ ansible_ssh_user }}"
+        mode: '0550'
+      when: inventory_hostname == "rbp1"
 
     - name: Create Cronjob for remote backup
       ansible.builtin.cron:

@@ -10,7 +10,6 @@ image:
   # Overrides the image tag whose default is the chart appVersion.
   tag: multi-arch-d9b9c54
 
-imagePullSecrets: []
 nameOverride: ""
 fullnameOverride: ""
 
