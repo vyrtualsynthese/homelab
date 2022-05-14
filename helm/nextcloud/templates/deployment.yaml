@@ -1,16 +1,21 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "home.fullname" . }}
+  name: {{ include "nextcloud.fullname" . }}
   labels:
-    {{- include "home.labels" . | nindent 4 }}
+    {{- include "nextcloud.labels" . | nindent 4 }}
 spec:
   {{- if not .Values.autoscaling.enabled }}
   replicas: {{ .Values.replicaCount }}
   {{- end }}
   selector:
     matchLabels:
-      {{- include "home.selectorLabels" . | nindent 6 }}
+      {{- include "nextcloud.selectorLabels" . | nindent 6 }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 25%
+      maxSurge: 25%
   template:
     metadata:
       {{- with .Values.podAnnotations }}
@@ -18,9 +23,17 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       labels:
-        {{- include "home.selectorLabels" . | nindent 8 }}
+        {{- include "nextcloud.selectorLabels" . | nindent 8 }}
     spec:
-      serviceAccountName: {{ include "home.serviceAccountName" . }}
+      volumes:
+        - name: render-minecraft-server-volume
+          persistentVolumeClaim:
+            claimName: render-minecraft-server
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "nextcloud.serviceAccountName" . }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:
@@ -34,6 +47,9 @@ spec:
               containerPort: 80
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: render-minecraft-server-volume
+              mountPath: /usr/share/nginx/html
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
