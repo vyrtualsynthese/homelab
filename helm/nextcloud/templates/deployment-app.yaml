@@ -1,16 +1,16 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "nextcloud.fullname" . }}
+  name: {{ include "nextcloud.app.fullname" . }}
   labels:
-    {{- include "nextcloud.labels" . | nindent 4 }}
+    {{- include "nextcloud.app.labels" . | nindent 4 }}
 spec:
   {{- if not .Values.app.autoscaling.enabled }}
   replicas: {{ .Values.replicaCount }}
   {{- end }}
   selector:
     matchLabels:
-      {{- include "nextcloud.selectorLabels" . | nindent 6 }}
+      {{- include "nextcloud.app.selectorLabels" . | nindent 6 }}
   template:
     metadata:
       {{- with .Values.app.podAnnotations }}
@@ -18,17 +18,17 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       labels:
-        {{- include "nextcloud.selectorLabels" . | nindent 8 }}
+        {{- include "nextcloud.app.selectorLabels" . | nindent 8 }}
     spec:
       volumes:
-        - name: render-minecraft-server-volume
+        - name: next-cloud-app-volume
           persistentVolumeClaim:
-            claimName: render-minecraft-server
+            claimName: next-cloud-app
       {{- with .Values.app.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      serviceAccountName: {{ include "nextcloud.serviceAccountName" . }}
+      serviceAccountName: {{ include "nextcloud.app.serviceAccountName" . }}
       securityContext:
         {{- toYaml .Values.app.podSecurityContext | nindent 8 }}
       containers:
@@ -45,10 +45,25 @@ spec:
               value: "next-cloud-db"
             - name: "REDIS_HOST"
               value: "next-cloud-redis"
+            - name: "POSTGRES_PASSWORD"
+              valueFrom:
+                secretKeyRef:
+                  name: nextcloud-postgres
+                  key: POSTGRES_PASSWORD
+            - name: "POSTGRES_DB"
+              valueFrom:
+                secretKeyRef:
+                  name: nextcloud-postgres
+                  key: POSTGRES_DB
+            - name: "POSTGRES_USER"
+              valueFrom:
+                secretKeyRef:
+                  name: nextcloud-postgres
+                  key: POSTGRES_USER
           resources:
             {{- toYaml .Values.app.resources | nindent 12 }}
           volumeMounts:
-            - name: next-cloud-volume
+            - name: next-cloud-app-volume
               mountPath: /var/www/html
       {{- with .Values.app.nodeSelector }}
       nodeSelector:
