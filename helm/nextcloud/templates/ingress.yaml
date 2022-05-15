@@ -1,5 +1,5 @@
 {{- if .Values.web.ingress.enabled -}}
-{{- $fullName := include "nextcloud.fullname" . -}}
+{{- $fullName := include "nextcloud.web.fullname" . -}}
 {{- $svcPort := .Values.web.service.port -}}
 {{- if and .Values.web.ingress.className (not (semverCompare ">=1.18-0" .Capabilities.KubeVersion.GitVersion)) }}
   {{- if not (hasKey .Values.web.ingress.annotations "kubernetes.io/ingress.class") }}
@@ -11,7 +11,7 @@ kind: IngressRoute
 metadata:
   name: {{ $fullName }}
   labels:
-    {{- include "nextcloud.labels" . | nindent 4 }}
+    {{- include "nextcloud.web.labels" . | nindent 4 }}
   {{- with .Values.web.ingress.annotations }}
   annotations:
     {{- toYaml . | nindent 4 }}
@@ -23,6 +23,6 @@ spec:
     - match: Host(`nextcloud.local`)
       kind: Rule
       services:
-        - name: nextcloud-web
+        - name: next-cloud-web
           port: 80
 {{- end }}

@@ -1,16 +1,16 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "nextcloud.fullname" . }}
+  name: {{ include "nextcloud.web.fullname" . }}
   labels:
-    {{- include "nextcloud.labels" . | nindent 4 }}
+    {{- include "nextcloud.web.labels" . | nindent 4 }}
 spec:
   {{- if not .Values.web.autoscaling.enabled }}
   replicas: {{ .Values.replicaCount }}
   {{- end }}
   selector:
     matchLabels:
-      {{- include "nextcloud.selectorLabels" . | nindent 6 }}
+      {{- include "nextcloud.web.selectorLabels" . | nindent 6 }}
   strategy:
     type: RollingUpdate
     rollingUpdate:
@@ -23,21 +23,21 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       labels:
-        {{- include "nextcloud.selectorLabels" . | nindent 8 }}
+        {{- include "nextcloud.web.selectorLabels" . | nindent 8 }}
     spec:
       volumes:
-        - name: render-minecraft-server-volume
+        - name: next-cloud-app-volume
           persistentVolumeClaim:
-            claimName: render-minecraft-server
+            claimName: next-cloud-app
       {{- with .Values.web.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      serviceAccountName: {{ include "nextcloud.serviceAccountName" . }}
+      serviceAccountName: {{ include "nextcloud.web.serviceAccountName" . }}
       securityContext:
         {{- toYaml .Values.web.podSecurityContext | nindent 8 }}
       containers:
-        - name: {{ .Chart.Name }}
+        - name: {{ .Chart.Name }}-web
           securityContext:
             {{- toYaml .Values.web.securityContext | nindent 12 }}
           image: "{{ .Values.web.image.repository }}:{{ .Values.web.image.tag | default .Chart.AppVersion }}"
@@ -48,8 +48,8 @@ spec:
           resources:
             {{- toYaml .Values.web.resources | nindent 12 }}
           volumeMounts:
-            - name: render-minecraft-server-volume
-              mountPath: /usr/share/nginx/html
+            - name: next-cloud-app-volume
+              mountPath: /var/www/html
       {{- with .Values.web.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

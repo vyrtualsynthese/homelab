@@ -5,14 +5,14 @@
 replicaCount: 1
 db:
   image:
-    repository: nginx
+    repository: postgres
     pullPolicy: IfNotPresent
     # Overrides the image tag whose default is the chart appVersion.
-    tag: latest
+    tag: 14.2-alpine
 
   imagePullSecrets: []
-  nameOverride: ""
-  fullnameOverride: ""
+  nameOverride: "next-cloud-db"
+  fullnameOverride: "next-cloud-db"
 
   serviceAccount:
     # Specifies whether a service account should be created
@@ -38,10 +38,10 @@ db:
 
   service:
     type: ClusterIP
-    port: 80
+    port: 5432
 
   ingress:
-    enabled: true
+    enabled: false
     className: ""
     annotations: {}
       # kubernetes.io/ingress.class: nginx
@@ -59,10 +59,10 @@ db:
   resources:
     requests:
       cpu: 1m
-      memory: 9Mi
+      memory: 50Mi
     limits:
-      cpu: 100m
-      memory: 10Mi
+      cpu: 1000m
+      memory: 128Mi
     # We usually recommend not to specify default resources and to leave this as a conscious
     # choice for the user. This also increases chances charts run on environments with little
     # resources, such as Minikube. If you do want to specify resources, uncomment the following
@@ -89,14 +89,14 @@ db:
 
 redis:
   image:
-    repository: nginx
+    repository: redis
     pullPolicy: IfNotPresent
     # Overrides the image tag whose default is the chart appVersion.
-    tag: latest
+    tag: 6.2.7-alpine
 
   imagePullSecrets: []
-  nameOverride: ""
-  fullnameOverride: ""
+  nameOverride: "next-cloud-redis"
+  fullnameOverride: "next-cloud-redis"
 
   serviceAccount:
     # Specifies whether a service account should be created
@@ -122,10 +122,10 @@ redis:
 
   service:
     type: ClusterIP
-    port: 80
+    port: 6379
 
   ingress:
-    enabled: true
+    enabled: false
     className: ""
     annotations: {}
       # kubernetes.io/ingress.class: nginx
@@ -141,12 +141,12 @@ redis:
     #      - chart-example.local
 
   resources:
-    requests:
-      cpu: 1m
-      memory: 9Mi
-    limits:
-      cpu: 100m
-      memory: 10Mi
+    requests: {}
+      #cpu: 1m
+      #memory: 9Mi
+    limits: {}
+      #cpu: 100m
+      #memory: 10Mi
     # We usually recommend not to specify default resources and to leave this as a conscious
     # choice for the user. This also increases chances charts run on environments with little
     # resources, such as Minikube. If you do want to specify resources, uncomment the following
@@ -179,8 +179,8 @@ app:
     tag: 22.2.7-fpm-alpine
 
   imagePullSecrets: []
-  nameOverride: "nextcloud-app"
-  fullnameOverride: "nextcloud-app"
+  nameOverride: "next-cloud-app"
+  fullnameOverride: "next-cloud-app"
 
   serviceAccount:
     # Specifies whether a service account should be created
@@ -206,13 +206,13 @@ app:
 
   service: {}
 
-  resources: {}
+  resources:
     requests:
-      #cpu: 1m
-      #memory: 9Mi
+      cpu: 100m
+      memory: 128Mi
     limits:
-      #cpu: 100m
-      #memory: 10Mi
+      cpu: 3000m
+      memory: 1Gi
     # We usually recommend not to specify default resources and to leave this as a conscious
     # choice for the user. This also increases chances charts run on environments with little
     # resources, such as Minikube. If you do want to specify resources, uncomment the following
@@ -247,14 +247,14 @@ app:
 
 web:
   image:
-    repository: nginx
+    repository: registry.hub.docker.com/vyrtualsynthese/next-cloud-web
     pullPolicy: IfNotPresent
     # Overrides the image tag whose default is the chart appVersion.
-    tag: latest
+    tag: multi-arch-92b559b
 
   imagePullSecrets: []
-  nameOverride: ""
-  fullnameOverride: ""
+  nameOverride: "next-cloud-web"
+  fullnameOverride: "next-cloud-web"
 
   serviceAccount:
     # Specifies whether a service account should be created
@@ -299,96 +299,12 @@ web:
     #      - chart-example.local
 
   resources:
-    requests:
-      cpu: 1m
-      memory: 9Mi
-    limits:
-      cpu: 100m
-      memory: 10Mi
-    # We usually recommend not to specify default resources and to leave this as a conscious
-    # choice for the user. This also increases chances charts run on environments with little
-    # resources, such as Minikube. If you do want to specify resources, uncomment the following
-    # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
-    # limits:
-    #   cpu: 100m
-    #   memory: 128Mi
-    # requests:
-    #   cpu: 100m
-    #   memory: 128Mi
-
-  autoscaling:
-    enabled: false
-    minReplicas: 1
-    maxReplicas: 100
-    targetCPUUtilizationPercentage: 80
-    # targetMemoryUtilizationPercentage: 80
-
-  nodeSelector: {}
-
-  tolerations: []
-
-  affinity: {}
-
-cron:
-  image:
-    repository: nginx
-    pullPolicy: IfNotPresent
-    # Overrides the image tag whose default is the chart appVersion.
-    tag: latest
-
-  imagePullSecrets: []
-  nameOverride: ""
-  fullnameOverride: ""
-
-  serviceAccount:
-    # Specifies whether a service account should be created
-    create: false
-    # Annotations to add to the service account
-    annotations: {}
-    # The name of the service account to use.
-    # If not set and create is true, a name is generated using the fullname template
-    name: ""
-
-  podAnnotations: {}
-
-  podSecurityContext: {}
-  # fsGroup: 2000
-
-  securityContext: {}
-    # capabilities:
-    #   drop:
-    #   - ALL
-    # readOnlyRootFilesystem: true
-    # runAsNonRoot: true
-  # runAsUser: 1000
-
-  service:
-    type: ClusterIP
-    port: 80
-
-  ingress:
-    enabled: true
-    className: ""
-    annotations: {}
-      # kubernetes.io/ingress.class: nginx
-    # kubernetes.io/tls-acme: "true"
-    hosts:
-      - host: chart-example.local
-        paths:
-          - path: /
-            pathType: ImplementationSpecific
-    tls: []
-    #  - secretName: chart-example-tls
-    #    hosts:
-    #      - chart-example.local
-
-  resources:
-    requests:
-      cpu: 1m
-      memory: 9Mi
-    limits:
-      cpu: 100m
-      memory: 10Mi
+    requests: {}
+      #cpu: 1m
+      #memory: 9Mi
+    limits: {}
+      #cpu: 100m
+      #memory: 10Mi
     # We usually recommend not to specify default resources and to leave this as a conscious
     # choice for the user. This also increases chances charts run on environments with little
     # resources, such as Minikube. If you do want to specify resources, uncomment the following
