@@ -1,7 +1,6 @@
 apiVersion: traefik.containo.us/v1alpha1
 kind: IngressRoute
 metadata:
-  creationTimestamp:  2021-09-27T22:35:59Z
   name: traefik-dashboard
   namespace: kube-system
 spec:
@@ -9,10 +8,12 @@ spec:
     - web
   routes:
   - kind:   Rule
-    match:  Host(`traefik.local`) && (PathPrefix(`/dashboard`) || PathPrefix(`/api`) || PathPrefix(`/metrics`))
+    match: >-
+      Host(`traefik.local`) && (PathPrefix(`/dashboard`) ||
+      PathPrefix(`/api`))
     middlewares:
       - name: traefik-dashboard-basicauth
         namespace: kube-system
     services:
-      - kind:  TraefikService
-        name:  api@internal
+      - kind: TraefikService
+        name: api@internal
