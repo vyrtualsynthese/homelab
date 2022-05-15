@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "nextcloud.db.fullname" . }}
+  labels:
+    {{- include "nextcloud.db.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.web.service.type }}
+  ports:
+    - port: 5432
+      targetPort: 5432
+  selector:
+    {{- include "nextcloud.db.selectorLabels" . | nindent 4 }}
