@@ -8,7 +8,7 @@ spec:
   volumeMode: Filesystem
   accessModes:
     - ReadWriteMany
-  storageClassName: minecraft-server
+  storageClassName: retain
   hostPath:
     path: >-
       /media/data/k3s/next-cloud
