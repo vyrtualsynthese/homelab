@@ -41,6 +41,8 @@ spec:
             - name: app-port
               containerPort: 9000
           env:
+            - name: "PHP_UPLOAD_LIMIT"
+              value: "100G"
             - name: "POSTGRES_HOST"
               value: "next-cloud-db"
             - name: "REDIS_HOST"
