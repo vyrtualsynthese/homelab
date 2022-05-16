@@ -255,3 +255,68 @@ Create the name of the service account to use
 {{- default "default" .Values.web.serviceAccount.name }}
 {{- end }}
 {{- end }}
+
+
+# cron Template
+{{/*
+Expand the name of the chart.
+*/}}
+{{- define "nextcloud.cron.name" -}}
+{{- default .Chart.Name .Values.cron.nameOverride | trunc 63 | trimSuffix "-" }}
+{{- end }}
+
+{{/*
+Create a default fully qualified app name.
+We truncate at 63 chars because some Kubernetes name fields are limited to this (by the DNS naming spec).
+If release name contains chart name it will be used as a full name.
+*/}}
+{{- define "nextcloud.cron.fullname" -}}
+{{- if .Values.cron.fullnameOverride }}
+{{- .Values.cron.fullnameOverride | trunc 63 | trimSuffix "-" }}
+{{- else }}
+{{- $name := default .Chart.Name .Values.cron.nameOverride }}
+{{- if contains $name .Release.Name }}
+{{- .Release.Name | trunc 63 | trimSuffix "-" }}
+{{- else }}
+{{- printf "%s-%s" .Release.Name $name | trunc 63 | trimSuffix "-" }}
+{{- end }}
+{{- end }}
+{{- end }}
+
+{{/*
+Create chart name and version as used by the chart label.
+*/}}
+{{- define "nextcloud.cron.chart" -}}
+{{- printf "%s-%s" .Chart.Name .Chart.Version | replace "+" "_" | trunc 63 | trimSuffix "-" }}
+{{- end }}
+
+{{/*
+Common labels
+*/}}
+{{- define "nextcloud.cron.labels" -}}
+helm.sh/chart: {{ include "nextcloud.cron.chart" . }}
+{{ include "nextcloud.cron.selectorLabels" . }}
+{{- if .Chart.AppVersion }}
+app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
+{{- end }}
+app.kubernetes.io/managed-by: {{ .Release.Service }}
+{{- end }}
+
+{{/*
+Selector labels
+*/}}
+{{- define "nextcloud.cron.selectorLabels" -}}
+app.kubernetes.io/name: {{ include "nextcloud.cron.name" . }}
+app.kubernetes.io/instance: {{ .Release.Name }}
+{{- end }}
+
+{{/*
+Create the name of the service account to use
+*/}}
+{{- define "nextcloud.cron.serviceAccountName" -}}
+{{- if .Values.web.serviceAccount.create }}
+{{- default (include "nextcloud.cron.fullname" .) .Values.redis.serviceAccount.name }}
+{{- else }}
+{{- default "default" .Values.web.serviceAccount.name }}
+{{- end }}
+{{- end }}
