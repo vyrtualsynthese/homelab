@@ -24,6 +24,9 @@ spec:
         - name: next-cloud-app-volume
           persistentVolumeClaim:
             claimName: next-cloud-app
+        - name: next-cloud-app-src-volume
+          persistentVolumeClaim:
+            claimName: next-cloud-app-src
       {{- with .Values.app.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
@@ -62,10 +65,14 @@ spec:
                 secretKeyRef:
                   name: nextcloud-postgres
                   key: POSTGRES_USER
+            - name: NEXTCLOUD_DATA_DIR
+              value: "/data"
           resources:
             {{- toYaml .Values.app.resources | nindent 12 }}
           volumeMounts:
             - name: next-cloud-app-volume
+              mountPath: /data
+            - name: next-cloud-app-src-volume
               mountPath: /var/www/html
       {{- with .Values.app.nodeSelector }}
       nodeSelector:

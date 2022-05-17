@@ -5,9 +5,7 @@ metadata:
   labels:
     {{- include "dashy.labels" . | nindent 4 }}
 spec:
-  {{- if not .Values.autoscaling.enabled }}
   replicas: {{ .Values.replicaCount }}
-  {{- end }}
   selector:
     matchLabels:
       {{- include "dashy.selectorLabels" . | nindent 6 }}
