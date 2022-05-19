@@ -36,7 +36,7 @@ spec:
           command: ["/cron.sh"]
           securityContext:
             {{- toYaml .Values.cron.securityContext | nindent 12 }}
-          image: "{{ .Values.app.image.repository }}:{{ .Values.cron.image.tag | default .Chart.AppVersion }}"
+          image: "{{ .Values.cron.image.repository }}:{{ .Values.cron.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.app.image.pullPolicy }}
           resources:
             {{- toYaml .Values.cron.resources | nindent 12 }}

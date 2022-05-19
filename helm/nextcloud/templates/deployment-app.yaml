@@ -21,12 +21,12 @@ spec:
         {{- include "nextcloud.app.selectorLabels" . | nindent 8 }}
     spec:
       volumes:
+        - name: next-cloud-data-volume
+          persistentVolumeClaim:
+            claimName: next-cloud-data
         - name: next-cloud-app-volume
           persistentVolumeClaim:
             claimName: next-cloud-app
-        - name: next-cloud-app-src-volume
-          persistentVolumeClaim:
-            claimName: next-cloud-app-src
       {{- with .Values.app.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
@@ -70,9 +70,9 @@ spec:
           resources:
             {{- toYaml .Values.app.resources | nindent 12 }}
           volumeMounts:
-            - name: next-cloud-app-volume
+            - name: next-cloud-data-volume
               mountPath: /data
-            - name: next-cloud-app-src-volume
+            - name: next-cloud-app-volume
               mountPath: /var/www/html
       {{- with .Values.app.nodeSelector }}
       nodeSelector:

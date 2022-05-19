@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "nextcloud.plex.fullname" . }}-transcode
+  labels:
+  {{- include "nextcloud.plex.labels" . | nindent 4 }}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: retain
+  resources:
+    requests:
+      storage: 50Gi
