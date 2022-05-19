@@ -173,14 +173,17 @@ redis:
 
 app:
   image:
-    repository: nextcloud
+    repository: registry.hub.docker.com/vyrtualsynthese/next-cloud-app
     pullPolicy: IfNotPresent
     # Overrides the image tag whose default is the chart appVersion.
-    tag: 23.0.4-fpm-alpine
+    tag: multi-arch-d21bed4
 
   imagePullSecrets: []
   nameOverride: "next-cloud-app"
   fullnameOverride: "next-cloud-app"
+
+  dataNameOverride: "next-cloud-data"
+  dataFullnameOverride: "next-cloud-data"
 
   serviceAccount:
     # Specifies whether a service account should be created
@@ -212,7 +215,7 @@ app:
       memory: 128Mi
     limits:
       cpu: 3000m
-      memory: 1Gi
+      memory: 4Gi
     # We usually recommend not to specify default resources and to leave this as a conscious
     # choice for the user. This also increases chances charts run on environments with little
     # resources, such as Minikube. If you do want to specify resources, uncomment the following
