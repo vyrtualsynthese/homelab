@@ -1,16 +1,20 @@
++ Nextcloud
+  + Refacto Helm chart
+  + Refacto Limits
++ Plex Media Center
+  + Read port Documentation
+  + Create Helm chart
++ Securisation cluster
+  + Change all DB password
+  + Change all apps password
+  + Private Network HTTPS
 + Ansible
   + Update backup script
   + Install ZSH to every nodes
   + Write Ansible runner setup script
-  + Write Script for NaS for setup Windows Network Drive
-+ Nextcloud
-  + Nextcloud Helm Chart
-  + Setup S3 backup
-+ Backup
-  + Implement backup script and doc for win 11
 + Doc
   + Implement documentation solution
-+ Plex Media Center
++ Wireguard VPN
 + Docker Repo
   + Docker repo on NaS
 + Infra
@@ -19,10 +23,6 @@
 + OpenHab
   + Implement Solution
 + Torrent Web Client
-+ Secure Cluster
-  + Prometheus Dashboard Simple Auth
-  + Change all passwords to secure one
-  + Implement HTTPS
 + CI
   + Look for open source CI solution for home lab
 + Certmanager

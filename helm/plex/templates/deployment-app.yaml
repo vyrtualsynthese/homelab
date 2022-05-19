@@ -1,0 +1,81 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "nextcloud.plex.fullname" . }}
+  labels:
+    {{- include "nextcloud.plex.labels" . | nindent 4 }}
+spec:
+  {{- if not .Values.plex.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "nextcloud.plex.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      {{- with .Values.plex.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "nextcloud.plex.selectorLabels" . | nindent 8 }}
+    spec:
+      volumes:
+        - name: plex-config-volume
+          persistentVolumeClaim:
+            claimName: plex-config
+        - name: plex-transcode-volume
+          persistentVolumeClaim:
+            claimName: plex-transcode
+        - name: plex-data-volume
+          persistentVolumeClaim:
+            claimName: plex-data
+        - name: plex-media-volume
+          persistentVolumeClaim:
+            claimName: plex-media
+      {{- with .Values.plex.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "nextcloud.plex.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.plex.podSecurityContext | nindent 8 }}
+      containers:
+        - name: {{ .Chart.Name }}
+          securityContext:
+            {{- toYaml .Values.plex.securityContext | nindent 12 }}
+          image: "{{ .Values.plex.image.repository }}:{{ .Values.plex.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.plex.image.pullPolicy }}
+          ports:
+            - name: plex
+              containerPort: 32400
+          env:
+            - name: "TZ"
+              value: "Europe/Paris"
+            - name: "PLEX_CLAIM"
+              value: "claim-aMAVx8DYBTZd4HUTxrNc"
+            - name: "ADVERTISE_IP"
+              value: "http://plex.local/"
+          resources:
+            {{- toYaml .Values.plex.resources | nindent 12 }}
+          volumeMounts:
+            - name: plex-config-volume
+              mountPath: /config
+            - name: plex-transcode-volume
+              mountPath: /transcode
+            - name: plex-data-volume
+              mountPath: /data
+            - name: plex-media-volume
+              mountPath: /media
+      {{- with .Values.plex.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.plex.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.plex.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

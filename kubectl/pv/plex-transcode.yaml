@@ -1,15 +1,15 @@
 apiVersion: v1
 kind: PersistentVolume
 metadata:
-  name: next-cloud-src
+  name: plex-transcode
 spec:
   capacity:
-    storage: 1Gi
+    storage: 50Gi
   volumeMode: Filesystem
   accessModes:
     - ReadWriteMany
   storageClassName: retain
   hostPath:
     path: >-
-      /var/lib/rancher/k3s/storage/next-cloud-src
+      /var/lib/rancher/k3s/storage/plex-transcode
     type: DirectoryOrCreate

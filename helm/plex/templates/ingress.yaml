@@ -1,0 +1,28 @@
+{{- if .Values.plex.ingress.enabled -}}
+{{- $fullName := include "nextcloud.plex.fullname" . -}}
+{{- $svcPort := .Values.plex.service.port -}}
+{{- if and .Values.plex.ingress.className (not (semverCompare ">=1.18-0" .Capabilities.KubeVersion.GitVersion)) }}
+  {{- if not (hasKey .Values.plex.ingress.annotations "kubernetes.io/ingress.class") }}
+  {{- $_ := set .Values.plex.ingress.annotations "kubernetes.io/ingress.class" .Values.plex.ingress.className}}
+  {{- end }}
+{{- end }}
+apiVersion: traefik.containo.us/v1alpha1
+kind: IngressRoute
+metadata:
+  name: {{ $fullName }}
+  labels:
+    {{- include "nextcloud.plex.labels" . | nindent 4 }}
+  {{- with .Values.plex.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  entryPoints:
+    - web
+  routes:
+    - match: Host(`plex.local`)
+      kind: Rule
+      services:
+        - name: plex
+          port: 32400
+{{- end }}
