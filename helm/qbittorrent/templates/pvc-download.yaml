@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "fullname" . }}-download
+  labels:
+  {{- include "labels" . | nindent 4 }}
+spec:
+  accessModes:
+    - ReadWriteMany
+  storageClassName: retain
+  resources:
+    requests:
+      storage: 250Gi

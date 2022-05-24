@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: qbittorrent-download
+spec:
+  capacity:
+    storage: 250Gi
+  volumeMode: Filesystem
+  accessModes:
+    - ReadWriteMany
+  storageClassName: retain
+  hostPath:
+    path: >-
+      /var/lib/rancher/k3s/storage/qbittorrent-download
+    type: DirectoryOrCreate
