@@ -6,7 +6,7 @@ metadata:
   {{- include "nextcloud.plex.labels" . | nindent 4 }}
 spec:
   accessModes:
-    - ReadWriteOnce
+    - ReadWriteMany
   storageClassName: retain
   resources:
     requests:

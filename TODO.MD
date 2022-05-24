@@ -2,8 +2,11 @@
   + Refacto Helm chart
   + Refacto Limits
 + Plex Media Center
-  + Read port Documentation
-  + Create Helm chart
+  + Test torrent download
+  + Configure gateway for plex namespace
+  + Move official Qtorrent into plex
+  + Configure ingress for qtorrent pannel
+  + ...
 + Securisation cluster
   + Change all DB password
   + Change all apps password
