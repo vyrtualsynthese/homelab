@@ -53,7 +53,7 @@ spec:
             - name: "TZ"
               value: "Europe/Paris"
             - name: "PLEX_CLAIM"
-              value: "claim-aMAVx8DYBTZd4HUTxrNc"
+              value: "claim-mwHjJyMTKCALS1y2EJXk"
             - name: "ADVERTISE_IP"
               value: "http://plex.local/"
           resources:
