@@ -1,0 +1,105 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "fullname" . }}
+  labels:
+    {{- include "labels" . | nindent 4 }}
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "selectorLabels" . | nindent 8 }}
+    spec:
+      dnsPolicy: "None"
+      dnsConfig:
+        nameservers:
+          - 8.8.8.8
+          - 8.8.4.4
+      volumes:
+        - name: qbittorrent-config-volume
+          persistentVolumeClaim:
+            claimName: qbittorrent-config
+        - name: qbittorrent-download-volume
+          persistentVolumeClaim:
+            claimName: qbittorrent-download
+        - name: qbittorrent-vpn-volume
+          persistentVolumeClaim:
+            claimName: qbittorrent-vpn
+        - name: "dev-tun" # Needed for VPN
+          hostPath:
+            path: "/dev/net/tun"
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: {{ .Chart.Name }}
+          securityContext:
+            capabilities: # Needed for VPN
+              add:
+                - NET_ADMIN
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: torrent-webui
+              containerPort: 8080
+          env:
+            - name: "TZ"
+              value: "Europe/Paris"
+            - name: "PUID"
+              value: "0"
+            - name: "PGID"
+              value: "0"
+            - name: VPN_ENABLED
+              value: "yes"
+            - name: VPN_TYPE
+              value: "openvpn" # VPN provider. List of supported providers: https://haugene.github.io/docker-transmission-openvpn/supported-providers/
+            - name: VPN_USERNAME
+              valueFrom: # Reference to the secret | openvpn.username
+                secretKeyRef:
+                  name: "openvpn"
+                  key: "username"
+            - name: VPN_PASSWORD
+              valueFrom: # Reference to the secret | openvpn.password
+                secretKeyRef:
+                  name: "openvpn"
+                  key: "password"
+            - name: LAN_NETWORK
+              value: "192.168.0.0/24"
+
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: qbittorrent-config-volume
+              mountPath: /data
+            - name: qbittorrent-download-volume
+              mountPath: /downloads/transmission
+            - name: qbittorrent-vpn-volume
+              mountPath: /config/openvpn
+            - name: "dev-tun"
+              mountPath: "/dev/net/tun"
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

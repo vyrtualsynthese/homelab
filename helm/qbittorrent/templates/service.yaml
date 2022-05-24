@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "fullname" . }}
+  labels:
+    {{- include "labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+    - port: 8080
+      targetPort: torrent-webui
+{{/*    - port: 6881*/}}
+{{/*      name: torrent-udp*/}}
+{{/*      protocol: UDP*/}}
+{{/*      targetPort: 6881*/}}
+{{/*    - port: 6881*/}}
+{{/*      name: torrent*/}}
+{{/*      targetPort: 6881*/}}
+  selector:
+    {{- include "selectorLabels" . | nindent 4 }}
