@@ -11,7 +11,7 @@ image:
   # -- image pull policy of the gateway and inserted helper cotainers
   pullPolicy: IfNotPresent
   # -- image tag of the gateway and inserted helper containers
-  tag: v1.2.6
+  tag: v1.5.0
 
 # -- IP address of the DNS server within the vxlan tunnel.
 # All mutated PODs will get this as their DNS server.
@@ -29,7 +29,7 @@ clusterName: "cluster.local"
 # -- Namespaces that might contain routed PODs and therefore
 # require a copy of the gneerated settings configmap.
 routed_namespaces:
-  - vpn
+  - plex
 
 settings:
   # -- IPs not sent to the POD gateway but to the default K8S.
@@ -58,7 +58,7 @@ settings:
 
   # -- DNS queries to these domains will be resolved by K8S DNS instead of
   # the default (typcally the VPN client changes it)
-  DNS_LOCAL_CIDRS: "local"
+  DNS_LOCAL_CIDRS: "cluster.local"
 
 # -- settings to expose ports, usually through a VPN provider.
 # NOTE: if you change it you will need to manually restart the gateway POD
@@ -76,7 +76,7 @@ addons:
     # -- Enable the VPN if you want to route through a VPN.
     # You might also want to set VPN_BLOCK_OTHER_TRAFFIC to true
     # for extra safeness in case the VPN does connect
-    enabled: true
+    enabled: false
     type: openvpn
     # openvpn:
     # wireguard:
@@ -109,7 +109,7 @@ webhook:
     # -- image pullPolicy of the webhook
     pullPolicy: IfNotPresent
     # -- image tag of the webhook
-    tag: v3.3.2
+    tag: v3.4.0
 
   # -- number of webhook instances to deploy
   replicas: 1
@@ -132,7 +132,7 @@ webhook:
       #   values: ["1"]
 
   # -- default behviour for new PODs in the evaluated namespace
-  gatewayDefault: true
+  gatewayDefault: false
 
   # -- label name to check when evaluating POD. If true the POD
   # will get the gateway. If not set setGatewayDefault will apply.
