@@ -5,10 +5,10 @@
 replicaCount: 1
 
 image:
-  repository: linuxserver/jackett
+  repository: flaresolverr/flaresolverr
   pullPolicy: IfNotPresent
   # Overrides the image tag whose default is the chart appVersion.
-  tag: 0.20.1102
+  tag: v2.2.4
 
 imagePullSecrets: []
 nameOverride: ""
