@@ -141,22 +141,12 @@ redis:
     #      - chart-example.local
 
   resources:
-    requests: {}
-      #cpu: 1m
-      #memory: 9Mi
-    limits: {}
-      #cpu: 100m
-      #memory: 10Mi
-    # We usually recommend not to specify default resources and to leave this as a conscious
-    # choice for the user. This also increases chances charts run on environments with little
-    # resources, such as Minikube. If you do want to specify resources, uncomment the following
-    # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
-    # limits:
-    #   cpu: 100m
-    #   memory: 128Mi
-    # requests:
-    #   cpu: 100m
-    #   memory: 128Mi
+    requests:
+      cpu: 10m
+      memory: 10Mi
+    limits:
+      cpu: 100m
+      memory: 100Mi
 
   autoscaling:
     enabled: false
@@ -212,9 +202,9 @@ app:
   resources:
     requests:
       cpu: 100m
-      memory: 128Mi
+      memory: 3Gi
     limits:
-      cpu: 3000m
+      cpu: 1000m
       memory: 4Gi
     # We usually recommend not to specify default resources and to leave this as a conscious
     # choice for the user. This also increases chances charts run on environments with little
@@ -302,12 +292,12 @@ web:
     #      - chart-example.local
 
   resources:
-    requests: {}
-      #cpu: 1m
-      #memory: 9Mi
-    limits: {}
-      #cpu: 100m
-      #memory: 10Mi
+    requests:
+      cpu: 10m
+      memory: 30Mi
+    limits:
+      cpu: 100m
+      memory: 100Mi
     # We usually recommend not to specify default resources and to leave this as a conscious
     # choice for the user. This also increases chances charts run on environments with little
     # resources, such as Minikube. If you do want to specify resources, uncomment the following
@@ -386,12 +376,12 @@ cron:
     #      - chart-example.local
 
   resources:
-    requests: {}
-      #cpu: 1m
-    #memory: 9Mi
-    limits: {}
-      #cpu: 100m
-    #memory: 10Mi
+    requests:
+      cpu: 10m
+      memory: 10Mi
+    limits:
+      cpu: 100m
+      memory: 25Mi
     # We usually recommend not to specify default resources and to leave this as a conscious
     # choice for the user. This also increases chances charts run on environments with little
     # resources, such as Minikube. If you do want to specify resources, uncomment the following

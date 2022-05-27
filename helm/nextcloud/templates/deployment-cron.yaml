@@ -32,7 +32,7 @@ spec:
       securityContext:
         {{- toYaml .Values.cron.podSecurityContext | nindent 8 }}
       containers:
-        - name: {{ .Chart.Name }}
+        - name: {{ .Chart.Name }}-cron
           command: ["/cron.sh"]
           securityContext:
             {{- toYaml .Values.cron.securityContext | nindent 12 }}
