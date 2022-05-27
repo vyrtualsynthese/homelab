@@ -1,4 +1,4 @@
-FROM nextcloud:fpm-alpine
+FROM nextcloud:24.0.1-fpm-alpine
 
 RUN mkdir /data; \
     chown -R www-data:root /data; \
