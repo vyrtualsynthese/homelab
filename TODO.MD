@@ -1,23 +1,28 @@
-+ Nextcloud
-  + Refacto Helm chart
-  + Refacto Limits
-+ Plex Media Center
-  + Test torrent download
-  + Configure gateway for plex namespace
-  + Move official Qtorrent into plex
-  + Configure ingress for qtorrent pannel
-  + ...
 + Securisation cluster
   + Change all DB password
   + Change all apps password
   + Private Network HTTPS
+  + Refacto Helm chart
+  + Refacto Limits
+  + Manage https
++ Connect Cluster to internet
+  + dashy.home.ashudev.com
+  + nextcloud.home.ashudev.com
+  + radarr.home.ashudev.com
+  + sonarr.home.ashudev.com
+  + qbittorrent.home.ashudev.com
+  + plex.home.ashudev.com
+  + jacket.home.ashudev.com
++ Doc
+  + Implement documentation solution
++ Photo management system
++ Book Management system
++ Music Management system
 + Ansible
   + Update backup script
   + Install ZSH to every nodes
   + Write Ansible runner setup script
-+ Doc
-  + Implement documentation solution
-+ Wireguard VPN
++ Wireguard VPN ???
 + Docker Repo
   + Docker repo on NaS
 + Infra
@@ -25,17 +30,8 @@
   + Better Switch
 + OpenHab
   + Implement Solution
-+ Torrent Web Client
 + CI
   + Look for open source CI solution for home lab
-+ Certmanager
-  + Implement Working Solution
-+ Connect Cluster to internet
-  + home.ashudev.com
-  + dashy.ashudev.com
-  + grafana.ashudev.com
-  + home.ashudev.com/dashboard
-  + prom.ashudev.com
 + KVM
   + PiKVM
 + Look into egress to use protonVPN
