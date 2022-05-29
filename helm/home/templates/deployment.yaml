@@ -20,7 +20,7 @@ spec:
       labels:
         {{- include "home.selectorLabels" . | nindent 8 }}
     spec:
-      serviceAccountName: {{ include "home.serviceAccountName" . }}
+      serviceAccountName: ""
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:
@@ -32,6 +32,19 @@ spec:
           ports:
             - name: web
               containerPort: 80
+          livenessProbe:
+            httpGet:
+              path: /
+              port: web
+            failureThreshold: 5
+            periodSeconds: 10
+          startupProbe:
+            httpGet:
+              scheme: HTTP
+              path: /
+              port: web
+            failureThreshold: 30
+            periodSeconds: 10
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
       {{- with .Values.nodeSelector }}

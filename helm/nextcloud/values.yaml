@@ -85,7 +85,15 @@ db:
 
   tolerations: []
 
-  affinity: {}
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+          - matchExpressions:
+            - key: kubernetes.io/hostname
+              operator: In
+              values:
+                - nas
 
 redis:
   image:
@@ -166,7 +174,7 @@ app:
     repository: registry.hub.docker.com/vyrtualsynthese/next-cloud-app
     pullPolicy: IfNotPresent
     # Overrides the image tag whose default is the chart appVersion.
-    tag: multi-arch-d21bed4
+    tag: multi-arch-8ec997d
 
   imagePullSecrets: []
   nameOverride: "next-cloud-app"
@@ -243,7 +251,7 @@ web:
     repository: registry.hub.docker.com/vyrtualsynthese/next-cloud-web
     pullPolicy: IfNotPresent
     # Overrides the image tag whose default is the chart appVersion.
-    tag: multi-arch-4e4a594
+    tag: multi-arch-8ec997d
 
   imagePullSecrets: []
   nameOverride: "next-cloud-web"
@@ -320,14 +328,22 @@ web:
 
   tolerations: []
 
-  affinity: {}
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+          - matchExpressions:
+            - key: kubernetes.io/hostname
+              operator: In
+              values:
+                - nas
 
 cron:
   image:
-    repository: nextcloud
+    repository: registry.hub.docker.com/vyrtualsynthese/next-cloud-app
     pullPolicy: IfNotPresent
     # Overrides the image tag whose default is the chart appVersion.
-    tag: 23.0.4-fpm-alpine
+    tag: multi-arch-8ec997d
 
   imagePullSecrets: []
   nameOverride: "next-cloud-cron"
@@ -404,4 +420,12 @@ cron:
 
   tolerations: []
 
-  affinity: {}
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+          - matchExpressions:
+            - key: kubernetes.io/hostname
+              operator: In
+              values:
+                - nas
