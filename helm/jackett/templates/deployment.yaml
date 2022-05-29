@@ -40,6 +40,19 @@ spec:
           ports:
             - name: jackett-webui
               containerPort: 9117
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: jackett-webui
+            failureThreshold: 5
+            periodSeconds: 10
+          startupProbe:
+            httpGet:
+              scheme: HTTP
+              path: /health
+              port: jackett-webui
+            failureThreshold: 120
+            periodSeconds: 10
           env:
             - name: "TZ"
               value: "Europe/Paris"
