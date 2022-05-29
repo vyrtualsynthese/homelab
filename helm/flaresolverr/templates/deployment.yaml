@@ -36,6 +36,19 @@ spec:
           ports:
             - name: flaresolverr
               containerPort: 8191
+          livenessProbe:
+            httpGet:
+              path: /
+              port: flaresolverr
+            failureThreshold: 5
+            periodSeconds: 10
+          startupProbe:
+            httpGet:
+              scheme: HTTP
+              path: /
+              port: flaresolverr
+            failureThreshold: 120
+            periodSeconds: 10
           env:
             - name: "TZ"
               value: "Europe/Paris"
