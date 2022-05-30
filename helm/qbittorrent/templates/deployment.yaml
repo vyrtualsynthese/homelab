@@ -35,6 +35,18 @@ spec:
         - name: "dev-tun" # Needed for VPN
           hostPath:
             path: "/dev/net/tun"
+        - name: ovpn-conf
+          secret:
+            secretName: openvpnconf
+            items:
+              - key: conf.ovpn
+                path: conf.ovpn
+        - name: wg0-conf
+          secret:
+            secretName: wireguard
+            items:
+              - key: wg0
+                path: wg0.conf
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
@@ -42,6 +54,20 @@ spec:
       serviceAccountName: {{ include "serviceAccountName" . }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      initContainers:
+        - name: init-qbittorrent
+          image: busybox:1.28
+          command: [ 'sh', '-c', "mkdir -p config/openvpn && mkdir -p config/wireguard && cp /secret/ovpn/conf.ovpn /config/openvpn/proton.ovpn && cp /secret/wg/wg0.conf /config/wireguard/wg0.conf" ]
+          volumeMounts:
+          - name: ovpn-conf
+            mountPath: "/secret/ovpn"
+            readOnly: true
+          - name: wg0-conf
+            mountPath: "/secret/wg"
+            readOnly: true
+          - name: qbittorrent-config-volume
+            mountPath: /config
+
       containers:
         - name: {{ .Chart.Name }}
           securityContext:
@@ -63,7 +89,7 @@ spec:
             - name: VPN_ENABLED
               value: "yes"
             - name: VPN_TYPE
-              value: "openvpn" # VPN provider. List of supported providers: https://haugene.github.io/docker-transmission-openvpn/supported-providers/
+              value: "wireguard" # VPN provider. List of supported providers: https://haugene.github.io/docker-transmission-openvpn/supported-providers/
             - name: VPN_USERNAME
               valueFrom: # Reference to the secret | openvpn.username
                 secretKeyRef:
