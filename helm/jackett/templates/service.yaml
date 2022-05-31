@@ -8,6 +8,7 @@ spec:
   type: {{ .Values.service.type }}
   ports:
     - port: 9117
+      name: jackett-webui
       targetPort: jackett-webui
   selector:
     {{- include "selectorLabels" . | nindent 4 }}
