@@ -8,6 +8,7 @@ spec:
   type: {{ .Values.service.type }}
   ports:
     - port: 7878
+      name: sonarr-webui
       targetPort: sonarr-webui
   selector:
     {{- include "selectorLabels" . | nindent 4 }}

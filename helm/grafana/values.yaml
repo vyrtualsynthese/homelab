@@ -53,12 +53,12 @@ deploymentStrategy:
 readinessProbe:
   httpGet:
     path: /api/health
-    port: 3000
+    port: grafana
 
 livenessProbe:
   httpGet:
     path: /api/health
-    port: 3000
+    port: grafana
   initialDelaySeconds: 60
   timeoutSeconds: 30
   failureThreshold: 10
@@ -70,7 +70,7 @@ livenessProbe:
 
 image:
   repository: grafana/grafana
-  tag: 8.1.6
+  tag: 8.5.4
   sha: ""
   pullPolicy: IfNotPresent
 
@@ -145,11 +145,11 @@ service:
   enabled: true
   type: ClusterIP
   port: 80
-  targetPort: 3000
+  targetPort: grafana
     # targetPort: 4181 To be used with a proxy extraContainer
   annotations: {}
   labels: {}
-  portName: service
+  portName: web
 
 serviceMonitor:
   ## If true, a ServiceMonitor CRD is created for a prometheus operator
@@ -224,8 +224,8 @@ ingressRoute:
 
 resources:
   limits:
-    cpu: 200m
-    memory: 75Mi
+    cpu: 1000m
+    memory: 200Mi
   requests:
     cpu: 7m
     memory: 50Mi

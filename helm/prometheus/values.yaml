@@ -48,7 +48,7 @@ alertmanager:
   ##
   image:
     repository: quay.io/prometheus/alertmanager
-    tag: v0.21.0
+    tag: v0.24.0
     pullPolicy: IfNotPresent
 
   ## alertmanager priorityClassName
@@ -467,7 +467,7 @@ nodeExporter:
   ##
   image:
     repository: quay.io/prometheus/node-exporter
-    tag: v1.1.2
+    tag: v1.3.1
     pullPolicy: IfNotPresent
 
   ## Specify if a Pod Security Policy for node-exporter must be created
@@ -642,7 +642,7 @@ server:
   ##
   image:
     repository: quay.io/prometheus/prometheus
-    tag: v2.26.0
+    tag: v2.36.0
     pullPolicy: IfNotPresent
 
   ## prometheus server priorityClassName
@@ -1086,7 +1086,7 @@ pushgateway:
   ##
   image:
     repository: prom/pushgateway
-    tag: v1.3.1
+    tag: v1.4.3
     pullPolicy: IfNotPresent
 
   ## pushgateway priorityClassName

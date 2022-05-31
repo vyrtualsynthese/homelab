@@ -8,6 +8,7 @@ spec:
   type: {{ .Values.web.service.type }}
   ports:
     - port: 5432
-      targetPort: 5432
+      name: postgres
+      targetPort: postgres
   selector:
     {{- include "nextcloud.db.selectorLabels" . | nindent 4 }}

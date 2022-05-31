@@ -24,5 +24,5 @@ spec:
       kind: Rule
       services:
         - name: sonarr
-          port: 7878
+          port: sonarr-webui
 {{- end }}

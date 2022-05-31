@@ -38,7 +38,7 @@ spec:
           image: "{{ .Values.db.image.repository }}:{{ .Values.db.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.db.image.pullPolicy }}
           ports:
-            - name: db
+            - name: postgres
               containerPort: 5432
           env:
             - name: "POSTGRES_PASSWORD"
