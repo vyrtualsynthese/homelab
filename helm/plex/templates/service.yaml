@@ -8,6 +8,7 @@ spec:
   type: {{ .Values.plex.service.type }}
   ports:
     - port: 32400
-      targetPort: 32400
+      name: plex
+      targetPort: plex
   selector:
     {{- include "nextcloud.plex.selectorLabels" . | nindent 4 }}

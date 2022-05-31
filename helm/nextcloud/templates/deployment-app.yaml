@@ -41,7 +41,7 @@ spec:
           image: "{{ .Values.app.image.repository }}:{{ .Values.app.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.app.image.pullPolicy }}
           ports:
-            - name: app-port
+            - name: next-cloud-app
               containerPort: 9000
           env:
             - name: "PHP_UPLOAD_LIMIT"

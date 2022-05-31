@@ -8,6 +8,7 @@ spec:
   type: {{ .Values.service.type }}
   ports:
     - port: 8080
+      name: torrent-webui
       targetPort: torrent-webui
 {{/*    - port: 6881*/}}
 {{/*      name: torrent-udp*/}}

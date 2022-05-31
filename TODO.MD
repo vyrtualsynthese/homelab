@@ -4,7 +4,6 @@
   + Change all apps password
   + Private Network HTTPS
   + Refacto Helm chart
-  + Refacto Limits
   + Manage https
 + Connect Cluster to internet
   + dashy.home.ashudev.com

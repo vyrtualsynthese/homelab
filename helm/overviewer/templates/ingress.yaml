@@ -24,5 +24,5 @@ spec:
       kind: Rule
       services:
         - name: overviewer-web
-          port: 80
+          port: web
 {{- end }}
