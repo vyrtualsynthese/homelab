@@ -62,7 +62,7 @@ db:
       memory: 50Mi
     limits:
       cpu: 1000m
-      memory: 128Mi
+      memory: 500Mi
     # We usually recommend not to specify default resources and to leave this as a conscious
     # choice for the user. This also increases chances charts run on environments with little
     # resources, such as Minikube. If you do want to specify resources, uncomment the following
