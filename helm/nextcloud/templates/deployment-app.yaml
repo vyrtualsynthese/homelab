@@ -43,6 +43,8 @@ spec:
           ports:
             - name: next-cloud-app
               containerPort: 9000
+            - name: php-fpm-status
+              containerPort: 9001
           env:
             - name: "PHP_UPLOAD_LIMIT"
               value: "100G"

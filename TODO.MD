@@ -1,4 +1,4 @@
-+ Name all cluster ports
++ health check for all pods
 + Securisation cluster
   + Change all DB password
   + Change all apps password
@@ -15,6 +15,7 @@
   + jacket.home.ashudev.com
 + Doc
   + Implement documentation solution
++ Global smtp server
 + Photo management system
 + Book Management system
 + Music Management system
@@ -23,19 +24,19 @@
   + Install ZSH to every nodes
   + Write Ansible runner setup script
 + Wireguard VPN ???
++ global databases
++ Egress VPN Gateway
 + Docker Repo
   + Docker repo on NaS
 + Infra
   + Power Supply
   + Better Switch
-+ OpenHab
++ Home assistant
   + Implement Solution
 + CI
-  + Look for open source CI solution for home lab
+  + github actions ci node
 + KVM
   + PiKVM
-+ Look into egress to use protonVPN
-+ https://greg.jeanmart.me/2020/04/13/self-host-your-media-center-on-kubernetes-wi/
 + Terraform
     + Job to apply kubectl commands via terraform
     + Job to apply Helm via terraform
