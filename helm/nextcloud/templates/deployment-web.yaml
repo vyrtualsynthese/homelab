@@ -29,6 +29,14 @@ spec:
         - name: next-cloud-app-volume
           persistentVolumeClaim:
             claimName: next-cloud-app
+        - name: conf-cache-volume
+          emptyDir: {}
+        - name: nextcloud-web-secret
+          secret:
+            secretName: nextcloud-web
+            items:
+              - key: nginx.conf
+                path: nginx.conf
       {{- with .Values.web.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
@@ -48,8 +56,20 @@ spec:
           resources:
             {{- toYaml .Values.web.resources | nindent 12 }}
           volumeMounts:
+            - mountPath: /etc/nginx
+              name: conf-cache-volume
             - name: next-cloud-app-volume
               mountPath: /var/www/html
+      initContainers:
+        - name: init-nextcloud-web
+          image: "{{ .Values.web.image.repository }}:{{ .Values.web.image.tag | default .Chart.AppVersion }}"
+          command: [ 'sh', '-c', "cp -r /etc/nginx/* /cache && cp /secret/nginx.conf /cache/nginx.conf && ls /cache" ]
+          volumeMounts:
+            - mountPath: /cache
+              name: conf-cache-volume
+            - name: nextcloud-web-secret
+              mountPath: "/secret"
+              readOnly: true
       {{- with .Values.web.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
