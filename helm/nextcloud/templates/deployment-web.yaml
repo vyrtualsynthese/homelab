@@ -61,15 +61,18 @@ spec:
             - name: next-cloud-app-volume
               mountPath: /var/www/html
       initContainers:
-        - name: init-nextcloud-web
+        - name: init-nextcloud-nginx-src
           image: "{{ .Values.web.image.repository }}:{{ .Values.web.image.tag | default .Chart.AppVersion }}"
-          command: [ 'sh', '-c', "cp -r /etc/nginx/* /cache && cp /secret/nginx.conf /cache/nginx.conf && ls /cache" ]
+          command: [ 'sh', '-c', "cp -r /etc/nginx/* /cache" ]
           volumeMounts:
             - mountPath: /cache
               name: conf-cache-volume
-            - name: nextcloud-web-secret
-              mountPath: "/secret"
-              readOnly: true
+        - name: init-nextcloud-nginx-config
+          image: busybox:1.35
+          command: [ 'sh', '-c', "wget -P /tmp https://raw.githubusercontent.com/vyrtualsynthese/homelab/main/config/next-cloud-web/nginx.conf && cp /tmp/nginx.conf /cache" ]
+          volumeMounts:
+            - mountPath: /cache
+              name: conf-cache-volume
       {{- with .Values.web.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
