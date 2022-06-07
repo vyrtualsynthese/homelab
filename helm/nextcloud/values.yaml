@@ -174,7 +174,7 @@ app:
     repository: registry.hub.docker.com/vyrtualsynthese/next-cloud-app
     pullPolicy: IfNotPresent
     # Overrides the image tag whose default is the chart appVersion.
-    tag: multi-arch-8ec997d
+    tag: multi-arch-c8c4d77
 
   imagePullSecrets: []
   nameOverride: "next-cloud-app"
@@ -248,10 +248,10 @@ app:
 
 web:
   image:
-    repository: registry.hub.docker.com/vyrtualsynthese/next-cloud-web
+    repository: nginx
     pullPolicy: IfNotPresent
     # Overrides the image tag whose default is the chart appVersion.
-    tag: multi-arch-8ec997d
+    tag: 1.22.0-alpine
 
   imagePullSecrets: []
   nameOverride: "next-cloud-web"

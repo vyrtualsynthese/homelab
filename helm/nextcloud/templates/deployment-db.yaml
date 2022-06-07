@@ -40,6 +40,18 @@ spec:
           ports:
             - name: postgres
               containerPort: 5432
+          livenessProbe:
+            exec:
+              command:
+                - pg_isready
+            failureThreshold: 5
+            periodSeconds: 10
+          startupProbe:
+            exec:
+              command:
+                - pg_isready
+            failureThreshold: 10
+            periodSeconds: 10
           env:
             - name: "POSTGRES_PASSWORD"
               valueFrom:
@@ -61,6 +73,7 @@ spec:
           volumeMounts:
             - name: next-cloud-db-volume
               mountPath: /var/lib/postgresql/data
+      terminationGracePeriodSeconds: 300
       {{- with .Values.db.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

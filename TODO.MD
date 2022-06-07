@@ -1,4 +1,14 @@
++ Gracefull shutdown kub
+  + for minecraft server
+  + for databases
 + health check for all pods
+  + next cloud php health check
+  + minecraft health check
++ Refacto
+  + nextcloud app & nextcloud web config injection via volume and initContainer
+  + Dashy inject config via initContainer
+  + Inject home via initContainer
+  + Overviewer conf via initContainer
 + Securisation cluster
   + Change all DB password
   + Change all apps password
@@ -15,6 +25,7 @@
   + jacket.home.ashudev.com
 + Doc
   + Implement documentation solution
++ Steam trade bot https://github.com/Refloow/Steam-Card-Bot-PRO/wiki/Installation
 + Global smtp server
 + Photo management system
 + Book Management system
