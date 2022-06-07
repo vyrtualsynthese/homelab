@@ -51,7 +51,7 @@ spec:
               scheme: HTTP
               path: /health
               port: jackett-webui
-            failureThreshold: 120
+            failureThreshold: 10
             periodSeconds: 10
           env:
             - name: "TZ"
