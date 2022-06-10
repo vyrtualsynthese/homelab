@@ -5,7 +5,7 @@ metadata:
   labels:
     {{- include "dashy.labels" . | nindent 4 }}
 spec:
-  type: {{ .Values.service.type }}
+  type: ClusterIP
   ports:
     - port: 80
       name: web

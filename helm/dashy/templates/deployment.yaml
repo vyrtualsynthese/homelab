@@ -30,6 +30,15 @@ spec:
       serviceAccountName: {{ include "dashy.serviceAccountName" . }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      volumes:
+        - name: dashy-shared-volume
+          emptyDir: {}
+        - name: dashy-configmap-volume
+          configMap:
+            name: dashy
+            items:
+            - key: conf.yml
+              path: conf.yml
       containers:
         - name: {{ .Chart.Name }}
           securityContext:
@@ -39,8 +48,21 @@ spec:
           ports:
             - name: web
               containerPort: 80
+          volumeMounts:
+            - name: dashy-shared-volume
+              subPath: conf.yml
+              mountPath: /app/public/conf.yml
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
+      initContainers:
+        - name: init-dashy
+          image: busybox:1.35
+          command: [ 'sh', '-c', "ls /configmap && cp /configmap/conf.yml /config && ls /config" ]
+          volumeMounts:
+            - name: dashy-shared-volume
+              mountPath: /config
+            - name: dashy-configmap-volume
+              mountPath: /configmap
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
