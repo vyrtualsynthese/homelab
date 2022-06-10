@@ -26,6 +26,7 @@
   + jacket.home.ashudev.com
 + Doc
   + Implement documentation solution
++ Loki for log management
 + Steam trade bot https://github.com/Refloow/Steam-Card-Bot-PRO/wiki/Installation
 + Global smtp server
 + Photo management system
