@@ -4,7 +4,7 @@ appConfig:
   layout: "auto"
   iconSize: "large"
   webSearch:
-    disableWebSearch: false
+    disableWebSearch: true
   allowConfigEdit: false
   disableUpdateChecks: true
   disableContextMenu: true
@@ -78,10 +78,6 @@ sections:
 
   - name: "Divers"
     items:
-      - title: "Home"
-        icon: "fas fa-home"
-        url: "http://home.local"
-        target: "newtab"
       - title: "Philips Hue Dashboard"
         icon: "https://upload.wikimedia.org/wikipedia/en/a/a1/Philips_hue_logo.png"
         url: "http://192.168.1.10/"
