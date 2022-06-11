@@ -63,7 +63,7 @@ spec:
       initContainers:
         - name: init-nextcloud-nginx-src
           image: "{{ .Values.web.image.repository }}:{{ .Values.web.image.tag | default .Chart.AppVersion }}"
-          command: [ 'sh', '-c', "rm /etc/nginx/nginx.conf && cp -r /etc/nginx/* /cache" ]
+          command: [ 'sh', '-c', "cp -r /etc/nginx/* /cache" ]
           volumeMounts:
             - mountPath: /cache
               name: conf-cache-volume
