@@ -5,7 +5,7 @@
 replicaCount: 1
 
 image:
-  repository: lissy93/dashy
+  repository: registry.hub.docker.com/vyrtualsynthese/dashy
   pullPolicy: IfNotPresent
   # Overrides the image tag whose default is the chart appVersion.
   tag: 2.1.0
@@ -41,13 +41,13 @@ ingress:
   className: ""
   annotations: {}
 
-resources: {}
-#  requests:
-#    cpu: 1m
-#    memory: 9Mi
-#  limits:
-#    cpu: 100m
-#    memory: 200Mi
+resources:
+  requests:
+    cpu: 1m
+    memory: 9Mi
+  limits:
+    cpu: 100m
+    memory: 200Mi
   # We usually recommend not to specify default resources and to leave this as a conscious
   # choice for the user. This also increases chances charts run on environments with little
   # resources, such as Minikube. If you do want to specify resources, uncomment the following
