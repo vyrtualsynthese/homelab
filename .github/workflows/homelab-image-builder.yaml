@@ -9,7 +9,7 @@ jobs:
 
     strategy:
       matrix:
-        project: [ dashy, overviewer, next-cloud-app ]
+        project: [ home, dashy, overviewer, next-cloud-app ]
     steps:
       - name: Check out repository code
         uses: actions/checkout@v2
