@@ -31,12 +31,9 @@ spec:
             claimName: next-cloud-app
         - name: conf-cache-volume
           emptyDir: {}
-        - name: nextcloud-web-secret
-          secret:
-            secretName: nextcloud-web
-            items:
-              - key: nginx.conf
-                path: nginx.conf
+        - name: next-cloud-web-configmap
+          configMap:
+            name: {{ include "nextcloud.web.fullname" . }}
       {{- with .Values.web.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
@@ -56,23 +53,20 @@ spec:
           resources:
             {{- toYaml .Values.web.resources | nindent 12 }}
           volumeMounts:
-            - mountPath: /etc/nginx
+            - mountPath: /etc/nginx/nginx.conf
+              subPath: nginx.conf
               name: conf-cache-volume
             - name: next-cloud-app-volume
               mountPath: /var/www/html
       initContainers:
-        - name: init-nextcloud-nginx-src
-          image: "{{ .Values.web.image.repository }}:{{ .Values.web.image.tag | default .Chart.AppVersion }}"
-          command: [ 'sh', '-c', "cp -r /etc/nginx/* /cache" ]
-          volumeMounts:
-            - mountPath: /cache
-              name: conf-cache-volume
         - name: init-nextcloud-nginx-config
           image: busybox:1.35
-          command: [ 'sh', '-c', "wget -P /tmp https://raw.githubusercontent.com/vyrtualsynthese/homelab/main/config/next-cloud-web/nginx.conf && cp /tmp/nginx.conf /cache" ]
+          command: [ 'sh', '-c', "cp /config/nginx.conf /cache" ]
           volumeMounts:
             - mountPath: /cache
               name: conf-cache-volume
+            - mountPath: /config
+              name: next-cloud-web-configmap
       {{- with .Values.web.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
