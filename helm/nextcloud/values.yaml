@@ -171,10 +171,10 @@ redis:
 
 app:
   image:
-    repository: registry.hub.docker.com/vyrtualsynthese/next-cloud-app
+    repository: nextcloud
     pullPolicy: IfNotPresent
     # Overrides the image tag whose default is the chart appVersion.
-    tag: multi-arch-c8c4d77
+    tag: 24.0.1-fpm-alpine
 
   imagePullSecrets: []
   nameOverride: "next-cloud-app"
