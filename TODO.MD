@@ -1,19 +1,10 @@
-+ Gracefull shutdown kub
-  + for minecraft server
-  + for databases
-+ health check for all pods
-  + next cloud php health check
-  + minecraft health check
 + Refacto
-  + nextcloud app & nextcloud web config injection via volume and initContainer
-  + Dashy inject config via initContainer
-  + Inject home via initContainer
   + Overviewer conf via initContainer
+  + qbittorrent with init container
+  + Minecraft server config via volume
 + Securisation cluster
   + Change all DB password
   + Change all apps password
-  + Private Network HTTPS
-  + Refacto Helm chart
   + Manage https
 + Connect Cluster to internet
   + dashy.home.ashudev.com

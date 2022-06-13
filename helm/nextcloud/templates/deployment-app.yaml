@@ -27,6 +27,11 @@ spec:
         - name: next-cloud-app-volume
           persistentVolumeClaim:
             claimName: next-cloud-app
+        - name: conf-cache-volume
+          emptyDir: {}
+        - name: next-cloud-app-configmap
+          configMap:
+            name: {{ include "nextcloud.web.fullname" . }}
       {{- with .Values.app.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
@@ -76,6 +81,21 @@ spec:
               mountPath: /data
             - name: next-cloud-app-volume
               mountPath: /var/www/html
+            - mountPath: /usr/local/etc/php/php.ini-production
+              subPath: php.ini-production
+              name: conf-cache-volume
+            - mountPath: /usr/local/etc/php-fpm.d/www.conf
+              subPath: www.conf
+              name: conf-cache-volume
+      initContainers:
+        - name: init-nextcloud-nginx-config
+          image: busybox:1.35
+          command: [ 'sh', '-c', "cp /config/* /cache" ]
+          volumeMounts:
+            - mountPath: /cache
+              name: conf-cache-volume
+            - mountPath: /config
+              name: next-cloud-app-configmap
       {{- with .Values.app.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
