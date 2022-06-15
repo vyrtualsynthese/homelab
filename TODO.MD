@@ -1,7 +1,9 @@
++ php status.php
 + Refacto
-  + Overviewer conf via initContainer
   + qbittorrent with init container
   + Minecraft server config via volume
+  + Overviewer conf via initContainer
+  + Overviewer cron job into helm
 + Securisation cluster
   + Change all DB password
   + Change all apps password
@@ -38,6 +40,7 @@
   + Implement Solution
 + CI
   + github actions ci node
+  + Terraform to manage PV, namespaces, storage class
 + KVM
   + PiKVM
 + Terraform
