@@ -12,10 +12,7 @@ spec:
     matchLabels:
       {{- include "mc.selectorLabels" . | nindent 6 }}
   strategy:
-    type: RollingUpdate
-    rollingUpdate:
-      maxUnavailable: 25%
-      maxSurge: 25%
+    type: Recreate
   template:
     metadata:
       {{- with .Values.podAnnotations }}
@@ -54,7 +51,7 @@ spec:
             - name: MAX_WORLD_SIZE
               value: "12500"
             - name: VERSION
-              value: "1.18.1"
+              value: "1.19"
             - name: ANNOUNCE_PLAYER_ACHIEVEMENTS
               value: "FALSE"
             - name: MODE
@@ -62,35 +59,55 @@ spec:
             - name: PVP
               value: "TRUE"
             - name: SERVER_NAME
-              value: "ashulab-1.18"
+              value: "ashulab-1.19"
             - name: VIEW_DISTANCE
-              value: "16"
-            - name: INIT_MEMORY
-              value: "512M"
-            - name: MAX_MEMORY
-              value: "6G"
-            - name: ENABLE_AUTOPAUSE
-              value: "TRUE"
+              value: "10"
+            - name: MEMORY
+              value: ""
+            - name: JVM_XX_OPTS
+              value: "-XX:MaxRAMPercentage=75"
             - name: MAX_TICK_TIME
               value: "-1"
-            - name: AUTOPAUSE_TIMEOUT_EST
-              value: "60"
-            - name: AUTOPAUSE_TIMEOUT_INIT
-              value: "60"
             - name: ENABLE_JMX
               value: "true"
             - name: JMX_HOST
               value: "0.0.0.0"
+            - name: STOP_SERVER_ANNOUNCE_DELAY
+              value: "30"
             - name: ENABLE_ROLLING_LOGS
               value: "true"
           ports:
             - name: mc
               containerPort: 25565
+            - name: jmx
+              containerPort: 7091
+          startupProbe:
+            tcpSocket:
+               port: 25565
+            failureThreshold: 5
+            periodSeconds: 60
+          readinessProbe:
+            tcpSocket:
+              port: 25565
+            initialDelaySeconds: 30
+            periodSeconds: 5
+            failureThreshold: 10
+            successThreshold: 1
+            timeoutSeconds: 1
+          livenessProbe:
+            tcpSocket:
+              port: 25565
+            initialDelaySeconds: 30
+            periodSeconds: 5
+            failureThreshold: 10
+            successThreshold: 1
+            timeoutSeconds: 1
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
           volumeMounts:
             - name: minecraft-server-volume
               mountPath: /data
+      terminationGracePeriodSeconds: 300
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
