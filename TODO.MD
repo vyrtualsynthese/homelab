@@ -1,9 +1,13 @@
 + php status.php
++ NAS V2
+  + Finish moving files to new raid array
+  + Move PV to new array
+  + Add old HDD to new array
+  + NFS for HDD
++ Doc
+  + Implement https://docusaurus.io/ for documentation
 + Refacto
-  + qbittorrent with init container
-  + Minecraft server config via volume
-  + Overviewer conf via initContainer
-  + Overviewer cron job into helm
+  + Resize minecraft data pv to 50Go
 + Securisation cluster
   + Change all DB password
   + Change all apps password
@@ -16,16 +20,20 @@
   + qbittorrent.home.ashudev.com
   + plex.home.ashudev.com
   + jacket.home.ashudev.com
-+ Doc
-  + Implement documentation solution
+  + dashy public version
++ Replace rbps Master node with Intel Nuc
+  + 1 additional ssd for Intel Nuc
++ Implement better storage
+  + NFS for HDD volumes
+  + Longhorn for ssd
+    + Min 1 SSD for every nodes
+    + Manage Backup
 + Loki for log management
-+ Steam trade bot https://github.com/Refloow/Steam-Card-Bot-PRO/wiki/Installation
 + Global smtp server
 + Photo management system
 + Book Management system
 + Music Management system
 + Ansible
-  + Update backup script
   + Install ZSH to every nodes
   + Write Ansible runner setup script
 + Wireguard VPN ???
@@ -46,3 +54,4 @@
 + Terraform
     + Job to apply kubectl commands via terraform
     + Job to apply Helm via terraform
++ Discord Alarms and notifications
