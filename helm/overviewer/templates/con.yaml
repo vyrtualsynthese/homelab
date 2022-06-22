@@ -1,0 +1,54 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "overviewer.fullname" . }}
+  labels:
+    {{- include "overviewer.labels" . | nindent 4 }}
+spec:
+  schedule: "0 6 * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          nodeName: xps-13
+          volumes:
+            - name: minecraft-server-volume
+              persistentVolumeClaim:
+                claimName: minecraft-server
+            - name: render-minecraft-server-volume
+              persistentVolumeClaim:
+                claimName: render-minecraft-server
+            - name: conf-cache-volume
+              emptyDir: {}
+            - name: overviewer-configmap
+              configMap:
+                name: {{ include "overviewer.fullname" . }}
+          initContainers:
+            - name: init-nextcloud-nginx-config
+              image: busybox:1.35
+              command: [ 'sh', '-c', "cp /config/config /cache" ]
+              volumeMounts:
+                - mountPath: /cache
+                  name: conf-cache-volume
+                - mountPath: /config
+                  name: overviewer-configmap
+          containers:
+            - name: overviewer
+              image: registry.hub.docker.com/vyrtualsynthese/overviewer:multi-arch-832ae4b
+              imagePullPolicy: IfNotPresent
+              resources:
+                limits:
+                  cpu: 1000m
+                  memory: 1Gi
+                requests:
+                  cpu: 100m
+                  memory: 100Mi
+              volumeMounts:
+                - name: minecraft-server-volume
+                  mountPath: /app/overviewer/src/Minecraft-Overviewer-master/world
+                - name: render-minecraft-server-volume
+                  mountPath: /app/overviewer/src/Minecraft-Overviewer-master/render
+                - mountPath: /app/overviewer/src/Minecraft-Overviewer-master/config
+                  subPath: config
+                  name: conf-cache-volume
+          restartPolicy: OnFailure
