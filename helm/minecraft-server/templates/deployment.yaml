@@ -64,6 +64,8 @@ spec:
               value: "10"
             - name: MEMORY
               value: ""
+            - name: TYPE
+              value: "PAPER"
             - name: JVM_XX_OPTS
               value: "-XX:MaxRAMPercentage=75"
             - name: MAX_TICK_TIME
@@ -71,7 +73,9 @@ spec:
             - name: ENABLE_JMX
               value: "true"
             - name: JMX_HOST
-              value: "0.0.0.0"
+              value: "127.0.0.1"
+            - name: USE_AIKAR_FLAGS
+              value: "true"
             - name: STOP_SERVER_ANNOUNCE_DELAY
               value: "30"
             - name: ENABLE_ROLLING_LOGS
