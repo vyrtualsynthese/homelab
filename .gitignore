@@ -13,3 +13,4 @@ world
 restic_env.yaml
 etc-dnsmasq.d
 etc-pihole
+build
