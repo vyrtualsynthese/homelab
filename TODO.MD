@@ -1,14 +1,13 @@
 + Securisation cluster
-  + Change all DB password
+  + Change next cloud DB password
+  + Change next cloud cache password
   + Change all apps password
-  + Manage https
 + Connect Cluster to internet
-  + dashy.home.ashudev.com
   + nextcloud.home.ashudev.com
-  + qbittorrent.home.ashudev.com
-  + plex.home.ashudev.com
-  + jacket.home.ashudev.com
-  + dashy pasword and tab for public version
++ Minecraft v2
+  + Update overviewer for evey worlds
++ https://github.com/rcon-web-admin/rcon-web-admin
++ factorio server
 + php status.php
 + NAS V2
   + Finish moving files to new raid array
@@ -17,8 +16,6 @@
   + NFS for HDD
 + Doc
   + Implement https://docusaurus.io/ for documentation
-+ Refacto
-  + Resize minecraft data pv to 50Go
 + Replace rbps Master node with Intel Nuc
   + 1 additional ssd for Intel Nuc
 + Implement better storage

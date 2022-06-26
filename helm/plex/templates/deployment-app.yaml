@@ -1,24 +1,24 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "nextcloud.plex.fullname" . }}
+  name: {{ include "fullname" . }}
   labels:
-    {{- include "nextcloud.plex.labels" . | nindent 4 }}
+    {{- include "labels" . | nindent 4 }}
 spec:
-  {{- if not .Values.plex.autoscaling.enabled }}
+  {{- if not .Values.autoscaling.enabled }}
   replicas: {{ .Values.replicaCount }}
   {{- end }}
   selector:
     matchLabels:
-      {{- include "nextcloud.plex.selectorLabels" . | nindent 6 }}
+      {{- include "selectorLabels" . | nindent 6 }}
   template:
     metadata:
-      {{- with .Values.plex.podAnnotations }}
+      {{- with .Values.podAnnotations }}
       annotations:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       labels:
-        {{- include "nextcloud.plex.selectorLabels" . | nindent 8 }}
+        {{- include "selectorLabels" . | nindent 8 }}
     spec:
       volumes:
         - name: plex-config-volume
@@ -32,20 +32,20 @@ spec:
             claimName: plex-data
         - name: plex-media-volume
           persistentVolumeClaim:
-            claimName: plex-media
-      {{- with .Values.plex.imagePullSecrets }}
+            claimName: plex-media-hdd
+      {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      serviceAccountName: {{ include "nextcloud.plex.serviceAccountName" . }}
+      serviceAccountName: {{ include "serviceAccountName" . }}
       securityContext:
-        {{- toYaml .Values.plex.podSecurityContext | nindent 8 }}
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:
         - name: {{ .Chart.Name }}
           securityContext:
-            {{- toYaml .Values.plex.securityContext | nindent 12 }}
-          image: "{{ .Values.plex.image.repository }}:{{ .Values.plex.image.tag | default .Chart.AppVersion }}"
-          imagePullPolicy: {{ .Values.plex.image.pullPolicy }}
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:
             - name: plex
               containerPort: 32400
@@ -53,11 +53,14 @@ spec:
             - name: "TZ"
               value: "Europe/Paris"
             - name: "PLEX_CLAIM"
-              value: "claim-mwHjJyMTKCALS1y2EJXk"
+              valueFrom:
+                secretKeyRef:
+                  name: plex
+                  key: plex_claim
             - name: "ADVERTISE_IP"
-              value: "http://plex.local/"
+              value: "https://plex.home.ashudev.com/"
           resources:
-            {{- toYaml .Values.plex.resources | nindent 12 }}
+            {{- toYaml .Values.resources | nindent 12 }}
           volumeMounts:
             - name: plex-config-volume
               mountPath: /config
@@ -67,15 +70,15 @@ spec:
               mountPath: /data
             - name: plex-media-volume
               mountPath: /media
-      {{- with .Values.plex.nodeSelector }}
+      {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      {{- with .Values.plex.affinity }}
+      {{- with .Values.affinity }}
       affinity:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      {{- with .Values.plex.tolerations }}
+      {{- with .Values.tolerations }}
       tolerations:
         {{- toYaml . | nindent 8 }}
       {{- end }}

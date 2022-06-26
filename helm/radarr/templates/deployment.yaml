@@ -29,7 +29,7 @@ spec:
             claimName: qbittorrent-download
         - name: plex-media-volume
           persistentVolumeClaim:
-            claimName: plex-media
+            claimName: plex-media-hdd
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
