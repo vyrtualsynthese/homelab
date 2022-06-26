@@ -9,7 +9,7 @@
 apiVersion: traefik.containo.us/v1alpha1
 kind: IngressRoute
 metadata:
-  name: {{ $fullName }}
+  name: {{ $fullName }}-public
   labels:
     {{- include "labels" . | nindent 4 }}
   {{- with .Values.ingress.annotations }}
@@ -18,11 +18,15 @@ metadata:
   {{- end }}
 spec:
   entryPoints:
-    - web
+    - websecure
   routes:
-    - match: Host(`plex.local`)
+    - match: Host(`plex.home.ashudev.com`)
       kind: Rule
       services:
         - name: plex
           port: plex
+  tls:
+    certResolver: le
+    options:
+      name: plex-tlsoption
 {{- end }}

@@ -1,14 +1,14 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ include "nextcloud.plex.fullname" . }}
+  name: {{ include "fullname" . }}
   labels:
-    {{- include "nextcloud.plex.labels" . | nindent 4 }}
+    {{- include "labels" . | nindent 4 }}
 spec:
-  type: {{ .Values.plex.service.type }}
+  type: {{ .Values.service.type }}
   ports:
     - port: 32400
       name: plex
       targetPort: plex
   selector:
-    {{- include "nextcloud.plex.selectorLabels" . | nindent 4 }}
+    {{- include "selectorLabels" . | nindent 4 }}
