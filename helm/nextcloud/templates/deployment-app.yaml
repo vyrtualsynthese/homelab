@@ -23,7 +23,7 @@ spec:
       volumes:
         - name: next-cloud-data-volume
           persistentVolumeClaim:
-            claimName: next-cloud-data
+            claimName: next-cloud-data-hdd
         - name: next-cloud-app-volume
           persistentVolumeClaim:
             claimName: next-cloud-app
