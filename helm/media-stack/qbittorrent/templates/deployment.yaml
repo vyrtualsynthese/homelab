@@ -102,6 +102,8 @@ spec:
                   key: "password"
             - name: LAN_NETWORK
               value: "192.168.0.0/24"
+            - name: RESTART_CONTAINER
+              value: "no"
 
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
