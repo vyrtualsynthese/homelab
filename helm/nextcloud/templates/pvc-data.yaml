@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: {{ include "nextcloud.data.fullname" . }}
+  name: {{ include "nextcloud.data.fullname" . }}-hdd
   labels:
   {{- include "nextcloud.app.labels" . | nindent 4 }}
 spec:

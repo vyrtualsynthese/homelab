@@ -1,3 +1,10 @@
++ https://github.com/recyclarr/recyclarr
++ https://github.com/StuffAnThings/qbit_manage
++ factorio server
+  + https://github.com/factoriotools/factorio-docker
++ Egress VPN Gateway
++ Clean up Plex PV mess
++ Bazarr
 + Securisation cluster
   + Change next cloud DB password
   + Change next cloud cache password
@@ -7,7 +14,6 @@
 + Minecraft v2
   + Update overviewer for evey worlds
 + https://github.com/rcon-web-admin/rcon-web-admin
-+ factorio server
 + php status.php
 + NAS V2
   + Finish moving files to new raid array
@@ -25,15 +31,16 @@
     + Manage Backup
 + Loki for log management
 + Global smtp server
++ https://tdarr.io/
++ https://snipeitapp.com/
 + Photo management system
 + Book Management system
 + Music Management system
 + Ansible
   + Install ZSH to every nodes
   + Write Ansible runner setup script
-+ Wireguard VPN ???
++ Wireguard VPN server ???
 + global databases
-+ Egress VPN Gateway
 + Docker Repo
   + Docker repo on NaS
 + Infra
