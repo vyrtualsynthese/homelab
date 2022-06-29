@@ -26,7 +26,7 @@ spec:
             claimName: radarr-config
         - name: qbittorrent-download-volume
           persistentVolumeClaim:
-            claimName: qbittorrent-download
+            claimName: qbittorrent-download-hdd
         - name: plex-media-volume
           persistentVolumeClaim:
             claimName: plex-media-hdd

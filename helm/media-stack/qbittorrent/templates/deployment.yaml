@@ -31,7 +31,7 @@ spec:
             claimName: qbittorrent-config
         - name: qbittorrent-download-volume
           persistentVolumeClaim:
-            claimName: qbittorrent-download
+            claimName: qbittorrent-download-hdd
         - name: "dev-tun" # Needed for VPN
           hostPath:
             path: "/dev/net/tun"
