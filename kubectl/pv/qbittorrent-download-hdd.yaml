@@ -1,15 +1,15 @@
 apiVersion: v1
 kind: PersistentVolume
 metadata:
-  name: qbittorrent-download
+  name: qbittorrent-download-hdd
 spec:
   capacity:
-    storage: 250Gi
+    storage: 1Ti
   volumeMode: Filesystem
   accessModes:
     - ReadWriteMany
   storageClassName: retain
   hostPath:
     path: >-
-      /var/lib/rancher/k3s/storage/qbittorrent-download
+      /media/hdd/k3s/qbittorrent-download
     type: DirectoryOrCreate

@@ -1,4 +1,3 @@
-+ https://github.com/recyclarr/recyclarr
 + https://github.com/StuffAnThings/qbit_manage
 + factorio server
   + https://github.com/factoriotools/factorio-docker
@@ -16,8 +15,6 @@
 + https://github.com/rcon-web-admin/rcon-web-admin
 + php status.php
 + NAS V2
-  + Finish moving files to new raid array
-  + Move PV to new array
   + Add old HDD to new array
   + NFS for HDD
 + Doc
