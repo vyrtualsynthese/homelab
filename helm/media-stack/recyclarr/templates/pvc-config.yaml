@@ -1,13 +1,13 @@
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: {{ include "fullname" . }}-download-hdd
+  name: {{ include "fullname" . }}-conf
   labels:
   {{- include "labels" . | nindent 4 }}
 spec:
   accessModes:
-    - ReadWriteMany
+    - ReadWriteOnce
   storageClassName: retain
   resources:
     requests:
-      storage: 1Ti
+      storage: 1Gi

@@ -1,0 +1,51 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "fullname" . }}
+  labels:
+    {{- include "labels" . | nindent 4 }}
+spec:
+  schedule: "0 6 * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          nodeName: xps-13
+          volumes:
+            - name: recyclarr-conf-volume
+              persistentVolumeClaim:
+                claimName: recyclarr-conf
+            - name: recyclarr-secret
+              secret:
+                secretName: recyclarr
+                items:
+                  - key: recyclarr.yml
+                    path: recyclarr.yml
+          initContainers:
+            - name: init-nextcloud-nginx-config
+              image: busybox:1.35
+              command: [ 'sh', '-c', "cp /secret/* /config && mkdir cache repo logs" ]
+              volumeMounts:
+                - mountPath: /config
+                  name: recyclarr-conf-volume
+                - mountPath: /secret
+                  name: recyclarr-secret
+          containers:
+            - name: {{ include "fullname" . }}
+              image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+              imagePullPolicy: {{ .Values.image.pullPolicy }}
+              command: [ "/bin/sh","-c" ]
+              args: [ "recyclarr sonarr --debug && recyclarr radarr --debug" ]
+              env:
+                - name: "TZ"
+                  value: "Europe/Paris"
+                - name: "PUID"
+                  value: "0"
+                - name: "PGID"
+                  value: "0"
+              resources:
+                {{- toYaml .Values.resources | nindent 16 }}
+              volumeMounts:
+                - name: recyclarr-conf-volume
+                  mountPath: /config
+          restartPolicy: OnFailure
