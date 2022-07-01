@@ -1,18 +1,30 @@
-worlds["Ashulab"] = "/app/overviewer/src/Minecraft-Overviewer-master/world/world"
+worlds["Lobby"] = "/app/overviewer/src/Minecraft-Overviewer-master/world/lobby"
+worlds["1.18"] = "/app/overviewer/src/Minecraft-Overviewer-master/world/world"
+worlds["1.19"] = "/app/overviewer/src/Minecraft-Overviewer-master/world/1.19"
 
-renders["normalrender"] = {
-  "world": "Ashulab",
-  "title": "Overworld",
+renders["Lobby"] = {
+  "world": "Lobby",
+  "title": "Lobby",
   "dimension": "overworld",
   "rendermode": "smooth_lighting",
   "imgformat": "jpeg",
   "imgquality": "85",
 }
 
-renders["end"] = {
-  "world": "Ashulab",
-  "title": "End",
-  "dimension": "end",
+renders["1.18"] = {
+  "world": "1.18",
+  "title": "1.18",
+  "dimension": "overworld",
+  "rendermode": "smooth_lighting",
+  "imgformat": "jpeg",
+  "imgquality": "85",
+}
+
+renders["1.19"] = {
+  "world": "1.19",
+  "title": "1.19",
+  "dimension": "overworld",
+  "rendermode": "smooth_lighting",
   "imgformat": "jpeg",
   "imgquality": "85",
 }
