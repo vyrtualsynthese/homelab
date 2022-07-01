@@ -1,7 +1,5 @@
-+ https://github.com/StuffAnThings/qbit_manage
-+ factorio server
-  + https://github.com/factoriotools/factorio-docker
-+ Egress VPN Gateway
++ How to usenet
++ https://github.com/mmgoodnow/cross-seed
 + Clean up Plex PV mess
 + Bazarr
 + Securisation cluster
@@ -10,8 +8,6 @@
   + Change all apps password
 + Connect Cluster to internet
   + nextcloud.home.ashudev.com
-+ Minecraft v2
-  + Update overviewer for evey worlds
 + https://github.com/rcon-web-admin/rcon-web-admin
 + php status.php
 + NAS V2
@@ -19,6 +15,8 @@
   + NFS for HDD
 + Doc
   + Implement https://docusaurus.io/ for documentation
++ factorio server
+  + https://github.com/factoriotools/factorio-docker
 + Replace rbps Master node with Intel Nuc
   + 1 additional ssd for Intel Nuc
 + Implement better storage
@@ -36,7 +34,7 @@
 + Ansible
   + Install ZSH to every nodes
   + Write Ansible runner setup script
-+ Wireguard VPN server ???
+  + Automate all operations
 + global databases
 + Docker Repo
   + Docker repo on NaS
