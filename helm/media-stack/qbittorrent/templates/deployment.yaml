@@ -35,12 +35,6 @@ spec:
         - name: "dev-tun" # Needed for VPN
           hostPath:
             path: "/dev/net/tun"
-        - name: ovpn-conf
-          secret:
-            secretName: openvpnconf
-            items:
-              - key: conf.ovpn
-                path: conf.ovpn
         - name: wg0-conf
           secret:
             secretName: wireguard
@@ -56,12 +50,10 @@ spec:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       initContainers:
         - name: init-qbittorrent
-          image: busybox:1.28
-          command: [ 'sh', '-c', "mkdir -p config/openvpn && mkdir -p config/wireguard && cp /secret/ovpn/conf.ovpn /config/openvpn/proton.ovpn && cp /secret/wg/wg0.conf /config/wireguard/wg0.conf" ]
+          image: alpine/git:latest
+          # Import wireguard config and clone nighthawk web ui theme
+          command: [ 'sh', '-c', "mkdir -p config/wireguard && cp /secret/wg/wg0.conf /config/wireguard/wg0.conf && git config --global --add safe.directory /config/nightwalker && git -C /config/nightwalker pull || git clone https://github.com/brettpetch/nightwalker.git /config/nightwalker && chown -R nobody:nogroup /config/nightwalker/" ]
           volumeMounts:
-          - name: ovpn-conf
-            mountPath: "/secret/ovpn"
-            readOnly: true
           - name: wg0-conf
             mountPath: "/secret/wg"
             readOnly: true
@@ -90,20 +82,12 @@ spec:
               value: "yes"
             - name: VPN_TYPE
               value: "wireguard" # VPN provider. List of supported providers: https://haugene.github.io/docker-transmission-openvpn/supported-providers/
-            - name: VPN_USERNAME
-              valueFrom: # Reference to the secret | openvpn.username
-                secretKeyRef:
-                  name: "openvpn"
-                  key: "username"
-            - name: VPN_PASSWORD
-              valueFrom: # Reference to the secret | openvpn.password
-                secretKeyRef:
-                  name: "openvpn"
-                  key: "password"
             - name: LAN_NETWORK
               value: "192.168.0.0/24"
             - name: RESTART_CONTAINER
               value: "no"
+            - name: HEALTH_CHECK_HOST
+              value: "8.8.8.8"
 
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
