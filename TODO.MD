@@ -1,7 +1,12 @@
-+ How to usenet
-+ https://github.com/mmgoodnow/cross-seed
-+ Clean up Plex PV mess
++ Implement better storage
+  + NFS for HDD volumes
+  + Longhorn for ssd
+  + Manage Backup
++ Migrate minecraft to UDP ingress
+  + Migrate minecraft to Longhorn
 + Bazarr
++ How to usenet
++ Readme
 + Securisation cluster
   + Change next cloud DB password
   + Change next cloud cache password
@@ -10,20 +15,13 @@
   + nextcloud.home.ashudev.com
 + https://github.com/rcon-web-admin/rcon-web-admin
 + php status.php
-+ NAS V2
-  + Add old HDD to new array
-  + NFS for HDD
 + Doc
   + Implement https://docusaurus.io/ for documentation
 + factorio server
   + https://github.com/factoriotools/factorio-docker
 + Replace rbps Master node with Intel Nuc
   + 1 additional ssd for Intel Nuc
-+ Implement better storage
-  + NFS for HDD volumes
-  + Longhorn for ssd
-    + Min 1 SSD for every nodes
-    + Manage Backup
++ https://github.com/mmgoodnow/cross-seed
 + Loki for log management
 + Global smtp server
 + https://tdarr.io/

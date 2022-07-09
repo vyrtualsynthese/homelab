@@ -5,6 +5,8 @@ metadata:
   labels:
     {{- include "labels" . | nindent 4 }}
 spec:
+  strategy:
+    type: Recreate
   {{- if not .Values.autoscaling.enabled }}
   replicas: {{ .Values.replicaCount }}
   {{- end }}
@@ -23,10 +25,10 @@ spec:
       volumes:
         - name: sonarr-config-volume
           persistentVolumeClaim:
-            claimName: sonarr-config
+            claimName: sonarr-config-lh
         - name: qbittorrent-download-volume
           persistentVolumeClaim:
-            claimName: qbittorrent-download-hdd
+            claimName: qbittorrent-download-lh
         - name: plex-media-volume
           persistentVolumeClaim:
             claimName: plex-media-hdd

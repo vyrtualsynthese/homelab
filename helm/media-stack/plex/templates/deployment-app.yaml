@@ -5,6 +5,8 @@ metadata:
   labels:
     {{- include "labels" . | nindent 4 }}
 spec:
+  strategy:
+    type: Recreate
   {{- if not .Values.autoscaling.enabled }}
   replicas: {{ .Values.replicaCount }}
   {{- end }}
@@ -23,13 +25,10 @@ spec:
       volumes:
         - name: plex-config-volume
           persistentVolumeClaim:
-            claimName: plex-config
+            claimName: plex-config-lh
         - name: plex-transcode-volume
           persistentVolumeClaim:
-            claimName: plex-transcode
-        - name: plex-data-volume
-          persistentVolumeClaim:
-            claimName: plex-data
+            claimName: plex-transcode-lh
         - name: plex-media-volume
           persistentVolumeClaim:
             claimName: plex-media-hdd
@@ -66,8 +65,6 @@ spec:
               mountPath: /config
             - name: plex-transcode-volume
               mountPath: /transcode
-            - name: plex-data-volume
-              mountPath: /data
             - name: plex-media-volume
               mountPath: /media
       {{- with .Values.nodeSelector }}

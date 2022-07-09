@@ -5,6 +5,8 @@ metadata:
   labels:
     {{- include "labels" . | nindent 4 }}
 spec:
+  strategy:
+    type: Recreate
   {{- if not .Values.autoscaling.enabled }}
   replicas: {{ .Values.replicaCount }}
   {{- end }}
@@ -23,7 +25,7 @@ spec:
       volumes:
         - name: jackett-config-volume
           persistentVolumeClaim:
-            claimName: jackett-config
+            claimName: jackett-config-lh
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
