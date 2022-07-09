@@ -642,7 +642,7 @@ server:
   ##
   image:
     repository: quay.io/prometheus/prometheus
-    tag: v2.36.0
+    tag: v2.36.2
     pullPolicy: IfNotPresent
 
   ## prometheus server priorityClassName
@@ -818,8 +818,8 @@ server:
     entryPoints: [web]
 
   ## Server Deployment Strategy type
-  # strategy:
-  #   type: Recreate
+  strategy:
+    type: Recreate
 
   ## hostAliases allows adding entries to /etc/hosts inside the containers
   hostAliases: []
@@ -877,7 +877,7 @@ server:
     ## Prometheus server data Persistent Volume existing claim name
     ## Requires server.persistentVolume.enabled: true
     ## If defined, PVC must be created manually before volume will be bound
-    existingClaim: ""
+    existingClaim: prometheus-data
 
     ## Prometheus server data Persistent Volume mount root path
     ##
