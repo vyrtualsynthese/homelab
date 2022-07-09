@@ -5,6 +5,8 @@ metadata:
   labels:
     {{- include "labels" . | nindent 4 }}
 spec:
+  strategy:
+    type: Recreate
   {{- if not .Values.autoscaling.enabled }}
   replicas: {{ .Values.replicaCount }}
   {{- end }}
@@ -28,10 +30,10 @@ spec:
       volumes:
         - name: qbittorrent-config-volume
           persistentVolumeClaim:
-            claimName: qbittorrent-config
+            claimName: qbittorrent-config-lh
         - name: qbittorrent-download-volume
           persistentVolumeClaim:
-            claimName: qbittorrent-download-hdd
+            claimName: qbittorrent-download-lh
         - name: "dev-tun" # Needed for VPN
           hostPath:
             path: "/dev/net/tun"

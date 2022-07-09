@@ -10,22 +10,13 @@ spec:
     spec:
       template:
         spec:
-          affinity:
-            nodeAffinity:
-              requiredDuringSchedulingIgnoredDuringExecution:
-                nodeSelectorTerms:
-                  - matchExpressions:
-                    - key: kubernetes.io/hostname
-                      operator: In
-                      values:
-                        - nas
           volumes:
             - name: qbittorrent-download-volume
               persistentVolumeClaim:
-                claimName: qbittorrent-download-hdd
+                claimName: qbittorrent-download-lh
             - name: qbit-manage-config-volume
               persistentVolumeClaim:
-                claimName: qbit-manage-config
+                claimName: qbit-manage-config-lh
             - name: qbit-manage-secrets
               secret:
                 secretName: qbit-manage

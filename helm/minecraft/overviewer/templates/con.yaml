@@ -17,7 +17,7 @@ spec:
                 claimName: minecraft-server
             - name: render-minecraft-server-volume
               persistentVolumeClaim:
-                claimName: render-minecraft-server
+                claimName: render-minecraft-server-lh
             - name: conf-cache-volume
               emptyDir: {}
             - name: overviewer-configmap
@@ -38,8 +38,8 @@ spec:
               imagePullPolicy: IfNotPresent
               resources:
                 limits:
-                  cpu: 1000m
-                  memory: 1Gi
+                  cpu: 4000m
+                  memory: 4Gi
                 requests:
                   cpu: 100m
                   memory: 100Mi

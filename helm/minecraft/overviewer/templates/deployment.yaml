@@ -12,10 +12,7 @@ spec:
     matchLabels:
       {{- include "overviewer.selectorLabels" . | nindent 6 }}
   strategy:
-    type: RollingUpdate
-    rollingUpdate:
-      maxUnavailable: 25%
-      maxSurge: 25%
+    type: Recreate
   template:
     metadata:
       {{- with .Values.podAnnotations }}
@@ -28,7 +25,7 @@ spec:
       volumes:
         - name: render-minecraft-server-volume
           persistentVolumeClaim:
-            claimName: render-minecraft-server
+            claimName: render-minecraft-server-lh
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}

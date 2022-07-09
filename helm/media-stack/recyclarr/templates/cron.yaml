@@ -10,11 +10,10 @@ spec:
     spec:
       template:
         spec:
-          nodeName: xps-13
           volumes:
             - name: recyclarr-conf-volume
               persistentVolumeClaim:
-                claimName: recyclarr-conf
+                claimName: recyclarr-conf-lh
             - name: recyclarr-secret
               secret:
                 secretName: recyclarr
