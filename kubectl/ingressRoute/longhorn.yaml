@@ -1,0 +1,19 @@
+apiVersion: traefik.containo.us/v1alpha1
+kind: IngressRoute
+metadata:
+  annotations: {}
+  labels:
+    app.kubernetes.io/instance: longhorn
+    app.kubernetes.io/name: longhorn
+    app.kubernetes.io/version: 1.0.0
+  name: longhorn
+  namespace: longhorn-system
+spec:
+  entryPoints:
+    - web
+  routes:
+    - kind: Rule
+      match: Host(`longhorn.local`)
+      services:
+        - name: longhorn-frontend
+          port: http

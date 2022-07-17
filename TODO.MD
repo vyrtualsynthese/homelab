@@ -1,9 +1,16 @@
++ Optimize limits
 + Implement better storage
-  + NFS for HDD volumes
-  + Longhorn for ssd
-  + Manage Backup
-+ Migrate minecraft to UDP ingress
+  + Nextcloud Longhorn
+  + Nextcloud NFS
+  + Ansible
+    + Install NFS server
+    + Setup folders
+    + Setup exports in file
+    + Export
   + Migrate minecraft to Longhorn
+  + Manage Backup
++ Node tagging and pod affinity cleanup
++ Migrate minecraft to UDP ingress
 + Bazarr
 + How to usenet
 + Readme
@@ -15,9 +22,9 @@
   + nextcloud.home.ashudev.com
 + https://github.com/rcon-web-admin/rcon-web-admin
 + php status.php
++ factorio server
 + Doc
   + Implement https://docusaurus.io/ for documentation
-+ factorio server
   + https://github.com/factoriotools/factorio-docker
 + Replace rbps Master node with Intel Nuc
   + 1 additional ssd for Intel Nuc

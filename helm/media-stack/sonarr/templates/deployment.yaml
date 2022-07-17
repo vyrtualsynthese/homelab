@@ -28,10 +28,10 @@ spec:
             claimName: sonarr-config-lh
         - name: qbittorrent-download-volume
           persistentVolumeClaim:
-            claimName: qbittorrent-download-lh
+            claimName: qbittorrent-download-nfs
         - name: plex-media-volume
           persistentVolumeClaim:
-            claimName: plex-media-hdd
+            claimName: plex-media-nfs
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
@@ -55,7 +55,6 @@ spec:
               value: "0"
             - name: "PGID"
               value: "0"
-
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
           volumeMounts:

@@ -47,8 +47,8 @@ spec:
               scheme: HTTP
               path: /
               port: flaresolverr
-            failureThreshold: 120
-            periodSeconds: 10
+            failureThreshold: 10
+            periodSeconds: 60
           env:
             - name: "TZ"
               value: "Europe/Paris"

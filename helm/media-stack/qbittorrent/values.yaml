@@ -59,10 +59,10 @@ ingress:
 
 resources:
   requests:
-    cpu: 1m
-    memory: 400Mi
+    cpu: 500m
+    memory: 1000Mi
   limits:
-    cpu: 2000m
+    cpu: 1000m
     memory: 1500Mi
 
 autoscaling:
@@ -76,4 +76,13 @@ nodeSelector: {}
 
 tolerations: []
 
-affinity: {}
+affinity:
+  nodeAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 1
+        preference:
+          matchExpressions:
+            - key: architecture
+              operator: In
+              values:
+                - x86
