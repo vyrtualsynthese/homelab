@@ -6,6 +6,8 @@ metadata:
     {{- include "labels" . | nindent 4 }}
 spec:
   schedule: "0 6 * * *"
+  successfulJobsHistoryLimit: 0
+  failedJobsHistoryLimit: 1
   jobTemplate:
     spec:
       template:
@@ -13,7 +15,7 @@ spec:
           volumes:
             - name: qbittorrent-download-volume
               persistentVolumeClaim:
-                claimName: qbittorrent-download-lh
+                claimName: qbittorrent-download-nfs
             - name: qbit-manage-config-volume
               persistentVolumeClaim:
                 claimName: qbit-manage-config-lh

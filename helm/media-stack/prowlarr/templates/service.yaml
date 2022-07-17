@@ -7,8 +7,8 @@ metadata:
 spec:
   type: {{ .Values.service.type }}
   ports:
-    - port: 9117
-      name: jackett-webui
-      targetPort: jackett-webui
+    - port: 9696
+      name: prowlarr-webui
+      targetPort: prowlarr-webui
   selector:
     {{- include "selectorLabels" . | nindent 4 }}

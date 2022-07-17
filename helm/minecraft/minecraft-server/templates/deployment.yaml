@@ -66,8 +66,6 @@ spec:
               value: ""
             - name: TYPE
               value: "PAPER"
-            - name: JVM_XX_OPTS
-              value: "-XX:MaxRAMPercentage=75"
             - name: MAX_TICK_TIME
               value: "-1"
             - name: ENABLE_JMX
@@ -76,6 +74,8 @@ spec:
               value: "127.0.0.1"
             - name: USE_AIKAR_FLAGS
               value: "true"
+            - name: JVM_XX_OPTS
+              value: "-XX:MaxRAMPercentage=75"
             - name: STOP_SERVER_ANNOUNCE_DELAY
               value: "30"
             - name: ENABLE_ROLLING_LOGS
@@ -92,30 +92,28 @@ spec:
           startupProbe:
             tcpSocket:
                port: 25565
-            failureThreshold: 5
+            failureThreshold: 10
             periodSeconds: 60
           readinessProbe:
             tcpSocket:
               port: 25565
-            initialDelaySeconds: 30
-            periodSeconds: 5
+            periodSeconds: 60
             failureThreshold: 10
             successThreshold: 1
-            timeoutSeconds: 1
+            timeoutSeconds: 10
           livenessProbe:
             tcpSocket:
               port: 25565
-            initialDelaySeconds: 30
-            periodSeconds: 5
+            periodSeconds: 60
             failureThreshold: 10
             successThreshold: 1
-            timeoutSeconds: 1
+            timeoutSeconds: 10
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
           volumeMounts:
             - name: minecraft-server-volume
               mountPath: /data
-      terminationGracePeriodSeconds: 300
+      terminationGracePeriodSeconds: 600
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
