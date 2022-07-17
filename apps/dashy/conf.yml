@@ -46,6 +46,10 @@ sections:
         icon: "https://upload.wikimedia.org/wikipedia/commons/8/88/Pi-hole_Logo_2.png"
         url: "http://192.168.1.38/admin/"
         target: "newtab"
+      - title: "PV: Longhorn"
+        icon: "https://longhorn.io/img/logos/longhorn-icon-color.png"
+        url: "http://longhorn.local/"
+        target: "newtab"
 
   - name: "Gaming"
     items:
@@ -59,10 +63,6 @@ sections:
 
   - name: "Media"
     items:
-      - title: "Jackett"
-        icon: "https://avatars.githubusercontent.com/u/15383019?s=200&v=4"
-        url: "http://jackett.local"
-        target: "newtab"
       - title: "Radarr"
         icon: "https://developer.asustor.com/uploadIcons/0020_999_1617261337_Radarr_new_256.png"
         url: "http://radarr.local"
@@ -70,6 +70,10 @@ sections:
       - title: "Sonarr"
         icon: "https://developer.asustor.com/uploadIcons/0020_999_1573627129_Sonarr_1_256.png"
         url: "http://sonarr.local"
+        target: "newtab"
+      - title: "Prowlarr"
+        icon: "https://images.opencollective.com/prowlarr/df81199/logo/256.png"
+        url: "http://prowlarr.local"
         target: "newtab"
       - title: "Plex"
         icon: "https://www.plex.tv/wp-content/uploads/2018/01/pmp-icon-1.png"

@@ -5,10 +5,10 @@
 replicaCount: 1
 
 image:
-  repository: linuxserver/jackett
+  repository: linuxserver/prowlarr
   pullPolicy: IfNotPresent
   # Overrides the image tag whose default is the chart appVersion.
-  tag: 0.20.1117
+  tag: 0.4.2-develop
 
 imagePullSecrets: []
 nameOverride: ""
@@ -59,11 +59,21 @@ ingress:
 
 resources:
   requests:
-    cpu: 10m
-    memory: 200Mi
+    cpu: 1m
+    memory: 120Mi
   limits:
-    cpu: 500m
-    memory: 500Mi
+    cpu: 400m
+    memory: 250Mi
+  # We usually recommend not to specify default resources and to leave this as a conscious
+  # choice for the user. This also increases chances charts run on environments with little
+  # resources, such as Minikube. If you do want to specify resources, uncomment the following
+  # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
+  # limits:
+  #   cpu: 100m
+  #   memory: 128Mi
+  # requests:
+  #   cpu: 100m
+  #   memory: 128Mi
 
 autoscaling:
   enabled: false

@@ -23,9 +23,9 @@ spec:
         {{- include "selectorLabels" . | nindent 8 }}
     spec:
       volumes:
-        - name: jackett-config-volume
+        - name: prowlarr-config-volume
           persistentVolumeClaim:
-            claimName: jackett-config-lh
+            claimName: prowlarr-config-lh
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
@@ -40,21 +40,8 @@ spec:
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:
-            - name: jackett-webui
-              containerPort: 9117
-          livenessProbe:
-            httpGet:
-              path: /health
-              port: jackett-webui
-            failureThreshold: 5
-            periodSeconds: 10
-          startupProbe:
-            httpGet:
-              scheme: HTTP
-              path: /health
-              port: jackett-webui
-            failureThreshold: 10
-            periodSeconds: 10
+            - name: prowlarr-webui
+              containerPort: 9696
           env:
             - name: "TZ"
               value: "Europe/Paris"
@@ -62,12 +49,11 @@ spec:
               value: "0"
             - name: "PGID"
               value: "0"
-            - name: "AUTO_UPDATE"
-              value: "false"
+
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
           volumeMounts:
-            - name: jackett-config-volume
+            - name: prowlarr-config-volume
               mountPath: /config
       {{- with .Values.nodeSelector }}
       nodeSelector:

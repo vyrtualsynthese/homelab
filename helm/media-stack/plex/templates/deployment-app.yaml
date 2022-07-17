@@ -31,7 +31,7 @@ spec:
             claimName: plex-transcode-lh
         - name: plex-media-volume
           persistentVolumeClaim:
-            claimName: plex-media-hdd
+            claimName: plex-media-nfs
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
