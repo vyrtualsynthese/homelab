@@ -9,6 +9,10 @@
     + Export
   + Migrate minecraft to Longhorn
   + Manage Backup
+  + Mergerfs
+    + Tools : Install and update via ansible
+    + Tools : setup mergerfs.balance via cronjob
+  + Ansible update rbp1 docker images via docker pull
 + Node tagging and pod affinity cleanup
 + Migrate minecraft to UDP ingress
 + Bazarr
