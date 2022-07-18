@@ -224,10 +224,10 @@ ingressRoute:
 
 resources:
   limits:
-    cpu: 1000m
+    cpu: 200m
     memory: 200Mi
   requests:
-    cpu: 7m
+    cpu: 1m
     memory: 50Mi
 
 ## Node labels for pod assignment
@@ -519,14 +519,8 @@ dashboardProviders:
 ##
 dashboards:
   default:
-    prometheus-dashboard:
-      file: dashboards/node-exporter-full.json
-      datasource: Prometheus
     homelab-monitor:
       file: dashboards/homelab-monitor.json
-      datasource: Prometheus
-    k3s:
-      file: dashboards/k3s.json
       datasource: Prometheus
 
 

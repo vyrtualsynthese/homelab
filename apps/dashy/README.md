@@ -6,5 +6,3 @@ Image is multi architecture.
 docker build --rm --target dev -t home-dashy:dev .
 docker run -it -v ${PWD}/conf.yml:/app/public/conf.yml -p 8080:80 home-dashy:dev
 ```
-
-forced
