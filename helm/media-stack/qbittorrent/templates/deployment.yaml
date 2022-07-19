@@ -37,12 +37,6 @@ spec:
         - name: "dev-tun" # Needed for VPN
           hostPath:
             path: "/dev/net/tun"
-        - name: wg0-conf
-          secret:
-            secretName: wireguard
-            items:
-              - key: wg0
-                path: wg0.conf
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
@@ -54,20 +48,12 @@ spec:
         - name: init-qbittorrent
           image: alpine/git:latest
           # Import wireguard config and clone nighthawk web ui theme
-          command: [ 'sh', '-c', "mkdir -p config/wireguard && cp /secret/wg/wg0.conf /config/wireguard/wg0.conf && git config --global --add safe.directory /config/nightwalker && git -C /config/nightwalker pull || git clone https://github.com/brettpetch/nightwalker.git /config/nightwalker && chown -R nobody:nogroup /config/nightwalker/" ]
+          command: [ 'sh', '-c', "git config --global --add safe.directory /config/nightwalker && git -C /config/nightwalker pull || git clone https://github.com/brettpetch/nightwalker.git /config/nightwalker && chown -R nobody:nogroup /config/nightwalker/" ]
           volumeMounts:
-          - name: wg0-conf
-            mountPath: "/secret/wg"
-            readOnly: true
-          - name: qbittorrent-config-volume
-            mountPath: /config
-
+            - name: qbittorrent-config-volume
+              mountPath: /config
       containers:
         - name: {{ .Chart.Name }}
-          securityContext:
-            capabilities: # Needed for VPN
-              add:
-                - NET_ADMIN
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:
@@ -80,17 +66,6 @@ spec:
               value: "0"
             - name: "PGID"
               value: "0"
-            - name: VPN_ENABLED
-              value: "yes"
-            - name: VPN_TYPE
-              value: "wireguard" # VPN provider. List of supported providers: https://haugene.github.io/docker-transmission-openvpn/supported-providers/
-            - name: LAN_NETWORK
-              value: "192.168.0.0/24"
-            - name: RESTART_CONTAINER
-              value: "no"
-            - name: HEALTH_CHECK_HOST
-              value: "8.8.8.8"
-
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
           volumeMounts:
@@ -98,6 +73,29 @@ spec:
               mountPath: /config
             - name: qbittorrent-download-volume
               mountPath: /downloads
+        - name: {{ .Chart.Name }}-vpn
+          securityContext:
+            capabilities: # Needed for VPN
+              add:
+                - NET_ADMIN
+          image: "{{ .Values.vpnimage.repository }}:{{ .Values.vpnimage.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.vpnimage.pullPolicy }}
+          env:
+            - name: VPN_SERVICE_PROVIDER
+              value: "protonvpn"
+            - name: OPENVPN_USER
+              valueFrom:
+                secretKeyRef:
+                  name: protonvpn
+                  key: user
+            - name: OPENVPN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: protonvpn
+                  key: password
+            - name: SERVER_COUNTRIES
+              value: "Switzerland"
+          volumeMounts:
             - name: "dev-tun"
               mountPath: "/dev/net/tun"
       {{- with .Values.nodeSelector }}
