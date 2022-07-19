@@ -6,9 +6,9 @@ replicaCount: 1
 
 image:
   repository: registry.hub.docker.com/vyrtualsynthese/dashy
-  pullPolicy: IfNotPresent
+  pullPolicy: Always
   # Overrides the image tag whose default is the chart appVersion.
-  tag: multi-arch-c208276
+  tag: multi-arch-latest
 
 imagePullSecrets: []
 nameOverride: ""

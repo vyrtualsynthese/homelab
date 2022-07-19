@@ -7,8 +7,8 @@ metadata:
 spec:
   type: {{ .Values.service.type }}
   ports:
-    - port: 8080
-      name: torrent-webui
-      targetPort: torrent-webui
+    - port: 6767
+      name: bazarr-webui
+      targetPort: bazarr-webui
   selector:
     {{- include "selectorLabels" . | nindent 4 }}
