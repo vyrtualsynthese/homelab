@@ -62,8 +62,8 @@ resources:
     cpu: 10m
     memory: 30Mi
   limits:
-    cpu: 500m
-    memory: 75Mi
+    cpu: 1000m
+    memory: 150Mi
 
 autoscaling:
   enabled: false
@@ -76,4 +76,13 @@ nodeSelector: {}
 
 tolerations: []
 
-affinity: {}
+affinity:
+  nodeAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 1
+        preference:
+          matchExpressions:
+            - key: architecture
+              operator: In
+              values:
+                - x86
