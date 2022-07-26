@@ -23,6 +23,6 @@ spec:
     - match: Host(`nextcloud.local`)
       kind: Rule
       services:
-        - name: next-cloud-web
+        - name: nextcloud-web
           port: web
 {{- end }}

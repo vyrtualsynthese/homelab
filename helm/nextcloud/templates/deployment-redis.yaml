@@ -5,9 +5,6 @@ metadata:
   labels:
     {{- include "nextcloud.redis.labels" . | nindent 4 }}
 spec:
-  {{- if not .Values.redis.autoscaling.enabled }}
-  replicas: {{ .Values.replicaCount }}
-  {{- end }}
   selector:
     matchLabels:
       {{- include "nextcloud.redis.selectorLabels" . | nindent 6 }}

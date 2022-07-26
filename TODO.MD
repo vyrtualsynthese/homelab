@@ -1,21 +1,28 @@
-+ Optimize limits
++ Revoir perfs prowlarr, radarr, sonarr, qbittorrent
++ VPN Prowlarr
 + Implement better storage
-  + Nextcloud Longhorn
-  + Bazarr ressources
-  + Nextcloud NFS
+  + Unmount nfs xps13
+  + restore NFS controller for qbittorrent
+    + test test test test
+  + Set daily TRIM for /dev/ssd0
+  + Set weekly TRIM for all SSD
+  + Set daily defrag e4defrag hdd
   + Ansible
     + Install NFS server
     + Setup folders
     + Setup exports in file
     + Export
+    + Auto mount nfs folders
+    + Install TRIM dependency
+    + Set TRIM CRON JOB
   + Migrate minecraft to Longhorn
   + Manage Backup
   + Mergerfs
     + Tools : Install and update via ansible
     + Tools : setup mergerfs.balance via cronjob
   + Ansible update rbp1 docker images via docker pull
++ smartools send mail
 + Migrate minecraft to UDP ingress
-+ Bazarr
 + How to usenet
 + Readme
 + Securisation cluster

@@ -5,9 +5,6 @@ metadata:
   labels:
     {{- include "nextcloud.db.labels" . | nindent 4 }}
 spec:
-  {{- if not .Values.db.autoscaling.enabled }}
-  replicas: {{ .Values.replicaCount }}
-  {{- end }}
   selector:
     matchLabels:
       {{- include "nextcloud.db.selectorLabels" . | nindent 6 }}
@@ -21,9 +18,9 @@ spec:
         {{- include "nextcloud.db.selectorLabels" . | nindent 8 }}
     spec:
       volumes:
-        - name: next-cloud-db-volume
+        - name: nextcloud-db-volume
           persistentVolumeClaim:
-            claimName: next-cloud-db
+            claimName: nextcloud-postgres
       {{- with .Values.db.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
@@ -71,8 +68,9 @@ spec:
           resources:
             {{- toYaml .Values.db.resources | nindent 12 }}
           volumeMounts:
-            - name: next-cloud-db-volume
+            - name: nextcloud-db-volume
               mountPath: /var/lib/postgresql/data
+              subPath: postgres-data
       terminationGracePeriodSeconds: 300
       {{- with .Values.db.nodeSelector }}
       nodeSelector:

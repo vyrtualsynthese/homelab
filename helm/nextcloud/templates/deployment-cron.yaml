@@ -5,9 +5,6 @@ metadata:
   labels:
     {{- include "nextcloud.cron.labels" . | nindent 4 }}
 spec:
-  {{- if not .Values.cron.autoscaling.enabled }}
-  replicas: {{ .Values.replicaCount }}
-  {{- end }}
   selector:
     matchLabels:
       {{- include "nextcloud.cron.selectorLabels" . | nindent 6 }}
@@ -21,9 +18,9 @@ spec:
         {{- include "nextcloud.cron.selectorLabels" . | nindent 8 }}
     spec:
       volumes:
-        - name: next-cloud-app-volume
+        - name: nextcloud-app-volume
           persistentVolumeClaim:
-            claimName: next-cloud-app
+            claimName: nextcloud-app
       {{- with .Values.cron.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
@@ -41,7 +38,7 @@ spec:
           resources:
             {{- toYaml .Values.cron.resources | nindent 12 }}
           volumeMounts:
-            - name: next-cloud-app-volume
+            - name: nextcloud-app-volume
               mountPath: /var/www/html
       {{- with .Values.cron.nodeSelector }}
       nodeSelector:
