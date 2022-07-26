@@ -11,8 +11,8 @@ db:
     tag: 14.2-alpine
 
   imagePullSecrets: []
-  nameOverride: "next-cloud-db"
-  fullnameOverride: "next-cloud-db"
+  nameOverride: "nextcloud-db"
+  fullnameOverride: "nextcloud-db"
 
   serviceAccount:
     # Specifies whether a service account should be created
@@ -74,26 +74,20 @@ db:
     #   cpu: 100m
     #   memory: 128Mi
 
-  autoscaling:
-    enabled: false
-    minReplicas: 1
-    maxReplicas: 100
-    targetCPUUtilizationPercentage: 80
-    # targetMemoryUtilizationPercentage: 80
-
   nodeSelector: {}
 
   tolerations: []
 
   affinity:
     nodeAffinity:
-      requiredDuringSchedulingIgnoredDuringExecution:
-        nodeSelectorTerms:
-          - matchExpressions:
-            - key: kubernetes.io/hostname
-              operator: In
-              values:
-                - nas
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 1
+          preference:
+            matchExpressions:
+              - key: architecture
+                operator: In
+                values:
+                  - x86
 
 redis:
   image:
@@ -103,8 +97,8 @@ redis:
     tag: 6.2.7-alpine
 
   imagePullSecrets: []
-  nameOverride: "next-cloud-redis"
-  fullnameOverride: "next-cloud-redis"
+  nameOverride: "nextcloud-redis"
+  fullnameOverride: "nextcloud-redis"
 
   serviceAccount:
     # Specifies whether a service account should be created
@@ -156,18 +150,20 @@ redis:
       cpu: 100m
       memory: 100Mi
 
-  autoscaling:
-    enabled: false
-    minReplicas: 1
-    maxReplicas: 100
-    targetCPUUtilizationPercentage: 80
-    # targetMemoryUtilizationPercentage: 80
-
   nodeSelector: {}
 
   tolerations: []
 
-  affinity: {}
+  affinity:
+    nodeAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 1
+          preference:
+            matchExpressions:
+              - key: architecture
+                operator: In
+                values:
+                  - x86
 
 app:
   image:
@@ -177,11 +173,11 @@ app:
     tag: 24.0.1-fpm-alpine
 
   imagePullSecrets: []
-  nameOverride: "next-cloud-app"
-  fullnameOverride: "next-cloud-app"
+  nameOverride: "nextcloud-app"
+  fullnameOverride: "nextcloud-app"
 
-  dataNameOverride: "next-cloud-data"
-  dataFullnameOverride: "next-cloud-data"
+  dataNameOverride: "nextcloud-nfs"
+  dataFullnameOverride: "nextcloud-nfs"
 
   serviceAccount:
     # Specifies whether a service account should be created
@@ -225,26 +221,20 @@ app:
     #   cpu: 100m
     #   memory: 128Mi
 
-  autoscaling:
-    enabled: false
-    minReplicas: 1
-    maxReplicas: 100
-    targetCPUUtilizationPercentage: 80
-    # targetMemoryUtilizationPercentage: 80
-
   nodeSelector: {}
 
   tolerations: []
 
   affinity:
     nodeAffinity:
-      requiredDuringSchedulingIgnoredDuringExecution:
-        nodeSelectorTerms:
-          - matchExpressions:
-              - key: kubernetes.io/hostname
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 1
+          preference:
+            matchExpressions:
+              - key: architecture
                 operator: In
                 values:
-                  - nas
+                  - x86
 
 web:
   image:
@@ -254,8 +244,8 @@ web:
     tag: 1.22.0-alpine
 
   imagePullSecrets: []
-  nameOverride: "next-cloud-web"
-  fullnameOverride: "next-cloud-web"
+  nameOverride: "nextcloud-web"
+  fullnameOverride: "nextcloud-web"
 
   serviceAccount:
     # Specifies whether a service account should be created
@@ -317,37 +307,22 @@ web:
     #   cpu: 100m
     #   memory: 128Mi
 
-  autoscaling:
-    enabled: false
-    minReplicas: 1
-    maxReplicas: 100
-    targetCPUUtilizationPercentage: 80
-    # targetMemoryUtilizationPercentage: 80
-
   nodeSelector: {}
 
   tolerations: []
 
-  affinity:
-    nodeAffinity:
-      requiredDuringSchedulingIgnoredDuringExecution:
-        nodeSelectorTerms:
-          - matchExpressions:
-            - key: kubernetes.io/hostname
-              operator: In
-              values:
-                - nas
+  affinity: {}
 
 cron:
   image:
-    repository: registry.hub.docker.com/vyrtualsynthese/next-cloud-app
+    repository: nextcloud
     pullPolicy: IfNotPresent
     # Overrides the image tag whose default is the chart appVersion.
-    tag: multi-arch-8ec997d
+    tag: 24.0.1-fpm-alpine
 
   imagePullSecrets: []
-  nameOverride: "next-cloud-cron"
-  fullnameOverride: "next-cloud-cron"
+  nameOverride: "nextcloud-cron"
+  fullnameOverride: "nextcloud-cron"
 
   serviceAccount:
     # Specifies whether a service account should be created
@@ -409,23 +384,17 @@ cron:
     #   cpu: 100m
     #   memory: 128Mi
 
-  autoscaling:
-    enabled: false
-    minReplicas: 1
-    maxReplicas: 100
-    targetCPUUtilizationPercentage: 80
-    # targetMemoryUtilizationPercentage: 80
-
   nodeSelector: {}
 
   tolerations: []
 
   affinity:
     nodeAffinity:
-      requiredDuringSchedulingIgnoredDuringExecution:
-        nodeSelectorTerms:
-          - matchExpressions:
-            - key: kubernetes.io/hostname
-              operator: In
-              values:
-                - nas
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 1
+          preference:
+            matchExpressions:
+              - key: architecture
+                operator: In
+                values:
+                  - x86

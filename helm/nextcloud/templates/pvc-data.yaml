@@ -1,13 +1,13 @@
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: {{ include "nextcloud.data.fullname" . }}-hdd
+  name: {{ include "nextcloud.data.fullname" . }}
   labels:
   {{- include "nextcloud.app.labels" . | nindent 4 }}
 spec:
   accessModes:
     - ReadWriteMany
-  storageClassName: retain
+  storageClassName: nfs-nextcloud
   resources:
     requests:
-      storage: 4Ti
+      storage: 8Ti

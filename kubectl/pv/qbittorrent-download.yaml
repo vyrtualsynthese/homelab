@@ -1,15 +1,15 @@
 apiVersion: v1
 kind: PersistentVolume
 metadata:
-  name: next-cloud-db
+  name: qbittorrent-download
 spec:
   capacity:
-    storage: 1Gi
+    storage: 1Ti
   volumeMode: Filesystem
   accessModes:
-    - ReadWriteOnce
+    - ReadWriteMany
   storageClassName: retain
   hostPath:
     path: >-
-      /var/lib/rancher/k3s/storage/next-cloud-db
+      /mnt/ssd0/nfs
     type: DirectoryOrCreate

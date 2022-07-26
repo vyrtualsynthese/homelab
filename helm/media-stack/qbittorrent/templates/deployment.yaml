@@ -33,7 +33,7 @@ spec:
             claimName: qbittorrent-config-lh
         - name: qbittorrent-download-volume
           persistentVolumeClaim:
-            claimName: qbittorrent-download-nfs
+            claimName: qbittorrent-download
         - name: "dev-tun" # Needed for VPN
           hostPath:
             path: "/dev/net/tun"
@@ -44,21 +44,10 @@ spec:
       serviceAccountName: {{ include "serviceAccountName" . }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
-      initContainers:
-        - name: init-qbittorrent
-          image: alpine/git:latest
-          # Import wireguard config and clone nighthawk web ui theme
-          command: [ 'sh', '-c', "git config --global --add safe.directory /config/nightwalker && git -C /config/nightwalker pull || git clone https://github.com/brettpetch/nightwalker.git /config/nightwalker && chown -R nobody:nogroup /config/nightwalker/" ]
-          volumeMounts:
-            - name: qbittorrent-config-volume
-              mountPath: /config
       containers:
         - name: {{ .Chart.Name }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
-          ports:
-            - name: torrent-webui
-              containerPort: 8080
           env:
             - name: "TZ"
               value: "Europe/Paris"
@@ -73,6 +62,9 @@ spec:
               mountPath: /config
             - name: qbittorrent-download-volume
               mountPath: /downloads
+          ports:
+            - name: torrent-webui
+              containerPort: 8080
         - name: {{ .Chart.Name }}-vpn
           securityContext:
             capabilities: # Needed for VPN
@@ -82,22 +74,41 @@ spec:
           imagePullPolicy: {{ .Values.vpnimage.pullPolicy }}
           env:
             - name: VPN_SERVICE_PROVIDER
-              value: "protonvpn"
-            - name: OPENVPN_USER
+              value: "mullvad"
+            - name: VPN_TYPE
+              value: "wireguard"
+            - name: WIREGUARD_PRIVATE_KEY
               valueFrom:
                 secretKeyRef:
-                  name: protonvpn
-                  key: user
-            - name: OPENVPN_PASSWORD
+                  name: mullvad
+                  key: WIREGUARD_PRIVATE_KEY
+            - name: WIREGUARD_ADDRESSES
               valueFrom:
                 secretKeyRef:
-                  name: protonvpn
-                  key: password
-            - name: SERVER_COUNTRIES
-              value: "Switzerland"
+                  name: mullvad
+                  key: WIREGUARD_ADDRESSES
+            - name: "SERVER_HOSTNAMES"
+              valueFrom:
+                secretKeyRef:
+                  name: mullvad
+                  key: SERVER_HOSTNAMES
+            - name: "FIREWALL_VPN_INPUT_PORTS"
+              valueFrom:
+                secretKeyRef:
+                  name: mullvad
+                  key: FIREWALL_VPN_INPUT_PORTS
+            - name: "DOT"
+              value: "off"
+            - name: "VPN_ENDPOINT_PORT"
+              valueFrom:
+                secretKeyRef:
+                  name: mullvad
+                  key: VPN_ENDPOINT_PORT
           volumeMounts:
             - name: "dev-tun"
               mountPath: "/dev/net/tun"
+          resources:
+            {{- toYaml .Values.vpnresources | nindent 12 }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

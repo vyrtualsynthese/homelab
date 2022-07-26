@@ -15,7 +15,7 @@ spec:
           volumes:
             - name: qbittorrent-download-volume
               persistentVolumeClaim:
-                claimName: qbittorrent-download-nfs
+                claimName: qbittorrent-download
             - name: qbit-manage-config-volume
               persistentVolumeClaim:
                 claimName: qbit-manage-config-lh
