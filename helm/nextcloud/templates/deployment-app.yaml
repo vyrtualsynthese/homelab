@@ -5,9 +5,6 @@ metadata:
   labels:
     {{- include "nextcloud.app.labels" . | nindent 4 }}
 spec:
-  {{- if not .Values.app.autoscaling.enabled }}
-  replicas: {{ .Values.replicaCount }}
-  {{- end }}
   selector:
     matchLabels:
       {{- include "nextcloud.app.selectorLabels" . | nindent 6 }}
@@ -21,15 +18,15 @@ spec:
         {{- include "nextcloud.app.selectorLabels" . | nindent 8 }}
     spec:
       volumes:
-        - name: next-cloud-data-volume
+        - name: nextcloud-data-volume
           persistentVolumeClaim:
-            claimName: next-cloud-data-hdd
-        - name: next-cloud-app-volume
+            claimName: nextcloud-nfs
+        - name: nextcloud-app-volume
           persistentVolumeClaim:
-            claimName: next-cloud-app
+            claimName: nextcloud-app
         - name: conf-cache-volume
           emptyDir: {}
-        - name: next-cloud-app-configmap
+        - name: nextcloud-app-configmap
           configMap:
             name: {{ include "nextcloud.web.fullname" . }}
       {{- with .Values.app.imagePullSecrets }}
@@ -46,7 +43,7 @@ spec:
           image: "{{ .Values.app.image.repository }}:{{ .Values.app.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.app.image.pullPolicy }}
           ports:
-            - name: next-cloud-app
+            - name: nextcloud-app
               containerPort: 9000
             - name: php-fpm-status
               containerPort: 9001
@@ -54,9 +51,9 @@ spec:
             - name: "PHP_UPLOAD_LIMIT"
               value: "100G"
             - name: "POSTGRES_HOST"
-              value: "next-cloud-db"
+              value: "nextcloud-db"
             - name: "REDIS_HOST"
-              value: "next-cloud-redis"
+              value: "nextcloud-redis"
             - name: "POSTGRES_PASSWORD"
               valueFrom:
                 secretKeyRef:
@@ -77,9 +74,9 @@ spec:
           resources:
             {{- toYaml .Values.app.resources | nindent 12 }}
           volumeMounts:
-            - name: next-cloud-data-volume
+            - name: nextcloud-data-volume
               mountPath: /data
-            - name: next-cloud-app-volume
+            - name: nextcloud-app-volume
               mountPath: /var/www/html
             - mountPath: /usr/local/etc/php/php.ini-production
               subPath: php.ini-production
@@ -95,7 +92,7 @@ spec:
             - mountPath: /cache
               name: conf-cache-volume
             - mountPath: /config
-              name: next-cloud-app-configmap
+              name: nextcloud-app-configmap
       {{- with .Values.app.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

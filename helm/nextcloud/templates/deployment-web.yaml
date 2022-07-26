@@ -5,9 +5,6 @@ metadata:
   labels:
     {{- include "nextcloud.web.labels" . | nindent 4 }}
 spec:
-  {{- if not .Values.web.autoscaling.enabled }}
-  replicas: {{ .Values.replicaCount }}
-  {{- end }}
   selector:
     matchLabels:
       {{- include "nextcloud.web.selectorLabels" . | nindent 6 }}
@@ -26,12 +23,12 @@ spec:
         {{- include "nextcloud.web.selectorLabels" . | nindent 8 }}
     spec:
       volumes:
-        - name: next-cloud-app-volume
+        - name: nextcloud-app-volume
           persistentVolumeClaim:
-            claimName: next-cloud-app
+            claimName: nextcloud-app
         - name: conf-cache-volume
           emptyDir: {}
-        - name: next-cloud-web-configmap
+        - name: nextcloud-web-configmap
           configMap:
             name: {{ include "nextcloud.web.fullname" . }}
       {{- with .Values.web.imagePullSecrets }}
@@ -56,7 +53,7 @@ spec:
             - mountPath: /etc/nginx/nginx.conf
               subPath: nginx.conf
               name: conf-cache-volume
-            - name: next-cloud-app-volume
+            - name: nextcloud-app-volume
               mountPath: /var/www/html
       initContainers:
         - name: init-nextcloud-nginx-config
@@ -66,7 +63,7 @@ spec:
             - mountPath: /cache
               name: conf-cache-volume
             - mountPath: /config
-              name: next-cloud-web-configmap
+              name: nextcloud-web-configmap
       {{- with .Values.web.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
