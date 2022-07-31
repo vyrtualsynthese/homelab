@@ -1,20 +1,19 @@
-+ Revoir perfs prowlarr, radarr, sonarr, qbittorrent
-+ VPN Prowlarr
 + Implement better storage
   + Unmount nfs xps13
   + restore NFS controller for qbittorrent
     + test test test test
   + Set daily TRIM for /dev/ssd0
   + Set weekly TRIM for all SSD
-  + Set daily defrag e4defrag hdd
+  + Set weekly defrag e4defrag hdd
   + Ansible
     + Install NFS server
     + Setup folders
     + Setup exports in file
     + Export
-    + Auto mount nfs folders
     + Install TRIM dependency
     + Set TRIM CRON JOB
+    + Install MergerFS
+    + Setup mergerfs
   + Migrate minecraft to Longhorn
   + Manage Backup
   + Mergerfs
