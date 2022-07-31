@@ -8,7 +8,7 @@ image:
   repository: linuxserver/sonarr
   pullPolicy: IfNotPresent
   # Overrides the image tag whose default is the chart appVersion.
-  tag: 3.0.8
+  tag: latest
 
 imagePullSecrets: []
 nameOverride: ""
