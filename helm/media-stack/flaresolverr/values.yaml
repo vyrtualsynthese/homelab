@@ -6,9 +6,9 @@ replicaCount: 1
 
 image:
   repository: flaresolverr/flaresolverr
-  pullPolicy: IfNotPresent
+  pullPolicy: Always
   # Overrides the image tag whose default is the chart appVersion.
-  tag: v2.2.4
+  tag: latest
 
 imagePullSecrets: []
 nameOverride: ""

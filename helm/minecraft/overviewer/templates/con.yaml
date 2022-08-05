@@ -6,6 +6,8 @@ metadata:
     {{- include "overviewer.labels" . | nindent 4 }}
 spec:
   schedule: "0 6 * * *"
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 1
   jobTemplate:
     spec:
       template:

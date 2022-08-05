@@ -7,9 +7,9 @@ replicaCount: 1
 
 image:
   repository: plexinc/pms-docker
-  pullPolicy: IfNotPresent
+  pullPolicy: Always
   # Overrides the image tag whose default is the chart appVersion.
-  tag: 1.27.1.5916-6b0e31a64
+  tag: latest
 
 imagePullSecrets: []
 nameOverride: ""
