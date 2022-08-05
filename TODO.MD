@@ -15,6 +15,7 @@
     + Install MergerFS
     + Setup mergerfs
   + Migrate minecraft to Longhorn
+  + https://www.curseforge.com/minecraft/mc-mods/plan-player-analytics
   + Manage Backup
   + Mergerfs
     + Tools : Install and update via ansible
