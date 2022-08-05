@@ -6,13 +6,13 @@ replicaCount: 1
 
 image:
   repository: linuxserver/qbittorrent
-  pullPolicy: IfNotPresent
+  pullPolicy: Always
   # Overrides the image tag whose default is the chart appVersion.
-  tag: 4.4.3
+  tag: latest
 
 vpnimage:
   repository: qmcgaw/gluetun
-  pullPolicy: IfNotPresent
+  pullPolicy: Always
   # Overrides the image tag whose default is the chart appVersion.
   tag: latest
 

@@ -6,9 +6,9 @@ replicaCount: 1
 
 image:
   repository: ghcr.io/recyclarr/recyclarr
-  pullPolicy: IfNotPresent
+  pullPolicy: Always
   # Overrides the image tag whose default is the chart appVersion.
-  tag: 2.2.1
+  tag: latest
 
 imagePullSecrets: []
 nameOverride: ""
