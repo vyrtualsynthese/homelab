@@ -9,7 +9,7 @@ WORKDIR ./app
 
 COPY dashy/package.json dashy/yarn.lock ./
 
-RUN yarn install
+RUN yarn install --frozen-lockfile
 
 COPY dashy ./
 COPY conf.yml ./public/
