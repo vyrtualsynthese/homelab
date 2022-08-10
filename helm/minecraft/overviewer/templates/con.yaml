@@ -16,7 +16,7 @@ spec:
           volumes:
             - name: minecraft-server-volume
               persistentVolumeClaim:
-                claimName: minecraft-server
+                claimName: minecraft-server-lh
             - name: render-minecraft-server-volume
               persistentVolumeClaim:
                 claimName: render-minecraft-server-lh
