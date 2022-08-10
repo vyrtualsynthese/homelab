@@ -16,6 +16,13 @@ spec:
       labels:
         run: alpine
     spec:
+      volumes:
+        - name: minecraft-server-volume
+          persistentVolumeClaim:
+            claimName: minecraft-server
+        - name: minecraft-server-volume-lh
+          persistentVolumeClaim:
+            claimName: minecraft-server-lh
       containers:
         - image: alpine:latest
           command:
@@ -24,3 +31,8 @@ spec:
             - "sleep 60m"
           imagePullPolicy: IfNotPresent
           name: alpine
+          volumeMounts:
+            - name: minecraft-server-volume
+              mountPath: /data
+            - name: minecraft-server-volume-lh
+              mountPath: /data-lh
