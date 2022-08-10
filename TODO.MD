@@ -1,7 +1,4 @@
 + Implement better storage
-  + Unmount nfs xps13
-  + restore NFS controller for qbittorrent
-    + test test test test
   + Set daily TRIM for /dev/ssd0
   + Set weekly TRIM for all SSD
   + Set weekly defrag e4defrag hdd
@@ -21,7 +18,8 @@
     + Tools : Install and update via ansible
     + Tools : setup mergerfs.balance via cronjob
   + Ansible update rbp1 docker images via docker pull
-+ smartools send mail
++ smartools send webhook
++ discord notifications
 + Migrate minecraft to UDP ingress
 + How to usenet
 + Readme

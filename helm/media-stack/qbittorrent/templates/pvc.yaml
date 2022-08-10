@@ -7,7 +7,7 @@ metadata:
 spec:
   accessModes:
     - ReadWriteMany
-  storageClassName: retain
+  storageClassName: nfs-ssd
   resources:
     requests:
       storage: 1Ti
