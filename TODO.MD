@@ -2,6 +2,7 @@
   + Set daily TRIM for /dev/ssd0
   + Set weekly TRIM for all SSD
   + Set weekly defrag e4defrag hdd
+  + Plex Cron sidecare to cleanup transcode folder based on age
   + Ansible
     + Install NFS server
     + Setup folders
@@ -11,9 +12,7 @@
     + Set TRIM CRON JOB
     + Install MergerFS
     + Setup mergerfs
-  + Migrate minecraft to Longhorn
   + https://www.curseforge.com/minecraft/mc-mods/plan-player-analytics
-  + Manage Backup
   + Mergerfs
     + Tools : Install and update via ansible
     + Tools : setup mergerfs.balance via cronjob
