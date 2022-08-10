@@ -10,6 +10,6 @@ COPY . .
 
 RUN npm run build
 
-FROM nginx:alpine AS Prod
+FROM nginx:1.23.1-alpine AS Prod
 
 COPY --from=dev ./app/build /usr/share/nginx/html/
