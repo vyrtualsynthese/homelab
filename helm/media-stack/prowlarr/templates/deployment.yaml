@@ -49,7 +49,6 @@ spec:
               value: "0"
             - name: "PGID"
               value: "0"
-
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
           volumeMounts:
