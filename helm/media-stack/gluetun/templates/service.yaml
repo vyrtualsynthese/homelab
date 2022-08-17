@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "fullname" . }}
+  labels:
+    {{- include "labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+    - port: 8888
+      name: gluetun-proxy
+      targetPort: gluetun-proxy
+  selector:
+    {{- include "selectorLabels" . | nindent 4 }}

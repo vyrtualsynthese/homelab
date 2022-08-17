@@ -1,4 +1,7 @@
++ Sonarr Improvements
+  + Integrate Flaresolver to Prowlarr pod
 + Implement better storage
+  + https://monitorss.xyz/
   + Set daily TRIM for /dev/ssd0
   + Set weekly TRIM for all SSD
   + Set weekly defrag e4defrag hdd
