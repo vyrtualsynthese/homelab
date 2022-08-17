@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "mongo.fullname" . }}-mongo
+  labels:
+    {{- include "mongo.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.mongo.service.type }}
+  ports:
+    - port: 27017
+      name: monitorss-mongo
+      targetPort: mongo
+  selector:
+    {{- include "mongo.selectorLabels" . | nindent 4 }}
