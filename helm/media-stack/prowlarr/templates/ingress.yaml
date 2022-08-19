@@ -20,7 +20,7 @@ spec:
   entryPoints:
     - web
   routes:
-    - match: Host(`prowlarr.local`)
+    - match: Host(`prowlarr.app.local`)
       kind: Rule
       services:
         - name: prowlarr

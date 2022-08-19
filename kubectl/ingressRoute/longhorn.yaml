@@ -13,7 +13,7 @@ spec:
     - web
   routes:
     - kind: Rule
-      match: Host(`longhorn.local`)
+      match: Host(`longhorn.app.local`)
       services:
         - name: longhorn-frontend
           port: http

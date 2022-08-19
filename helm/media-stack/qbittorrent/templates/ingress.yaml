@@ -20,7 +20,7 @@ spec:
   entryPoints:
     - web
   routes:
-    - match: Host(`qbittorrent.local`)
+    - match: Host(`qbittorrent.app.local`)
       kind: Rule
       services:
         - name: qbittorrent
