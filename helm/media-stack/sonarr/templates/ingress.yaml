@@ -20,7 +20,7 @@ spec:
   entryPoints:
     - web
   routes:
-    - match: Host(`sonarr.local`)
+    - match: Host(`sonarr.app.local`)
       kind: Rule
       services:
         - name: sonarr

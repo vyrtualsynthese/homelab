@@ -20,7 +20,7 @@ spec:
   entryPoints:
     - web
   routes:
-    - match: Host(`nextcloud.local`)
+    - match: Host(`nextcloud.app.local`)
       kind: Rule
       services:
         - name: nextcloud-web

@@ -20,7 +20,7 @@ spec:
   entryPoints:
     - web
   routes:
-    - match: Host(`bazarr.local`)
+    - match: Host(`bazarr.app.local`)
       kind: Rule
       services:
         - name: bazarr

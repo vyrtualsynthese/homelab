@@ -27,7 +27,7 @@ spec:
   entryPoints:
     - web
   routes:
-    - match: Host(`grafana.local`)
+    - match: Host(`grafana.app.local`)
       kind: Rule
       services:
         - name: grafana
