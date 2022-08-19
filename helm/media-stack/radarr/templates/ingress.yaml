@@ -20,7 +20,7 @@ spec:
   entryPoints:
     - web
   routes:
-    - match: Host(`radarr.local`)
+    - match: Host(`radarr.app.local`)
       kind: Rule
       services:
         - name: radarr

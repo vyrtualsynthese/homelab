@@ -14,7 +14,7 @@ spec:
   entryPoints:
     - web
   routes:
-    - match: Host(`dashy.local`)
+    - match: Host(`dashy.app.local`)
       kind: Rule
       services:
         - name: dashy
