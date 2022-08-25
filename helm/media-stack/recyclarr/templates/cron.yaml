@@ -25,7 +25,7 @@ spec:
           initContainers:
             - name: init-nextcloud-nginx-config
               image: busybox:1.35
-              command: [ 'sh', '-c', "cp /secret/* /config && mkdir cache repo logs" ]
+              command: [ 'sh', '-c', "cp /secret/* /config && mkdir cache repo logs && chown -R 1000:1000 /config" ]
               volumeMounts:
                 - mountPath: /config
                   name: recyclarr-conf-volume
@@ -41,9 +41,9 @@ spec:
                 - name: "TZ"
                   value: "Europe/Paris"
                 - name: "PUID"
-                  value: "0"
+                  value: "1000"
                 - name: "PGID"
-                  value: "0"
+                  value: "1000"
               resources:
                 {{- toYaml .Values.resources | nindent 16 }}
               volumeMounts:
