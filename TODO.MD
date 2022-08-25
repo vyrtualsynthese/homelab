@@ -1,5 +1,6 @@
 + Implement better storage
   + Steam api pull games list to merged rss feed
+  + https://github.com/jkirkcaldy/plex-utills
   + Set daily TRIM for /dev/ssd0
   + Set weekly TRIM for all SSD
   + Set weekly defrag e4defrag hdd

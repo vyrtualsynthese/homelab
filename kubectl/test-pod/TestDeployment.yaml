@@ -19,10 +19,7 @@ spec:
       volumes:
         - name: minecraft-server-volume
           persistentVolumeClaim:
-            claimName: minecraft-server
-        - name: minecraft-server-volume-lh
-          persistentVolumeClaim:
-            claimName: minecraft-server-lh
+            claimName: recyclarr-conf-lh
       containers:
         - image: alpine:latest
           command:
@@ -34,5 +31,3 @@ spec:
           volumeMounts:
             - name: minecraft-server-volume
               mountPath: /data
-            - name: minecraft-server-volume-lh
-              mountPath: /data-lh
