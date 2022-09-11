@@ -5,7 +5,7 @@ metadata:
   labels:
     {{- include "labels" . | nindent 4 }}
 spec:
-  schedule: "0 6 * * *"
+  schedule: "0,15,30,45 * * * *"
   successfulJobsHistoryLimit: 1
   failedJobsHistoryLimit: 1
   jobTemplate:
@@ -48,6 +48,8 @@ spec:
                 - name: "QBT_RUN"
                   value: "true"
                 - name: "QBT_REM_ORPHANED"
+                  value: "true"
+                - name: "QBT_TAG_UPDATE"
                   value: "true"
               resources:
                 {{- toYaml .Values.resources | nindent 16 }}
