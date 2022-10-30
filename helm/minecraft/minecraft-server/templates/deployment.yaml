@@ -51,7 +51,7 @@ spec:
             - name: MAX_WORLD_SIZE
               value: "12500"
             - name: VERSION
-              value: "1.19"
+              value: "1.19.2"
             - name: ANNOUNCE_PLAYER_ACHIEVEMENTS
               value: "FALSE"
             - name: MODE
