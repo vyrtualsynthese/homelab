@@ -31,6 +31,9 @@ spec:
         - name: qbittorrent-download-volume
           persistentVolumeClaim:
             claimName: qbittorrent-download
+        - name: qbittorrent-seed-volume
+          persistentVolumeClaim:
+            claimName: qbittorrent-seed
       containers:
         - name: {{ .Chart.Name }}
           securityContext:
@@ -49,13 +52,13 @@ spec:
             - name: "UN_LOG_FILE_MB"
               value: "10"
             - name: "UN_INTERVAL"
-              value: "2m"
+              value: "15m"
             - name: "UN_START_DELAY"
-              value: "1m"
+              value: "1h"
             - name: "UN_RETRY_DELAY"
-              value: "5m"
+              value: "30m"
             - name: "UN_MAX_RETRIES"
-              value: "0"
+              value: "10"
             - name: "UN_PARALLEL"
               value: "1"
             - name: "UN_FILE_MODE"
@@ -67,60 +70,62 @@ spec:
             - name: "UN_SONARR_0_API_KEY"
               value: "59ed1b7bec9b475f8109799fe6c2ef98"
             - name: "UN_SONARR_0_PATHS_0"
-              value: "/downloads"
+              value: "/seed"
             - name: "UN_SONARR_0_PROTOCOLS"
               value: "torrent"
             - name: "UN_SONARR_0_TIMEOUT"
-              value: "10s"
+              value: "1m"
             - name: "UN_SONARR_0_DELETE_ORIG"
               value: "false"
             - name: "UN_SONARR_0_DELETE_DELAY"
-              value: "5m"
+              value: "30m"
             - name: "UN_SONARR_1_URL"
               value: "http://sonarr-sd:8989"
             - name: "UN_SONARR_1_API_KEY"
               value: "dee16ad33c714ddfb2d5d54808932ca3"
             - name: "UN_SONARR_1_PATHS_0"
-              value: "/downloads"
+              value: "/seed"
             - name: "UN_SONARR_1_PROTOCOLS"
               value: "torrent"
             - name: "UN_SONARR_1_TIMEOUT"
-              value: "10s"
+              value: "1m"
             - name: "UN_SONARR_1_DELETE_ORIG"
               value: "false"
             - name: "UN_SONARR_1_DELETE_DELAY"
-              value: "5m"
+              value: "30m"
             - name: "UN_RADARR_0_URL"
               value: "http://radarr:7878"
             - name: "UN_RADARR_0_API_KEY"
               value: "b6c7196f708347f7afa6061ee6178782"
             - name: "UN_RADARR_0_PATHS_0"
-              value: "/downloads"
+              value: "/seed"
             - name: "UN_RADARR_0_PROTOCOLS"
               value: "torrent"
             - name: "UN_RADARR_0_TIMEOUT"
-              value: "10s"
+              value: "1m"
             - name: "UN_RADARR_0_DELETE_ORIG"
               value: "false"
             - name: "UN_RADARR_0_DELETE_DELAY"
-              value: "5m"
+              value: "30m"
             - name: "UN_RADARR_1_URL"
               value: "http://radarr-sd:7878"
             - name: "UN_RADARR_1_API_KEY"
               value: "885b4ca6035f43a9ba4076a65c03504a"
             - name: "UN_RADARR_1_PATHS_0"
-              value: "/downloads"
+              value: "/seed"
             - name: "UN_RADARR_1_PROTOCOLS"
               value: "torrent"
             - name: "UN_RADARR_1_TIMEOUT"
-              value: "10s"
+              value: "1m"
             - name: "UN_RADARR_1_DELETE_ORIG"
               value: "false"
             - name: "UN_RADARR_1_DELETE_DELAY"
-              value: "5m"
+              value: "30m"
           volumeMounts:
             - mountPath: /downloads
               name: qbittorrent-download-volume
+            - mountPath: /seed
+              name: qbittorrent-seed-volume
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

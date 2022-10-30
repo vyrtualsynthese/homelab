@@ -29,6 +29,9 @@ spec:
         - name: qbittorrent-download-volume
           persistentVolumeClaim:
             claimName: qbittorrent-download
+        - name: qbittorrent-seed-volume
+          persistentVolumeClaim:
+            claimName: qbittorrent-seed
         - name: plex-media-volume
           persistentVolumeClaim:
             claimName: plex-media-nfs
@@ -63,6 +66,8 @@ spec:
               mountPath: /config
             - name: qbittorrent-download-volume
               mountPath: /downloads
+            - name: qbittorrent-seed-volume
+              mountPath: /seed
             - name: plex-media-volume
               mountPath: /movies
       {{- with .Values.nodeSelector }}
