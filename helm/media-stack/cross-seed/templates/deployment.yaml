@@ -30,7 +30,7 @@ spec:
       volumes:
         - name: qbittorrent-config-volume
           persistentVolumeClaim:
-            claimName: qbittorrent-config-lh
+            claimName: qbittorrent-config2-lh
         - name: cross-seed-config-volume
           persistentVolumeClaim:
             claimName: cross-seed-config-lh

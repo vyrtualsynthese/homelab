@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: qbittorrent-seed-nfs
+spec:
+  storageClassName: qbittorrent-seed-nfs
+  volumeMode: Filesystem
+  capacity:
+    storage: 10Ti
+  accessModes:
+    - ReadWriteMany
+  nfs:
+    server: 192.168.1.41
+    path: "/mnt/storage/nfs/seed"
+  mountOptions:
+    - mountvers=4
+    - nolock
