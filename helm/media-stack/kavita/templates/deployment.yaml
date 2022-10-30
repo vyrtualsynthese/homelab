@@ -45,6 +45,9 @@ spec:
           ports:
             - name: kavita
               containerPort: 5000
+          env:
+            - name: DOTNET_HOSTBUILDER__RELOADCONFIGONCHANGE
+              value: "false"
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
           volumeMounts:
