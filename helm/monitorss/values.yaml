@@ -72,7 +72,15 @@ bot:
 
   tolerations: []
 
-  affinity: {}
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+          - matchExpressions:
+            - key: architecture
+              operator: In
+              values:
+                - x86
 
 mongo:
   image:
@@ -133,4 +141,12 @@ mongo:
 
   tolerations: []
 
-  affinity: {}
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+        - matchExpressions:
+          - key: architecture
+            operator: In
+            values:
+              - x86

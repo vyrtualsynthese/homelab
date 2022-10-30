@@ -23,18 +23,12 @@ spec:
         {{- include "selectorLabels" . | nindent 8 }}
     spec:
       volumes:
-        - name: radarr-sd-config-volume
+        - name: books-volume
           persistentVolumeClaim:
-            claimName: radarr-sd-config-lh
-        - name: qbittorrent-download-volume
+            claimName: books-nfs
+        - name: config-volume
           persistentVolumeClaim:
-            claimName: qbittorrent-download
-        - name: qbittorrent-seed-volume
-          persistentVolumeClaim:
-            claimName: qbittorrent-seed
-        - name: plex-media-volume
-          persistentVolumeClaim:
-            claimName: plex-media-nfs
+            claimName: kavita-config-lh
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
@@ -49,27 +43,15 @@ spec:
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:
-            - name: radarr-webui
-              containerPort: 7878
-          env:
-            - name: "TZ"
-              value: "Europe/Paris"
-            - name: "PUID"
-              value: "0"
-            - name: "PGID"
-              value: "0"
-
+            - name: kavita
+              containerPort: 5000
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
           volumeMounts:
-            - name: radarr-sd-config-volume
-              mountPath: /config
-            - name: qbittorrent-download-volume
-              mountPath: /downloads
-            - name: qbittorrent-seed-volume
-              mountPath: /seed
-            - name: plex-media-volume
-              mountPath: /movies
+            - name: books-volume
+              mountPath: /books
+            - name: config-volume
+              mountPath: /kavita/config
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

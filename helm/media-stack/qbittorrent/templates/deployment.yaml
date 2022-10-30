@@ -30,10 +30,13 @@ spec:
       volumes:
         - name: qbittorrent-config-volume
           persistentVolumeClaim:
-            claimName: qbittorrent-config-lh
+            claimName: qbittorrent-config2-lh
         - name: qbittorrent-download-volume
           persistentVolumeClaim:
             claimName: qbittorrent-download
+        - name: qbittorrent-seed-volume
+          persistentVolumeClaim:
+            claimName: qbittorrent-seed
         - name: "dev-tun" # Needed for VPN
           hostPath:
             path: "/dev/net/tun"
@@ -47,7 +50,7 @@ spec:
       initContainers:
         - name: init-qbittorrent
           image: alpine:latest
-          command: [ 'sh', '-c', "apk update && apk add unzip && wget https://github.com/WDaan/VueTorrent/releases/download/v0.18.1/vuetorrent.zip && unzip vuetorrent.zip && cp -r vuetorrent /config/ui" ]
+          command: [ 'sh', '-c', "apk update && apk add unzip && wget https://github.com/WDaan/VueTorrent/releases/download/v0.19.1/vuetorrent.zip && unzip vuetorrent.zip && cp -r vuetorrent /config/ui" ]
           volumeMounts:
             - name: qbittorrent-config-volume
               mountPath: /config
@@ -69,14 +72,16 @@ spec:
               mountPath: /config
             - name: qbittorrent-download-volume
               mountPath: /downloads
+            - name: qbittorrent-seed-volume
+              mountPath: /seed
           ports:
             - name: torrent-webui
               containerPort: 8080
             - name: torrent
-              containerPort: 60841
+              containerPort: 59565
               protocol: TCP
             - name: torrent-udp
-              containerPort: 60841
+              containerPort: 59565
               protocol: UDP
         - name: {{ .Chart.Name }}-vpn
           securityContext:
@@ -114,6 +119,14 @@ spec:
                   key: FIREWALL_VPN_INPUT_PORTS
             - name: "DOT"
               value: "off"
+            - name: "DOT_IPV6"
+              value: "off"
+            - name: "BLOCK_MALICIOUS"
+              value: "off"
+            - name: "HEALTH_VPN_DURATION_INITIAL"
+              value: "30s"
+            - name: "HEALTH_VPN_DURATION_ADDITION"
+              value: "10s"
             - name: "VPN_ENDPOINT_PORT"
               valueFrom:
                 secretKeyRef:
