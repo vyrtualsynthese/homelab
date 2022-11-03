@@ -9,7 +9,7 @@
 apiVersion: traefik.containo.us/v1alpha1
 kind: IngressRoute
 metadata:
-  name: {{ $fullName }}
+  name: {{ $fullName }}-public-redirect
   labels:
     {{- include "labels" . | nindent 4 }}
   {{- with .Values.ingress.annotations }}
@@ -20,9 +20,11 @@ spec:
   entryPoints:
     - web
   routes:
-    - match: Host(`readarr.app.local`)
+    - match: Host(`autobrr.home.ashudev.com`)
       kind: Rule
       services:
-        - name: readarr
-          port: readarr-webui
+        - name: autobrr
+          port: autobrr-webui
+      middlewares:
+        - name: {{ include "fullname" . }}-redirect-https
 {{- end }}

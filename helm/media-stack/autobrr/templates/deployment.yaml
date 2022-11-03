@@ -23,18 +23,9 @@ spec:
         {{- include "selectorLabels" . | nindent 8 }}
     spec:
       volumes:
-        - name: readarr-config-volume
+        - name: autobrr-config-volume
           persistentVolumeClaim:
-            claimName: readarr-config-lh
-        - name: qbittorrent-download-volume
-          persistentVolumeClaim:
-            claimName: qbittorrent-download
-        - name: qbittorrent-seed-volume
-          persistentVolumeClaim:
-            claimName: qbittorrent-seed
-        - name: books-volume
-          persistentVolumeClaim:
-            claimName: books-nfs
+            claimName: autobrr-config-lh
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
@@ -49,8 +40,8 @@ spec:
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:
-            - name: readarr-webui
-              containerPort: 8787
+            - name: autobrr-webui
+              containerPort: 7474
           env:
             - name: "TZ"
               value: "Europe/Paris"
@@ -58,16 +49,11 @@ spec:
               value: "0"
             - name: "PGID"
               value: "0"
+
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
           volumeMounts:
-            - name: books-volume
-              mountPath: /books
-            - name: qbittorrent-download-volume
-              mountPath: /downloads
-            - name: qbittorrent-seed-volume
-              mountPath: /seed
-            - name: readarr-config-volume
+            - name: autobrr-config-volume
               mountPath: /config
       {{- with .Values.nodeSelector }}
       nodeSelector:
