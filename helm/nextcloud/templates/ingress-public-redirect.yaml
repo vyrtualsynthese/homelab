@@ -1,9 +1,9 @@
-{{- if .Values.ingress.enabled -}}
-{{- $fullName := include "fullname" . -}}
-{{- $svcPort := .Values.service.port -}}
-{{- if and .Values.ingress.className (not (semverCompare ">=1.18-0" .Capabilities.KubeVersion.GitVersion)) }}
-  {{- if not (hasKey .Values.ingress.annotations "kubernetes.io/ingress.class") }}
-  {{- $_ := set .Values.ingress.annotations "kubernetes.io/ingress.class" .Values.ingress.className}}
+{{- if .Values.web.ingress.enabled -}}
+{{- $fullName := include "nextcloud.web.fullname" . -}}
+{{- $svcPort := .Values.web.service.port -}}
+{{- if and .Values.web.ingress.className (not (semverCompare ">=1.18-0" .Capabilities.KubeVersion.GitVersion)) }}
+  {{- if not (hasKey .Values.web.ingress.annotations "kubernetes.io/ingress.class") }}
+  {{- $_ := set .Values.web.ingress.annotations "kubernetes.io/ingress.class" .Values.web.ingress.className}}
   {{- end }}
 {{- end }}
 apiVersion: traefik.containo.us/v1alpha1
@@ -11,8 +11,8 @@ kind: IngressRoute
 metadata:
   name: {{ $fullName }}-public-redirect
   labels:
-    {{- include "labels" . | nindent 4 }}
-  {{- with .Values.ingress.annotations }}
+    {{- include "nextcloud.web.labels" . | nindent 4 }}
+  {{- with .Values.web.ingress.annotations }}
   annotations:
     {{- toYaml . | nindent 4 }}
   {{- end }}
@@ -20,11 +20,11 @@ spec:
   entryPoints:
     - web
   routes:
-    - match: Host(`plex.home.ashudev.com`)
+    - match: Host(`nextcloud.home.ashudev.com`)
       kind: Rule
       services:
-        - name: plex
-          port: plex
+        - name: nextcloud-web
+          port: web
       middlewares:
-        - name: {{ include "fullname" . }}-redirect-https
+        - name: nextcloud-web-redirect-https
 {{- end }}

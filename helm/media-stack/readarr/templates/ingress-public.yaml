@@ -20,13 +20,13 @@ spec:
   entryPoints:
     - websecure
   routes:
-    - match: Host(`radarr.home.ashudev.com`)
+    - match: Host(`readarr.home.ashudev.com`)
       kind: Rule
       services:
-        - name: radarr
-          port: radarr-webui
+        - name: readarr
+          port: readarr-webui
   tls:
     certResolver: le
     options:
-      name: radarr-tlsoption
+      name: readarr-tlsoption
 {{- end }}

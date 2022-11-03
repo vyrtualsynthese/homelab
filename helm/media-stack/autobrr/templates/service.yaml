@@ -7,8 +7,8 @@ metadata:
 spec:
   type: {{ .Values.service.type }}
   ports:
-    - port: 8787
-      name: readarr-webui
-      targetPort: readarr-webui
+    - port: 7474
+      name: autobrr-webui
+      targetPort: autobrr-webui
   selector:
     {{- include "selectorLabels" . | nindent 4 }}

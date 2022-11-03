@@ -1,9 +1,9 @@
 apiVersion: traefik.containo.us/v1alpha1
 kind: TLSOption
 metadata:
-  name: nextcloud-web-tlsoption
+  name: {{ include "fullname" . }}-tlsoption
   labels:
-    {{- include "nextcloud.web.labels" . | nindent 4 }}
+    {{- include "labels" . | nindent 4 }}
 spec:
   minVersion: VersionTLS12
   cipherSuites:

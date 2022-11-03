@@ -42,10 +42,8 @@ spec:
           env:
             - name: EULA
               value: "TRUE"
-            - name: WHITELIST
-              value: "vsynthese,Tarrhen,PapeCaponche,Carabaf,JambonLeVrai,KaFeuk,LeGrandSimon,Ramzo1506,Ioni,Neka14"
             - name: ONLINE_MODE
-              value: "TRUE"
+              value: "FALSE"
             - name: OPS
               value: "vsynthese"
             - name: MAX_WORLD_SIZE
