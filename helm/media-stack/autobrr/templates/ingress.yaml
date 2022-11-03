@@ -20,9 +20,9 @@ spec:
   entryPoints:
     - web
   routes:
-    - match: Host(`readarr.app.local`)
+    - match: Host(`autobrr.app.local`)
       kind: Rule
       services:
-        - name: readarr
-          port: readarr-webui
+        - name: autobrr
+          port: autobrr-webui
 {{- end }}
