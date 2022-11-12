@@ -5,13 +5,7 @@
 replicaCount: 1
 
 image:
-  repository: linuxserver/qbittorrent
-  pullPolicy: Always
-  # Overrides the image tag whose default is the chart appVersion.
-  tag: latest
-
-vpnimage:
-  repository: qmcgaw/gluetun
+  repository: jamesits/dst-server
   pullPolicy: Always
   # Overrides the image tag whose default is the chart appVersion.
   tag: latest
@@ -29,30 +23,29 @@ serviceAccount:
   # If not set and create is true, a name is generated using the fullname template
   name: ""
 
-podAnnotations:
-  setGateway: "true"
+podAnnotations: {}
 
 podSecurityContext: {}
-# fsGroup: 2000
+  # fsGroup: 2000
 
 securityContext: {}
   # capabilities:
   #   drop:
   #   - ALL
   # readOnlyRootFilesystem: true
-# runAsNonRoot: true
-# runAsUser: 1000
+  # runAsNonRoot: true
+  # runAsUser: 1000
 
 service:
-  type: ClusterIP
-  port: 32400
+  type: NodePort
+  port: 25565
 
 ingress:
-  enabled: true
-  className: no
+  enabled: false
+  className: ""
   annotations: {}
-  # kubernetes.io/ingress.class: nginx
-  # kubernetes.io/tls-acme: "true"
+    # kubernetes.io/ingress.class: nginx
+    # kubernetes.io/tls-acme: "true"
   hosts:
     - host: chart-example.local
       paths:
@@ -63,22 +56,23 @@ ingress:
   #    hosts:
   #      - chart-example.local
 
-resources: {}
-#  requests:
-#    cpu: 100m
-#    memory: 200Mi
-#  limits:
-#    cpu: 2000m
-#    memory: 2000Mi
-
-vpnresources:
+resources:
   requests:
-    cpu: 10m
-    memory: 25Mi
+    cpu: 500m
+    memory: 500Mi
   limits:
-    cpu: 100m
-    memory: 150Mi
-
+    cpu: 2000m
+    memory: 6Gi
+  # We usually recommend not to specify default resources and to leave this as a conscious
+  # choice for the user. This also increases chances charts run on environments with little
+  # resources, such as Minikube. If you do want to specify resources, uncomment the following
+  # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
+  # limits:
+  #   cpu: 100m
+  #   memory: 128Mi
+  # requests:
+  #   cpu: 100m
+  #   memory: 128Mi
 
 autoscaling:
   enabled: false
