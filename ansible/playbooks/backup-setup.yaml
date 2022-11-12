@@ -58,7 +58,7 @@
   tasks:
     - name: Create backup folder of master
       ansible.builtin.file:
-        path: /media/hdd/backup/{{ inventory_hostname }}
+        path: /mnt/storage/backup/{{ inventory_hostname }}
         state: directory
         owner: root
         group: root
@@ -72,13 +72,13 @@
 
     - name: Set rights for backup folder
       ansible.builtin.file:
-        path: /media/hdd/backup
+        path: /mnt/storage/backup
         state: directory
         mode: '755'
 
     - name: Create a backup folder for every slaves
       ansible.builtin.file:
-        path: /media/hdd/backup/{{ item }}
+        path: /mnt/storage/backup/{{ item }}
         state: directory
         owner: "{{ item }}"
         group: "{{ item }}"
@@ -97,7 +97,7 @@
         path: /etc/environment
         state: present
         regexp: '^RESTIC_REPOSITORY'
-        line: 'RESTIC_REPOSITORY="/media/hdd/backup/{{ inventory_hostname }}"'
+        line: 'RESTIC_REPOSITORY="/mnt/storage/backup/{{ inventory_hostname }}"'
 
     - name: Check if repo already configured
       ansible.builtin.command: sudo restic snapshots
@@ -145,7 +145,7 @@
         path: /etc/environment
         state: present
         regexp: '^RESTIC_REPOSITORY'
-        line: 'RESTIC_REPOSITORY="sftp:{{ inventory_hostname }}@192.168.1.41:/media/hdd/backup/{{ inventory_hostname }}"'
+        line: 'RESTIC_REPOSITORY="sftp:{{ inventory_hostname }}@192.168.1.41:/mnt/storage/backup/{{ inventory_hostname }}"'
 
     - name: Check if repo already configured
       ansible.builtin.command: sudo restic snapshots

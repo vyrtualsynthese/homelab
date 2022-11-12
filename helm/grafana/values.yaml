@@ -522,6 +522,9 @@ dashboards:
     homelab-monitor:
       file: dashboards/homelab-monitor.json
       datasource: Prometheus
+    network:
+      file: dashboards/network.json
+      datasource: Prometheus
 
 
 ## Reference to external ConfigMap per provider. Use provider name as key and ConfigMap name as value.

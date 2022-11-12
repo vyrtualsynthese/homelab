@@ -1,0 +1,89 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "fullname" . }}
+  labels:
+    {{- include "labels" . | nindent 4 }}
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "selectorLabels" . | nindent 6 }}
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "selectorLabels" . | nindent 8 }}
+    spec:
+      volumes:
+        - name: dont-starve-together-volume
+          persistentVolumeClaim:
+            claimName: dont-starve-together-lh
+        - name: dont-starve-together
+          secret:
+            secretName: dont-starve-together
+            items:
+              - key: cluster.ini
+                path: cluster.ini
+              - key: cluster_token.txt
+                path: cluster_token.txt
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      initContainers:
+        - name: init-dst-config
+          image: busybox:1.35
+          command: [ 'sh', '-c', "mkdir -p /config/DoNotStarveTogether/Cluster_1 && cp /secret/* /config/DoNotStarveTogether/Cluster_1" ]
+          volumeMounts:
+            - mountPath: /config
+              name: dont-starve-together-volume
+            - mountPath: /secret
+              name: dont-starve-together
+      containers:
+        - name: {{ .Chart.Name }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: dst-1
+              protocol: UDP
+              containerPort: 10999
+            - name: dst-2
+              protocol: UDP
+              containerPort: 11000
+            - name: dst-3
+              protocol: UDP
+              containerPort: 12346
+            - name: dst-4
+              protocol: UDP
+              containerPort: 12347
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: dont-starve-together-volume
+              mountPath: /data
+      terminationGracePeriodSeconds: 600
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
