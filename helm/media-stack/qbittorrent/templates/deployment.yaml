@@ -94,7 +94,7 @@ spec:
             - name: VPN_SERVICE_PROVIDER
               value: "mullvad"
             - name: FIREWALL
-              value: "on"
+              value: "off"
             - name: VPN_TYPE
               value: "wireguard"
             - name: WIREGUARD_PRIVATE_KEY

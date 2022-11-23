@@ -5,10 +5,26 @@ metadata:
   labels:
     {{- include "labels" . | nindent 4 }}
 spec:
-  type: {{ .Values.service.type }}
+  type: NodePort
   ports:
-    - port: 32400
-      name: plex
-      targetPort: plex
+    - name: plex
+      port: 32400
+      protocol: TCP
+      targetPort: 32400 #PMS
+    - targetPort: 32400
+      port: 32400
+      name: plex-udp
+      protocol: UDP
+    - targetPort: 32469 #Plex DLNA
+      port: 32469
+      name: plex-dlna
+    - targetPort: 5353
+      port: 5353
+      name: plex-discovery
+      protocol: UDP
+    - targetPort: 1900 #Plex DLNA
+      port: 1900
+      name: plex-dlna-udp
+      protocol: UDP
   selector:
     {{- include "selectorLabels" . | nindent 4 }}

@@ -28,6 +28,14 @@ spec:
       serviceAccountName: {{ include "nextcloud.db.serviceAccountName" . }}
       securityContext:
         {{- toYaml .Values.db.podSecurityContext | nindent 8 }}
+{{/*      initContainers:*/}}
+{{/*        - name: init-nextcloud-nginx-config*/}}
+{{/*          image: postgres:14.2-alpine*/}}
+{{/*          command: [ 'sh', '-c', "sleep 9000" ]*/}}
+{{/*          volumeMounts:*/}}
+{{/*            - name: nextcloud-db-volume*/}}
+{{/*              mountPath: /var/lib/postgresql/data*/}}
+{{/*              subPath: postgres-data*/}}
       containers:
         - name: {{ .Chart.Name }}-db
           securityContext:
@@ -37,18 +45,18 @@ spec:
           ports:
             - name: postgres
               containerPort: 5432
-          livenessProbe:
-            exec:
-              command:
-                - pg_isready
-            failureThreshold: 5
-            periodSeconds: 10
-          startupProbe:
-            exec:
-              command:
-                - pg_isready
-            failureThreshold: 10
-            periodSeconds: 10
+{{/*          livenessProbe:*/}}
+{{/*            exec:*/}}
+{{/*              command:*/}}
+{{/*                - "pg_isready -d nextcloud-postgres -U nextcloud-postgres"*/}}
+{{/*            failureThreshold: 5*/}}
+{{/*            periodSeconds: 10*/}}
+{{/*          startupProbe:*/}}
+{{/*            exec:*/}}
+{{/*              command:*/}}
+{{/*                - "pg_isready -d nextcloud-postgres -U nextcloud-postgres"*/}}
+{{/*            failureThreshold: 10*/}}
+{{/*            periodSeconds: 10*/}}
           env:
             - name: "POSTGRES_PASSWORD"
               valueFrom:
