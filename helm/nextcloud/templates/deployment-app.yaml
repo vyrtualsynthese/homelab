@@ -50,10 +50,14 @@ spec:
           env:
             - name: "PHP_UPLOAD_LIMIT"
               value: "100G"
+            - name: "NEXTCLOUD_UPDATE"
+              value: "0"
             - name: "POSTGRES_HOST"
               value: "nextcloud-db"
             - name: "REDIS_HOST"
               value: "nextcloud-redis"
+            - name: "OVERWRITEPROTOCOL"
+              value: "https"
             - name: "POSTGRES_PASSWORD"
               valueFrom:
                 secretKeyRef:
