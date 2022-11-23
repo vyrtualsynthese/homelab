@@ -90,7 +90,7 @@ affinity:
     requiredDuringSchedulingIgnoredDuringExecution:
       nodeSelectorTerms:
         - matchExpressions:
-            - key: kubernetes.io/hostname
+            - key: kubernetes.io/arch
               operator: In
               values:
-                - xps-13
+                - amd64

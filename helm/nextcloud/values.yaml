@@ -8,7 +8,7 @@ db:
     repository: postgres
     pullPolicy: IfNotPresent
     # Overrides the image tag whose default is the chart appVersion.
-    tag: 14.2-alpine
+    tag: 14-alpine
 
   imagePullSecrets: []
   nameOverride: "nextcloud-db"
@@ -80,14 +80,13 @@ db:
 
   affinity:
     nodeAffinity:
-      preferredDuringSchedulingIgnoredDuringExecution:
-        - weight: 1
-          preference:
-            matchExpressions:
-              - key: architecture
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+          - matchExpressions:
+              - key: kubernetes.io/arch
                 operator: In
                 values:
-                  - x86
+                  - amd64
 
 redis:
   image:
@@ -156,21 +155,20 @@ redis:
 
   affinity:
     nodeAffinity:
-      preferredDuringSchedulingIgnoredDuringExecution:
-        - weight: 1
-          preference:
-            matchExpressions:
-              - key: architecture
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+          - matchExpressions:
+              - key: kubernetes.io/arch
                 operator: In
                 values:
-                  - x86
+                  - amd64
 
 app:
   image:
     repository: nextcloud
     pullPolicy: IfNotPresent
     # Overrides the image tag whose default is the chart appVersion.
-    tag: 24.0.1-fpm-alpine
+    tag: fpm-alpine
 
   imagePullSecrets: []
   nameOverride: "nextcloud-app"
@@ -227,14 +225,13 @@ app:
 
   affinity:
     nodeAffinity:
-      preferredDuringSchedulingIgnoredDuringExecution:
-        - weight: 1
-          preference:
-            matchExpressions:
-              - key: architecture
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+          - matchExpressions:
+              - key: kubernetes.io/arch
                 operator: In
                 values:
-                  - x86
+                  - amd64
 
 web:
   image:
@@ -311,14 +308,22 @@ web:
 
   tolerations: []
 
-  affinity: {}
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+          - matchExpressions:
+              - key: kubernetes.io/arch
+                operator: In
+                values:
+                  - amd64
 
 cron:
   image:
     repository: nextcloud
     pullPolicy: IfNotPresent
     # Overrides the image tag whose default is the chart appVersion.
-    tag: 24.0.1-fpm-alpine
+    tag: fpm-alpine
 
   imagePullSecrets: []
   nameOverride: "nextcloud-cron"
@@ -390,11 +395,10 @@ cron:
 
   affinity:
     nodeAffinity:
-      preferredDuringSchedulingIgnoredDuringExecution:
-        - weight: 1
-          preference:
-            matchExpressions:
-              - key: architecture
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+          - matchExpressions:
+              - key: kubernetes.io/arch
                 operator: In
                 values:
-                  - x86
+                  - amd64

@@ -111,7 +111,7 @@
         "showThresholdMarkers": true,
         "text": {}
       },
-      "pluginVersion": "8.5.4",
+      "pluginVersion": "9.2.5",
       "targets": [
         {
           "exemplar": true,
@@ -179,7 +179,7 @@
         "showThresholdMarkers": true,
         "text": {}
       },
-      "pluginVersion": "8.5.4",
+      "pluginVersion": "9.2.5",
       "targets": [
         {
           "exemplar": true,
@@ -256,13 +256,19 @@
         "showThresholdMarkers": true,
         "text": {}
       },
-      "pluginVersion": "8.5.4",
+      "pluginVersion": "9.2.5",
       "targets": [
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "editorMode": "code",
           "exemplar": true,
-          "expr": "(sum(((100 - ((node_filesystem_avail_bytes{mountpoint=\"/\",fstype!=\"rootfs\"} * 100) / (node_filesystem_size_bytes{mountpoint=\"/\",fstype!=\"rootfs\"})))))/ (count(count(node_memory_MemTotal_bytes) by (instance))))",
+          "expr": "(sum(((100 - ((node_filesystem_avail_bytes{fstype!=\"ext4\"} * 100) / (node_filesystem_size_bytes{fstype!=\"ext4\"})))))/ (count(count(node_filesystem_size_bytes) by (instance))))",
           "interval": "",
           "legendFormat": "",
+          "range": true,
           "refId": "A"
         }
       ],
@@ -336,7 +342,7 @@
         "showThresholdMarkers": true,
         "text": {}
       },
-      "pluginVersion": "8.5.4",
+      "pluginVersion": "9.2.5",
       "targets": [
         {
           "exemplar": true,
@@ -412,7 +418,7 @@
         "text": {},
         "textMode": "auto"
       },
-      "pluginVersion": "8.5.4",
+      "pluginVersion": "9.2.5",
       "targets": [
         {
           "exemplar": true,
@@ -472,7 +478,7 @@
         "text": {},
         "textMode": "auto"
       },
-      "pluginVersion": "8.5.4",
+      "pluginVersion": "9.2.5",
       "targets": [
         {
           "exemplar": true,
@@ -549,7 +555,7 @@
         "text": {},
         "textMode": "auto"
       },
-      "pluginVersion": "8.5.4",
+      "pluginVersion": "9.2.5",
       "targets": [
         {
           "exemplar": true,
@@ -623,7 +629,7 @@
         "text": {},
         "textMode": "auto"
       },
-      "pluginVersion": "8.5.4",
+      "pluginVersion": "9.2.5",
       "targets": [
         {
           "exemplar": true,
@@ -699,7 +705,7 @@
         "text": {},
         "textMode": "auto"
       },
-      "pluginVersion": "8.5.4",
+      "pluginVersion": "9.2.5",
       "targets": [
         {
           "exemplar": true,
@@ -748,10 +754,10 @@
       },
       "id": 14,
       "options": {
-        "colorMode": "none",
+        "colorMode": "value",
         "graphMode": "none",
         "justifyMode": "auto",
-        "orientation": "horizontal",
+        "orientation": "auto",
         "reduceOptions": {
           "calcs": [
             "lastNotNull"
@@ -759,16 +765,21 @@
           "fields": "",
           "values": false
         },
-        "text": {},
         "textMode": "auto"
       },
-      "pluginVersion": "8.5.4",
+      "pluginVersion": "9.2.5",
       "targets": [
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "editorMode": "code",
           "exemplar": true,
-          "expr": "sum(node_filesystem_size_bytes{mountpoint=\"/\",fstype!=\"rootfs\"})",
+          "expr": "sum(node_filesystem_size_bytes{fstype=\"ext4\"})",
           "interval": "",
-          "legendFormat": "",
+          "legendFormat": "__auto",
+          "range": true,
           "refId": "A"
         }
       ],
@@ -822,7 +833,7 @@
         "text": {},
         "textMode": "auto"
       },
-      "pluginVersion": "8.5.4",
+      "pluginVersion": "9.2.5",
       "targets": [
         {
           "exemplar": true,
@@ -894,7 +905,7 @@
         "text": {},
         "textMode": "auto"
       },
-      "pluginVersion": "8.5.4",
+      "pluginVersion": "9.2.5",
       "targets": [
         {
           "exemplar": true,
@@ -959,7 +970,7 @@
         "text": {},
         "textMode": "value_and_name"
       },
-      "pluginVersion": "8.5.4",
+      "pluginVersion": "9.2.5",
       "targets": [
         {
           "exemplar": true,
@@ -1029,7 +1040,7 @@
         "text": {},
         "textMode": "auto"
       },
-      "pluginVersion": "8.5.4",
+      "pluginVersion": "9.2.5",
       "targets": [
         {
           "exemplar": true,
@@ -1096,13 +1107,19 @@
         "text": {},
         "textMode": "auto"
       },
-      "pluginVersion": "8.5.4",
+      "pluginVersion": "9.2.5",
       "targets": [
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "editorMode": "code",
           "exemplar": true,
-          "expr": "sum by (instance) (node_filesystem_avail_bytes{mountpoint=\"/\",fstype!=\"rootfs\"})",
+          "expr": "sum by (kubernetes_node) (node_filesystem_avail_bytes{mountpoint=\"/\",fstype!=\"rootfs\"})",
           "interval": "",
-          "legendFormat": "{{instance}}",
+          "legendFormat": "{{kubernetes_node}}",
+          "range": true,
           "refId": "A"
         }
       ],
@@ -1159,7 +1176,7 @@
         "text": {},
         "textMode": "auto"
       },
-      "pluginVersion": "8.5.4",
+      "pluginVersion": "9.2.5",
       "targets": [
         {
           "exemplar": true,
@@ -1231,7 +1248,7 @@
         "text": {},
         "textMode": "auto"
       },
-      "pluginVersion": "8.5.4",
+      "pluginVersion": "9.2.5",
       "targets": [
         {
           "expr": "max(node_network_up) by (kubernetes_node)",
@@ -1300,7 +1317,7 @@
         "text": {},
         "textMode": "value_and_name"
       },
-      "pluginVersion": "8.5.4",
+      "pluginVersion": "9.2.5",
       "targets": [
         {
           "exemplar": true,
@@ -1328,6 +1345,8 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
@@ -1374,33 +1393,7 @@
             ]
           }
         },
-        "overrides": [
-          {
-            "__systemRef": "hideSeriesFrom",
-            "matcher": {
-              "id": "byNames",
-              "options": {
-                "mode": "exclude",
-                "names": [
-                  "qbittorrent",
-                  "qbittorrent-limit"
-                ],
-                "prefix": "All except:",
-                "readOnly": true
-              }
-            },
-            "properties": [
-              {
-                "id": "custom.hideFrom",
-                "value": {
-                  "legend": false,
-                  "tooltip": false,
-                  "viz": true
-                }
-              }
-            ]
-          }
-        ]
+        "overrides": []
       },
       "gridPos": {
         "h": 10,
@@ -1414,10 +1407,11 @@
         "legend": {
           "calcs": [],
           "displayMode": "table",
-          "placement": "right"
+          "placement": "right",
+          "showLegend": true
         },
         "tooltip": {
-          "mode": "multi",
+          "mode": "single",
           "sort": "none"
         }
       },
@@ -1427,11 +1421,13 @@
             "type": "prometheus",
             "uid": "PBFA97CFB590B2093"
           },
+          "editorMode": "code",
           "exemplar": true,
-          "expr": "sum(rate(container_cpu_usage_seconds_total{container!=\"\", container!~\"lb.*\"}[5m])) by (container)",
+          "expr": "sum (rate(container_cpu_usage_seconds_total{container!=\"\", container!~\"lb.*\"}[5m])) by (pod)",
           "format": "time_series",
           "interval": "",
-          "legendFormat": "{{container}}",
+          "legendFormat": "{{pod}}",
+          "range": true,
           "refId": "A"
         },
         {
@@ -1439,11 +1435,13 @@
             "type": "prometheus",
             "uid": "PBFA97CFB590B2093"
           },
+          "editorMode": "code",
           "exemplar": true,
           "expr": "kube_pod_container_resource_limits{resource=\"cpu\"}",
-          "hide": false,
+          "hide": true,
           "interval": "",
-          "legendFormat": "{{container}}-limit",
+          "legendFormat": "{{pod}}-limit",
+          "range": true,
           "refId": "B"
         }
       ],
@@ -1461,6 +1459,8 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "left",
             "barAlignment": 0,
@@ -1507,7 +1507,257 @@
           },
           "unit": "bytes"
         },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 35
+      },
+      "id": 44,
+      "interval": "15s",
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "exemplar": true,
+          "expr": "sum by (pod) (container_memory_working_set_bytes{container!=\"\", container!~\"lb.*\"})",
+          "interval": "",
+          "legendFormat": "{{container}}",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "exemplar": true,
+          "expr": "sum by (pod) (kube_pod_container_resource_limits{resource=\"memory\"})",
+          "hide": true,
+          "interval": "",
+          "legendFormat": "{{container}}-limit",
+          "refId": "B"
+        }
+      ],
+      "title": "Pod Memory Usage",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 4,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "links": [],
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "Bps"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 11,
+        "w": 24,
+        "x": 0,
+        "y": 45
+      },
+      "id": 46,
+      "interval": "1m",
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "right",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "8.5.4",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "editorMode": "code",
+          "exemplar": false,
+          "expr": "sum by(kubernetes_node) (rate(node_network_receive_bytes_total{device!~\"cni0|docker0|flannel.1|lo|veth.*\"}[5m]))",
+          "format": "time_series",
+          "instant": false,
+          "interval": "",
+          "legendFormat": "{{kubernetes_node}} Download",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "editorMode": "code",
+          "expr": "sum by (kubernetes_node) (rate(node_network_transmit_bytes_total{device!~\"cni0|docker0|flannel.1|lo|veth.*\"}[5m]))",
+          "hide": false,
+          "legendFormat": "{{kubernetes_node}} Upload",
+          "range": true,
+          "refId": "B"
+        }
+      ],
+      "title": "Network Traffic (Nodes)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "bytes"
+        },
         "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": " Receive"
+            },
+            "properties": [
+              {
+                "id": "custom.hideFrom",
+                "value": {
+                  "legend": true,
+                  "tooltip": true,
+                  "viz": true
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": " Transmit"
+            },
+            "properties": [
+              {
+                "id": "custom.hideFrom",
+                "value": {
+                  "legend": true,
+                  "tooltip": true,
+                  "viz": true
+                }
+              }
+            ]
+          },
           {
             "__systemRef": "hideSeriesFrom",
             "matcher": {
@@ -1515,7 +1765,22 @@
               "options": {
                 "mode": "exclude",
                 "names": [
-                  "grafana"
+                  "plex-55d8dbf695-fdn7d Receive",
+                  " Receive",
+                  " Transmit",
+                  "plex-647dddfd54-hcmvw Receive",
+                  "plex-6d7d89cbf6-444kd Receive",
+                  "plex-6d7d89cbf6-ljfhx Receive",
+                  "plex-79b49d4d49-vtg67 Receive",
+                  "plex-85d8755854-p5bfj Receive",
+                  "plex-85d8755854-rbg4k Receive",
+                  "plex-55d8dbf695-fdn7d Transmit",
+                  "plex-647dddfd54-hcmvw Transmit",
+                  "plex-6d7d89cbf6-444kd Transmit",
+                  "plex-6d7d89cbf6-ljfhx Transmit",
+                  "plex-79b49d4d49-vtg67 Transmit",
+                  "plex-85d8755854-p5bfj Transmit",
+                  "plex-85d8755854-rbg4k Transmit"
                 ],
                 "prefix": "All except:",
                 "readOnly": true
@@ -1535,21 +1800,21 @@
         ]
       },
       "gridPos": {
-        "h": 10,
+        "h": 13,
         "w": 24,
         "x": 0,
-        "y": 35
+        "y": 56
       },
-      "id": 44,
-      "interval": "1m",
+      "id": 48,
       "options": {
         "legend": {
           "calcs": [],
-          "displayMode": "table",
-          "placement": "right"
+          "displayMode": "list",
+          "placement": "right",
+          "showLegend": true
         },
         "tooltip": {
-          "mode": "multi",
+          "mode": "single",
           "sort": "none"
         }
       },
@@ -1559,10 +1824,10 @@
             "type": "prometheus",
             "uid": "PBFA97CFB590B2093"
           },
-          "exemplar": true,
-          "expr": "container_memory_working_set_bytes{container!=\"\", container!~\"lb.*\"}",
-          "interval": "",
-          "legendFormat": "{{container}}",
+          "editorMode": "code",
+          "expr": "sum by(pod) (rate(container_network_receive_bytes_total{interface!~\"cni0|docker0|flannel.1|lo|veth.*\",pod!~\".*prometheus.*\"}[5m]))",
+          "legendFormat": "{{pod}} Receive",
+          "range": true,
           "refId": "A"
         },
         {
@@ -1570,27 +1835,206 @@
             "type": "prometheus",
             "uid": "PBFA97CFB590B2093"
           },
-          "exemplar": true,
-          "expr": "kube_pod_container_resource_limits{resource=\"memory\"}",
+          "editorMode": "code",
+          "expr": "sum by(pod) (rate(container_network_transmit_bytes_total{interface!~\"cni0|docker0|flannel.1|lo|veth.*\",pod!~\".*prometheus.*\"}[5m]))",
           "hide": false,
-          "interval": "",
-          "legendFormat": "{{container}}-limit",
+          "legendFormat": "{{pod}} Transmit",
+          "range": true,
           "refId": "B"
         }
       ],
-      "title": "Pod Memory Usage",
+      "title": "Network Usage by pod",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "bytes"
+        },
+        "overrides": [
+          {
+            "__systemRef": "hideSeriesFrom",
+            "matcher": {
+              "id": "byNames",
+              "options": {
+                "mode": "exclude",
+                "names": [
+                  "nas sda Write",
+                  "nas sdb Write",
+                  "nas sdc Write",
+                  "nas sdd Write",
+                  "nas sde Write",
+                  "nas sdf Write",
+                  "nas sdg Write",
+                  "nas sdi Write",
+                  "nas sdj Write",
+                  "nas sdk Write",
+                  "nas sdl Write",
+                  "nas sdm Write",
+                  "nas sdn Write",
+                  "nas sdr Write",
+                  "nas sda Write Read",
+                  "nas sdb Write Read",
+                  "nas sdc Write Read",
+                  "nas sdd Write Read",
+                  "nas sde Write Read",
+                  "nas sdf Write Read",
+                  "nas sdg Write Read",
+                  "nas sdi Write Read",
+                  "nas sdj Write Read",
+                  "nas sdk Write Read",
+                  "nas sdl Write Read",
+                  "nas sdm Write Read",
+                  "nas sdn Write Read",
+                  "nas sdr Write Read",
+                  "nas sdf Read",
+                  "nas sde Read",
+                  "nas sdd Read",
+                  "nas sdc Read",
+                  "nas sdb Read",
+                  "nas sda Read",
+                  "nas sdg Read",
+                  "nas sdi Read",
+                  "nas sdj Read",
+                  "nas sdk Read",
+                  "nas sdl Read",
+                  "nas sdm Read",
+                  "nas sdn Read",
+                  "nas sdr Read",
+                  "nas sdo Read",
+                  "nas sdp Read",
+                  "nas sdq Read",
+                  "nas sdh Read",
+                  "nas sdq Write",
+                  "nas sdp Write",
+                  "nas sdo Write",
+                  "nas sdh Write"
+                ],
+                "prefix": "All except:",
+                "readOnly": true
+              }
+            },
+            "properties": [
+              {
+                "id": "custom.hideFrom",
+                "value": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": true
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 24,
+        "x": 0,
+        "y": 69
+      },
+      "id": 52,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "right",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "editorMode": "code",
+          "expr": "sum by(device,kubernetes_node) (rate(node_disk_written_bytes_total{}[5m]))",
+          "legendFormat": "{{kubernetes_node}} {{device}} Write",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "editorMode": "code",
+          "expr": "sum by(device,kubernetes_node) (rate(node_disk_read_bytes_total{}[5m]))",
+          "hide": false,
+          "legendFormat": "{{kubernetes_node}} {{device}} Read",
+          "range": true,
+          "refId": "B"
+        }
+      ],
+      "title": "Node IO",
       "type": "timeseries"
     }
   ],
-  "refresh": "5s",
-  "schemaVersion": 36,
+  "refresh": "10s",
+  "schemaVersion": 37,
   "style": "dark",
   "tags": [],
   "templating": {
     "list": []
   },
   "time": {
-    "from": "now-2d",
+    "from": "now-3h",
     "to": "now"
   },
   "timepicker": {},
