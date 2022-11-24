@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "redis.fullname" . }}
+  labels:
+    {{- include "redis.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.mongo.service.type }}
+  ports:
+    - port: 6379
+      name: monitorss-redis
+      targetPort: redis
+  selector:
+    {{- include "redis.selectorLabels" . | nindent 4 }}

@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ include "mongo.fullname" . }}-mongo
+  name: {{ include "mongo.fullname" . }}
   labels:
     {{- include "mongo.labels" . | nindent 4 }}
 spec:

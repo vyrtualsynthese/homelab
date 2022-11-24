@@ -1,0 +1,82 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "web.fullname" . }}
+  labels:
+    {{- include "web.labels" . | nindent 4 }}
+spec:
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "web.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      {{- with .Values.web.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "web.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.web.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "web.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.web.podSecurityContext | nindent 8 }}
+      containers:
+        - name: {{ .Chart.Name }}
+          image: "{{ .Values.web.image.repository }}:{{ .Values.web.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.web.image.pullPolicy }}
+          env:
+            - name: "DRSS_START"
+              value: "web"
+            - name: "DRSSWEB_BOT_TOKEN"
+              valueFrom:
+                secretKeyRef:
+                  name: monitorss
+                  key: token
+            - name: "DRSSWEB_BOT_CLIENTID"
+              valueFrom:
+                secretKeyRef:
+                  name: monitorss
+                  key: clientid
+            - name: "DRSSWEB_BOT_CLIENTSECRET"
+              valueFrom:
+                secretKeyRef:
+                  name: monitorss
+                  key: clientsecret
+            - name: "DRSSWEB_BOT_REDIRECTURI"
+              valueFrom:
+                secretKeyRef:
+                  name: monitorss
+                  key: redirecturi
+            - name: "DRSSWEB_DATABASE_REDIS"
+              value: "redis://monitorss-redis:6379/"
+            - name: "DRSSWEB_DATABASE_URI"
+              value: "mongodb://monitorss-mongo:27017/rss"
+            - name: "DRSSWEB_HTTP_TRUSTPROXY"
+              value: "true"
+            - name: "DRSSWEB_LOG_LEVEL"
+              value: "trace"
+            - name: "DRSSWEB_HTTP_PORT"
+              value: "8081"
+          ports:
+            - name: monitorss-web
+              containerPort: 8081
+          resources:
+            {{- toYaml .Values.web.resources | nindent 12 }}
+      {{- with .Values.web.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.web.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.web.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
