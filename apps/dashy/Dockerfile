@@ -1,4 +1,4 @@
-FROM node:lts-alpine AS dev
+FROM node:16-alpine AS dev
 
 # Define some ENV Vars
 ENV PORT=80 \
@@ -9,12 +9,12 @@ WORKDIR ./app
 
 COPY dashy/package.json dashy/yarn.lock ./
 
-RUN yarn install --frozen-lockfile
+RUN yarn install --frozen-lockfile --network-timeout 1000000
 
 COPY dashy ./
 COPY conf.yml ./public/
 
-RUN yarn build
+RUN yarn build --mode production
 
 # Expose given port
 EXPOSE ${PORT}
