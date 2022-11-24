@@ -1,7 +1,7 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "bot.fullname" . }}-bot
+  name: {{ include "bot.fullname" . }}
   labels:
     {{- include "bot.labels" . | nindent 4 }}
 spec:
