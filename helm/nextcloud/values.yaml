@@ -191,7 +191,9 @@ app:
   podSecurityContext: {}
   # fsGroup: 2000
 
-  securityContext: {}
+  securityContext:
+    runAsUser: 82
+    runAsGroup: 82
     # capabilities:
     #   drop:
     #   - ALL
@@ -343,7 +345,9 @@ cron:
   podSecurityContext: {}
   # fsGroup: 2000
 
-  securityContext: {}
+  securityContext:
+    runAsUser: 82
+    runAsGroup: 82
     # capabilities:
     #   drop:
     #   - ALL

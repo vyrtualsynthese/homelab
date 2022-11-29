@@ -42,6 +42,7 @@ spec:
           ports:
             - name: mongo
               containerPort: 27017
+      terminationGracePeriodSeconds: 60
       {{- with .Values.mongo.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

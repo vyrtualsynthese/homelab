@@ -12,7 +12,6 @@ spec:
     spec:
       template:
         spec:
-          nodeName: xps-13
           volumes:
             - name: minecraft-server-volume
               persistentVolumeClaim:
@@ -54,3 +53,12 @@ spec:
                   subPath: config
                   name: conf-cache-volume
           restartPolicy: OnFailure
+          affinity:
+            nodeAffinity:
+              requiredDuringSchedulingIgnoredDuringExecution:
+                nodeSelectorTerms:
+                  - matchExpressions:
+                      - key: kubernetes.io/arch
+                        operator: In
+                        values:
+                          - amd64

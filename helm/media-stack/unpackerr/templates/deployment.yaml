@@ -30,10 +30,7 @@ spec:
       volumes:
         - name: qbittorrent-download-volume
           persistentVolumeClaim:
-            claimName: qbittorrent-download
-        - name: qbittorrent-seed-volume
-          persistentVolumeClaim:
-            claimName: qbittorrent-seed
+            claimName: qbittorrent-download2-nfs
       containers:
         - name: {{ .Chart.Name }}
           securityContext:
@@ -138,8 +135,6 @@ spec:
           volumeMounts:
             - mountPath: /downloads
               name: qbittorrent-download-volume
-            - mountPath: /seed
-              name: qbittorrent-seed-volume
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
