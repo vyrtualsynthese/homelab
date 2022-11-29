@@ -28,10 +28,7 @@ spec:
             claimName: readarr-config-lh
         - name: qbittorrent-download-volume
           persistentVolumeClaim:
-            claimName: qbittorrent-download
-        - name: qbittorrent-seed-volume
-          persistentVolumeClaim:
-            claimName: qbittorrent-seed
+            claimName: qbittorrent-download2-nfs
         - name: books-volume
           persistentVolumeClaim:
             claimName: books-nfs
@@ -65,8 +62,6 @@ spec:
               mountPath: /books
             - name: qbittorrent-download-volume
               mountPath: /downloads
-            - name: qbittorrent-seed-volume
-              mountPath: /seed
             - name: readarr-config-volume
               mountPath: /config
       {{- with .Values.nodeSelector }}

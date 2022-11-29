@@ -15,10 +15,7 @@ spec:
           volumes:
             - name: qbittorrent-download-volume
               persistentVolumeClaim:
-                claimName: qbittorrent-download
-            - name: qbittorrent-seed-volume
-              persistentVolumeClaim:
-                claimName: qbittorrent-seed
+                claimName: qbittorrent-download2-nfs
             - name: qbit-manage-config-volume
               persistentVolumeClaim:
                 claimName: qbit-manage-config-lh
@@ -61,8 +58,6 @@ spec:
               volumeMounts:
                 - name: qbittorrent-download-volume
                   mountPath: /downloads
-                - name: qbittorrent-seed-volume
-                  mountPath: /seed
                 - mountPath: /config
                   name: qbit-manage-config-volume
           restartPolicy: OnFailure

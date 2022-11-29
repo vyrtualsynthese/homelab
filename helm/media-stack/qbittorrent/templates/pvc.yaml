@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: {{ include "fullname" . }}-download
+  name: {{ include "fullname" . }}-download2-nfs
   labels:
   {{- include "labels" . | nindent 4 }}
 spec:

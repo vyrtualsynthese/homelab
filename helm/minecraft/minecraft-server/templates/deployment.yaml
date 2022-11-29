@@ -92,13 +92,6 @@ spec:
                port: 25565
             failureThreshold: 10
             periodSeconds: 60
-          readinessProbe:
-            tcpSocket:
-              port: 25565
-            periodSeconds: 60
-            failureThreshold: 10
-            successThreshold: 1
-            timeoutSeconds: 10
           livenessProbe:
             tcpSocket:
               port: 25565
