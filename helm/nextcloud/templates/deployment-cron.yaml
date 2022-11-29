@@ -21,6 +21,9 @@ spec:
         - name: nextcloud-app-volume
           persistentVolumeClaim:
             claimName: nextcloud-app
+        - name: nextcloud-data-volume
+          persistentVolumeClaim:
+            claimName: nextcloud-nfs
       {{- with .Values.cron.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
@@ -40,6 +43,8 @@ spec:
           volumeMounts:
             - name: nextcloud-app-volume
               mountPath: /var/www/html
+            - name: nextcloud-data-volume
+              mountPath: /data
       {{- with .Values.cron.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

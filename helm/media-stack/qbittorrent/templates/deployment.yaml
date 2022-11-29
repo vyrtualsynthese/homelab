@@ -33,10 +33,7 @@ spec:
             claimName: qbittorrent-config2-lh
         - name: qbittorrent-download-volume
           persistentVolumeClaim:
-            claimName: qbittorrent-download
-        - name: qbittorrent-seed-volume
-          persistentVolumeClaim:
-            claimName: qbittorrent-seed
+            claimName: qbittorrent-download2-nfs
         - name: "dev-tun" # Needed for VPN
           hostPath:
             path: "/dev/net/tun"
@@ -72,8 +69,6 @@ spec:
               mountPath: /config
             - name: qbittorrent-download-volume
               mountPath: /downloads
-            - name: qbittorrent-seed-volume
-              mountPath: /seed
           ports:
             - name: torrent-webui
               containerPort: 8080
