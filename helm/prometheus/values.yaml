@@ -1372,7 +1372,11 @@ serverFiles:
       - job_name: traefik
         static_configs:
           - targets:
-            - traefik.kube-system.svc.cluster.local:9000
+            - traefik.kube-system.svc.cluster.local:9100
+      - job_name: qbittorrent
+        static_configs:
+          - targets:
+              - qbittorrent-exporter.plex.svc.cluster.local:17871
 
       # A scrape configuration for running Prometheus on a Kubernetes cluster.
       # This uses separate scrape configs for cluster components (i.e. API server, node)

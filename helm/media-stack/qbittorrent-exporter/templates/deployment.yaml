@@ -5,8 +5,6 @@ metadata:
   labels:
     {{- include "labels" . | nindent 4 }}
 spec:
-  strategy:
-    type: Recreate
   {{- if not .Values.autoscaling.enabled }}
   replicas: {{ .Values.replicaCount }}
   {{- end }}
@@ -22,13 +20,6 @@ spec:
       labels:
         {{- include "selectorLabels" . | nindent 8 }}
     spec:
-      volumes:
-        - name: calibre-config-volume
-          persistentVolumeClaim:
-            claimName: calibre-config-lh
-        - name: books-volume
-          persistentVolumeClaim:
-            claimName: books-nfs
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
@@ -42,25 +33,24 @@ spec:
             {{- toYaml .Values.securityContext | nindent 12 }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
-          ports:
-            - name: calibre-gui
-              containerPort: 8080
-            - name: calibre-webui
-              containerPort: 8081
           env:
-            - name: "TZ"
-              value: "Europe/Paris"
-            - name: "PUID"
-              value: "0"
-            - name: "PGID"
-              value: "0"
+            - name: "QBITTORRENT_USERNAME"
+              valueFrom:
+                secretKeyRef:
+                  name: qbittorrent-exporter
+                  key: username
+            - name: "QBITTORRENT_PASSWORD"
+              valueFrom:
+                secretKeyRef:
+                  name: qbittorrent-exporter
+                  key: password
+            - name: "QBITTORRENT_BASE_URL"
+              value: "http://qbittorrent:8080"
+          ports:
+            - name: qbt-exporter
+              containerPort: 17871
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
-          volumeMounts:
-            - mountPath: /config
-              name: calibre-config-volume
-            - name: books-volume
-              mountPath: /books
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

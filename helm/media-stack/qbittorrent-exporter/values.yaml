@@ -5,13 +5,7 @@
 replicaCount: 1
 
 image:
-  repository: linuxserver/qbittorrent
-  pullPolicy: Always
-  # Overrides the image tag whose default is the chart appVersion.
-  tag: latest
-
-vpnimage:
-  repository: qmcgaw/gluetun
+  repository: caseyscarborough/qbittorrent-exporter
   pullPolicy: Always
   # Overrides the image tag whose default is the chart appVersion.
   tag: latest
@@ -64,21 +58,12 @@ ingress:
   #      - chart-example.local
 
 resources: {}
-#  requests:
-#    cpu: 1000m
-#    memory: 200Mi
-#  limits:
-#    cpu: 4000m
-#    memory: 6000Mi
-
-vpnresources: {}
-#  requests:
-#    cpu: 10m
-#    memory: 25Mi
-#  limits:
-#    cpu: 100m
-#    memory: 150Mi
-
+  #requests:
+  #  cpu: 10m
+  #  memory: 30Mi
+  #limits:
+  #  cpu: 1000m
+  #  memory: 150Mi
 
 autoscaling:
   enabled: false
@@ -87,9 +72,16 @@ autoscaling:
   targetCPUUtilizationPercentage: 80
   # targetMemoryUtilizationPercentage: 80
 
-nodeSelector:
-  kubernetes.io/hostname: nas
+nodeSelector: {}
 
 tolerations: []
 
-affinity: {}
+affinity:
+  nodeAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: kubernetes.io/arch
+              operator: In
+              values:
+                - amd64
