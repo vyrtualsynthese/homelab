@@ -7,11 +7,8 @@ metadata:
 spec:
   type: {{ .Values.service.type }}
   ports:
-    - port: 8080
-      name: calibre-gui
-      targetPort: calibre-gui
-    - port: 8081
-      name: calibre-webui
-      targetPort: calibre-webui
+    - port: 17871
+      name: qbt-exporter
+      targetPort: qbt-exporter
   selector:
     {{- include "selectorLabels" . | nindent 4 }}
