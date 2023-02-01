@@ -36,7 +36,7 @@ spec:
               image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
               imagePullPolicy: {{ .Values.image.pullPolicy }}
               command: [ "/bin/sh","-c" ]
-              args: [ "recyclarr sonarr --debug && recyclarr radarr --debug" ]
+              args: [ "recyclarr sync --debug" ]
               env:
                 - name: "TZ"
                   value: "Europe/Paris"
