@@ -112,6 +112,11 @@ spec:
                 secretKeyRef:
                   name: mullvad
                   key: FIREWALL_VPN_INPUT_PORTS
+            - name: "FIREWALL_INPUT_PORTS"
+              valueFrom:
+                secretKeyRef:
+                  name: mullvad
+                  key: FIREWALL_INPUT_PORTS
             - name: "DOT"
               value: "off"
             - name: "DOT_IPV6"
