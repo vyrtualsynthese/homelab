@@ -19,7 +19,7 @@ spec:
       volumes:
         - name: minecraft-server-volume
           persistentVolumeClaim:
-            claimName: recyclarr-conf-lh
+            claimName: koillection-conf
       containers:
         - image: alpine:latest
           command:
