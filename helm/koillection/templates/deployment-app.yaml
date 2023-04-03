@@ -56,8 +56,10 @@ spec:
               value: "Europe/Paris"
             - name: "HTTPS_ENABLED"
               value: "0"
-            - name: "APP_DEBUG"
-              value: "1"
+            - name: "UPLOAD_MAX_FILESIZE"
+              value: "100M"
+            - name: "PHP_MEMORY_LIMIT"
+              value: "100M"
           ports:
             - containerPort: 80
               name: koillection

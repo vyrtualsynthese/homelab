@@ -26,7 +26,7 @@ spec:
         - name: qbittorrent
           port: torrent-webui
   tls:
-    certResolver: le
+    certResolver: myresolver
     options:
       name: qbittorrent-tlsoption
 {{- end }}

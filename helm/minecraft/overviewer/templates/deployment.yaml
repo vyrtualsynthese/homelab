@@ -25,7 +25,7 @@ spec:
       volumes:
         - name: render-minecraft-server-volume
           persistentVolumeClaim:
-            claimName: render-minecraft-server-lh
+            claimName: render-minecraft
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
@@ -47,13 +47,7 @@ spec:
           volumeMounts:
             - name: render-minecraft-server-volume
               mountPath: /usr/share/nginx/html
-          livenessProbe:
-            exec:
-              command:
-                - ps -ef | grep nginx || exit 1
-            initialDelaySeconds: 5
-            periodSeconds: 5
-            failureThreshold: 5
+
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

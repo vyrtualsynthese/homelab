@@ -26,7 +26,7 @@ spec:
         - name: sonarr-sd
           port: sonarr-webui
   tls:
-    certResolver: le
+    certResolver: myresolver
     options:
       name: sonarr-sd-tlsoption
 {{- end }}

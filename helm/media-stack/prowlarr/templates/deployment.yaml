@@ -25,7 +25,7 @@ spec:
       volumes:
         - name: prowlarr-config-volume
           persistentVolumeClaim:
-            claimName: prowlarr-config-lh
+            claimName: prowlarr-config
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}

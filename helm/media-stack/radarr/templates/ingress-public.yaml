@@ -26,7 +26,7 @@ spec:
         - name: radarr
           port: radarr-webui
   tls:
-    certResolver: le
+    certResolver: myresolver
     options:
       name: radarr-tlsoption
 {{- end }}

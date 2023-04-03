@@ -7,12 +7,10 @@ spec:
   entryPoints:
     - web
   routes:
-  - kind:   Rule
-    match: >-
-      Host(`traefik.local`) && (PathPrefix(`/dashboard`) ||
-      PathPrefix(`/api`))
+  - kind: Rule
+    match: Host(`traefik.app.local`) && (PathPrefix(`/dashboard`) || PathPrefix(`/api`))
     middlewares:
-      - name: traefik-dashboard-basicauth
+      - name: traefik-dashboard
         namespace: kube-system
     services:
       - kind: TraefikService

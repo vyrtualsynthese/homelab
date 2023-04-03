@@ -25,10 +25,10 @@ spec:
       volumes:
         - name: plex-config-volume
           persistentVolumeClaim:
-            claimName: plex-config-lh
+            claimName: plex-config
         - name: plex-transcode-volume
           persistentVolumeClaim:
-            claimName: plex-transcode-lh
+            claimName: plex-transcode
         - name: plex-media-volume
           persistentVolumeClaim:
             claimName: plex-media-nfs

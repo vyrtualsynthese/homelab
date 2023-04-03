@@ -26,7 +26,7 @@ spec:
         - name: bazarr
           port: bazarr-webui
   tls:
-    certResolver: le
+    certResolver: myresolver
     options:
       name: bazarr-tlsoption
 {{- end }}
