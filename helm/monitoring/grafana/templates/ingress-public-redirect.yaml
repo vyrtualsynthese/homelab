@@ -1,0 +1,26 @@
+
+{{- $fullName := include "grafana.fullname" . -}}
+{{- $svcPort := .Values.service.port -}}
+
+apiVersion: traefik.containo.us/v1alpha1
+kind: IngressRoute
+metadata:
+  name: {{ $fullName }}-public-redirect
+  labels:
+    {{- include "grafana.labels" . | nindent 4 }}
+  {{- with .Values.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  entryPoints:
+    - web
+  routes:
+    - match: Host(`grafana.home.ashudev.com`)
+      kind: Rule
+      services:
+        - name: grafana
+          port: service
+      middlewares:
+        - name: {{ include "grafana.fullname" . }}-redirect-https
+

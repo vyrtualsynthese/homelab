@@ -25,7 +25,7 @@ spec:
       volumes:
         - name: calibre-config-volume
           persistentVolumeClaim:
-            claimName: calibre-config-lh
+            claimName: calibre-config
         - name: books-volume
           persistentVolumeClaim:
             claimName: books-nfs

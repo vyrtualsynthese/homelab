@@ -25,10 +25,10 @@ spec:
       volumes:
         - name: sonarr-sd-config-volume
           persistentVolumeClaim:
-            claimName: sonarr-sd-config-lh
+            claimName: sonarr-sd-config
         - name: qbittorrent-download-volume
           persistentVolumeClaim:
-            claimName: qbittorrent-download2-nfs
+            claimName: qbittorrent-download-nfs
         - name: plex-media-volume
           persistentVolumeClaim:
             claimName: plex-media-nfs

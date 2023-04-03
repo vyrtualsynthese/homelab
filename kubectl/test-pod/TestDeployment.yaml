@@ -19,7 +19,7 @@ spec:
       volumes:
         - name: minecraft-server-volume
           persistentVolumeClaim:
-            claimName: koillection-conf
+            claimName: monitorss-mongo
       containers:
         - image: alpine:latest
           command:

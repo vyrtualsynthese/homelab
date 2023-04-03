@@ -30,10 +30,10 @@ spec:
       volumes:
         - name: qbittorrent-config-volume
           persistentVolumeClaim:
-            claimName: qbittorrent-config2-lh
+            claimName: qbittorrent-config
         - name: qbittorrent-download-volume
           persistentVolumeClaim:
-            claimName: qbittorrent-download2-nfs
+            claimName: qbittorrent-download-nfs
         - name: "dev-tun" # Needed for VPN
           hostPath:
             path: "/dev/net/tun"

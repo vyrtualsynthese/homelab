@@ -3,7 +3,7 @@ kind: PersistentVolume
 metadata:
   name: plex-media-nfs
 spec:
-  storageClassName: nfs-plex
+  storageClassName: nfs-hdd
   volumeMode: Filesystem
   capacity:
     storage: 10Ti

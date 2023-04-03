@@ -15,10 +15,10 @@ spec:
           volumes:
             - name: minecraft-server-volume
               persistentVolumeClaim:
-                claimName: minecraft-server-lh
+                claimName: minecraft-lh
             - name: render-minecraft-server-volume
               persistentVolumeClaim:
-                claimName: render-minecraft-server-lh
+                claimName: render-minecraft
             - name: conf-cache-volume
               emptyDir: {}
             - name: overviewer-configmap
