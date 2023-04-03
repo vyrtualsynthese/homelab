@@ -25,7 +25,7 @@ spec:
       volumes:
         - name: bazarr-config-volume
           persistentVolumeClaim:
-            claimName: bazarr-config-lh
+            claimName: bazarr-config
         - name: plex-media-volume
           persistentVolumeClaim:
             claimName: plex-media-nfs

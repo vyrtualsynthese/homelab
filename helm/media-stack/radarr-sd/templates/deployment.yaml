@@ -25,10 +25,10 @@ spec:
       volumes:
         - name: radarr-sd-config-volume
           persistentVolumeClaim:
-            claimName: radarr-sd-config-lh
+            claimName: radarr-sd-config
         - name: qbittorrent-download-volume
           persistentVolumeClaim:
-            claimName: qbittorrent-download2-nfs
+            claimName: qbittorrent-download-nfs
         - name: plex-media-volume
           persistentVolumeClaim:
             claimName: plex-media-nfs

@@ -30,7 +30,7 @@ spec:
       volumes:
         - name: qbittorrent-download-volume
           persistentVolumeClaim:
-            claimName: qbittorrent-download2-nfs
+            claimName: qbittorrent-download-nfs
       containers:
         - name: {{ .Chart.Name }}
           securityContext:

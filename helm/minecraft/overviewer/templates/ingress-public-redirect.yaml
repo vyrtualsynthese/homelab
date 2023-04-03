@@ -23,7 +23,7 @@ spec:
     - match: Host(`mc-map.ashudev.com`)
       kind: Rule
       services:
-        - name: overviewer-web
+        - name: render-minecraft-overviewer
           port: web
       middlewares:
         - name: {{ include "overviewer.fullname" . }}-redirect-https

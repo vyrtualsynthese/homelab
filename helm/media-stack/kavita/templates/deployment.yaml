@@ -28,7 +28,7 @@ spec:
             claimName: books-nfs
         - name: config-volume
           persistentVolumeClaim:
-            claimName: kavita-config-lh
+            claimName: kavita-config
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}

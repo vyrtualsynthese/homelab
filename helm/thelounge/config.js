@@ -58,7 +58,7 @@ module.exports = {
     // this to `-1` will keep unlimited amount.
     //
     // This value is set to `10000` by default.
-    maxHistory: 10000,
+    maxHistory: 100,
 
     // ### `https`
     //

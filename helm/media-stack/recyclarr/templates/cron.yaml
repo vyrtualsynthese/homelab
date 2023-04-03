@@ -15,7 +15,7 @@ spec:
           volumes:
             - name: recyclarr-conf-volume
               persistentVolumeClaim:
-                claimName: recyclarr-conf-lh
+                claimName: recyclarr-config
             - name: recyclarr-secret
               secret:
                 secretName: recyclarr
@@ -36,7 +36,7 @@ spec:
               image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
               imagePullPolicy: {{ .Values.image.pullPolicy }}
               command: [ "/bin/sh","-c" ]
-              args: [ "recyclarr sync --debug" ]
+              args: [ "recyclarr sync" ]
               env:
                 - name: "TZ"
                   value: "Europe/Paris"

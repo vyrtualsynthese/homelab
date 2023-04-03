@@ -23,6 +23,6 @@ spec:
     - match: Host(`overviewer.app.local`)
       kind: Rule
       services:
-        - name: overviewer-web
+        - name: render-minecraft-overviewer
           port: web
 {{- end }}

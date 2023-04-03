@@ -1,13 +1,13 @@
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: {{ include "fullname" . }}-download2-nfs
+  name: {{ include "fullname" . }}-download-nfs
   labels:
   {{- include "labels" . | nindent 4 }}
 spec:
   accessModes:
     - ReadWriteMany
-  storageClassName: nfs-ssd
+  storageClassName: nfs-ultrafaststorage
   resources:
     requests:
-      storage: 1Ti
+      storage: 4Ti

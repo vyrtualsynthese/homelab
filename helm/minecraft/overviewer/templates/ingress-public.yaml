@@ -23,10 +23,10 @@ spec:
     - match: Host(`mc-map.ashudev.com`)
       kind: Rule
       services:
-        - name: overviewer-web
+        - name: render-minecraft-overviewer
           port: web
   tls:
-    certResolver: le
+    certResolver: myresolver
     options:
-      name: overviewer-web-tlsoption
+      name: render-minecraft-overviewer-tlsoption
 {{- end }}
