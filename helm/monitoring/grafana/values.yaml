@@ -248,10 +248,10 @@ ingress:
 resources:
   limits:
     cpu: 200m
-    memory: 200Mi
+    memory: 250Mi
   requests:
-    cpu: 1m
-    memory: 50Mi
+    cpu: 5m
+    memory: 85Mi
 
 ## Node labels for pod assignment
 ## ref: https://kubernetes.io/docs/user-guide/node-selection/

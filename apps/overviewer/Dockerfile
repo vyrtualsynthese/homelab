@@ -11,7 +11,7 @@ WORKDIR /app/overviewer/src/Minecraft-Overviewer-master
 
 RUN python3 setup.py build
 
-RUN mkdir -p ~/.minecraft/versions/1.19.2/ && wget https://overviewer.org/textures/1.19.2 -O ~/.minecraft/versions/1.19.2/1.19.2.jar
+RUN mkdir -p ~/.minecraft/versions/1.19.4/ && wget https://overviewer.org/textures/1.19.4 -O ~/.minecraft/versions/1.19.4/1.19.4.jar
 
 COPY config .
 

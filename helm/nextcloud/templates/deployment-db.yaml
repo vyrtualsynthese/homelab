@@ -20,7 +20,7 @@ spec:
       volumes:
         - name: nextcloud-db-volume
           persistentVolumeClaim:
-            claimName: nextcloud-postgres
+            claimName: nextcloud-db
       {{- with .Values.db.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}

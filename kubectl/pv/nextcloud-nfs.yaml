@@ -3,7 +3,7 @@ kind: PersistentVolume
 metadata:
   name: nextcloud-nfs
 spec:
-  storageClassName: nfs-nextcloud
+  storageClassName: nextcloud-nfs
   volumeMode: Filesystem
   capacity:
     storage: 8Ti
