@@ -17,9 +17,9 @@ spec:
         run: alpine
     spec:
       volumes:
-        - name: minecraft-server-volume
+        - name: data1
           persistentVolumeClaim:
-            claimName: monitorss-mongo
+            claimName: koillection-db
       containers:
         - image: alpine:latest
           command:
@@ -29,5 +29,5 @@ spec:
           imagePullPolicy: IfNotPresent
           name: alpine
           volumeMounts:
-            - name: minecraft-server-volume
-              mountPath: /data
+            - name: data1
+              mountPath: /data1

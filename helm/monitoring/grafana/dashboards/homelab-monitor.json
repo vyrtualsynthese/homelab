@@ -111,7 +111,7 @@
         "showThresholdMarkers": true,
         "text": {}
       },
-      "pluginVersion": "9.2.5",
+      "pluginVersion": "9.4.7",
       "targets": [
         {
           "exemplar": true,
@@ -179,7 +179,7 @@
         "showThresholdMarkers": true,
         "text": {}
       },
-      "pluginVersion": "9.2.5",
+      "pluginVersion": "9.4.7",
       "targets": [
         {
           "exemplar": true,
@@ -256,7 +256,7 @@
         "showThresholdMarkers": true,
         "text": {}
       },
-      "pluginVersion": "9.2.5",
+      "pluginVersion": "9.4.7",
       "targets": [
         {
           "datasource": {
@@ -342,7 +342,7 @@
         "showThresholdMarkers": true,
         "text": {}
       },
-      "pluginVersion": "9.2.5",
+      "pluginVersion": "9.4.7",
       "targets": [
         {
           "exemplar": true,
@@ -418,7 +418,7 @@
         "text": {},
         "textMode": "auto"
       },
-      "pluginVersion": "9.2.5",
+      "pluginVersion": "9.4.7",
       "targets": [
         {
           "exemplar": true,
@@ -478,7 +478,7 @@
         "text": {},
         "textMode": "auto"
       },
-      "pluginVersion": "9.2.5",
+      "pluginVersion": "9.4.7",
       "targets": [
         {
           "exemplar": true,
@@ -555,7 +555,7 @@
         "text": {},
         "textMode": "auto"
       },
-      "pluginVersion": "9.2.5",
+      "pluginVersion": "9.4.7",
       "targets": [
         {
           "exemplar": true,
@@ -629,7 +629,7 @@
         "text": {},
         "textMode": "auto"
       },
-      "pluginVersion": "9.2.5",
+      "pluginVersion": "9.4.7",
       "targets": [
         {
           "exemplar": true,
@@ -705,7 +705,7 @@
         "text": {},
         "textMode": "auto"
       },
-      "pluginVersion": "9.2.5",
+      "pluginVersion": "9.4.7",
       "targets": [
         {
           "exemplar": true,
@@ -767,7 +767,7 @@
         },
         "textMode": "auto"
       },
-      "pluginVersion": "9.2.5",
+      "pluginVersion": "9.4.7",
       "targets": [
         {
           "datasource": {
@@ -833,7 +833,7 @@
         "text": {},
         "textMode": "auto"
       },
-      "pluginVersion": "9.2.5",
+      "pluginVersion": "9.4.7",
       "targets": [
         {
           "exemplar": true,
@@ -905,7 +905,7 @@
         "text": {},
         "textMode": "auto"
       },
-      "pluginVersion": "9.2.5",
+      "pluginVersion": "9.4.7",
       "targets": [
         {
           "exemplar": true,
@@ -970,7 +970,7 @@
         "text": {},
         "textMode": "value_and_name"
       },
-      "pluginVersion": "9.2.5",
+      "pluginVersion": "9.4.7",
       "targets": [
         {
           "exemplar": true,
@@ -1040,7 +1040,7 @@
         "text": {},
         "textMode": "auto"
       },
-      "pluginVersion": "9.2.5",
+      "pluginVersion": "9.4.7",
       "targets": [
         {
           "exemplar": true,
@@ -1107,7 +1107,7 @@
         "text": {},
         "textMode": "auto"
       },
-      "pluginVersion": "9.2.5",
+      "pluginVersion": "9.4.7",
       "targets": [
         {
           "datasource": {
@@ -1176,7 +1176,7 @@
         "text": {},
         "textMode": "auto"
       },
-      "pluginVersion": "9.2.5",
+      "pluginVersion": "9.4.7",
       "targets": [
         {
           "exemplar": true,
@@ -1248,7 +1248,7 @@
         "text": {},
         "textMode": "auto"
       },
-      "pluginVersion": "9.2.5",
+      "pluginVersion": "9.4.7",
       "targets": [
         {
           "expr": "max(node_network_up) by (kubernetes_node)",
@@ -1317,7 +1317,7 @@
         "text": {},
         "textMode": "value_and_name"
       },
-      "pluginVersion": "9.2.5",
+      "pluginVersion": "9.4.7",
       "targets": [
         {
           "exemplar": true,
@@ -1423,10 +1423,10 @@
           },
           "editorMode": "code",
           "exemplar": true,
-          "expr": "sum (rate(container_cpu_usage_seconds_total{container!=\"\", container!~\"lb.*\"}[5m])) by (pod)",
+          "expr": "sum (rate(container_cpu_usage_seconds_total{container!=\"\", container!~\"lb.*\"}[5m])) by (container)",
           "format": "time_series",
           "interval": "",
-          "legendFormat": "{{pod}}",
+          "legendFormat": "{{container}}",
           "range": true,
           "refId": "A"
         },
@@ -1437,15 +1437,15 @@
           },
           "editorMode": "code",
           "exemplar": true,
-          "expr": "kube_pod_container_resource_limits{resource=\"cpu\"}",
-          "hide": true,
+          "expr": "sum (kube_pod_container_resource_limits{resource=\"cpu\"}) by (container)",
+          "hide": false,
           "interval": "",
-          "legendFormat": "{{pod}}-limit",
+          "legendFormat": "{{container}}-limit",
           "range": true,
           "refId": "B"
         }
       ],
-      "title": "Pod CPU Usage",
+      "title": "Container CPU Usage",
       "type": "timeseries"
     },
     {
@@ -1462,7 +1462,7 @@
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
-            "axisPlacement": "left",
+            "axisPlacement": "auto",
             "barAlignment": 0,
             "drawStyle": "line",
             "fillOpacity": 0,
@@ -1473,9 +1473,6 @@
               "viz": false
             },
             "lineInterpolation": "linear",
-            "lineStyle": {
-              "fill": "solid"
-            },
             "lineWidth": 1,
             "pointSize": 5,
             "scaleDistribution": {
@@ -1520,7 +1517,7 @@
       "options": {
         "legend": {
           "calcs": [],
-          "displayMode": "table",
+          "displayMode": "list",
           "placement": "right",
           "showLegend": true
         },
@@ -1529,16 +1526,20 @@
           "sort": "none"
         }
       },
+      "pluginVersion": "9.4.7",
       "targets": [
         {
           "datasource": {
             "type": "prometheus",
             "uid": "PBFA97CFB590B2093"
           },
+          "editorMode": "code",
           "exemplar": true,
-          "expr": "sum by (pod) (container_memory_working_set_bytes{container!=\"\", container!~\"lb.*\"})",
+          "expr": "sum by (container) (container_memory_working_set_bytes{container!=\"\", container!~\"lb.*\"})",
+          "hide": false,
           "interval": "",
           "legendFormat": "{{container}}",
+          "range": true,
           "refId": "A"
         },
         {
@@ -1546,11 +1547,13 @@
             "type": "prometheus",
             "uid": "PBFA97CFB590B2093"
           },
+          "editorMode": "code",
           "exemplar": true,
-          "expr": "sum by (pod) (kube_pod_container_resource_limits{resource=\"memory\"})",
-          "hide": true,
+          "expr": "sum by (container) (kube_pod_container_resource_limits{resource=\"memory\"})",
+          "hide": false,
           "interval": "",
           "legendFormat": "{{container}}-limit",
+          "range": true,
           "refId": "B"
         }
       ],
@@ -1757,45 +1760,6 @@
                 }
               }
             ]
-          },
-          {
-            "__systemRef": "hideSeriesFrom",
-            "matcher": {
-              "id": "byNames",
-              "options": {
-                "mode": "exclude",
-                "names": [
-                  "plex-55d8dbf695-fdn7d Receive",
-                  " Receive",
-                  " Transmit",
-                  "plex-647dddfd54-hcmvw Receive",
-                  "plex-6d7d89cbf6-444kd Receive",
-                  "plex-6d7d89cbf6-ljfhx Receive",
-                  "plex-79b49d4d49-vtg67 Receive",
-                  "plex-85d8755854-p5bfj Receive",
-                  "plex-85d8755854-rbg4k Receive",
-                  "plex-55d8dbf695-fdn7d Transmit",
-                  "plex-647dddfd54-hcmvw Transmit",
-                  "plex-6d7d89cbf6-444kd Transmit",
-                  "plex-6d7d89cbf6-ljfhx Transmit",
-                  "plex-79b49d4d49-vtg67 Transmit",
-                  "plex-85d8755854-p5bfj Transmit",
-                  "plex-85d8755854-rbg4k Transmit"
-                ],
-                "prefix": "All except:",
-                "readOnly": true
-              }
-            },
-            "properties": [
-              {
-                "id": "custom.hideFrom",
-                "value": {
-                  "legend": false,
-                  "tooltip": false,
-                  "viz": true
-                }
-              }
-            ]
           }
         ]
       },
@@ -1826,6 +1790,7 @@
           },
           "editorMode": "code",
           "expr": "sum by(pod) (rate(container_network_receive_bytes_total{interface!~\"cni0|docker0|flannel.1|lo|veth.*\",pod!~\".*prometheus.*\"}[5m]))",
+          "hide": false,
           "legendFormat": "{{pod}} Receive",
           "range": true,
           "refId": "A"
@@ -1902,81 +1867,7 @@
           },
           "unit": "bytes"
         },
-        "overrides": [
-          {
-            "__systemRef": "hideSeriesFrom",
-            "matcher": {
-              "id": "byNames",
-              "options": {
-                "mode": "exclude",
-                "names": [
-                  "nas sda Write",
-                  "nas sdb Write",
-                  "nas sdc Write",
-                  "nas sdd Write",
-                  "nas sde Write",
-                  "nas sdf Write",
-                  "nas sdg Write",
-                  "nas sdi Write",
-                  "nas sdj Write",
-                  "nas sdk Write",
-                  "nas sdl Write",
-                  "nas sdm Write",
-                  "nas sdn Write",
-                  "nas sdr Write",
-                  "nas sda Write Read",
-                  "nas sdb Write Read",
-                  "nas sdc Write Read",
-                  "nas sdd Write Read",
-                  "nas sde Write Read",
-                  "nas sdf Write Read",
-                  "nas sdg Write Read",
-                  "nas sdi Write Read",
-                  "nas sdj Write Read",
-                  "nas sdk Write Read",
-                  "nas sdl Write Read",
-                  "nas sdm Write Read",
-                  "nas sdn Write Read",
-                  "nas sdr Write Read",
-                  "nas sdf Read",
-                  "nas sde Read",
-                  "nas sdd Read",
-                  "nas sdc Read",
-                  "nas sdb Read",
-                  "nas sda Read",
-                  "nas sdg Read",
-                  "nas sdi Read",
-                  "nas sdj Read",
-                  "nas sdk Read",
-                  "nas sdl Read",
-                  "nas sdm Read",
-                  "nas sdn Read",
-                  "nas sdr Read",
-                  "nas sdo Read",
-                  "nas sdp Read",
-                  "nas sdq Read",
-                  "nas sdh Read",
-                  "nas sdq Write",
-                  "nas sdp Write",
-                  "nas sdo Write",
-                  "nas sdh Write"
-                ],
-                "prefix": "All except:",
-                "readOnly": true
-              }
-            },
-            "properties": [
-              {
-                "id": "custom.hideFrom",
-                "value": {
-                  "legend": false,
-                  "tooltip": false,
-                  "viz": true
-                }
-              }
-            ]
-          }
-        ]
+        "overrides": []
       },
       "gridPos": {
         "h": 9,
@@ -2024,17 +1915,164 @@
       ],
       "title": "Node IO",
       "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "#EAB839",
+                "value": 75
+              },
+              {
+                "color": "red",
+                "value": 90
+              }
+            ]
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 13,
+        "w": 24,
+        "x": 0,
+        "y": 78
+      },
+      "id": 54,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "max"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "text": {
+          "titleSize": 25
+        },
+        "textMode": "value_and_name"
+      },
+      "pluginVersion": "9.4.7",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "editorMode": "code",
+          "expr": "round(\r\n  100 *\r\n    sum(\r\n      rate(container_cpu_usage_seconds_total{image!=\"\", container_name!=\"POD\"}[5m])\r\n    ) by (container)\r\n      /\r\n    sum(\r\n      container_spec_cpu_quota{image!=\"\", container_name!=\"POD\"} / container_spec_cpu_period{image!=\"\", container_name!=\"POD\"}\r\n    ) by (container)\r\n)",
+          "legendFormat": "__auto",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Pod CPU Usage",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "#EAB839",
+                "value": 75
+              },
+              {
+                "color": "red",
+                "value": 90
+              }
+            ]
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 13,
+        "w": 24,
+        "x": 0,
+        "y": 91
+      },
+      "id": 56,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "max"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "text": {
+          "titleSize": 25
+        },
+        "textMode": "auto"
+      },
+      "pluginVersion": "9.4.7",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "editorMode": "code",
+          "expr": "round(\r\n  100 *\r\n    sum(container_memory_working_set_bytes{image!=\"\", container_name!=\"POD\"}) by (container)\r\n      /\r\n    sum(container_spec_memory_limit_bytes{image!=\"\", container_name!=\"POD\"} > 0) by (container)\r\n)",
+          "legendFormat": "{{pod}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Pod Memory Usage",
+      "type": "stat"
     }
   ],
-  "refresh": "10s",
-  "schemaVersion": 37,
+  "refresh": "1m",
+  "revision": 1,
+  "schemaVersion": 38,
   "style": "dark",
   "tags": [],
   "templating": {
     "list": []
   },
   "time": {
-    "from": "now-3h",
+    "from": "now-1h",
     "to": "now"
   },
   "timepicker": {},
