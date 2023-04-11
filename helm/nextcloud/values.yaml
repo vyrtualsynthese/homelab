@@ -58,11 +58,11 @@ db:
 
   resources:
     requests:
-      cpu: 1m
+      cpu: 5m
       memory: 50Mi
     limits:
-      cpu: 1000m
-      memory: 500Mi
+      cpu: 100m
+      memory: 128Mi
     # We usually recommend not to specify default resources and to leave this as a conscious
     # choice for the user. This also increases chances charts run on environments with little
     # resources, such as Minikube. If you do want to specify resources, uncomment the following
@@ -143,11 +143,11 @@ redis:
 
   resources:
     requests:
-      cpu: 10m
-      memory: 10Mi
+      cpu: 2m
+      memory: 12Mi
     limits:
-      cpu: 100m
-      memory: 100Mi
+      cpu: 10m
+      memory: 26Mi
 
   nodeSelector: {}
 
@@ -205,11 +205,11 @@ app:
 
   resources:
     requests:
-      cpu: 100m
-      memory: 3Gi
+      cpu: 25m
+      memory: 1256Mi
     limits:
-      cpu: 1000m
-      memory: 4Gi
+      cpu: 500m
+      memory: 4000Mi
     # We usually recommend not to specify default resources and to leave this as a conscious
     # choice for the user. This also increases chances charts run on environments with little
     # resources, such as Minikube. If you do want to specify resources, uncomment the following
@@ -290,11 +290,11 @@ web:
 
   resources:
     requests:
-      cpu: 10m
-      memory: 30Mi
+      cpu: 1m
+      memory: 26Mi
     limits:
       cpu: 100m
-      memory: 100Mi
+      memory: 128Mi
     # We usually recommend not to specify default resources and to leave this as a conscious
     # choice for the user. This also increases chances charts run on environments with little
     # resources, such as Minikube. If you do want to specify resources, uncomment the following
@@ -346,8 +346,8 @@ cron:
   # fsGroup: 2000
 
   securityContext:
-    runAsUser: 82
-    runAsGroup: 82
+    runAsUser: 0
+    runAsGroup: 0
     # capabilities:
     #   drop:
     #   - ALL
@@ -377,11 +377,11 @@ cron:
 
   resources:
     requests:
-      cpu: 10m
+      cpu: 5m
       memory: 10Mi
     limits:
-      cpu: 100m
-      memory: 25Mi
+      cpu: 50m
+      memory: 100Mi
     # We usually recommend not to specify default resources and to leave this as a conscious
     # choice for the user. This also increases chances charts run on environments with little
     # resources, such as Minikube. If you do want to specify resources, uncomment the following

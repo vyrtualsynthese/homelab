@@ -56,7 +56,13 @@ bot:
     #    hosts:
     #      - chart-example.local
 
-  resources: {}
+  resources:
+    limits:
+      cpu: 50m
+      memory: 450Mi
+    requests:
+      cpu: 15m
+      memory: 156Mi
     # We usually recommend not to specify default resources and to leave this as a conscious
     # choice for the user. This also increases chances charts run on environments with little
     # resources, such as Minikube. If you do want to specify resources, uncomment the following
@@ -135,7 +141,13 @@ mongo:
     #    hosts:
     #      - chart-example.local
 
-  resources: {}
+  resources:
+    limits:
+      cpu: 100m
+      memory: 256Mi
+    requests:
+      cpu: 10m
+      memory: 134Mi
 
   nodeSelector: {}
 
@@ -204,7 +216,13 @@ web:
     #    hosts:
     #      - chart-example.local
 
-  resources: {}
+  resources:
+    limits:
+      cpu: 20m
+      memory: 128Mi
+    requests:
+      cpu: 1m
+      memory: 86Mi
     # We usually recommend not to specify default resources and to leave this as a conscious
     # choice for the user. This also increases chances charts run on environments with little
     # resources, such as Minikube. If you do want to specify resources, uncomment the following
@@ -283,7 +301,13 @@ redis:
     #    hosts:
     #      - chart-example.local
 
-  resources: {}
+  resources:
+    limits:
+      cpu: 10m
+      memory: 26Mi
+    requests:
+      cpu: 2m
+      memory: 8Mi
     # We usually recommend not to specify default resources and to leave this as a conscious
     # choice for the user. This also increases chances charts run on environments with little
     # resources, such as Minikube. If you do want to specify resources, uncomment the following

@@ -8,6 +8,7 @@ spec:
   schedule: "0 6 * * *"
   successfulJobsHistoryLimit: 1
   failedJobsHistoryLimit: 1
+  concurrencyPolicy: Forbid
   jobTemplate:
     spec:
       template:
@@ -34,13 +35,13 @@ spec:
                 - mountPath: /config
                   name: overviewer-configmap
           containers:
-            - name: overviewer
+            - name: overviewer-cron
               image: registry.hub.docker.com/vyrtualsynthese/overviewer:multi-arch-832ae4b
               imagePullPolicy: IfNotPresent
               resources:
                 limits:
-                  cpu: 4000m
-                  memory: 4Gi
+                  cpu: 1000m
+                  memory: 1Gi
                 requests:
                   cpu: 100m
                   memory: 100Mi

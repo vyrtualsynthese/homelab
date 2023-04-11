@@ -25,7 +25,7 @@ spec:
         - name: thelounge
           port: web
   tls:
-    certResolver: le
+    certResolver: myresolver
     options:
       name: {{ include "fullname" . }}-tlsoption
 {{- end }}

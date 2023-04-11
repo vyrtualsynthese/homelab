@@ -28,7 +28,7 @@ spec:
       volumes:
         - name: thelounge-volume
           persistentVolumeClaim:
-            claimName: thelounge-volume-lh
+            claimName: thelounge-volume
         - name: thelounge-configmap
           configMap:
             name: {{ include "fullname" . }}

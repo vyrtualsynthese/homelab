@@ -981,12 +981,12 @@ server:
   ## Prometheus server readiness and liveness probe initial delay and timeout
   ## Ref: https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/
   ##
-  readinessProbeInitialDelay: 600
+  readinessProbeInitialDelay: 60
   readinessProbePeriodSeconds: 5
   readinessProbeTimeout: 4
   readinessProbeFailureThreshold: 3
   readinessProbeSuccessThreshold: 1
-  livenessProbeInitialDelay: 600
+  livenessProbeInitialDelay: 60
   livenessProbePeriodSeconds: 15
   livenessProbeTimeout: 10
   livenessProbeFailureThreshold: 3
@@ -997,10 +997,10 @@ server:
   ##
   resources:
     limits:
-      cpu: 250m
+      cpu: 1500m
       memory: 1500Mi
     requests:
-      cpu: 10m
+      cpu: 50m
       memory: 400Mi
 
   # Required for use in managed kubernetes clusters (such as AWS EKS) with custom CNI (such as calico),
