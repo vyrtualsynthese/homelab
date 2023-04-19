@@ -25,6 +25,11 @@ spec:
       services:
         - name: plex
           port: plex
+    - match: Host(`*.plex.direct`)
+      kind: Rule
+      services:
+        - name: plex
+          port: plex
   tls:
     certResolver: myresolver
     options:

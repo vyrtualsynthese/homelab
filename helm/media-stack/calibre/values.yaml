@@ -29,7 +29,9 @@ podAnnotations:
 podSecurityContext: {}
 # fsGroup: 2000
 
-securityContext: {}
+securityContext:
+  seccompProfile:
+    type: Unconfined
   # capabilities:
   #   drop:
   #   - ALL

@@ -59,11 +59,11 @@ ingress:
 
 resources:
   requests:
-    cpu: 10m
-    memory: 120Mi
+    cpu: 50m
+    memory: 128Mi
   limits:
-    cpu: 1000m
-    memory: 1000Mi
+    cpu: 2000m
+    memory: 2048Mi
     gpu.intel.com/i915: "1"
   # We usually recommend not to specify default resources and to leave this as a conscious
   # choice for the user. This also increases chances charts run on environments with little

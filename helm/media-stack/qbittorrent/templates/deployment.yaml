@@ -52,32 +52,6 @@ spec:
             - name: qbittorrent-config-volume
               mountPath: /config
       containers:
-        - name: {{ .Chart.Name }}
-          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
-          imagePullPolicy: {{ .Values.image.pullPolicy }}
-          env:
-            - name: "TZ"
-              value: "Europe/Paris"
-            - name: "PUID"
-              value: "0"
-            - name: "PGID"
-              value: "0"
-          resources:
-            {{- toYaml .Values.resources | nindent 12 }}
-          volumeMounts:
-            - name: qbittorrent-config-volume
-              mountPath: /config
-            - name: qbittorrent-download-volume
-              mountPath: /downloads
-          ports:
-            - name: torrent-webui
-              containerPort: 8080
-            - name: torrent
-              containerPort: 59565
-              protocol: TCP
-            - name: torrent-udp
-              containerPort: 59565
-              protocol: UDP
         - name: {{ .Chart.Name }}-vpn
           securityContext:
             capabilities: # Needed for VPN
@@ -121,6 +95,10 @@ spec:
               value: "off"
             - name: "DOT_IPV6"
               value: "off"
+            - name: "DOT_PROVIDERS"
+              value: "google"
+            - name: "HEALTH_TARGET_ADDRESS"
+              value: "google.com:443"
             - name: "BLOCK_MALICIOUS"
               value: "off"
             - name: "HEALTH_VPN_DURATION_INITIAL"
@@ -137,6 +115,32 @@ spec:
               mountPath: "/dev/net/tun"
           resources:
             {{- toYaml .Values.vpnresources | nindent 12 }}
+        - name: {{ .Chart.Name }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+            - name: "TZ"
+              value: "Europe/Paris"
+            - name: "PUID"
+              value: "0"
+            - name: "PGID"
+              value: "0"
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: qbittorrent-config-volume
+              mountPath: /config
+            - name: qbittorrent-download-volume
+              mountPath: /downloads
+          ports:
+            - name: torrent-webui
+              containerPort: 8080
+            - name: torrent
+              containerPort: 59565
+              protocol: TCP
+            - name: torrent-udp
+              containerPort: 59565
+              protocol: UDP
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
