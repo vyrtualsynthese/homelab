@@ -69,11 +69,11 @@ spec:
                   name: plex
                   key: plex_claim
             - name: "ADVERTISE_IP"
-              value: "https://plex.home.ashudev.com"
+              value: "https://plex.home.ashudev.com:443,http://plex.app.local:80,http://80.14.57.209:32400,http://192.168.1.41:32400"
             - name: "HOSTNAME"
-              value: "plex.home.ashudev.com"
+              value: "plex"
             - name: "ALLOWED_NETWORKS"
-              value: "192.168.1.0/16,100.96.0.0/11"
+              value: "192.168.1.0/16,100.96.0.0/11,10.42.0.0/23"
             - name: "PLEX_UID"
               value: "1000"
             - name: "PLEX_GID"

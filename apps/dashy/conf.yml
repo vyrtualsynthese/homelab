@@ -11,43 +11,55 @@ appConfig:
   hideComponents:
     hideSettings: true
     hideNav: true
-#  auth:
-#    users:
-#      - user: "synthese"
-#        hash: "1FD8128178397A0D18326AAA3952A35F631D2D04780CD4BDCF03F7268E4ADD38"
-#        type: "admin"
-#    enableGuestAccess: true
+  auth:
+    users:
+      - user: "vronteix"
+        hash: "A952423B8C83906576D5CCBAF8B2B30EA20BFF083C924AB0229CBA1BEACAD953"
+        type: "admin"
+    enableGuestAccess: true
 pageInfo:
   title: "Homelab Dashy"
   footerText: "Made by <a href='https://ashudev.com' target='_blank'>Ashu Dev</a> Powered by <a href='https://github.com/Lissy93/dashy' target='_blank'>Dashy</a>"
   navLinks:
     - title: "Home"
-      path: "http://dashy.local"
+      path: "https://dashy.home.ashudev.com"
 sections:
   - name: "Home Lab Tools"
     items:
       - title: "Router: Livebox"
         icon: "https://upload.wikimedia.org/wikipedia/commons/c/c8/Orange_logo.svg"
+        displayData:
+          showForUsers: vronteix
         url: "http://192.168.1.1/"
         target: "newtab"
       - title: "Proxy: Traefik Dashboard"
         icon: "https://upload.wikimedia.org/wikipedia/commons/thumb/1/1b/Traefik.logo.png/1200px-Traefik.logo.png"
+        displayData:
+          showForUsers: vronteix
         url: "http://traefik.local/dashboard/"
         target: "newtab"
       - title: "Monitoring: Grafana"
         icon: "https://upload.wikimedia.org/wikipedia/en/thumb/a/a1/Grafana_logo.svg/1024px-Grafana_logo.svg.png"
+        displayData:
+          showForUsers: vronteix
         url: "https://grafana.home.ashudev.com/"
         target: "newtab"
       - title: "Monitoring: prometheus"
         icon: "https://prometheus.io/assets/favicons/android-chrome-192x192.png"
+        displayData:
+          showForUsers: vronteix
         url: "https://prom.home.ashudev.com/"
         target: "newtab"
       - title: "DNS: PiHole"
         icon: "https://upload.wikimedia.org/wikipedia/commons/8/88/Pi-hole_Logo_2.png"
+        displayData:
+          showForUsers: vronteix
         url: "http://192.168.1.38/admin/"
         target: "newtab"
       - title: "PV: Longhorn"
         icon: "https://longhorn.io/img/logos/longhorn-icon-color.png"
+        displayData:
+          showForUsers: vronteix
         url: "http://longhorn.app.local/"
         target: "newtab"
 
@@ -55,9 +67,13 @@ sections:
     items:
       - title: "Minecraft: Server Adress"
         icon: "https://upload.wikimedia.org/wikipedia/commons/d/d8/Minecraft_cube.svg"
+        displayData:
+          showForUsers: vronteix
         description: "80.14.57.209:31894"
       - title: "Minecraft: OverViewer"
         icon: "https://upload.wikimedia.org/wikipedia/commons/d/d8/Minecraft_cube.svg"
+        displayData:
+          showForUsers: vronteix
         url: "https://mc-map.ashudev.com"
         target: "newtab"
 
@@ -65,37 +81,61 @@ sections:
     items:
       - title: "Radarr"
         icon: "https://developer.asustor.com/uploadIcons/0020_999_1617261337_Radarr_new_256.png"
+        displayData:
+          showForUsers: vronteix
         url: "https://radarr.home.ashudev.com"
         target: "newtab"
       - title: "Radarr-sd"
         icon: "https://developer.asustor.com/uploadIcons/0020_999_1617261337_Radarr_new_256.png"
+        displayData:
+          showForUsers: vronteix
         url: "https://radarr-sd.home.ashudev.com"
         target: "newtab"
       - title: "Sonarr"
         icon: "https://developer.asustor.com/uploadIcons/0020_999_1573627129_Sonarr_1_256.png"
+        displayData:
+          showForUsers: vronteix
         url: "https://sonarr.home.ashudev.com"
         target: "newtab"
       - title: "Sonarr-sd"
         icon: "https://developer.asustor.com/uploadIcons/0020_999_1573627129_Sonarr_1_256.png"
+        displayData:
+          showForUsers: vronteix
         url: "https://sonarr-sd.home.ashudev.com"
         target: "newtab"
       - title: "Readarr"
         icon: "https://images.opencollective.com/readarr/2f7d366/logo/256.png"
+        displayData:
+          showForUsers: vronteix
         url: "https://readarr.home.ashudev.com"
         target: "newtab"
       - title: "Kavita"
         icon: "https://wiki.kavitareader.com/user/pages/01.home/kavita-logo3.png"
+        displayData:
+          showForUsers: vronteix
         url: "https://kavita.home.ashudev.com"
+        target: "newtab"
+      - title: "Calibre"
+        icon: "https://manual.calibre-ebook.com/fr/_static/logo.png"
+        displayData:
+          showForUsers: vronteix
+        url: "https://calibre.home.ashudev.com"
         target: "newtab"
       - title: "Prowlarr"
         icon: "https://images.opencollective.com/prowlarr/df81199/logo/256.png"
+        displayData:
+          showForUsers: vronteix
         url: "https://prowlarr.home.ashudev.com"
       - title: "Bazarr"
         icon: "https://www.bazarr.media/assets/img/logo.png"
+        displayData:
+          showForUsers: vronteix
         url: "https://bazarr.home.ashudev.com"
         target: "newtab"
       - title: "Plex"
         icon: "https://www.plex.tv/wp-content/uploads/2018/01/pmp-icon-1.png"
+        displayData:
+          showForUsers: vronteix
         url: "https://plex.home.ashudev.com"
         target: "newtab"
 
@@ -103,29 +143,43 @@ sections:
     items:
       - title: "Philips Hue Dashboard"
         icon: "https://upload.wikimedia.org/wikipedia/en/a/a1/Philips_hue_logo.png"
+        displayData:
+          showForUsers: vronteix
         url: "http://192.168.1.10/"
         target: "newtab"
       - title: "qBittorrent"
         icon: "https://upload.wikimedia.org/wikipedia/commons/6/66/New_qBittorrent_Logo.svg"
+        displayData:
+          showForUsers: vronteix
         url: "https://qbittorrent.home.ashudev.com"
         target: "newtab"
       - title: "Nextcloud"
         icon: "https://upload.wikimedia.org/wikipedia/commons/6/60/Nextcloud_Logo.svg"
+        displayData:
+          showForUsers: vronteix
         url: "https://nextcloud.home.ashudev.com"
         target: "newtab"
       - title: "Autobrr"
         icon: "https://autobrr.com/img/logo.png"
+        displayData:
+          showForUsers: vronteix
         url: "https://autobrr.home.ashudev.com"
         target: "newtab"
       - title: "The Lounge"
         icon: "https://raw.githubusercontent.com/thelounge/thelounge.github.io/master/assets/logos/logo/TL_Grey%26Yellow_Vertical_logotype_Transparent_Bg/TL_Grey%26Yellow_Vertical_logotype_Transparent_Bg.png"
+        displayData:
+          showForUsers: vronteix
         url: "https://thelounge.home.ashudev.com"
         target: "newtab"
       - title: "Koillection"
         icon: "https://user-images.githubusercontent.com/20560781/80213166-0e560e00-8639-11ea-944e-4f79fdbcef55.png"
+        displayData:
+          showForUsers: vronteix
         url: "https://koillection.home.ashudev.com"
         target: "newtab"
       - title: "Monitorss"
         icon: "https://monitorss.xyz/static/media/monitorss-logo.ab98090f1def9186417bd476bb0eda93.svg"
+        displayData:
+          showForUsers: vronteix
         url: "https://monitorss.home.ashudev.com"
         target: "newtab"

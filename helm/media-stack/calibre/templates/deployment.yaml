@@ -54,6 +54,8 @@ spec:
               value: "0"
             - name: "PGID"
               value: "0"
+            - name: "START_DOCKER"
+              value: "false"
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
           volumeMounts:

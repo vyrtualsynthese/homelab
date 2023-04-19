@@ -1,7 +1,7 @@
 apiVersion: batch/v1
 kind: CronJob
 metadata:
-  name: {{ include "overviewer.fullname" . }}
+  name: {{ include "overviewer.fullname" . }}-cron
   labels:
     {{- include "overviewer.labels" . | nindent 4 }}
 spec:
@@ -36,7 +36,7 @@ spec:
                   name: overviewer-configmap
           containers:
             - name: overviewer-cron
-              image: registry.hub.docker.com/vyrtualsynthese/overviewer:multi-arch-832ae4b
+              image: registry.hub.docker.com/vyrtualsynthese/overviewer:multi-arch-latest
               imagePullPolicy: IfNotPresent
               resources:
                 limits:
