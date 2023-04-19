@@ -58,7 +58,7 @@ app:
 
   resources:
     limits:
-      cpu: 20m
+      cpu: 100m
       memory: 256Mi
     requests:
       cpu: 1m
@@ -144,7 +144,7 @@ db:
 
   resources:
     limits:
-      cpu: 10m
+      cpu: 100m
       memory: 128Mi
     requests:
       cpu: 1m
