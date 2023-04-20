@@ -1,4 +1,4 @@
-FROM ubuntu:22.04 AS builder
+FROM ubuntu:kinetic AS builder
 
 WORKDIR /app/overviewer
 
