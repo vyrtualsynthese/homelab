@@ -19,7 +19,7 @@ spec:
       volumes:
         - name: data1
           persistentVolumeClaim:
-            claimName: koillection-db
+            claimName: qbittorrent-config
       containers:
         - image: alpine:latest
           command:

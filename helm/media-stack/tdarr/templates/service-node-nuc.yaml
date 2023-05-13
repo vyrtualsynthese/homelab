@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "fullname" . }}-node-nuc
+  labels:
+    {{- include "labels" . | nindent 4 }}
+spec:
+  type: NodePort
+  ports:
+    - name: server
+      port: 8266
+      protocol: TCP
+      targetPort: 8266
+  selector:
+    {{- include "selectorLabels-node-nuc" . | nindent 4 }}
