@@ -1,0 +1,160 @@
+apiVersion: helm.cattle.io/v1
+kind: HelmChartConfig
+metadata:
+  name: traefik
+  namespace: kube-system
+spec:
+  valuesContent: |-
+    deployment:
+      kind: DaemonSet
+    ingressRoute:
+      dashboard:
+        enabled: true
+        # Additional ingressRoute annotations (e.g. for kubernetes.io/ingress.class)
+        annotations: {}
+        # Additional ingressRoute labels (e.g. for filtering IngressRoute by custom labels)
+        labels: {}
+        # The router match rule used for the dashboard ingressRoute
+        matchRule: Host(`traefik.app.local`) && (PathPrefix(`/dashboard`) || PathPrefix(`/api`))
+        # Specify the allowed entrypoints to use for the dashboard ingress route, (e.g. traefik, web, websecure).
+        # By default, it's using traefik entrypoint, which is not exposed.
+        # /!\ Do not expose your dashboard without any protection over the internet /!\
+        entryPoints: ["web"]
+        # Additional ingressRoute middlewares (e.g. for authentication)
+        middlewares:
+          - name: traefik-dashboard
+            namespace: kube-system
+        # TLS options (e.g. secret containing certificate)
+        # tls: {}
+    
+    metrics:
+    # When using hostNetwork, use another port to avoid conflict with node exporter:
+    # https://github.com/prometheus/prometheus/wiki/Default-port-allocations
+      port: 9100
+    # hostPort: 9100
+    # Defines whether the port is exposed if service.type is LoadBalancer or
+    # NodePort.
+    #
+    # You may not want to expose the metrics port on production deployments.
+    # If you want to access it from outside of your cluster,
+    # use `kubectl port-forward` or create a secure ingress
+      expose: true
+    # The exposed port for this service
+      exposedPort: 9100
+    # The port protocol (TCP/UDP)
+      protocol: TCP
+
+    certResolvers:
+      myresolver:
+        email: valentin.ronteix@ashudev.com
+        tlsChallenge: true
+        # It has to match the path with a persistent volume
+        storage: /data/acme.json
+
+    ports:
+      web:
+        ## Enable this entrypoint as a default entrypoint. When a service doesn't explicity set an entrypoint it will only use this entrypoint.
+        # asDefault: true
+        port: 8000
+        # hostPort: 8000
+        # containerPort: 8000
+        expose: true
+        exposedPort: 80
+        ## Different target traefik port on the cluster, useful for IP type LB
+        # targetPort: 80
+        # The port protocol (TCP/UDP)
+        protocol: TCP
+        # Use nodeport if set. This is useful if you have configured Traefik in a
+        # LoadBalancer.
+        # nodePort: 32080
+        # Port Redirections
+        # Added in 2.2, you can make permanent redirects via entrypoints.
+        # https://docs.traefik.io/routing/entrypoints/#redirection
+        # redirectTo: websecure
+        #
+        # Trust forwarded  headers information (X-Forwarded-*).
+        forwardedHeaders:
+          insecure: true
+        #
+        # Enable the Proxy Protocol header parsing for the entry point
+        proxyProtocol:
+        #   trustedIPs: []
+          insecure: true
+      websecure:
+        ## Enable this entrypoint as a default entrypoint. When a service doesn't explicity set an entrypoint it will only use this entrypoint.
+        # asDefault: true
+        port: 8443
+        # hostPort: 8443
+        # containerPort: 8443
+        expose: true
+        exposedPort: 443
+        ## Different target traefik port on the cluster, useful for IP type LB
+        # targetPort: 80
+        ## The port protocol (TCP/UDP)
+        protocol: TCP
+        # nodePort: 32443
+        #
+        ## Enable HTTP/3 on the entrypoint
+        ## Enabling it will also enable http3 experimental feature
+        ## https://doc.traefik.io/traefik/routing/entrypoints/#http3
+        ## There are known limitations when trying to listen on same ports for
+        ## TCP & UDP (Http3). There is a workaround in this chart using dual Service.
+        ## https://github.com/kubernetes/kubernetes/issues/47249#issuecomment-587960741
+        # Trust forwarded  headers information (X-Forwarded-*).
+        forwardedHeaders:
+          insecure: true
+        #
+        # Enable the Proxy Protocol header parsing for the entry point
+        proxyProtocol:
+        #   trustedIPs: []
+          insecure: true
+    
+    persistence:
+      enabled: true
+      name: data
+      existingClaim: "traefik"
+      path: /data
+
+    service:
+      enabled: true
+      ## Single service is using `MixedProtocolLBService` feature gate.
+      ## When set to false, it will create two Service, one for TCP and one for UDP.
+      single: true
+      type: LoadBalancer
+      # Additional annotations applied to both TCP and UDP services (e.g. for cloud provider specific config)
+      #annotations: {}
+      # Additional annotations for TCP service only
+      #annotationsTCP: {}
+      # Additional annotations for UDP service only
+      #annotationsUDP: {}
+      # Additional service labels (e.g. for filtering Service by custom labels)
+      #labels: {}
+      # Additional entries here will be added to the service spec.
+      # Cannot contain type, selector or ports entries.
+      spec:
+        externalTrafficPolicy: Local
+        # loadBalancerIP: "1.2.3.4"
+        # clusterIP: "2.3.4.5"
+      #loadBalancerSourceRanges: []
+        # - 192.168.0.1/32
+        # - 172.16.0.0/16
+      #externalIPs: []
+        # - 1.2.3.4
+      ## One of SingleStack, PreferDualStack, or RequireDualStack.
+      # ipFamilyPolicy: SingleStack
+      ## List of IP families (e.g. IPv4 and/or IPv6).
+      ## ref: https://kubernetes.io/docs/concepts/services-networking/dual-stack/#services
+      # ipFamilies:
+      #   - IPv4
+      #   - IPv6
+      ##
+      ## An additionnal and optional internal Service.
+      ## Same parameters as external Service
+      # internal:
+      #   type: ClusterIP
+      #   # labels: {}
+      #   # annotations: {}
+      #   # spec: {}
+      #   # loadBalancerSourceRanges: []
+      #   # externalIPs: []
+      #   # ipFamilies: [ "IPv4","IPv6" ]
