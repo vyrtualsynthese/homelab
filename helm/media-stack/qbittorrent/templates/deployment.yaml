@@ -25,8 +25,8 @@ spec:
       dnsPolicy: "None"
       dnsConfig:
         nameservers:
-          - 8.8.8.8
-          - 8.8.4.4
+          - 1.1.1.1
+          - 1.0.0.1
       volumes:
         - name: qbittorrent-config-volume
           persistentVolumeClaim:
@@ -61,11 +61,15 @@ spec:
           imagePullPolicy: {{ .Values.vpnimage.pullPolicy }}
           env:
             - name: VPN_SERVICE_PROVIDER
-              value: "mullvad"
+              value: "custom"
             - name: FIREWALL
               value: "off"
             - name: VPN_TYPE
               value: "wireguard"
+            - name: VPN_ENDPOINT_IP
+              value: "193.32.126.69"
+            - name: WIREGUARD_PUBLIC_KEY
+              value: "E/KjR7nlFouuRXh1pwGDr7iK2TAZ6c4K0LjjmA1A2Tc="
             - name: WIREGUARD_PRIVATE_KEY
               valueFrom:
                 secretKeyRef:
@@ -76,11 +80,19 @@ spec:
                 secretKeyRef:
                   name: mullvad
                   key: WIREGUARD_ADDRESSES
-            - name: "SERVER_HOSTNAMES"
-              valueFrom:
-                secretKeyRef:
-                  name: mullvad
-                  key: SERVER_HOSTNAMES
+            #- name: "SERVER_HOSTNAMES"
+            #  valueFrom:
+            #    secretKeyRef:
+            #      name: mullvad
+            #      key: SERVER_HOSTNAMES
+            #- name: "SERVER_COUNTRIES"
+            #  value: "France"
+            #- name: "SERVER_CITIES"
+            #  value: "Paris"
+            #- name: "OWNED_ONLY"
+            #  value: "yes"
+            #- name: "ISP"
+            #  value: "31173"
             - name: "FIREWALL_VPN_INPUT_PORTS"
               valueFrom:
                 secretKeyRef:
@@ -98,7 +110,7 @@ spec:
             - name: "DOT_PROVIDERS"
               value: "google"
             - name: "HEALTH_TARGET_ADDRESS"
-              value: "google.com:443"
+              value: "cloudflare.com:443"
             - name: "BLOCK_MALICIOUS"
               value: "off"
             - name: "HEALTH_VPN_DURATION_INITIAL"

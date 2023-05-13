@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: tdarr-temp-nfs
+spec:
+  storageClassName: nfs-ssd
+  volumeMode: Filesystem
+  capacity:
+    storage: 1Ti
+  accessModes:
+    - ReadWriteMany
+  nfs:
+    server: 192.168.1.41
+    path: "/mnt/ssd0/nfs"
+  mountOptions:
+    - mountvers=4
+    - nolock

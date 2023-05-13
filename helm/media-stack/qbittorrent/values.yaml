@@ -63,21 +63,21 @@ ingress:
   #    hosts:
   #      - chart-example.local
 
-resources: {}
-#  requests:
-#    cpu: 1000m
-#    memory: 200Mi
-#  limits:
-#    cpu: 4000m
-#    memory: 6000Mi
+resources:
+  requests:
+    cpu: 500m
+    memory: 500Mi
+  limits:
+    cpu: 4000m
+    memory: 6000Mi
 
-vpnresources: {}
-#  requests:
-#    cpu: 10m
-#    memory: 25Mi
-#  limits:
-#    cpu: 100m
-#    memory: 150Mi
+vpnresources:
+  requests:
+    cpu: 50m
+    memory: 26Mi
+  limits:
+    cpu: 500m
+    memory: 256Mi
 
 
 autoscaling:

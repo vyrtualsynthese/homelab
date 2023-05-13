@@ -36,22 +36,22 @@ spec:
             - '--entrypoints.web.address=:8000/tcp'
             - '--entrypoints.websecure.address=:8443/tcp'
             - '--api.dashboard=true'
-            - '--api.insecure=true'
             - '--ping=true'
             - '--metrics.prometheus=true'
             - '--metrics.prometheus.entrypoint=metrics'
             - '--providers.kubernetescrd'
             - '--providers.kubernetesingress'
-            - '--certificatesresolvers.le.acme.email=valentin.ronteix@ashudev.com'
-            - '--certificatesresolvers.le.acme.storage=/data/acme.json'
-            - '--certificatesresolvers.le.acme.tlschallenge=true'
-            - '--certificatesresolvers.le.acme.dnsChallenge.provider=route53'
-            - '--certificatesresolvers.le.acme.dnsChallenge.delayBeforeCheck=0'
+            - '--entryPoints.web.forwardedHeaders.insecure'
+            - '--entryPoints.web.proxyProtocol.insecure'
+            - '--certificatesresolvers.myresolver.acme.tlschallenge'
             - >-
-              --certificatesresolvers.le.acme.caServer=https://acme-v02.api.letsencrypt.org/directory
+              --certificatesresolvers.myresolver.acme.email=valentin.ronteix@ashudev.com
+            - '--entrypoints.websecure.forwardedHeaders.insecure'
+            - '--entryPoints.websecure.proxyProtocol.insecure'
+            - '--certificatesresolvers.myresolver.acme.storage=/data/acme.json'
+            - '--entrypoints.websecure.http.tls=true'
             - >-
               --providers.kubernetesingress.ingressendpoint.publishedservice=kube-system/traefik
-            - '--entrypoints.websecure.http.tls=true'
           ports:
             - name: metrics
               containerPort: 9100
