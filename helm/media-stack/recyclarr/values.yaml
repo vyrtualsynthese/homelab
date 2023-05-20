@@ -36,11 +36,10 @@ securityContext: {}
 
 resources:
    limits:
-     cpu: 2000m
-     memory: 512Mi
+     memory: 5128Mi
    requests:
-     cpu: 10m
-     memory: 58Mi
+     cpu: 100m
+     memory: 64Mi
 
 autoscaling:
   enabled: false
@@ -58,7 +57,7 @@ affinity:
     requiredDuringSchedulingIgnoredDuringExecution:
       nodeSelectorTerms:
         - matchExpressions:
-            - key: kubernetes.io/arch
-              operator: In
+            - key: kubernetes.io/hostname
+              operator: NotIn
               values:
-                - amd64
+                - nas

@@ -61,7 +61,6 @@ db:
       cpu: 5m
       memory: 50Mi
     limits:
-      cpu: 100m
       memory: 128Mi
     # We usually recommend not to specify default resources and to leave this as a conscious
     # choice for the user. This also increases chances charts run on environments with little
@@ -83,10 +82,10 @@ db:
       requiredDuringSchedulingIgnoredDuringExecution:
         nodeSelectorTerms:
           - matchExpressions:
-              - key: kubernetes.io/arch
-                operator: In
+              - key: kubernetes.io/hostname
+                operator: NotIn
                 values:
-                  - amd64
+                  - nas
 
 redis:
   image:
@@ -146,7 +145,6 @@ redis:
       cpu: 2m
       memory: 12Mi
     limits:
-      cpu: 10m
       memory: 26Mi
 
   nodeSelector: {}
@@ -158,10 +156,10 @@ redis:
       requiredDuringSchedulingIgnoredDuringExecution:
         nodeSelectorTerms:
           - matchExpressions:
-              - key: kubernetes.io/arch
-                operator: In
+              - key: kubernetes.io/hostname
+                operator: NotIn
                 values:
-                  - amd64
+                  - nas
 
 app:
   image:
@@ -205,11 +203,10 @@ app:
 
   resources:
     requests:
-      cpu: 25m
-      memory: 1256Mi
+      cpu: 20m
+      memory: 512Mi
     limits:
-      cpu: 500m
-      memory: 4000Mi
+      memory: 1024Mi
     # We usually recommend not to specify default resources and to leave this as a conscious
     # choice for the user. This also increases chances charts run on environments with little
     # resources, such as Minikube. If you do want to specify resources, uncomment the following
@@ -230,10 +227,10 @@ app:
       requiredDuringSchedulingIgnoredDuringExecution:
         nodeSelectorTerms:
           - matchExpressions:
-              - key: kubernetes.io/arch
-                operator: In
+              - key: kubernetes.io/hostname
+                operator: NotIn
                 values:
-                  - amd64
+                  - nas
 
 web:
   image:
@@ -291,10 +288,9 @@ web:
   resources:
     requests:
       cpu: 1m
-      memory: 26Mi
-    limits:
-      cpu: 100m
       memory: 128Mi
+    limits:
+      memory: 256Mi
     # We usually recommend not to specify default resources and to leave this as a conscious
     # choice for the user. This also increases chances charts run on environments with little
     # resources, such as Minikube. If you do want to specify resources, uncomment the following
@@ -315,10 +311,10 @@ web:
       requiredDuringSchedulingIgnoredDuringExecution:
         nodeSelectorTerms:
           - matchExpressions:
-              - key: kubernetes.io/arch
-                operator: In
+              - key: kubernetes.io/hostname
+                operator: NotIn
                 values:
-                  - amd64
+                  - nas
 
 cron:
   image:
@@ -378,10 +374,9 @@ cron:
   resources:
     requests:
       cpu: 5m
-      memory: 10Mi
+      memory: 16Mi
     limits:
-      cpu: 50m
-      memory: 100Mi
+      memory: 128Mi
     # We usually recommend not to specify default resources and to leave this as a conscious
     # choice for the user. This also increases chances charts run on environments with little
     # resources, such as Minikube. If you do want to specify resources, uncomment the following
@@ -402,7 +397,7 @@ cron:
       requiredDuringSchedulingIgnoredDuringExecution:
         nodeSelectorTerms:
           - matchExpressions:
-              - key: kubernetes.io/arch
-                operator: In
+              - key: kubernetes.io/hostname
+                operator: NotIn
                 values:
-                  - amd64
+                  - nas

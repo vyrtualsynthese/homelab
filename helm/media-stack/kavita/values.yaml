@@ -59,10 +59,9 @@ ingress:
 
 resources:
   requests:
-    cpu: 10m
+    cpu: 15m
     memory: 256Mi
   limits:
-    cpu: 100m
     memory: 512Mi
 
 autoscaling:
@@ -81,7 +80,7 @@ affinity:
     requiredDuringSchedulingIgnoredDuringExecution:
       nodeSelectorTerms:
         - matchExpressions:
-            - key: kubernetes.io/arch
-              operator: In
+            - key: kubernetes.io/hostname
+              operator: NotIn
               values:
-                - amd64
+                - nas

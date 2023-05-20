@@ -57,13 +57,12 @@ ingress:
   #    hosts:
   #      - chart-example.local
 
-resources: {}
-#   limits:
-#     cpu: 100m
-#     memory: 1024Mi
-#   requests:
-#     cpu: 1m
-#     memory: 256Mi
+resources:
+   limits:
+     memory: 512Mi
+   requests:
+     cpu: 1m
+     memory: 256Mi
 
 autoscaling:
   enabled: false
@@ -81,7 +80,7 @@ affinity:
     requiredDuringSchedulingIgnoredDuringExecution:
       nodeSelectorTerms:
         - matchExpressions:
-            - key: kubernetes.io/arch
-              operator: In
+            - key: kubernetes.io/hostname
+              operator: NotIn
               values:
-                - amd64
+                - nas

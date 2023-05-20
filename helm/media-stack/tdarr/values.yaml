@@ -65,36 +65,32 @@ ingress:
 
 resources:
   requests:
-    cpu: 500m
-    memory: 500Mi
+    cpu: 200m
+    memory: 2048Mi
   limits:
-    cpu: 1000m
-    memory: 8000Mi
+    memory: 12000Mi
 
 resourcesNodeNas:
   requests:
-    cpu: 500m
-    memory: 500Mi
+    cpu: 1m
+    memory: 1024Mi
   limits:
-    cpu: 4000m
     memory: 8000Mi
     gpu.intel.com/i915: "1"
 
 resourcesNodeNuc:
   requests:
-    cpu: 500m
-    memory: 500Mi
+    cpu: 1m
+    memory: 1024Mi
   limits:
-    cpu: 4000m
     memory: 8000Mi
     gpu.intel.com/i915: "1"
 
 resourcesNodeXps13:
   requests:
-    cpu: 500m
-    memory: 500Mi
+    cpu: 1m
+    memory: 1024Mi
   limits:
-    cpu: 4000m
     memory: 8000Mi
     gpu.intel.com/i915: "1"
   # We usually recommend not to specify default resources and to leave this as a conscious
@@ -129,4 +125,12 @@ nodeSelectorNodeXps13:
 
 tolerations: []
 
-affinity: {}
+affinity:
+  nodeAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: kubernetes.io/hostname
+              operator: NotIn
+              values:
+                - nas

@@ -247,11 +247,10 @@ ingress:
 
 resources:
   limits:
-    cpu: 200m
-    memory: 250Mi
+    memory: 256Mi
   requests:
-    cpu: 5m
-    memory: 85Mi
+    cpu: 20m
+    memory: 128Mi
 
 ## Node labels for pod assignment
 ## ref: https://kubernetes.io/docs/user-guide/node-selection/
@@ -271,10 +270,10 @@ affinity:
     requiredDuringSchedulingIgnoredDuringExecution:
       nodeSelectorTerms:
         - matchExpressions:
-            - key: kubernetes.io/arch
-              operator: In
+            - key: kubernetes.io/hostname
+              operator: NotIn
               values:
-                - amd64
+                - nas
 
 ## Topology Spread Constraints
 ## ref: https://kubernetes.io/docs/concepts/workloads/pods/pod-topology-spread-constraints/

@@ -58,10 +58,9 @@ ingress:
 
 resources:
   requests:
-    cpu: 500m
-    memory: 500Mi
+    cpu: 100m
+    memory: 1000Mi
   limits:
-    cpu: 2000m
     memory: 6Gi
   # We usually recommend not to specify default resources and to leave this as a conscious
   # choice for the user. This also increases chances charts run on environments with little
@@ -90,7 +89,7 @@ affinity:
     requiredDuringSchedulingIgnoredDuringExecution:
       nodeSelectorTerms:
         - matchExpressions:
-            - key: kubernetes.io/arch
-              operator: In
+            - key: kubernetes.io/hostname
+              operator: NotIn
               values:
-                - amd64
+                - nas

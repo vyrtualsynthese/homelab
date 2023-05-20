@@ -19,7 +19,7 @@ spec:
       volumes:
         - name: data1
           persistentVolumeClaim:
-            claimName: qbittorrent-config
+            claimName: nextcloud-db
       containers:
         - image: alpine:latest
           command:
