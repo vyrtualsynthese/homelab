@@ -26,9 +26,9 @@ spec:
         - name: plex-config-volume
           persistentVolumeClaim:
             claimName: plex-config
-        - name: plex-transcode-volume
-          persistentVolumeClaim:
-            claimName: plex-transcode
+        #- name: plex-transcode-volume
+        #  persistentVolumeClaim:
+        #    claimName: plex-transcode
         - name: plex-media-volume
           persistentVolumeClaim:
             claimName: plex-media-nfs
@@ -83,8 +83,8 @@ spec:
           volumeMounts:
             - name: plex-config-volume
               mountPath: /config
-            - name: plex-transcode-volume
-              mountPath: /transcode
+            #- name: plex-transcode-volume
+            #  mountPath: /transcode
             - name: plex-media-volume
               mountPath: /media
       {{- with .Values.nodeSelector }}

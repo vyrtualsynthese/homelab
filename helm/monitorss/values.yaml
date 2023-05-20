@@ -58,11 +58,10 @@ bot:
 
   resources:
     limits:
-      cpu: 500m
-      memory: 512Mi
+      memory: 256Mi
     requests:
       cpu: 15m
-      memory: 256Mi
+      memory: 128Mi
     # We usually recommend not to specify default resources and to leave this as a conscious
     # choice for the user. This also increases chances charts run on environments with little
     # resources, such as Minikube. If you do want to specify resources, uncomment the following
@@ -83,10 +82,10 @@ bot:
       requiredDuringSchedulingIgnoredDuringExecution:
         nodeSelectorTerms:
           - matchExpressions:
-              - key: kubernetes.io/arch
-                operator: In
+              - key: kubernetes.io/hostname
+                operator: NotIn
                 values:
-                  - amd64
+                  - nas
 
 mongo:
   image:
@@ -143,8 +142,7 @@ mongo:
 
   resources:
     limits:
-      cpu: 1000m
-      memory: 512Mi
+      memory: 256Mi
     requests:
       cpu: 10m
       memory: 128Mi
@@ -158,10 +156,10 @@ mongo:
       requiredDuringSchedulingIgnoredDuringExecution:
         nodeSelectorTerms:
           - matchExpressions:
-              - key: kubernetes.io/arch
-                operator: In
+              - key: kubernetes.io/hostname
+                operator: NotIn
                 values:
-                  - amd64
+                  - nas
 
 web:
   image:
@@ -218,8 +216,7 @@ web:
 
   resources:
     limits:
-      cpu: 500m
-      memory: 512Mi
+      memory: 256Mi
     requests:
       cpu: 1m
       memory: 128Mi
@@ -243,10 +240,10 @@ web:
       requiredDuringSchedulingIgnoredDuringExecution:
         nodeSelectorTerms:
           - matchExpressions:
-              - key: kubernetes.io/arch
-                operator: In
+              - key: kubernetes.io/hostname
+                operator: NotIn
                 values:
-                  - amd64
+                  - nas
 
 redis:
   image:
@@ -303,7 +300,6 @@ redis:
 
   resources:
     limits:
-      cpu: 50m
       memory: 32Mi
     requests:
       cpu: 2m
@@ -328,7 +324,7 @@ redis:
       requiredDuringSchedulingIgnoredDuringExecution:
         nodeSelectorTerms:
           - matchExpressions:
-              - key: kubernetes.io/arch
-                operator: In
+              - key: kubernetes.io/hostname
+                operator: NotIn
                 values:
-                  - amd64
+                  - nas

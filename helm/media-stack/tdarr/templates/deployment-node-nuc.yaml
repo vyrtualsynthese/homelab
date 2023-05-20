@@ -72,6 +72,10 @@ spec:
               mountPath: /temp
             - name: plex-media-volume
               mountPath: /media
+            - name: plex-media-volume
+              mountPath: /media-hd
+            - name: plex-media-volume
+              mountPath: /media-sd
       {{- with .Values.nodeSelectorNodeNuc }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

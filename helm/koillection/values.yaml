@@ -58,7 +58,6 @@ app:
 
   resources:
     limits:
-      cpu: 100m
       memory: 256Mi
     requests:
       cpu: 1m
@@ -84,10 +83,10 @@ app:
       requiredDuringSchedulingIgnoredDuringExecution:
         nodeSelectorTerms:
           - matchExpressions:
-              - key: kubernetes.io/arch
-                operator: In
+              - key: kubernetes.io/hostname
+                operator: NotIn
                 values:
-                  - amd64
+                  - nas
 
 db:
   image:
@@ -144,7 +143,6 @@ db:
 
   resources:
     limits:
-      cpu: 100m
       memory: 128Mi
     requests:
       cpu: 1m
@@ -159,7 +157,7 @@ db:
       requiredDuringSchedulingIgnoredDuringExecution:
         nodeSelectorTerms:
           - matchExpressions:
-              - key: kubernetes.io/arch
-                operator: In
+              - key: kubernetes.io/hostname
+                operator: NotIn
                 values:
-                  - amd64
+                  - nas
