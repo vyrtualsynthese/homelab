@@ -76,20 +76,6 @@ spec:
               value: "false"
             - name: "UN_SONARR_0_DELETE_DELAY"
               value: "30m"
-{{/*            - name: "UN_SONARR_1_URL"*/}}
-{{/*              value: "http://sonarr-sd:8989"*/}}
-{{/*            - name: "UN_SONARR_1_API_KEY"*/}}
-{{/*              value: "dee16ad33c714ddfb2d5d54808932ca3"*/}}
-{{/*            - name: "UN_SONARR_1_PATHS_0"*/}}
-{{/*              value: "/downloads"*/}}
-{{/*            - name: "UN_SONARR_1_PROTOCOLS"*/}}
-{{/*              value: "torrent"*/}}
-{{/*            - name: "UN_SONARR_1_TIMEOUT"*/}}
-{{/*              value: "1m"*/}}
-{{/*            - name: "UN_SONARR_1_DELETE_ORIG"*/}}
-{{/*              value: "false"*/}}
-{{/*            - name: "UN_SONARR_1_DELETE_DELAY"*/}}
-{{/*              value: "30m"*/}}
             - name: "UN_SONARR_1_URL"
               value: "http://sonarr-anime:8989"
             - name: "UN_SONARR_1_API_KEY"
@@ -103,48 +89,6 @@ spec:
             - name: "UN_SONARR_1_DELETE_ORIG"
               value: "false"
             - name: "UN_SONARR_1_DELETE_DELAY"
-              value: "30m"
-{{/*            - name: "UN_SONARR_3_URL"*/}}
-{{/*              value: "http://sonarr-anime-sd:8989"*/}}
-{{/*            - name: "UN_SONARR_3_API_KEY"*/}}
-{{/*              value: "b84b7031efc84c3bb3a91cdc1402d7c2"*/}}
-{{/*            - name: "UN_SONARR_3_PATHS_0"*/}}
-{{/*              value: "/downloads"*/}}
-{{/*            - name: "UN_SONARR_3_PROTOCOLS"*/}}
-{{/*              value: "torrent"*/}}
-{{/*            - name: "UN_SONARR_3_TIMEOUT"*/}}
-{{/*              value: "1m"*/}}
-{{/*            - name: "UN_SONARR_3_DELETE_ORIG"*/}}
-{{/*              value: "false"*/}}
-{{/*            - name: "UN_SONARR_3_DELETE_DELAY"*/}}
-{{/*              value: "30m"*/}}
-            - name: "UN_SONARR_2_URL"
-              value: "http://sonarr-anime-hd:8989"
-            - name: "UN_SONARR_2_API_KEY"
-              value: "97371c5e3bf64552b2495b7502749abc"
-            - name: "UN_SONARR_2_PATHS_0"
-              value: "/downloads"
-            - name: "UN_SONARR_2_PROTOCOLS"
-              value: "torrent"
-            - name: "UN_SONARR_2_TIMEOUT"
-              value: "1m"
-            - name: "UN_SONARR_2_DELETE_ORIG"
-              value: "false"
-            - name: "UN_SONARR_2_DELETE_DELAY"
-              value: "30m"
-            - name: "UN_SONARR_3_URL"
-              value: "http://sonarr-hd:8989"
-            - name: "UN_SONARR_3_API_KEY"
-              value: "6484a4d1fb504324aa253ea3ca237c30"
-            - name: "UN_SONARR_3_PATHS_0"
-              value: "/downloads"
-            - name: "UN_SONARR_3_PROTOCOLS"
-              value: "torrent"
-            - name: "UN_SONARR_3_TIMEOUT"
-              value: "1m"
-            - name: "UN_SONARR_3_DELETE_ORIG"
-              value: "false"
-            - name: "UN_SONARR_3_DELETE_DELAY"
               value: "30m"
             - name: "UN_RADARR_0_URL"
               value: "http://radarr:7878"
@@ -160,20 +104,6 @@ spec:
               value: "false"
             - name: "UN_RADARR_0_DELETE_DELAY"
               value: "30m"
-{{/*            - name: "UN_RADARR_1_URL"*/}}
-{{/*              value: "http://radarr-sd:7878"*/}}
-{{/*            - name: "UN_RADARR_1_API_KEY"*/}}
-{{/*              value: "2aba1a43462b4b8cb52fbdf12b62c475"*/}}
-{{/*            - name: "UN_RADARR_1_PATHS_0"*/}}
-{{/*              value: "/downloads"*/}}
-{{/*            - name: "UN_RADARR_1_PROTOCOLS"*/}}
-{{/*              value: "torrent"*/}}
-{{/*            - name: "UN_RADARR_1_TIMEOUT"*/}}
-{{/*              value: "1m"*/}}
-{{/*            - name: "UN_RADARR_1_DELETE_ORIG"*/}}
-{{/*              value: "false"*/}}
-{{/*            - name: "UN_RADARR_1_DELETE_DELAY"*/}}
-{{/*              value: "30m"*/}}
             - name: "UN_RADARR_1_URL"
               value: "http://radarr-anime:7878"
             - name: "UN_RADARR_1_API_KEY"
@@ -187,48 +117,6 @@ spec:
             - name: "UN_RADARR_1_DELETE_ORIG"
               value: "false"
             - name: "UN_RADARR_1_DELETE_DELAY"
-              value: "30m"
-{{/*            - name: "UN_RADARR_3_URL"*/}}
-{{/*              value: "http://radarr-anime-sd:7878"*/}}
-{{/*            - name: "UN_RADARR_3_API_KEY"*/}}
-{{/*              value: "bc275c90676a47659b14cbf1718cdda6"*/}}
-{{/*            - name: "UN_RADARR_3_PATHS_0"*/}}
-{{/*              value: "/downloads"*/}}
-{{/*            - name: "UN_RADARR_3_PROTOCOLS"*/}}
-{{/*              value: "torrent"*/}}
-{{/*            - name: "UN_RADARR_3_TIMEOUT"*/}}
-{{/*              value: "1m"*/}}
-{{/*            - name: "UN_RADARR_3_DELETE_ORIG"*/}}
-{{/*              value: "false"*/}}
-{{/*            - name: "UN_RADARR_3_DELETE_DELAY"*/}}
-{{/*              value: "30m"*/}}
-            - name: "UN_RADARR_2_URL"
-              value: "http://radarr-hd:7878"
-            - name: "UN_RADARR_2_API_KEY"
-              value: "3bfddd4a63344503b59e7c24949e9bd2"
-            - name: "UN_RADARR_2_PATHS_0"
-              value: "/downloads"
-            - name: "UN_RADARR_2_PROTOCOLS"
-              value: "torrent"
-            - name: "UN_RADARR_2_TIMEOUT"
-              value: "1m"
-            - name: "UN_RADARR_2_DELETE_ORIG"
-              value: "false"
-            - name: "UN_RADARR_2_DELETE_DELAY"
-              value: "30m"
-            - name: "UN_RADARR_3_URL"
-              value: "http://radarr-anime-hd:7878"
-            - name: "UN_RADARR_3_API_KEY"
-              value: "aeb212ea56a24d5687af2284d938524e"
-            - name: "UN_RADARR_3_PATHS_0"
-              value: "/downloads"
-            - name: "UN_RADARR_3_PROTOCOLS"
-              value: "torrent"
-            - name: "UN_RADARR_3_TIMEOUT"
-              value: "1m"
-            - name: "UN_RADARR_3_DELETE_ORIG"
-              value: "false"
-            - name: "UN_RADARR_3_DELETE_DELAY"
               value: "30m"
             - name: "UN_READARR_0_URL"
               value: "http://readarr:8787"
