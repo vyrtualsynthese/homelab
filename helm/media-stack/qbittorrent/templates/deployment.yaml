@@ -33,7 +33,7 @@ spec:
             claimName: qbittorrent-config
         - name: qbittorrent-download-volume
           persistentVolumeClaim:
-            claimName: qbittorrent-download-nfs
+            claimName: pvc-nfs-qbittorrent-download-nfs-subdir-external-provisioner
         - name: "dev-tun" # Needed for VPN
           hostPath:
             path: "/dev/net/tun"
