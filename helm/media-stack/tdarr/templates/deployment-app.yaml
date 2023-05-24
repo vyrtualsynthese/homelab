@@ -31,10 +31,10 @@ spec:
             claimName: tdarr-logs
         - name: tdarr-temp-volume
           persistentVolumeClaim:
-            claimName: tdarr-temp-nfs
+            claimName: pvc-tdarr-cache
         - name: plex-media-volume
           persistentVolumeClaim:
-            claimName: plex-media-nfs
+            claimName: pvc-plex-media
 
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:

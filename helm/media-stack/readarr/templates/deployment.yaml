@@ -28,7 +28,7 @@ spec:
             claimName: readarr-config
         - name: qbittorrent-download-volume
           persistentVolumeClaim:
-            claimName: qbittorrent-download-nfs
+            claimName: pvc-nfs-qbittorrent-download-nfs-subdir-external-provisioner
         - name: books-volume
           persistentVolumeClaim:
             claimName: books-nfs

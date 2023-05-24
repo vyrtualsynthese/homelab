@@ -13,5 +13,6 @@ spec:
     server: 192.168.1.41
     path: "/mnt/ultrafaststorage/nfs"
   mountOptions:
-    - mountvers=4
+    - vers=4.1
     - nolock
+    - async
