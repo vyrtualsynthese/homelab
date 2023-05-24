@@ -81,23 +81,11 @@ sections:
           hideForGuests: true
         url: "https://radarr.home.ashudev.com"
         target: "newtab"
-      - title: "Radarr-sd"
-        icon: "https://developer.asustor.com/uploadIcons/0020_999_1617261337_Radarr_new_256.png"
-        displayData:
-          hideForGuests: true
-        url: "https://radarr-sd.home.ashudev.com"
-        target: "newtab"
       - title: "Radarr-anime"
         icon: "https://developer.asustor.com/uploadIcons/0020_999_1617261337_Radarr_new_256.png"
         displayData:
           hideForGuests: true
         url: "https://radarr-anime.home.ashudev.com"
-        target: "newtab"
-      - title: "Radarr-anime-sd"
-        icon: "https://developer.asustor.com/uploadIcons/0020_999_1617261337_Radarr_new_256.png"
-        displayData:
-          hideForGuests: true
-        url: "https://radarr-anime-sd.home.ashudev.com"
         target: "newtab"
       - title: "Sonarr"
         icon: "https://developer.asustor.com/uploadIcons/0020_999_1573627129_Sonarr_1_256.png"
@@ -105,23 +93,11 @@ sections:
           hideForGuests: true
         url: "https://sonarr.home.ashudev.com"
         target: "newtab"
-      - title: "Sonarr-sd"
-        icon: "https://developer.asustor.com/uploadIcons/0020_999_1573627129_Sonarr_1_256.png"
-        displayData:
-          hideForGuests: true
-        url: "https://sonarr-sd.home.ashudev.com"
-        target: "newtab"
       - title: "Sonarr-anime"
         icon: "https://developer.asustor.com/uploadIcons/0020_999_1573627129_Sonarr_1_256.png"
         displayData:
           hideForGuests: true
         url: "https://sonarr-sd.home.ashudev.com"
-        target: "newtab"
-      - title: "Sonarr-anime-sd"
-        icon: "https://developer.asustor.com/uploadIcons/0020_999_1573627129_Sonarr_1_256.png"
-        displayData:
-          hideForGuests: true
-        url: "https://sonarr-anime-sd.home.ashudev.com"
         target: "newtab"
       - title: "Overseerr"
         icon: "https://hotio.dev/img/image-logos/overseerr.svg"
