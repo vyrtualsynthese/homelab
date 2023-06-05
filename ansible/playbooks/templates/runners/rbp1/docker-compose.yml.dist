@@ -1,0 +1,53 @@
+version: "3"
+
+# More info at https://github.com/pi-hole/docker-pi-hole/ and https://docs.pi-hole.net/
+services:
+  pihole:
+    container_name: pihole
+    image: pihole/pihole:latest
+    # For DHCP it is recommended to remove these ports and instead add: network_mode: "host"
+    network_mode: "host"
+    #ports:
+    #  - "53:53/tcp"
+    #  - "53:53/udp"
+    #  - "67:67/udp" # Only required if you are using Pi-hole as your DHCP server
+    #  - "80:80/tcp"
+    #  - "4711:4711"
+    environment:
+      TZ: 'Europe/Paris'
+      WEBPASSWORD: ''
+      WEBPASSWORD: ''
+    # Volumes store your data between container upgrades
+    volumes:
+      - './etc-pihole:/etc/pihole'
+      - './etc-dnsmasq.d:/etc/dnsmasq.d'
+    #   https://github.com/pi-hole/docker-pi-hole#note-on-capabilities
+    restart: unless-stopped
+
+  wireguard:
+    image: lscr.io/linuxserver/wireguard:latest
+    container_name: wireguard
+    depends_on:
+      - pihole
+    cap_add:
+      - NET_ADMIN
+      #- SYS_MODULE
+    environment:
+      - PUID=1001
+      - PGID=1001
+      - TZ=Europe/Paris
+      - SERVERURL= #optional
+      - SERVERPORT= #optional
+      - PEERS=
+      #- PEERDNS=127.0.0.1 #optional
+      #- INTERNAL_SUBNET=255.255.255.0 #optional
+      - ALLOWEDIPS=0.0.0.0/0 #optional
+      - LOG_CONFS=true #optional
+    ports:
+      - 51820:51820/udp
+    sysctls:
+      - net.ipv4.conf.all.src_valid_mark=1
+    volumes:
+      - ./config:/config
+      #- /lib/modules:/lib/modules
+    restart: unless-stopped

@@ -9,14 +9,6 @@
         update_cache: yes
         cache_valid_time: 86400 #One day
 
-    - name: install required packages from apt
-      apt:
-        pkg:
-          - open-iscsi
-          - nfs-common
-          - original-awk
-          - jq
-
     - name: Remove useless packages from the cache
       apt:
         autoclean: yes
@@ -27,3 +19,5 @@
 
     - name: Upgrade Restic
       ansible.builtin.command: restic self-update
+
+    # Upgrade docker compose

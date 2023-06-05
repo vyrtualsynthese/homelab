@@ -39,7 +39,7 @@ sections:
         url: "http://traefik.local/dashboard/"
         target: "newtab"
       - title: "Monitoring: Grafana"
-        icon: "https://upload.wikimedia.org/wikipedia/en/thumb/a/a1/Grafana_logo.svg/1024px-Grafana_logo.svg.png"
+        icon: "https://upload.wikimedia.org/wikipedia/commons/a/a1/Grafana_logo.svg"
         displayData:
           hideForGuests: true
         url: "https://grafana.home.ashudev.com/"
@@ -68,10 +68,6 @@ sections:
       - title: "Minecraft: Server Adress"
         icon: "https://upload.wikimedia.org/wikipedia/commons/d/d8/Minecraft_cube.svg"
         description: "80.14.57.209:31894"
-      - title: "Minecraft: OverViewer"
-        icon: "https://upload.wikimedia.org/wikipedia/commons/d/d8/Minecraft_cube.svg"
-        url: "https://mc-map.ashudev.com"
-        target: "newtab"
 
   - name: "Media"
     items:
@@ -134,6 +130,18 @@ sections:
         icon: "https://www.plex.tv/wp-content/uploads/2018/01/pmp-icon-1.png"
         url: "https://plex.home.ashudev.com"
         target: "newtab"
+      - title: "Tdarr"
+        icon: "https://repository-images.githubusercontent.com/208294915/c94da600-a0eb-11eb-935a-cef889856b8d"
+        url: "http://tdarr.app.local"
+        displayData:
+          hideForGuests: true
+        target: "newtab"
+      - title: "Autobrr"
+        icon: "https://autobrr.com/img/logo.png"
+        displayData:
+          hideForGuests: true
+        url: "https://autobrr.home.ashudev.com"
+        target: "newtab"
 
   - name: "Divers"
     items:
@@ -152,12 +160,6 @@ sections:
       - title: "Nextcloud"
         icon: "https://upload.wikimedia.org/wikipedia/commons/6/60/Nextcloud_Logo.svg"
         url: "https://nextcloud.home.ashudev.com"
-        target: "newtab"
-      - title: "Autobrr"
-        icon: "https://autobrr.com/img/logo.png"
-        displayData:
-          hideForGuests: true
-        url: "https://autobrr.home.ashudev.com"
         target: "newtab"
       - title: "The Lounge"
         icon: "https://raw.githubusercontent.com/thelounge/thelounge.github.io/master/assets/logos/logo/TL_Grey%26Yellow_Vertical_logotype_Transparent_Bg/TL_Grey%26Yellow_Vertical_logotype_Transparent_Bg.png"
