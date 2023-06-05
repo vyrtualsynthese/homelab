@@ -1,5 +1,24 @@
++ Switch ultrafaststorage to raid 0
+  + Put tdarr cache to ultrafaststorage
++ Setup Minio
+  + Backup of longhorn
+  + Change restic backup to Minio
+  + Backup Minio to S3
++ Hardware
+  + Configure 10g switch
+  + Plex/bittorrent machin
+    + NVME as root Storage
+    + SATA SSD for longhorn
+    + GPU as backup nvenc encode for plex
+  + Backup nas
+    + Big HDD
+    + Minio as docker compose
+  + Rackable Nas case
+    + compact
+    + lot of space for HDD
+    + Sata expension card
+  + Find solution for r/w heavy applications for temporary files
 + Apps
-  + Matrix Stack
   + factorio server
   + Doc
     + Implement https://docusaurus.io/ for documentation
@@ -12,38 +31,19 @@
     + Implement Solution
   + https://www.curseforge.com/minecraft/mc-mods/plan-player-analytics
 + Admin
-  + improve limit
-  + Implement better storage
   + Steam api pull games list to merged rss feed
   + Ansible
-    + Install NFS server
-    + Setup folders
-    + Setup exports in file
-    + Export
-    + Install TRIM dependency
-    + Set TRIM CRON JOB
-    + Install MergerFS
-    + Setup mergerfs
-  + Ansible update rbp1 docker images via docker pull
-  + smartools send webhook
-  + Ansible
     + Install ZSH to every nodes
-    + Write Ansible runner setup script
     + Automate all operations
   + Fluentd + Loki for log management
 + Hardware
-  + New RJ45 lines
-  + Replace rbps Master node with Intel Nuc
-    + 1 additional ssd for Intel Nuc
   + KVM
     + PiKVM
++ Setup Prometheus exporter for raspberry pi
+  + Pihole Exporter
+  + Wireguard Exporter
 
-+ Readme
-
-
-
-
-
++ Readme~~~~
 
 + global databases ?
 

@@ -163,7 +163,7 @@
         owner: "{{ ansible_ssh_user }}"
         group: "{{ ansible_ssh_user }}"
         mode: '0550'
-      when: inventory_hostname != "rbp1"
+      when: inventory_hostname != "rbp1" or inventory_hostname != "rbp0"
 
     - name: Import backup script
       ansible.builtin.copy:
@@ -172,7 +172,7 @@
         owner: "{{ ansible_ssh_user }}"
         group: "{{ ansible_ssh_user }}"
         mode: '0550'
-      when: inventory_hostname == "rbp1"
+      when: inventory_hostname == "rbp1" or inventory_hostname == "rbp0"
 
     - name: Create Cronjob for remote backup
       ansible.builtin.cron:

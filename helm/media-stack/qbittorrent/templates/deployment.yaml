@@ -28,6 +28,9 @@ spec:
           - 1.1.1.1
           - 1.0.0.1
       volumes:
+        - name: qbittorrent-vpn-config-volume
+          persistentVolumeClaim:
+            claimName: qbittorrent-vpn-config
         - name: qbittorrent-config-volume
           persistentVolumeClaim:
             claimName: qbittorrent-config
@@ -57,74 +60,22 @@ spec:
             capabilities: # Needed for VPN
               add:
                 - NET_ADMIN
+                - SYS_MODULE
+            privileged: true
           image: "{{ .Values.vpnimage.repository }}:{{ .Values.vpnimage.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.vpnimage.pullPolicy }}
           env:
-            - name: VPN_SERVICE_PROVIDER
-              value: "custom"
-            - name: FIREWALL
-              value: "off"
-            - name: VPN_TYPE
-              value: "wireguard"
-            - name: VPN_ENDPOINT_IP
-              value: "193.32.126.69"
-            - name: WIREGUARD_PUBLIC_KEY
-              value: "E/KjR7nlFouuRXh1pwGDr7iK2TAZ6c4K0LjjmA1A2Tc="
-            - name: WIREGUARD_PRIVATE_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: mullvad
-                  key: WIREGUARD_PRIVATE_KEY
-            - name: WIREGUARD_ADDRESSES
-              valueFrom:
-                secretKeyRef:
-                  name: mullvad
-                  key: WIREGUARD_ADDRESSES
-            #- name: "SERVER_HOSTNAMES"
-            #  valueFrom:
-            #    secretKeyRef:
-            #      name: mullvad
-            #      key: SERVER_HOSTNAMES
-            #- name: "SERVER_COUNTRIES"
-            #  value: "France"
-            #- name: "SERVER_CITIES"
-            #  value: "Paris"
-            #- name: "OWNED_ONLY"
-            #  value: "yes"
-            #- name: "ISP"
-            #  value: "31173"
-            - name: "FIREWALL_VPN_INPUT_PORTS"
-              valueFrom:
-                secretKeyRef:
-                  name: mullvad
-                  key: FIREWALL_VPN_INPUT_PORTS
-            - name: "FIREWALL_INPUT_PORTS"
-              valueFrom:
-                secretKeyRef:
-                  name: mullvad
-                  key: FIREWALL_INPUT_PORTS
-            - name: "DOT"
-              value: "off"
-            - name: "DOT_IPV6"
-              value: "off"
-            - name: "DOT_PROVIDERS"
-              value: "google"
-            - name: "HEALTH_TARGET_ADDRESS"
-              value: "cloudflare.com:443"
-            - name: "BLOCK_MALICIOUS"
-              value: "off"
-            - name: "HEALTH_VPN_DURATION_INITIAL"
-              value: "30s"
-            - name: "HEALTH_VPN_DURATION_ADDITION"
-              value: "10s"
-            - name: "VPN_ENDPOINT_PORT"
-              valueFrom:
-                secretKeyRef:
-                  name: mullvad
-                  key: VPN_ENDPOINT_PORT
+            - name: "PUID"
+              value: "0"
+            - name: "PGID"
+              value: "0"
+            - name: "TZ"
+              value: "Europe/Paris"
           volumeMounts:
             - name: "dev-tun"
               mountPath: "/dev/net/tun"
+            - name: qbittorrent-vpn-config-volume
+              mountPath: /config
           resources:
             {{- toYaml .Values.vpnresources | nindent 12 }}
         - name: {{ .Chart.Name }}
@@ -148,10 +99,10 @@ spec:
             - name: torrent-webui
               containerPort: 8080
             - name: torrent
-              containerPort: 59565
+              containerPort: 19691
               protocol: TCP
             - name: torrent-udp
-              containerPort: 59565
+              containerPort: 19691
               protocol: UDP
       {{- with .Values.nodeSelector }}
       nodeSelector:

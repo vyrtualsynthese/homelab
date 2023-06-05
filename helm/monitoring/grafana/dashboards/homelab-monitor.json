@@ -1962,7 +1962,7 @@
         "orientation": "auto",
         "reduceOptions": {
           "calcs": [
-            "max"
+            "lastNotNull"
           ],
           "fields": "",
           "values": false
@@ -1980,13 +1980,29 @@
             "uid": "PBFA97CFB590B2093"
           },
           "editorMode": "code",
-          "expr": "round(\r\n  100 *\r\n    sum(\r\n      rate(container_cpu_usage_seconds_total{image!=\"\", container_name!=\"POD\"}[5m])\r\n    ) by (container)\r\n      /\r\n    sum(\r\n      container_spec_cpu_quota{image!=\"\", container_name!=\"POD\"} / container_spec_cpu_period{image!=\"\", container_name!=\"POD\"}\r\n    ) by (container)\r\n)",
-          "legendFormat": "__auto",
+          "exemplar": false,
+          "expr": "100 - ((node_filesystem_avail_bytes{mountpoint=~\"/|/mnt.*\",fstype!=\"rootfs\"} * 100) / node_filesystem_size_bytes{mountpoint=~\"/|/mnt.*\",fstype!=\"rootfs\"})",
+          "format": "time_series",
+          "instant": false,
+          "legendFormat": "{{kubernetes_node}}: {{mountpoint}}",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Pod CPU Usage",
+      "title": "Node CPU Usage",
+      "transformations": [
+        {
+          "id": "sortBy",
+          "options": {
+            "fields": {},
+            "sort": [
+              {
+                "field": "Time"
+              }
+            ]
+          }
+        }
+      ],
       "type": "stat"
     },
     {
@@ -2072,7 +2088,7 @@
     "list": []
   },
   "time": {
-    "from": "now-1h",
+    "from": "now-24h",
     "to": "now"
   },
   "timepicker": {},

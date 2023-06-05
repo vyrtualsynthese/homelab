@@ -45,10 +45,82 @@
       notify:
         - restart sshd
 
+    - name: change journal config for 1G max log
+      template:
+        src: 'scripts/template/journald.conf'
+        dest: '/etc/systemd/journald.conf'
+
+    - name: install required packages from apt
+      apt:
+        pkg:
+          - open-iscsi
+          - nfs-common
+          - original-awk
+          - jq
+
+- hosts: runner
+  remote_user: vronteix
+  become: yes
+  tasks:
+
+
+    # Setup Docker
+    - name: Add Docker GPG apt Key
+      apt_key:
+        url: https://download.docker.com/linux/ubuntu/gpg
+        state: present
+
+    - name: Add Docker Repository
+      apt_repository:
+        repo: deb https://download.docker.com/linux/ubuntu focal stable
+        state: present
+
+    - name: Update apt and install docker-ce
+      apt:
+        name: docker-ce
+        state: latest
+        update_cache: true
+
+    - name: Creates directory
+      file:
+        path: /home/vronteix/dockers
+        state: directory
+        recurse: yes
+
+    - name: Copy docker-compose.yml
+      ansible.builtin.copy:
+        src: templates/runners/{{ inventory_hostname }}/docker-compose.yml
+        dest: /home/vronteix/dockers/docker-compose.yml
+
+    - name: Start Docker Compose
+      ansible.builtin.shell: docker compose up -d
+      args:
+        chdir: /home/vronteix/dockers
+
+    # For rbp
+      # Wireguard
+      # Download Configuration files localy
+      # In the future, push configuration file to minio
+
+    # Push Pihole Config
+    # Setup Addlists for Pi Hole
+
+
+    # For Nas
+    # Install mergerFS
+    # Push fstab and Export config
+    # LVM or Raid modules and partitionning should not be Automation.
+
+
   handlers:
     - name: restart sshd
       service:
         name: sshd
+        state: restarted
+
+    - name: reload systemd-journald
+      service:
+        name: systemd-journald
         state: restarted
 
   # configure log rotate
