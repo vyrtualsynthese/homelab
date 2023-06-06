@@ -1,0 +1,74 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "fullname" . }}
+  labels:
+    {{- include "labels" . | nindent 4 }}
+spec:
+  schedule: "0 5 * * *"
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 1
+  concurrencyPolicy: Replace
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+            - name: {{ include "fullname" . }}
+              image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+              imagePullPolicy: {{ .Values.image.pullPolicy }}
+              env:
+                - name: "PRIMARY_HOST_BASE_URL"
+                  value: "http://192.168.1.22"
+                - name: "PRIMARY_HOST_PASSWORD"
+                  valueFrom:
+                    secretKeyRef:
+                      name: orbitalsync
+                      key: PRIMARY_HOST_PASSWORD
+                - name: "SECONDARY_HOST_1_BASE_URL"
+                  value: "http://192.168.1.38"
+                - name: "SECONDARY_HOST_1_PASSWORD"
+                  valueFrom:
+                    secretKeyRef:
+                      name: orbitalsync
+                      key: SECONDARY_HOST_1_PASSWORD
+                - name: "UPDATE_GRAVITY"
+                  value: "true"
+                - name: "SYNC_WHITELIST"
+                  value: "true"
+                - name: "SYNC_REGEX_WHITELIST"
+                  value: "true"
+                - name: "SYNC_BLACKLIST"
+                  value: "true"
+                - name: "SYNC_REGEXLIST"
+                  value: "true"
+                - name: "SYNC_ADLIST"
+                  value: "true"
+                - name: "SYNC_CLIENT"
+                  value: "true"
+                - name: "SYNC_GROUP"
+                  value: "true"
+                - name: "SYNC_AUDITLOG"
+                  value: "true"
+                - name: "SYNC_STATICDHCPLEASES"
+                  value: "true"
+                - name: "SYNC_LOCALDNSRECORDS"
+                  value: "true"
+                - name: "SYNC_LOCALCNAMERECORDS"
+                  value: "true"
+                - name: "SYNC_FLUSHTABLES"
+                  value: "true"
+                - name: "RUN_ONCE"
+                  value: "true"
+              resources:
+                {{- toYaml .Values.resources | nindent 16 }}
+          restartPolicy: OnFailure
+          affinity:
+            nodeAffinity:
+              requiredDuringSchedulingIgnoredDuringExecution:
+                nodeSelectorTerms:
+                  - matchExpressions:
+                      - key: kubernetes.io/hostname
+                        operator: NotIn
+                        values:
+                          - nas

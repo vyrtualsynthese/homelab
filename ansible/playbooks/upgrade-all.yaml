@@ -19,5 +19,16 @@
 
     - name: Upgrade Restic
       ansible.builtin.command: restic self-update
+      register: resticStdout
+      changed_when:
+        - resticStdout.stdout.find('is up to') == -1
 
-    # Upgrade docker compose
+- hosts: runner
+  remote_user: vronteix
+  become: yes
+
+  tasks:
+    - name: Upgrade docker compse if needed
+      community.docker.docker_compose:
+        pull: true
+        project_src: /home/vronteix/dockers

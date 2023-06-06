@@ -4,7 +4,7 @@ dist
 .env
 .terraform
 db
-keys
+ansible/playbooks/keys
 *.pub
 helm/overviewer/minecraft-server
 helm/overviewer/render

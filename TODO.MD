@@ -1,3 +1,8 @@
++ Ansible
+  + Upgrade all improvement (read comments)
+  + setup node improvement (read comments)
+  + Improve backup setup
+  + Setup Script for Gaming PC
 + Switch ultrafaststorage to raid 0
   + Put tdarr cache to ultrafaststorage
 + Setup Minio
@@ -23,6 +28,10 @@
   + Doc
     + Implement https://docusaurus.io/ for documentation
     + https://github.com/factoriotools/factorio-docker
+      + Write guide for Media stack usage
+      + Write guide for book upload and read Usage
+      + List of available services
+      + Password protected
   + Inventory System
   + https://snipeitapp.com/
   + Photo management system
