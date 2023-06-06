@@ -63,7 +63,6 @@
   become: yes
   tasks:
 
-
     # Setup Docker
     - name: Add Docker GPG apt Key
       apt_key:
@@ -81,6 +80,15 @@
         state: latest
         update_cache: true
 
+    - name: Install pip3
+      apt:
+        pkg:
+          - python3-pip
+
+    - name: Install docker-compose pip3 module
+      ansible.builtin.pip:
+        name: docker-compose
+
     - name: Creates directory
       file:
         path: /home/vronteix/dockers
@@ -92,25 +100,53 @@
         src: templates/runners/{{ inventory_hostname }}/docker-compose.yml
         dest: /home/vronteix/dockers/docker-compose.yml
 
-    - name: Start Docker Compose
-      ansible.builtin.shell: docker compose up -d
-      args:
-        chdir: /home/vronteix/dockers
+    - name: Up docker compose
+      community.docker.docker_compose:
+        state: present
+        project_src: /home/vronteix/dockers
+
+    - name: Prepare Wireguard config to download
+      community.general.archive:
+        path:
+          - /home/vronteix/dockers/config/peer*
+        dest: /home/vronteix/wireguard-config.tar.gz
+        format: gz
+
+    - name: Download wireguard peer folders localy
+      ansible.builtin.fetch:
+        src: "/home/vronteix/wireguard-config.tar.gz"
+        dest: "{{ playbook_dir }}/templates/runners/{{ inventory_hostname }}/config/wireguard/wireguard-config.tar.gz"
+        flat: yes
+
+    - name: Remove wireguard config on remote
+      ansible.builtin.file:
+        path: /home/vronteix/wireguard-config.tar.gz
+        state: absent
+
+- name: localhost
+  hosts: localhost
+  tasks:
+    - name: Extract wireguard config files to folder
+      ansible.builtin.unarchive:
+        src: "{{ playbook_dir }}/templates/runners/{{ item }}/config/wireguard/wireguard-config.tar.gz"
+        dest: "{{ playbook_dir }}/templates/runners/{{ item }}/config/wireguard/"
+      loop: "{{ query('inventory_hostnames', 'runner') }}"
+
+    - name: Remove wireguard.tar.gz locally
+      ansible.builtin.file:
+        path: "{{ playbook_dir }}/templates/runners/{{ item }}/config/wireguard/wireguard-config.tar.gz"
+        state: absent
+      loop: "{{ query('inventory_hostnames', 'runner') }}"
 
     # For rbp
       # Wireguard
-      # Download Configuration files localy
       # In the future, push configuration file to minio
 
-    # Push Pihole Config
     # Setup Addlists for Pi Hole
-
 
     # For Nas
     # Install mergerFS
     # Push fstab and Export config
-    # LVM or Raid modules and partitionning should not be Automation.
-
 
   handlers:
     - name: restart sshd
@@ -122,6 +158,3 @@
       service:
         name: systemd-journald
         state: restarted
-
-  # configure log rotate
-  # Configure systemd journal logs size

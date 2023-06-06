@@ -1,6 +1,8 @@
 init:
-	ansible-galaxy collection install ansible.posix
-	ansible-galaxy collection install community.crypto
+	ansible-galaxy collection install ansible.posix -f
+	ansible-galaxy collection install community.crypto -f
+	ansible-galaxy collection install community.docker -f
+	ansible-galaxy collection install community.general -f
 
 setup-node:
 	ansible-playbook playbooks/setup-node.yaml -kK

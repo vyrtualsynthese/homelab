@@ -16,7 +16,6 @@ services:
     environment:
       TZ: 'Europe/Paris'
       WEBPASSWORD: ''
-      WEBPASSWORD: ''
     # Volumes store your data between container upgrades
     volumes:
       - './etc-pihole:/etc/pihole'
