@@ -1,8 +1,9 @@
 rbp0:
-  password: "XXX"
+  awsAccessKey:
+  awsSecretKey:
 rbp1:
-  password: "XXX"
+  awsAccessKey:
+  awsSecretKey:
 xps13:
-  password: "XXX"
-nas:
-  password: "XXX"
+  awsAccessKey:
+  awsSecretKey:

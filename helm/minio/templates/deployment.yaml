@@ -39,16 +39,29 @@ spec:
             {{- toYaml .Values.securityContext | nindent 12 }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command:
+            - /bin/bash
+            - -c
+          args:
+            - minio server /data --console-address :9090
           ports:
-            - name: radarr-webui
-              containerPort: 7878
+            - name: minio-api
+              containerPort: 9000
+            - name: minio-webui
+              containerPort: 9090
           env:
-            - name: "TZ"
-              value: "Europe/Paris"
-            - name: "PUID"
-              value: "0"
-            - name: "PGID"
-              value: "0"
+            - name: "MINIO_ROOT_USER"
+              valueFrom:
+                secretKeyRef:
+                  name: minio
+                  key: MINIO_ROOT_USER
+            - name: "MINIO_ROOT_PASSWORD"
+              valueFrom:
+                secretKeyRef:
+                  name: minio
+                  key: MINIO_ROOT_PASSWORD
+            - name: "MINIO_VOLUMES"
+              value: "/data"
 
           resources:
             {{- toYaml .Values.resources | nindent 12 }}

@@ -123,6 +123,16 @@
         path: /home/vronteix/wireguard-config.tar.gz
         state: absent
 
+- hosts: xps13
+  remote_user: vronteix
+  become: yes
+
+  tasks:
+    - name: install sqlite3 for master node backup
+      apt:
+        pkg:
+          - sqlite3
+
 - name: localhost
   hosts: localhost
   tasks:

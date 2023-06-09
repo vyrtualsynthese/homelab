@@ -20,9 +20,14 @@ spec:
   entryPoints:
     - web
   routes:
-    - match: Host(`radarr.app.local`)
+    - match: Host(`minio.app.local`)
       kind: Rule
       services:
-        - name: radarr
-          port: radarr-webui
+        - name: minio
+          port: minio-webui
+    - match: Host(`minio.api.app.local`)
+      kind: Rule
+      services:
+        - name: minio
+          port: minio-api
 {{- end }}
