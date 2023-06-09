@@ -20,13 +20,18 @@ spec:
   entryPoints:
     - websecure
   routes:
-    - match: Host(`radarr.home.ashudev.com`)
+    - match: Host(`minio.home.ashudev.com`)
       kind: Rule
       services:
-        - name: radarr
-          port: radarr-webui
+        - name: minio
+          port: minio-webui
+    - match: Host(`minio.api.home.ashudev.com`)
+      kind: Rule
+      services:
+        - name: minio
+          port: minio-api
   tls:
     certResolver: myresolver
     options:
-      name: radarr-tlsoption
+      name: minio-tlsoption
 {{- end }}
