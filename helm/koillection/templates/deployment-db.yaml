@@ -43,6 +43,13 @@ spec:
               value: "root"
             - name: "POSTGRES_PASSWORD"
               value: "root"
+          lifecycle:
+            preStop:
+              exec:
+                command:
+                  - /bin/sh
+                  - "-c"
+                  - "su - postgres -c '/var/lib/postgresql/data/pg_ctl stop -D /var/lib/postgresql/data'"
           volumeMounts:
             - name: koillection-db
               mountPath: /var/lib/postgresql/data
@@ -76,7 +83,7 @@ spec:
             - name: koillection-db
               mountPath: /var/lib/postgresql/data
               subPath: db
-      terminationGracePeriodSeconds: 60
+      terminationGracePeriodSeconds: 600
       {{- with .Values.db.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

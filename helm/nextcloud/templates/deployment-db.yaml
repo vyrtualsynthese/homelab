@@ -53,6 +53,17 @@ spec:
                 secretKeyRef:
                   name: nextcloud-postgres
                   key: POSTGRES_USER
+          lifecycle:
+            preStop:
+              exec:
+                command:
+                  - /bin/sh
+                  - "-c"
+                  - "su - postgres -c '/var/lib/postgresql/data/pg_ctl stop -D /var/lib/postgresql/data'"
+          #command:
+          #  - /bin/sh
+          #  - "-c"
+          #  - "sleep 60m"
           resources:
             {{- toYaml .Values.db.resources | nindent 12 }}
           volumeMounts:
@@ -97,7 +108,7 @@ spec:
             - name: nextcloud-db-volume
               mountPath: /var/lib/postgresql/data
               subPath: postgres-data
-      terminationGracePeriodSeconds: 300
+      terminationGracePeriodSeconds: 600
       {{- with .Values.db.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

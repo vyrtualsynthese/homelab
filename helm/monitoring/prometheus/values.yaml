@@ -48,8 +48,8 @@ alertmanager:
   ##
   image:
     repository: quay.io/prometheus/alertmanager
-    tag: v0.24.0
-    pullPolicy: IfNotPresent
+    tag: v0.25.0
+    pullPolicy: Always
 
   ## alertmanager priorityClassName
   ##
@@ -367,9 +367,9 @@ configmapReload:
     ## configmap-reload container image
     ##
     image:
-      repository: jimmidyson/configmap-reload
-      tag: v0.5.0
-      pullPolicy: IfNotPresent
+      repository: ghcr.io/jimmidyson/configmap-reload
+      tag: v0.11.1
+      pullPolicy: Always
 
     ## Additional configmap-reload container arguments
     ##
@@ -405,9 +405,9 @@ configmapReload:
     ## configmap-reload container image
     ##
     image:
-      repository: jimmidyson/configmap-reload
-      tag: v0.5.0
-      pullPolicy: IfNotPresent
+      repository: ghcr.io/jimmidyson/configmap-reload
+      tag: v0.11.1
+      pullPolicy: Always
 
     ## Additional configmap-reload container arguments
     ##
@@ -467,8 +467,8 @@ nodeExporter:
   ##
   image:
     repository: quay.io/prometheus/node-exporter
-    tag: v1.3.1
-    pullPolicy: IfNotPresent
+    tag: v1.6.0
+    pullPolicy: Always
 
   ## Specify if a Pod Security Policy for node-exporter must be created
   ## Ref: https://kubernetes.io/docs/concepts/policy/pod-security-policy/
@@ -642,8 +642,8 @@ server:
   ##
   image:
     repository: quay.io/prometheus/prometheus
-    tag: v2.36.2
-    pullPolicy: IfNotPresent
+    tag: v2.44.0
+    pullPolicy: Always
 
   ## prometheus server priorityClassName
   ##
@@ -1095,8 +1095,8 @@ pushgateway:
   ##
   image:
     repository: prom/pushgateway
-    tag: v1.4.3
-    pullPolicy: IfNotPresent
+    tag: v1.6.0
+    pullPolicy: Always
 
   ## pushgateway priorityClassName
   ##

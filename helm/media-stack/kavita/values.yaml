@@ -8,7 +8,7 @@ image:
   repository: kizaing/kavita
   pullPolicy: Always
   # Overrides the image tag whose default is the chart appVersion.
-  tag: latest
+  tag: 0.7.3
 
 imagePullSecrets: []
 nameOverride: ""
@@ -62,7 +62,7 @@ resources:
     cpu: 15m
     memory: 256Mi
   limits:
-    memory: 512Mi
+    memory: 1024Mi
 
 autoscaling:
   enabled: false

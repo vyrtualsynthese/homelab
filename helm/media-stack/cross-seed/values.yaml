@@ -8,7 +8,7 @@ image:
   repository: crossseed/cross-seed
   pullPolicy: Always
   # Overrides the image tag whose default is the chart appVersion.
-  tag: latest
+  tag: version-5.2.0
 
 imagePullSecrets: []
 nameOverride: ""
@@ -62,7 +62,7 @@ resources:
     cpu: 10m
     memory: 128Mi
   limits:
-    memory: 256Mi
+    memory: 512Mi
 
 autoscaling:
   enabled: false

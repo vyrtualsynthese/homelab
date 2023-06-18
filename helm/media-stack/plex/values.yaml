@@ -9,7 +9,7 @@ image:
   repository: plexinc/pms-docker
   pullPolicy: Always
   # Overrides the image tag whose default is the chart appVersion.
-  tag: latest
+  tag: 1.32.3.7192-7aa441827
 
 imagePullSecrets: []
 nameOverride: ""
@@ -62,7 +62,7 @@ resources:
     cpu: 100m
     memory: 1024Mi
   limits:
-    memory: 12000Mi
+    memory: 24000Mi
     #gpu.intel.com/i915: "1"
   # We usually recommend not to specify default resources and to leave this as a conscious
   # choice for the user. This also increases chances charts run on environments with little
