@@ -1,17 +1,10 @@
 + Setup Minio
   + Create account for Terraform main
-  + Bucket for nodes backup
-  + Bucket for Longhorn Backup
-  + Backup of longhorn
-  + Change restic backup to Minio
   + Backup Minio to S3
-+ Migrate all backups to Minio
 + Terraform to manage PV, namespaces, storage class
 + Terraform
   + Job to apply kubectl commands via terraform
     + Job to apply Helm via terraform
-+ Github actions to use Wireguard VPN to connect to kubernetes cluster
-  + Terraform to push some secrets
 + Ansible
   + Install ZSH to every nodes
 + Fluentd + Loki for log management

@@ -14,6 +14,20 @@ db:
   nameOverride: "nextcloud-db"
   fullnameOverride: "nextcloud-db"
 
+  #https://hub.docker.com/r/prodrigestivill/postgres-backup-local#how-the-backups-folder-works
+  backup:
+    image:
+      repository: prodrigestivill/postgres-backup-local
+      pullPolicy: Always
+      # Overrides the image tag whose default is the chart appVersion.
+      tag: latest
+    resources:
+      limits:
+        memory: 8Mi
+      requests:
+        cpu: 1m
+        memory: 1Mi
+
   serviceAccount:
     # Specifies whether a service account should be created
     create: false

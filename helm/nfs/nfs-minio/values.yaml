@@ -11,9 +11,12 @@ nfs:
   server: 192.168.1.41
   path: /mnt/storage/minio
   mountOptions:
-    - nfsvers=4.1
+    - nfsvers=4.2
+    - rsize=1048576
+    - wsize=1048576
     - nolock
     - async
+
   volumeName: minio-nfs
   # Reclaim policy for the main nfs volume
   reclaimPolicy: Retain
@@ -103,7 +106,8 @@ resources: {}
   #  cpu: 100m
   #  memory: 128Mi
 
-nodeSelector: {}
+nodeSelector:
+  kubernetes.io/hostname: nas
 
 tolerations: []
 

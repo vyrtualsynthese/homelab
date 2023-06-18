@@ -683,6 +683,8 @@ server:
 
   extraFlags:
     - web.enable-lifecycle
+    - storage.tsdb.wal-compression
+    - storage.tsdb.retention.size=100GB
     ## web.enable-admin-api flag controls access to the administrative HTTP API which includes functionality such as
     ## deleting time series. This is disabled by default.
     # - web.enable-admin-api
@@ -1073,7 +1075,7 @@ server:
 
   ## Prometheus data retention period (default if not specified is 15 days)
   ##
-  retention: "15d"
+  retention: "1y"
 
 pushgateway:
   ## If false, pushgateway will not be installed
@@ -1371,11 +1373,32 @@ serverFiles:
       - job_name: traefik
         static_configs:
           - targets:
-            - traefik.kube-system.svc.cluster.local:9100
+            - traefik.kube-system.svc.cluster.local:9101
+      - job_name: longhorn
+        static_configs:
+          - targets:
+              - longhorn-backend.longhorn-system.svc.cluster.local:9500
       - job_name: qbittorrent
         static_configs:
           - targets:
-              - qbittorrent-exporter.plex.svc.cluster.local:17871
+              - qbittorrent-exporter.media-stack.svc.cluster.local:17871
+
+      - job_name: rbp0
+        static_configs:
+          - targets:
+              - 192.168.1.22:9100
+
+      - job_name: rbp1
+        static_configs:
+          - targets:
+              - 192.168.1.38:9100
+
+      - job_name: minio-backup
+        bearer_token: eyJhbGciOiJIUzUxMiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJwcm9tZXRoZXVzIiwic3ViIjoiYWRtaW4iLCJleHAiOjQ4NDAwODM4NjF9.-jDSM45QM-A6djPXWa8VXey-WfXCNCprANNvoZOeU6DtmsiAGbfxQsjmDJ-4fG0BA4XQ3EvYdD6M-bYJLFGz-w
+        metrics_path: /minio/v2/metrics/cluster
+        scheme: http
+        static_configs:
+          - targets: [ minio.minio.svc.cluster.local:9000 ]
 
       # A scrape configuration for running Prometheus on a Kubernetes cluster.
       # This uses separate scrape configs for cluster components (i.e. API server, node)

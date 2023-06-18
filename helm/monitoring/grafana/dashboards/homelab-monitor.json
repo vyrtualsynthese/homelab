@@ -111,13 +111,19 @@
         "showThresholdMarkers": true,
         "text": {}
       },
-      "pluginVersion": "9.4.7",
+      "pluginVersion": "9.5.2",
       "targets": [
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "editorMode": "code",
           "exemplar": true,
           "expr": "(((count(count(node_cpu_seconds_total) by (cpu, instance))) - avg(sum by (mode)(rate(node_cpu_seconds_total{mode='idle'}[$__rate_interval])))) * 100) / count(count(node_cpu_seconds_total) by (cpu, instance))",
           "interval": "",
           "legendFormat": "",
+          "range": true,
           "refId": "A"
         }
       ],
@@ -179,7 +185,7 @@
         "showThresholdMarkers": true,
         "text": {}
       },
-      "pluginVersion": "9.4.7",
+      "pluginVersion": "9.5.2",
       "targets": [
         {
           "exemplar": true,
@@ -256,7 +262,7 @@
         "showThresholdMarkers": true,
         "text": {}
       },
-      "pluginVersion": "9.4.7",
+      "pluginVersion": "9.5.2",
       "targets": [
         {
           "datasource": {
@@ -265,7 +271,8 @@
           },
           "editorMode": "code",
           "exemplar": true,
-          "expr": "(sum(((100 - ((node_filesystem_avail_bytes{fstype!=\"ext4\"} * 100) / (node_filesystem_size_bytes{fstype!=\"ext4\"})))))/ (count(count(node_filesystem_size_bytes) by (instance))))",
+          "expr": "sum(sum(node_filesystem_avail_bytes{device=~\"/dev.*\"}) / sum(node_filesystem_size_bytes{device=~\"/dev.*\"})*100)",
+          "hide": false,
           "interval": "",
           "legendFormat": "",
           "range": true,
@@ -342,7 +349,7 @@
         "showThresholdMarkers": true,
         "text": {}
       },
-      "pluginVersion": "9.4.7",
+      "pluginVersion": "9.5.2",
       "targets": [
         {
           "exemplar": true,
@@ -418,7 +425,7 @@
         "text": {},
         "textMode": "auto"
       },
-      "pluginVersion": "9.4.7",
+      "pluginVersion": "9.5.2",
       "targets": [
         {
           "exemplar": true,
@@ -478,7 +485,7 @@
         "text": {},
         "textMode": "auto"
       },
-      "pluginVersion": "9.4.7",
+      "pluginVersion": "9.5.2",
       "targets": [
         {
           "exemplar": true,
@@ -555,7 +562,7 @@
         "text": {},
         "textMode": "auto"
       },
-      "pluginVersion": "9.4.7",
+      "pluginVersion": "9.5.2",
       "targets": [
         {
           "exemplar": true,
@@ -629,7 +636,7 @@
         "text": {},
         "textMode": "auto"
       },
-      "pluginVersion": "9.4.7",
+      "pluginVersion": "9.5.2",
       "targets": [
         {
           "exemplar": true,
@@ -705,19 +712,25 @@
         "text": {},
         "textMode": "auto"
       },
-      "pluginVersion": "9.4.7",
+      "pluginVersion": "9.5.2",
       "targets": [
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "editorMode": "code",
           "exemplar": true,
-          "expr": "sum (container_fs_usage_bytes)",
+          "expr": "sum (node_filesystem_avail_bytes{device=~\"/dev.*\"})",
           "interval": "10s",
           "intervalFactor": 1,
           "legendFormat": "",
+          "range": true,
           "refId": "A",
           "step": 10
         }
       ],
-      "title": "Disk Used",
+      "title": "Disk Available",
       "type": "stat"
     },
     {
@@ -767,7 +780,7 @@
         },
         "textMode": "auto"
       },
-      "pluginVersion": "9.4.7",
+      "pluginVersion": "9.5.2",
       "targets": [
         {
           "datasource": {
@@ -776,7 +789,7 @@
           },
           "editorMode": "code",
           "exemplar": true,
-          "expr": "sum(node_filesystem_size_bytes{fstype=\"ext4\"})",
+          "expr": "sum(node_filesystem_size_bytes{device=~\"/dev.*\"})",
           "interval": "",
           "legendFormat": "__auto",
           "range": true,
@@ -833,7 +846,7 @@
         "text": {},
         "textMode": "auto"
       },
-      "pluginVersion": "9.4.7",
+      "pluginVersion": "9.5.2",
       "targets": [
         {
           "exemplar": true,
@@ -905,7 +918,7 @@
         "text": {},
         "textMode": "auto"
       },
-      "pluginVersion": "9.4.7",
+      "pluginVersion": "9.5.2",
       "targets": [
         {
           "exemplar": true,
@@ -948,7 +961,7 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 7,
+        "h": 3,
         "w": 6,
         "x": 0,
         "y": 12
@@ -970,15 +983,33 @@
         "text": {},
         "textMode": "value_and_name"
       },
-      "pluginVersion": "9.4.7",
+      "pluginVersion": "9.5.2",
       "targets": [
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "editorMode": "code",
           "exemplar": true,
-          "expr": "100 - (avg by (kubernetes_node) (rate(node_cpu_seconds_total{mode=\"idle\"}[$__rate_interval])) * 100)",
+          "expr": "100 - (avg by (kubernetes_node) (rate(node_cpu_seconds_total{mode=\"idle\",kubernetes_node=~\"nuc0|xps-13|nas\"}[$__rate_interval])) * 100)",
           "interval": "",
           "intervalFactor": 1,
           "legendFormat": "{{kubernetes_node}}",
+          "range": true,
           "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "editorMode": "code",
+          "expr": "100 - (avg by (job) (rate(node_cpu_seconds_total{mode=\"idle\",job!~\"kubernetes-service-endpoints\"}[$__rate_interval])) * 100)",
+          "hide": false,
+          "legendFormat": "{{job}}",
+          "range": true,
+          "refId": "B"
         }
       ],
       "title": "CPU Usage",
@@ -1019,7 +1050,7 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 7,
+        "h": 3,
         "w": 6,
         "x": 6,
         "y": 12
@@ -1040,14 +1071,32 @@
         "text": {},
         "textMode": "auto"
       },
-      "pluginVersion": "9.4.7",
+      "pluginVersion": "9.5.2",
       "targets": [
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "editorMode": "code",
           "exemplar": true,
-          "expr": "node_memory_MemAvailable_bytes",
+          "expr": "node_memory_MemAvailable_bytes{kubernetes_node=~\"nuc0|xps-13|nas\"}",
           "interval": "",
           "legendFormat": "{{kubernetes_node}}",
+          "range": true,
           "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "editorMode": "code",
+          "expr": "node_memory_MemAvailable_bytes{job=~\"rbp0|rbp1\"}",
+          "hide": false,
+          "legendFormat": "{{job}}",
+          "range": true,
+          "refId": "B"
         }
       ],
       "title": "Node Ram Free",
@@ -1086,7 +1135,7 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 7,
+        "h": 3,
         "w": 6,
         "x": 12,
         "y": 12
@@ -1107,7 +1156,7 @@
         "text": {},
         "textMode": "auto"
       },
-      "pluginVersion": "9.4.7",
+      "pluginVersion": "9.5.2",
       "targets": [
         {
           "datasource": {
@@ -1116,11 +1165,23 @@
           },
           "editorMode": "code",
           "exemplar": true,
-          "expr": "sum by (kubernetes_node) (node_filesystem_avail_bytes{mountpoint=\"/\",fstype!=\"rootfs\"})",
+          "expr": "sum by (kubernetes_node) (node_filesystem_avail_bytes{device=~\"/dev.*\",fstype!=\"rootfs\",kubernetes_node=~\"nuc0|xps-13|nas\"})",
           "interval": "",
           "legendFormat": "{{kubernetes_node}}",
           "range": true,
           "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "editorMode": "code",
+          "expr": "sum by (job) (node_filesystem_avail_bytes{device=~\"/dev.*\",fstype!=\"rootfs\",job=~\"rbp0|rbp1\"})",
+          "hide": false,
+          "legendFormat": "{{job}}",
+          "range": true,
+          "refId": "B"
         }
       ],
       "title": "Node Disk Usage",
@@ -1155,7 +1216,7 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 7,
+        "h": 3,
         "w": 6,
         "x": 18,
         "y": 12
@@ -1176,14 +1237,32 @@
         "text": {},
         "textMode": "auto"
       },
-      "pluginVersion": "9.4.7",
+      "pluginVersion": "9.5.2",
       "targets": [
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "editorMode": "code",
           "exemplar": true,
-          "expr": "node_memory_SwapTotal_bytes - node_memory_SwapFree_bytes",
+          "expr": "node_memory_SwapTotal_bytes{kubernetes_node=~\"nuc0|xps-13|nas\"} - node_memory_SwapFree_bytes{kubernetes_node=~\"nuc0|xps-13|nas\"}",
           "interval": "",
           "legendFormat": "{{kubernetes_node}}",
+          "range": true,
           "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "editorMode": "code",
+          "expr": "node_memory_SwapTotal_bytes{job=~\"rbp0|rbp1\"} - node_memory_SwapFree_bytes{job=~\"rbp0|rbp1\"}",
+          "hide": false,
+          "legendFormat": "{{job}}",
+          "range": true,
+          "refId": "B"
         }
       ],
       "title": "Used Swap",
@@ -1230,7 +1309,7 @@
         "h": 6,
         "w": 12,
         "x": 0,
-        "y": 19
+        "y": 15
       },
       "id": 34,
       "options": {
@@ -1248,16 +1327,33 @@
         "text": {},
         "textMode": "auto"
       },
-      "pluginVersion": "9.4.7",
+      "pluginVersion": "9.5.2",
       "targets": [
         {
-          "expr": "max(node_network_up) by (kubernetes_node)",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "editorMode": "code",
+          "expr": "max(node_network_up{kubernetes_node=~\"nuc0|xps-13|nas\"}) by (kubernetes_node)",
           "format": "time_series",
           "instant": false,
           "interval": "",
           "intervalFactor": 1,
           "legendFormat": "{{kubernetes_node}}",
           "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "editorMode": "code",
+          "expr": "max(node_network_up{job=~\"rbp0|rbp1\"}) by (job)",
+          "hide": false,
+          "legendFormat": "{{job}}",
+          "range": true,
+          "refId": "B"
         }
       ],
       "timeFrom": "30s",
@@ -1299,7 +1395,7 @@
         "h": 6,
         "w": 12,
         "x": 12,
-        "y": 19
+        "y": 15
       },
       "id": 36,
       "options": {
@@ -1317,17 +1413,34 @@
         "text": {},
         "textMode": "value_and_name"
       },
-      "pluginVersion": "9.4.7",
+      "pluginVersion": "9.5.2",
       "targets": [
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "editorMode": "code",
           "exemplar": true,
-          "expr": "sum(node_thermal_zone_temp{zone=\"0\"}) by (kubernetes_node)",
+          "expr": "sum(node_thermal_zone_temp{zone=\"0\",kubernetes_node=~\"nuc0|xps-13|nas\"}) by (kubernetes_node)",
           "format": "time_series",
           "instant": false,
           "interval": "",
           "intervalFactor": 1,
           "legendFormat": "{{kubernetes_node}}",
           "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "editorMode": "code",
+          "expr": "sum(node_thermal_zone_temp{zone=\"0\",job=~\"rbp0|rbp1\"}) by (job)",
+          "hide": false,
+          "legendFormat": "{{job}}",
+          "range": true,
+          "refId": "B"
         }
       ],
       "title": "Node Temp",
@@ -1399,7 +1512,7 @@
         "h": 10,
         "w": 24,
         "x": 0,
-        "y": 25
+        "y": 21
       },
       "id": 42,
       "interval": "1m",
@@ -1510,7 +1623,7 @@
         "h": 10,
         "w": 24,
         "x": 0,
-        "y": 35
+        "y": 31
       },
       "id": 44,
       "interval": "15s",
@@ -1623,7 +1736,7 @@
         "h": 11,
         "w": 24,
         "x": 0,
-        "y": 45
+        "y": 41
       },
       "id": 46,
       "interval": "1m",
@@ -1767,7 +1880,7 @@
         "h": 13,
         "w": 24,
         "x": 0,
-        "y": 56
+        "y": 52
       },
       "id": 48,
       "options": {
@@ -1873,7 +1986,7 @@
         "h": 9,
         "w": 24,
         "x": 0,
-        "y": 69
+        "y": 65
       },
       "id": 52,
       "options": {
@@ -1952,7 +2065,7 @@
         "h": 13,
         "w": 24,
         "x": 0,
-        "y": 78
+        "y": 74
       },
       "id": 54,
       "options": {
@@ -1972,7 +2085,7 @@
         },
         "textMode": "value_and_name"
       },
-      "pluginVersion": "9.4.7",
+      "pluginVersion": "9.5.2",
       "targets": [
         {
           "datasource": {
@@ -2041,7 +2154,7 @@
         "h": 13,
         "w": 24,
         "x": 0,
-        "y": 91
+        "y": 87
       },
       "id": 56,
       "options": {
@@ -2061,7 +2174,7 @@
         },
         "textMode": "auto"
       },
-      "pluginVersion": "9.4.7",
+      "pluginVersion": "9.5.2",
       "targets": [
         {
           "datasource": {
@@ -2088,7 +2201,7 @@
     "list": []
   },
   "time": {
-    "from": "now-24h",
+    "from": "now-5m",
     "to": "now"
   },
   "timepicker": {},
