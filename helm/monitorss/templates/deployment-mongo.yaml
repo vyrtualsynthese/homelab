@@ -31,7 +31,7 @@ spec:
       securityContext:
         {{- toYaml .Values.mongo.podSecurityContext | nindent 8 }}
       containers:
-        - name: {{ .Chart.Name }}
+        - name: {{ .Chart.Name }}-mongo
           image: "{{ .Values.mongo.image.repository }}:{{ .Values.mongo.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.mongo.image.pullPolicy }}
           resources:

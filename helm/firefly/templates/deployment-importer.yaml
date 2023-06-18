@@ -1,0 +1,63 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "importer.fullname" . }}
+  labels:
+    {{- include "importer.labels" . | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "importer.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      {{- with .Values.importer.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "importer.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.importer.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "importer.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.importer.podSecurityContext | nindent 8 }}
+      containers:
+        - name: {{ .Chart.Name }}-importer
+          securityContext:
+            {{- toYaml .Values.importer.securityContext | nindent 12 }}
+          image: "{{ .Values.importer.image.repository }}:{{ .Values.importer.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.importer.image.pullPolicy }}
+          env:
+            - name: "FIREFLY_III_URL"
+              value: "http://firefly-app:8080"
+            - name: "FIREFLY_III_ACCESS_TOKEN"
+              valueFrom:
+                secretKeyRef:
+                  name: firefly-importer
+                  key: FIREFLY_III_ACCESS_TOKEN
+            - name: "TZ"
+              value: "Europe/Paris"
+            - name: "NORDIGEN_ID"
+              value: "mjw1cGkKrWDsESSPSeiXxttFfN4ts9SB"
+            - name: "NORDIGEN_KEY"
+              value: "nito6Y-LpSzRFZhBpkfYAFfGNaQ8mAcFnfuRjJXusxhhIjUU_ZId_IwVOhJQBMt9"
+          ports:
+            - name: firefly-import
+              containerPort: 8080
+          resources:
+            {{- toYaml .Values.importer.resources | nindent 12 }}
+      {{- with .Values.importer.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.importer.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.importer.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

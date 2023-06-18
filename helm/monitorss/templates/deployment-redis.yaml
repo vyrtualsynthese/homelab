@@ -27,7 +27,7 @@ spec:
       securityContext:
         {{- toYaml .Values.redis.podSecurityContext | nindent 8 }}
       containers:
-        - name: {{ .Chart.Name }}
+        - name: {{ .Chart.Name }}-redis
           image: "{{ .Values.redis.image.repository }}:{{ .Values.redis.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.redis.image.pullPolicy }}
           resources:

@@ -50,6 +50,32 @@ spec:
           ports:
             - name: db
               containerPort: 5432
+        - name: {{ .Chart.Name }}-backup
+          image: "{{ .Values.db.backup.image.repository }}:{{ .Values.db.backup.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.db.backup.image.pullPolicy }}
+          resources:
+            {{- toYaml .Values.db.backup.resources | nindent 12 }}
+          env:
+            - name: "POSTGRES_HOST"
+              value: "localhost"
+            - name: "POSTGRES_DB"
+              value: "koillection"
+            - name: "POSTGRES_USER"
+              value: "root"
+            - name: "POSTGRES_PASSWORD"
+              value: "root"
+            - name: "BACKUP_DIR"
+              value: "/var/lib/postgresql/data/backup"
+            - name: "BACKUP_KEEP_DAYS"
+              value: "7"
+            - name: "BACKUP_KEEP_WEEKS"
+              value: "4"
+            - name: "BACKUP_KEEP_MONTHS"
+              value: "1"
+          volumeMounts:
+            - name: koillection-db
+              mountPath: /var/lib/postgresql/data
+              subPath: db
       terminationGracePeriodSeconds: 60
       {{- with .Values.db.nodeSelector }}
       nodeSelector:

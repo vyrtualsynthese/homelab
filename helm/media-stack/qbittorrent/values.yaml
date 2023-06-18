@@ -68,7 +68,7 @@ resources:
     cpu: 200m
     memory: 1024Mi
   limits:
-    memory: 5000Mi
+    memory: 16000Mi
 
 vpnresources:
   requests:

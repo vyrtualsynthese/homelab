@@ -1,0 +1,104 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "app.fullname" . }}
+  labels:
+    {{- include "app.labels" . | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "app.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      {{- with .Values.app.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "app.selectorLabels" . | nindent 8 }}
+    spec:
+      volumes:
+        - name: firefly-config-volume
+          persistentVolumeClaim:
+            claimName: firefly-config
+      {{- with .Values.app.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "app.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.app.podSecurityContext | nindent 8 }}
+      containers:
+        - name: {{ .Chart.Name }}-app
+          securityContext:
+            {{- toYaml .Values.app.securityContext | nindent 12 }}
+          image: "{{ .Values.app.image.repository }}:{{ .Values.app.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.app.image.pullPolicy }}
+          ports:
+            - name: firefly-app
+              containerPort: 8080
+          env:
+            - name: "APP_ENV"
+              value: "local"
+            - name: "APP_DEBUG"
+              value: "false"
+            - name: "SITE_OWNER"
+              value: "valentin.ronteix@ashudev.com"
+            - name: "APP_KEY"
+              valueFrom:
+                secretKeyRef:
+                  name: firefly-app
+                  key: APP_KEY
+            - name: "DEFAULT_LANGUAGE"
+              value: "en_US"
+            - name: "DEFAULT_LOCALE"
+              value: "equal"
+            - name: "TZ"
+              value: "Europe/Paris"
+            - name: "TRUSTED_PROXIES"
+              value: "**"
+            - name: "DB_CONNECTION"
+              value: "pgsql"
+            - name: "DB_HOST"
+              value: "firefly-db"
+            - name: "DB_PORT"
+              value: "5432"
+            - name: "DB_DATABASE"
+              valueFrom:
+                secretKeyRef:
+                  name: firefly-db
+                  key: DB_DATABASE
+            - name: "DB_USERNAME"
+              valueFrom:
+                secretKeyRef:
+                  name: firefly-db
+                  key: DB_USERNAME
+            - name: "DB_PASSWORD"
+              valueFrom:
+                secretKeyRef:
+                  name: firefly-db
+                  key: DB_PASSWORD
+            - name: "STATIC_CRON_TOKEN"
+              valueFrom:
+                secretKeyRef:
+                  name: firefly-app
+                  key: STATIC_CRON_TOKEN
+            - name: "APP_URL"
+              value: "https://firefly.home.ashudev.com"
+          resources:
+            {{- toYaml .Values.app.resources | nindent 12 }}
+          volumeMounts:
+            - name: firefly-config-volume
+              mountPath: /var/www/html/storage/upload
+      {{- with .Values.app.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.app.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.app.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

@@ -1,0 +1,31 @@
+{{- if .Values.importer.ingress.enabled -}}
+{{- $fullName := include "importer.fullname" . -}}
+{{- if and .Values.app.ingress.className (not (semverCompare ">=1.18-0" .Capabilities.KubeVersion.GitVersion)) }}
+  {{- if not (hasKey .Values.importer.ingress.annotations "kubernetes.io/ingress.class") }}
+  {{- $_ := set .Values.importer.ingress.annotations "kubernetes.io/ingress.class" .Values.app.ingress.className}}
+  {{- end }}
+{{- end }}
+apiVersion: traefik.containo.us/v1alpha1
+kind: IngressRoute
+metadata:
+  name: {{ $fullName }}-public
+  labels:
+    {{- include "importer.labels" . | nindent 4 }}
+  {{- with .Values.importer.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`firefly.importer.home.ashudev.com`)
+      kind: Rule
+      services:
+        - name: firefly-importer
+          port: firefly-import
+  tls:
+    certResolver: myresolver
+    options:
+      name: firefly-importer-tlsoption
+{{- end }}

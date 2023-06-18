@@ -1,0 +1,53 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "cron.fullname" . }}
+  labels:
+    {{- include "cron.labels" . | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "cron.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      {{- with .Values.cron.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "cron.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.cron.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "cron.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.cron.podSecurityContext | nindent 8 }}
+      containers:
+        - name: {{ .Chart.Name }}-cron
+          securityContext:
+            {{- toYaml .Values.cron.securityContext | nindent 12 }}
+          image: "{{ .Values.cron.image.repository }}:{{ .Values.cron.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.cron.image.pullPolicy }}
+          env:
+            - name: "STATIC_CRON_TOKEN"
+              valueFrom:
+                secretKeyRef:
+                  name: firefly-app
+                  key: STATIC_CRON_TOKEN
+          command: ["sh -c 'echo \'0 3 * * * wget -qO- http://app:8080/api/v1/cron/$STATIC_CRON_TOKEN\' | crontab - && crond -f -L /dev/stdout'"]
+          resources:
+            {{- toYaml .Values.cron.resources | nindent 12 }}
+      {{- with .Values.cron.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.cron.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.cron.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

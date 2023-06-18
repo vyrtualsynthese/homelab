@@ -26,23 +26,38 @@ spec:
             namespace: kube-system
         # TLS options (e.g. secret containing certificate)
         # tls: {}
-    
+      metrics:
+        enabled: true
+        # Additional ingressRoute annotations (e.g. for kubernetes.io/ingress.class)
+        annotations: {}
+        # Additional ingressRoute labels (e.g. for filtering IngressRoute by custom labels)
+        labels: {}
+        # The router match rule used for the dashboard ingressRoute
+        matchRule: Host(`traefik.app.local`) && (PathPrefix(`/metrics`))
+        # Specify the allowed entrypoints to use for the dashboard ingress route, (e.g. traefik, web, websecure).
+        # By default, it's using traefik entrypoint, which is not exposed.
+        # /!\ Do not expose your dashboard without any protection over the internet /!\
+        entryPoints: ["web"]
+        # TLS options (e.g. secret containing certificate)
+        # tls: {}
+
     metrics:
-    # When using hostNetwork, use another port to avoid conflict with node exporter:
-    # https://github.com/prometheus/prometheus/wiki/Default-port-allocations
-      port: 9100
-    # hostPort: 9100
-    # Defines whether the port is exposed if service.type is LoadBalancer or
-    # NodePort.
-    #
-    # You may not want to expose the metrics port on production deployments.
-    # If you want to access it from outside of your cluster,
-    # use `kubectl port-forward` or create a secure ingress
-      expose: true
-    # The exposed port for this service
-      exposedPort: 9100
-    # The port protocol (TCP/UDP)
-      protocol: TCP
+      ## -- Prometheus is enabled by default.
+      ## -- It can be disabled by setting "prometheus: null"
+      prometheus:
+        # -- Entry point used to expose metrics.
+        entryPoint: metrics
+        ## Enable metrics on entry points. Default=true
+        # addEntryPointsLabels: false
+        ## Enable metrics on routers. Default=false
+        # addRoutersLabels: true
+        ## Enable metrics on services. Default=true
+        # addServicesLabels: false
+        ## Buckets for latency metrics. Default="0.1,0.3,1.2,5.0"
+        # buckets: "0.5,1.0,2.5"
+        ## When manualRouting is true, it disables the default internal router in
+        ## order to allow creating a custom router for prometheus@internal service.
+        # manualRouting: true
 
     certResolvers:
       myresolver:
@@ -108,7 +123,23 @@ spec:
         proxyProtocol:
         #   trustedIPs: []
           insecure: true
-    
+      metrics:
+      # When using hostNetwork, use another port to avoid conflict with node exporter:
+      # https://github.com/prometheus/prometheus/wiki/Default-port-allocations
+        port: 9100
+      # hostPort: 9100
+      # Defines whether the port is exposed if service.type is LoadBalancer or
+      # NodePort.
+      #
+      # You may not want to expose the metrics port on production deployments.
+      # If you want to access it from outside of your cluster,
+      # use `kubectl port-forward` or create a secure ingress
+        expose: true
+      # The exposed port for this service
+        exposedPort: 9101
+      # The port protocol (TCP/UDP)
+        protocol: TCP
+
     persistence:
       enabled: true
       name: data

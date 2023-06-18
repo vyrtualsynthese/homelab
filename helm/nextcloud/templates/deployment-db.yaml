@@ -28,14 +28,6 @@ spec:
       serviceAccountName: {{ include "nextcloud.db.serviceAccountName" . }}
       securityContext:
         {{- toYaml .Values.db.podSecurityContext | nindent 8 }}
-{{/*      initContainers:*/}}
-{{/*        - name: init-nextcloud-nginx-config*/}}
-{{/*          image: postgres:14.2-alpine*/}}
-{{/*          command: [ 'sh', '-c', "sleep 9000" ]*/}}
-{{/*          volumeMounts:*/}}
-{{/*            - name: nextcloud-db-volume*/}}
-{{/*              mountPath: /var/lib/postgresql/data*/}}
-{{/*              subPath: postgres-data*/}}
       containers:
         - name: {{ .Chart.Name }}-db
           securityContext:
@@ -45,18 +37,6 @@ spec:
           ports:
             - name: postgres
               containerPort: 5432
-{{/*          livenessProbe:*/}}
-{{/*            exec:*/}}
-{{/*              command:*/}}
-{{/*                - "pg_isready -d nextcloud-postgres -U nextcloud-postgres"*/}}
-{{/*            failureThreshold: 5*/}}
-{{/*            periodSeconds: 10*/}}
-{{/*          startupProbe:*/}}
-{{/*            exec:*/}}
-{{/*              command:*/}}
-{{/*                - "pg_isready -d nextcloud-postgres -U nextcloud-postgres"*/}}
-{{/*            failureThreshold: 10*/}}
-{{/*            periodSeconds: 10*/}}
           env:
             - name: "POSTGRES_PASSWORD"
               valueFrom:
@@ -75,6 +55,44 @@ spec:
                   key: POSTGRES_USER
           resources:
             {{- toYaml .Values.db.resources | nindent 12 }}
+          volumeMounts:
+            - name: nextcloud-db-volume
+              mountPath: /var/lib/postgresql/data
+              subPath: postgres-data
+
+        - name: {{ .Chart.Name }}-db-backup
+          securityContext:
+            {{- toYaml .Values.db.securityContext | nindent 12 }}
+          image: "{{ .Values.db.backup.image.repository }}:{{ .Values.db.backup.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.db.backup.image.pullPolicy }}
+          env:
+            - name: "POSTGRES_HOST"
+              value: "localhost"
+            - name: "POSTGRES_DB"
+              valueFrom:
+                secretKeyRef:
+                  name: nextcloud-postgres
+                  key: POSTGRES_DB
+            - name: "POSTGRES_USER"
+              valueFrom:
+                secretKeyRef:
+                  name: nextcloud-postgres
+                  key: POSTGRES_USER
+            - name: "POSTGRES_PASSWORD"
+              valueFrom:
+                secretKeyRef:
+                  name: nextcloud-postgres
+                  key: POSTGRES_PASSWORD
+            - name: "BACKUP_DIR"
+              value: "/var/lib/postgresql/data/backup"
+            - name: "BACKUP_KEEP_DAYS"
+              value: "7"
+            - name: "BACKUP_KEEP_WEEKS"
+              value: "4"
+            - name: "BACKUP_KEEP_MONTHS"
+              value: "1"
+          resources:
+            {{- toYaml .Values.db.backup.resources | nindent 12 }}
           volumeMounts:
             - name: nextcloud-db-volume
               mountPath: /var/lib/postgresql/data
