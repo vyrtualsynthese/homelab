@@ -9,13 +9,13 @@ image:
   repository: ghcr.io/haveagitgat/tdarr
   pullPolicy: Always
   # Overrides the image tag whose default is the chart appVersion.
-  tag: latest
+  tag: 2.00.21
 
 imageNode:
   repository: ghcr.io/haveagitgat/tdarr_node
   pullPolicy: Always
   # Overrides the image tag whose default is the chart appVersion.
-  tag: latest
+  tag: 2.00.21
 
 imagePullSecrets: []
 nameOverride: ""
@@ -68,14 +68,14 @@ resources:
     cpu: 200m
     memory: 2048Mi
   limits:
-    memory: 12000Mi
+    memory: 24000Mi
 
 resourcesNodeNas:
   requests:
     cpu: 1m
     memory: 1024Mi
   limits:
-    memory: 8000Mi
+    memory: 12000Mi
     gpu.intel.com/i915: "1"
 
 resourcesNodeNuc:
@@ -83,7 +83,7 @@ resourcesNodeNuc:
     cpu: 1m
     memory: 1024Mi
   limits:
-    memory: 8000Mi
+    memory: 12000Mi
     gpu.intel.com/i915: "1"
 
 resourcesNodeXps13:

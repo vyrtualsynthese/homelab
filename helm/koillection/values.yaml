@@ -8,7 +8,7 @@ app:
     repository: koillection/koillection
     pullPolicy: Always
     # Overrides the image tag whose default is the chart appVersion.
-    tag: latest
+    tag: 1.4.6
 
   imagePullSecrets: []
   nameOverride: "koillection-app"
@@ -93,7 +93,7 @@ db:
     repository: postgres
     pullPolicy: Always
     # Overrides the image tag whose default is the chart appVersion.
-    tag: latest
+    tag: 15.3-alpine3.18
 
   imagePullSecrets: []
   nameOverride: "koillection-db"

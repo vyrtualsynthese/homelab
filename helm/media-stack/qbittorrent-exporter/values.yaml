@@ -8,7 +8,7 @@ image:
   repository: caseyscarborough/qbittorrent-exporter
   pullPolicy: Always
   # Overrides the image tag whose default is the chart appVersion.
-  tag: latest
+  tag: v1.3.2
 
 imagePullSecrets: []
 nameOverride: ""

@@ -8,7 +8,7 @@ image:
   repository: bobokun/qbit_manage
   pullPolicy: Always
   # Overrides the image tag whose default is the chart appVersion.
-  tag: latest
+  tag: v4.0.1
 
 imagePullSecrets: []
 nameOverride: ""

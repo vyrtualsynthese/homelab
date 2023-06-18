@@ -5,10 +5,10 @@
 replicaCount: 1
 
 image:
-  repository: linuxserver/overseerr
+  repository: lscr.io/linuxserver/overseerr
   pullPolicy: Always
   # Overrides the image tag whose default is the chart appVersion.
-  tag: latest
+  tag: v1.33.0-ls68
 
 imagePullSecrets: []
 nameOverride: ""

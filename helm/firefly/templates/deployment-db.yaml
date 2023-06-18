@@ -53,6 +53,13 @@ spec:
                 secretKeyRef:
                   name: firefly-db
                   key: DB_USERNAME
+          lifecycle:
+            preStop:
+              exec:
+                command:
+                  - /bin/sh
+                  - "-c"
+                  - "su - postgres -c '/var/lib/postgresql/data/pg_ctl stop -D /var/lib/postgresql/data'"
           resources:
             {{- toYaml .Values.db.resources | nindent 12 }}
           volumeMounts:
@@ -97,7 +104,7 @@ spec:
             - name: firefly-db-volume
               mountPath: /var/lib/postgresql/data
               subPath: postgres-data
-      terminationGracePeriodSeconds: 300
+      terminationGracePeriodSeconds: 600
       {{- with .Values.db.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

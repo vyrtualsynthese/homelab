@@ -84,10 +84,10 @@ livenessProbe:
 # schedulerName: "default-scheduler"
 
 image:
-  repository: grafana/grafana
-  tag: latest
+  repository: grafana/grafana-oss
+  tag: 10.0.0
   sha: ""
-  pullPolicy: IfNotPresent
+  pullPolicy: Always
 
   ## Optionally specify an array of imagePullSecrets.
   ## Secrets must be manually created in the namespace.

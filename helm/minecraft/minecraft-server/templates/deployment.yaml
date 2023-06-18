@@ -78,10 +78,8 @@ spec:
               value: "30"
             - name: ENABLE_ROLLING_LOGS
               value: "true"
-            - name: SPIGET_RESOURCES
-              value: "390"
             - name: MODS
-              value: "https://dev.bukkit.org/projects/multiverse-netherportals/files/3687506/download,https://dev.bukkit.org/projects/multiverse-portals/files/3113114/download"
+              value: "https://dev.bukkit.org/projects/multiverse-core/files/3462546/download,https://dev.bukkit.org/projects/multiverse-netherportals/files/3687506/download,https://dev.bukkit.org/projects/multiverse-portals/files/3113114/download"
           ports:
             - name: mc
               containerPort: 25565

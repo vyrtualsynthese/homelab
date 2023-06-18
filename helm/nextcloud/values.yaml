@@ -8,7 +8,7 @@ db:
     repository: postgres
     pullPolicy: IfNotPresent
     # Overrides the image tag whose default is the chart appVersion.
-    tag: 14-alpine
+    tag: 14.8-alpine3.18
 
   imagePullSecrets: []
   nameOverride: "nextcloud-db"
@@ -106,7 +106,7 @@ redis:
     repository: redis
     pullPolicy: IfNotPresent
     # Overrides the image tag whose default is the chart appVersion.
-    tag: 6.2.7-alpine
+    tag: 7.0.11-alpine3.18
 
   imagePullSecrets: []
   nameOverride: "nextcloud-redis"
@@ -180,7 +180,7 @@ app:
     repository: nextcloud
     pullPolicy: IfNotPresent
     # Overrides the image tag whose default is the chart appVersion.
-    tag: fpm-alpine
+    tag: 27.0.0-fpm-alpine
 
   imagePullSecrets: []
   nameOverride: "nextcloud-app"
@@ -251,7 +251,7 @@ web:
     repository: nginx
     pullPolicy: IfNotPresent
     # Overrides the image tag whose default is the chart appVersion.
-    tag: 1.22.0-alpine
+    tag: 1.25.1-alpine3.17
 
   imagePullSecrets: []
   nameOverride: "nextcloud-web"
@@ -335,7 +335,7 @@ cron:
     repository: nextcloud
     pullPolicy: IfNotPresent
     # Overrides the image tag whose default is the chart appVersion.
-    tag: fpm-alpine
+    tag: 27.0.0-fpm-alpine
 
   imagePullSecrets: []
   nameOverride: "nextcloud-cron"

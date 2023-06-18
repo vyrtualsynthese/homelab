@@ -5,10 +5,10 @@
 replicaCount: 1
 
 image:
-  repository: linuxserver/bazarr
+  repository: lscr.io/linuxserver/bazarr
   pullPolicy: Always
   # Overrides the image tag whose default is the chart appVersion.
-  tag: latest
+  tag: v1.2.1-ls199
 
 imagePullSecrets: []
 nameOverride: ""

@@ -5,10 +5,10 @@
 replicaCount: 1
 
 image:
-  repository: registry.hub.docker.com/itzg/minecraft-server
+  repository: itzg/minecraft-server
   pullPolicy: Always
   # Overrides the image tag whose default is the chart appVersion.
-  tag: latest
+  tag: 2023.4.1-java20-alpine
 
 imagePullSecrets: []
 nameOverride: ""
