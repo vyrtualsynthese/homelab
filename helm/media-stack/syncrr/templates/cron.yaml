@@ -1,0 +1,150 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "fullname" . }}
+  labels:
+    {{- include "labels" . | nindent 4 }}
+spec:
+  schedule: "0 5 * * *"
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 1
+  concurrencyPolicy: Replace
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          volumes:
+            - name: plex-media-volume
+              persistentVolumeClaim:
+                claimName: pvc-plex-media
+          containers:
+            - name: {{ include "fullname" . }}-movies-hd
+              image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+              imagePullPolicy: {{ .Values.image.pullPolicy }}
+              env:
+                - name: "SRC_FOLDER_0"
+                  value: "/data/movies"
+                - name: "DST_FOLDER_0"
+                  value: "/data/movies-hd"
+                - name: "LOG_LEVEL"
+                  value: "INFO"
+              resources:
+                {{- toYaml .Values.resources | nindent 16 }}
+              volumeMounts:
+                - name: plex-media-volume
+                  mountPath: /data
+            - name: {{ include "fullname" . }}-movies-sd
+              image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+              imagePullPolicy: {{ .Values.image.pullPolicy }}
+              env:
+                - name: "SRC_FOLDER_0"
+                  value: "/data/movies"
+                - name: "DST_FOLDER_0"
+                  value: "/data/movies-sd"
+                - name: "LOG_LEVEL"
+                  value: "INFO"
+              resources:
+                {{- toYaml .Values.resources | nindent 16 }}
+              volumeMounts:
+                - name: plex-media-volume
+                  mountPath: /data
+            - name: {{ include "fullname" . }}-anime-movies-hd
+              image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+              imagePullPolicy: {{ .Values.image.pullPolicy }}
+              env:
+                - name: "SRC_FOLDER_0"
+                  value: "/data/anime-movies"
+                - name: "DST_FOLDER_0"
+                  value: "/data/anime-movies-hd"
+                - name: "LOG_LEVEL"
+                  value: "INFO"
+              resources:
+                {{- toYaml .Values.resources | nindent 16 }}
+              volumeMounts:
+                - name: plex-media-volume
+                  mountPath: /data
+            - name: {{ include "fullname" . }}-anime-movies-sd
+              image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+              imagePullPolicy: {{ .Values.image.pullPolicy }}
+              env:
+                - name: "SRC_FOLDER_0"
+                  value: "/data/anime-movies"
+                - name: "DST_FOLDER_0"
+                  value: "/data/anime-movies-sd"
+                - name: "LOG_LEVEL"
+                  value: "INFO"
+              resources:
+                {{- toYaml .Values.resources | nindent 16 }}
+              volumeMounts:
+                - name: plex-media-volume
+                  mountPath: /data
+            - name: {{ include "fullname" . }}-series-hd
+              image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+              imagePullPolicy: {{ .Values.image.pullPolicy }}
+              env:
+                - name: "SRC_FOLDER_0"
+                  value: "/data/series"
+                - name: "DST_FOLDER_0"
+                  value: "/data/series-hd"
+                - name: "LOG_LEVEL"
+                  value: "INFO"
+              resources:
+                {{- toYaml .Values.resources | nindent 16 }}
+              volumeMounts:
+                - name: plex-media-volume
+                  mountPath: /data
+            - name: {{ include "fullname" . }}-series-sd
+              image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+              imagePullPolicy: {{ .Values.image.pullPolicy }}
+              env:
+                - name: "SRC_FOLDER_0"
+                  value: "/data/series"
+                - name: "DST_FOLDER_0"
+                  value: "/data/series-sd"
+                - name: "LOG_LEVEL"
+                  value: "INFO"
+              resources:
+                {{- toYaml .Values.resources | nindent 16 }}
+              volumeMounts:
+                - name: plex-media-volume
+                  mountPath: /data
+            - name: {{ include "fullname" . }}-anime-hd
+              image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+              imagePullPolicy: {{ .Values.image.pullPolicy }}
+              env:
+                - name: "SRC_FOLDER_0"
+                  value: "/data/anime"
+                - name: "DST_FOLDER_0"
+                  value: "/data/anime-hd"
+                - name: "LOG_LEVEL"
+                  value: "INFO"
+              resources:
+                {{- toYaml .Values.resources | nindent 16 }}
+              volumeMounts:
+                - name: plex-media-volume
+                  mountPath: /data
+            - name: {{ include "fullname" . }}-anime-sd
+              image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+              imagePullPolicy: {{ .Values.image.pullPolicy }}
+              env:
+                - name: "SRC_FOLDER_0"
+                  value: "/data/anime"
+                - name: "DST_FOLDER_0"
+                  value: "/data/anime-sd"
+                - name: "LOG_LEVEL"
+                  value: "INFO"
+              resources:
+                {{- toYaml .Values.resources | nindent 16 }}
+              volumeMounts:
+                - name: plex-media-volume
+                  mountPath: /data
+          restartPolicy: OnFailure
+          affinity:
+            nodeAffinity:
+              requiredDuringSchedulingIgnoredDuringExecution:
+                nodeSelectorTerms:
+                  - matchExpressions:
+                      - key: kubernetes.io/hostname
+                        operator: NotIn
+                        values:
+                          - nas

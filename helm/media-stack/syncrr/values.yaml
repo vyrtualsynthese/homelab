@@ -5,10 +5,10 @@
 replicaCount: 1
 
 image:
-  repository: vyrtualsynthese/srt-moving-script
+  repository: vyrtualsynthese/syncrr
   pullPolicy: Always
   # Overrides the image tag whose default is the chart appVersion.
-  tag: multi-arch-latest
+  tag: multi-arch-2d1f907
 
 imagePullSecrets: []
 nameOverride: ""

@@ -33,7 +33,7 @@
         src: templates/runners/{{ inventory_hostname }}/docker-compose.yml
         dest: /home/vronteix/dockers/docker-compose.yml
 
-    - name: Upgrade docker compse if needed
+    - name: Upgrade docker compose if needed
       community.docker.docker_compose:
         pull: true
         project_src: /home/vronteix/dockers

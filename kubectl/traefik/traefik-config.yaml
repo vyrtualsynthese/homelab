@@ -143,7 +143,7 @@ spec:
     persistence:
       enabled: true
       name: data
-      existingClaim: "traefik"
+        existingClaim: "traefik"
       path: /data
 
     service:
