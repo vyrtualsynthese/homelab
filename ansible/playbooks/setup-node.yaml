@@ -100,28 +100,32 @@
         src: templates/runners/{{ inventory_hostname }}/docker-compose.yml
         dest: /home/vronteix/dockers/docker-compose.yml
 
+    - name: Copy netplan config
+      ansible.builtin.copy:
+        src: templates/runners/{{ inventory_hostname }}/50-cloud-init.yaml
+        dest: /etc/netplan/50-cloud-init.yaml
+
+    # Configure local DNS
+    - name: Disable Stub resolver
+      ansible.builtin.command: sed -r -i.orig 's/#?DNSStubListener=yes/DNSStubListener=no/g' /etc/systemd/resolved.conf
+
+    - name: Update Netplan
+      ansible.builtin.command: sh -c 'rm /etc/resolv.conf && ln -s /run/systemd/resolve/resolv.conf /etc/resolv.conf'
+
+    - name: Restart Netplan and make sure it is unmasked and started a boot
+      ansible.builtin.systemd:
+        state: restarted
+        masked: false
+        name: systemd-resolved
+        enabled: true
+
     - name: Up docker compose
       community.docker.docker_compose:
+        remove_orphans: true
         state: present
         project_src: /home/vronteix/dockers
 
-    - name: Prepare Wireguard config to download
-      community.general.archive:
-        path:
-          - /home/vronteix/dockers/config/peer*
-        dest: /home/vronteix/wireguard-config.tar.gz
-        format: gz
 
-    - name: Download wireguard peer folders localy
-      ansible.builtin.fetch:
-        src: "/home/vronteix/wireguard-config.tar.gz"
-        dest: "{{ playbook_dir }}/templates/runners/{{ inventory_hostname }}/config/wireguard/wireguard-config.tar.gz"
-        flat: yes
-
-    - name: Remove wireguard config on remote
-      ansible.builtin.file:
-        path: /home/vronteix/wireguard-config.tar.gz
-        state: absent
 
 - hosts: xps13
   remote_user: vronteix
@@ -147,16 +151,6 @@
         path: "{{ playbook_dir }}/templates/runners/{{ item }}/config/wireguard/wireguard-config.tar.gz"
         state: absent
       loop: "{{ query('inventory_hostnames', 'runner') }}"
-
-    # For rbp
-      # Wireguard
-      # In the future, push configuration file to minio
-
-    # Setup Addlists for Pi Hole
-
-    # For Nas
-    # Install mergerFS
-    # Push fstab and Export config
 
   handlers:
     - name: restart sshd
