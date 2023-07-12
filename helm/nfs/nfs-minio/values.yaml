@@ -3,7 +3,7 @@ strategyType: Recreate
 
 image:
   repository: registry.k8s.io/sig-storage/nfs-subdir-external-provisioner
-  tag: v4.0.2
+  tag: v4.0.18
   pullPolicy: IfNotPresent
 imagePullSecrets: []
 

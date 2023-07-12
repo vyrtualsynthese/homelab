@@ -85,9 +85,9 @@ livenessProbe:
 
 image:
   repository: grafana/grafana-oss
-  tag: 10.0.0
+  tag: 10.0.2
   sha: ""
-  pullPolicy: Always
+  pullPolicy: IfNotPresent
 
   ## Optionally specify an array of imagePullSecrets.
   ## Secrets must be manually created in the namespace.

@@ -6,7 +6,7 @@ replicaCount: 1
 
 image:
   repository: vyrtualsynthese/syncrr
-  pullPolicy: Always
+  pullPolicy: IfNotPresent
   # Overrides the image tag whose default is the chart appVersion.
   tag: multi-arch-2d1f907
 

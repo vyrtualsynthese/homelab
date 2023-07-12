@@ -6,7 +6,7 @@ replicaCount: 1
 
 image:
   repository: quay.io/minio/minio
-  pullPolicy: Always
+  pullPolicy: IfNotPresent
   # Overrides the image tag whose default is the chart appVersion.
   tag: RELEASE.2023-06-16T02-41-06Z
 

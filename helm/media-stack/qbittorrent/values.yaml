@@ -6,15 +6,15 @@ replicaCount: 1
 
 image:
   repository: lscr.io/linuxserver/qbittorrent
-  pullPolicy: Always
+  pullPolicy: IfNotPresent
   # Overrides the image tag whose default is the chart appVersion.
   tag: 4.5.3-r0-ls270
 
 vpnimage:
   repository: lscr.io/linuxserver/wireguard
-  pullPolicy: Always
+  pullPolicy: IfNotPresent
   # Overrides the image tag whose default is the chart appVersion.
-  tag: v1.0.20210914-ls119
+  tag: v1.0.20210914-ls123
 
 imagePullSecrets: []
 nameOverride: ""

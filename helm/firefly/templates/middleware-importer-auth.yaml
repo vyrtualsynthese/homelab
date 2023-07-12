@@ -1,0 +1,9 @@
+apiVersion: traefik.containo.us/v1alpha1
+kind: Middleware
+metadata:
+  name: importer-auth
+  labels:
+    {{- include "importer.labels" . | nindent 4 }}
+spec:
+  basicAuth:
+    secret: importer-auth

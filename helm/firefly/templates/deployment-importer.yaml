@@ -33,6 +33,10 @@ spec:
           env:
             - name: "FIREFLY_III_URL"
               value: "http://firefly-app:8080"
+            - name: "VANITY_URL"
+              value: "https://firefly.home.ashudev.com"
+            - name: "TRUSTED_PROXIES"
+              value: "**"
             - name: "FIREFLY_III_ACCESS_TOKEN"
               valueFrom:
                 secretKeyRef:
@@ -40,10 +44,6 @@ spec:
                   key: FIREFLY_III_ACCESS_TOKEN
             - name: "TZ"
               value: "Europe/Paris"
-            - name: "NORDIGEN_ID"
-              value: "mjw1cGkKrWDsESSPSeiXxttFfN4ts9SB"
-            - name: "NORDIGEN_KEY"
-              value: "nito6Y-LpSzRFZhBpkfYAFfGNaQ8mAcFnfuRjJXusxhhIjUU_ZId_IwVOhJQBMt9"
           ports:
             - name: firefly-import
               containerPort: 8080

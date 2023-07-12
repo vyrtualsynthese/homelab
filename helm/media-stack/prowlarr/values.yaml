@@ -6,9 +6,9 @@ replicaCount: 1
 
 image:
   repository: lscr.io/linuxserver/prowlarr
-  pullPolicy: Always
+  pullPolicy: IfNotPresent
   # Overrides the image tag whose default is the chart appVersion.
-  tag: develop-1.6.0.3527-ls108
+  tag: 1.6.3.3608-ls24
 
 imagePullSecrets: []
 nameOverride: ""

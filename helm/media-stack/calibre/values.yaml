@@ -6,9 +6,9 @@ replicaCount: 1
 
 image:
   repository: lscr.io/linuxserver/calibre
-  pullPolicy: Always
+  pullPolicy: IfNotPresent
   # Overrides the image tag whose default is the chart appVersion.
-  tag: v6.21.0-ls224
+  tag: v6.21.0-ls226
 
 imagePullSecrets: []
 nameOverride: ""

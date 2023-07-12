@@ -36,7 +36,11 @@ spec:
                 secretKeyRef:
                   name: firefly-app
                   key: STATIC_CRON_TOKEN
-          command: ["sh -c 'echo \'0 3 * * * wget -qO- http://app:8080/api/v1/cron/$STATIC_CRON_TOKEN\' | crontab - && crond -f -L /dev/stdout'"]
+          command:
+            - /bin/sh
+            - "-c"
+            - "sleep 60m"
+          #command: ["sh -c 'echo '0 3 * * * wget -qO- http://firefly-app:8080/api/v1/cron/$STATIC_CRON_TOKEN' | crontab - && crond -f -L /dev/stdout'"]
           resources:
             {{- toYaml .Values.cron.resources | nindent 12 }}
       {{- with .Values.cron.nodeSelector }}

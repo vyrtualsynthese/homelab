@@ -6,9 +6,9 @@ replicaCount: 1
 app:
   image:
     repository: koillection/koillection
-    pullPolicy: Always
+    pullPolicy: IfNotPresent
     # Overrides the image tag whose default is the chart appVersion.
-    tag: 1.4.6
+    tag: 1.4.7
 
   imagePullSecrets: []
   nameOverride: "koillection-app"
@@ -91,7 +91,7 @@ app:
 db:
   image:
     repository: postgres
-    pullPolicy: Always
+    pullPolicy: IfNotPresent
     # Overrides the image tag whose default is the chart appVersion.
     tag: 15.3-alpine3.18
 

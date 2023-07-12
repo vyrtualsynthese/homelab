@@ -369,7 +369,7 @@ configmapReload:
     image:
       repository: ghcr.io/jimmidyson/configmap-reload
       tag: v0.11.1
-      pullPolicy: Always
+      pullPolicy: IfNotPresent
 
     ## Additional configmap-reload container arguments
     ##
@@ -468,7 +468,7 @@ nodeExporter:
   image:
     repository: quay.io/prometheus/node-exporter
     tag: v1.6.0
-    pullPolicy: Always
+    pullPolicy: IfNotPresent
 
   ## Specify if a Pod Security Policy for node-exporter must be created
   ## Ref: https://kubernetes.io/docs/concepts/policy/pod-security-policy/
@@ -643,7 +643,7 @@ server:
   image:
     repository: quay.io/prometheus/prometheus
     tag: v2.44.0
-    pullPolicy: Always
+    pullPolicy: IfNotPresent
 
   ## prometheus server priorityClassName
   ##
