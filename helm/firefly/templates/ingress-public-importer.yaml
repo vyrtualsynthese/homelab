@@ -24,6 +24,8 @@ spec:
       services:
         - name: firefly-importer
           port: firefly-import
+      middlewares:
+        - name: importer-auth
   tls:
     certResolver: myresolver
     options:

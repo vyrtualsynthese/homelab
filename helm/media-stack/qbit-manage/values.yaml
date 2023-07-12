@@ -6,9 +6,9 @@ replicaCount: 1
 
 image:
   repository: bobokun/qbit_manage
-  pullPolicy: Always
+  pullPolicy: IfNotPresent
   # Overrides the image tag whose default is the chart appVersion.
-  tag: v4.0.1
+  tag: v4.0.2
 
 imagePullSecrets: []
 nameOverride: ""
