@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "guacd.fullname" . }}
+  labels:
+    {{- include "guacd.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.guacd.service.type }}
+  ports:
+    - port: 8080
+      name: {{ .Chart.Name }}-guacd
+      targetPort: {{ .Chart.Name }}-guacd
+  selector:
+    {{- include "guacd.selectorLabels" . | nindent 4 }}

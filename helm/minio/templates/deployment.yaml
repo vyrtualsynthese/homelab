@@ -65,7 +65,7 @@ spec:
             - name: "MINIO_PROMETHEUS_URL"
               value: "http://prometheus-server.monitoring.svc.cluster.local"
             - name: "MINIO_PROMETHEUS_JOB_ID"
-              value: "minio-backup"
+              value: "minio-job"
 
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
