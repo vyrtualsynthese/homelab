@@ -1,0 +1,30 @@
+{{- if .Values.guacamole.ingress.enabled -}}
+{{- $fullName := include "guacamole.fullname" . -}}
+{{- $svcPort := .Values.guacamole.service.port -}}
+{{- if and .Values.guacamole.ingress.className (not (semverCompare ">=1.18-0" .Capabilities.KubeVersion.GitVersion)) }}
+  {{- if not (hasKey .Values.guacamole.ingress.annotations "kubernetes.io/ingress.class") }}
+  {{- $_ := set .Values.guacamole.ingress.annotations "kubernetes.io/ingress.class" .Values.guacamole.ingress.className}}
+  {{- end }}
+{{- end }}
+apiVersion: traefik.containo.us/v1alpha1
+kind: IngressRoute
+metadata:
+  name: {{ $fullName }}-public-redirect
+  labels:
+    {{- include "guacamole.labels" . | nindent 4 }}
+  {{- with .Values.guacamole.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  entryPoints:
+    - web
+  routes:
+    - match: Host(`guacamole.home.ashudev.com`)
+      kind: Rule
+      services:
+        - name: guacamole
+          port: guacamole
+      middlewares:
+        - name: {{ include "guacamole.fullname" . }}-redirect-https
+{{- end }}

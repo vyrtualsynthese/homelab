@@ -1,0 +1,49 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "guacd.fullname" . }}
+  labels:
+    {{- include "guacd.labels" . | nindent 4 }}
+spec:
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "guacd.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      {{- with .Values.guacd.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "guacd.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.guacd.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "guacd.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.guacd.podSecurityContext | nindent 8 }}
+      containers:
+        - name: {{ .Chart.Name }}-guacd
+          image: "{{ .Values.guacd.image.repository }}:{{ .Values.guacd.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.guacd.image.pullPolicy }}
+          ports:
+            - containerPort: 4822
+              name: {{ .Chart.Name }}-guacd
+          resources:
+            {{- toYaml .Values.guacd.resources | nindent 12 }}
+      {{- with .Values.guacd.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.guacd.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.guacd.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

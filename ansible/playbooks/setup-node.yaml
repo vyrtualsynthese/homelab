@@ -58,6 +58,17 @@
           - original-awk
           - jq
 
+  handlers:
+    - name: restart sshd
+      service:
+        name: sshd
+        state: restarted
+
+    - name: reload systemd-journald
+      service:
+        name: systemd-journald
+        state: restarted
+
 - hosts: runner
   remote_user: vronteix
   become: yes
@@ -100,6 +111,11 @@
         src: templates/runners/{{ inventory_hostname }}/docker-compose.yml
         dest: /home/vronteix/dockers/docker-compose.yml
 
+- hosts: rbp0
+  remote_user: vronteix
+  become: yes
+  tasks:
+
     - name: Copy netplan config
       ansible.builtin.copy:
         src: templates/runners/{{ inventory_hostname }}/50-cloud-init.yaml
@@ -119,13 +135,47 @@
         name: systemd-resolved
         enabled: true
 
+- hosts: rbp1
+  remote_user: vronteix
+  become: yes
+  tasks:
+
+    - name: Compress wg configs
+      community.general.archive:
+        path: /home/vronteix/dockers/config
+        dest: /home/vronteix/dockers/config.tgz
+
+    - name: download wg configs
+      ansible.builtin.fetch:
+        src: /home/vronteix/dockers/config.tgz
+        dest: "{{ playbook_dir }}/templates/runners/rbp1/config/wireguard/config.tgz"
+        flat: true
+
+- hosts: runner
+  remote_user: vronteix
+  become: yes
+  tasks:
+
     - name: Up docker compose
       community.docker.docker_compose:
         remove_orphans: true
         state: present
         project_src: /home/vronteix/dockers
 
+- name: localhost
+  hosts: localhost
+  tasks:
 
+
+    - name: Extract wireguard config files to folder
+      ansible.builtin.unarchive:
+        src: "{{ playbook_dir }}/templates/runners/rbp1/config/wireguard/config.tgz"
+        dest: "{{ playbook_dir }}/templates/runners/rbp1/config/wireguard/"
+
+    - name: Remove wireguard.tar.gz locally
+      ansible.builtin.file:
+        path: "{{ playbook_dir }}/templates/runners/rbp1/config/wireguard/config.tgz"
+        state: absent
 
 - hosts: xps13
   remote_user: vronteix
@@ -136,29 +186,3 @@
       apt:
         pkg:
           - sqlite3
-
-- name: localhost
-  hosts: localhost
-  tasks:
-    - name: Extract wireguard config files to folder
-      ansible.builtin.unarchive:
-        src: "{{ playbook_dir }}/templates/runners/{{ item }}/config/wireguard/wireguard-config.tar.gz"
-        dest: "{{ playbook_dir }}/templates/runners/{{ item }}/config/wireguard/"
-      loop: "{{ query('inventory_hostnames', 'runner') }}"
-
-    - name: Remove wireguard.tar.gz locally
-      ansible.builtin.file:
-        path: "{{ playbook_dir }}/templates/runners/{{ item }}/config/wireguard/wireguard-config.tar.gz"
-        state: absent
-      loop: "{{ query('inventory_hostnames', 'runner') }}"
-
-  handlers:
-    - name: restart sshd
-      service:
-        name: sshd
-        state: restarted
-
-    - name: reload systemd-journald
-      service:
-        name: systemd-journald
-        state: restarted

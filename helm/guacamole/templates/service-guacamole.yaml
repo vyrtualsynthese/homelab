@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "guacamole.fullname" . }}
+  labels:
+    {{- include "guacamole.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.guacamole.service.type }}
+  ports:
+    - port: 8080
+      name: guacamole
+      targetPort: guacamole
+  selector:
+    {{- include "guacamole.selectorLabels" . | nindent 4 }}

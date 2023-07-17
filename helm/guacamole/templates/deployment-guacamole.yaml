@@ -1,0 +1,66 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "guacamole.fullname" . }}
+  labels:
+    {{- include "guacamole.labels" . | nindent 4 }}
+spec:
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "guacamole.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      {{- with .Values.guacamole.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "guacamole.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.guacamole.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "guacamole.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.guacamole.podSecurityContext | nindent 8 }}
+      containers:
+        - name: {{ .Chart.Name }}
+          image: "{{ .Values.guacamole.image.repository }}:{{ .Values.guacamole.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.guacamole.image.pullPolicy }}
+          env:
+            - name: "GUACD_HOSTNAME"
+              value: "guacamole-guacd.guacamole.svc.cluster.local"
+            - name: "POSTGRES_DATABASE"
+              value: "guacamole_db"
+            - name: "POSTGRES_HOSTNAME"
+              value: "guacamole-db.guacamole.svc.cluster.local"
+            - name: "POSTGRES_PASSWORD"
+              valueFrom:
+                secretKeyRef:
+                  name: "guacamole-db"
+                  key: "POSTGRES_PASSWORD"
+            - name: "POSTGRES_USER"
+              valueFrom:
+                secretKeyRef:
+                  name: "guacamole-db"
+                  key: "POSTGRES_USER"
+          ports:
+            - containerPort: 8080
+              name: guacamole
+          resources:
+            {{- toYaml .Values.guacamole.resources | nindent 12 }}
+      {{- with .Values.guacamole.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.guacamole.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.guacamole.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
