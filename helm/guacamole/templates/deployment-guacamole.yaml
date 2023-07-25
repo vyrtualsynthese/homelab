@@ -47,6 +47,8 @@ spec:
                 secretKeyRef:
                   name: "guacamole-db"
                   key: "POSTGRES_USER"
+            - name: "WEBAPP_CONTEXT"
+              value: "ROOT"
           ports:
             - containerPort: 8080
               name: guacamole
