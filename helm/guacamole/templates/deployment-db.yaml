@@ -71,7 +71,7 @@ spec:
                   - "-c"
                   - "su - postgres -c '/var/lib/postgresql/data/pg_ctl stop -D /var/lib/postgresql/data'"
           volumeMounts:
-            - name: koillection-db
+            - name: guacamole-db
               mountPath: /var/lib/postgresql/data
               subPath: db
             - name: guacamole-init
@@ -102,7 +102,7 @@ spec:
             - name: "BACKUP_KEEP_MONTHS"
               value: "1"
           volumeMounts:
-            - name: koillection-db
+            - name: guacamole-db
               mountPath: /var/lib/postgresql/data
               subPath: db
       terminationGracePeriodSeconds: 600

@@ -7,7 +7,7 @@ metadata:
 spec:
   type: {{ .Values.guacd.service.type }}
   ports:
-    - port: 8080
+    - port: 4822
       name: {{ .Chart.Name }}-guacd
       targetPort: {{ .Chart.Name }}-guacd
   selector:
