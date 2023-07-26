@@ -1,0 +1,28 @@
+{{- if .Values.n8n.ingress.enabled -}}
+{{- $fullName := include "n8n.fullname" . -}}
+{{- $svcPort := .Values.n8n.service.port -}}
+{{- if and .Values.n8n.ingress.className (not (semverCompare ">=1.18-0" .Capabilities.KubeVersion.GitVersion)) }}
+  {{- if not (hasKey .Values.n8n.ingress.annotations "kubernetes.io/ingress.class") }}
+  {{- $_ := set .Values.n8n.ingress.annotations "kubernetes.io/ingress.class" .Values.n8n.ingress.className}}
+  {{- end }}
+{{- end }}
+apiVersion: traefik.containo.us/v1alpha1
+kind: IngressRoute
+metadata:
+  name: {{ $fullName }}
+  labels:
+    {{- include "n8n.labels" . | nindent 4 }}
+  {{- with .Values.n8n.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  entryPoints:
+    - web
+  routes:
+    - match: Host(`n8n.app.local`)
+      kind: Rule
+      services:
+        - name: n8n
+          port: n8n
+{{- end }}
