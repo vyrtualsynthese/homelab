@@ -41,6 +41,8 @@ spec:
               value: "true"
             - name: "QUEUE_HEALTH_CHECK_ACTIVE"
               value: "true"
+            - name: "WEBHOOK_URL"
+              value: "https://n8n.home.ashudev.com/"
           ports:
             - containerPort: 5678
               name: "n8n"
