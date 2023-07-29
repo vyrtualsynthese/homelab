@@ -1,6 +1,5 @@
 {{- if .Values.ingress.enabled -}}
 {{- $fullName := include "fullname" . -}}
-{{- $svcPort := .Values.service.port -}}
 {{- if and .Values.ingress.className (not (semverCompare ">=1.18-0" .Capabilities.KubeVersion.GitVersion)) }}
   {{- if not (hasKey .Values.ingress.annotations "kubernetes.io/ingress.class") }}
   {{- $_ := set .Values.ingress.annotations "kubernetes.io/ingress.class" .Values.ingress.className}}
@@ -9,7 +8,7 @@
 apiVersion: traefik.containo.us/v1alpha1
 kind: IngressRoute
 metadata:
-  name: {{ $fullName }}
+  name: {{ $fullName }}-public-redirect
   labels:
     {{- include "labels" . | nindent 4 }}
   {{- with .Values.ingress.annotations }}
@@ -20,9 +19,11 @@ spec:
   entryPoints:
     - web
   routes:
-    - match: Host(`sonarr-anime.app.local`)
+    - match: Host(`tdarr.home.ashudev.com`)
       kind: Rule
       services:
-        - name: sonarr-anime
-          port: sonarr-webui
+        - name: {{ include "fullname" . }}
+          port: web-ui
+      middlewares:
+        - name: {{ include "fullname" . }}-redirect-https
 {{- end }}
