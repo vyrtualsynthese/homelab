@@ -1,0 +1,9 @@
+apiVersion: traefik.containo.us/v1alpha1
+kind: Middleware
+metadata:
+  name: {{ include "fullname" . }}-auth
+  labels:
+    {{- include "labels" . | nindent 4 }}
+spec:
+  basicAuth:
+    secret: {{ include "fullname" . }}-auth
