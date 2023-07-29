@@ -9,7 +9,7 @@ app:
     repository: fireflyiii/core
     pullPolicy: IfNotPresent
     # Overrides the image tag whose default is the chart appVersion.
-    tag: version-6.0.18
+    tag: version-6.0.19
 
   imagePullSecrets: []
   nameOverride: "firefly-app"
