@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "dashy.fullname" . }}
+  labels:
+    {{- include "dashy.labels" . | nindent 4 }}
+data:
+  {{- $files := .Files }}
+  {{- range tuple "conf.yml" }}
+  {{ . }}: |-
+  {{ tpl ($files.AsConfig) $ | indent 2 }}
+  {{- end }}
