@@ -84,3 +84,11 @@ services:
     restart: unless-stopped
     volumes:
       - '/:/host:ro,rslave'
+
+  smartctl-exporter:
+    image: matusnovak/prometheus-smartctl:latest
+    container_name: smartctl-exporter
+    privileged: true
+    ports:
+      - "9902:9902"
+    restart: unless-stopped
