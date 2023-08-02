@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "dashy.fullname" . }}
+  labels:
+    {{- include "dashy.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports:
+    - port: 9902
+      name: exporter
+      targetPort: exporter
+  selector:
+    {{- include "dashy.selectorLabels" . | nindent 4 }}

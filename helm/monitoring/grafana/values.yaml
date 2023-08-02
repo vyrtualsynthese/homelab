@@ -689,6 +689,10 @@ dashboardsConfigMaps: {}
 ## ref: http://docs.grafana.org/installation/configuration/
 ##
 grafana.ini:
+  auth.anonymous:
+    org_name: "Ashu Lab"
+  dashboards:
+    default_home_dashboard_path: "/var/lib/grafana/dashboards/default/homelab-monitor.json"
   paths:
     data: /var/lib/grafana/
     logs: /var/log/grafana
