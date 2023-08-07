@@ -32,7 +32,7 @@ spec:
       initContainers:
         - name: init-freshrss-extension
           image: alpine/git:2.40.1
-          command: [ 'sh', '-c', "git clone https://github.com/mgnsk/FreshRSS-AutoTTL.git /config/www/freshrss/extensions/FreshRSS-AutoTTL" ]
+          command: [ 'sh', '-c', "if cd /config/www/freshrss/extensions/FreshRSS-AutoTTL; then git config --global --add safe.directory /config/www/freshrss/extensions/FreshRSS-AutoTTL && git pull; else git clone https://server/repo repo; fi" ]
           volumeMounts:
             - name: freshrss-volume
               mountPath: /config
