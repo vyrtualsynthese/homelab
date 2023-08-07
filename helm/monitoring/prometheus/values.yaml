@@ -1403,10 +1403,10 @@ serverFiles:
           - targets:
               - 192.168.1.38:9902
 
-      - job_name: kub-smart
-        static_configs:
-          - targets:
-              - prometheus-smartctl.monitoring.svc.cluster.local:9902
+      #- job_name: kub-smart
+      #  static_configs:
+      #    - targets:
+      #        - prometheus-smartctl.monitoring.svc.cluster.local:9902
 
       - job_name: minio-job
         bearer_token: eyJhbGciOiJIUzUxMiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJwcm9tZXRoZXVzIiwic3ViIjoiZHpXRzNIbndtallzNWFiaGs1U2giLCJleHAiOjQ4NDI4NTYwNTl9.OPT0hRrbORlMMnHLR_RNg0m4t0DpoodZmZcbEylrwObCsrA6EL3f1GICulqVsqAZcjc_9koYs6iG6Mmmvgqwgg
