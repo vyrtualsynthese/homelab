@@ -57,6 +57,7 @@
           - nfs-common
           - original-awk
           - jq
+          - smartmontools
 
   handlers:
     - name: restart sshd
