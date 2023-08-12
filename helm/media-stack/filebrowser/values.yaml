@@ -5,10 +5,10 @@
 replicaCount: 1
 
 image:
-  repository: itzg/minecraft-server
+  repository: filebrowser/filebrowser
   pullPolicy: IfNotPresent
   # Overrides the image tag whose default is the chart appVersion.
-  tag: 2023.7.0-java20-alpine
+  tag: v2.24.2-s6
 
 imagePullSecrets: []
 nameOverride: ""
@@ -23,33 +23,30 @@ serviceAccount:
   # If not set and create is true, a name is generated using the fullname template
   name: ""
 
-podAnnotations: {}
+podAnnotations:
+  setGateway: "true"
 
 podSecurityContext: {}
-  # fsGroup: 2000
+# fsGroup: 2000
 
 securityContext: {}
   # capabilities:
   #   drop:
   #   - ALL
   # readOnlyRootFilesystem: true
-  # runAsNonRoot: true
-  # runAsUser: 1000
+# runAsNonRoot: true
+# runAsUser: 1000
 
 service:
-  nodeport:
-    type: NodePort
-    port: 31894
-  clusterip:
-    type: ClusterIP
-    port: 25565
+  type: ClusterIP
+  port: 32400
 
 ingress:
   enabled: true
-  className: ""
+  className: no
   annotations: {}
-    # kubernetes.io/ingress.class: nginx
-    # kubernetes.io/tls-acme: "true"
+  # kubernetes.io/ingress.class: nginx
+  # kubernetes.io/tls-acme: "true"
   hosts:
     - host: chart-example.local
       paths:
@@ -60,22 +57,12 @@ ingress:
   #    hosts:
   #      - chart-example.local
 
-resources:
-  requests:
-    cpu: 100m
-    memory: 1000Mi
-  limits:
-    memory: 6Gi
-  # We usually recommend not to specify default resources and to leave this as a conscious
-  # choice for the user. This also increases chances charts run on environments with little
-  # resources, such as Minikube. If you do want to specify resources, uncomment the following
-  # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
-  # limits:
-  #   cpu: 100m
-  #   memory: 128Mi
-  # requests:
-  #   cpu: 100m
-  #   memory: 128Mi
+resources: {}
+  #requests:
+  #  cpu: 15m
+  #  memory: 256Mi
+  #limits:
+  #  memory: 1024Mi
 
 autoscaling:
   enabled: false

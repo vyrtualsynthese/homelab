@@ -123,6 +123,13 @@ spec:
         proxyProtocol:
         #   trustedIPs: []
           insecure: true
+    
+      mc:
+        port: 25565
+        expose: true
+        exposedPort: 25565
+        protocol: TCP
+      
       metrics:
       # When using hostNetwork, use another port to avoid conflict with node exporter:
       # https://github.com/prometheus/prometheus/wiki/Default-port-allocations
