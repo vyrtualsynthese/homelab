@@ -8,7 +8,7 @@ image:
   repository: lscr.io/linuxserver/qbittorrent
   pullPolicy: IfNotPresent
   # Overrides the image tag whose default is the chart appVersion.
-  tag: 4.5.3-r0-ls270
+  tag: 4.5.4-r2-ls282
 
 vpnimage:
   repository: lscr.io/linuxserver/wireguard

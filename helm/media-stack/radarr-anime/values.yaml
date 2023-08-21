@@ -8,7 +8,7 @@ image:
   repository: lscr.io/linuxserver/radarr
   pullPolicy: IfNotPresent
   # Overrides the image tag whose default is the chart appVersion.
-  tag: 4.5.2.7388-ls174
+  tag: 4.6.4.7568-ls184
 
 imagePullSecrets: []
 nameOverride: ""

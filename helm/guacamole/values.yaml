@@ -8,7 +8,7 @@ guacamole:
     repository: guacamole/guacamole
     pullPolicy: IfNotPresent
     # Overrides the image tag whose default is the chart appVersion.
-    tag: 1.5.2
+    tag: 1.5.3
 
   imagePullSecrets: []
   nameOverride: "guacamole"
@@ -93,7 +93,7 @@ guacd:
     repository: guacamole/guacd
     pullPolicy: IfNotPresent
     # Overrides the image tag whose default is the chart appVersion.
-    tag: 1.5.2
+    tag: 1.5.3
 
   imagePullSecrets: []
   nameOverride: "guacamole-guacd"
@@ -178,7 +178,7 @@ db:
     repository: postgres
     pullPolicy: IfNotPresent
     # Overrides the image tag whose default is the chart appVersion.
-    tag: 15.3-alpine3.18
+    tag: 15.4-alpine3.18
 
   imagePullSecrets: []
   nameOverride: "guacamole-db"

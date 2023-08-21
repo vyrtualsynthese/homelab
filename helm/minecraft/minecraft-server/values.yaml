@@ -8,7 +8,7 @@ image:
   repository: itzg/minecraft-server
   pullPolicy: IfNotPresent
   # Overrides the image tag whose default is the chart appVersion.
-  tag: 2023.7.0-java20-alpine
+  tag: 2023.7.1-java20-alpine
 
 imagePullSecrets: []
 nameOverride: ""

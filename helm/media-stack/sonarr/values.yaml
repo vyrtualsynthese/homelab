@@ -8,7 +8,7 @@ image:
   repository: lscr.io/linuxserver/sonarr
   pullPolicy: IfNotPresent
   # Overrides the image tag whose default is the chart appVersion.
-  tag: develop-4.0.0.559-ls515
+  tag: develop-4.0.0.644-ls562
 
 imagePullSecrets: []
 nameOverride: ""
