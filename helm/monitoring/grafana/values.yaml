@@ -316,11 +316,11 @@ extraContainerVolumes: []
 ##
 persistence:
   type: pvc
-  enabled: false
+  enabled: true
   # storageClassName: default
   accessModes:
     - ReadWriteOnce
-  size: 10Gi
+  size: 1Gi
   # annotations: {}
   finalizers:
     - kubernetes.io/pvc-protection
@@ -328,7 +328,7 @@ persistence:
   ## Sub-directory of the PV to mount. Can be templated.
   # subPath: ""
   ## Name of an existing PVC. Can be templated.
-  # existingClaim:
+  existingClaim: grafana
   ## Extra labels to apply to a PVC.
   extraPvcLabels: {}
 
@@ -662,11 +662,17 @@ dashboardProviders:
 ##
 dashboards:
   default:
+    global:
+      file: dashboards/global.json
+      datasource: Prometheus
     homelab-monitor:
       file: dashboards/homelab-monitor.json
       datasource: Prometheus
     network:
       file: dashboards/network.json
+      datasource: Prometheus
+    node-exporter-full:
+      file: dashboards/node-exporter-full.json
       datasource: Prometheus
     qbittorrent:
       file: dashboards/qbittorrent.json
