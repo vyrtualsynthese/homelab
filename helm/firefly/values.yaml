@@ -87,7 +87,7 @@ db:
     repository: postgres
     pullPolicy: Always
     # Overrides the image tag whose default is the chart appVersion.
-    tag: 14.8-alpine3.18
+    tag: 14.9-alpine3.18
 
   imagePullSecrets: []
   nameOverride: "firefly-db"
