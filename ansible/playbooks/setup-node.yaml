@@ -112,6 +112,16 @@
         src: templates/runners/{{ inventory_hostname }}/docker-compose.yml
         dest: /home/vronteix/dockers/docker-compose.yml
 
+    - name: Copy docker daemon file to expose metrics
+      ansible.builtin.copy:
+        src: templates/runners/daemon.json
+        dest: /etc/docker/daemon.json
+      register: docker_daemon
+
+    - name: restart docker if daemon.json changed
+      command: systemctl restart docker
+      when: docker_daemon.changed
+
 - hosts: rbp0
   remote_user: vronteix
   become: yes

@@ -1370,43 +1370,29 @@ serverFiles:
         static_configs:
           - targets:
             - localhost:9090
-      - job_name: traefik
-        static_configs:
-          - targets:
-            - traefik.kube-system.svc.cluster.local:9101
+
       - job_name: longhorn
         static_configs:
           - targets:
               - longhorn-backend.longhorn-system.svc.cluster.local:9500
+
       - job_name: qbittorrent
         static_configs:
           - targets:
               - qbittorrent-exporter.media-stack.svc.cluster.local:17871
 
-      - job_name: rbp0
+      - job_name: runners
         static_configs:
           - targets:
+              # Exporter
               - 192.168.1.22:9100
-
-      - job_name: rbp1
-        static_configs:
-          - targets:
               - 192.168.1.38:9100
-
-      - job_name: rbp0-smart
-        static_configs:
-          - targets:
+              # Smart
               - 192.168.1.22:9902
-
-      - job_name: rbp1-smart
-        static_configs:
-          - targets:
               - 192.168.1.38:9902
-
-      #- job_name: kub-smart
-      #  static_configs:
-      #    - targets:
-      #        - prometheus-smartctl.monitoring.svc.cluster.local:9902
+              # Docker
+              - 192.168.1.22:9323
+              - 192.168.1.38:9323
 
       - job_name: minio-job
         bearer_token: eyJhbGciOiJIUzUxMiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJwcm9tZXRoZXVzIiwic3ViIjoiZHpXRzNIbndtallzNWFiaGs1U2giLCJleHAiOjQ4NDI4NTYwNTl9.OPT0hRrbORlMMnHLR_RNg0m4t0DpoodZmZcbEylrwObCsrA6EL3f1GICulqVsqAZcjc_9koYs6iG6Mmmvgqwgg
