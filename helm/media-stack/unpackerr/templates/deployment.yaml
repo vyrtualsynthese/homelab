@@ -39,6 +39,10 @@ spec:
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
+          ports:
+            - name: metrics
+              containerPort: 5656
+              protocol: TCP
           env:
             - name: "TZ"
               value: "Europe/Paris"
@@ -132,6 +136,8 @@ spec:
               value: "false"
             - name: "UN_READARR_0_DELETE_DELAY"
               value: "30m"
+            - name: "UN_WEBSERVER_METRICS"
+              value: "true"
           volumeMounts:
             - mountPath: /downloads
               name: qbittorrent-download-volume

@@ -25,6 +25,9 @@ serviceAccount:
 
 podAnnotations:
   setGateway: "true"
+  prometheus.io/scrape: "true"
+  prometheus.io/scheme: "http"
+  prometheus.io/port: "5656"
 
 podSecurityContext: {}
 # fsGroup: 2000
