@@ -639,20 +639,20 @@ notifiers: {}
 ##
 ## `path` must be /var/lib/grafana/dashboards/<provider_name>
 ##
-dashboardProviders:
-  dashboardproviders.yaml:
-    apiVersion: 1
-    providers:
-    - name: 'default'
-      orgId: 1
-      folder: ''
-      type: file
-      disableDeletion: false
-      editable: true
-      options:
-        path: /var/lib/grafana/dashboards/default
-        # <bool> use folder names from filesystem to create folders in Grafana
-        foldersFromFilesStructure: true
+dashboardProviders: {}
+#  dashboardproviders.yaml:
+#    apiVersion: 1
+#    providers:
+#    - name: 'default'
+#      orgId: 1
+#      folder: ''
+#      type: file
+#      disableDeletion: false
+#      editable: true
+#      options:
+#        path: /var/lib/grafana/dashboards/default
+#        # <bool> use folder names from filesystem to create folders in Grafana
+#        foldersFromFilesStructure: true
 
 ## Configure grafana dashboard to import
 ## NOTE: To use dashboards you must also enable/configure dashboardProviders
@@ -660,23 +660,23 @@ dashboardProviders:
 ##
 ## dashboards per provider, use provider name as key.
 ##
-dashboards:
-  default:
-    global:
-      file: dashboards/global.json
-      datasource: Prometheus
-    homelab-monitor:
-      file: dashboards/homelab-monitor.json
-      datasource: Prometheus
-    network:
-      file: dashboards/network.json
-      datasource: Prometheus
-    node-exporter-full:
-      file: dashboards/node-exporter-full.json
-      datasource: Prometheus
-    qbittorrent:
-      file: dashboards/qbittorrent.json
-      datasource: Prometheus
+#dashboards:
+#  default:
+#    global:
+#      file: dashboards/global.json
+#      datasource: Prometheus
+#    homelab-monitor:
+#      file: dashboards/homelab-monitor.json
+#      datasource: Prometheus
+#    network:
+#      file: dashboards/network.json
+#      datasource: Prometheus
+#    node-exporter-full:
+#      file: dashboards/node-exporter-full.json
+#      datasource: Prometheus
+#    qbittorrent:
+#      file: dashboards/qbittorrent.json
+#      datasource: Prometheus
 
 
 ## Reference to external ConfigMap per provider. Use provider name as key and ConfigMap name as value.
@@ -697,8 +697,8 @@ dashboardsConfigMaps: {}
 grafana.ini:
   auth.anonymous:
     org_name: "Ashu Lab"
-  dashboards:
-    default_home_dashboard_path: "/var/lib/grafana/dashboards/default/homelab-monitor.json"
+  dashboards: {}
+    #default_home_dashboard_path: "/var/lib/grafana/dashboards/default/homelab-monitor.json"
   paths:
     data: /var/lib/grafana/
     logs: /var/log/grafana
