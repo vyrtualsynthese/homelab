@@ -9,14 +9,15 @@ imagePullSecrets: []
 
 nfs:
   server: 192.168.1.41
-  path: /mnt/storage/nfs/stash
+  path: /mnt/storage/traefik
   mountOptions:
     - nfsvers=4.2
     - rsize=1048576
     - wsize=1048576
     - nolock
     - async
-  volumeName: stash-nfs
+
+  volumeName: traefik-nfs
   # Reclaim policy for the main nfs volume
   reclaimPolicy: Retain
 
@@ -33,7 +34,7 @@ storageClass:
 
   # Set a StorageClass name
   # Ignored if storageClass.create is false
-  name: stash-nfs
+  name: traefik-nfs
 
   # Allow volume to be expanded dynamically
   allowVolumeExpansion: true
