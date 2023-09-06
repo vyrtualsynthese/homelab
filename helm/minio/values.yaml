@@ -25,6 +25,10 @@ serviceAccount:
 
 podAnnotations:
   setGateway: "true"
+  prometheus.io/scrape: "true"
+  prometheus.io/scheme: "http"
+  prometheus.io/port: "9000"
+  prometheus.io/path: "/minio/v2/metrics/cluster"
 
 podSecurityContext: {}
 # fsGroup: 2000

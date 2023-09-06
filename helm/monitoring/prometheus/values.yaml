@@ -1396,13 +1396,6 @@ serverFiles:
               # Docker
               - 192.168.1.38:9323
 
-      - job_name: minio-job
-        bearer_token: eyJhbGciOiJIUzUxMiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJwcm9tZXRoZXVzIiwic3ViIjoiZHpXRzNIbndtallzNWFiaGs1U2giLCJleHAiOjQ4NDI4NTYwNTl9.OPT0hRrbORlMMnHLR_RNg0m4t0DpoodZmZcbEylrwObCsrA6EL3f1GICulqVsqAZcjc_9koYs6iG6Mmmvgqwgg
-        metrics_path: /minio/v2/metrics/cluster
-        scheme: http
-        static_configs:
-          - targets: [ minio.api.app.local ]
-
       # A scrape configuration for running Prometheus on a Kubernetes cluster.
       # This uses separate scrape configs for cluster components (i.e. API server, node)
       # and services to allow each to use different authentication configs.
