@@ -65,7 +65,9 @@ spec:
             - name: "MINIO_PROMETHEUS_URL"
               value: "http://prometheus-server.monitoring.svc.cluster.local"
             - name: "MINIO_PROMETHEUS_JOB_ID"
-              value: "minio-job"
+              value: "kubernetes-pods"
+            - name: "MINIO_PROMETHEUS_AUTH_TYPE"
+              value: "public"
 
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
