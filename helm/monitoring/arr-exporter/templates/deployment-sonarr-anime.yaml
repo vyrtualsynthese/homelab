@@ -5,11 +5,6 @@ metadata:
   labels:
     {{- include "labels" . | nindent 4 }}
 spec:
-  strategy:
-    type: Recreate
-  {{- if not .Values.autoscaling.enabled }}
-  replicas: {{ .Values.replicaCount }}
-  {{- end }}
   selector:
     matchLabels:
       {{- include "selectorLabels" . | nindent 6 }}
@@ -22,10 +17,6 @@ spec:
       labels:
         {{- include "selectorLabels" . | nindent 8 }}
     spec:
-      volumes:
-        - name: prowlarr-config-volume
-          persistentVolumeClaim:
-            claimName: prowlarr-config
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
@@ -39,41 +30,23 @@ spec:
             {{- toYaml .Values.securityContext | nindent 12 }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
-          ports:
-            - name: prowlarr-webui
-              containerPort: 9696
           env:
-            - name: "TZ"
-              value: "Europe/Paris"
-            - name: "PUID"
-              value: "0"
-            - name: "PGID"
-              value: "0"
-          resources:
-            {{- toYaml .Values.resources | nindent 12 }}
-          volumeMounts:
-            - name: prowlarr-config-volume
-              mountPath: /config
-        - name: {{ .Chart.Name }}-exporter
-          securityContext:
-            {{- toYaml .Values.securityContext | nindent 12 }}
-          image: "{{ .Values.exportarr.image.repository }}:{{ .Values.exportarr.image.tag | default .Chart.AppVersion }}"
-          imagePullPolicy: {{ .Values.exportarr.image.pullPolicy }}
-          ports:
-            - name: exporter
-              containerPort: 9707
-          env:
-            - name: "PORT"
-              value: "9707"
-            - name: "URL"
-              value: "http://{{ .Chart.Name }}:9696"
-            - name: "APIKEY"
+            - name: PIHOLE_PROTOCOL
+              value: "http"
+            - name: PIHOLE_HOSTNAME
+              value: "192.168.1.22"
+            - name: PIHOLE_API_TOKEN
               valueFrom:
                 secretKeyRef:
-                  name: prowlarr
-                  key: secret
-          args:
-            - prowlarr
+                  name: pihole-exporter
+                  key: key
+            - name: PIHOLE_PORT
+              value: "80"
+            - name: PORT
+              value: "9617"
+          ports:
+            - name: sonarr-anime-exporter
+              containerPort: 9707
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
       {{- with .Values.nodeSelector }}

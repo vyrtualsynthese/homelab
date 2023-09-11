@@ -64,6 +64,29 @@ spec:
               mountPath: /downloads
             - name: readarr-config-volume
               mountPath: /config
+
+        - name: {{ .Chart.Name }}-exporter
+          securityContext:
+                        {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "{{ .Values.exportarr.image.repository }}:{{ .Values.exportarr.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.exportarr.image.pullPolicy }}
+          ports:
+            - name: exporter
+              containerPort: 9707
+          env:
+            - name: "PORT"
+              value: "9707"
+            - name: "URL"
+              value: "http://{{ .Chart.Name }}:8787"
+            - name: "APIKEY"
+              valueFrom:
+                secretKeyRef:
+                  name: readarr
+                  key: secret
+          args:
+            - readarr
+          resources:
+                              {{- toYaml .Values.resources | nindent 12 }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

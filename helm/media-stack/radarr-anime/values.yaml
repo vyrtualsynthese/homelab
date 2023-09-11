@@ -14,6 +14,13 @@ imagePullSecrets: []
 nameOverride: ""
 fullnameOverride: ""
 
+exportarr:
+  image:
+    repository: ghcr.io/onedr0p/exportarr
+    pullPolicy: IfNotPresent
+    # Overrides the image tag whose default is the chart appVersion.
+    tag: latest
+
 serviceAccount:
   # Specifies whether a service account should be created
   create: false
@@ -24,7 +31,9 @@ serviceAccount:
   name: ""
 
 podAnnotations:
-  setGateway: "true"
+  prometheus.io/scrape: "true"
+  prometheus.io/scheme: "http"
+  prometheus.io/port: "9707"
 
 podSecurityContext: {}
 # fsGroup: 2000

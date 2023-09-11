@@ -10,6 +10,13 @@ image:
   # Overrides the image tag whose default is the chart appVersion.
   tag: 1.7.4.3769-ls26
 
+exportarr:
+  image:
+    repository: ghcr.io/onedr0p/exportarr
+    pullPolicy: IfNotPresent
+    # Overrides the image tag whose default is the chart appVersion.
+    tag: latest
+
 imagePullSecrets: []
 nameOverride: ""
 fullnameOverride: ""
@@ -24,7 +31,9 @@ serviceAccount:
   name: ""
 
 podAnnotations:
-  setGateway: "true"
+  prometheus.io/scrape: "true"
+  prometheus.io/scheme: "http"
+  prometheus.io/port: "9707"
 
 podSecurityContext: {}
 # fsGroup: 2000
