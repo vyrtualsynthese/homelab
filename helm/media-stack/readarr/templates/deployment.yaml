@@ -67,7 +67,7 @@ spec:
 
         - name: {{ .Chart.Name }}-exporter
           securityContext:
-                        {{- toYaml .Values.securityContext | nindent 12 }}
+            {{- toYaml .Values.securityContext | nindent 12 }}
           image: "{{ .Values.exportarr.image.repository }}:{{ .Values.exportarr.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.exportarr.image.pullPolicy }}
           ports:
@@ -86,7 +86,7 @@ spec:
           args:
             - readarr
           resources:
-                              {{- toYaml .Values.resources | nindent 12 }}
+            {{- toYaml .Values.resources | nindent 12 }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

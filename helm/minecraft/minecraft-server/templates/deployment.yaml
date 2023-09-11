@@ -102,6 +102,23 @@ spec:
           volumeMounts:
             - name: minecraft-server-volume
               mountPath: /data
+        - name: {{ .Chart.Name }}-exporter
+          securityContext:
+                              {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "{{ .Values.monitor.image.repository }}:{{ .Values.monitor.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.monitor.image.pullPolicy }}
+          env:
+            - name: EXPORT_SERVERS
+              value: "minecraft-server"
+            - name: DEBUG
+              value: "true"
+          ports:
+            - name: monitor
+              containerPort: 8080
+          args:
+            - export-for-prometheus
+          resources:
+                              {{- toYaml .Values.resources | nindent 12 }}
       terminationGracePeriodSeconds: 600
       {{- with .Values.nodeSelector }}
       nodeSelector:

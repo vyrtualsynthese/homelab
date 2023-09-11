@@ -10,6 +10,13 @@ image:
   # Overrides the image tag whose default is the chart appVersion.
   tag: 2023.7.1-java20-alpine
 
+monitor:
+  image:
+    repository: itzg/mc-monitor
+    pullPolicy: IfNotPresent
+    # Overrides the image tag whose default is the chart appVersion.
+    tag: latest
+
 imagePullSecrets: []
 nameOverride: ""
 fullnameOverride: ""
@@ -23,7 +30,10 @@ serviceAccount:
   # If not set and create is true, a name is generated using the fullname template
   name: ""
 
-podAnnotations: {}
+podAnnotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/scheme: "http"
+  prometheus.io/port: "8080"
 
 podSecurityContext: {}
   # fsGroup: 2000
