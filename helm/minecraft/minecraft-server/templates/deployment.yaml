@@ -109,9 +109,7 @@ spec:
           imagePullPolicy: {{ .Values.monitor.image.pullPolicy }}
           env:
             - name: EXPORT_SERVERS
-              value: "minecraft-server"
-            - name: DEBUG
-              value: "true"
+              value: "127.0.0.1"
           ports:
             - name: monitor
               containerPort: 8080
