@@ -66,10 +66,10 @@ spec:
               value: "PAPER"
             - name: MAX_TICK_TIME
               value: "-1"
-            - name: ENABLE_JMX
-              value: "true"
-            - name: JMX_HOST
-              value: "127.0.0.1"
+            #- name: ENABLE_JMX
+            #  value: "true"
+            #- name: JMX_HOST
+            #  value: "0.0.0.0"
             - name: USE_AIKAR_FLAGS
               value: "true"
             - name: JVM_XX_OPTS
@@ -117,6 +117,7 @@ spec:
             - export-for-prometheus
           resources:
                               {{- toYaml .Values.resources | nindent 12 }}
+
       terminationGracePeriodSeconds: 600
       {{- with .Values.nodeSelector }}
       nodeSelector:

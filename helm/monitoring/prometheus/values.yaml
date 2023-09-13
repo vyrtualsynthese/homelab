@@ -1371,10 +1371,10 @@ serverFiles:
           - targets:
             - localhost:9090
 
-      #- job_name: longhorn
-      #  static_configs:
-      #    - targets:
-      #        - longhorn-backend.longhorn-system.svc.cluster.local:9500
+      - job_name: longhorn
+        static_configs:
+          - targets:
+              - longhorn-backend.longhorn-system.svc.cluster.local:9500
 
       - job_name: rbp0
         static_configs:
