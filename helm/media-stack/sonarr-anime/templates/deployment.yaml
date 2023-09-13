@@ -81,7 +81,7 @@ spec:
             - name: "APIKEY"
               valueFrom:
                 secretKeyRef:
-                  name: sonarr
+                  name: sonarr-anime
                   key: secret
           args:
             - sonarr
