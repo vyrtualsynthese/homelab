@@ -6,7 +6,7 @@ metadata:
     {{- include "dashy.labels" . | nindent 4 }}
 data:
   {{- $files := .Files }}
-  {{- range tuple "conf.yml" }}
+  {{- range tuple "conf.yaml" }}
   {{ . }}: |-
   {{ tpl ($files.AsConfig) $ | indent 2 }}
   {{- end }}
