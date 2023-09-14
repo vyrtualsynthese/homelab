@@ -1,11 +1,11 @@
 {{- if .Values.ingress.enabled -}}
-{{- $fullName := include "dashy.fullname" . -}}
+{{- $fullName := include "fullname" . -}}
 apiVersion: traefik.containo.us/v1alpha1
 kind: IngressRoute
 metadata:
   name: {{ $fullName }}
   labels:
-    {{- include "dashy.labels" . | nindent 4 }}
+    {{- include "labels" . | nindent 4 }}
   {{- with .Values.ingress.annotations }}
   annotations:
     {{- toYaml . | nindent 4 }}
@@ -14,9 +14,9 @@ spec:
   entryPoints:
     - web
   routes:
-    - match: Host(`dashy.kub.local`)
+    - match: Host(`bazarr-anime.kub.local`)
       kind: Rule
       services:
-        - name: dashy
-          port: web
+        - name: bazarr-anime
+          port: bazarr-webui
 {{- end }}

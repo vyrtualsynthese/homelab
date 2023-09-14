@@ -20,7 +20,7 @@ spec:
   entryPoints:
     - websecure
   routes:
-    - match: Host(`plex.home.ashudev.com`)
+    - match: Host(`plex.kub.home.ashudev.com`)
       kind: Rule
       services:
         - name: plex

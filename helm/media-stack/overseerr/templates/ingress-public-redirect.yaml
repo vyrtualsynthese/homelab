@@ -20,7 +20,7 @@ spec:
   entryPoints:
     - web
   routes:
-    - match: Host(`{{ $fullName }}.home.ashudev.com`)
+    - match: Host(`{{ $fullName }}.kub.home.ashudev.com`)
       kind: Rule
       services:
         - name: {{ $fullName }}

@@ -20,7 +20,7 @@ spec:
   entryPoints:
     - websecure
   routes:
-    - match: Host(`n8n.home.ashudev.com`)
+    - match: Host(`n8n.kub.home.ashudev.com`)
       kind: Rule
       services:
         - name: n8n

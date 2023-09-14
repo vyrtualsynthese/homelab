@@ -20,7 +20,7 @@ spec:
   entryPoints:
     - websecure
   routes:
-    - match: Host(`wiki.home.ashudev.com`)
+    - match: Host(`wiki.kub.home.ashudev.com`)
       kind: Rule
       services:
         - name: wiki-app

@@ -20,7 +20,7 @@ spec:
   entryPoints:
     - web
   routes:
-    - match: Host(`monitorss.home.ashudev.com`)
+    - match: Host(`monitorss.kub.home.ashudev.com`)
       kind: Rule
       services:
         - name: monitorss-web

@@ -20,7 +20,7 @@ spec:
   entryPoints:
     - websecure
   routes:
-    - match: Host(`kavita.home.ashudev.com`)
+    - match: Host(`kavita.kub.home.ashudev.com`)
       kind: Rule
       services:
         - name: kavita

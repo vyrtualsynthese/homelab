@@ -15,7 +15,7 @@ imageNode:
   repository: ghcr.io/haveagitgat/tdarr_node
   pullPolicy: Always
   # Overrides the image tag whose default is the chart appVersion.
-  tag: 2.00.21
+  tag: 2.00.25
 
 imagePullSecrets: []
 nameOverride: ""

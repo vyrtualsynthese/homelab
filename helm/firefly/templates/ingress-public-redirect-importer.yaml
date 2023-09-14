@@ -19,7 +19,7 @@ spec:
   entryPoints:
     - web
   routes:
-    - match: Host(`firefly.importer.home.ashudev.com`)
+    - match: Host(`firefly-importer.kub.home.ashudev.com`)
       kind: Rule
       services:
         - name: firefly-importer

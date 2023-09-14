@@ -20,7 +20,7 @@ spec:
   entryPoints:
     - websecure
   routes:
-    - match: Host(`nextcloud.home.ashudev.com`)
+    - match: Host(`nextcloud.kub.home.ashudev.com`)
       kind: Rule
       services:
         - name: nextcloud-web
