@@ -19,7 +19,7 @@ spec:
   entryPoints:
     - web
   routes:
-    - match: Host(`thelounge.home.ashudev.com`)
+    - match: Host(`thelounge.kub.home.ashudev.com`)
       kind: Rule
       services:
         - name: thelounge

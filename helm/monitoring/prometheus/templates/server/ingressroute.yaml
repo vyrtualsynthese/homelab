@@ -17,7 +17,7 @@ spec:
   entryPoints:
     - web
   routes:
-    - match: Host(`prom.app.local`)
+    - match: Host(`prom.kub.local`)
       kind: Rule
       services:
         - name: prometheus-server

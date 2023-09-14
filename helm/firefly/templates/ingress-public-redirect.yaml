@@ -19,7 +19,7 @@ spec:
   entryPoints:
     - web
   routes:
-    - match: Host(`firefly.home.ashudev.com`)
+    - match: Host(`firefly.kub.home.ashudev.com`)
       kind: Rule
       services:
         - name: firefly-app

@@ -69,7 +69,7 @@ spec:
                   name: plex
                   key: plex_claim
             - name: "ADVERTISE_IP"
-              value: "https://plex.home.ashudev.com:443"
+              value: "https://plex.kub.home.ashudev.com:443"
             - name: "HOSTNAME"
               value: "plex"
             - name: "ALLOWED_NETWORKS"

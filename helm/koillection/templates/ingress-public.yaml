@@ -20,7 +20,7 @@ spec:
   entryPoints:
     - websecure
   routes:
-    - match: Host(`koillection.home.ashudev.com`)
+    - match: Host(`koillection.kub.home.ashudev.com`)
       kind: Rule
       services:
         - name: koillection-app

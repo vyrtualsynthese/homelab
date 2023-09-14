@@ -19,7 +19,7 @@ spec:
   entryPoints:
     - websecure
   routes:
-    - match: Host(`freshrss.home.ashudev.com`)
+    - match: Host(`freshrss.kub.home.ashudev.com`)
       kind: Rule
       services:
         - name: freshrss

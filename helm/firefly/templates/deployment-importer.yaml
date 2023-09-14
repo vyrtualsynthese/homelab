@@ -34,7 +34,7 @@ spec:
             - name: "FIREFLY_III_URL"
               value: "http://firefly-app:8080"
             - name: "VANITY_URL"
-              value: "https://firefly.home.ashudev.com"
+              value: "https://firefly.kub.home.ashudev.com"
             - name: "TRUSTED_PROXIES"
               value: "**"
             #- name: "FIREFLY_III_ACCESS_TOKEN"

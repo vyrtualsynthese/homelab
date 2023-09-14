@@ -20,7 +20,7 @@ spec:
   entryPoints:
     - websecure
   routes:
-    - match: Host(`guacamole.home.ashudev.com`)
+    - match: Host(`guacamole.kub.home.ashudev.com`)
       kind: Rule
       services:
         - name: guacamole

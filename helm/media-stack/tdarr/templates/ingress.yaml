@@ -1,14 +1,9 @@
 {{- if .Values.ingress.enabled -}}
 {{- $fullName := include "fullname" . -}}
-{{- if and .Values.ingress.className (not (semverCompare ">=1.18-0" .Capabilities.KubeVersion.GitVersion)) }}
-  {{- if not (hasKey .Values.ingress.annotations "kubernetes.io/ingress.class") }}
-  {{- $_ := set .Values.ingress.annotations "kubernetes.io/ingress.class" .Values.ingress.className}}
-  {{- end }}
-{{- end }}
 apiVersion: traefik.containo.us/v1alpha1
 kind: IngressRoute
 metadata:
-  name: {{ $fullName }}-public-redirect
+  name: {{ $fullName }}
   labels:
     {{- include "labels" . | nindent 4 }}
   {{- with .Values.ingress.annotations }}
@@ -19,11 +14,11 @@ spec:
   entryPoints:
     - web
   routes:
-    - match: Host(`tdarr.home.ashudev.com`)
+    - match: Host(`tdarr.kub.local`)
       kind: Rule
       services:
         - name: {{ include "fullname" . }}
           port: web-ui
       middlewares:
-        - name: {{ include "fullname" . }}-redirect-https
+        - name: {{ include "fullname" . }}-auth
 {{- end }}

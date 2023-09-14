@@ -1,11 +1,9 @@
-
 {{- $fullName := include "grafana.fullname" . -}}
 {{- $svcPort := .Values.service.port -}}
-
 apiVersion: traefik.containo.us/v1alpha1
 kind: IngressRoute
 metadata:
-  name: {{ $fullName }}-public
+  name: {{ $fullName }}
   labels:
     {{- include "grafana.labels" . | nindent 4 }}
   {{- with .Values.ingress.annotations }}
@@ -14,15 +12,10 @@ metadata:
   {{- end }}
 spec:
   entryPoints:
-    - websecure
+    - web
   routes:
-    - match: Host(`grafana.home.ashudev.com`)
+    - match: Host(`grafana.kub.local`)
       kind: Rule
       services:
         - name: grafana
           port: service
-  tls:
-    certResolver: myresolver
-    options:
-      name: grafana-tlsoption
-
