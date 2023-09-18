@@ -28,5 +28,5 @@ spec:
   tls:
     certResolver: myresolver
     options:
-      name: qbittorrent-tlsoption
+      name: {{ include "fullname" . }}-tlsoption
 {{- end }}
