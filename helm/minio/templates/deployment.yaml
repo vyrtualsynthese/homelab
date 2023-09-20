@@ -24,8 +24,9 @@ spec:
     spec:
       volumes:
         - name: minio-data-volume
-          persistentVolumeClaim:
-            claimName: pvc-minio-nfs
+          hostPath:
+            path: /mnt/storage/minio
+            type: Directory
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}

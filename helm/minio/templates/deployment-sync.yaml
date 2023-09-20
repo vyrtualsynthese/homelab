@@ -60,6 +60,51 @@ spec:
           volumeMounts:
             - name: config
               mountPath: /root/.mc
+        - name: {{ .Chart.Name }}-sync-rbp0-backup
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "{{ .Values.sync.image.repository }}:{{ .Values.sync.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.sync.image.pullPolicy }}
+          command:
+            - /bin/bash
+            - -c
+          args:
+            - mc mirror --watch --overwrite --remove minio-rbp0/rbp0backup s3-rbp0-backup/ashudev-homelab-rbp0-backup
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: config
+              mountPath: /root/.mc
+        - name: {{ .Chart.Name }}-sync-rbp1-backup
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "{{ .Values.sync.image.repository }}:{{ .Values.sync.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.sync.image.pullPolicy }}
+          command:
+            - /bin/bash
+            - -c
+          args:
+            - mc mirror --watch --overwrite --remove minio-rbp1/rbp1backup s3-rbp1-backup/ashudev-homelab-rbp1-backup
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: config
+              mountPath: /root/.mc
+        - name: {{ .Chart.Name }}-sync-longhorn-backup
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "{{ .Values.sync.image.repository }}:{{ .Values.sync.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.sync.image.pullPolicy }}
+          command:
+            - /bin/bash
+            - -c
+          args:
+            - mc mirror --watch --overwrite --remove minio-longhorn/longhorn s3-longhorn-backup/ashudev-homelab-longhorn-backup
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: config
+              mountPath: /root/.mc
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
