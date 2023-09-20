@@ -1,7 +1,7 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "fullname" . }}
+  name: {{ include "fullname" . }}-sync
   labels:
     {{- include "labels" . | nindent 4 }}
 spec:
@@ -15,20 +15,19 @@ spec:
       {{- include "selectorLabels" . | nindent 6 }}
   template:
     metadata:
-      {{- with .Values.podAnnotations }}
-      annotations:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
+      annotations: {}
       labels:
         {{- include "selectorLabels" . | nindent 8 }}
     spec:
       volumes:
-        - name: books-volume
-          persistentVolumeClaim:
-            claimName: books-nfs
-        - name: config-volume
-          persistentVolumeClaim:
-            claimName: kavita-config2
+        - name: config
+          emptyDir: {}
+        - name: minio-sync-config
+          secret:
+            secretName: minio-sync
+            items:
+              - key: config.json
+                path: config.json
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
@@ -36,25 +35,31 @@ spec:
       serviceAccountName: {{ include "serviceAccountName" . }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      initContainers:
+        - name: init-minio-config
+          image: busybox:1.35
+          command: [ 'sh', '-c', "cp /secret/* /config" ]
+          volumeMounts:
+            - mountPath: /config
+              name: config
+            - mountPath: /secret
+              name: minio-sync-config
       containers:
-        - name: {{ .Chart.Name }}
+        - name: {{ .Chart.Name }}-sync-xps13-backup
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
-          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
-          imagePullPolicy: {{ .Values.image.pullPolicy }}
-          ports:
-            - name: kavita
-              containerPort: 5000
-          env:
-            - name: DOTNET_HOSTBUILDER__RELOADCONFIGONCHANGE
-              value: "false"
+          image: "{{ .Values.sync.image.repository }}:{{ .Values.sync.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.sync.image.pullPolicy }}
+          command:
+            - /bin/bash
+            - -c
+          args:
+            - mc mirror --watch --overwrite --remove minio-xps13/xps13backup s3-xps13-backup/ashudev-homelab-xps13-backup
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
           volumeMounts:
-            - name: books-volume
-              mountPath: /books
-            - name: config-volume
-              mountPath: /kavita/config
+            - name: config
+              mountPath: /root/.mc
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
