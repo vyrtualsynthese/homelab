@@ -1,0 +1,30 @@
+{{- if .Values.proxy.ingress.enabled -}}
+{{- $fullName := include "proxy.fullname" . -}}
+{{- $svcPort := .Values.proxy.service.port -}}
+{{- if and .Values.proxy.ingress.className (not (semverCompare ">=1.18-0" .Capabilities.KubeVersion.GitVersion)) }}
+  {{- if not (hasKey .Values.proxy.ingress.annotations "kubernetes.io/ingress.class") }}
+  {{- $_ := set .Values.proxy.ingress.annotations "kubernetes.io/ingress.class" .Values.proxy.ingress.className}}
+  {{- end }}
+{{- end }}
+apiVersion: traefik.containo.us/v1alpha1
+kind: IngressRoute
+metadata:
+  name: {{ $fullName }}-public-redirect
+  labels:
+    {{- include "proxy.labels" . | nindent 4 }}
+  {{- with .Values.proxy.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  entryPoints:
+    - web
+  routes:
+    - match: Host(`inventree-lego.kub.home.ashudev.com`)
+      kind: Rule
+      services:
+        - name: {{ include "proxy.fullname" . }}
+          port: inventree-lego
+      middlewares:
+        - name: {{ include "proxy.fullname" . }}-redirect-https
+{{- end }}

@@ -1,0 +1,50 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "cache.fullname" . }}
+  labels:
+    {{- include "cache.labels" . | nindent 4 }}
+spec:
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "cache.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      {{- with .Values.cache.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "cache.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.cache.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "cache.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.cache.podSecurityContext | nindent 8 }}
+      containers:
+        - name: {{ .Chart.Name }}
+          image: "{{ .Values.cache.image.repository }}:{{ .Values.cache.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.cache.image.pullPolicy }}
+          resources:
+            {{- toYaml .Values.cache.resources | nindent 12 }}
+          ports:
+            - name: redis
+              containerPort: 6379
+      terminationGracePeriodSeconds: 600
+      {{- with .Values.cache.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.cache.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.cache.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
