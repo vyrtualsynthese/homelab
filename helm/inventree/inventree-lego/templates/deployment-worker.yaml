@@ -1,0 +1,90 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "worker.fullname" . }}
+  labels:
+    {{- include "worker.labels" . | nindent 4 }}
+spec:
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "worker.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      {{- with .Values.worker.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "worker.selectorLabels" . | nindent 8 }}
+    spec:
+      volumes:
+        - name: inventree-lego-data
+          persistentVolumeClaim:
+            claimName: inventree-lego-data
+      {{- with .Values.worker.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "worker.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.worker.podSecurityContext | nindent 8 }}
+      containers:
+        - name: {{ .Chart.Name }}
+          image: "{{ .Values.worker.image.repository }}:{{ .Values.worker.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.worker.image.pullPolicy }}
+          resources:
+            {{- toYaml .Values.worker.resources | nindent 12 }}
+          env:
+            - name: "INVENTREE_WEB_PORT"
+              value: "1337"
+            - name: "INVENTREE_DEBUG"
+              value: "False"
+            - name: "INVENTREE_LOG_LEVEL"
+              value: "WARNING"
+            - name: "INVENTREE_DB_ENGINE"
+              value: "postgresql"
+            - name: "INVENTREE_DB_NAME"
+              value: "inventree-lego"
+            - name: "INVENTREE_DB_HOST"
+              value: "inventree-lego-db"
+            - name: "INVENTREE_DB_PORT"
+              value: "5432"
+            - name: "INVENTREE_DB_USER"
+              valueFrom:
+                secretKeyRef:
+                  name: inventree-lego
+                  key: POSTGRES_USER
+            - name: "INVENTREE_DB_PASSWORD"
+              valueFrom:
+                secretKeyRef:
+                  name: inventree-lego
+                  key: POSTGRES_PASSWORD
+            - name: "INVENTREE_CACHE_HOST"
+              value: "inventree-lego-cache"
+            - name: "INVENTREE_CACHE_PORT"
+              value: "6379"
+            - name: "INVENTREE_GUNICORN_TIMEOUT"
+              value: "90"
+            - name: "INVENTREE_PLUGINS_ENABLED"
+              value: "False"
+          volumeMounts:
+            - name: inventree-lego-data
+              mountPath: /home/inventree/data
+          command:
+            - /bin/sh
+            - "-c"
+            - "invoke worker"
+      {{- with .Values.worker.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.worker.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.worker.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
