@@ -22,7 +22,7 @@ spec:
       volumes:
         - name: inventree-lego-data
           persistentVolumeClaim:
-            claimName: inventree-lego-data
+            claimName: inventree-lego-data2
       {{- with .Values.worker.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
