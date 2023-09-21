@@ -22,7 +22,7 @@ spec:
       volumes:
         - name: inventree-lego-data
           persistentVolumeClaim:
-            claimName: inventree-lego-data
+            claimName: inventree-lego-data2
         - name: conf-cache-volume
           emptyDir: { }
         - name: inventree-lego-proxy-configmap
