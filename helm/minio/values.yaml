@@ -17,6 +17,13 @@ sync:
     # Overrides the image tag whose default is the chart appVersion.
     tag: RELEASE.2023-09-13T23-08-58Z
 
+  resources:
+    requests:
+      cpu: 2m
+      memory: 28Mi
+    limits:
+      memory: 56Mi
+
 imagePullSecrets: []
 nameOverride: ""
 fullnameOverride: ""
@@ -68,12 +75,12 @@ ingress:
   #    hosts:
   #      - chart-example.local
 
-resources: {}
-#  requests:
-#    cpu: 25m
-#    memory: 250Mi
-#  limits:
-#    memory: 2048Mi
+resources:
+  requests:
+    cpu: 170m
+    memory: 2048Mi
+  limits:
+    memory: 4096Mi
   # We usually recommend not to specify default resources and to leave this as a conscious
   # choice for the user. This also increases chances charts run on environments with little
   # resources, such as Minikube. If you do want to specify resources, uncomment the following
