@@ -56,7 +56,7 @@ spec:
           args:
             - mc mirror --watch --overwrite --remove minio-xps13/xps13backup s3-xps13-backup/ashudev-homelab-xps13-backup
           resources:
-            {{- toYaml .Values.resources | nindent 12 }}
+            {{- toYaml .Values.sync.resources | nindent 12 }}
           volumeMounts:
             - name: config
               mountPath: /root/.mc
@@ -71,7 +71,7 @@ spec:
           args:
             - mc mirror --watch --overwrite --remove minio-rbp0/rbp0backup s3-rbp0-backup/ashudev-homelab-rbp0-backup
           resources:
-            {{- toYaml .Values.resources | nindent 12 }}
+            {{- toYaml .Values.sync.resources | nindent 12 }}
           volumeMounts:
             - name: config
               mountPath: /root/.mc
@@ -86,7 +86,7 @@ spec:
           args:
             - mc mirror --watch --overwrite --remove minio-rbp1/rbp1backup s3-rbp1-backup/ashudev-homelab-rbp1-backup
           resources:
-            {{- toYaml .Values.resources | nindent 12 }}
+            {{- toYaml .Values.sync.resources | nindent 12 }}
           volumeMounts:
             - name: config
               mountPath: /root/.mc
@@ -101,7 +101,7 @@ spec:
           args:
             - mc mirror --watch --overwrite --remove minio-longhorn/longhorn s3-longhorn-backup/ashudev-homelab-longhorn-backup
           resources:
-            {{- toYaml .Values.resources | nindent 12 }}
+            {{- toYaml .Values.sync.resources | nindent 12 }}
           volumeMounts:
             - name: config
               mountPath: /root/.mc
