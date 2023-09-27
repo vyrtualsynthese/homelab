@@ -17,6 +17,13 @@ exportarr:
     # Overrides the image tag whose default is the chart appVersion.
     tag: latest
 
+  resources:
+    requests:
+      cpu: 2m
+      memory: 56Mi
+    limits:
+      memory: 112Mi
+
 imagePullSecrets: []
 nameOverride: ""
 fullnameOverride: ""
