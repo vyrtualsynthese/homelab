@@ -1,0 +1,61 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "nextcloud.backup.fullname" . }}
+  labels:
+    {{- include "nextcloud.backup.labels" . | nindent 4 }}
+spec:
+  schedule: "0 5 * * *"
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 1
+  concurrencyPolicy: Replace
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          volumes:
+            - name: nextcloud-data-volume
+              persistentVolumeClaim:
+                claimName: nextcloud-nfs
+          containers:
+            - name: {{ .Chart.Name }}-backup
+              command: [ "/bin/sh","-c" ]
+              args: [ "restic init && restic backup /data && restic forget --keep-within-daily 7d --keep-within-weekly 1m --prune" ]
+              image: "{{ .Values.backup.image.repository }}:{{ .Values.backup.image.tag | default .Chart.AppVersion }}"
+              imagePullPolicy: {{ .Values.backup.image.pullPolicy }}
+              resources:
+                {{- toYaml .Values.backup.resources | nindent 16 }}
+              env:
+                - name: "AWS_ACCESS_KEY_ID"
+                  valueFrom:
+                    secretKeyRef:
+                      name: nextcloud-backup
+                      key: AWS_ACCESS_KEY_ID
+                - name: "AWS_SECRET_ACCESS_KEY"
+                  valueFrom:
+                    secretKeyRef:
+                      name: nextcloud-backup
+                      key: AWS_SECRET_ACCESS_KEY
+                - name: "RESTIC_REPOSITORY"
+                  valueFrom:
+                    secretKeyRef:
+                      name: nextcloud-backup
+                      key: RESTIC_REPOSITORY
+                - name: "RESTIC_PASSWORD"
+                  valueFrom:
+                    secretKeyRef:
+                      name: nextcloud-backup
+                      key: RESTIC_PASSWORD
+              volumeMounts:
+                - name: nextcloud-data-volume
+                  mountPath: /data
+          restartPolicy: OnFailure
+          affinity:
+            nodeAffinity:
+              requiredDuringSchedulingIgnoredDuringExecution:
+                nodeSelectorTerms:
+                  - matchExpressions:
+                    - key: kubernetes.io/hostname
+                      operator: NotIn
+                      values:
+                        - nas
