@@ -17,12 +17,12 @@ sync:
     # Overrides the image tag whose default is the chart appVersion.
     tag: RELEASE.2023-09-13T23-08-58Z
 
-  resources:
-    requests:
-      cpu: 2m
-      memory: 28Mi
-    limits:
-      memory: 56Mi
+  resources: {}
+  #  requests:
+  #    cpu: 2m
+  #    memory: 28Mi
+  #  limits:
+  #    memory: 56Mi
 
 imagePullSecrets: []
 nameOverride: ""
