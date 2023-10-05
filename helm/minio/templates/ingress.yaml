@@ -20,12 +20,12 @@ spec:
   entryPoints:
     - web
   routes:
-    - match: Host(`minio.app.local`)
+    - match: Host(`minio.app.local`) || Host(`minio.kub.local`)
       kind: Rule
       services:
         - name: minio
           port: minio-webui
-    - match: Host(`minio.api.app.local`)
+    - match: Host(`minio.api.app.local`) || Host(`minio.api.kub.local`)
       kind: Rule
       services:
         - name: minio
