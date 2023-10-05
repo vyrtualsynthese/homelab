@@ -17,10 +17,24 @@ spec:
             - name: nextcloud-data-volume
               persistentVolumeClaim:
                 claimName: nextcloud-nfs
+            - name: script-cache-volume
+              emptyDir: {}
+            - name: nextcloud-backup-configmap
+              configMap:
+                name: {{ include "nextcloud.backup.fullname" . }}
+          initContainers:
+            - name: init-nextcloud-nginx-config
+              image: busybox:1.35
+              command: [ 'sh', '-c', "cp /config/* /cache" ]
+              volumeMounts:
+                - mountPath: /cache
+                  name: script-cache-volume
+                - mountPath: /config
+                  name: nextcloud-backup-configmap
           containers:
             - name: {{ .Chart.Name }}-backup
-              command: [ "/bin/sh","-c" ]
-              args: [ "restic init && restic backup /data && restic forget --keep-within-daily 7d --keep-within-weekly 1m --prune" ]
+              command: [ "/bin/sh" ]
+              args: [ "./config/backup.sh" ]
               image: "{{ .Values.backup.image.repository }}:{{ .Values.backup.image.tag | default .Chart.AppVersion }}"
               imagePullPolicy: {{ .Values.backup.image.pullPolicy }}
               resources:
@@ -49,6 +63,8 @@ spec:
               volumeMounts:
                 - name: nextcloud-data-volume
                   mountPath: /data
+                - mountPath: /config
+                  name: script-cache-volume
           restartPolicy: OnFailure
           affinity:
             nodeAffinity:
