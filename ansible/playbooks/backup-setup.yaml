@@ -41,8 +41,8 @@
       ansible.builtin.lineinfile:
         path: /etc/environment
         state: present
-        regexp: '^RESTIC_REPOSITORY="s3:http://minio.api.app.local/{{ inventory_hostname }}backup"'
-        line: 'RESTIC_REPOSITORY="s3:http://minio.api.app.local/{{ inventory_hostname }}backup"'
+        regexp: '^RESTIC_REPOSITORY="s3:http://minio.api.kub.local/{{ inventory_hostname }}backup"'
+        line: 'RESTIC_REPOSITORY="s3:http://minio.api.kub.local/{{ inventory_hostname }}backup"'
 
     - name: Check if repo already configured
       ansible.builtin.command: restic snapshots
