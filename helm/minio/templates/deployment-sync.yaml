@@ -105,6 +105,21 @@ spec:
           volumeMounts:
             - name: config
               mountPath: /root/.mc
+        - name: {{ .Chart.Name }}-sync-nextcloud-backup
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "{{ .Values.sync.image.repository }}:{{ .Values.sync.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.sync.image.pullPolicy }}
+          command:
+            - /bin/bash
+            - -c
+          args:
+            - mc mirror --watch --overwrite --remove minio-nextcloud/nextcloudbackup s3-nextcloud-backup/ashudev-homelab-nextcloud-backup
+          resources:
+            {{- toYaml .Values.sync.resources | nindent 12 }}
+          volumeMounts:
+            - name: config
+              mountPath: /root/.mc
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
