@@ -51,7 +51,7 @@ spec:
           image: "{{ .Values.sync.image.repository }}:{{ .Values.sync.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.sync.image.pullPolicy }}
           command:
-            - /bin/bash
+            - /bin/sh
             - -c
           args:
             - mc mirror --watch --overwrite --remove minio-xps13/xps13backup s3-xps13-backup/ashudev-homelab-xps13-backup
@@ -66,7 +66,7 @@ spec:
           image: "{{ .Values.sync.image.repository }}:{{ .Values.sync.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.sync.image.pullPolicy }}
           command:
-            - /bin/bash
+            - /bin/sh
             - -c
           args:
             - mc mirror --watch --overwrite --remove minio-rbp0/rbp0backup s3-rbp0-backup/ashudev-homelab-rbp0-backup
@@ -81,7 +81,7 @@ spec:
           image: "{{ .Values.sync.image.repository }}:{{ .Values.sync.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.sync.image.pullPolicy }}
           command:
-            - /bin/bash
+            - /bin/sh
             - -c
           args:
             - mc mirror --watch --overwrite --remove minio-rbp1/rbp1backup s3-rbp1-backup/ashudev-homelab-rbp1-backup
@@ -96,7 +96,7 @@ spec:
           image: "{{ .Values.sync.image.repository }}:{{ .Values.sync.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.sync.image.pullPolicy }}
           command:
-            - /bin/bash
+            - /bin/sh
             - -c
           args:
             - mc mirror --watch --overwrite --remove minio-longhorn/longhorn s3-longhorn-backup/ashudev-homelab-longhorn-backup
@@ -111,7 +111,7 @@ spec:
           image: "{{ .Values.sync.image.repository }}:{{ .Values.sync.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.sync.image.pullPolicy }}
           command:
-            - /bin/bash
+            - /bin/sh
             - -c
           args:
             - mc mirror --watch --overwrite --remove minio-nextcloud/nextcloudbackup s3-nextcloud-backup/ashudev-homelab-nextcloud-backup
