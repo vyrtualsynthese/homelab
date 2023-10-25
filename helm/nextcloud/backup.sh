@@ -8,3 +8,4 @@ fi
 
 restic backup /data --host nextcloudbackup -v
 restic forget --keep-within-daily 7d --keep-within-weekly 1m --prune -v --host nextcloudbackup
+exit 0
