@@ -21,6 +21,6 @@ EXPOSE ${PORT}
 
 CMD yarn build-and-start
 
-FROM nginx:alpine AS Prod
+FROM nginx:1.25.3-alpine3.18 AS Prod
 
 COPY --from=dev ./app/dist /usr/share/nginx/html/
