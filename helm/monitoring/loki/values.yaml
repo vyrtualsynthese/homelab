@@ -1,0 +1,31 @@
+loki:
+  commonConfig:
+    replication_factor: 1
+  storage:
+    type: 'filesystem'
+singleBinary:
+  replicas: 1
+  persistence:
+    # -- Enable StatefulSetAutoDeletePVC feature
+    enableStatefulSetAutoDeletePVC: true
+    # -- Enable persistent disk
+    enabled: true
+    # -- Size of persistent disk
+    size: 10Gi
+
+# Disabled as it forces usage of Grafana Agent and Loki Canary. Should be fixed
+test:
+  enabled: false
+monitoring:
+  dashboards:
+    # -- If enabled, create configmap with dashboards for monitoring Loki
+    enabled: false
+  selfMonitoring:
+    enabled: false
+  grafanaAgent:
+    # -- Controls whether to install the Grafana Agent Operator and its CRDs.
+    # Note that helm will not install CRDs if this flag is enabled during an upgrade.
+    # In that case install the CRDs manually from https://github.com/grafana/agent/tree/main/production/operator/crds
+    installOperator: false
+  lokiCanary:
+    enabled: false
