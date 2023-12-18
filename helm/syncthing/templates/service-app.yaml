@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "app.fullname" . }}
+  labels:
+    {{- include "app.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.app.service.type }}
+  ports:
+    - port: 8384
+      name: webui
+      targetPort: webui
+      protocol: TCP
+    - port: 22000
+      name: listening
+      targetPort: listening
+      protocol: TCP
+  selector:
+    {{- include "app.selectorLabels" . | nindent 4 }}
