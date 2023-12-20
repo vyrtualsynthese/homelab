@@ -1,4 +1,4 @@
-- hosts: xps13,runner
+- hosts: backup_slave
   remote_user: vronteix
   become: yes
 
@@ -53,16 +53,16 @@
       ansible.builtin.command: sudo restic init
       when: repoCheckReturn.rc != 0
 
-    - name: Import backup script
+    - name: Import backup script for k3s masters
       ansible.builtin.copy:
         src: "scripts/backup-scripts/k3s/backup.sh"
         dest: "/home/vronteix/scripts/"
         owner: "{{ ansible_ssh_user }}"
         group: "{{ ansible_ssh_user }}"
         mode: '0550'
-      when: inventory_hostname == "xps13"
+      when: inventory_hostname == "xps13" or inventory_hostname == "nuc0"
 
-    - name: Import backup script
+    - name: Import backup script for runners
       ansible.builtin.copy:
         src: "scripts/backup-scripts/runner/backup.sh"
         dest: "/home/vronteix/scripts/"
@@ -78,4 +78,3 @@
         hour: "4"
         user: root
         job: "/home/{{ ansible_ssh_user }}/scripts/backup.sh"
-      when: inventory_hostname == "rbp1" or inventory_hostname == "rbp0" or inventory_hostname == "xps13"

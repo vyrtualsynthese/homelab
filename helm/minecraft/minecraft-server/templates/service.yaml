@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "mc.fullname" . }}
+  labels:
+    {{- include "mc.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.service.clusterip.type }}
+  ports:
+    - port: 25565
+      name: mc
+      targetPort: mc
+  selector:
+    {{- include "mc.selectorLabels" . | nindent 4 }}
