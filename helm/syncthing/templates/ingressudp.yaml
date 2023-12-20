@@ -7,9 +7,9 @@
   {{- end }}
 {{- end }}
 apiVersion: traefik.containo.us/v1alpha1
-kind: IngressRoute
+kind: IngressRouteUDP
 metadata:
-  name: {{ $fullName }}-public
+  name: {{ $fullName }}-udp
   labels:
     {{- include "app.labels" . | nindent 4 }}
   {{- with .Values.app.ingress.annotations }}
@@ -18,15 +18,9 @@ metadata:
   {{- end }}
 spec:
   entryPoints:
-    - websecure
+    - studp
   routes:
-    - match: Host(`syncthing.kub.home.ashudev.com`)
-      kind: Rule
-      services:
-        - name: syncthing
-          port: webui
-  tls:
-    certResolver: myresolver
-    options:
-      name: {{ include "app.fullname" . }}-tlsoption
+    - services:
+      - name: syncthing
+        port: studp
 {{- end }}
