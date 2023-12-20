@@ -47,8 +47,16 @@ spec:
           ports:
             - containerPort: 8384
               name: webui
+              protocol: TCP
             - containerPort: 22000
-              name: listening
+              name: sttcp
+              protocol: TCP
+            - containerPort: 22000
+              name: studp
+              protocol: UDP
+            - containerPort: 21027
+              name: stdiscovery
+              protocol: UDP
           volumeMounts:
             - name: syncthing-conf
               mountPath: /config

@@ -20,18 +20,11 @@ spec:
   entryPoints:
     - web
   routes:
-    - match: Host(`webui.syncthing.kub.home.ashudev.com`)
-      kind: Rule
-      services:
-        - name: syncthing
-          port: webui
-      middlewares:
-        - name: {{ include "app.fullname" . }}-redirect-https
     - match: Host(`syncthing.kub.home.ashudev.com`)
       kind: Rule
       services:
         - name: syncthing
-          port: listening
+          port: webui
       middlewares:
         - name: {{ include "app.fullname" . }}-redirect-https
 {{- end }}

@@ -12,8 +12,16 @@ spec:
       targetPort: webui
       protocol: TCP
     - port: 22000
-      name: listening
-      targetPort: listening
+      name: sttcp
+      targetPort: sttcp
       protocol: TCP
+    - port: 22000
+      name: studp
+      targetPort: studp
+      protocol: UDP
+    - port: 21027
+      name: stdiscovery
+      targetPort: stdiscovery
+      protocol: UDP
   selector:
     {{- include "app.selectorLabels" . | nindent 4 }}
