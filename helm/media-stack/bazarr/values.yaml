@@ -8,7 +8,7 @@ image:
   repository: lscr.io/linuxserver/bazarr
   pullPolicy: IfNotPresent
   # Overrides the image tag whose default is the chart appVersion.
-  tag: v1.2.4-ls209
+  tag: v1.4.0-ls228
 
 imagePullSecrets: []
 nameOverride: ""
@@ -60,9 +60,9 @@ ingress:
 resources:
   requests:
     cpu: 1m
-    memory: 128Mi
+    memory: 256Mi
   limits:
-    memory: 512Mi
+    memory: 1Gi
   # We usually recommend not to specify default resources and to leave this as a conscious
   # choice for the user. This also increases chances charts run on environments with little
   # resources, such as Minikube. If you do want to specify resources, uncomment the following
