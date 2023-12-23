@@ -5,10 +5,10 @@
 replicaCount: 1
 
 image:
-  repository: kizaing/kavita
+  repository: lscr.io/linuxserver/kavita
   pullPolicy: IfNotPresent
   # Overrides the image tag whose default is the chart appVersion.
-  tag: 0.7.7
+  tag: v0.7.11.2-ls19
 
 imagePullSecrets: []
 nameOverride: ""
