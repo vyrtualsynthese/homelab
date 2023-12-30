@@ -1,9 +1,20 @@
 rbp0:
   awsAccessKey:
   awsSecretKey:
+  password:
 rbp1:
   awsAccessKey:
   awsSecretKey:
+  password:
 xps13:
   awsAccessKey:
   awsSecretKey:
+  password:
+nuc0:
+  awsAccessKey:
+  awsSecretKey:
+  password:
+streaming:
+  awsAccessKey:
+  awsSecretKey:
+  password:
