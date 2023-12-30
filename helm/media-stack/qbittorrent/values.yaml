@@ -86,7 +86,7 @@ autoscaling:
   # targetMemoryUtilizationPercentage: 80
 
 nodeSelector:
-  kubernetes.io/hostname: nas
+  kubernetes.io/hostname: streaming
 
 tolerations: []
 

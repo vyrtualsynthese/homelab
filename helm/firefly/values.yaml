@@ -77,20 +77,12 @@ app:
 
   tolerations: []
 
-  affinity:
-    nodeAffinity:
-      requiredDuringSchedulingIgnoredDuringExecution:
-        nodeSelectorTerms:
-          - matchExpressions:
-              - key: kubernetes.io/hostname
-                operator: NotIn
-                values:
-                  - nas
+  affinity: {}
 
 db:
   image:
     repository: postgres
-    pullPolicy: Always
+    pullPolicy: IfNotPresent
     # Overrides the image tag whose default is the chart appVersion.
     tag: 14.9-alpine3.18
 
@@ -158,15 +150,7 @@ db:
 
   tolerations: []
 
-  affinity:
-    nodeAffinity:
-      requiredDuringSchedulingIgnoredDuringExecution:
-        nodeSelectorTerms:
-          - matchExpressions:
-              - key: kubernetes.io/hostname
-                operator: NotIn
-                values:
-                  - nas
+  affinity: {}
 
 importer:
   image:
@@ -235,15 +219,7 @@ importer:
 
   tolerations: []
 
-  affinity:
-    nodeAffinity:
-      requiredDuringSchedulingIgnoredDuringExecution:
-        nodeSelectorTerms:
-          - matchExpressions:
-              - key: kubernetes.io/hostname
-                operator: NotIn
-                values:
-                  - nas
+  affinity: {}
 
 cron:
   image:
@@ -296,12 +272,4 @@ cron:
 
   tolerations: []
 
-  affinity:
-    nodeAffinity:
-      requiredDuringSchedulingIgnoredDuringExecution:
-        nodeSelectorTerms:
-          - matchExpressions:
-              - key: kubernetes.io/hostname
-                operator: NotIn
-                values:
-                  - nas
+  affinity: {}

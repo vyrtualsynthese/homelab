@@ -92,3 +92,13 @@ Selector labels
 app.kubernetes.io/name: {{ include "name" . }}-node-xps13
 app.kubernetes.io/instance: {{ .Release.Name }}-node-xps13
 {{- end }}
+
+# node-streaming template
+
+{{/*
+Selector labels
+*/}}
+{{- define "selectorLabels-node-streaming" -}}
+app.kubernetes.io/name: {{ include "name" . }}-node-streaming
+app.kubernetes.io/instance: {{ .Release.Name }}-node-streaming
+{{- end }}

@@ -78,15 +78,7 @@ app:
 
   tolerations: []
 
-  affinity:
-    nodeAffinity:
-      requiredDuringSchedulingIgnoredDuringExecution:
-        nodeSelectorTerms:
-          - matchExpressions:
-              - key: kubernetes.io/hostname
-                operator: NotIn
-                values:
-                  - nas
+  affinity: {}
 
 db:
   image:
@@ -166,12 +158,4 @@ db:
         cpu: 1m
         memory: 1Mi
 
-  affinity:
-    nodeAffinity:
-      requiredDuringSchedulingIgnoredDuringExecution:
-        nodeSelectorTerms:
-          - matchExpressions:
-              - key: kubernetes.io/hostname
-                operator: NotIn
-                values:
-                  - nas
+  affinity: {}

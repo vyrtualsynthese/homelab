@@ -5,6 +5,9 @@ metadata:
   labels:
     {{- include "nextcloud.app.labels" . | nindent 4 }}
 spec:
+  replicas: 1
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       {{- include "nextcloud.app.selectorLabels" . | nindent 6 }}

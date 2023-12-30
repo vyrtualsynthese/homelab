@@ -106,7 +106,7 @@ resources: {}
   #  memory: 128Mi
 
 nodeSelector:
-  kubernetes.io/hostname: nas
+  kubernetes.io/hostname: streaming
 
 tolerations: []
 

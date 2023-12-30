@@ -6,7 +6,7 @@ replicaCount: 1
 
 image:
   repository: lissy93/dashy
-  pullPolicy: Always
+  pullPolicy: IfNotPresent
   # Overrides the image tag whose default is the chart appVersion.
   tag: 2.1.1
 
@@ -61,6 +61,5 @@ resources:
 nodeSelector: {}
 
 tolerations: []
-
 
 affinity: {}

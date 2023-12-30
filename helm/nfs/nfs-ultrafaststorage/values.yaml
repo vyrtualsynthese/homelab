@@ -3,7 +3,7 @@ strategyType: Recreate
 
 image:
   repository: registry.k8s.io/sig-storage/nfs-subdir-external-provisioner
-  tag: v4.0.18
+  tag: v4.0.2
   pullPolicy: IfNotPresent
 imagePullSecrets: []
 
@@ -106,7 +106,7 @@ resources: {}
   #  memory: 128Mi
 
 nodeSelector:
-  kubernetes.io/hostname: nas
+  kubernetes.io/hostname: streaming
 
 tolerations: []
 

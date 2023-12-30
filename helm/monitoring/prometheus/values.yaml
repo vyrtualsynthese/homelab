@@ -642,7 +642,7 @@ server:
   ##
   image:
     repository: quay.io/prometheus/prometheus
-    tag: v2.44.0
+    tag: v2.45.2
     pullPolicy: IfNotPresent
 
   ## prometheus server priorityClassName
@@ -845,15 +845,7 @@ server:
 
   ## Pod affinity
   ##
-  affinity:
-    nodeAffinity:
-      requiredDuringSchedulingIgnoredDuringExecution:
-        nodeSelectorTerms:
-          - matchExpressions:
-              - key: kubernetes.io/hostname
-                operator: NotIn
-                values:
-                  - nas
+  affinity: {}
 
   ## PodDisruptionBudget settings
   ## ref: https://kubernetes.io/docs/concepts/workloads/pods/disruptions/
@@ -999,7 +991,7 @@ server:
   ##
   resources:
     limits:
-      memory: 3000Mi
+      memory: 6Gi
     requests:
       cpu: 25m
       memory: 1500Mi
