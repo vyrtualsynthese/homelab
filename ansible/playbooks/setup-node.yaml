@@ -58,7 +58,8 @@
           - original-awk
           - jq
           - smartmontools
-          - linux-modules-extra-*
+          #- linux-modules-extra-5.15.0-73-generic
+          - linux-generic
 
   handlers:
     - name: restart sshd
