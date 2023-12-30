@@ -12,15 +12,7 @@ singleBinary:
     enabled: true
     # -- Size of persistent disk
     size: 10Gi
-  affinity: |
-    nodeAffinity:
-      requiredDuringSchedulingIgnoredDuringExecution:
-        nodeSelectorTerms:
-          - matchExpressions:
-              - key: kubernetes.io/hostname
-                operator: NotIn
-                values:
-                  - nas
+  affinity: {}
 
 # Disabled as it forces usage of Grafana Agent and Loki Canary. Should be fixed
 test:

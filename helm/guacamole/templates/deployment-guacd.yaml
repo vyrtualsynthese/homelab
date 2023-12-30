@@ -5,6 +5,7 @@ metadata:
   labels:
     {{- include "guacd.labels" . | nindent 4 }}
 spec:
+  replicas: 1
   strategy:
     type: Recreate
   selector:

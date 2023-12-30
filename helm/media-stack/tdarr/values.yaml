@@ -2,9 +2,6 @@
 # This is a YAML-formatted file.
 # Declare variables to be passed into your templates.
 
-replicaCount: 1
-
-
 image:
   repository: ghcr.io/haveagitgat/tdarr
   pullPolicy: IfNotPresent
@@ -76,7 +73,6 @@ resourcesNodeNas:
     memory: 1024Mi
   limits:
     memory: 12000Mi
-    gpu.intel.com/i915: "1"
 
 resourcesNodeNuc:
   requests:
@@ -84,7 +80,6 @@ resourcesNodeNuc:
     memory: 1024Mi
   limits:
     memory: 12000Mi
-    gpu.intel.com/i915: "1"
 
 resourcesNodeXps13:
   requests:
@@ -92,7 +87,14 @@ resourcesNodeXps13:
     memory: 1024Mi
   limits:
     memory: 8000Mi
-    gpu.intel.com/i915: "1"
+
+resourcesNodeStreaming:
+  requests:
+    cpu: 1m
+    memory: 1024Mi
+  limits:
+    memory: 8000Mi
+    nvidia.com/gpu: 1
   # We usually recommend not to specify default resources and to leave this as a conscious
   # choice for the user. This also increases chances charts run on environments with little
   # resources, such as Minikube. If you do want to specify resources, uncomment the following
@@ -112,7 +114,6 @@ autoscaling:
   # targetMemoryUtilizationPercentage: 80
 
 nodeSelector: {}
-  #kubernetes.io/hostname: nuc0
 
 nodeSelectorNodeNas:
   kubernetes.io/hostname: nas
@@ -123,14 +124,9 @@ nodeSelectorNodeNuc:
 nodeSelectorNodeXps13:
   kubernetes.io/hostname: xps-13
 
+nodeSelectorNodeStreaming:
+  kubernetes.io/hostname: streaming
+
 tolerations: []
 
-affinity:
-  nodeAffinity:
-    requiredDuringSchedulingIgnoredDuringExecution:
-      nodeSelectorTerms:
-        - matchExpressions:
-            - key: kubernetes.io/hostname
-              operator: NotIn
-              values:
-                - nas
+affinity: {}

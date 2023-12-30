@@ -5,11 +5,9 @@ metadata:
   labels:
     {{- include "labels" . | nindent 4 }}
 spec:
+  replicas: 1
   strategy:
     type: Recreate
-  {{- if not .Values.autoscaling.enabled }}
-  replicas: {{ .Values.replicaCount }}
-  {{- end }}
   selector:
     matchLabels:
       {{- include "selectorLabels-node-xps13" . | nindent 6 }}

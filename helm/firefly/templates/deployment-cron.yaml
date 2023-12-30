@@ -5,6 +5,9 @@ metadata:
   labels:
     {{- include "cron.labels" . | nindent 4 }}
 spec:
+  replicas: 1
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       {{- include "cron.selectorLabels" . | nindent 6 }}

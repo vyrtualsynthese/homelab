@@ -2,9 +2,6 @@
 # This is a YAML-formatted file.
 # Declare variables to be passed into your templates.
 
-replicaCount: 1
-
-
 image:
   repository: plexinc/pms-docker
   pullPolicy: IfNotPresent
@@ -83,7 +80,7 @@ autoscaling:
   # targetMemoryUtilizationPercentage: 80
 
 nodeSelector:
-  kubernetes.io/hostname: nas
+  kubernetes.io/hostname: streaming
 
 tolerations: []
 

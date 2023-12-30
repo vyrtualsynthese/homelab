@@ -1,7 +1,7 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "fullname" . }}
+  name: {{ include "fullname" . }}-node-streaming
   labels:
     {{- include "labels" . | nindent 4 }}
 spec:
@@ -10,7 +10,7 @@ spec:
     type: Recreate
   selector:
     matchLabels:
-      {{- include "selectorLabels" . | nindent 6 }}
+      {{- include "selectorLabels-node-streaming" . | nindent 6 }}
   template:
     metadata:
       {{- with .Values.podAnnotations }}
@@ -18,22 +18,15 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       labels:
-        {{- include "selectorLabels" . | nindent 8 }}
+        {{- include "selectorLabels-node-streaming" . | nindent 8 }}
     spec:
       volumes:
-        - name: tdarr-server-volume
-          persistentVolumeClaim:
-            claimName: tdarr-server
-        - name: tdarr-logs-volume
-          persistentVolumeClaim:
-            claimName: tdarr-logs
         - name: tdarr-temp-volume
           persistentVolumeClaim:
             claimName: pvc-tdarr-cache
         - name: plex-media-volume
           persistentVolumeClaim:
             claimName: pvc-plex-media
-
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
@@ -42,29 +35,24 @@ spec:
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:
-        - name: {{ .Chart.Name }}
+        - name: {{ .Chart.Name }}-node-streaming
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
-          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          image: "{{ .Values.imageNode.repository }}:{{ .Values.imageNode.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:
-            - name: web-ui
-              containerPort: 8265
-              protocol: TCP
             - name: server
               containerPort: 8266 #PMS
               protocol: TCP
           env:
             - name: "serverIP"
-              value: "0.0.0.0"
+              value: "tdarr"
             - name: "serverPort"
               value: "8266"
             - name: "webUIPort"
               value: "8265"
-            - name: "internalNode"
-              value: "false"
-            - name: "inContainer"
-              value: "true"
+            - name: "nodeName"
+              value: "AshuFlixNode-streaming"
             - name: "TZ"
               value: "Europe/Paris"
             - name: "PUID"
@@ -76,12 +64,8 @@ spec:
             - name: "NVIDIA_VISIBLE_DEVICES"
               value: "all"
           resources:
-            {{- toYaml .Values.resources | nindent 12 }}
+            {{- toYaml .Values.resourcesNodeStreaming | nindent 12 }}
           volumeMounts:
-            - name: tdarr-server-volume
-              mountPath: /app/server
-            - name: tdarr-logs-volume
-              mountPath: /app/logs
             - name: tdarr-temp-volume
               mountPath: /temp
             - name: plex-media-volume
@@ -90,7 +74,7 @@ spec:
               mountPath: /media-hd
             - name: plex-media-volume
               mountPath: /media-sd
-      {{- with .Values.nodeSelector }}
+      {{- with .Values.nodeSelectorNodeStreaming }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
       {{- end }}
