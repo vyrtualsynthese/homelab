@@ -72,6 +72,29 @@
         name: systemd-journald
         state: restarted
 
+- hosts: k8s_agent
+  remote_user: vronteix
+  become: yes
+  tasks:
+
+    # https://longhorn.io/kb/troubleshooting-volume-with-multipath/
+    - name: multipath update for Longhorn
+      ansible.builtin.blockinfile:
+        path: /etc/multipath.conf
+        append_newline: true
+        prepend_newline: true
+        block: |
+          blacklist {
+              devnode "^sd[a-z0-9]+"
+          }
+      register: multipath
+
+    - name: reload multipathd.service
+      service:
+        name: multipathd.service
+        state: restarted
+      when: multipath.changed
+
 - hosts: runner
   remote_user: vronteix
   become: yes
@@ -179,7 +202,6 @@
   hosts: localhost
   tasks:
 
-
     - name: Extract wireguard config files to folder
       ansible.builtin.unarchive:
         src: "{{ playbook_dir }}/templates/runners/rbp1/config/wireguard/config.tgz"
@@ -189,13 +211,3 @@
       ansible.builtin.file:
         path: "{{ playbook_dir }}/templates/runners/rbp1/config/wireguard/config.tgz"
         state: absent
-
-- hosts: xps13
-  remote_user: vronteix
-  become: yes
-
-  tasks:
-    - name: install sqlite3 for master node backup
-      apt:
-        pkg:
-          - sqlite3
