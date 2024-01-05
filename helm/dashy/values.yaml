@@ -1,45 +1,23 @@
-# Default values for dashy.
-# This is a YAML-formatted file.
-# Declare variables to be passed into your templates.
-
-replicaCount: 1
-
 image:
-  repository: lissy93/dashy
-  pullPolicy: IfNotPresent
   # Overrides the image tag whose default is the chart appVersion.
   tag: 2.1.1
-
-imagePullSecrets: []
-nameOverride: ""
-fullnameOverride: ""
 
 serviceAccount:
   # Specifies whether a service account should be created
   create: false
-  # Annotations to add to the service account
-  annotations: {}
-  # The name of the service account to use.
-  # If not set and create is true, a name is generated using the fullname template
-  name: ""
-
-podAnnotations: {}
-
-podSecurityContext: {}
-  # fsGroup: 2000
-
-securityContext: {}
-  # capabilities:
-  #   drop:
-  #   - ALL
-  # readOnlyRootFilesystem: true
-  # runAsNonRoot: true
-  # runAsUser: 1000
+  # Automatically mount a ServiceAccount's API credentials?
+  automount: false
 
 ingress:
   enabled: true
   className: ""
-  annotations: {}
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: web
+  hosts:
+    - host: dashy.kub.local
+      paths:
+        - path: /
+          pathType: Prefix
 
 resources:
   requests:
@@ -47,19 +25,56 @@ resources:
     memory: 56Mi
   limits:
     memory: 128Mi
-  # We usually recommend not to specify default resources and to leave this as a conscious
-  # choice for the user. This also increases chances charts run on environments with little
-  # resources, such as Minikube. If you do want to specify resources, uncomment the following
-  # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
-  # limits:
-  #   cpu: 100m
-  #   memory: 128Mi
-  # requests:
-  #   cpu: 100m
-  #   memory: 128Mi
 
-nodeSelector: {}
-
-tolerations: []
-
-affinity: {}
+static:
+  enabled: true
+  secret: true
+  # Customize config.yaml https://github.com/Lissy93/dashy/blob/master/docs/configuring.md for more information.
+  configMapContent:
+    # Use --set-file stringArray to pass secret https://helm.sh/docs/helm/helm_install/
+    conf: |-
+      # Page meta info, like heading, footer text and nav links
+      pageInfo:
+        title: Dashy
+        description: Welcome to your new dashboard!
+        navLinks:
+          - title: GitHub
+            path: https://github.com/Lissy93/dashy
+          - title: Documentation
+            path: https://dashy.to/docs
+      
+      # Optional app settings and configuration
+      appConfig:
+        theme: colorful
+      
+      # Main content - An array of sections, each containing an array of items
+      sections:
+        - name: Getting Started
+          icon: fas fa-rocket
+          items:
+            - title: Dashy Live
+              description: Development a project management links for Dashy
+              icon: https://i.ibb.co/qWWpD0v/astro-dab-128.png
+              url: https://live.dashy.to/
+              target: newtab
+            - title: GitHub
+              description: Source Code, Issues and Pull Requests
+              url: https://github.com/lissy93/dashy
+              icon: favicon
+            - title: Docs
+              description: Configuring & Usage Documentation
+              provider: Dashy.to
+              icon: far fa-book
+              url: https://dashy.to/docs
+            - title: Showcase
+              description: See how others are using Dashy
+              url: https://github.com/Lissy93/dashy/blob/master/docs/showcase.md
+              icon: far fa-grin-hearts
+            - title: Config Guide
+              description: See full list of configuration options
+              url: https://github.com/Lissy93/dashy/blob/master/docs/configuring.md
+              icon: fas fa-wrench
+            - title: Support
+              description: Get help with Dashy, raise a bug, or get in contact
+              url: https://github.com/Lissy93/dashy/blob/master/.github/SUPPORT.md
+              icon: far fa-hands-helping
