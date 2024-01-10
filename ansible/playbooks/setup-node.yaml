@@ -147,14 +147,9 @@
       command: systemctl restart docker
       when: docker_daemon.changed
 
-- hosts: rbp0
-  remote_user: vronteix
-  become: yes
-  tasks:
-
     - name: Copy netplan config
       ansible.builtin.copy:
-        src: templates/runners/{{ inventory_hostname }}/50-cloud-init.yaml
+        src: templates/runners/50-cloud-init.yaml
         dest: /etc/netplan/50-cloud-init.yaml
 
     # Configure local DNS
@@ -171,26 +166,41 @@
         name: systemd-resolved
         enabled: true
 
-- hosts: rbp1
-  remote_user: vronteix
-  become: yes
-  tasks:
-
     - name: Compress wg configs
       community.general.archive:
         path: /home/vronteix/dockers/config
         dest: /home/vronteix/dockers/config.tgz
 
+    - name: Create etc-dnsmasq.d directory if it does not exist
+      ansible.builtin.file:
+        path: /home/vronteix/dockers/etc-dnsmasq.d/
+        state: directory
+
+    - name: Configure pihole DNS
+      ansible.builtin.copy:
+        src: templates/runners/02-my-wildcard-dns.conf
+        dest: /home/vronteix/dockers/etc-dnsmasq.d/02-my-wildcard-dns.conf
+
+    - name: Create etc-pihole-updatelists directory if it does not exist
+      ansible.builtin.file:
+        path: /home/vronteix/dockers/etc-pihole-updatelists/
+        state: directory
+
+    - name: Configure pihole adlist
+      ansible.builtin.copy:
+        src: templates/runners/pihole-updatelists.conf
+        dest: /home/vronteix/dockers/etc-pihole-updatelists/pihole-updatelists.conf
+
     - name: download wg configs
       ansible.builtin.fetch:
         src: /home/vronteix/dockers/config.tgz
-        dest: "{{ playbook_dir }}/templates/runners/rbp1/config/wireguard/config.tgz"
+        dest: "{{ playbook_dir }}/templates/runners/{{ inventory_hostname }}/config/wireguard/config.tgz"
         flat: true
 
-- hosts: runner
-  remote_user: vronteix
-  become: yes
-  tasks:
+    - name: Remove wireguard.tar.gz locally
+      ansible.builtin.file:
+        path: "/home/vronteix/dockers/config.tgz"
+        state: absent
 
     - name: Up docker compose
       community.docker.docker_compose:
@@ -204,10 +214,12 @@
 
     - name: Extract wireguard config files to folder
       ansible.builtin.unarchive:
-        src: "{{ playbook_dir }}/templates/runners/rbp1/config/wireguard/config.tgz"
-        dest: "{{ playbook_dir }}/templates/runners/rbp1/config/wireguard/"
+        src: "{{ playbook_dir }}/templates/runners/{{ item }}/config/wireguard/config.tgz"
+        dest: "{{ playbook_dir }}/templates/runners/{{ item }}/config/wireguard/"
+      with_items: "{{ groups['runner'] }}"
 
     - name: Remove wireguard.tar.gz locally
       ansible.builtin.file:
-        path: "{{ playbook_dir }}/templates/runners/rbp1/config/wireguard/config.tgz"
+        path: "{{ playbook_dir }}/templates/runners/{{ item }}/config/wireguard/config.tgz"
         state: absent
+      with_items: "{{ groups['runner'] }}"
