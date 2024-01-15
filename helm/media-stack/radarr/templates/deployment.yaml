@@ -23,7 +23,7 @@ spec:
       volumes:
         - name: radarr-config-volume
           persistentVolumeClaim:
-            claimName: radarr-config
+            claimName: radarr-config2
         - name: qbittorrent-download-volume
           persistentVolumeClaim:
             claimName: pvc-nfs-qbittorrent-download-nfs-subdir-external-provisioner

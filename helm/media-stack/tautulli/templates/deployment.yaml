@@ -23,7 +23,7 @@ spec:
       volumes:
         - name: tautulli-config-volume
           persistentVolumeClaim:
-            claimName: tautulli-config
+            claimName: tautulli-config2
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
