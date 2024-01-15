@@ -20,3 +20,4 @@ ansible/playbooks/templates/runners/rbp1/docker-compose.yml
 ansible/playbooks/templates/runners/rbp1/config
 secret.yml
 secret.yaml
+providers.yaml
