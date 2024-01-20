@@ -29,7 +29,7 @@ spec:
             claimName: pvc-nfs-qbittorrent-download-nfs-subdir-external-provisioner
         - name: books-volume
           persistentVolumeClaim:
-            claimName: books-nfs
+            claimName: pvc-books-media-nfs-subdir-external-provisioner
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
