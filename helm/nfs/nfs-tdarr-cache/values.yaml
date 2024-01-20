@@ -82,7 +82,10 @@ podAnnotations: {}
 ## Set pod priorityClassName
 # priorityClassName: ""
 
-podSecurityContext: {}
+podSecurityContext:
+  runAsUser: 1100
+  runAsGroup: 1100
+  fsGroup: 1100
 
 securityContext: {}
 

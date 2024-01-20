@@ -42,9 +42,9 @@ spec:
                 - name: "TZ"
                   value: "Europe/Paris"
                 - name: "PUID"
-                  value: "1000"
+                  value: "1100"
                 - name: "PGID"
-                  value: "1000"
+                  value: "1100"
               resources:
                 {{- toYaml .Values.resources | nindent 16 }}
               volumeMounts:

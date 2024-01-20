@@ -83,16 +83,6 @@ app.kubernetes.io/name: {{ include "name" . }}-node-nuc
 app.kubernetes.io/instance: {{ .Release.Name }}-node-nuc
 {{- end }}
 
-# node-xps13 template
-
-{{/*
-Selector labels
-*/}}
-{{- define "selectorLabels-node-xps13" -}}
-app.kubernetes.io/name: {{ include "name" . }}-node-xps13
-app.kubernetes.io/instance: {{ .Release.Name }}-node-xps13
-{{- end }}
-
 # node-streaming template
 
 {{/*
