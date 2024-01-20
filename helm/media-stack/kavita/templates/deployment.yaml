@@ -23,7 +23,7 @@ spec:
       volumes:
         - name: books-volume
           persistentVolumeClaim:
-            claimName: books-nfs
+            claimName: pvc-books-media-nfs-subdir-external-provisioner
         - name: config-volume
           persistentVolumeClaim:
             claimName: kavita-config2
