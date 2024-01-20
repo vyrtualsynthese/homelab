@@ -1,22 +1,18 @@
-replicaCount: 1
-strategyType: Recreate
-
 image:
   repository: registry.k8s.io/sig-storage/nfs-subdir-external-provisioner
   tag: v4.0.2
-  pullPolicy: IfNotPresent
-imagePullSecrets: []
 
 nfs:
   server: 192.168.1.41
-  path: /mnt/storage/nfs/plexmedia
+  path: /mnt/storage/nfs/books
   mountOptions:
     - nfsvers=4.2
     - rsize=1048576
     - wsize=1048576
     - nolock
     - async
-  volumeName: plex-media
+
+  volumeName: nfs-books
   # Reclaim policy for the main nfs volume
   reclaimPolicy: Retain
 
@@ -33,7 +29,7 @@ storageClass:
 
   # Set a StorageClass name
   # Ignored if storageClass.create is false
-  name: plex-media
+  name: nfs-books
 
   # Allow volume to be expanded dynamically
   allowVolumeExpansion: true
@@ -54,7 +50,7 @@ storageClass:
   pathPattern:
 
   # Set access mode - ReadWriteOnce, ReadOnlyMany or ReadWriteMany
-  accessModes: ReadWriteOnce
+  accessModes: ReadWriteMany
 
   # Set volume bindinng mode - Immediate or WaitForFirstConsumer
   volumeBindingMode: Immediate
@@ -83,11 +79,12 @@ podAnnotations: {}
 # priorityClassName: ""
 
 podSecurityContext:
-  runAsUser: 1100
-  runAsGroup: 1100
-  fsGroup: 1100
+  runAsUser: 911
+  runAsGroup: 911
+  fsGroup: 911
 
-securityContext: {}
+securityContext:
+  allowPrivilegeEscalation: false
 
 serviceAccount:
   # Specifies whether a ServiceAccount should be created
@@ -108,8 +105,7 @@ resources: {}
   #  cpu: 100m
   #  memory: 128Mi
 
-nodeSelector:
-  kubernetes.io/hostname: streaming
+nodeSelector: {}
 
 tolerations: []
 

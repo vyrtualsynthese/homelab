@@ -26,7 +26,7 @@ spec:
             claimName: calibre-config
         - name: books-volume
           persistentVolumeClaim:
-            claimName: books-nfs
+            claimName: pvc-books-media-nfs-subdir-external-provisioner
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
@@ -49,9 +49,9 @@ spec:
             - name: "TZ"
               value: "Europe/Paris"
             - name: "PUID"
-              value: "0"
+              value: "1100"
             - name: "PGID"
-              value: "0"
+              value: "1100"
             - name: "START_DOCKER"
               value: "false"
           resources:

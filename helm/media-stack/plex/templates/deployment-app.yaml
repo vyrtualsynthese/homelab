@@ -73,16 +73,14 @@ spec:
             - name: "ALLOWED_NETWORKS"
               value: "192.168.1.0/16,10.42.0.0/16"
             - name: "PLEX_UID"
-              value: "0"
+              value: "1100"
             - name: "PLEX_GID"
-              value: "0"
+              value: "1100"
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
           volumeMounts:
             - name: plex-config-volume
               mountPath: /config
-            #- name: plex-transcode-volume
-            #  mountPath: /transcode
             - name: plex-media-volume
               mountPath: /media
       {{- with .Values.nodeSelector }}

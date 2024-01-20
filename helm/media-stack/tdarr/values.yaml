@@ -81,13 +81,6 @@ resourcesNodeNuc:
   limits:
     memory: 12000Mi
 
-resourcesNodeXps13:
-  requests:
-    cpu: 1m
-    memory: 1024Mi
-  limits:
-    memory: 8000Mi
-
 resourcesNodeStreaming:
   requests:
     cpu: 1m
@@ -120,9 +113,6 @@ nodeSelectorNodeNas:
 
 nodeSelectorNodeNuc:
   kubernetes.io/hostname: nuc0
-
-nodeSelectorNodeXps13:
-  kubernetes.io/hostname: xps-13
 
 nodeSelectorNodeStreaming:
   kubernetes.io/hostname: streaming
