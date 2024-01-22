@@ -79,6 +79,7 @@ resourcesNodeNuc:
     cpu: 1m
     memory: 1024Mi
   limits:
+    cpu: 8000m
     memory: 12000Mi
 
 resourcesNodeStreaming:
@@ -86,8 +87,8 @@ resourcesNodeStreaming:
     cpu: 1m
     memory: 1024Mi
   limits:
+    cpu: 8000m
     memory: 8000Mi
-    nvidia.com/gpu: 1
   # We usually recommend not to specify default resources and to leave this as a conscious
   # choice for the user. This also increases chances charts run on environments with little
   # resources, such as Minikube. If you do want to specify resources, uncomment the following
@@ -108,9 +109,6 @@ autoscaling:
 
 nodeSelector: {}
 
-nodeSelectorNodeNas:
-  kubernetes.io/hostname: nas
-
 nodeSelectorNodeNuc:
   kubernetes.io/hostname: nuc0
 
@@ -119,4 +117,13 @@ nodeSelectorNodeStreaming:
 
 tolerations: []
 
-affinity: {}
+affinity:
+  nodeAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: kubernetes.io/hostname
+              operator: NotIn
+              values:
+                - nas
+                - rbp2
