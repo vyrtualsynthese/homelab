@@ -59,6 +59,7 @@ resources:
     cpu: 100m
     memory: 1024Mi
   limits:
+    cpu: 8000m
     memory: 24000Mi
     #gpu.intel.com/i915: "1"
   # We usually recommend not to specify default resources and to leave this as a conscious
