@@ -83,11 +83,19 @@ guacamole:
       requiredDuringSchedulingIgnoredDuringExecution:
         nodeSelectorTerms:
           - matchExpressions:
-              - key: kubernetes.io/hostname
-                operator: NotIn
+              - key: node-type
+                operator: In
                 values:
-                  - nas
-                  - rbp2
+                  - general
+    podAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        - labelSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/instance
+                operator: In
+                values:
+                  - guacamole
+          topologyKey: "kubernetes.io/hostname"
 
 guacd:
   image:
@@ -169,11 +177,19 @@ guacd:
       requiredDuringSchedulingIgnoredDuringExecution:
         nodeSelectorTerms:
           - matchExpressions:
-              - key: kubernetes.io/hostname
-                operator: NotIn
+              - key: node-type
+                operator: In
                 values:
-                  - nas
-                  - rbp2
+                  - general
+    podAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        - labelSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/instance
+                operator: In
+                values:
+                  - guacamole
+          topologyKey: "kubernetes.io/hostname"
 
 db:
   image:
@@ -258,8 +274,16 @@ db:
       requiredDuringSchedulingIgnoredDuringExecution:
         nodeSelectorTerms:
           - matchExpressions:
-              - key: kubernetes.io/hostname
-                operator: NotIn
+              - key: node-type
+                operator: In
                 values:
-                  - nas
-                  - rbp2
+                  - general
+    podAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        - labelSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/instance
+                operator: In
+                values:
+                  - guacamole
+          topologyKey: "kubernetes.io/hostname"

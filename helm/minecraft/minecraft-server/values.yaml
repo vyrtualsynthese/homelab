@@ -71,7 +71,7 @@ ingress:
 resources:
   requests:
     cpu: 100m
-    memory: 1000Mi
+    memory: 6Gi
   limits:
     memory: 6Gi
   # We usually recommend not to specify default resources and to leave this as a conscious
@@ -101,8 +101,7 @@ affinity:
     requiredDuringSchedulingIgnoredDuringExecution:
       nodeSelectorTerms:
         - matchExpressions:
-            - key: kubernetes.io/hostname
-              operator: NotIn
+            - key: node-type
+              operator: In
               values:
-                - nas
-                - rbp2
+                - general

@@ -26,6 +26,17 @@ resources:
   limits:
     memory: 128Mi
 
+affinity:
+  nodeAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: node-type
+              operator: In
+              values:
+                - general
+                - small
+
 env:
   NODE_ENV: "production"
   PORT: "80"

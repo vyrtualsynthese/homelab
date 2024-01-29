@@ -106,7 +106,8 @@ resources: {}
   #  cpu: 100m
   #  memory: 128Mi
 
-nodeSelector: {}
+nodeSelector:
+  kubernetes.io/hostname: nas
 
 tolerations: []
 

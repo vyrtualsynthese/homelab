@@ -45,21 +45,6 @@ spec:
             - mountPath: /secret
               name: minio-sync-config
       containers:
-        - name: {{ .Chart.Name }}-sync-xps13-backup
-          securityContext:
-            {{- toYaml .Values.securityContext | nindent 12 }}
-          image: "{{ .Values.sync.image.repository }}:{{ .Values.sync.image.tag | default .Chart.AppVersion }}"
-          imagePullPolicy: {{ .Values.sync.image.pullPolicy }}
-          command:
-            - /bin/sh
-            - -c
-          args:
-            - mc mirror --watch --overwrite --remove minio-xps13/xps13backup s3-xps13-backup/ashudev-homelab-xps13-backup
-          resources:
-            {{- toYaml .Values.sync.resources | nindent 12 }}
-          volumeMounts:
-            - name: config
-              mountPath: /root/.mc
         - name: {{ .Chart.Name }}-sync-rbp0-backup
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}

@@ -8,7 +8,7 @@ image:
   repository: lscr.io/linuxserver/sonarr
   pullPolicy: IfNotPresent
   # Overrides the image tag whose default is the chart appVersion.
-  tag: 4.0.0.741-ls219
+  tag: 4.0.1.929-ls222
 
 imagePullSecrets: []
 nameOverride: ""
@@ -105,8 +105,7 @@ affinity:
     requiredDuringSchedulingIgnoredDuringExecution:
       nodeSelectorTerms:
         - matchExpressions:
-            - key: kubernetes.io/hostname
-              operator: NotIn
+            - key: node-type
+              operator: In
               values:
-                - nas
-                - rbp2
+                - general

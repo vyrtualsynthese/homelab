@@ -74,10 +74,10 @@ ingress:
 
 resources:
   requests:
-    cpu: 25m
-    memory: 250Mi
+    cpu: 600m
+    memory: 2Gi
   limits:
-    memory: 2048Mi
+    memory: 2Gi
   # We usually recommend not to specify default resources and to leave this as a conscious
   # choice for the user. This also increases chances charts run on environments with little
   # resources, such as Minikube. If you do want to specify resources, uncomment the following
@@ -105,8 +105,7 @@ affinity:
     requiredDuringSchedulingIgnoredDuringExecution:
       nodeSelectorTerms:
         - matchExpressions:
-            - key: kubernetes.io/hostname
-              operator: NotIn
+            - key: node-type
+              operator: In
               values:
-                - nas
-                - rbp2
+                - general
