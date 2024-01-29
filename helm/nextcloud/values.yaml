@@ -96,11 +96,19 @@ db:
       requiredDuringSchedulingIgnoredDuringExecution:
         nodeSelectorTerms:
           - matchExpressions:
-              - key: kubernetes.io/hostname
-                operator: NotIn
+              - key: node-type
+                operator: In
                 values:
-                  - nas
-                  - rbp2
+                  - general
+    podAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        - labelSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/instance
+                operator: In
+                values:
+                  - nextcloud
+          topologyKey: "kubernetes.io/hostname"
 
 redis:
   image:
@@ -171,11 +179,19 @@ redis:
       requiredDuringSchedulingIgnoredDuringExecution:
         nodeSelectorTerms:
           - matchExpressions:
-              - key: kubernetes.io/hostname
-                operator: NotIn
+              - key: node-type
+                operator: In
                 values:
-                  - nas
-                  - rbp2
+                  - general
+    podAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        - labelSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/instance
+                operator: In
+                values:
+                  - nextcloud
+          topologyKey: "kubernetes.io/hostname"
 
 app:
   image:
@@ -243,11 +259,19 @@ app:
       requiredDuringSchedulingIgnoredDuringExecution:
         nodeSelectorTerms:
           - matchExpressions:
-              - key: kubernetes.io/hostname
-                operator: NotIn
+              - key: node-type
+                operator: In
                 values:
-                  - nas
-                  - rbp2
+                  - general
+    podAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        - labelSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/instance
+                operator: In
+                values:
+                  - nextcloud
+          topologyKey: "kubernetes.io/hostname"
 
 web:
   image:
@@ -328,11 +352,19 @@ web:
       requiredDuringSchedulingIgnoredDuringExecution:
         nodeSelectorTerms:
           - matchExpressions:
-              - key: kubernetes.io/hostname
-                operator: NotIn
+              - key: node-type
+                operator: In
                 values:
-                  - nas
-                  - rbp2
+                  - general
+    podAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        - labelSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/instance
+                operator: In
+                values:
+                  - nextcloud
+          topologyKey: "kubernetes.io/hostname"
 
 cron:
   image:
@@ -415,11 +447,19 @@ cron:
       requiredDuringSchedulingIgnoredDuringExecution:
         nodeSelectorTerms:
           - matchExpressions:
-              - key: kubernetes.io/hostname
-                operator: NotIn
+              - key: node-type
+                operator: In
                 values:
-                  - nas
-                  - rbp2
+                  - general
+    podAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        - labelSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/instance
+                operator: In
+                values:
+                  - nextcloud
+          topologyKey: "kubernetes.io/hostname"
 
 backup:
   image:
@@ -502,8 +542,16 @@ backup:
       requiredDuringSchedulingIgnoredDuringExecution:
         nodeSelectorTerms:
           - matchExpressions:
-              - key: kubernetes.io/hostname
-                operator: NotIn
+              - key: node-type
+                operator: In
                 values:
-                  - nas
-                  - rbp2
+                  - general
+    podAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        - labelSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/instance
+                operator: In
+                values:
+                  - nextcloud
+          topologyKey: "kubernetes.io/hostname"

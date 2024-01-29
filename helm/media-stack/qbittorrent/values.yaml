@@ -65,15 +65,15 @@ ingress:
 
 resources:
   requests:
-    cpu: 200m
-    memory: 1024Mi
+    cpu: 1
+    memory: 16Gi
   limits:
-    memory: 16000Mi
+    memory: 16Gi
 
 vpnresources:
   requests:
     cpu: 50m
-    memory: 26Mi
+    memory: 256Mi
   limits:
     memory: 256Mi
 

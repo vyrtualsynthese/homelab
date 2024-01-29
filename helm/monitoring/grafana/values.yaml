@@ -270,11 +270,10 @@ affinity:
     requiredDuringSchedulingIgnoredDuringExecution:
       nodeSelectorTerms:
         - matchExpressions:
-            - key: kubernetes.io/hostname
-              operator: NotIn
+            - key: node-type
+              operator: In
               values:
-                - nas
-                - rbp2
+                - general
 
 ## Topology Spread Constraints
 ## ref: https://kubernetes.io/docs/concepts/workloads/pods/pod-topology-spread-constraints/
@@ -1132,11 +1131,10 @@ imageRenderer:
       requiredDuringSchedulingIgnoredDuringExecution:
         nodeSelectorTerms:
           - matchExpressions:
-              - key: kubernetes.io/hostname
-                operator: NotIn
+              - key: node-type
+                operator: In
                 values:
-                  - nas
-                  - rbp2
+                  - general
 
   ## Use an alternate scheduler, e.g. "stork".
   ## ref: https://kubernetes.io/docs/tasks/administer-cluster/configure-multiple-schedulers/
