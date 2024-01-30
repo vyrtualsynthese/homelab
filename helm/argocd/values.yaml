@@ -1943,7 +1943,7 @@ server:
     enabled: true
     # -- Additional ingress annotations
     annotations:
-      traefik.ingress.kubernetes.io/router.entrypoints: web
+      traefik.ingress.kubernetes.io/router.entrypoints: websecure
     # -- Additional ingress labels
     labels: {}
     # -- Defines which ingress controller will implement the resource
@@ -1985,11 +1985,12 @@ server:
   # Ref: https://argo-cd.readthedocs.io/en/stable/operator-manual/ingress/
   ingressGrpc:
     # -- Enable an ingress resource for the Argo CD server for dedicated [gRPC-ingress]
-    enabled: false
+    enabled: true
     # -- Setup up gRPC ingress to work with an AWS ALB
     isAWSALB: false
     # -- Additional ingress annotations for dedicated [gRPC-ingress]
-    annotations: {}
+    annotations:
+      traefik.ingress.kubernetes.io/router.entrypoints: websecure
     # -- Additional ingress labels for dedicated [gRPC-ingress]
     labels: {}
     # -- Defines which ingress controller will implement the resource [gRPC-ingress]
@@ -2012,7 +2013,9 @@ server:
     ## Hostnames must be provided if Ingress is enabled.
     ## Secrets must be manually created in the namespace
     ##
-    hosts: []
+    hosts:
+      - argocd.api.kub.local
+
     # - argocd.example.com
 
     # -- List of ingress paths for dedicated [gRPC-ingress]
