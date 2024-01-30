@@ -1,0 +1,25 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: dashy
+  namespace: dashy
+spec:
+  project: default
+  destination:
+    server: 'https://kubernetes.default.svc'
+    namespace: dashy
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+  sources:
+    - repoURL: 'https://vyrtualsynthese.github.io/selfhosted-helmcharts/'
+      targetRevision: 0.1.6
+      helm:
+        valueFiles:
+          - $values/helm/dashy/values.yaml
+      chart: dashy
+    - repoURL: 'https://github.com/vyrtualsynthese/homelab.git'
+      targetRevision: develop
+      ref: values
+
