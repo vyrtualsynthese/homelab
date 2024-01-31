@@ -21,7 +21,7 @@ spec:
               emptyDir: {}
             - name: syncthing-backup-configmap
               configMap:
-                name: {{ include "backup.fullname" . }}
+                name: {{ include "backup.fullname" . }}-backup
           initContainers:
             - name: init-syncthing-config
               image: busybox:1.35
@@ -49,7 +49,7 @@ spec:
                 - mountPath: /config
                   name: script-cache-volume
           restartPolicy: OnFailure
-        {{- with .Values.app.nodeSelector }}
+          {{- with .Values.app.nodeSelector }}
           nodeSelector:
             {{- toYaml . | nindent 8 }}
           {{- end }}
