@@ -114,7 +114,22 @@ spec:
             - /bin/sh
             - -c
           args:
-            - mc mirror --watch --overwrite --remove minio-nextcloud/nextcloudbackup s3-nextcloud-backup/ashudev-homelab-nextcloud-backup --debug
+            - mc mirror --watch --overwrite --remove minio-nas/nasbackup s3-nas-backup/ashudev-homelab-nas-backup --debug
+          resources:
+            {{- toYaml .Values.sync.resources | nindent 12 }}
+          volumeMounts:
+            - name: config
+              mountPath: /root/.mc
+        - name: {{ .Chart.Name }}-sync-syncthing-backup
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "{{ .Values.sync.image.repository }}:{{ .Values.sync.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.sync.image.pullPolicy }}
+          command:
+            - /bin/sh
+            - -c
+          args:
+            - mc mirror --watch --overwrite --remove minio-syncthing/syncthingbackup s3-syncthing-backup/ashudev-homelab-syncthing-backup --debug
           resources:
             {{- toYaml .Values.sync.resources | nindent 12 }}
           volumeMounts:
