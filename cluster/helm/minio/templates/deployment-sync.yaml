@@ -54,7 +54,7 @@ spec:
             - /bin/sh
             - -c
           args:
-            - mc mirror --watch --overwrite --remove minio-rbp0/rbp0backup s3-rbp0-backup/ashudev-homelab-rbp0-backup
+            - mc mirror --watch --overwrite --remove minio-rbp0/rbp0backup s3-rbp0-backup/ashudev-homelab-rbp0-backup --debug
           resources:
             {{- toYaml .Values.sync.resources | nindent 12 }}
           volumeMounts:
@@ -69,7 +69,7 @@ spec:
             - /bin/sh
             - -c
           args:
-            - mc mirror --watch --overwrite --remove minio-rbp1/rbp1backup s3-rbp1-backup/ashudev-homelab-rbp1-backup
+            - mc mirror --watch --overwrite --remove minio-rbp1/rbp1backup s3-rbp1-backup/ashudev-homelab-rbp1-backup --debug
           resources:
             {{- toYaml .Values.sync.resources | nindent 12 }}
           volumeMounts:
@@ -84,7 +84,7 @@ spec:
             - /bin/sh
             - -c
           args:
-            - mc mirror --watch --overwrite --remove minio-longhorn/longhorn s3-longhorn-backup/ashudev-homelab-longhorn-backup
+            - mc mirror --watch --overwrite --remove minio-longhorn/longhorn s3-longhorn-backup/ashudev-homelab-longhorn-backup --debug
           resources:
             {{- toYaml .Values.sync.resources | nindent 12 }}
           volumeMounts:
@@ -99,7 +99,22 @@ spec:
             - /bin/sh
             - -c
           args:
-            - mc mirror --watch --overwrite --remove minio-nextcloud/nextcloudbackup s3-nextcloud-backup/ashudev-homelab-nextcloud-backup
+            - mc mirror --watch --overwrite --remove minio-nextcloud/nextcloudbackup s3-nextcloud-backup/ashudev-homelab-nextcloud-backup --debug
+          resources:
+            {{- toYaml .Values.sync.resources | nindent 12 }}
+          volumeMounts:
+            - name: config
+              mountPath: /root/.mc
+        - name: {{ .Chart.Name }}-sync-minio-backup
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "{{ .Values.sync.image.repository }}:{{ .Values.sync.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.sync.image.pullPolicy }}
+          command:
+            - /bin/sh
+            - -c
+          args:
+            - mc mirror --watch --overwrite --remove minio-nextcloud/nextcloudbackup s3-nextcloud-backup/ashudev-homelab-nextcloud-backup --debug
           resources:
             {{- toYaml .Values.sync.resources | nindent 12 }}
           volumeMounts:
