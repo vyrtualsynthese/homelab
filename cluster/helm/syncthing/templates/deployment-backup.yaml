@@ -1,0 +1,63 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "backup.fullname" . }}-backup
+  labels:
+    {{- include "backup.labels" . | nindent 4 }}
+spec:
+  schedule: "0 5 * * *"
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 1
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          volumes:
+            - name: syncthing-data-volume
+              persistentVolumeClaim:
+                claimName: pvc-nfs-syncthing
+            - name: script-cache-volume
+              emptyDir: {}
+            - name: syncthing-backup-configmap
+              configMap:
+                name: {{ include "backup.fullname" . }}
+          initContainers:
+            - name: init-syncthing-config
+              image: busybox:1.35
+              command: [ 'sh', '-c', "cp /config/* /cache" ]
+              volumeMounts:
+                - mountPath: /cache
+                  name: script-cache-volume
+                - mountPath: /config
+                  name: syncthing-backup-configmap
+          containers:
+            - name: {{ .Chart.Name }}-backup
+              command: [ "/bin/sh" ]
+              args: [ "./config/backup.sh" ]
+              #args: [ "-c", "sleep 60m" ]
+              image: "{{ .Values.backup.image.repository }}:{{ .Values.backup.image.tag | default .Chart.AppVersion }}"
+              imagePullPolicy: {{ .Values.backup.image.pullPolicy }}
+              resources:
+                {{- toYaml .Values.backup.resources | nindent 16 }}
+              envFrom:
+                - secretRef:
+                    name: syncthing-backup
+              volumeMounts:
+                - name: syncthing-data-volume
+                  mountPath: /data
+                - mountPath: /config
+                  name: script-cache-volume
+          restartPolicy: OnFailure
+        {{- with .Values.app.nodeSelector }}
+          nodeSelector:
+            {{- toYaml . | nindent 8 }}
+          {{- end }}
+          {{- with .Values.app.affinity }}
+          affinity:
+            {{- toYaml . | nindent 8 }}
+          {{- end }}
+          {{- with .Values.app.tolerations }}
+          tolerations:
+            {{- toYaml . | nindent 8 }}
+          {{- end }}
