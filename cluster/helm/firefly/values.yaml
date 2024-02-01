@@ -86,15 +86,6 @@ app:
                 operator: In
                 values:
                   - general
-    podAffinity:
-      requiredDuringSchedulingIgnoredDuringExecution:
-        - labelSelector:
-            matchExpressions:
-              - key: app.kubernetes.io/instance
-                operator: In
-                values:
-                  - ghostfolio
-          topologyKey: "kubernetes.io/hostname"
 
 db:
   image:
@@ -183,7 +174,7 @@ db:
               - key: app.kubernetes.io/instance
                 operator: In
                 values:
-                  - ghostfolio
+                  - firefly
           topologyKey: "kubernetes.io/hostname"
 
 importer:
@@ -269,7 +260,7 @@ importer:
               - key: app.kubernetes.io/instance
                 operator: In
                 values:
-                  - ghostfolio
+                  - firefly
           topologyKey: "kubernetes.io/hostname"
 
 cron:
@@ -339,5 +330,5 @@ cron:
               - key: app.kubernetes.io/instance
                 operator: In
                 values:
-                  - ghostfolio
+                  - firefly
           topologyKey: "kubernetes.io/hostname"
