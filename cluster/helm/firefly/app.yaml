@@ -1,27 +1,19 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  annotations:
-    argocd-image-updater.argoproj.io/image-list: docker.io/lissy93/dashy:^2.0
-  name: dashy
+  name: firefly
   namespace: argocd
 spec:
   project: default
   destination:
     server: 'https://kubernetes.default.svc'
-    namespace: dashy
+    namespace: firefly
   syncPolicy:
     automated:
       prune: true
       selfHeal: true
-  sources:
-    - repoURL: 'https://vyrtualsynthese.github.io/selfhosted-helmcharts/'
-      targetRevision: 0.1.6
-      helm:
-        valueFiles:
-          - $values/cluster/helm/dashy/values.yaml
-      chart: dashy
-    - repoURL: 'https://github.com/vyrtualsynthese/homelab.git'
-      targetRevision: develop
-      ref: values
+  source:
+    repoURL: 'https://github.com/vyrtualsynthese/homelab.git'
+    targetRevision: develop
+    path: cluster/helm/firefly
 
