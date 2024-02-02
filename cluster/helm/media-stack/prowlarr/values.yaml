@@ -5,10 +5,10 @@
 replicaCount: 1
 
 image:
-  repository: lscr.io/linuxserver/prowlarr
+  repository: ghcr.io/linuxserver/prowlarr
   pullPolicy: IfNotPresent
   # Overrides the image tag whose default is the chart appVersion.
-  tag: 1.11.4.4173-ls45
+  tag: 1.11.4
 
 exportarr:
   image:

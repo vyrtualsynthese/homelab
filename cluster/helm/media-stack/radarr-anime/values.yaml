@@ -5,10 +5,10 @@
 replicaCount: 1
 
 image:
-  repository: lscr.io/linuxserver/radarr
+  repository: ghcr.io/linuxserver/radarr
   pullPolicy: IfNotPresent
   # Overrides the image tag whose default is the chart appVersion.
-  tag: 5.2.6.8376-ls198
+  tag: 5.2.6
 
 imagePullSecrets: []
 nameOverride: ""

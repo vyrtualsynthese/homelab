@@ -3,10 +3,10 @@
 # Declare variables to be passed into your templates.
 
 image:
-  repository: lscr.io/linuxserver/kavita
+  repository: ghcr.io/linuxserver/kavita
   pullPolicy: IfNotPresent
   # Overrides the image tag whose default is the chart appVersion.
-  tag: v0.7.11.2-ls19
+  tag: 0.7.11.2
 
 imagePullSecrets: []
 nameOverride: ""
