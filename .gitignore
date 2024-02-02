@@ -21,3 +21,4 @@ ansible/playbooks/templates/runners/rbp1/config
 secret.yml
 secret.yaml
 providers.yaml
+!cluster/helm/monitoring/grafana/templates/secret.yaml
