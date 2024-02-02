@@ -2,21 +2,21 @@ apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
   annotations:
-    argocd-image-updater.argoproj.io/image-list: app=fireflyiii/core:version-^6.x, db=postgres:^14.x-0, cron=alpine:^3.x
-    argocd-image-updater.argoproj.io/app.helm.image-name: app.image.repository
-    argocd-image-updater.argoproj.io/app.helm.image-tag: app.image.tag
+    argocd-image-updater.argoproj.io/image-list: guacamole=guacamole/guacamole:^1.x, guacd=guacamole/guacd:^1.x, db=postgres:^15.x-0
+    argocd-image-updater.argoproj.io/guacamole.helm.image-name: guacamole.image.repository
+    argocd-image-updater.argoproj.io/guacamole.helm.image-tag: guacamole.image.tag
+    argocd-image-updater.argoproj.io/guacd.helm.image-name: guacd.image.repository
+    argocd-image-updater.argoproj.io/guacd.helm.image-tag: guacd.image.tag
     argocd-image-updater.argoproj.io/db.helm.image-name: db.image.repository
     argocd-image-updater.argoproj.io/db.helm.image-tag: db.image.tag
     argocd-image-updater.argoproj.io/db.allow-tags: 'regexp:^(0|[1-9]\d*)\.(0|[1-9]\d*)?-alpine.*'
-    argocd-image-updater.argoproj.io/cron.helm.image-name: cron.image.repository
-    argocd-image-updater.argoproj.io/cron.helm.image-tag: cron.image.tag
-  name: firefly
+  name: guacamole
   namespace: argocd
 spec:
   project: default
   destination:
     server: 'https://kubernetes.default.svc'
-    namespace: firefly
+    namespace: guacamole
   syncPolicy:
     automated:
       prune: true
@@ -24,5 +24,5 @@ spec:
   source:
     repoURL: 'https://github.com/vyrtualsynthese/homelab.git'
     targetRevision: develop
-    path: cluster/helm/firefly
+    path: cluster/helm/guacamole
 
