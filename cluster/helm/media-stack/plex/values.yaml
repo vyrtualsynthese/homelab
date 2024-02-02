@@ -3,10 +3,10 @@
 # Declare variables to be passed into your templates.
 
 image:
-  repository: plexinc/pms-docker
+  repository: ghcr.io/linuxserver/plex
   pullPolicy: IfNotPresent
   # Overrides the image tag whose default is the chart appVersion.
-  tag: 1.32.8.7639-fb6452ebf
+  tag: 1.32.8
 
 imagePullSecrets: []
 nameOverride: ""
