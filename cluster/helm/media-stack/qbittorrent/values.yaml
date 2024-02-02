@@ -11,10 +11,10 @@ image:
   tag: 4.6.2
 
 vpnimage:
-  repository: lscr.io/linuxserver/wireguard
+  repository: ghcr.io/linuxserver/wireguard
   pullPolicy: IfNotPresent
   # Overrides the image tag whose default is the chart appVersion.
-  tag: v1.0.20210914-ls123
+  tag: v1.0.20210914
 
 imagePullSecrets: []
 nameOverride: ""
