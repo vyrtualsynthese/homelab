@@ -19,7 +19,7 @@ exportarr:
     repository: ghcr.io/onedr0p/exportarr
     pullPolicy: IfNotPresent
     # Overrides the image tag whose default is the chart appVersion.
-    tag: latest
+    tag: v1.6.0
   resources:
     requests:
       cpu: 2m
