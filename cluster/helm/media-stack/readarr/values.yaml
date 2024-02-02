@@ -5,10 +5,10 @@
 replicaCount: 1
 
 image:
-  repository: lscr.io/linuxserver/readarr
+  repository: ghcr.io/linuxserver/readarr
   pullPolicy: IfNotPresent
   # Overrides the image tag whose default is the chart appVersion.
-  tag: develop-0.3.12.2327-ls79
+  tag: 0.3.12-develop
 
 imagePullSecrets: []
 nameOverride: ""

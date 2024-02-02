@@ -5,10 +5,10 @@
 replicaCount: 1
 
 image:
-  repository: lscr.io/linuxserver/sonarr
+  repository: ghcr.io/linuxserver/sonarr
   pullPolicy: IfNotPresent
   # Overrides the image tag whose default is the chart appVersion.
-  tag: 4.0.1.929-ls222
+  tag: 4.0.1
 
 imagePullSecrets: []
 nameOverride: ""
