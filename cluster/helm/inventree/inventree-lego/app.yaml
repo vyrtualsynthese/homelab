@@ -1,0 +1,35 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  annotations:
+    argocd-image-updater.argoproj.io/image-list: app=inventree/inventree:^0.x, db=postgres:^15.x-0, cache=redis:^7.x-0, worker=inventree/inventree:^0.x, proxy=nginx:^1.x-0
+    argocd-image-updater.argoproj.io/app.helm.image-name: app.image.repository
+    argocd-image-updater.argoproj.io/app.helm.image-tag: app.image.tag
+    argocd-image-updater.argoproj.io/db.helm.image-name: db.image.repository
+    argocd-image-updater.argoproj.io/db.helm.image-tag: db.image.tag
+    argocd-image-updater.argoproj.io/db.allow-tags: 'regexp:^(0|[1-9]\d*)\.(0|[1-9]\d*)?-alpine.*'
+    argocd-image-updater.argoproj.io/cache.helm.image-name: cache.image.repository
+    argocd-image-updater.argoproj.io/cache.helm.image-tag: cache.image.tag
+    argocd-image-updater.argoproj.io/cache.allow-tags: 'regexp:^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)?-alpine.*'
+    argocd-image-updater.argoproj.io/worker.helm.image-name: worker.image.repository
+    argocd-image-updater.argoproj.io/worker.helm.image-tag: worker.image.tag
+    argocd-image-updater.argoproj.io/proxy.helm.image-name: proxy.image.repository
+    argocd-image-updater.argoproj.io/proxy.helm.image-tag: proxy.image.tag
+    argocd-image-updater.argoproj.io/proxy.allow-tags: 'regexp:^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)?-alpine.*'
+
+  name: inventree-lego
+  namespace: argocd
+spec:
+  project: default
+  destination:
+    server: 'https://kubernetes.default.svc'
+    namespace: inventree-lego
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+  source:
+    repoURL: 'https://github.com/vyrtualsynthese/homelab.git'
+    targetRevision: develop
+    path: cluster/helm/inventree/inventree-lego
+

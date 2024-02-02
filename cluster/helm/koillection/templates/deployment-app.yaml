@@ -61,6 +61,8 @@ spec:
               value: "100M"
             - name: "PHP_MEMORY_LIMIT"
               value: "100M"
+            - name: "COMPOSER_ALLOW_SUPERUSER"
+              value: "1"
           ports:
             - containerPort: 80
               name: koillection
