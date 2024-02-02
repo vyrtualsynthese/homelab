@@ -2,7 +2,7 @@ apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
   annotations:
-    argocd-image-updater.argoproj.io/image-list: app=plexinc/pms-docker:^1.x-0
+    argocd-image-updater.argoproj.io/image-list: app=ghcr.io/linuxserver/plex:^1.x
     argocd-image-updater.argoproj.io/app.helm.image-name: image.repository
     argocd-image-updater.argoproj.io/app.helm.image-tag: image.tag
   name: plex

@@ -70,11 +70,13 @@ spec:
               value: "https://plex.kub.home.ashudev.com:443"
             - name: "HOSTNAME"
               value: "plex"
+            - name: "VERSION"
+              value: "docker"
             - name: "ALLOWED_NETWORKS"
               value: "192.168.1.0/16,10.42.0.0/16"
-            - name: "PLEX_UID"
+            - name: "PUID"
               value: "1100"
-            - name: "PLEX_GID"
+            - name: "PGID"
               value: "1100"
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
