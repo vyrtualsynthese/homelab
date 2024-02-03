@@ -14,7 +14,7 @@ vpnimage:
   repository: ghcr.io/linuxserver/wireguard
   pullPolicy: IfNotPresent
   # Overrides the image tag whose default is the chart appVersion.
-  tag: v1.0.20210914
+  tag: 1.0.20210914
 
 imagePullSecrets: []
 nameOverride: ""

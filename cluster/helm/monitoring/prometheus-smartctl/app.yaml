@@ -6,7 +6,7 @@ metadata:
     argocd-image-updater.argoproj.io/app.helm.image-name: image.repository
     argocd-image-updater.argoproj.io/app.helm.image-tag: image.tag
 
-  name: prometheus
+  name: prometheus-smartctl
   namespace: argocd
 spec:
   project: default
@@ -20,4 +20,4 @@ spec:
   source:
     repoURL: 'https://github.com/vyrtualsynthese/homelab.git'
     targetRevision: develop
-    path: cluster/helm/monitoring/prometheus
+    path: cluster/helm/monitoring/prometheus-smartctl

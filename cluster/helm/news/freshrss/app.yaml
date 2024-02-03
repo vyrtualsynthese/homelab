@@ -2,16 +2,16 @@ apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
   annotations:
-    argocd-image-updater.argoproj.io/image-list: app=bobokun/qbit_manage:^4.x
+    argocd-image-updater.argoproj.io/image-list: app=lscr.io/linuxserver/freshrss:^1.x
     argocd-image-updater.argoproj.io/app.helm.image-name: image.repository
     argocd-image-updater.argoproj.io/app.helm.image-tag: image.tag
-  name: qbit-manage
+  name: freshrss
   namespace: argocd
 spec:
   project: default
   destination:
     server: 'https://kubernetes.default.svc'
-    namespace: media-stack
+    namespace: news
   syncPolicy:
     automated:
       prune: true
@@ -19,4 +19,4 @@ spec:
   source:
     repoURL: 'https://github.com/vyrtualsynthese/homelab.git'
     targetRevision: develop
-    path: cluster/helm/media-stack/qbit-manage
+    path: cluster/helm/news/freshrss

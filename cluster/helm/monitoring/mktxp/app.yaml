@@ -1,21 +1,7 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  annotations:
-    argocd-image-updater.argoproj.io/image-list: app=grafana/grafana-oss:^10.x, testFramework=bats/bats:^1.x, downloadDashboardsImage=curlimages/curl:^7.x, initChownData=busybox:^1.x, sidecar=quay.io/kiwigrid/k8s-sidecar:^1.x, imageRenderer=grafana/grafana-image-renderer:^3.x
-    argocd-image-updater.argoproj.io/app.helm.image-name: image.repository
-    argocd-image-updater.argoproj.io/app.helm.image-tag: image.tag
-    argocd-image-updater.argoproj.io/testFramework.helm.image-name: testFramework.image.repository
-    argocd-image-updater.argoproj.io/testFramework.helm.image-tag: testFramework.image.tag
-    argocd-image-updater.argoproj.io/downloadDashboardsImage.helm.image-name: downloadDashboardsImage.image.repository
-    argocd-image-updater.argoproj.io/downloadDashboardsImage.helm.image-tag: downloadDashboardsImage.image.tag
-    argocd-image-updater.argoproj.io/initChownData.helm.image-name: initChownData.image.repository
-    argocd-image-updater.argoproj.io/initChownData.helm.image-tag: initChownData.image.tag
-    argocd-image-updater.argoproj.io/sidecar.helm.image-name: sidecar.image.repository
-    argocd-image-updater.argoproj.io/sidecar.helm.image-tag: sidecar.image.tag
-    argocd-image-updater.argoproj.io/imageRenderer.helm.image-name: imageRenderer.image.repository
-    argocd-image-updater.argoproj.io/imageRenderer.helm.image-tag: imageRenderer.image.tag
-  name: grafana
+  name: mktxp
   namespace: argocd
 spec:
   project: default
@@ -29,4 +15,4 @@ spec:
   source:
     repoURL: 'https://github.com/vyrtualsynthese/homelab.git'
     targetRevision: develop
-    path: cluster/helm/monitoring/grafana
+    path: cluster/helm/monitoring/mktxp

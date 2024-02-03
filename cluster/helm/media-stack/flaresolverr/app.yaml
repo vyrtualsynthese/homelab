@@ -2,10 +2,10 @@ apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
   annotations:
-    argocd-image-updater.argoproj.io/image-list: app=filebrowser/filebrowser:^2.x
+    argocd-image-updater.argoproj.io/image-list: app=ghcr.io/flaresolverr/flaresolverr:^3.x
     argocd-image-updater.argoproj.io/app.helm.image-name: image.repository
     argocd-image-updater.argoproj.io/app.helm.image-tag: image.tag
-  name: filebrowser
+  name: flaresolverr
   namespace: argocd
 spec:
   project: default
@@ -19,4 +19,4 @@ spec:
   source:
     repoURL: 'https://github.com/vyrtualsynthese/homelab.git'
     targetRevision: develop
-    path: cluster/helm/media-stack/filebrowser
+    path: cluster/helm/media-stack/flaresolverr
