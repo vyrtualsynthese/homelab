@@ -2,7 +2,7 @@ apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
   annotations:
-    argocd-image-updater.argoproj.io/image-list: app=fireflyiii/core:version-^6.x, db=postgres:^14.x-0, backup=prodrigestivill/postgres-backup-local:^14.x-0, cron=alpine:^3.x
+    argocd-image-updater.argoproj.io/image-list: app=nextcloud:^2.x,db=postgres:^15.x-0, backup=prodrigestivill/postgres-backup-local:^14.x-0
     argocd-image-updater.argoproj.io/app.helm.image-name: app.image.repository
     argocd-image-updater.argoproj.io/app.helm.image-tag: app.image.tag
     argocd-image-updater.argoproj.io/db.helm.image-name: db.image.repository
@@ -11,15 +11,13 @@ metadata:
     argocd-image-updater.argoproj.io/backup.helm.image-name: db.backup.image.repository
     argocd-image-updater.argoproj.io/backup.helm.image-tag: db.backup.image.tag
     argocd-image-updater.argoproj.io/backup.allow-tags: 'regexp:^(0|[1-9]\d*)?-alpine'
-    argocd-image-updater.argoproj.io/cron.helm.image-name: cron.image.repository
-    argocd-image-updater.argoproj.io/cron.helm.image-tag: cron.image.tag
-  name: firefly
+  name: wiki
   namespace: argocd
 spec:
   project: default
   destination:
     server: 'https://kubernetes.default.svc'
-    namespace: firefly
+    namespace: wiki
   syncPolicy:
     automated:
       prune: true
@@ -27,5 +25,5 @@ spec:
   source:
     repoURL: 'https://github.com/vyrtualsynthese/homelab.git'
     targetRevision: develop
-    path: cluster/helm/firefly
-
+    path: cluster/helm/wiki
+  revisionHistoryLimit: 3

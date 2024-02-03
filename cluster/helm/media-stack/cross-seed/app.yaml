@@ -2,10 +2,10 @@ apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
   annotations:
-    argocd-image-updater.argoproj.io/image-list: app=ghcr.io/linuxserver/calibre:^7.x
+    argocd-image-updater.argoproj.io/image-list: app=crossseed/cross-seed:^5.x
     argocd-image-updater.argoproj.io/app.helm.image-name: image.repository
     argocd-image-updater.argoproj.io/app.helm.image-tag: image.tag
-  name: calibre
+  name: cross-seed
   namespace: argocd
 spec:
   project: default
@@ -19,4 +19,4 @@ spec:
   source:
     repoURL: 'https://github.com/vyrtualsynthese/homelab.git'
     targetRevision: develop
-    path: cluster/helm/media-stack/calibre
+    path: cluster/helm/media-stack/cross-seed

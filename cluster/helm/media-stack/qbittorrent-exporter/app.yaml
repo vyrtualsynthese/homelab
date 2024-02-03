@@ -2,12 +2,10 @@ apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
   annotations:
-    argocd-image-updater.argoproj.io/image-list: app=ghcr.io/linuxserver/qbittorrent:^4.x, vpn=ghcr.io/linuxserver/wireguard:^1.x
+    argocd-image-updater.argoproj.io/image-list: app=caseyscarborough/qbittorrent-exporter:^1.x
     argocd-image-updater.argoproj.io/app.helm.image-name: image.repository
     argocd-image-updater.argoproj.io/app.helm.image-tag: image.tag
-    argocd-image-updater.argoproj.io/vpn.helm.image-name: vpnimage.repository
-    argocd-image-updater.argoproj.io/vpn.helm.image-tag: vpnimage.tag
-  name: qbittorrent
+  name: qbittorrent-exporter
   namespace: argocd
 spec:
   project: default
@@ -21,4 +19,4 @@ spec:
   source:
     repoURL: 'https://github.com/vyrtualsynthese/homelab.git'
     targetRevision: develop
-    path: cluster/helm/media-stack/qbittorrent
+    path: cluster/helm/media-stack/qbittorrent-exporter

@@ -2,10 +2,20 @@ apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
   annotations:
-    argocd-image-updater.argoproj.io/image-list: app=ekofr/pihole-exporter:^0.x
-    argocd-image-updater.argoproj.io/app.helm.image-name: image.repository
-    argocd-image-updater.argoproj.io/app.helm.image-tag: image.tag
-  name: pihole-exporter
+    argocd-image-updater.argoproj.io/image-list: alertmanager=quay.io/prometheus/alertmanager:^0.x, configmapReload-prometheus=ghcr.io/jimmidyson/configmap-reload:^0.x, configmapReload-alertmanager=ghcr.io/jimmidyson/configmap-reload:^0.x, nodeExporter=quay.io/prometheus/node-exporter:^1.x, server=quay.io/prometheus/prometheus:^2.x, pushgateway=prom/pushgateway:^1.x
+    argocd-image-updater.argoproj.io/alertmanager.helm.image-name: alertmanager.image.repository
+    argocd-image-updater.argoproj.io/alertmanager.helm.image-tag: alertmanager.image.tag
+    argocd-image-updater.argoproj.io/configmapReload-prometheus.helm.image-name: configmapReload.prometheus.image.repository
+    argocd-image-updater.argoproj.io/configmapReload-prometheus.helm.image-tag: configmapReload.prometheus.image.tag
+    argocd-image-updater.argoproj.io/configmapReload-alertmanager.helm.image-name: configmapReload.alertmanager.image.repository
+    argocd-image-updater.argoproj.io/configmapReload-alertmanager.helm.image-tag: configmapReload.alertmanager.image.tag
+    argocd-image-updater.argoproj.io/nodeExporter.helm.image-name: nodeExporter.image.repository
+    argocd-image-updater.argoproj.io/nodeExporter.helm.image-tag: nodeExporter.image.tag
+    argocd-image-updater.argoproj.io/server.helm.image-name: server.image.repository
+    argocd-image-updater.argoproj.io/server.helm.image-tag: server.image.tag
+    argocd-image-updater.argoproj.io/pushgateway.helm.image-name: pushgateway.image.repository
+    argocd-image-updater.argoproj.io/pushgateway.helm.image-tag: pushgateway.image.tag
+  name: prometheus
   namespace: argocd
 spec:
   project: default
@@ -19,4 +29,4 @@ spec:
   source:
     repoURL: 'https://github.com/vyrtualsynthese/homelab.git'
     targetRevision: develop
-    path: cluster/helm/monitoring/pihole-exporter
+    path: cluster/helm/monitoring/prometheus
