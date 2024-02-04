@@ -6,8 +6,8 @@ metadata:
     argocd-image-updater.argoproj.io/app.helm.image-name: image.repository
     argocd-image-updater.argoproj.io/app.helm.image-tag: image.tag
     argocd-image-updater.argoproj.io/app.allow-tags: 'regexp:^(0|[1-9]\d*)\.(0|[1-9]\d*)?-develop'
-    argocd-image-updater.argoproj.io/exportarr.helm.image-name: exportarr.repository
-    argocd-image-updater.argoproj.io/exportarr.helm.image-tag: exportarr.tag
+    argocd-image-updater.argoproj.io/exportarr.helm.image-name: exportarr.image.repository
+    argocd-image-updater.argoproj.io/exportarr.helm.image-tag: exportarr.image.tag
   name: readarr
   namespace: argocd
 spec:

@@ -21,18 +21,15 @@ spec:
         {{- include "selectorLabels" . | nindent 8 }}
     spec:
       volumes:
-        - name: plex-config-volume
+        - name: lidarr-config-volume
           persistentVolumeClaim:
-            claimName: plex-config
+            claimName: lidarr-config
+        - name: qbittorrent-download-volume
+          persistentVolumeClaim:
+            claimName: pvc-nfs-qbittorrent-download-nfs-subdir-external-provisioner
         - name: audio-volume
           persistentVolumeClaim:
             claimName: pvc-nfs-audio-nfs-subdir-external-provisioner
-        #- name: plex-transcode-volume
-        #  persistentVolumeClaim:
-        #    claimName: plex-transcode
-        - name: plex-media-volume
-          persistentVolumeClaim:
-            claimName: pvc-plex-media
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
@@ -47,36 +44,11 @@ spec:
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:
-            - name: plex
-              containerPort: 32400 #PMS
-              protocol: TCP
-            - containerPort: 32400
-              name: plex-udp
-              protocol: UDP
-            - containerPort: 32469 #Plex DLNA
-              name: plex-dlna
-            - containerPort: 5353
-              name: plex-discovery
-              protocol: UDP
-            - containerPort: 1900 #Plex DLNA
-              name: plex-dlna-udp
-              protocol: UDP
+            - name: lidarr-webui
+              containerPort: 8686
           env:
             - name: "TZ"
               value: "Europe/Paris"
-            - name: "PLEX_CLAIM"
-              valueFrom:
-                secretKeyRef:
-                  name: plex
-                  key: plex_claim
-            - name: "ADVERTISE_IP"
-              value: "https://plex.kub.home.ashudev.com:443"
-            - name: "HOSTNAME"
-              value: "plex"
-            - name: "VERSION"
-              value: "docker"
-            - name: "ALLOWED_NETWORKS"
-              value: "192.168.1.0/16,10.42.0.0/16"
             - name: "PUID"
               value: "1100"
             - name: "PGID"
@@ -84,12 +56,34 @@ spec:
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
           volumeMounts:
-            - name: plex-config-volume
+            - name: lidarr-config-volume
               mountPath: /config
-            - name: plex-media-volume
-              mountPath: /media
+            - name: qbittorrent-download-volume
+              mountPath: /downloads
             - name: audio-volume
               mountPath: /audio
+        - name: {{ .Chart.Name }}-exporter
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "{{ .Values.exportarr.image.repository }}:{{ .Values.exportarr.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.exportarr.image.pullPolicy }}
+          ports:
+            - name: exporter
+              containerPort: 9707
+          env:
+            - name: "PORT"
+              value: "9707"
+            - name: "URL"
+              value: "http://{{ .Chart.Name }}:8686"
+            - name: "APIKEY"
+              valueFrom:
+                secretKeyRef:
+                  name: lidarr
+                  key: secret
+          args:
+            - lidarr
+          resources:
+                  {{- toYaml .Values.exportarr.resources | nindent 12 }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
