@@ -35,12 +35,17 @@ spec:
           enabled: true
           className: ""
           annotations:
-            traefik.ingress.kubernetes.io/router.entrypoints: websecure
+            traefik.ingress.kubernetes.io/router.entrypoints: "websecure,web"
+            traefik.ingress.kubernetes.io/router.middlewares: "kube-system-default-redirect-https@kubernetescrd"
+            traefik.ingress.kubernetes.io/router.tls: "true"
+            traefik.ingress.kubernetes.io/router.tls.domains.0.main: "kub.local"
+            traefik.ingress.kubernetes.io/router.tls.domains.0.sans: "dashy.kub.local"
           hosts:
             - host: dashy.kub.local
               paths:
                 - path: /
                   pathType: Prefix
+          tls: []
 
         resources:
           requests:

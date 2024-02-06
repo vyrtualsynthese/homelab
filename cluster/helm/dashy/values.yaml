@@ -12,12 +12,17 @@ ingress:
   enabled: true
   className: ""
   annotations:
-    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure,web
+    traefik.ingress.kubernetes.io/router.middlewares: kube-system-default-redirect-https@kubernetescrd
+    traefik.ingress.kubernetes.io/router.tls: true
+    traefik.ingress.kubernetes.io/router.tls.domains.0.main: kub.local
+    traefik.ingress.kubernetes.io/router.tls.domains.0.sans: dashy.kub.local
   hosts:
     - host: dashy.kub.local
       paths:
         - path: /
           pathType: Prefix
+  tls: []
 
 resources:
   requests:
@@ -49,6 +54,7 @@ env:
 
 static:
   enabled: true
-  existingSecret: "dashy-config"
+  existingSecret: "dashy-conf"
   # Customize config.yaml https://github.com/Lissy93/dashy/blob/master/docs/configuring.md for more information.
   configMapContent: ""
+  # Use --set-file stringArray to pass secret https://helm.sh/docs/helm/helm_install/
