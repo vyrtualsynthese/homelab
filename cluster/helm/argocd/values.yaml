@@ -1943,11 +1943,8 @@ server:
     enabled: true
     # -- Additional ingress annotations
     annotations:
-      traefik.ingress.kubernetes.io/router.entrypoints: "websecure, web"
-      traefik.ingress.kubernetes.io/router.middlewares: "kube-system-default-redirect-https@kubernetescrd"
-      traefik.ingress.kubernetes.io/router.tls: "true"
-      traefik.ingress.kubernetes.io/router.tls.domains.0.main: "kub.local"
-      traefik.ingress.kubernetes.io/router.tls.domains.0.sans: "argocd.kub.local"
+      traefik.ingress.kubernetes.io/router.entrypoints: "web,websecure"
+      traefik.ingress.kubernetes.io/router.middlewares: "kube-system-redirect-https@kubernetescrd"
     # -- Additional ingress labels
     labels: {}
     # -- Defines which ingress controller will implement the resource
@@ -1994,11 +1991,8 @@ server:
     isAWSALB: false
     # -- Additional ingress annotations for dedicated [gRPC-ingress]
     annotations:
-      traefik.ingress.kubernetes.io/router.entrypoints: websecure, web
-      traefik.ingress.kubernetes.io/router.middlewares: kube-system-default-redirect-https@kubernetescrd
-      traefik.ingress.kubernetes.io/router.tls: true
-      traefik.ingress.kubernetes.io/router.tls.domains.0.main: kub.local
-      traefik.ingress.kubernetes.io/router.tls.domains.0.sans: argocd.api.kub.local
+      traefik.ingress.kubernetes.io/router.entrypoints: 'web,websecure'
+      traefik.ingress.kubernetes.io/router.middlewares: 'kube-system-redirect-https@kubernetescrd'
     # -- Additional ingress labels for dedicated [gRPC-ingress]
     labels: {}
     # -- Defines which ingress controller will implement the resource [gRPC-ingress]
