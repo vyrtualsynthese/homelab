@@ -16,7 +16,7 @@ spec:
     automated:
       prune: true
       selfHeal: true
-  source:
+  sources:
     - repoURL: 'https://vyrtualsynthese.github.io/selfhosted-helmcharts/'
       chart: autobrr
       targetRevision: 0.1.1
