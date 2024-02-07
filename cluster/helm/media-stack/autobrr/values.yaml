@@ -1,12 +1,17 @@
-# Default values for home.
+# Default values for dashy.
 # This is a YAML-formatted file.
 # Declare variables to be passed into your templates.
+
+replicaCount: 1
 
 image:
   repository: ghcr.io/autobrr/autobrr
   pullPolicy: IfNotPresent
   # Overrides the image tag whose default is the chart appVersion.
-  tag: v1.34.1
+  tag: "v1.36.0"
+
+# Choose deployment strategy type
+strategyType: Recreate
 
 imagePullSecrets: []
 nameOverride: ""
@@ -14,15 +19,17 @@ fullnameOverride: ""
 
 serviceAccount:
   # Specifies whether a service account should be created
-  create: false
+  create: true
+  # Automatically mount a ServiceAccount's API credentials?
+  automount: true
   # Annotations to add to the service account
   annotations: {}
   # The name of the service account to use.
   # If not set and create is true, a name is generated using the fullname template
   name: ""
 
-podAnnotations:
-  setGateway: "true"
+podAnnotations: {}
+podLabels: {}
 
 podSecurityContext: {}
 # fsGroup: 2000
@@ -37,19 +44,19 @@ securityContext: {}
 
 service:
   type: ClusterIP
-  port: 32400
+  port: 7474
 
 ingress:
   enabled: true
-  className: no
-  annotations: {}
-  # kubernetes.io/ingress.class: nginx
-  # kubernetes.io/tls-acme: "true"
+  className: ""
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: "web,websecure"
+    traefik.ingress.kubernetes.io/router.middlewares: "kube-system-redirect-https@kubernetescrd"
   hosts:
-    - host: chart-example.local
+    - host: autobrr.kub.local
       paths:
         - path: /
-          pathType: ImplementationSpecific
+          pathType: Prefix
   tls: []
   #  - secretName: chart-example-tls
   #    hosts:
@@ -70,14 +77,20 @@ resources:
   #   memory: 128Mi
   # requests:
   #   cpu: 100m
-  #   memory: 128Mi
+#   memory: 128Mi
 
-autoscaling:
-  enabled: false
-  minReplicas: 1
-  maxReplicas: 100
-  targetCPUUtilizationPercentage: 80
-  # targetMemoryUtilizationPercentage: 80
+storage:
+  class: ~
+  accessModes: ReadWriteOnce
+  dataSize: 5Gi
+  # -- Use an existing PersistentVolumeClaim, overrides values above
+  existingClaim: "autobrr-config2"
+
+# Additional volumes on the output Deployment definition.
+volumes: []
+
+# Additional volumeMounts on the output Deployment definition.
+volumeMounts: []
 
 nodeSelector: {}
 
@@ -92,3 +105,16 @@ affinity:
               operator: In
               values:
                 - general
+
+env:
+  TZ: "Europe/Paris"
+  AUTOBRR__HOST: "0.0.0.0"
+  AUTOBRR__PORT: "7474"
+  #AUTOBRR__BASE_URL: ""
+  #AUTOBRR__LOG_LEVEL: ""
+  #AUTOBRR__LOG_PATH: ""
+  #AUTOBRR__LOG_MAX_SIZE: ""
+  #AUTOBRR__LOG_MAX_BACKUPS: ""
+  #AUTOBRR__SESSION_SECRET: ""
+  #AUTOBRR__CUSTOM_DEFINITIONS: ""
+  #AUTOBRR__CHECK_FOR_UPDATES: ""
