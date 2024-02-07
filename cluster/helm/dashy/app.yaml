@@ -1,8 +1,8 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  annotations:
-    argocd-image-updater.argoproj.io/image-list: lissy93/dashy:^2.0
+#  annotations:
+#    argocd-image-updater.argoproj.io/image-list: lissy93/dashy:^2.0
   name: dashy
   namespace: argocd
 spec:
@@ -14,68 +14,13 @@ spec:
     automated:
       prune: true
       selfHeal: true
-  source:
-    chart: dashy
-    repoURL: https://vyrtualsynthese.github.io/selfhosted-helmcharts/
-    targetRevision: 0.1.6
-    helm:
-      releaseName: dashy
-      valuesObject:
-        image:
-          # Overrides the image tag whose default is the chart appVersion.
-          tag: 2.1.1
-
-        serviceAccount:
-          # Specifies whether a service account should be created
-          create: false
-          # Automatically mount a ServiceAccount's API credentials?
-          automount: false
-
-        ingress:
-          enabled: true
-          className: ""
-          annotations:
-            traefik.ingress.kubernetes.io/router.entrypoints: "web,websecure"
-            traefik.ingress.kubernetes.io/router.middlewares: "kube-system-redirect-https@kubernetescrd"
-          hosts:
-            - host: dashy.kub.local
-              paths:
-                - path: /
-                  pathType: Prefix
-          tls: []
-
-        resources:
-          requests:
-            cpu: 1m
-            memory: 128Mi
-          limits:
-            memory: 128Mi
-
-        affinity:
-          nodeAffinity:
-            requiredDuringSchedulingIgnoredDuringExecution:
-              nodeSelectorTerms:
-                - matchExpressions:
-                    - key: node-type
-                      operator: In
-                      values:
-                        - general
-                        - small
-
-        env:
-          NODE_ENV: "production"
-          PORT: "80"
-          #HOST: ""
-          #BASE_URL: ""
-          #VUE_APP_DOMAIN: ""
-          #INTEGRITY: ""
-          # -- Set this to the name of a secret to load environment variables from. If defined, values in the secret will override values in configs
-          existingSecret: ""
-
-        static:
-          enabled: true
-          existingSecret: "dashy-conf"
-          # Customize config.yaml https://github.com/Lissy93/dashy/blob/master/docs/configuring.md for more information.
-          configMapContent: ""
-            # Use --set-file stringArray to pass secret https://helm.sh/docs/helm/helm_install/
-
+  sources:
+    - repoURL: 'https://vyrtualsynthese.github.io/selfhosted-helmcharts/'
+      chart: dashy
+      targetRevision: 0.1.6
+      helm:
+        valueFiles:
+          - $values/cluster/helm/dashy/values.yaml
+    - repoURL: 'https://github.com/vyrtualsynthese/homelab.git'
+      targetRevision: develop
+      ref: values
