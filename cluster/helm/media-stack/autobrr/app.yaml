@@ -1,10 +1,10 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  annotations:
-    argocd-image-updater.argoproj.io/image-list: app=ghcr.io/autobrr/autobrr:^1.x
-    argocd-image-updater.argoproj.io/app.helm.image-name: image.repository
-    argocd-image-updater.argoproj.io/app.helm.image-tag: image.tag
+#  annotations:
+#    argocd-image-updater.argoproj.io/image-list: app=ghcr.io/autobrr/autobrr:^1.x
+#    argocd-image-updater.argoproj.io/app.helm.image-name: image.repository
+#    argocd-image-updater.argoproj.io/app.helm.image-tag: image.tag
   name: autobrr
   namespace: argocd
 spec:
@@ -17,6 +17,13 @@ spec:
       prune: true
       selfHeal: true
   source:
-    repoURL: 'https://github.com/vyrtualsynthese/homelab.git'
-    targetRevision: develop
-    path: cluster/helm/media-stack/autobrr
+    - repoURL: 'https://vyrtualsynthese.github.io/selfhosted-helmcharts/'
+      chart: autobrr
+      targetRevision: 0.1.1
+      helm:
+        valueFiles:
+          - $values/cluster/helm/media-stack/autobrr/values.yaml
+    - repoURL: 'https://github.com/vyrtualsynthese/homelab.git'
+      targetRevision: develop
+      ref: values
+
