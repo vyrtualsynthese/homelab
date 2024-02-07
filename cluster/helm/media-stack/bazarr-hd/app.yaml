@@ -1,7 +1,7 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: bazarr-anime
+  name: bazarr-hd
   namespace: argocd
 spec:
   project: default
@@ -18,7 +18,7 @@ spec:
       targetRevision: 0.1.1
       helm:
         valueFiles:
-          - $values/cluster/helm/media-stack/bazarr-anime/values.yaml
+          - $values/cluster/helm/media-stack/bazarr-hd/values.yaml
     - repoURL: 'https://github.com/vyrtualsynthese/homelab.git'
       targetRevision: develop
       ref: values
