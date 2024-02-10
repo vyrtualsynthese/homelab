@@ -8,7 +8,7 @@ app:
     repository: koillection/koillection
     pullPolicy: IfNotPresent
     # Overrides the image tag whose default is the chart appVersion.
-    tag: 1.4.10
+    tag: 1.5.4
 
   imagePullSecrets: []
   nameOverride: "koillection-app"

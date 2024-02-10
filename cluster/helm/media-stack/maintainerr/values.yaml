@@ -8,7 +8,7 @@ image:
   repository: jorenn92/maintainerr
   pullPolicy: IfNotPresent
   # Overrides the image tag whose default is the chart appVersion.
-  tag: 1.7.1
+  tag: 2.0.2
 
 imagePullSecrets: []
 nameOverride: ""
@@ -25,10 +25,13 @@ serviceAccount:
 
 podAnnotations: {}
 
-podSecurityContext: {}
+podSecurityContext:
+  fsGroup: 1000
 # fsGroup: 2000
 
-securityContext: {}
+securityContext:
+  runAsUser: 1000
+  runAsNonRoot: true
   # capabilities:
   #   drop:
   #   - ALL
