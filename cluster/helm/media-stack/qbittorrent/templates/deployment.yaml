@@ -31,7 +31,7 @@ spec:
             claimName: qbittorrent-vpn-config
         - name: qbittorrent-config-volume
           persistentVolumeClaim:
-            claimName: qbittorrent-config
+            claimName: qbittorrent-config3
         - name: qbittorrent-download-volume
           persistentVolumeClaim:
             claimName: pvc-nfs-qbittorrent-download-nfs-subdir-external-provisioner

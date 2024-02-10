@@ -39,7 +39,7 @@ spec:
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:
             - name: webui
-              containerPort: 80
+              containerPort: 6246
           env:
             - name: "TZ"
               value: "Europe/Paris"
