@@ -8,14 +8,14 @@ image:
   repository: quay.io/minio/minio
   pullPolicy: IfNotPresent
   # Overrides the image tag whose default is the chart appVersion.
-  tag: RELEASE.2024-01-31T20-20-33Z
+  tag: RELEASE.2024-02-09T21-25-16Z
 
 sync:
   image:
     repository: minio/mc
     pullPolicy: IfNotPresent
     # Overrides the image tag whose default is the chart appVersion.
-    tag: RELEASE.2024-01-31T08-59-40Z
+    tag: RELEASE.2024-02-09T22-18-24Z
 
   resources: {}
   #  requests:
