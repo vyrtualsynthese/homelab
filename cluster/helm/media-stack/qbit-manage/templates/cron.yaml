@@ -19,7 +19,7 @@ spec:
                 claimName: pvc-nfs-qbittorrent-download-nfs-subdir-external-provisioner
             - name: qbit-manage-config-volume
               persistentVolumeClaim:
-                claimName: qbit-manage-config
+                claimName: pvc-nfs-qbittorrent-config-nfs-subdir-external-provisioner
             - name: qbit-manage-secrets
               secret:
                 secretName: qbit-manage
