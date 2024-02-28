@@ -30,7 +30,7 @@ spec:
       volumes:
         - name: qbittorrent-config-volume
           persistentVolumeClaim:
-            claimName: qbittorrent-config
+            claimName: pvc-nfs-qbittorrent-config-nfs-subdir-external-provisioner
         - name: cross-seed-config-volume
           persistentVolumeClaim:
             claimName: cross-seed-config
