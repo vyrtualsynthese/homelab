@@ -8,7 +8,7 @@ image:
   repository: ghcr.io/linuxserver/radarr
   pullPolicy: IfNotPresent
   # Overrides the image tag whose default is the chart appVersion.
-  tag: 5.2.6
+  tag: 5.3.6
 
 imagePullSecrets: []
 nameOverride: ""
