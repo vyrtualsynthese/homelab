@@ -21,9 +21,29 @@ spec:
         {{- include "selectorLabels" . | nindent 8 }}
     spec:
       volumes:
-        - name: minio-data-volume
+        - name: minio-data0-volume
           hostPath:
-            path: /mnt/storage/minio
+            path: /mnt/hdd0/minio
+            type: Directory
+        - name: minio-data1-volume
+          hostPath:
+            path: /mnt/hdd1/minio
+            type: Directory
+        - name: minio-data2-volume
+          hostPath:
+            path: /mnt/hdd2/minio
+            type: Directory
+        - name: minio-data3-volume
+          hostPath:
+            path: /mnt/hdd3/minio
+            type: Directory
+        - name: minio-data4-volume
+          hostPath:
+            path: /mnt/hdd4/minio
+            type: Directory
+        - name: minio-data5-volume
+          hostPath:
+            path: /mnt/hdd5/minio
             type: Directory
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
@@ -60,19 +80,28 @@ spec:
                   name: minio
                   key: MINIO_ROOT_PASSWORD
             - name: "MINIO_VOLUMES"
-              value: "/data"
+              value: "/data-{0...5}"
             - name: "MINIO_PROMETHEUS_URL"
               value: "http://prometheus-server.monitoring.svc.cluster.local"
             - name: "MINIO_PROMETHEUS_JOB_ID"
               value: "kubernetes-pods"
             - name: "MINIO_PROMETHEUS_AUTH_TYPE"
               value: "public"
-
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
           volumeMounts:
-            - name: minio-data-volume
-              mountPath: /data
+            - name: minio-data0-volume
+              mountPath: /data-0
+            - name: minio-data1-volume
+              mountPath: /data-1
+            - name: minio-data2-volume
+              mountPath: /data-2
+            - name: minio-data3-volume
+              mountPath: /data-3
+            - name: minio-data4-volume
+              mountPath: /data-4
+            - name: minio-data5-volume
+              mountPath: /data-5
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
