@@ -1,29 +1,6 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  annotations:
-    argocd-image-updater.argoproj.io/image-list: db=postgres:^14.x-0, redis=redis:^7.x-0, app=nextcloud:^27.x-0, web=nginx:^1.x-0, cron=nextcloud:^27.x-0, backup=restic/restic:^0.x, backupdb=prodrigestivill/postgres-backup-local:^14.x-0
-    argocd-image-updater.argoproj.io/db.helm.image-name: db.image.repository
-    argocd-image-updater.argoproj.io/db.helm.image-tag: db.image.tag
-    argocd-image-updater.argoproj.io/db.allow-tags: 'regexp:^(0|[1-9]\d*)\.(0|[1-9]\d*)?-alpine.*'
-    argocd-image-updater.argoproj.io/redis.helm.image-name: redis.image.repository
-    argocd-image-updater.argoproj.io/redis.helm.image-tag: redis.image.tag
-    argocd-image-updater.argoproj.io/redis.allow-tags: 'regexp:^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)?-alpine.*'
-    argocd-image-updater.argoproj.io/app.helm.image-name: app.image.repository
-    argocd-image-updater.argoproj.io/app.helm.image-tag: app.image.tag
-    argocd-image-updater.argoproj.io/app.allow-tags: 'regexp:^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)?-fpm-alpine'
-    argocd-image-updater.argoproj.io/web.helm.image-name: web.image.repository
-    argocd-image-updater.argoproj.io/web.helm.image-tag: web.image.tag
-    argocd-image-updater.argoproj.io/web.allow-tags: 'regexp:^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)?-alpine.*'
-    argocd-image-updater.argoproj.io/cron.helm.image-name: cron.image.repository
-    argocd-image-updater.argoproj.io/cron.helm.image-tag: cron.image.tag
-    argocd-image-updater.argoproj.io/cron.allow-tags: 'regexp:^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)?-fpm-alpine'
-    argocd-image-updater.argoproj.io/backup.helm.image-name: backup.image.repository
-    argocd-image-updater.argoproj.io/backup.helm.image-tag: backup.image.tag
-    argocd-image-updater.argoproj.io/backupdb.helm.image-name: db.backup.image.repository
-    argocd-image-updater.argoproj.io/backupdb.helm.image-tag: db.backup.image.tag
-    argocd-image-updater.argoproj.io/backupdb.allow-tags: 'regexp:^(0|[1-9]\d*)?-alpine'
-
   name: nextcloud
   namespace: argocd
 spec:
