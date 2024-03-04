@@ -21,7 +21,6 @@ spec:
     - mc
   routes:
     - match: HostSNI(`*`)
-      kind: Rule
       services:
         - name: minecraft-server
           port: mc
