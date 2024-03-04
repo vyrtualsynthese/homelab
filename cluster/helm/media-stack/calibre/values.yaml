@@ -62,7 +62,7 @@ ingress:
     # kubernetes.io/ingress.class: nginx
     # kubernetes.io/tls-acme: "true"
   gui:
-    host: calibre.gui.kub.local
+    host: calibre-gui.kub.local
     paths:
       - path: /
         pathType: Prefix
