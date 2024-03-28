@@ -1,0 +1,100 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "fullname" . }}
+  labels:
+    {{- include "labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "selectorLabels" . | nindent 8 }}
+    spec:
+      volumes:
+        - name: radarr-config-volume
+          persistentVolumeClaim:
+            claimName: radarr-anime-hd-config
+        - name: qbittorrent-download-volume
+          persistentVolumeClaim:
+            claimName: pvc-nfs-qbittorrent-download-nfs-subdir-external-provisioner
+        - name: plex-media-volume
+          persistentVolumeClaim:
+            claimName: pvc-plex-media
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: {{ .Chart.Name }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: radarr-webui
+              containerPort: 7878
+          env:
+            - name: "TZ"
+              value: "Europe/Paris"
+            - name: "PUID"
+              value: "0"
+            - name: "PGID"
+              value: "0"
+
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: radarr-config-volume
+              mountPath: /config
+            - name: qbittorrent-download-volume
+              mountPath: /downloads
+            - name: plex-media-volume
+              mountPath: /movies
+
+        - name: {{ .Chart.Name }}-exporter
+          securityContext:
+                  {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "{{ .Values.exportarr.image.repository }}:{{ .Values.exportarr.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.exportarr.image.pullPolicy }}
+          ports:
+            - name: exporter
+              containerPort: 9707
+          env:
+            - name: "PORT"
+              value: "9707"
+            - name: "URL"
+              value: "http://{{ .Chart.Name }}:7878"
+            - name: "APIKEY"
+              valueFrom:
+                secretKeyRef:
+                  name: radarr-anime
+                  key: secret
+          args:
+            - radarr
+          resources:
+                        {{- toYaml .Values.exportarr.resources | nindent 12 }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
