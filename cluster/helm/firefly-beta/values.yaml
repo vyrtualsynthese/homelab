@@ -3,7 +3,7 @@ firefly-db:
   enabled: true
   image:
     repository: postgres
-    tag: 14.9-alpine3.18
+    tag: 16.2-alpine3.18
     pullPolicy: IfNotPresent
 
   storage:
