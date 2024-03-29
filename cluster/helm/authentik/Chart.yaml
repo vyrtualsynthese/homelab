@@ -36,7 +36,7 @@ dependencies:
 - condition: postgresql.enabled
   name: postgresql
   repository: https://charts.goauthentik.io
-  version: 10.16.2
+  version: 12.8.2
 - condition: redis.enabled
   name: redis
   repository: https://charts.goauthentik.io
