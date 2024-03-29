@@ -1,0 +1,26 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+#  annotations:
+#    argocd-image-updater.argoproj.io/image-list: lissy93/dashy:^2.0
+  name: renovate
+  namespace: argocd
+spec:
+  project: default
+  destination:
+    server: 'https://kubernetes.default.svc'
+    namespace: renovate
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+  sources:
+    - repoURL: 'https://docs.renovatebot.com/helm-charts'
+      chart: renovate
+      targetRevision: 37.274.0
+      helm:
+        valueFiles:
+          - $values/cluster/helm/renovate/values.yaml
+    - repoURL: 'https://github.com/vyrtualsynthese/homelab.git'
+      targetRevision: develop
+      ref: values
