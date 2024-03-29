@@ -277,7 +277,7 @@ redis:
     repository: redis
     pullPolicy: Always
     # Overrides the image tag whose default is the chart appVersion.
-    tag: 7.0.11-alpine3.18
+    tag: 7.2.3-alpine3.18
 
   imagePullSecrets: []
   nameOverride: "monitorss-redis"
