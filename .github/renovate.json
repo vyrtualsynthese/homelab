@@ -1,3 +1,4 @@
 {
-  "baseBranches": ["main", "develop"]
+  "baseBranches": ["main", "develop"],
+  "extends": ["config:recommended", ":dependencyDashboard"]
 }
