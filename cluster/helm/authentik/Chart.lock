@@ -7,6 +7,6 @@ dependencies:
   version: 15.7.6
 - name: authentik-remote-cluster
   repository: https://charts.goauthentik.io
-  version: 1.2.2
-digest: sha256:5a94bd53a9414123ef18b2d85087191726442494886a9cb8ef957c7bc872d25f
-generated: "2023-09-11T19:17:13.30834249Z"
+  version: 2.0.0
+digest: sha256:fc7f0a084841ca207618cce513e81e302d6a4c141c7b30d5df577f95d9f0e2b0
+generated: "2024-03-29T14:45:54.718015513Z"
