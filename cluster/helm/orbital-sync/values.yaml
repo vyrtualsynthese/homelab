@@ -8,7 +8,7 @@ image:
   repository: ghcr.io/mattwebbio/orbital-sync
   pullPolicy: IfNotPresent
   # Overrides the image tag whose default is the chart appVersion.
-  tag: 1.5.2
+  tag: 1.8.1
 
 imagePullSecrets: []
 nameOverride: ""
