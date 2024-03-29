@@ -196,7 +196,7 @@ db:
     repository: postgres
     pullPolicy: IfNotPresent
     # Overrides the image tag whose default is the chart appVersion.
-    tag: 15.4-alpine3.18
+    tag: 16.2-alpine3.18
 
   imagePullSecrets: []
   nameOverride: "guacamole-db"

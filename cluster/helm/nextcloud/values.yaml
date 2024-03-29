@@ -8,7 +8,7 @@ db:
     repository: postgres
     pullPolicy: IfNotPresent
     # Overrides the image tag whose default is the chart appVersion.
-    tag: 14.11-alpine3.19
+    tag: 16.2-alpine3.19
 
   imagePullSecrets: []
   nameOverride: "nextcloud-db"
