@@ -1,4 +1,4 @@
 {
-  "baseBranches": ["main", "develop"],
-  "extends": ["config:recommended", ":dependencyDashboard"]
+  "baseBranches": ["develop"],
+  "extends": ["config:recommended", ":dependencyDashboard", "docker:enableMajor"]
 }
