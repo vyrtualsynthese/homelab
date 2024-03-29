@@ -101,7 +101,7 @@ mongo:
     repository: mongo
     pullPolicy: Always
     # Overrides the image tag whose default is the chart appVersion.
-    tag: 6.0.6-jammy
+    tag: 7.0.7-jammy
 
   imagePullSecrets: []
   nameOverride: "monitorss-mongo"
