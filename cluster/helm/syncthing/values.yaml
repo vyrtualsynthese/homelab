@@ -93,7 +93,7 @@ backup:
     repository: restic/restic
     pullPolicy: IfNotPresent
     # Overrides the image tag whose default is the chart appVersion.
-    tag: 0.16.0
+    tag: 0.16.4
 
   imagePullSecrets: []
   nameOverride: ""
