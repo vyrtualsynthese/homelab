@@ -8,7 +8,7 @@ app:
     repository: inventree/inventree
     pullPolicy: IfNotPresent
     # Overrides the image tag whose default is the chart appVersion.
-    tag: 0.12.7
+    tag: 0.14.4
 
   imagePullSecrets: []
   nameOverride: "inventree-lego-app"
@@ -282,7 +282,7 @@ worker:
     repository: inventree/inventree
     pullPolicy: IfNotPresent
     # Overrides the image tag whose default is the chart appVersion.
-    tag: 0.12.7
+    tag: 0.14.4
 
   imagePullSecrets: []
   nameOverride: "inventree-lego-worker"
