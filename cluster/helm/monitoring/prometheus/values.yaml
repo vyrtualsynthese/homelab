@@ -1103,7 +1103,7 @@ pushgateway:
   ##
   image:
     repository: prom/pushgateway
-    tag: v1.7.0
+    tag: v1.8.0
     pullPolicy: Always
 
   ## pushgateway priorityClassName
