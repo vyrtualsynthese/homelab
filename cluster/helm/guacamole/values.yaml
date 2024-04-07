@@ -102,7 +102,7 @@ guacd:
     repository: guacamole/guacd
     pullPolicy: IfNotPresent
     # Overrides the image tag whose default is the chart appVersion.
-    tag: 1.5.4
+    tag: 1.5.5
 
   imagePullSecrets: []
   nameOverride: "guacamole-guacd"
