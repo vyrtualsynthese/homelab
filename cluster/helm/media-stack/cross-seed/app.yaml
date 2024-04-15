@@ -1,10 +1,6 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  annotations:
-    argocd-image-updater.argoproj.io/image-list: app=crossseed/cross-seed:^5.x
-    argocd-image-updater.argoproj.io/app.helm.image-name: image.repository
-    argocd-image-updater.argoproj.io/app.helm.image-tag: image.tag
   name: cross-seed
   namespace: argocd
 spec:
@@ -16,7 +12,13 @@ spec:
     automated:
       prune: true
       selfHeal: true
-  source:
-    repoURL: 'https://github.com/vyrtualsynthese/homelab.git'
-    targetRevision: develop
-    path: cluster/helm/media-stack/cross-seed
+  sources:
+    - repoURL: 'https://vyrtualsynthese.github.io/selfhosted-helmcharts/'
+      chart: cross-seed
+      targetRevision: 0.1.0
+      helm:
+        valueFiles:
+          - $values/cluster/helm/media-stack/cross-seed/values.yaml
+    - repoURL: 'https://github.com/vyrtualsynthese/homelab.git'
+      targetRevision: develop
+      ref: values
