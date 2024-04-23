@@ -1,4 +1,4 @@
-# Default values for home.
+# Default values for cross-seed.
 # This is a YAML-formatted file.
 # Declare variables to be passed into your templates.
 
@@ -8,7 +8,10 @@ image:
   repository: filebrowser/filebrowser
   pullPolicy: IfNotPresent
   # Overrides the image tag whose default is the chart appVersion.
-  tag: v2.28.0
+  tag: "v2.28.0"
+
+# Choose deployment strategy type
+strategyType: Recreate
 
 imagePullSecrets: []
 nameOverride: ""
@@ -16,7 +19,9 @@ fullnameOverride: ""
 
 serviceAccount:
   # Specifies whether a service account should be created
-  create: false
+  create: true
+  # Automatically mount a ServiceAccount's API credentials?
+  automount: true
   # Annotations to add to the service account
   annotations: {}
   # The name of the service account to use.
@@ -25,37 +30,35 @@ serviceAccount:
 
 podAnnotations:
   setGateway: "true"
+podLabels: {}
 
 podSecurityContext: {}
-# fsGroup: 2000
+  # fsGroup: 2000
 
 securityContext: {}
   # capabilities:
   #   drop:
   #   - ALL
   # readOnlyRootFilesystem: true
-# runAsNonRoot: true
-# runAsUser: 1000
+  # runAsNonRoot: true
+  # runAsUser: 1000
 
 service:
   type: ClusterIP
-  port: 32400
+  port: 80
 
 ingress:
   enabled: true
-  className: no
-  annotations: {}
-  # kubernetes.io/ingress.class: nginx
-  # kubernetes.io/tls-acme: "true"
+  className: ""
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: "web,websecure"
+    traefik.ingress.kubernetes.io/router.middlewares: "kube-system-redirect-https@kubernetescrd"
   hosts:
-    - host: chart-example.local
+    - host: filebrowser.kub.local
       paths:
         - path: /
-          pathType: ImplementationSpecific
+          pathType: Prefix
   tls: []
-  #  - secretName: chart-example-tls
-  #    hosts:
-  #      - chart-example.local
 
 resources:
   requests:
@@ -64,12 +67,42 @@ resources:
   limits:
     memory: 1024Mi
 
-autoscaling:
-  enabled: false
-  minReplicas: 1
-  maxReplicas: 100
-  targetCPUUtilizationPercentage: 80
-  # targetMemoryUtilizationPercentage: 80
+storage:
+  config:
+    class: ~
+    accessModes: ReadWriteOnce
+    dataSize: 1Gi
+    # -- Use an existing PersistentVolumeClaim, overrides values above
+    existingClaim: "filebrowser-config"
+
+  database:
+    class: ~
+    accessModes: ReadWriteOnce
+    dataSize: 1Gi
+    subPath: ""
+    # -- Use an existing PersistentVolumeClaim, overrides values above
+    existingClaim: "filebrowser-db"
+
+# Additional volumes on the output Deployment definition.
+volumes:
+  - name: stash-volume
+    persistentVolumeClaim:
+      claimName: pvc-stash-nfs-nfs-stash
+  - name: audio-volume
+    persistentVolumeClaim:
+      claimName: pvc-nfs-audio-nfs-subdir-external-provisioner
+  - name: qbittorrent-download-volume
+    persistentVolumeClaim:
+      claimName: pvc-nfs-qbittorrent-download-nfs-subdir-external-provisioner
+
+# Additional volumeMounts on the output Deployment definition.
+volumeMounts:
+  - name: stash-volume
+    mountPath: /srv/various
+  - name: audio-volume
+    mountPath: /srv/audio
+  - name: qbittorrent-download-volume
+    mountPath: /srv/torrent
 
 nodeSelector: {}
 
@@ -84,3 +117,20 @@ affinity:
               operator: In
               values:
                 - general
+
+env:
+  #FB_ADDRESS: ""
+  #FB_BASEURL: ""
+  #FB_CERT: ""
+  FB_CONFIG: "/config/settings.json"
+  FB_DATABASE: "/database/filebrowser.db"
+  #FB_KEY: ""
+  #FB_LOG: ""
+  #FB_NOAUTH: ""
+  ## hashed password (bcrypt) for the first user when using quick config (default "admin")
+  #FB_PASSWORD: ""
+  #FB_PORT: ""
+  #FB_ROOT: ""
+  #FB_USERNAME: ""
+  # -- Set this to the name of a secret to load environment variables from. If defined, values in the secret will override values in configs
+  existingSecret: ""
