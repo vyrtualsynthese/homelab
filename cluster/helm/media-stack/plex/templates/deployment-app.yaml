@@ -23,7 +23,7 @@ spec:
       volumes:
         - name: plex-config-volume
           persistentVolumeClaim:
-            claimName: plex-config
+            claimName: plex-config2
         - name: audio-volume
           persistentVolumeClaim:
             claimName: pvc-nfs-audio-nfs-subdir-external-provisioner
