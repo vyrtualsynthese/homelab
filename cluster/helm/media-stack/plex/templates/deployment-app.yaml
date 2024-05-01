@@ -27,12 +27,15 @@ spec:
         - name: audio-volume
           persistentVolumeClaim:
             claimName: pvc-nfs-audio-nfs-subdir-external-provisioner
-        #- name: plex-transcode-volume
-        #  persistentVolumeClaim:
-        #    claimName: plex-transcode
         - name: plex-media-volume
           persistentVolumeClaim:
             claimName: pvc-plex-media
+        - name: plex-transcode-volume
+          persistentVolumeClaim:
+            claimName: plex-transcode
+        - name: gpu
+          hostPath:
+            path: /dev/dri
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
@@ -40,6 +43,7 @@ spec:
       serviceAccountName: {{ include "serviceAccountName" . }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      runtimeClassName: nvidia
       containers:
         - name: {{ .Chart.Name }}
           securityContext:
@@ -81,6 +85,10 @@ spec:
               value: "1100"
             - name: "PGID"
               value: "1100"
+            - name: NVIDIA_VISIBLE_DEVICES
+              value: "all"
+            - name: NVIDIA_DRIVER_CAPABILITIES
+              value: "compute,video,utility"
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
           volumeMounts:
@@ -90,6 +98,10 @@ spec:
               mountPath: /media
             - name: audio-volume
               mountPath: /audio
+            - name: gpu
+              mountPath: /dev/dri
+            - name: plex-transcode-volume
+              mountPath: /transcode
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
