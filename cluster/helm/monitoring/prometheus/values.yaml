@@ -991,12 +991,12 @@ server:
   ## Prometheus server readiness and liveness probe initial delay and timeout
   ## Ref: https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/
   ##
-  readinessProbeInitialDelay: 60
+  readinessProbeInitialDelay: 300
   readinessProbePeriodSeconds: 5
   readinessProbeTimeout: 4
   readinessProbeFailureThreshold: 3
   readinessProbeSuccessThreshold: 1
-  livenessProbeInitialDelay: 60
+  livenessProbeInitialDelay: 300
   livenessProbePeriodSeconds: 15
   livenessProbeTimeout: 10
   livenessProbeFailureThreshold: 3
@@ -1005,12 +1005,7 @@ server:
   ## Prometheus server resource requests and limits
   ## Ref: http://kubernetes.io/docs/user-guide/compute-resources/
   ##
-  resources:
-    limits:
-      memory: 6Gi
-    requests:
-      cpu: 25m
-      memory: 1500Mi
+  resources: {}
 
   # Required for use in managed kubernetes clusters (such as AWS EKS) with custom CNI (such as calico),
   # because control-plane managed by AWS cannot communicate with pods' IP CIDR and admission webhooks are not working
