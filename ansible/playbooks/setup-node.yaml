@@ -128,18 +128,11 @@
 
     - name: Update apt and install docker-ce
       apt:
-        name: docker-ce
+        name:
+          - docker-ce
+          - docker-compose-plugin
         state: latest
         update_cache: true
-
-    - name: Install pip3
-      apt:
-        pkg:
-          - python3-pip
-
-    - name: Install docker-compose pip3 module
-      ansible.builtin.pip:
-        name: docker-compose
 
     - name: Creates directory
       file:
@@ -181,11 +174,6 @@
         name: systemd-resolved
         enabled: true
 
-    - name: Compress wg configs
-      community.general.archive:
-        path: /home/vronteix/dockers/config
-        dest: /home/vronteix/dockers/config.tgz
-
     - name: Create etc-dnsmasq.d directory if it does not exist
       ansible.builtin.file:
         path: /home/vronteix/dockers/etc-dnsmasq.d/
@@ -206,35 +194,8 @@
         src: templates/runners/pihole-updatelists.conf
         dest: /home/vronteix/dockers/etc-pihole-updatelists/pihole-updatelists.conf
 
-    - name: download wg configs
-      ansible.builtin.fetch:
-        src: /home/vronteix/dockers/config.tgz
-        dest: "{{ playbook_dir }}/templates/runners/{{ inventory_hostname }}/config/wireguard/config.tgz"
-        flat: true
-
-    - name: Remove wireguard.tar.gz locally
-      ansible.builtin.file:
-        path: "/home/vronteix/dockers/config.tgz"
-        state: absent
-
     - name: Up docker compose
-      community.docker.docker_compose:
+      community.docker.docker_compose_v2:
         remove_orphans: true
         state: present
         project_src: /home/vronteix/dockers
-
-- name: localhost
-  hosts: localhost
-  tasks:
-
-    - name: Extract wireguard config files to folder
-      ansible.builtin.unarchive:
-        src: "{{ playbook_dir }}/templates/runners/{{ item }}/config/wireguard/config.tgz"
-        dest: "{{ playbook_dir }}/templates/runners/{{ item }}/config/wireguard/"
-      with_items: "{{ groups['runner'] }}"
-
-    - name: Remove wireguard.tar.gz locally
-      ansible.builtin.file:
-        path: "{{ playbook_dir }}/templates/runners/{{ item }}/config/wireguard/config.tgz"
-        state: absent
-      with_items: "{{ groups['runner'] }}"
