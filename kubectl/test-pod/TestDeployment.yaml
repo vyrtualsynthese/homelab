@@ -19,7 +19,7 @@ spec:
       volumes:
         - name: data1
           persistentVolumeClaim:
-            claimName: n8n
+            claimName: plex-config
       containers:
         - image: alpine:latest
           command:
