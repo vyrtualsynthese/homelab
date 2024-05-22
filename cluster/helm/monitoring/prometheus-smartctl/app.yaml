@@ -1,11 +1,6 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  annotations:
-    argocd-image-updater.argoproj.io/image-list: app=matusnovak/prometheus-smartctl:^2.x
-    argocd-image-updater.argoproj.io/app.helm.image-name: image.repository
-    argocd-image-updater.argoproj.io/app.helm.image-tag: image.tag
-
   name: prometheus-smartctl
   namespace: argocd
 spec:

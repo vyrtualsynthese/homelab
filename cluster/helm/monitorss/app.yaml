@@ -1,13 +1,6 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  annotations:
-    argocd-image-updater.argoproj.io/image-list: mongo=mongo:^6.x, redis=redis:^7.x-0
-    argocd-image-updater.argoproj.io/mongo.helm.image-name: mongo.image.repository
-    argocd-image-updater.argoproj.io/mongo.helm.image-tag: mongo.image.tag
-    argocd-image-updater.argoproj.io/redis.helm.image-name: redis.image.repository
-    argocd-image-updater.argoproj.io/redis.helm.image-tag: redis.image.tag
-    argocd-image-updater.argoproj.io/redis.allow-tags: 'regexp:^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)?-alpine.*'
   name: monitorss
   namespace: argocd
 spec:
