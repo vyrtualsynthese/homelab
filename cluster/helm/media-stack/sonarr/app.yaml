@@ -1,12 +1,6 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  annotations:
-    argocd-image-updater.argoproj.io/image-list: app=ghcr.io/linuxserver/sonarr:^4.x, exportarr=ghcr.io/onedr0p/exportarr:^1.x
-    argocd-image-updater.argoproj.io/app.helm.image-name: image.repository
-    argocd-image-updater.argoproj.io/app.helm.image-tag: image.tag
-    argocd-image-updater.argoproj.io/exportarr.helm.image-name: exportarr.image.repository
-    argocd-image-updater.argoproj.io/exportarr.helm.image-tag: exportarr.image.tag
   name: sonarr
   namespace: argocd
 spec:

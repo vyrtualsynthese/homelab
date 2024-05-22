@@ -1,16 +1,6 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  annotations:
-    argocd-image-updater.argoproj.io/image-list: app=nextcloud:^2.x,db=postgres:^15.x-0, backup=prodrigestivill/postgres-backup-local:^14.x-0
-    argocd-image-updater.argoproj.io/app.helm.image-name: app.image.repository
-    argocd-image-updater.argoproj.io/app.helm.image-tag: app.image.tag
-    argocd-image-updater.argoproj.io/db.helm.image-name: db.image.repository
-    argocd-image-updater.argoproj.io/db.helm.image-tag: db.image.tag
-    argocd-image-updater.argoproj.io/db.allow-tags: 'regexp:^(0|[1-9]\d*)\.(0|[1-9]\d*)?-alpine.*'
-    argocd-image-updater.argoproj.io/backup.helm.image-name: db.backup.image.repository
-    argocd-image-updater.argoproj.io/backup.helm.image-tag: db.backup.image.tag
-    argocd-image-updater.argoproj.io/backup.allow-tags: 'regexp:^(0|[1-9]\d*)?-alpine'
   name: wiki
   namespace: argocd
 spec:
