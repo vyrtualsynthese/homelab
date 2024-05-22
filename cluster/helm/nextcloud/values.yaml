@@ -115,7 +115,7 @@ redis:
     repository: redis
     pullPolicy: IfNotPresent
     # Overrides the image tag whose default is the chart appVersion.
-    tag: 7.2.4-alpine3.19
+    tag: 7.2.5-alpine3.19
 
   imagePullSecrets: []
   nameOverride: "nextcloud-redis"
