@@ -1,8 +1,6 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-#  annotations:
-#    argocd-image-updater.argoproj.io/image-list: lissy93/dashy:^2.0
   name: renovate
   namespace: argocd
 spec:

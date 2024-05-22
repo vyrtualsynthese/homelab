@@ -1,12 +1,6 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  annotations:
-    argocd-image-updater.argoproj.io/image-list: app=lscr.io/linuxserver/syncthing:^1.x, backup=restic/restic:^0.x
-    argocd-image-updater.argoproj.io/app.helm.image-name: app.image.repository
-    argocd-image-updater.argoproj.io/app.helm.image-tag: app.image.tag
-    argocd-image-updater.argoproj.io/backup.helm.image-name: backup.image.repository
-    argocd-image-updater.argoproj.io/backup.helm.image-tag: backup.image.tag
   name: syncthing
   namespace: argocd
 spec:

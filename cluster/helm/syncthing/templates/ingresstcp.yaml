@@ -21,7 +21,6 @@ spec:
     - sttcp
   routes:
     - match: HostSNI(`*`)
-      kind: Rule
       services:
         - name: syncthing
           port: sttcp
