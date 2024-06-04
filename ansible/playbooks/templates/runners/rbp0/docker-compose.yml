@@ -44,7 +44,7 @@ services:
       - "/var/run/docker.sock:/var/run/docker.sock:ro"
       - "./providers:/providers"
   node_exporter:
-    image: quay.io/prometheus/node-exporter:v1.6.0
+    image: quay.io/prometheus/node-exporter:v1.8.1
     container_name: node_exporter
     command:
       - '--path.rootfs=/host'
