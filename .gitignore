@@ -14,11 +14,8 @@ restic_env.yaml
 etc-dnsmasq.d
 etc-pihole
 build
-ansible/playbooks/templates/runners/rbp0/docker-compose.yml
-ansible/playbooks/templates/runners/rbp0/config
-ansible/playbooks/templates/runners/rbp1/docker-compose.yml
-ansible/playbooks/templates/runners/rbp1/config
 secret.yml
 secret.yaml
 providers.yaml
 !cluster/helm/monitoring/grafana/templates/secret.yaml
+*.env

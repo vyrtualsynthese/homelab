@@ -145,6 +145,16 @@
         src: templates/runners/{{ inventory_hostname }}/docker-compose.yml
         dest: /home/vronteix/dockers/docker-compose.yml
 
+    - name: Copy pihole.env
+      ansible.builtin.copy:
+        src: templates/runners/{{ inventory_hostname }}/pihole.env
+        dest: /home/vronteix/dockers/pihole.env
+
+    - name: Copy wg-easy.env
+      ansible.builtin.copy:
+        src: templates/runners/{{ inventory_hostname }}/wg-easy.env
+        dest: /home/vronteix/dockers/wg-easy.env
+
     - name: Copy docker daemon file to expose metrics
       ansible.builtin.copy:
         src: templates/runners/daemon.json
