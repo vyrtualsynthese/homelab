@@ -1,0 +1,62 @@
+services:
+  pihole:
+    container_name: pihole
+    image: jacklul/pihole:2023.05.2
+    network_mode: host
+    env_file:
+      - path: ./pihole.env
+    volumes:
+      - './etc-pihole:/etc/pihole'
+      - './etc-dnsmasq.d:/etc/dnsmasq.d'
+      - './etc-pihole-updatelists/pihole-updatelists.conf:/etc/pihole-updatelists.conf'
+    cap_add:
+      - NET_ADMIN # Required if you are using Pi-hole as your DHCP server, else not needed
+    restart: unless-stopped
+  wg-easy:
+    image: ghcr.io/wg-easy/wg-easy
+    container_name: wg-easy
+    env_file:
+      - path: ./wg-easy.env
+    volumes:
+      - ./config:/etc/wireguard
+    ports:
+      - "51820:51820/udp"
+      - "5000:5000/tcp"
+    restart: unless-stopped
+    cap_add:
+      - NET_ADMIN
+      - SYS_MODULE
+    sysctls:
+      - net.ipv4.ip_forward=1
+      - net.ipv4.conf.all.src_valid_mark=1
+  traefik:
+    image: "traefik:v2.10"
+    container_name: "traefik"
+    network_mode: host
+    command:
+      - "--api.insecure=true"
+      - "--providers.docker=false"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--providers.file.directory=/providers"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+      - "./providers:/providers"
+  node_exporter:
+    image: quay.io/prometheus/node-exporter:v1.6.0
+    container_name: node_exporter
+    command:
+      - '--path.rootfs=/host'
+    network_mode: host
+    pid: host
+    restart: unless-stopped
+    volumes:
+      - '/:/host:ro,rslave'
+  smartctl-exporter:
+    image: matusnovak/prometheus-smartctl:latest
+    container_name: smartctl-exporter
+    privileged: true
+    ports:
+      - "9902:9902"
+    restart: unless-stopped

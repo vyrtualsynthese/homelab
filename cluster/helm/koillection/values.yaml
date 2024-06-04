@@ -102,7 +102,7 @@ db:
     repository: postgres
     pullPolicy: IfNotPresent
     # Overrides the image tag whose default is the chart appVersion.
-    tag: 15.7-alpine3.18
+    tag: 15.6-alpine3.18
 
   imagePullSecrets: []
   nameOverride: "koillection-db"
