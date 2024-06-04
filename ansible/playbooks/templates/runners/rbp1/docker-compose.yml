@@ -14,7 +14,7 @@ services:
       - NET_ADMIN # Required if you are using Pi-hole as your DHCP server, else not needed
     restart: unless-stopped
   wg-easy:
-    image: ghcr.io/wg-easy/wg-easy
+    image: ghcr.io/wg-easy/wg-easy:13
     container_name: wg-easy
     env_file:
       - path: ./wg-easy.env
@@ -42,7 +42,7 @@ services:
       - '/:/host:ro,rslave'
 
   smartctl-exporter:
-    image: matusnovak/prometheus-smartctl:latest
+    image: matusnovak/prometheus-smartctl:v2.3.0
     container_name: smartctl-exporter
     privileged: true
     ports:
