@@ -1,4 +1,5 @@
 image:
+  repository: lissy93/dashy
   # Overrides the image tag whose default is the chart appVersion.
   tag: 2.1.1
 

@@ -21,7 +21,7 @@ services:
     volumes:
       - ./config:/etc/wireguard
     ports:
-      - "51820:51820/udp"
+      - "51822:51822/udp"
       - "5000:5000/tcp"
     restart: unless-stopped
     cap_add:
