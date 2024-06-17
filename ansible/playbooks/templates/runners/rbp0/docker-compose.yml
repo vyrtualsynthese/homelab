@@ -1,7 +1,7 @@
 services:
   pihole:
     container_name: pihole
-    image: jacklul/pihole:2024.05.0
+    image: jacklul/pihole:2024.06.0
     network_mode: host
     env_file:
       - path: ./pihole.env
