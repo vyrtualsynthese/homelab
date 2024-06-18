@@ -1,9 +1,9 @@
 {
   "baseBranches": ["develop"],
   "extends": ["config:recommended", ":dependencyDashboard", "docker:enableMajor"],
-  "argocd": {
-    "fileMatch": ["app.yaml$"]
-  },
   "prConcurrentLimit": 0,
-  "prHourlyLimit": 0
+  "prHourlyLimit": 0,
+  "argocd": {
+    "fileMatch": ["\\.yaml$"]
+  }
 }

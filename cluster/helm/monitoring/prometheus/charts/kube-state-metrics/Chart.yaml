@@ -1,7 +1,7 @@
 apiVersion: v2
-appVersion: 2.2.0
+appVersion: 5.20.0
 description: Install kube-state-metrics to generate and expose cluster-level metrics
-home: https://github.com/kubernetes/kube-state-metrics/
+home: https://prometheus-community.github.io/helm-charts
 keywords:
 - metric
 - monitoring
@@ -14,6 +14,6 @@ maintainers:
   name: mrueg
 name: kube-state-metrics
 sources:
-- https://github.com/kubernetes/kube-state-metrics/
+- https://prometheus-community.github.io/helm-charts
 type: application
 version: 3.5.2

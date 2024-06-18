@@ -26,4 +26,3 @@ spec:
     - repoURL: 'https://github.com/vyrtualsynthese/homelab.git'
       targetRevision: develop
       ref: values
-
