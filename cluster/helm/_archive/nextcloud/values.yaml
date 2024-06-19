@@ -198,7 +198,7 @@ app:
     repository: nextcloud
     pullPolicy: IfNotPresent
     # Overrides the image tag whose default is the chart appVersion.
-    tag: 29.0.1-fpm-alpine
+    tag: 29.0.2-fpm-alpine
 
   imagePullSecrets: []
   nameOverride: "nextcloud-app"
@@ -371,7 +371,7 @@ cron:
     repository: nextcloud
     pullPolicy: IfNotPresent
     # Overrides the image tag whose default is the chart appVersion.
-    tag: 29.0.1-fpm-alpine
+    tag: 29.0.2-fpm-alpine
 
   imagePullSecrets: []
   nameOverride: "nextcloud-cron"
