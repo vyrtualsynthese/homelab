@@ -1,0 +1,26 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+#  annotations:
+#    argocd-image-updater.argoproj.io/image-list: lissy93/dashy:^2.0
+  name: dashy
+  namespace: argocd
+spec:
+  project: default
+  destination:
+    server: 'https://kubernetes.default.svc'
+    namespace: dashy
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+  sources:
+    - repoURL: 'https://vyrtualsynthese.github.io/selfhosted-helmcharts/'
+      chart: dashy
+      targetRevision: 0.1.6
+      helm:
+        valueFiles:
+          - $values/cluster/helm/dashy/values.yaml
+    - repoURL: 'https://github.com/vyrtualsynthese/homelab.git'
+      targetRevision: develop
+      ref: values
