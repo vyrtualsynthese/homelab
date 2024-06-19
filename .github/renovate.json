@@ -5,5 +5,11 @@
   "prHourlyLimit": 0,
   "argocd": {
     "fileMatch": ["\\.yaml$"]
-  }
+  },
+  "ignorePaths": [
+    "cluster/helm/_archive/**",
+    "kubectl/**",
+    "ansible/**",
+    "cluster/infrastructure/**"
+  ]
 }
