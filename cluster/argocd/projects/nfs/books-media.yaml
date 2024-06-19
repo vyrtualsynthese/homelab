@@ -1,0 +1,20 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: books-media
+  namespace: argocd
+spec:
+  project: default
+  destination:
+    server: 'https://kubernetes.default.svc'
+    namespace: media-stack
+  sources:
+    - repoURL: 'https://kubernetes-sigs.github.io/nfs-subdir-external-provisioner/'
+      chart: nfs-subdir-external-provisioner
+      targetRevision: 4.0.18
+      helm:
+        valueFiles:
+          - $values/cluster/helm/nfs/books-media/values.yaml
+    - repoURL: 'https://github.com/vyrtualsynthese/homelab.git'
+      targetRevision: develop
+      ref: values
