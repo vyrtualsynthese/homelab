@@ -19,7 +19,7 @@ spec:
   sources:
     - repoURL: 'https://vyrtualsynthese.github.io/selfhosted-helmcharts/'
       chart: dashy
-      targetRevision: 0.1.6
+      targetRevision: 0.1.8
       helm:
         valueFiles:
           - $values/cluster/helm/dashy/values.yaml
