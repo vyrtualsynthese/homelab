@@ -1,20 +1,21 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: argocd-root
+  name: thelounge
   namespace: argocd
 spec:
-  destination:
-    namespace: argocd
-    server: https://kubernetes.default.svc
   project: default
+  destination:
+    server: 'https://kubernetes.default.svc'
+    namespace: thelounge
   syncPolicy:
+    syncOptions:
+      - CreateNamespace=true
     automated:
       prune: true
       selfHeal: true
   source:
-    path: cluster/argocd
     repoURL: 'https://github.com/vyrtualsynthese/homelab.git'
     targetRevision: develop
-    directory:
-      recurse: true
+    path: cluster/helm/thelounge
+  revisionHistoryLimit: 3
