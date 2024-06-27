@@ -19,7 +19,7 @@ worker:
 
 image:
   repository: ghcr.io/goauthentik/server
-  tag: 2024.4.2
+  tag: 2024.6.0
   # -- optional container image digest
   digest: ""
   pullPolicy: IfNotPresent
