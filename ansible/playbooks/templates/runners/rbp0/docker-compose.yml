@@ -3,8 +3,7 @@ services:
     container_name: pihole
     image: jacklul/pihole:2024.06.0
     network_mode: host
-    env_file:
-      - path: ./pihole.env
+    env_file: "./pihole.env"
     volumes:
       - './etc-pihole:/etc/pihole'
       - './etc-dnsmasq.d:/etc/dnsmasq.d'
@@ -15,8 +14,7 @@ services:
   wg-easy:
     image: ghcr.io/wg-easy/wg-easy:13
     container_name: wg-easy
-    env_file:
-      - path: ./wg-easy.env
+    env_file: "./wg-easy.env"
     volumes:
       - ./config:/etc/wireguard
     ports:
