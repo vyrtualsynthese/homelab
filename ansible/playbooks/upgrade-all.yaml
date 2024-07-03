@@ -17,17 +17,18 @@
       apt:
         autoremove: yes
 
-    - name: Upgrade Restic
-      ansible.builtin.command: restic self-update
-      register: resticStdout
-      changed_when:
-        - resticStdout.stdout.find('is up to') == -1
-
 - hosts: runner
   remote_user: vronteix
   become: yes
 
   tasks:
+    - name: Upgrade Restic
+      ansible.builtin.command: restic self-update
+      register: resticStdout
+      changed_when:
+        - resticStdout.stdout.find('is up to') == -1
+      ignore_errors: true
+      
     - name: Copy docker-compose.yml
       ansible.builtin.copy:
         src: templates/runners/{{ inventory_hostname }}/docker-compose.yml
