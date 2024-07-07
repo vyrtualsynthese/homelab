@@ -1,7 +1,7 @@
 image:
   repository: lissy93/dashy
   # Overrides the image tag whose default is the chart appVersion.
-  tag: 2.1.1
+  tag: 2.1.2
 
 serviceAccount:
   # Specifies whether a service account should be created
@@ -22,12 +22,19 @@ ingress:
           pathType: Prefix
   tls: []
 
+probs:
+  failureThreshold: 3
+  timeoutSeconds: 10
+  periodSeconds: 90
+  initialDelaySeconds: 40
+  path: "/"
+
 resources:
   requests:
-    cpu: 1m
-    memory: 128Mi
+    cpu: 500m
+    memory: 512Mi
   limits:
-    memory: 128Mi
+    memory: 4Gi
 
 affinity:
   nodeAffinity:
