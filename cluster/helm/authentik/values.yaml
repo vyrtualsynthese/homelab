@@ -17,8 +17,6 @@ server:
       traefik.ingress.kubernetes.io/router.middlewares: "kube-system-redirect-https@kubernetescrd"
       traefik.ingress.kubernetes.io/router.tls: "true"
       traefik.ingress.kubernetes.io/router.tls.certresolver: "myresolver"
-      traefik.ingress.kubernetes.io/router.tls.domains.0.main: "ashudev.com"
-      traefik.ingress.kubernetes.io/router.tls.domains.0.sans: "authentik.kub.home.ashudev.com"
     hosts:
       - authentik.kub.home.ashudev.com
     paths:
