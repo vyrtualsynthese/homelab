@@ -1,0 +1,19 @@
+apiVersion: traefik.containo.us/v1alpha1
+kind: Middleware
+metadata:
+  name: authentik
+spec:
+  headers:
+    allowedHosts:
+      - "ashudev.com"
+      - "local"
+    accessControlAllowMethods:
+      - "GET"
+      - "OPTIONS"
+      - "PUT"
+    accessControlAllowHeaders:
+      - "*"
+    accessControlAllowOriginList:
+      - "https://authentik.kub.home.ashudev.com"
+    accessControlMaxAge: 100
+    addVaryHeader: true

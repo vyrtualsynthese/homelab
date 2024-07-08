@@ -39,22 +39,22 @@ app:
 
   service:
     type: ClusterIP
+    port: 8080
 
   ingress:
     enabled: true
     className: ""
-    annotations: { }
-    # kubernetes.io/ingress.class: nginx
-    # kubernetes.io/tls-acme: "true"
+    annotations:
+      traefik.ingress.kubernetes.io/router.entrypoints: "web,websecure"
+      traefik.ingress.kubernetes.io/router.middlewares: "kube-system-redirect-https@kubernetescrd"
+      traefik.ingress.kubernetes.io/router.tls: "true"
+      traefik.ingress.kubernetes.io/router.tls.certresolver: "myresolver"
     hosts:
-      - host: chart-example.local
+      - host: firefly.kub.home.ashudev.com
         paths:
           - path: /
-            pathType: ImplementationSpecific
+            pathType: Prefix
     tls: [ ]
-    #  - secretName: chart-example-tls
-    #    hosts:
-    #      - chart-example.local
 
   resources:
     limits:
@@ -212,6 +212,7 @@ importer:
 
   service:
     type: ClusterIP
+    port: 5432
 
   ingress:
     enabled: true
