@@ -5,10 +5,10 @@ metadata:
 spec:
   headers:
     accessControlAllowMethods:
-      - "https://authentik.kub.home.ashudev.com/application/o/dashy/.well-known/openid-configuration"
+      - "*"
     accessControlAllowHeaders:
-      - "https://authentik.kub.home.ashudev.com/application/o/dashy/.well-known/openid-configuration"
+      - "*"
     accessControlAllowOriginList:
-      - "https://authentik.kub.home.ashudev.com/application/o/dashy/.well-known/openid-configuration"
+      - "https://authentik\\.kub\\.home\\.ashudev\\.com.*"
     accessControlMaxAge: 100
     addVaryHeader: true
