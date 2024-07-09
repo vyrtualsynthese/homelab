@@ -13,15 +13,17 @@ ingress:
   enabled: true
   className: ""
   annotations:
-    traefik.ingress.kubernetes.io/router.entrypoints: "web,websecure"
-    traefik.ingress.kubernetes.io/router.middlewares: "kube-system-redirect-https@kubernetescrd,kube-system-authentik@kubernetescrd"
-    traefik.ingress.kubernetes.io/custom-response-headers: "Access-Control-Allow-Origin:*||Access-Control-Allow-Methods:GET,POST,OPTIONS||Access-Control-Allow-Headers:DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range||Access-Control-Expose-Headers:Content-Length,Content-Range"
+    traefik.ingress.kubernetes.io/router.entrypoints: "websecure"
+    traefik.ingress.kubernetes.io/router.middlewares: "kube-system-authentik@kubernetescrd,kube-system-security@kubernetescrd"
+    traefik.ingress.kubernetes.io/router.tls.certresolver: "myresolver"
+    traefik.ingress.kubernetes.io/router.tls: "true"
+    traefik.ingress.kubernetes.io/router.tls.domains.0.main: "kub.home.ashudev.com"
   hosts:
-    - host: dashy.kub.local
+    - host: kub.home.ashudev.com
       paths:
         - path: /
           pathType: Prefix
-  tls: []
+  tls: [ ]
 
 probs:
   failureThreshold: 3
