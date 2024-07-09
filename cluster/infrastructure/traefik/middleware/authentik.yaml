@@ -4,16 +4,11 @@ metadata:
   name: authentik
 spec:
   headers:
-    allowedHosts:
-      - "ashudev.com"
-      - "local"
     accessControlAllowMethods:
-      - "GET"
-      - "OPTIONS"
-      - "PUT"
+      - "https://authentik.kub.home.ashudev.com/application/o/dashy/.well-known/openid-configuration"
     accessControlAllowHeaders:
-      - "*"
+      - "https://authentik.kub.home.ashudev.com/application/o/dashy/.well-known/openid-configuration"
     accessControlAllowOriginList:
-      - "https://authentik.kub.home.ashudev.com"
+      - "https://authentik.kub.home.ashudev.com/application/o/dashy/.well-known/openid-configuration"
     accessControlMaxAge: 100
     addVaryHeader: true
