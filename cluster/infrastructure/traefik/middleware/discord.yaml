@@ -1,14 +1,14 @@
 apiVersion: traefik.containo.us/v1alpha1
 kind: Middleware
 metadata:
-  name: authentik
+  name: discord
 spec:
   headers:
     accessControlAllowMethods:
       - "*"
     accessControlAllowHeaders:
       - "*"
-    accessControlAllowOriginList:
-      - "https://authentik\\.kub\\.home\\.ashudev\\.com.*"
+    accessControlAllowOriginListRegex:
+      - "https://discord\\.com.*"
     accessControlMaxAge: 100
     addVaryHeader: true
