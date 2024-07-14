@@ -7,6 +7,14 @@ global:
   envFrom:
     - secretRef:
         name: authentik-env
+  addPrometheusAnnotations: false
+  affinity:
+    nodeAffinity:
+      matchExpressions:
+        - key: node-type
+          operator: In
+          values:
+            - general
 
 server:
   ingress:
@@ -32,6 +40,7 @@ postgresql:
   primary:
     persistence:
       existingClaim: "authentik-db"
+
 
 
 redis:
