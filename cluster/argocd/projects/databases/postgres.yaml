@@ -1,13 +1,13 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: authentik
+  name: postgres
   namespace: argocd
 spec:
   project: default
   destination:
     server: 'https://kubernetes.default.svc'
-    namespace: authentik
+    namespace: databases
   syncPolicy:
     syncOptions:
       - CreateNamespace=true
@@ -15,12 +15,13 @@ spec:
       prune: true
       selfHeal: true
   sources:
-    - repoURL: 'https://charts.goauthentik.io/'
-      chart: authentik
-      targetRevision: 2024.6.0
+    - repoURL: 'registry-1.docker.io/bitnamicharts'
+      path: postgresql
+      chart: postgresql
+      targetRevision: 15.5.16
       helm:
         valueFiles:
-          - $values/cluster/helm/authentik/values.yaml
+          - $values/cluster/helm/databases/postgres.yaml
     - repoURL: 'https://github.com/vyrtualsynthese/homelab.git'
       targetRevision: develop
       ref: values
