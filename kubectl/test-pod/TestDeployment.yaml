@@ -19,7 +19,7 @@ spec:
       volumes:
         - name: data1
           persistentVolumeClaim:
-            claimName: plex-config
+            claimName: koillection-uploads
       containers:
         - image: alpine:latest
           command:
