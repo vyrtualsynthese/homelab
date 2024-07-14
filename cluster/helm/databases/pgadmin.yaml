@@ -18,7 +18,7 @@ image:
 ##
 
 networkPolicy:
-  enabled: true
+  enabled: false
 
 ## Ingress
 ## Ref: https://kubernetes.io/docs/concepts/services-networking/ingress/
@@ -152,11 +152,13 @@ resources: {}
 ##
 affinity:
   nodeAffinity:
-    matchExpressions:
-      - key: node-type
-        operator: In
-        values:
-          - general
+    requiredDuringSchedulingIgnoredDuringExecution:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: node-type
+              operator: In
+              values:
+                - general
 
 init:
   ## Init container resources

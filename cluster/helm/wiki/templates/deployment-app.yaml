@@ -36,15 +36,18 @@ spec:
             - name: "DB_TYPE"
               value: "postgres"
             - name: "DB_HOST"
-              value: "wiki-db"
+              value: "postgres-postgresql.databases.svc.cluster.local"
             - name: "DB_PORT"
               value: "5432"
             - name: "DB_USER"
               value: "wikijs"
             - name: "DB_PASS"
-              value: "wikijsrocks"
+              valueFrom:
+                secretKeyRef:
+                  key: password
+                  name: wikijs
             - name: "DB_NAME"
-              value: "wiki"
+              value: "wikijs"
           ports:
             - containerPort: 3000
               name: wiki
