@@ -33,11 +33,11 @@ spec:
           imagePullPolicy: {{ .Values.guacamole.image.pullPolicy }}
           env:
             - name: "GUACD_HOSTNAME"
-              value: "guacamole-guacd.guacamole.svc.cluster.local"
+              value: "guacamole-guacd"
             - name: "POSTGRES_DATABASE"
-              value: "guacamole_db"
+              value: "guacamole"
             - name: "POSTGRES_HOSTNAME"
-              value: "guacamole-db.guacamole.svc.cluster.local"
+              value: "postgres-postgresql.databases.svc.cluster.local"
             - name: "POSTGRES_PASSWORD"
               valueFrom:
                 secretKeyRef:
