@@ -22,7 +22,7 @@ spec:
     - match: Host(`freshrss.kub.home.ashudev.com`)
       kind: Rule
       services:
-        - name: freshrss
+        - name: {{ include "fullname" . }}
           port: webui
   tls:
     certResolver: myresolver
