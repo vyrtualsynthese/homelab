@@ -27,8 +27,9 @@ primary:
 backup:
   enabled: true
   resources: {}
-  storage:
-    existingClaim: "databases-postgres-backup"
+  cronjob:
+    storage:
+      existingClaim: "databases-postgres-backup"
 
 metrics:
   enabled: true
