@@ -11,9 +11,6 @@ spec:
   syncPolicy:
     syncOptions:
       - CreateNamespace=true
-    automated:
-      prune: true
-      selfHeal: true
   sources:
     - repoURL: 'https://charts.goauthentik.io/'
       chart: authentik
