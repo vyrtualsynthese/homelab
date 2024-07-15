@@ -2,7 +2,19 @@ authentik:
   # This sends anonymous usage-data, stack traces on errors and
   # performance data to authentik.error-reporting.a7k.io, and is fully opt-in
   error_reporting:
-    enabled: true
+    enabled: false
+  postgresql:
+    # -- set the postgresql hostname to talk to
+    # if unset and .Values.postgresql.enabled == true, will generate the default
+    # @default -- `{{ .Release.Name }}-postgresql`
+    host: "postgres-postgresql.databases.svc.cluster.local"
+    # -- postgresql Database name
+    # @default -- `authentik`
+    name: "authentik"
+    # -- postgresql Username
+    # @default -- `authentik`
+    user: "authentik"
+    port: 5432
 global:
   envFrom:
     - secretRef:
@@ -34,14 +46,7 @@ server:
     tls: []
 
 postgresql:
-  enabled: true
-  auth:
-    existingSecret: "authentik-postgresql-secrets"
-  primary:
-    persistence:
-      existingClaim: "authentik-db"
-
-
+  enabled: false
 
 redis:
   enabled: true
