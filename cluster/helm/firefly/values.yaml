@@ -181,7 +181,7 @@ cron:
     repository: alpine
     pullPolicy: IfNotPresent
     # Overrides the image tag whose default is the chart appVersion.
-    tag: 3.20.1
+    tag: 3.20.2
 
   imagePullSecrets: []
   nameOverride: "firefly-cron"
