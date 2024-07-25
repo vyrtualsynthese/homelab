@@ -18,7 +18,7 @@ spec:
     - repoURL: 'registry-1.docker.io/bitnamicharts'
       path: postgresql
       chart: postgresql
-      targetRevision: 15.5.16
+      targetRevision: 15.5.19
       helm:
         valueFiles:
           - $values/cluster/helm/databases/postgres.yaml
