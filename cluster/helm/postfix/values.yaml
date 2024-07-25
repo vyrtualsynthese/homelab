@@ -1,0 +1,72 @@
+# Default values for postfix.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+# High availability
+replicaCount: 2
+
+# Role Based Access Control
+# Ref: https://kubernetes.io/docs/admin/authorization/rbac/
+rbac:
+  create: false
+
+# Service Account
+# Ref: https://kubernetes.io/docs/admin/service-accounts-admin/
+serviceAccount:
+  create: false
+  ## The name of the ServiceAccount to use.
+  ## If not set and create is true, a name is generated using the fullname template
+  name:
+
+# Docker image
+image:
+  repository: eldada.jfrog.io/docker/postfix-relay
+  tag: 0.9
+  pullPolicy: IfNotPresent
+
+# Exporter Docker image
+# https://github.com/kumina/postfix_exporter
+exporter:
+  enabled: true
+  image:
+    repository: eldada.jfrog.io/docker/postfix-exporter
+    tag: 0.2
+    pullPolicy: IfNotPresent
+  # Resources needed for the postfix-exporter container
+  resources: {}
+
+# Add a ServiceMonitor object for scraping metrics by Prometheus
+# Must have exporter.enabled=true
+serviceMonitor:
+  # Enable only if you have support for ServiceMonitor object with version monitoring.coreos.com/v1 (Prometheus)
+  enabled: true
+
+# Expose pods with service on port 25
+service:
+  type: ClusterIP
+  port: 25
+  exporterPort: 9154
+  loadBalancerIP:
+
+# SMTP server details
+# Used by postfix to connect to SMTP server
+smtp:
+  # Example with mailgun
+  relayHost: "smtp-relay.gmail.com:25"
+  relayMyhostname: "ashudev.com"
+  relayUsername: "ashulab@ashudev.com"
+  relayNetworks: '10.0.0.0/8,127.0.0.0/8,172.17.0.0/16,192.0.0.0/8'
+
+# Optional extra configuration to add or edit in /etc/postfix/main.cf
+# A single string with key=value separated by a semicolon char (;)
+# Example: postfixCustomConfig: "key1 = value1; key2 = value2; key3 = value3"
+postfixCustomConfig:
+
+# Resources needed for the postfix container
+resources: {}
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}
