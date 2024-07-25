@@ -3,6 +3,23 @@ authentik:
   # performance data to authentik.error-reporting.a7k.io, and is fully opt-in
   error_reporting:
     enabled: false
+  email:
+    # -- SMTP Server emails are sent from, fully optional
+    host: "smtp.gmail.com"
+    # -- SMTP server port
+    port: 587
+    # -- SMTP credentials, when left empty, no authentication will be done
+    username: ""
+    # -- SMTP credentials, when left empty, no authentication will be done
+    password: ""
+    # -- Enable either use_tls or use_ssl, they can't be enabled at the same time.
+    use_tls: false
+    # -- Enable either use_tls or use_ssl, they can't be enabled at the same time.
+    use_ssl: false
+    # -- Connection timeout
+    timeout: 30
+    # -- Email from address, can either be in the format "foo@bar.baz" or "authentik <foo@bar.baz>"
+    from: ""
   postgresql:
     # -- set the postgresql hostname to talk to
     # if unset and .Values.postgresql.enabled == true, will generate the default
