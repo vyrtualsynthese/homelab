@@ -15,6 +15,21 @@ authentik:
     # @default -- `authentik`
     user: "authentik"
     port: 5432
+  email:
+    # -- SMTP Server emails are sent from, fully optional
+    host: "smtp.gmail.com"
+    # -- SMTP server port
+    port: 587
+    # -- SMTP credentials, when left empty, no authentication will be done
+    username: "valentin.ronteix@ashudev.com"
+    # -- Enable either use_tls or use_ssl, they can't be enabled at the same time.
+    use_tls: true
+    # -- Enable either use_tls or use_ssl, they can't be enabled at the same time.
+    use_ssl: false
+    # -- Connection timeout
+    timeout: 30
+    # -- Email from address, can either be in the format "foo@bar.baz" or "authentik <foo@bar.baz>"
+    from: "ashulab@ashudev.com"
 global:
   # Default image used by all authentik components. For GeoIP configuration, see the geoip values below.
   image:
