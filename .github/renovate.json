@@ -11,5 +11,29 @@
     "kubectl/**",
     "ansible/**",
     "cluster/infrastructure/**"
+  ],
+  "packageRules": [
+    {
+      "matchCurrentValue": "/^(?<major>\\d+)(?:\\.(?<minor>\\d+)(?:\\.(?<patch>\\d+))?)?-(?<compatibility>.+)-(?<build>\\d+)(?:-r(?<revision>\\d+))?$/",
+      "matchDatasources": [
+        "docker"
+      ],
+      "matchPackageNames": [
+        "bitnami/**",
+        "docker.io/bitnami/**",
+        "gcr.io/bitnami-containers/**"
+      ],
+      "versioning": "regex:^(?<major>\\d+)(?:\\.(?<minor>\\d+)(?:\\.(?<patch>\\d+))?)?(:?-(?<compatibility>.+)-(?<build>\\d+)(?:-r(?<revision>\\d+))?)?$"
+    },
+    {
+      "matchDatasources": [
+        "docker"
+      ],
+      "matchPackageNames": [
+        "fireflyiii/core",
+        "fireflyiii/data-importer"
+      ],
+      "versioning": "loose"
+    }
   ]
 }

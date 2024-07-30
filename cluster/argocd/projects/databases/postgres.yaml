@@ -21,7 +21,7 @@ spec:
       targetRevision: 15.5.19
       helm:
         valueFiles:
-          - $values/cluster/helm/databases/postgres.yaml
+          - $values/cluster/helm/databases/postgres/values.yaml
     - repoURL: 'https://github.com/vyrtualsynthese/homelab.git'
       targetRevision: develop
       ref: values
