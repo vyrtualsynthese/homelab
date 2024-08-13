@@ -81,7 +81,7 @@ storage:
     dataSize: 1Gi
     subPath: ""
     # -- Use an existing PersistentVolumeClaim, overrides values above
-    existingClaim: "filebrowser-db"
+    existingClaim: "filebrowser-db-2"
 
 # Additional volumes on the output Deployment definition.
 volumes:
