@@ -23,7 +23,7 @@ spec:
       volumes:
         - name: firefly-config-volume
           persistentVolumeClaim:
-            claimName: firefly-config
+            claimName: firefly-config-2
       {{- with .Values.app.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}

@@ -30,7 +30,7 @@ spec:
       volumes:
         - name: n8n
           persistentVolumeClaim:
-            claimName: "n8n"
+            claimName: "n8n-2"
       containers:
         - name: {{ .Chart.Name }}
           image: "{{ .Values.n8n.image.repository }}:{{ .Values.n8n.image.tag | default .Chart.AppVersion }}"
