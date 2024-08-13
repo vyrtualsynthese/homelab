@@ -14,7 +14,7 @@ spec:
   sources:
     - chart: gpu-operator
       repoURL: https://helm.ngc.nvidia.com/nvidia
-      targetRevision: v24.3.0
+      targetRevision: v24.6.1
   destination:
     server: https://kubernetes.default.svc
     namespace: gpu-operator
