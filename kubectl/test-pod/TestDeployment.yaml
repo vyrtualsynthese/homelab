@@ -19,7 +19,7 @@ spec:
       volumes:
         - name: data1
           persistentVolumeClaim:
-            claimName: koillection-uploads
+            claimName: minecraft-lh-2
       containers:
         - image: alpine:latest
           command:
