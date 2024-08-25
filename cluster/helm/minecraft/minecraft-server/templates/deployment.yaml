@@ -6,8 +6,6 @@ metadata:
     {{- include "mc.labels" . | nindent 4 }}
 spec:
   replicas: 1
-  strategy:
-    type: Recreate
   selector:
     matchLabels:
       {{- include "mc.selectorLabels" . | nindent 6 }}
@@ -43,13 +41,13 @@ spec:
             - name: EULA
               value: "TRUE"
             - name: ONLINE_MODE
-              value: "FALSE"
+              value: "TRUE"
             - name: OPS
               value: "vsynthese"
             - name: MAX_WORLD_SIZE
               value: "12500"
             - name: VERSION
-              value: "1.20.4"
+              value: "1.21.1"
             - name: ANNOUNCE_PLAYER_ACHIEVEMENTS
               value: "FALSE"
             - name: MODE
