@@ -17,7 +17,7 @@ spec:
   sources:
     - repoURL: 'https://helm.runix.net'
       chart: pgadmin4
-      targetRevision: 1.28.0
+      targetRevision: 1.29.0
       helm:
         valueFiles:
           - $values/cluster/helm/databases/pgadmin/values.yaml
