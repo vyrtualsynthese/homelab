@@ -376,7 +376,7 @@ configmapReload:
     ##
     image:
       repository: ghcr.io/jimmidyson/configmap-reload
-      tag: v0.13.1
+      tag: v0.14.0
       pullPolicy: IfNotPresent
 
     ## Additional configmap-reload container arguments
@@ -414,7 +414,7 @@ configmapReload:
     ##
     image:
       repository: ghcr.io/jimmidyson/configmap-reload
-      tag: v0.13.1
+      tag: v0.14.0
       pullPolicy: Always
 
     ## Additional configmap-reload container arguments
