@@ -8,7 +8,7 @@ image:
   repository: ghcr.io/linuxserver/readarr
   pullPolicy: IfNotPresent
   # Overrides the image tag whose default is the chart appVersion.
-  tag: 0.3.32-develop
+  tag: 0.4.0-develop
 
 imagePullSecrets: []
 nameOverride: ""
