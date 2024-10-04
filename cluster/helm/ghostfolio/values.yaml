@@ -9,7 +9,7 @@ app:
     repository: ghostfolio/ghostfolio
     pullPolicy: IfNotPresent
     # Overrides the image tag whose default is the chart appVersion.
-    tag: 2.110.0
+    tag: 2.112.0
 
   imagePullSecrets: []
   nameOverride: ""
