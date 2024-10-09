@@ -51,14 +51,17 @@ ingress:
   enabled: true
   className: ""
   annotations:
-    traefik.ingress.kubernetes.io/router.entrypoints: "web,websecure"
-    traefik.ingress.kubernetes.io/router.middlewares: "kube-system-redirect-https@kubernetescrd"
+    traefik.ingress.kubernetes.io/router.entrypoints: "websecure"
+    traefik.ingress.kubernetes.io/router.middlewares: "kube-system-authentik@kubernetescrd,kube-system-security@kubernetescrd"
+    traefik.ingress.kubernetes.io/router.tls.certresolver: "myresolver"
+    traefik.ingress.kubernetes.io/router.tls: "true"
+    traefik.ingress.kubernetes.io/router.tls.domains.0.main: "filebrowser.kub.home.ashudev.com"
   hosts:
-    - host: filebrowser.kub.local
+    - host: filebrowser.kub.home.ashudev.com
       paths:
         - path: /
           pathType: Prefix
-  tls: []
+  tls: [ ]
 
 resources:
   requests:
