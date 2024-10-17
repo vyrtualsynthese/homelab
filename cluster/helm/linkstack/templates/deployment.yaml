@@ -1,0 +1,82 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "linkstack.fullname" . }}
+  labels:
+    {{- include "linkstack.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "linkstack.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      {{- with .Values.linkstack.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "linkstack.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.linkstack.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "linkstack.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.linkstack.podSecurityContext | nindent 8 }}
+      volumes:
+        - name: linkstack
+          persistentVolumeClaim:
+            claimName: "linkstack"
+      initContainers:
+        - name: cp
+          image: "{{ .Values.linkstack.image.repository }}:{{ .Values.linkstack.image.tag | default .Chart.AppVersion }}"
+          resources:
+                  {{- toYaml .Values.linkstack.resources | nindent 12 }}
+          command: [ "/bin/ash", "-c", "sleep 1 && \
+                [ -z \"$(ls -A /htdocs_provisioning)\" ] && \
+                cp -Ra /htdocs/. /htdocs_provisioning/ && \
+                chown -R apache:apache /htdocs_provisioning && \
+                find /htdocs -type d -print0 | xargs -0 chmod 0755 && \
+                find /htdocs -type f -print0 | xargs -0 chmod 0644 && \
+                echo \"/htdocs was empty. Files copied to /htdocs.\" || \
+                echo \"/htdocs is not empty. No files copied.\"" ]
+          volumeMounts:
+            - name: linkstack
+              mountPath: /htdocs_provisioning
+      containers:
+        - name: {{ .Chart.Name }}
+          image: "{{ .Values.linkstack.image.repository }}:{{ .Values.linkstack.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.linkstack.image.pullPolicy }}
+          env:
+            - name: "HTTP_SERVER_NAME"
+              value: "linkstack.kub.home.ashudev.com"
+            - name: "TZ"
+              value: "Europe/Paris"
+            - name: "PHP_MEMORY_LIMIT"
+              value: "512M"
+            - name: "UPLOAD_MAX_FILESIZE"
+              value: "8M"
+          ports:
+            - containerPort: 80
+              name: "linkstack"
+          volumeMounts:
+            - mountPath: "/htdocs"
+              name: "linkstack"
+          resources:
+            {{- toYaml .Values.linkstack.resources | nindent 12 }}
+      {{- with .Values.linkstack.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.linkstack.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.linkstack.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
