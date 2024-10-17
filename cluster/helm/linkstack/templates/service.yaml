@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "linkstack.fullname" . }}
+  labels:
+    {{- include "linkstack.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.linkstack.service.type }}
+  ports:
+    - port: 80
+      name: linkstack
+      targetPort: linkstack
+  selector:
+    {{- include "linkstack.selectorLabels" . | nindent 4 }}
