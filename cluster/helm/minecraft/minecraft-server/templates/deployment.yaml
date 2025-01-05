@@ -47,7 +47,7 @@ spec:
             - name: MAX_WORLD_SIZE
               value: "12500"
             - name: VERSION
-              value: "1.21.1"
+              value: "1.21.4"
             - name: ANNOUNCE_PLAYER_ACHIEVEMENTS
               value: "FALSE"
             - name: MODE
@@ -55,7 +55,7 @@ spec:
             - name: PVP
               value: "TRUE"
             - name: SERVER_NAME
-              value: "ashulab-1.19"
+              value: "ashulab"
             - name: VIEW_DISTANCE
               value: "10"
             - name: MEMORY
