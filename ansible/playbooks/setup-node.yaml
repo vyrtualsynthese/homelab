@@ -33,7 +33,12 @@
       ansible.posix.authorized_key:
         user: vronteix
         state: present
-        key: "{{ lookup('file', '/home/vyrtualsynthese/.ssh/homelab_rsa.pub') }}"
+        key: '{{ item }}'
+      with_file:
+        - "/home/vyrtualsynthese/.ssh/homelab_rsa.pub"
+        - "/home/vyrtualsynthese/.ssh/homelab_live.pub"
+
+      #key: "{{ lookup('file', '/home/vyrtualsynthese/.ssh/homelab_rsa.pub') }}"
 
     - name: Disable root login over SSH
       lineinfile: dest=/etc/ssh/sshd_config regexp="^PermitRootLogin" line="PermitRootLogin no" state=present
