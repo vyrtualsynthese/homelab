@@ -1,13 +1,15 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: argocd
+  #  annotations:
+  #    argocd-image-updater.argoproj.io/image-list: lissy93/dashy:^2.0
+  name: postiz
   namespace: argocd
 spec:
   project: default
   destination:
     server: 'https://kubernetes.default.svc'
-    namespace: argocd
+    namespace: postiz
   syncPolicy:
     syncOptions:
       - CreateNamespace=true
@@ -15,12 +17,12 @@ spec:
       prune: true
       selfHeal: true
   sources:
-    - repoURL: 'https://argoproj.github.io/argo-helm'
-      chart: argo-cd
-      targetRevision: 7.7.15
+    - repoURL: 'https://ghcr.io/gitroomhq/postiz-helmchart/charts/postiz-app'
+      chart: postiz
+      targetRevision: 1.0.5
       helm:
         valueFiles:
-          - $values/cluster/helm/argocd/values.yaml
+          - $values/cluster/helm/postiz/values.yaml
     - repoURL: 'https://github.com/vyrtualsynthese/homelab.git'
       targetRevision: develop
       ref: values

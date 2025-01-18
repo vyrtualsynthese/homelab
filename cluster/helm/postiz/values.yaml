@@ -1,0 +1,72 @@
+image:
+  repository: ghcr.io/gitroomhq/postiz-app
+  # Overrides the image tag whose default is the chart appVersion.
+  tag: v1.27.2-amd64
+
+serviceAccount:
+  # Specifies whether a service account should be created
+  create: false
+  # Automatically mount a ServiceAccount's API credentials?
+  automount: false
+
+ingress:
+  enabled: true
+  className: ""
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: "web,websecure"
+    traefik.ingress.kubernetes.io/router.middlewares: "kube-system-redirect-https@kubernetescrd"
+  hosts:
+    - host: postiz.kub.local
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+affinity:
+  nodeAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: node-type
+              operator: In
+              values:
+                - general
+                - small
+
+extraVolumes: []
+extraVolumeMounts: []
+
+# PostgreSQL configuration
+postgresql:
+  enabled: false
+
+# Redis configuration
+redis:
+  enabled: true
+  auth:
+    enabled: false
+  master:
+    service:
+      ports:
+        redis: 6379
+
+# Environment variables
+env:
+  FRONTEND_URL: "http://localhost:4200"
+  NEXT_PUBLIC_BACKEND_URL: "http://localhost:3000"
+  BACKEND_INTERNAL_URL: "http://backend:3000"
+  UPLOAD_DIRECTORY: "/uploads"
+  NEXT_PUBLIC_UPLOAD_STATIC_DIRECTORY: ""
+  NX_ADD_PLUGINS: "false"
+  IS_GENERAL: "true"
+
+# Sensitive environment variables (to be stored in Secrets)
+secrets:
+  DATABASE_URL: ""
+  REDIS_URL: ""
+  JWT_SECRET: ""
+  X_API_KEY: ""
+  X_API_SECRET: ""
+  REDDIT_CLIENT_ID: ""
+  REDDIT_CLIENT_SECRET: ""
+  RESEND_API_KEY: ""
