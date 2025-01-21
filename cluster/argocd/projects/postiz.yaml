@@ -17,8 +17,8 @@ spec:
       prune: true
       selfHeal: true
   sources:
-    - repoURL: 'https://ghcr.io/gitroomhq/postiz-helmchart/charts/postiz-app'
-      chart: postiz
+    - repoURL: 'https://gitroomhq.github.io/postiz-helmchart/'
+      chart: postiz-app
       targetRevision: 1.0.5
       helm:
         valueFiles:
