@@ -1,0 +1,31 @@
+apiVersion: v2
+appVersion: 1.3.0
+dependencies:
+- condition: postgresql.enabled
+  name: postgresql
+  repository: https://charts.bitnami.com/bitnami
+  version: 15.5.28
+- condition: redis.enabled
+  name: redis
+  repository: https://charts.bitnami.com/bitnami
+  version: 20.1.0
+description: A Social Media Scheduling App
+home: https://postiz.com
+keywords:
+- social media
+- marketing
+- scheduling
+- queue
+maintainers:
+- email: offendingcommit@gmail.com
+  name: jonathan-irvin
+  url: https://linktr.ee/offendingcommit
+- email: contact@jread.com
+  name: jamesread
+  url: http://jread.com
+name: postiz-app
+sources:
+- https://github.com/gitroomhq/postiz-app
+- https://github.com/gitroomhq/postiz-helmchart
+type: application
+version: 1.0.5

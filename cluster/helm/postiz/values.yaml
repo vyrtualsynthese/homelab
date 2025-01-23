@@ -1,13 +1,29 @@
+replicaCount: 1
+
 image:
   repository: ghcr.io/gitroomhq/postiz-app
-  # Overrides the image tag whose default is the chart appVersion.
-  tag: v1.27.2-amd64
+  pullPolicy: IfNotPresent
+  tag: "v1.27.2-amd64"
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
 
 serviceAccount:
-  # Specifies whether a service account should be created
-  create: false
-  # Automatically mount a ServiceAccount's API credentials?
-  automount: false
+  create: true
+  annotations: {}
+  name: ""
+
+podAnnotations: {}
+
+podSecurityContext: {}
+
+securityContext: {}
+
+service:
+  type: ClusterIP
+  port: 80
+  additionalPorts: []
 
 ingress:
   enabled: true
@@ -22,6 +38,32 @@ ingress:
           pathType: Prefix
           port: 80
   tls: []
+  #  - secretName: chart-example-tls
+  #    hosts:
+  #      - chart-example.local
+  extraRules: []
+
+resources: {}
+
+extraContainers: []
+
+extraVolumes:
+  - name: uploads-volume
+    persistentVolumeClaim:
+      claimName: postiz-uploads
+extraVolumeMounts:
+  - name: uploads-volume
+    mountPath: /uploads
+
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 100
+  targetCPUUtilizationPercentage: 80
+
+nodeSelector: {}
+
+tolerations: []
 
 affinity:
   nodeAffinity:
@@ -34,9 +76,6 @@ affinity:
                 - general
                 - small
 
-extraVolumes: []
-extraVolumeMounts: []
-
 # PostgreSQL configuration
 postgresql:
   enabled: false
@@ -44,8 +83,10 @@ postgresql:
 # Redis configuration
 redis:
   enabled: true
+  architecture: standalone
   auth:
     enabled: false
+    password: postiz-redis-password
   master:
     service:
       ports:
@@ -60,14 +101,4 @@ env:
   NEXT_PUBLIC_UPLOAD_STATIC_DIRECTORY: ""
   NX_ADD_PLUGINS: "false"
   IS_GENERAL: "true"
-
-# Sensitive environment variables (to be stored in Secrets)
-secrets:
-  DATABASE_URL: ""
-  REDIS_URL: ""
-  JWT_SECRET: ""
-  X_API_KEY: ""
-  X_API_SECRET: ""
-  REDDIT_CLIENT_ID: ""
-  REDDIT_CLIENT_SECRET: ""
-  RESEND_API_KEY: ""
+  STORAGE_PROVIDER: "local"
