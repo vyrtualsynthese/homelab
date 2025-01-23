@@ -1,8 +1,6 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  #  annotations:
-  #    argocd-image-updater.argoproj.io/image-list: lissy93/dashy:^2.0
   name: postiz
   namespace: argocd
 spec:
@@ -13,16 +11,7 @@ spec:
   syncPolicy:
     syncOptions:
       - CreateNamespace=true
-    automated:
-      prune: true
-      selfHeal: true
-  sources:
-    - repoURL: 'ghcr.io/gitroomhq/postiz-helmchart/charts'
-      chart: postiz-app
-      targetRevision: 1.0.5
-      helm:
-        valueFiles:
-          - $values/cluster/helm/postiz/values.yaml
-    - repoURL: 'https://github.com/vyrtualsynthese/homelab.git'
-      targetRevision: develop
-      ref: values
+  source:
+    repoURL: 'https://github.com/vyrtualsynthese/homelab.git'
+    targetRevision: develop
+    path: cluster/helm/postiz
