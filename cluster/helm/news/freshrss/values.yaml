@@ -8,7 +8,7 @@ image:
   repository: lscr.io/linuxserver/freshrss
   pullPolicy: IfNotPresent
   # Overrides the image tag whose default is the chart appVersion.
-  tag: 1.21.0-ls186
+  tag: 1.25.0-ls257
 
 imagePullSecrets: []
 nameOverride: ""
