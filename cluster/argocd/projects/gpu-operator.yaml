@@ -1,7 +1,7 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: gpu-operator
+  name: longhorn
   namespace: argocd
 spec:
   project: default
@@ -13,7 +13,7 @@ spec:
       selfHeal: true
   sources:
     - chart: gpu-operator
-      repoURL: https://helm.ngc.nvidia.com/nvidia
+      repoURL: https://helm.ngc.nvidia.com/nvidia/
       targetRevision: v24.9.1
   destination:
     server: https://kubernetes.default.svc
