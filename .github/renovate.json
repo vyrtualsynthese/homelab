@@ -21,7 +21,9 @@
       "matchPackageNames": [
         "bitnami/**",
         "docker.io/bitnami/**",
-        "gcr.io/bitnami-containers/**"
+        "gcr.io/bitnami-containers/**",
+        "lscr.io/linuxserver/**",
+        "ghcr.io/linuxserver/**"
       ],
       "versioning": "regex:^(?<major>\\d+)(?:\\.(?<minor>\\d+)(?:\\.(?<patch>\\d+))?)?(:?-(?<compatibility>.+)-(?<build>\\d+)(?:-r(?<revision>\\d+))?)?$"
     },
