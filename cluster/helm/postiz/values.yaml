@@ -29,10 +29,13 @@ ingress:
   enabled: true
   className: ""
   annotations:
-    traefik.ingress.kubernetes.io/router.entrypoints: "web,websecure"
-    traefik.ingress.kubernetes.io/router.middlewares: "kube-system-redirect-https@kubernetescrd"
+    traefik.ingress.kubernetes.io/router.entrypoints: "websecure"
+    traefik.ingress.kubernetes.io/router.middlewares: "kube-system-authentik@kubernetescrd,kube-system-security@kubernetescrd"
+    traefik.ingress.kubernetes.io/router.tls.certresolver: "myresolver"
+    traefik.ingress.kubernetes.io/router.tls: "true"
+    traefik.ingress.kubernetes.io/router.tls.domains.0.main: "postiz.kub.home.ashudev.com"
   hosts:
-    - host: postiz.kub.local
+    - host: postiz.kub.home.ashudev.com
       paths:
         - path: /
           pathType: Prefix
@@ -94,9 +97,10 @@ redis:
 
 # Environment variables
 env:
-  FRONTEND_URL: "http://localhost:4200"
-  NEXT_PUBLIC_BACKEND_URL: "http://localhost:3000"
-  BACKEND_INTERNAL_URL: "http://backend:3000"
+  MAIN_URL: "https://postiz.kub.home.ashudev.com"
+  FRONTEND_URL: "https://postiz.kub.home.ashudev.com"
+  NEXT_PUBLIC_BACKEND_URL: "https://postiz.kub.home.ashudev.com/api"
+  BACKEND_INTERNAL_URL: "http://localhost:3000"
   UPLOAD_DIRECTORY: "/uploads"
   NEXT_PUBLIC_UPLOAD_STATIC_DIRECTORY: ""
   NX_ADD_PLUGINS: "false"
