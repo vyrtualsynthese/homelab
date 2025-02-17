@@ -6,6 +6,8 @@ metadata:
 spec:
   valuesContent: |-
     deployment:
+      # -- Enable deployment
+      enabled: true
       kind: DaemonSet
     ingressRoute:
       dashboard:
@@ -26,45 +28,35 @@ spec:
             namespace: kube-system
         # TLS options (e.g. secret containing certificate)
         # tls: {}
-      metrics:
-        enabled: true
-        # Additional ingressRoute annotations (e.g. for kubernetes.io/ingress.class)
-        annotations: {}
-        # Additional ingressRoute labels (e.g. for filtering IngressRoute by custom labels)
-        labels: {}
-        # The router match rule used for the dashboard ingressRoute
-        matchRule: Host(`traefik.app.local`) && (PathPrefix(`/metrics`))
-        # Specify the allowed entrypoints to use for the dashboard ingress route, (e.g. traefik, web, websecure).
-        # By default, it's using traefik entrypoint, which is not exposed.
-        # /!\ Do not expose your dashboard without any protection over the internet /!\
-        entryPoints: ["web"]
-        # TLS options (e.g. secret containing certificate)
-        # tls: {}
 
     metrics:
-      ## -- Prometheus is enabled by default.
-      ## -- It can be disabled by setting "prometheus: null"
+      # -- Prometheus is enabled by default.
+      # -- It can be disabled by setting "prometheus: null"
       prometheus:
         # -- Entry point used to expose metrics.
         entryPoint: metrics
-        ## Enable metrics on entry points. Default=true
-        # addEntryPointsLabels: false
-        ## Enable metrics on routers. Default=false
-        # addRoutersLabels: true
-        ## Enable metrics on services. Default=true
-        # addServicesLabels: false
-        ## Buckets for latency metrics. Default="0.1,0.3,1.2,5.0"
-        # buckets: "0.5,1.0,2.5"
-        ## When manualRouting is true, it disables the default internal router in
-        ## order to allow creating a custom router for prometheus@internal service.
-        # manualRouting: true
+        # Enable metrics on entry points. Default=true
+        addEntryPointsLabels: false
+        # Enable metrics on routers. Default=false
+        addRoutersLabels: true
+        # Enable metrics on services. Default=true
+        addServicesLabels: false
+        # Buckets for latency metrics. Default="0.1,0.3,1.2,5.0"
+        buckets: "0.5,1.0,2.5"
+        # When manualRouting is true, it disables the default internal router in
+        # order to allow creating a custom router for prometheus@internal service.
+        manualRouting: true
 
-    certResolvers:
+    # -- Certificates resolvers configuration.
+    # Ref: https://doc.traefik.io/traefik/https/acme/#certificate-resolvers
+    # See EXAMPLES.md for more details.
+    certificatesResolvers:
       myresolver:
-        email: valentin.ronteix@ashudev.com
-        tlsChallenge: true
-        # It has to match the path with a persistent volume
-        storage: /data/acme.json
+        acme:
+          email: valentin.ronteix@ashudev.com
+          tlsChallenge: true
+          # It has to match the path with a persistent volume
+          storage: /data/acme.json
 
     ports:
       web:
