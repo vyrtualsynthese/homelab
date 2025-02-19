@@ -9,7 +9,12 @@ image:
   tag: 16.4.0-debian-12-r2
 
 primary:
-  resources: {}
+  resources:
+    requests:
+      cpu: 0.1
+      memory: 1Gi
+    limits:
+      memory: 4Gi
   affinity:
     nodeAffinity:
       requiredDuringSchedulingIgnoredDuringExecution:
