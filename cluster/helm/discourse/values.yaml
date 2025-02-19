@@ -325,7 +325,12 @@ discourse:
   ##     cpu: 3
   ##     memory: 1024Mi
   ##
-  resources: {}
+  resources:
+    requests:
+      cpu: 0.10
+      memory: 1Gi
+    limits:
+      memory: 6Gi
   ## Configure Discourse containers (only main one) Security Context
   ## ref: https://kubernetes.io/docs/tasks/configure-pod-container/security-context/#set-the-security-context-for-a-container
   ## @param discourse.containerSecurityContext.enabled Enabled containers' Security Context
@@ -476,15 +481,13 @@ sidekiq:
   resourcesPreset: "small"
   ## @param sidekiq.resources Set container requests and limits for different resources like CPU or memory (essential for production workloads)
   ## Example:
-  ## resources:
-  ##   requests:
-  ##     cpu: 2
-  ##     memory: 512Mi
-  ##   limits:
-  ##     cpu: 3
-  ##     memory: 1024Mi
   ##
-  resources: {}
+  resources:
+    requests:
+      cpu: 0.5
+      memory: 512Mi
+    limits:
+      memory: 1024Mi
   ## Configure Sidekiq containers (only main one) Security Context
   ## ref: https://kubernetes.io/docs/tasks/configure-pod-container/security-context/#set-the-security-context-for-a-container
   ## @param sidekiq.containerSecurityContext.enabled Enabled containers' Security Context
@@ -764,4 +767,9 @@ redis:
     ##     cpu: 3
     ##     memory: 1024Mi
     ##
-    resources: {}
+    resources:
+      requests:
+        cpu: 0.5
+        memory: 512Mi
+      limits:
+        memory: 1024Mi
