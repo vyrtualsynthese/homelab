@@ -5,10 +5,10 @@
 replicaCount: 1
 linkstack:
   image:
-    repository: linkstackorg/linkstack
-    pullPolicy: IfNotPresent
+    repository: ghcr.io/linkstackorg/linkstack
+    pullPolicy: Always
     # Overrides the image tag whose default is the chart appVersion.
-    tag: always
+    tag: latest
 
   imagePullSecrets: []
   nameOverride: "linkstack"

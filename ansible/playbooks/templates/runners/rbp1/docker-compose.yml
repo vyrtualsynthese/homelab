@@ -2,7 +2,7 @@
 services:
   pihole:
     container_name: pihole
-    image: jacklul/pihole:2024.06.0
+    image: jacklul/pihole:2024.07.0
     network_mode: host
     env_file: "./pihole.env"
     volumes:
@@ -13,7 +13,7 @@ services:
       - NET_ADMIN # Required if you are using Pi-hole as your DHCP server, else not needed
     restart: unless-stopped
   wg-easy:
-    image: ghcr.io/wg-easy/wg-easy:13
+    image: ghcr.io/wg-easy/wg-easy:14
     container_name: wg-easy
     env_file: "./wg-easy.env"
     volumes:
@@ -29,7 +29,7 @@ services:
       - net.ipv4.ip_forward=1
       - net.ipv4.conf.all.src_valid_mark=1
   node_exporter:
-    image: quay.io/prometheus/node-exporter:v1.8.1
+    image: quay.io/prometheus/node-exporter:v1.9.0
     container_name: node_exporter
     command:
       - '--path.rootfs=/host'
@@ -40,7 +40,7 @@ services:
       - '/:/host:ro,rslave'
 
   smartctl-exporter:
-    image: matusnovak/prometheus-smartctl:v2.3.0
+    image: matusnovak/prometheus-smartctl:v2.5.0
     container_name: smartctl-exporter
     privileged: true
     ports:
