@@ -3,7 +3,7 @@ replicaCount: 1
 image:
   repository: ghcr.io/gitroomhq/postiz-app
   pullPolicy: IfNotPresent
-  tag: "v1.35.1-amd64"
+  tag: "v1.36.1-amd64"
 
 imagePullSecrets: []
 nameOverride: ""
@@ -101,7 +101,7 @@ env:
   NEXT_PUBLIC_BACKEND_URL: "https://postiz.kub.home.ashudev.com/api"
   BACKEND_INTERNAL_URL: "http://localhost:3000"
   UPLOAD_DIRECTORY: "/uploads"
-  NEXT_PUBLIC_UPLOAD_STATIC_DIRECTORY: ""
+  NEXT_PUBLIC_UPLOAD_STATIC_DIRECTORY: "/uploads"
   NX_ADD_PLUGINS: "false"
   IS_GENERAL: "true"
   STORAGE_PROVIDER: "local"
