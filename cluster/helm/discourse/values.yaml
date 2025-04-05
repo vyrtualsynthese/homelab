@@ -329,8 +329,6 @@ discourse:
     requests:
       cpu: 0.10
       memory: 1Gi
-    limits:
-      memory: 6Gi
   ## Configure Discourse containers (only main one) Security Context
   ## ref: https://kubernetes.io/docs/tasks/configure-pod-container/security-context/#set-the-security-context-for-a-container
   ## @param discourse.containerSecurityContext.enabled Enabled containers' Security Context
@@ -445,7 +443,7 @@ sidekiq:
   ##
   readinessProbe:
     enabled: true
-    initialDelaySeconds: 30
+    initialDelaySeconds: 500
     periodSeconds: 10
     timeoutSeconds: 5
     failureThreshold: 6
@@ -459,7 +457,7 @@ sidekiq:
   ##
   startupProbe:
     enabled: false
-    initialDelaySeconds: 60
+    initialDelaySeconds: 500
     periodSeconds: 10
     timeoutSeconds: 5
     failureThreshold: 15
@@ -486,8 +484,6 @@ sidekiq:
     requests:
       cpu: 0.5
       memory: 512Mi
-    limits:
-      memory: 1024Mi
   ## Configure Sidekiq containers (only main one) Security Context
   ## ref: https://kubernetes.io/docs/tasks/configure-pod-container/security-context/#set-the-security-context-for-a-container
   ## @param sidekiq.containerSecurityContext.enabled Enabled containers' Security Context
@@ -771,5 +767,3 @@ redis:
       requests:
         cpu: 0.5
         memory: 512Mi
-      limits:
-        memory: 1024Mi
