@@ -18,7 +18,7 @@ spec:
     - repoURL: 'registry-1.docker.io/bitnamicharts'
       path: discourse
       chart: discourse
-      targetRevision: 15.1.7
+      targetRevision: 15.1.13
       helm:
         valueFiles:
           - $values/cluster/helm/discourse/values.yaml
