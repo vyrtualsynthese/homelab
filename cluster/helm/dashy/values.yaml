@@ -11,19 +11,19 @@ serviceAccount:
 
 ingress:
   enabled: true
-  className: ""
+  ingressClassName: "traefik"  # This must match Traefik's ingressClass
   annotations:
-    traefik.ingress.kubernetes.io/router.entrypoints: "websecure"
-    traefik.ingress.kubernetes.io/router.middlewares: "kube-system-authentik@kubernetescrd,kube-system-security@kubernetescrd"
-    traefik.ingress.kubernetes.io/router.tls.certresolver: "myresolver"
-    traefik.ingress.kubernetes.io/router.tls: "true"
-    traefik.ingress.kubernetes.io/router.tls.domains.0.main: "kub.home.ashudev.com"
+    kubernetes.io/ingress.class: "traefik"
+    traefik.ingress.kubernetes.io/router.middlewares: "kube-system-redirect-https@kubernetescrd,kube-system-authentik@kubernetescrd,kube-system-security@kubernetescrd"
   hosts:
     - host: kub.home.ashudev.com
       paths:
         - path: /
           pathType: Prefix
-  tls: [ ]
+  tls:
+    - secretName: myresolver-tls  # Must match your TLS secret name if using certResolver
+      hosts:
+        - kub.home.ashudev.com
 
 probs:
   failureThreshold: 3
