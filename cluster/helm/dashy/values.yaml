@@ -1,69 +1,69 @@
-image:
-  repository: lissy93/dashy
-  # Overrides the image tag whose default is the chart appVersion.
-  tag: release-3.1.1
+dashy:
+  image:
+    repository: lissy93/dashy
+    # Overrides the image tag whose default is the chart appVersion.
+    tag: release-3.1.1
 
-serviceAccount:
-  # Specifies whether a service account should be created
-  create: false
-  # Automatically mount a ServiceAccount's API credentials?
-  automount: false
+  serviceAccount:
+    # Specifies whether a service account should be created
+    create: false
+    # Automatically mount a ServiceAccount's API credentials?
+    automount: false
 
-ingress:
-  enabled: true
-  ingressClassName: "traefik"  # This must match Traefik's ingressClass
-  annotations:
-    kubernetes.io/ingress.class: "traefik"
-    traefik.ingress.kubernetes.io/router.middlewares: "kube-system-redirect-https@kubernetescrd,kube-system-authentik@kubernetescrd,kube-system-security@kubernetescrd"
-  hosts:
-    - host: kub.home.ashudev.com
-      paths:
-        - path: /
-          pathType: Prefix
-  tls:
-    - secretName: myresolver-tls  # Must match your TLS secret name if using certResolver
-      hosts:
-        - kub.home.ashudev.com
+  ingress:
+    enabled: false
+    ingressClassName: "traefik"  # This must match Traefik's ingressClass
+    annotations:
+      kubernetes.io/ingress.class: "traefik"
+      traefik.ingress.kubernetes.io/router.entrypoints: "websecure"
+      traefik.ingress.kubernetes.io/router.tls: "true"
+      traefik.ingress.kubernetes.io/router.tls.certresolver: "myresolver"
+      traefik.ingress.kubernetes.io/router.middlewares: "kube-system-redirect-https@kubernetescrd,kube-system-authentik@kubernetescrd,kube-system-security@kubernetescrd"
+    hosts:
+      - host: dashy.ashudev.com
+        paths:
+          - path: /
+            pathType: Prefix
 
-probs:
-  failureThreshold: 3
-  timeoutSeconds: 10
-  periodSeconds: 90
-  initialDelaySeconds: 40
-  path: "/"
+  probs:
+    failureThreshold: 3
+    timeoutSeconds: 10
+    periodSeconds: 90
+    initialDelaySeconds: 40
+    path: "/"
 
-resources:
-  requests:
-    cpu: 500m
-    memory: 512Mi
-  limits:
-    memory: 4Gi
+  resources:
+    requests:
+      cpu: 500m
+      memory: 512Mi
+    limits:
+      memory: 4Gi
 
-affinity:
-  nodeAffinity:
-    requiredDuringSchedulingIgnoredDuringExecution:
-      nodeSelectorTerms:
-        - matchExpressions:
-            - key: node-type
-              operator: In
-              values:
-                - general
-                - small
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+          - matchExpressions:
+              - key: node-type
+                operator: In
+                values:
+                  - general
+                  - small
 
-env:
-  NODE_ENV: "production"
-  PORT: "8080"
-  #HOST: ""
-  #BASE_URL: ""
-  #VUE_APP_DOMAIN: ""
-  #INTEGRITY: ""
-  # -- Set this to the name of a secret to load environment variables from. If defined, values in the secret will override values in configs
-  existingSecret: ""
+  env:
+    NODE_ENV: "production"
+    PORT: "8080"
+    #HOST: ""
+    #BASE_URL: ""
+    #VUE_APP_DOMAIN: ""
+    #INTEGRITY: ""
+    # -- Set this to the name of a secret to load environment variables from. If defined, values in the secret will override values in configs
+    existingSecret: ""
 
-static:
-  enabled: true
-  existingSecret: "dashy-conf"
-  # Customize config.yaml https://github.com/Lissy93/dashy/blob/master/docs/configuring.md for more information.
-  configMapContent: ""
-  # Use --set-file stringArray to pass secret https://helm.sh/docs/helm/helm_install/
+  static:
+    enabled: true
+    existingSecret: "dashy-conf"
+    # Customize config.yaml https://github.com/Lissy93/dashy/blob/master/docs/configuring.md for more information.
+    configMapContent: ""
+    # Use --set-file stringArray to pass secret https://helm.sh/docs/helm/helm_install/
 

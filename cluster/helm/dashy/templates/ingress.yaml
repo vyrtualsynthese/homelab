@@ -1,0 +1,21 @@
+apiVersion: traefik.containo.us/v1alpha1
+kind: IngressRoute
+metadata:
+  name: dashy
+  namespace: dashy
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`dashy.ashudev.com`) && PathPrefix(`/`)
+      kind: Rule
+      middlewares:
+        - name: authentik
+          namespace: kube-system
+        - name: security
+          namespace: kube-system
+      services:
+        - name: dashy
+          port: 8080
+  tls:
+    certResolver: myresolver
