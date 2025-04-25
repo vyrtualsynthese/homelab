@@ -1,0 +1,10 @@
+apiVersion: traefik.containo.us/v1alpha1
+kind: Middleware
+metadata:
+  name: redirect-to-dashy
+  namespace: dashy
+spec:
+  redirectRegex:
+    regex: "^https?://kub\\.home\\.ashudev\\.com/(.*)"
+    replacement: "https://dashy.ashudev.com/$1"
+    permanent: true
