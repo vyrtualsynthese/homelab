@@ -1,0 +1,31 @@
+{{- if .Values.app.ingress.enabled -}}
+{{- $fullName := include "app.fullname" . -}}
+{{- $svcPort := .Values.app.service.port -}}
+{{- if and .Values.app.ingress.className (not (semverCompare ">=1.18-0" .Capabilities.KubeVersion.GitVersion)) }}
+  {{- if not (hasKey .Values.app.ingress.annotations "kubernetes.io/ingress.class") }}
+  {{- $_ := set .Values.app.ingress.annotations "kubernetes.io/ingress.class" .Values.app.ingress.className}}
+  {{- end }}
+{{- end }}
+apiVersion: traefik.containo.us/v1alpha1
+kind: IngressRoute
+metadata:
+  name: {{ $fullName }}-old
+  labels:
+    {{- include "app.labels" . | nindent 4 }}
+  {{- with .Values.app.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  entryPoints:
+    - web
+  routes:
+    - match: Host(`wiki.kub.home.ashudev.com`)
+      kind: Rule
+      middlewares:
+        - name: {{ include "app.fullname" . }}-redirect-old
+          namespace: wiki
+      services:
+        - name: noop@internal
+          kind: TraefikService
+{{- end }}

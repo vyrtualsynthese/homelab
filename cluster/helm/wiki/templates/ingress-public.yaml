@@ -20,13 +20,11 @@ spec:
   entryPoints:
     - websecure
   routes:
-    - match: Host(`wiki.kub.home.ashudev.com`)
+    - match: Host(`wiki.ashuvidz.com`)
       kind: Rule
       services:
         - name: wiki-app
           port: wiki
   tls:
     certResolver: myresolver
-    options:
-      name: {{ include "app.fullname" . }}-tlsoption
 {{- end }}
