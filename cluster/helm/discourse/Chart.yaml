@@ -1,0 +1,9 @@
+apiVersion: v2
+name: discourse
+description: Forum Ashuvidz
+type: application
+version: 0.1.0
+dependencies:
+  - name: discourse
+    version: 15.1.7
+    repository: oci://registry-1.docker.io/bitnamicharts

@@ -1,0 +1,19 @@
+apiVersion: traefik.containo.us/v1alpha1
+kind: IngressRoute
+metadata:
+  name: redirect-kub-to-discourse-secure
+  namespace: {{ .Release.Namespace | quote }}
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`discourse.kub.home.ashudev.com`)
+      kind: Rule
+      middlewares:
+        - name: redirect-to-discourse
+          namespace: {{ .Release.Namespace | quote }}
+      services:
+        - name: noop@internal
+          kind: TraefikService
+  tls:
+    certResolver: myresolver
