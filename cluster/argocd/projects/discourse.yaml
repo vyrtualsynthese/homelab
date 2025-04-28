@@ -11,17 +11,8 @@ spec:
   syncPolicy:
     syncOptions:
       - CreateNamespace=true
-    automated:
-      prune: true
-      selfHeal: true
-  sources:
-    - repoURL: 'registry-1.docker.io/bitnamicharts'
-      path: discourse
-      chart: discourse
-      targetRevision: 15.1.7
-      helm:
-        valueFiles:
-          - $values/cluster/helm/discourse/values.yaml
-    - repoURL: 'https://github.com/vyrtualsynthese/homelab.git'
-      targetRevision: develop
-      ref: values
+  source:
+    repoURL: 'https://github.com/vyrtualsynthese/homelab.git'
+    targetRevision: develop
+    path: cluster/helm/discourse
+  revisionHistoryLimit: 3
