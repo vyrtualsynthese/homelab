@@ -1,11 +1,11 @@
 apiVersion: traefik.containo.us/v1alpha1
 kind: IngressRoute
 metadata:
-  name: redirect-kub-to-dashy
+  name: redirect-kub-to-dashy-secure
   namespace: dashy
 spec:
   entryPoints:
-    - web
+    - websecure
   routes:
     - match: Host(`kub.home.ashudev.com`)
       kind: Rule
@@ -15,3 +15,5 @@ spec:
       services:
         - name: noop@internal
           kind: TraefikService
+  tls:
+    certResolver: myresolver
