@@ -1,0 +1,19 @@
+apiVersion: traefik.containo.us/v1alpha1
+kind: IngressRoute
+metadata:
+  name: ashuvidz
+  namespace: ashuvidz
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`ashuvidz.com`) && PathPrefix(`/`)
+      kind: Rule
+      middlewares:
+        - name: security
+          namespace: kube-system
+      services:
+        - name: ashuvidz-nginx
+          port: 80
+  tls:
+    certResolver: myresolver
