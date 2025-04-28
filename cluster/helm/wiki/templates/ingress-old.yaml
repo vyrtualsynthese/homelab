@@ -9,7 +9,7 @@
 apiVersion: traefik.containo.us/v1alpha1
 kind: IngressRoute
 metadata:
-  name: {{ $fullName }}-public
+  name: {{ $fullName }}-old
   labels:
     {{- include "app.labels" . | nindent 4 }}
   {{- with .Values.app.ingress.annotations }}
@@ -18,13 +18,14 @@ metadata:
   {{- end }}
 spec:
   entryPoints:
-    - websecure
+    - web
   routes:
-    - match: Host(`wiki.ashuvidz.com`)
+    - match: Host(`wiki.kub.home.ashudev.com`)
       kind: Rule
+      middlewares:
+        - name: {{ include "app.fullname" . }}-redirect-old
+          namespace: wiki
       services:
-        - name: wiki-app
-          port: wiki
-  tls:
-    certResolver: myresolver
+        - name: noop@internal
+          kind: TraefikService
 {{- end }}
