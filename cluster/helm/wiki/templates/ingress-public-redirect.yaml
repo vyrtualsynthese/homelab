@@ -20,11 +20,12 @@ spec:
   entryPoints:
     - web
   routes:
-    - match: Host(`wiki.kub.home.ashudev.com`)
+    - match: Host(`wiki.ashuvidz.com`)
       kind: Rule
-      services:
-        - name: wiki-app
-          port: wiki
       middlewares:
-        - name: {{ include "app.fullname" . }}-redirect-https
+        - name: redirect-https
+          namespace: kube-system
+      services:
+        - kind: TraefikService
+          name: noop@internal
 {{- end }}

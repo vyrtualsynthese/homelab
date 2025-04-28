@@ -1,10 +1,12 @@
 apiVersion: traefik.containo.us/v1alpha1
 kind: Middleware
 metadata:
-  name: {{ include "app.fullname" . }}-redirect-https
+  name: {{ include "app.fullname" . }}-redirect-old
   labels:
     {{- include "app.labels" . | nindent 4 }}
 spec:
-  redirectScheme:
-    scheme: https
+  redirectRegex:
+    regex: "^https?://wiki\\.kub\\.home\\.ashudev\\.com/(.*)"
+    replacement: "https://wiki.ashuvidz.com/$1"
     permanent: true
+
