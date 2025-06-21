@@ -16,7 +16,7 @@ discourse:
   image:
     registry: docker.io
     repository: bitnami/discourse
-    tag: 3.3.3-debian-12-r2
+    tag: 3.4.5-debian-12-r0
     digest: ""
     ## Specify a imagePullPolicy
     ## ref: https://kubernetes.io/docs/concepts/containers/images/#pre-pulled-images
@@ -58,7 +58,7 @@ discourse:
   host: "forum.ashuvidz.com"
   ## @param siteName Discourse site name
   ##
-  siteName: 'Ashuvidz - Forum'
+  siteName: "Ashuvidz - Forum"
   ## Discourse SMTP settings
   ## @param smtp.enabled Enable/disable SMTP
   ## @param smtp.host SMTP host name
@@ -216,7 +216,7 @@ discourse:
     ## @param discourse.skipInstall Do not run the Discourse installation wizard
     ## Use only in case you are importing an existing database.
     ##
-    skipInstall: false
+    skipInstall: true
     ## @param discourse.plugins List of plugins to be installed before the container initialization
     ## NOTE: This will be ignored if the values 'discourse.command' or 'discourse.args' are provided.
     ## Additionally, consider increasing the value discourse.livenessProbe.initialDelaySeconds if the container restarts before the initialization finishes.
@@ -355,7 +355,8 @@ discourse:
       allowPrivilegeEscalation: false
       capabilities:
         drop: ["ALL"]
-        add: ["CHOWN", "SYS_CHROOT", "FOWNER", "SETGID", "SETUID", "DAC_OVERRIDE"]
+        add:
+          ["CHOWN", "SYS_CHROOT", "FOWNER", "SETGID", "SETUID", "DAC_OVERRIDE"]
       seccompProfile:
         type: "RuntimeDefault"
     ## @param discourse.lifecycleHooks for the Discourse container(s) to automate configuration before or after startup
@@ -370,7 +371,7 @@ discourse:
   persistence:
     ## @param persistence.enabled Enable persistence using Persistent Volume Claims
     ##
-    enabled: true
+    enabled: false
     ## @param persistence.storageClass Persistent Volume storage class
     ## If defined, storageClassName: <storageClass>
     ## If set to "-", storageClassName: "", which disables dynamic provisioning
@@ -405,10 +406,10 @@ discourse:
   sidekiq:
     ## @param sidekiq.command Custom command to override image cmd (evaluated as a template)
     ##
-    command: ['/opt/bitnami/scripts/discourse/entrypoint.sh']
+    command: ["/opt/bitnami/scripts/discourse/entrypoint.sh"]
     ## @param sidekiq.args Custom args for the custom command (evaluated as a template)
     ##
-    args: ['/opt/bitnami/scripts/discourse-sidekiq/run.sh']
+    args: ["/opt/bitnami/scripts/discourse-sidekiq/run.sh"]
     ## @param sidekiq.extraEnvVars Array with extra environment variables to add Sidekiq pods
     ##
     extraEnvVars: []
@@ -510,7 +511,8 @@ discourse:
       allowPrivilegeEscalation: false
       capabilities:
         drop: ["ALL"]
-        add: ["CHOWN", "SYS_CHROOT", "FOWNER", "SETGID", "SETUID", "DAC_OVERRIDE"]
+        add:
+          ["CHOWN", "SYS_CHROOT", "FOWNER", "SETGID", "SETUID", "DAC_OVERRIDE"]
       seccompProfile:
         type: "RuntimeDefault"
     ## @param sidekiq.lifecycleHooks for the Sidekiq container(s) to automate configuration before or after startup
