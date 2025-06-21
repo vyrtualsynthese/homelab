@@ -5,5 +5,5 @@ type: application
 version: 0.1.0
 dependencies:
   - name: discourse
-    version: 15.1.7
+    version: 16.0.2
     repository: oci://registry-1.docker.io/bitnamicharts
