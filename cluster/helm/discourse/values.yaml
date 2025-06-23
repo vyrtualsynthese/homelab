@@ -221,7 +221,7 @@ discourse:
     ## NOTE: This will be ignored if the values 'discourse.command' or 'discourse.args' are provided.
     ## Additionally, consider increasing the value discourse.livenessProbe.initialDelaySeconds if the container restarts before the initialization finishes.
     ## e.g:
-    ## plugins:
+    ## plugins:t
     ##   - https://github.com/discourse/discourse-oauth2-basic
     ##
     plugins: []
@@ -298,7 +298,7 @@ discourse:
       enabled: true
       initialDelaySeconds: 150
       periodSeconds: 60
-      timeoutSeconds: 5
+      timeoutSeco nds: 5
       failureThreshold: 25
       successThreshold: 1
     ## @param discourse.customLivenessProbe Custom livenessProbe that overrides the default one
@@ -371,7 +371,7 @@ discourse:
   persistence:
     ## @param persistence.enabled Enable persistence using Persistent Volume Claims
     ##
-    enabled: false
+    enabled: true
     ## @param persistence.storageClass Persistent Volume storage class
     ## If defined, storageClassName: <storageClass>
     ## If set to "-", storageClassName: "", which disables dynamic provisioning
