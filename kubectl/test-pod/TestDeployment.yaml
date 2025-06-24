@@ -19,7 +19,7 @@ spec:
       volumes:
         - name: data1
           persistentVolumeClaim:
-            claimName: minecraft-lh-2
+            claimName: discourse
       containers:
         - image: alpine:latest
           command:
