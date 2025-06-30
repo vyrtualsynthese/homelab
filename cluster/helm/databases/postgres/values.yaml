@@ -33,6 +33,10 @@ backup:
   enabled: true
   resources: {}
   cronjob:
+    command:
+      - /bin/bash
+      - -c
+      - PGPASSWORD="${PGPASSWORD:-$(< "$PGPASSWORD_FILE")}" pg_dumpall --clean --if-exists --load-via-partition-root --quote-all-identifiers --no-password --file="${PGDUMP_DIR}/pg_dumpall-$(date '+%Y-%m-%d-%H-%M').pgdump" && find "$PGDUMP_DIR" -maxdepth 1 -name "pg_dumpall-*.pgdump" -type f -printf "%T@ %p\n" | sort -nr | tail -n +31 | cut -d' ' -f2- | xargs -r rm --"
     storage:
       existingClaim: "databases-postgres-backup"
 
@@ -45,4 +49,3 @@ metrics:
   resources: {}
   serviceMonitor:
     enabled: true
-
