@@ -216,7 +216,7 @@ discourse:
     ## @param discourse.skipInstall Do not run the Discourse installation wizard
     ## Use only in case you are importing an existing database.
     ##
-    skipInstall: true
+    skipInstall: false
     ## @param discourse.plugins List of plugins to be installed before the container initialization
     ## NOTE: This will be ignored if the values 'discourse.command' or 'discourse.args' are provided.
     ## Additionally, consider increasing the value discourse.livenessProbe.initialDelaySeconds if the container restarts before the initialization finishes.
