@@ -268,10 +268,10 @@ discourse:
     ##
     livenessProbe:
       enabled: true
-      initialDelaySeconds: 600
+      initialDelaySeconds: 60
       periodSeconds: 10
       timeoutSeconds: 5
-      failureThreshold: 25
+      failureThreshold: 250
       successThreshold: 1
     ## @param discourse.readinessProbe.enabled Enable readinessProbe on Discourse containers
     ## @param discourse.readinessProbe.initialDelaySeconds Initial delay seconds for readinessProbe
@@ -282,10 +282,10 @@ discourse:
     ##
     readinessProbe:
       enabled: true
-      initialDelaySeconds: 600
+      initialDelaySeconds: 60
       periodSeconds: 10
       timeoutSeconds: 5
-      failureThreshold: 25
+      failureThreshold: 250
       successThreshold: 1
     ## @param discourse.startupProbe.enabled Enable startupProbe on Discourse containers
     ## @param discourse.startupProbe.initialDelaySeconds Initial delay seconds for startupProbe
@@ -296,10 +296,10 @@ discourse:
     ##
     startupProbe:
       enabled: true
-      initialDelaySeconds: 150
+      initialDelaySeconds: 60
       periodSeconds: 60
       timeoutSeco nds: 5
-      failureThreshold: 25
+      failureThreshold: 250
       successThreshold: 1
     ## @param discourse.customLivenessProbe Custom livenessProbe that overrides the default one
     ##
@@ -430,10 +430,10 @@ discourse:
     ##
     livenessProbe:
       enabled: true
-      initialDelaySeconds: 500
+      initialDelaySeconds: 60
       periodSeconds: 10
       timeoutSeconds: 5
-      failureThreshold: 6
+      failureThreshold: 60
       successThreshold: 1
     ## Sidekiq extra options for readiness probe
     ## @param sidekiq.readinessProbe.enabled Enable readinessProbe on Sidekiq containers
@@ -445,10 +445,10 @@ discourse:
     ##
     readinessProbe:
       enabled: true
-      initialDelaySeconds: 500
+      initialDelaySeconds: 60
       periodSeconds: 10
       timeoutSeconds: 5
-      failureThreshold: 6
+      failureThreshold: 60
       successThreshold: 1
     ## @param sidekiq.startupProbe.enabled Enable startupProbe on Sidekiq containers
     ## @param sidekiq.startupProbe.initialDelaySeconds Initial delay seconds for startupProbe
@@ -459,10 +459,10 @@ discourse:
     ##
     startupProbe:
       enabled: false
-      initialDelaySeconds: 500
+      initialDelaySeconds: 60
       periodSeconds: 10
       timeoutSeconds: 5
-      failureThreshold: 15
+      failureThreshold: 150
       successThreshold: 1
     ## @param sidekiq.customLivenessProbe Custom livenessProbe that overrides the default one
     ##
