@@ -7,11 +7,8 @@ metadata:
 spec:
   type: {{ .Values.service.type }}
   ports:
-    - port: 9090
-      name: minio-webui
-      targetPort: minio-webui
-    - port: 9000
-      name: minio-api
-      targetPort: minio-api
+    - port: 9705
+      name: huntarr-webui
+      targetPort: huntarr-webui
   selector:
     {{- include "selectorLabels" . | nindent 4 }}
