@@ -21,10 +21,9 @@ spec:
         {{- include "selectorLabels" . | nindent 8 }}
     spec:
       volumes:
-        - name: minio-data-volume
-          hostPath:
-            path: /mnt/storage/minio
-            type: Directory
+        - name: huntarr-config-volume
+          persistentVolumeClaim:
+            claimName: huntarr-config
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
@@ -38,41 +37,17 @@ spec:
             {{- toYaml .Values.securityContext | nindent 12 }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
-          command:
-            - /bin/bash
-            - -c
-          args:
-            - minio server /data --console-address :9090
           ports:
-            - name: minio-api
-              containerPort: 9000
-            - name: minio-webui
-              containerPort: 9090
+            - name: huntarr-webui
+              containerPort: 9705
           env:
-            - name: "MINIO_ROOT_USER"
-              valueFrom:
-                secretKeyRef:
-                  name: minio
-                  key: MINIO_ROOT_USER
-            - name: "MINIO_ROOT_PASSWORD"
-              valueFrom:
-                secretKeyRef:
-                  name: minio
-                  key: MINIO_ROOT_PASSWORD
-            - name: "MINIO_VOLUMES"
-              value: "/data"
-            - name: "MINIO_PROMETHEUS_URL"
-              value: "http://prometheus-server.monitoring.svc.cluster.local"
-            - name: "MINIO_PROMETHEUS_JOB_ID"
-              value: "kubernetes-pods"
-            - name: "MINIO_PROMETHEUS_AUTH_TYPE"
-              value: "public"
-
+            - name: "TZ"
+              value: "Europe/Paris"
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
           volumeMounts:
-            - name: minio-data-volume
-              mountPath: /data
+            - name: huntarr-config-volume
+              mountPath: /config
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
