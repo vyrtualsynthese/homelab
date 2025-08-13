@@ -8,7 +8,7 @@ image:
   repository: lscr.io/linuxserver/lidarr
   pullPolicy: IfNotPresent
   # Overrides the image tag whose default is the chart appVersion.
-  tag: 8.1.2135
+  tag: 2.12.4.4658-ls49
 
 imagePullSecrets: []
 nameOverride: ""
@@ -44,7 +44,8 @@ podAnnotations:
 podSecurityContext: {}
 # fsGroup: 2000
 
-securityContext: {}
+securityContext:
+  {}
   # capabilities:
   #   drop:
   #   - ALL
