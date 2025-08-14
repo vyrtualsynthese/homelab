@@ -35,7 +35,8 @@ podAnnotations:
 podSecurityContext: {}
 # fsGroup: 2000
 
-securityContext: {}
+securityContext:
+  {}
   # capabilities:
   #   drop:
   #   - ALL
@@ -68,7 +69,7 @@ resources:
     cpu: 1
     memory: 4Gi
   limits:
-    memory: 4Gi
+    memory: 16Gi
 
 vpnresources:
   requests:
@@ -76,7 +77,6 @@ vpnresources:
     memory: 256Mi
   limits:
     memory: 256Mi
-
 
 autoscaling:
   enabled: false
