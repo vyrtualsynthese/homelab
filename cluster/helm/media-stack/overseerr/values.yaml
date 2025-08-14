@@ -27,7 +27,8 @@ podAnnotations:
 podSecurityContext: {}
 # fsGroup: 2000
 
-securityContext: {}
+securityContext:
+  {}
   # capabilities:
   #   drop:
   #   - ALL
@@ -56,11 +57,11 @@ ingress:
   #      - chart-example.local
 
 resources:
-   limits:
-     memory: 512Mi
-   requests:
-     cpu: 1m
-     memory: 256Mi
+  limits:
+    memory: 1Gi
+  requests:
+    cpu: 1m
+    memory: 256Mi
 
 autoscaling:
   enabled: false
