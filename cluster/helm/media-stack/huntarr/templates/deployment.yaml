@@ -43,6 +43,8 @@ spec:
           env:
             - name: "TZ"
               value: "Europe/Paris"
+            - name: HUNTARR_PORT
+              value: "9705"
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
           volumeMounts:

@@ -15,7 +15,7 @@ spec:
           namespace: kube-system
       services:
         - name: huntarr
-          port: 9708
+          port: 9705
   tls:
     certResolver: myresolver
 
