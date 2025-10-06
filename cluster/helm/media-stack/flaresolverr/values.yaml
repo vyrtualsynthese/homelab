@@ -5,11 +5,11 @@
 replicaCount: 1
 
 image:
-  repository: 21hsmw/flaresolverr
+  repository: ghcr.io/flaresolverr/flaresolverr
   #repository: ghcr.io/flaresolverr/flaresolverr
   pullPolicy: Always
   # Overrides the image tag whose default is the chart appVersion.
-  tag: nodriver
+  tag: v3.4.1
   #tag: v3.3.21
 
 imagePullSecrets: []
@@ -32,10 +32,10 @@ podSecurityContext: {}
 # fsGroup: 2000
 
 securityContext: {}
-  # capabilities:
-  #   drop:
-  #   - ALL
-  # readOnlyRootFilesystem: true
+# capabilities:
+#   drop:
+#   - ALL
+# readOnlyRootFilesystem: true
 # runAsNonRoot: true
 # runAsUser: 1000
 
@@ -59,7 +59,8 @@ ingress:
   #    hosts:
   #      - chart-example.local
 
-resources: {}
+resources:
+  {}
   #requests:
   #  cpu: 1m
   #  memory: 128Mi
