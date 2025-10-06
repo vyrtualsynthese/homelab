@@ -1,18 +1,18 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: discourse
+  name: flaresolverr
   namespace: argocd
 spec:
   project: default
   destination:
-    server: 'https://kubernetes.default.svc'
-    namespace: discourse
+    server: "https://kubernetes.default.svc"
+    namespace: media-stack
   syncPolicy:
     syncOptions:
       - CreateNamespace=true
   source:
-    repoURL: 'https://github.com/vyrtualsynthese/homelab.git'
+    repoURL: "https://github.com/vyrtualsynthese/homelab.git"
     targetRevision: develop
-    path: cluster/helm/discourse
+    path: cluster/helm/media-stack/flaresolver
   revisionHistoryLimit: 3
