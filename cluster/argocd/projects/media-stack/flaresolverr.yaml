@@ -14,5 +14,5 @@ spec:
   source:
     repoURL: "https://github.com/vyrtualsynthese/homelab.git"
     targetRevision: develop
-    path: cluster/helm/media-stack/flaresolver
+    path: cluster/helm/media-stack/flaresolverr
   revisionHistoryLimit: 3
