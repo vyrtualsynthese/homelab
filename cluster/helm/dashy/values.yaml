@@ -1,8 +1,8 @@
 dashy:
   image:
-    repository: lissy93/dashy
+    repository: ghcr.io/lissy93/dashy
     # Overrides the image tag whose default is the chart appVersion.
-    tag: release-3.1.1
+    tag: latest
 
   serviceAccount:
     # Specifies whether a service account should be created
@@ -12,7 +12,7 @@ dashy:
 
   ingress:
     enabled: false
-    ingressClassName: "traefik"  # This must match Traefik's ingressClass
+    ingressClassName: "traefik" # This must match Traefik's ingressClass
     annotations:
       kubernetes.io/ingress.class: "traefik"
       traefik.ingress.kubernetes.io/router.entrypoints: "websecure"
@@ -66,4 +66,3 @@ dashy:
     # Customize config.yaml https://github.com/Lissy93/dashy/blob/master/docs/configuring.md for more information.
     configMapContent: ""
     # Use --set-file stringArray to pass secret https://helm.sh/docs/helm/helm_install/
-
