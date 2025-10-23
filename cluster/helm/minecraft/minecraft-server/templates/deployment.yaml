@@ -77,7 +77,7 @@ spec:
             - name: ENABLE_ROLLING_LOGS
               value: "true"
             - name: MODS
-              value: "https://dev.bukkit.org/projects/multiverse-core/files/3462546/download,https://dev.bukkit.org/projects/multiverse-netherportals/files/3687506/download,https://dev.bukkit.org/projects/multiverse-portals/files/3113114/download"
+              value: "https://mediafilez.forgecdn.net/files/7128/203/multiverse-core-5.3.3.jar,https://mediafilez.forgecdn.net/files/6774/131/multiverse-netherportals-5.0.3.jar,https://mediafilez.forgecdn.net/files/7108/621/multiverse-portals-5.1.1.jar"
           ports:
             - name: mc
               containerPort: 25565
