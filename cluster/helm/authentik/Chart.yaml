@@ -1,0 +1,9 @@
+apiVersion: v2
+name: authentik
+description: Ashuvidz
+type: application
+version: 0.1.0
+dependencies:
+  - name: authentik
+    version: 2025.2.3
+    repository: https://charts.goauthentik.io

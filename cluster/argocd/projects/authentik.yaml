@@ -6,18 +6,12 @@ metadata:
 spec:
   project: default
   destination:
-    server: 'https://kubernetes.default.svc'
+    server: "https://kubernetes.default.svc"
     namespace: authentik
-  syncPolicy:
-    syncOptions:
-      - CreateNamespace=true
-  sources:
-    - repoURL: 'https://charts.goauthentik.io/'
-      chart: authentik
-      targetRevision: 2025.2.3
-      helm:
-        valueFiles:
-          - $values/cluster/helm/authentik/values.yaml
-    - repoURL: 'https://github.com/vyrtualsynthese/homelab.git'
-      targetRevision: develop
-      ref: values
+  source:
+    repoURL: "https://github.com/vyrtualsynthese/homelab.git"
+    targetRevision: develop
+    path: cluster/helm/authentik
+    helm:
+      valueFiles:
+        - values.yaml
