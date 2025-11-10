@@ -137,7 +137,7 @@ extraLabels: {}
 
 downloadDashboardsImage:
   repository: curlimages/curl
-  tag: 8.12.1
+  tag: 8.17.0
   sha: ""
   pullPolicy: IfNotPresent
 
