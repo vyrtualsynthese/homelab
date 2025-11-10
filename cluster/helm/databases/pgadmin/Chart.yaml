@@ -6,4 +6,4 @@ version: 0.1.0
 dependencies:
   - name: pgadmin
     version: 1.50.0 # Version du chart open-source que tu veux utiliser
-    repository: https://vyrtualsynthese.github.io/rowanruseler/
+    repository: https://helm.runix.net/
