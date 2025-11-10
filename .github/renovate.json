@@ -1,10 +1,18 @@
 {
-  "baseBranches": ["develop"],
-  "extends": ["config:recommended", ":dependencyDashboard", "docker:enableMajor"],
+  "baseBranchPatterns": [
+    "develop"
+  ],
+  "extends": [
+    "config:recommended",
+    ":dependencyDashboard",
+    "docker:enableMajor"
+  ],
   "prConcurrentLimit": 0,
   "prHourlyLimit": 0,
   "argocd": {
-    "fileMatch": ["\\.yaml$"]
+    "managerFilePatterns": [
+      "/\\.yaml$/"
+    ]
   },
   "ignorePaths": [
     "cluster/helm/_archive/**",
