@@ -21,6 +21,14 @@ pgadmin:
   networkPolicy:
     enabled: false
 
+  ## Strategy used to replace old Pods by new ones
+  ## Ref: https://kubernetes.io/docs/concepts/workloads/controllers/deployment/#strategy
+  ##
+  strategy:
+    type: Recreate
+  # rollingUpdate:
+  #   maxSurge: 0
+  #   maxUnavailable: 1
   ## Ingress
   ## Ref: https://kubernetes.io/docs/concepts/services-networking/ingress/
   ingress:
