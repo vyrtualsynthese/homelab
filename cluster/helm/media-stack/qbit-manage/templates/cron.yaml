@@ -17,9 +17,8 @@ spec:
             - name: qbittorrent-download-volume
               persistentVolumeClaim:
                 claimName: pvc-nfs-qbittorrent-download-nfs-subdir-external-provisioner
-            - name: qbit-manage-config-volume
-              persistentVolumeClaim:
-                claimName: pvc-nfs-qbittorrent-config-nfs-subdir-external-provisioner
+            - name: qbit-manage-config
+              emptyDir: {}
             - name: qbit-manage-secrets
               secret:
                 secretName: qbit-manage
@@ -29,10 +28,10 @@ spec:
           initContainers:
             - name: init-qbit-manage-config
               image: busybox:1.35
-              command: [ 'sh', '-c', "cp /secret/* /config" ]
+              command: [ 'sh', '-c', "install -d -o 1100 -g 1100 -m 755 /config /config/logs && cp /secret/* /config" ]
               volumeMounts:
                 - mountPath: /config
-                  name: qbit-manage-config-volume
+                  name: qbit-manage-config
                 - mountPath: /secret
                   name: qbit-manage-secrets
           containers:
@@ -60,7 +59,7 @@ spec:
                 - name: qbittorrent-download-volume
                   mountPath: /downloads
                 - mountPath: /config
-                  name: qbit-manage-config-volume
+                  name: qbit-manage-config
           restartPolicy: OnFailure
           affinity:
             nodeAffinity:
