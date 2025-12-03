@@ -8,7 +8,7 @@ image:
   repository: ghcr.io/autobrr/autobrr
   pullPolicy: IfNotPresent
   # Overrides the image tag whose default is the chart appVersion.
-  tag: "v1.69.0"
+  tag: "v1.70.0"
 
 # Choose deployment strategy type
 strategyType: Recreate
@@ -34,7 +34,8 @@ podLabels: {}
 podSecurityContext: {}
 # fsGroup: 2000
 
-securityContext: {}
+securityContext:
+  {}
   # capabilities:
   #   drop:
   #   - ALL
@@ -62,7 +63,8 @@ ingress:
   #    hosts:
   #      - chart-example.local
 
-resources: {}
+resources:
+  {}
   #requests:
   #  cpu: 5m
   #  memory: 128Mi
@@ -95,15 +97,6 @@ affinity:
               operator: In
               values:
                 - general
-
-probs:
-  failureThreshold: 3
-  timeoutSeconds: 10
-  periodSeconds: 90
-  initialDelaySeconds: 3600
-  path:
-    startup: "/healthz/liveness"
-    readiness: "/healthz/readiness"
 
 env:
   TZ: "Europe/Paris"
