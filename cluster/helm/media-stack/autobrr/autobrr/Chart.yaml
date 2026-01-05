@@ -1,0 +1,9 @@
+apiVersion: v2
+appVersion: 1.57.0
+description: autobrr redefines download automation for torrents and Usenet, drawing
+  inspiration from tools like trackarr, autodl-irssi, and flexget. We've combined
+  the best of these worlds into one versatile tool that can do it all, and then some.
+icon: https://github.com/autobrr/autobrr/blob/develop/.github/images/logo.png
+name: autobrr
+type: application
+version: 1.0.0
