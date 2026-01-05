@@ -6,7 +6,7 @@ image:
   repository: ghcr.io/itzg/minecraft-server
   pullPolicy: IfNotPresent
   # Overrides the image tag whose default is the chart appVersion.
-  tag: 2025.10.5-java21-alpine
+  tag: 2026.1.0-java21-alpine
 
 monitor:
   image:
