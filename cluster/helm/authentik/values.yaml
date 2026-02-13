@@ -37,7 +37,7 @@ authentik:
       # -- If defined, a repository applied to all authentik deployments
       repository: ghcr.io/goauthentik/server
       # -- Overrides the global authentik whose default is the chart appVersion
-      tag: "2025.10.1"
+      tag: "2025.12.4"
       # -- If defined, an imagePullPolicy applied to all authentik deployments
       pullPolicy: IfNotPresent
     envFrom:
