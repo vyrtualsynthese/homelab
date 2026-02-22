@@ -8,7 +8,7 @@ image:
   repository: ghcr.io/maintainerr/maintainerr
   pullPolicy: IfNotPresent
   # Overrides the image tag whose default is the chart appVersion.
-  tag: 2.26.0
+  tag: 2.27.0
 
 imagePullSecrets: []
 nameOverride: ""
