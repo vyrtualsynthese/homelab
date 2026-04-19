@@ -47,7 +47,7 @@ spec:
             - name: MAX_WORLD_SIZE
               value: "12500"
             - name: VERSION
-              value: "1.21.8"
+              value: "1.21.11"
             - name: ANNOUNCE_PLAYER_ACHIEVEMENTS
               value: "FALSE"
             - name: MODE
@@ -58,8 +58,6 @@ spec:
               value: "ashulab"
             - name: VIEW_DISTANCE
               value: "10"
-            - name: MEMORY
-              value: ""
             - name: TYPE
               value: "PAPER"
             - name: MAX_TICK_TIME
@@ -68,16 +66,20 @@ spec:
             #  value: "true"
             #- name: JMX_HOST
             #  value: "0.0.0.0"
-            - name: USE_AIKAR_FLAGS
+            - name: USE_MEOWICE_FLAGS
               value: "true"
-            - name: JVM_XX_OPTS
-              value: "-XX:MaxRAMPercentage=75"
+            - name: USE_MEOWICE_GRAALVM_FLAGS
+              value: "true"
             - name: STOP_SERVER_ANNOUNCE_DELAY
               value: "30"
             - name: ENABLE_ROLLING_LOGS
               value: "true"
+            - name: INIT_MEMORY
+              value: "1G"
+            - name: MAX_MEMORY
+              value: "6G"
             - name: MODS
-              value: "https://mediafilez.forgecdn.net/files/7128/203/multiverse-core-5.3.3.jar,https://mediafilez.forgecdn.net/files/6774/131/multiverse-netherportals-5.0.3.jar,https://mediafilez.forgecdn.net/files/7108/621/multiverse-portals-5.1.1.jar"
+              value: "https://github.com/Multiverse/Multiverse-Core/releases/download/5.6.1/multiverse-core-5.6.1.jar,https://github.com/Multiverse/Multiverse-Portals/releases/download/5.2.1/multiverse-portals-5.2.1.jar,https://github.com/Multiverse/Multiverse-NetherPortals/releases/download/5.0.4/multiverse-netherportals-5.0.4.jar,https://download.luckperms.net/1631/bukkit/loader/LuckPerms-Bukkit-5.5.42.jar"
           ports:
             - name: mc
               containerPort: 25565
