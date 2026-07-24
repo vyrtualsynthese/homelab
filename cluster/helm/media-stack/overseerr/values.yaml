@@ -3,10 +3,10 @@
 # Declare variables to be passed into your templates.
 
 image:
-  repository: ghcr.io/linuxserver/overseerr
+  repository: ghcr.io/seerr-team/seerr
   pullPolicy: IfNotPresent
   # Overrides the image tag whose default is the chart appVersion.
-  tag: 1.35.0
+  tag: v3.3.0
 
 imagePullSecrets: []
 nameOverride: ""
