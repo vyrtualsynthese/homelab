@@ -8,13 +8,13 @@ image:
   repository: ghcr.io/linuxserver/qbittorrent
   pullPolicy: IfNotPresent
   # Overrides the image tag whose default is the chart appVersion.
-  tag: 5.1.4
+  tag: 5.2.3
 
 vpnimage:
   repository: ghcr.io/linuxserver/wireguard
   pullPolicy: IfNotPresent
   # Overrides the image tag whose default is the chart appVersion.
-  tag: 1.0.20250521
+  tag: 1.0.20260223
 
 imagePullSecrets: []
 nameOverride: ""

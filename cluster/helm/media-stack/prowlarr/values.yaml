@@ -8,7 +8,7 @@ image:
   repository: ghcr.io/linuxserver/prowlarr
   pullPolicy: IfNotPresent
   # Overrides the image tag whose default is the chart appVersion.
-  tag: 2.3.5
+  tag: 2.5.2
 
 exportarr:
   image:
@@ -24,7 +24,7 @@ exportarr:
     limits:
       memory: 112Mi
 
-imagePullSecrets: []
+imagePullSecrets:
 nameOverride: ""
 fullnameOverride: ""
 
@@ -45,7 +45,8 @@ podAnnotations:
 podSecurityContext: {}
 # fsGroup: 2000
 
-securityContext: {}
+securityContext:
+  {}
   # capabilities:
   #   drop:
   #   - ALL
