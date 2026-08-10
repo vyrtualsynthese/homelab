@@ -27,7 +27,7 @@ primary:
   updateStrategy:
     type: RollingUpdate
   persistence:
-    existingClaim: "databases-postgres"
+    existingClaim: "databases-postgres1"
 
 backup:
   enabled: true
