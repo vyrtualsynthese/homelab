@@ -34,7 +34,7 @@ storageClass:
 
   ## Set StorageClass as the default StorageClass
   ## Ignored if storageClass.create is false
-  defaultClass: false
+  defaultClass: true
 
   ## The default volume type this storage class creates, can be "local" or "hostPath"
   defaultVolumeType: hostPath
