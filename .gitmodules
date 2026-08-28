@@ -1,0 +1,3 @@
+[submodule "cluster/helm/local-path"]
+	path = cluster/helm/local-path
+	url = https://github.com/rancher/local-path-provisioner.git
