@@ -130,8 +130,6 @@ podSecurityContext:
   {}
   # runAsNonRoot: true
 
-hostUsers: true
-
 securityContext:
   {}
   # allowPrivilegeEscalation: false
