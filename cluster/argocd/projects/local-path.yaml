@@ -11,15 +11,14 @@ spec:
   syncPolicy:
     syncOptions:
       - CreateNamespace=true
-  source:
+  sources:
     - repoURL: "https://github.com/rancher/local-path-provisioner.git"
       targetRevision: master
       path: deploy/chart/local-path-provisioner
       helm:
         valueFiles:
-          - $values/values.yaml
+          - $values/cluster/helm/local-path/values.yaml
     - repoURL: "https://github.com/vyrtualsynthese/homelab.git"
-      targetRevision: dev
-      path: cluster/helm/local-path
+      targetRevision: develop
       ref: values
   revisionHistoryLimit: 3
