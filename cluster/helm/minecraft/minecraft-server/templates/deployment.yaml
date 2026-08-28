@@ -47,7 +47,7 @@ spec:
             - name: MAX_WORLD_SIZE
               value: "12500"
             - name: VERSION
-              value: "1.21.11"
+              value: "26.2"
             - name: ANNOUNCE_PLAYER_ACHIEVEMENTS
               value: "FALSE"
             - name: MODE
@@ -79,7 +79,7 @@ spec:
             - name: MAX_MEMORY
               value: "6G"
             - name: MODS
-              value: "https://github.com/Multiverse/Multiverse-Core/releases/download/5.6.1/multiverse-core-5.6.1.jar,https://github.com/Multiverse/Multiverse-Portals/releases/download/5.2.1/multiverse-portals-5.2.1.jar,https://github.com/Multiverse/Multiverse-NetherPortals/releases/download/5.0.4/multiverse-netherportals-5.0.4.jar,https://download.luckperms.net/1631/bukkit/loader/LuckPerms-Bukkit-5.5.42.jar"
+              value: "https://github.com/Multiverse/Multiverse-Core/releases/download/5.8.1/multiverse-core-5.8.1.jar,https://github.com/Multiverse/Multiverse-Portals/releases/download/5.3.0/multiverse-portals-5.3.0.jar,https://github.com/Multiverse/Multiverse-NetherPortals/releases/download/5.1.0/multiverse-netherportals-5.1.0.jar,https://download.luckperms.net/1668/bukkit/loader/LuckPerms-Bukkit-5.5.81.jar"
           ports:
             - name: mc
               containerPort: 25565
