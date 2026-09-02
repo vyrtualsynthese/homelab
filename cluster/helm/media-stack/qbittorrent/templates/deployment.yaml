@@ -48,7 +48,7 @@ spec:
       initContainers:
         - name: init-qbittorrent
           image: alpine:latest
-          command: [ 'sh', '-c', "apk update && apk add unzip && wget https://github.com/WDaan/VueTorrent/releases/download/v2.34.1/vuetorrent.zip && unzip vuetorrent.zip && cp -r vuetorrent /config/ui" ]
+          command: [ 'sh', '-c', "apk update && apk add unzip && wget https://github.com/WDaan/VueTorrent/releases/download/v2.35.0/vuetorrent.zip && unzip vuetorrent.zip && cp -r vuetorrent /config/ui" ]
           volumeMounts:
             - name: qbittorrent-config-volume
               mountPath: /config
@@ -97,10 +97,10 @@ spec:
             - name: torrent-webui
               containerPort: 8080
             - name: torrent
-              containerPort: 19691
+              containerPort: 6881
               protocol: TCP
             - name: torrent-udp
-              containerPort: 19691
+              containerPort: 6881
               protocol: UDP
       {{- with .Values.nodeSelector }}
       nodeSelector:
