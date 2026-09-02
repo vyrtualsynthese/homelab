@@ -7,7 +7,7 @@ metadata:
 spec:
   type: {{ .Values.service.type }}
   ports:
-    - port: 7878
+    - port: 8989
       name: sonarr-webui
       targetPort: sonarr-webui
   selector:
