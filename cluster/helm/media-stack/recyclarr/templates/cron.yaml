@@ -16,7 +16,7 @@ spec:
           volumes:
             - name: recyclarr-conf-volume
               persistentVolumeClaim:
-                claimName: recyclarr-config2
+                claimName: recyclarr-config
             - name: recyclarr-secret
               secret:
                 secretName: recyclarr
@@ -51,12 +51,4 @@ spec:
                 - name: recyclarr-conf-volume
                   mountPath: /config
           restartPolicy: OnFailure
-          affinity:
-            nodeAffinity:
-              requiredDuringSchedulingIgnoredDuringExecution:
-                nodeSelectorTerms:
-                  - matchExpressions:
-                      - key: kubernetes.io/hostname
-                        operator: NotIn
-                        values:
-                          - nas
+          affinity: {}

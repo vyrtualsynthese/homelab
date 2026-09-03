@@ -26,7 +26,8 @@ serviceAccount:
 podSecurityContext: {}
 # fsGroup: 2000
 
-securityContext: {}
+securityContext:
+  {}
   # capabilities:
   #   drop:
   #   - ALL
@@ -35,11 +36,11 @@ securityContext: {}
 # runAsUser: 1000
 
 resources:
-   limits:
-     memory: 5128Mi
-   requests:
-     cpu: 100m
-     memory: 64Mi
+  limits:
+    memory: 5128Mi
+  requests:
+    cpu: 100m
+    memory: 64Mi
 
 autoscaling:
   enabled: false
@@ -48,16 +49,9 @@ autoscaling:
   targetCPUUtilizationPercentage: 80
   # targetMemoryUtilizationPercentage: 80
 
-nodeSelector: {}
+nodeSelector:
+  kubernetes.io/hostname: streaming
 
 tolerations: []
 
-affinity:
-  nodeAffinity:
-    requiredDuringSchedulingIgnoredDuringExecution:
-      nodeSelectorTerms:
-        - matchExpressions:
-            - key: node-type
-              operator: In
-              values:
-                - general
+affinity: {}

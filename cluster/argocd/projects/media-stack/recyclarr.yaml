@@ -6,15 +6,12 @@ metadata:
 spec:
   project: default
   destination:
-    server: 'https://kubernetes.default.svc'
+    server: "https://kubernetes.default.svc"
     namespace: media-stack
   syncPolicy:
     syncOptions:
       - CreateNamespace=true
-    automated:
-      prune: true
-      selfHeal: true
   source:
-    repoURL: 'https://github.com/vyrtualsynthese/homelab.git'
+    repoURL: "https://github.com/vyrtualsynthese/homelab.git"
     targetRevision: develop
     path: cluster/helm/media-stack/recyclarr
