@@ -6,8 +6,8 @@ metadata:
     {{- include "labels" . | nindent 4 }}
 spec:
   schedule: "0 5 * * *"
-  successfulJobsHistoryLimit: 1
-  failedJobsHistoryLimit: 1
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
   concurrencyPolicy: Replace
   jobTemplate:
     spec:
