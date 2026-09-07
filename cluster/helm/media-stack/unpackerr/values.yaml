@@ -8,7 +8,7 @@ image:
   repository: golift/unpackerr
   pullPolicy: IfNotPresent
   # Overrides the image tag whose default is the chart appVersion.
-  tag: 0.15.2
+  tag: 0.16.1
 
 imagePullSecrets: []
 nameOverride: ""
@@ -32,7 +32,8 @@ podAnnotations:
 podSecurityContext: {}
 # fsGroup: 2000
 
-securityContext: {}
+securityContext:
+  {}
   # capabilities:
   #   drop:
   #   - ALL
@@ -60,7 +61,8 @@ ingress:
   #    hosts:
   #      - chart-example.local
 
-resources: {}
+resources:
+  {}
   #requests:
   #  cpu: 1m
   #  memory: 16Mi
