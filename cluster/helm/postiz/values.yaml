@@ -3,7 +3,7 @@ replicaCount: 1
 image:
   repository: ghcr.io/gitroomhq/postiz-app
   pullPolicy: IfNotPresent
-  tag: "v2.21.7"
+  tag: "v2.23.0"
 
 imagePullSecrets: []
 nameOverride: ""
