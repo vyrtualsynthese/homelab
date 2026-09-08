@@ -21,9 +21,9 @@ spec:
         {{- include "selectorLabels" . | nindent 8 }}
     spec:
       volumes:
-        - name: overseerr-config-volume
+        - name: seerr-config-volume
           persistentVolumeClaim:
-            claimName: overseerr-config
+            claimName: seerr-config
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
@@ -38,7 +38,7 @@ spec:
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:
-            - name: overseerr-webui
+            - name: seerr-webui
               containerPort: 5055
           env:
             - name: "TZ"
@@ -51,7 +51,7 @@ spec:
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
           volumeMounts:
-            - name: overseerr-config-volume
+            - name: seerr-config-volume
               mountPath: /app/config
       {{- with .Values.nodeSelector }}
       nodeSelector:
