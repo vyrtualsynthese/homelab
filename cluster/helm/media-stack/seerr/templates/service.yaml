@@ -8,7 +8,7 @@ spec:
   type: {{ .Values.service.type }}
   ports:
     - port: 5055
-      name: overseerr-webui
-      targetPort: overseerr-webui
+      name: seerr-webui
+      targetPort: seerr-webui
   selector:
     {{- include "selectorLabels" . | nindent 4 }}
