@@ -1,0 +1,15 @@
+apiVersion: traefik.containo.us/v1alpha1
+kind: IngressRoute
+metadata:
+  name: {{ include "autobrr.fullname" . }}
+  labels:
+    {{- include "autobrr.labels" . | nindent 4 }}
+spec:
+  entryPoints:
+    - web
+  routes:
+    - match: Host(`autobrr.kub.local`)
+      kind: Rule
+      services:
+        - name: autobrr
+          port: {{ .Values.service.port }}
