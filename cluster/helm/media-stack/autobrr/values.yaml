@@ -1,4 +1,4 @@
-# Default values for dashy.
+# Default values for autobrr.
 # This is a YAML-formatted file.
 # Declare variables to be passed into your templates.
 
@@ -8,7 +8,7 @@ image:
   repository: ghcr.io/autobrr/autobrr
   pullPolicy: IfNotPresent
   # Overrides the image tag whose default is the chart appVersion.
-  tag: "v1.77.0"
+  tag: "v1.85.0"
 
 # Choose deployment strategy type
 strategyType: Recreate
@@ -31,8 +31,9 @@ serviceAccount:
 podAnnotations: {}
 podLabels: {}
 
-podSecurityContext: {}
-# fsGroup: 2000
+podSecurityContext:
+  {}
+  # fsGroup: 2000
 
 securityContext:
   {}
@@ -40,24 +41,25 @@ securityContext:
   #   drop:
   #   - ALL
   # readOnlyRootFilesystem: true
-# runAsNonRoot: true
-# runAsUser: 1000
+  # runAsNonRoot: true
+  # runAsUser: 1000
 
 service:
   type: ClusterIP
   port: 7474
 
 ingress:
-  enabled: true
+  enabled: false
   className: ""
   annotations:
-    traefik.ingress.kubernetes.io/router.entrypoints: "web,websecure"
-    traefik.ingress.kubernetes.io/router.middlewares: "kube-system-redirect-https@kubernetescrd"
+    {}
+    # kubernetes.io/ingress.class: nginx
+    # kubernetes.io/tls-acme: "true"
   hosts:
-    - host: autobrr.kub.local
+    - host: chart-example.local
       paths:
         - path: /
-          pathType: Prefix
+          pathType: ImplementationSpecific
   tls: []
   #  - secretName: chart-example-tls
   #    hosts:
@@ -65,18 +67,32 @@ ingress:
 
 resources:
   {}
-  #requests:
-  #  cpu: 5m
-  #  memory: 128Mi
-  #limits:
-  #  memory: 512Mi
+  # We usually recommend not to specify default resources and to leave this as a conscious
+  # choice for the user. This also increases chances charts run on environments with little
+  # resources, such as Minikube. If you do want to specify resources, uncomment the following
+  # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
+  # limits:
+  #   cpu: 100m
+  #   memory: 128Mi
+  # requests:
+  #   cpu: 100m
+  #   memory: 128Mi
+
+probs:
+  failureThreshold: 3
+  timeoutSeconds: 10
+  periodSeconds: 90
+  initialDelaySeconds: 40
+  path:
+    startup: "/healthz/liveness"
+    readiness: "/healthz/readiness"
 
 storage:
   class: ~
   accessModes: ReadWriteOnce
   dataSize: 5Gi
   # -- Use an existing PersistentVolumeClaim, overrides values above
-  existingClaim: "autobrr-config2"
+  existingClaim: "autobrr-config"
 
 # Additional volumes on the output Deployment definition.
 volumes: []
@@ -84,19 +100,12 @@ volumes: []
 # Additional volumeMounts on the output Deployment definition.
 volumeMounts: []
 
-nodeSelector: {}
+nodeSelector:
+  kubernetes.io/hostname: streaming
 
 tolerations: []
 
-affinity:
-  nodeAffinity:
-    requiredDuringSchedulingIgnoredDuringExecution:
-      nodeSelectorTerms:
-        - matchExpressions:
-            - key: node-type
-              operator: In
-              values:
-                - general
+affinity: {}
 
 env:
   TZ: "Europe/Paris"
