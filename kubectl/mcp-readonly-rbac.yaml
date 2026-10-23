@@ -1,0 +1,73 @@
+# Read-only identity for the OpenCode kubernetes MCP server.
+# Applied by hand (not GitOps-managed): kubectl apply -f kubectl/mcp-readonly-rbac.yaml
+# The built-in `view` ClusterRole grants read on most resources and deliberately excludes Secrets.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: opencode-mcp
+  namespace: kube-system
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: opencode-mcp-token
+  namespace: kube-system
+  annotations:
+    kubernetes.io/service-account.name: opencode-mcp
+type: kubernetes.io/service-account-token
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: opencode-mcp-view
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: view
+subjects:
+  - kind: ServiceAccount
+    name: opencode-mcp
+    namespace: kube-system
+---
+# `view` does not cover CRDs, so add read-only access to the ones this repo uses.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: opencode-mcp-read-crds
+rules:
+  # `view` omits cluster-scoped reads; these are metadata only (no nodes/proxy).
+  - apiGroups: [""]
+    resources: ["nodes", "persistentvolumes", "namespaces"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["storage.k8s.io"]
+    resources: ["storageclasses"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["argoproj.io"]
+    resources: ["applications", "appprojects", "applicationsets"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups:
+      - traefik.io
+      - traefik.containo.us
+      - gateway.networking.k8s.io
+      - cert-manager.io
+      - longhorn.io
+      - k8s.cni.cncf.io
+      - helm.toolkit.fluxcd.io
+    resources: ["*"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["metrics.k8s.io"]
+    resources: ["*"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: opencode-mcp-read-crds
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: opencode-mcp-read-crds
+subjects:
+  - kind: ServiceAccount
+    name: opencode-mcp
+    namespace: kube-system
