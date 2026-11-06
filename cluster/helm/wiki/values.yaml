@@ -8,7 +8,7 @@ app:
     repository: ghcr.io/requarks/wiki
     pullPolicy: IfNotPresent
     # Overrides the image tag whose default is the chart appVersion.
-    tag: 2.5
+    tag: 3.1
 
   imagePullSecrets: []
   nameOverride: "wiki-app"
