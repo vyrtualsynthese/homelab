@@ -327,6 +327,8 @@ each. None of them makes an agent better at finding the answer, because the hard
 which document is authoritative — and that is solved by an index and a naming convention, not by a
 database.
 
+## 9. Workstreams
+
 Each workstream has a scope and an acceptance test. They are ordered by dependency, not by
 importance — the operator sets priority.
 
