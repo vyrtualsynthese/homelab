@@ -144,15 +144,14 @@ independently.
 | Node | Role | Capacity | Hosts | Rationale |
 |---|---|---|---|---|
 | `streaming` | GPU + media | SSD ≥ 1 TB | Plex, the `*arr` stack, qbittorrent, autobrr, cross-seed, unpackerr, flaresolverr, seerr, calibre, kavita, tautulli, maintainerr, recyclarr | Plex needs the GPU; the rest stream from the NAS over NFS anyway |
-| `nas` | Storage + data-adjacent | ~30 TB HDD + 2 TB NVMe | PostgreSQL, filebrowser, syncthing, stash, Prometheus TSDB, Loki, the restic working copy, the W0 rescue copies, and every NFS provisioner chart | The disks live here; config volumes on the same box as the data they serve |
+| `nas` | Storage + data-adjacent | ~30 TB HDD + 2 TB NVMe | PostgreSQL, filebrowser, syncthing, stash, Prometheus TSDB, Loki, the restic working copy, and every NFS provisioner chart | The disks live here; config volumes on the same box as the data they serve |
 | `nuc0` | Application catalogue | SSD ≥ 1 TB | authentik, dashy, wiki, firefly, guacamole, koillection, linkstack, ghostfolio, discourse, postiz, n8n, monitorss, minecraft, news-freshrss, Vikunja, OpenMemory | General-purpose x86, 32 GB |
 | `rbp2` | Control plane only | SSD | nothing | A Pi with an SSD, ARM64. Keeping it app-free avoids the multi-arch image problem entirely |
 
 Disk is therefore **not** a constraint anywhere, and placement needs no special handling: the NAS
 root filesystem is on a **dedicated SSD used only for `local-path`**, so config volumes, PostgreSQL,
 the Prometheus TSDB and Loki all land on flash without extra configuration. The 30 TB mechanical
-array holds media, the W0 rescue copies and the restic working copy. The NVMe is not part of this
-design.
+array holds media and the restic working copy. The NVMe is not part of this design.
 
 The binding constraints are RAM on `nuc0` and the fact that `local-path` ties a volume to one node —
 which is exactly why the operator pins every pod rather than relying on a label.
