@@ -41,30 +41,28 @@ This programme has no unit tests. A step's test is one of:
 
 | ID | Workstream | Produces | Depends on | Tasks | Sessions |
 |---|---|---|---|---|---|
-| W0 | Rescue | Eleven verified config copies on the NAS, Longhorn gone | — | 8 | 1 |
+| W0 | Longhorn cleanup | Longhorn gone from cluster and repo; eleven apps listed for rebuild | — | 3 | 0.5 |
 | W1 | Storage foundation | A small, correct set of StorageClasses; three broken Applications fixed | W0 | 9 | 1.5 |
 | W2 | PostgreSQL | One PostgreSQL 17 on `local-path`, database-per-app, dump-backed | W1 | 7 | 1.5 |
 | W3 | Application waves | Whole catalogue Synced/Healthy, or deleted on purpose | W1, W2 | 14 | 5 |
 | W4 | Offsite | restic to OVH, Route 53 zones moved to OVH DNS, AWS credentials gone | W1 | 10 | 2.5 |
-| W5 | Platform | K3s 1.36.x, Traefik v3, a rehearsed runbook and a tested restore | W4 | 11 | 4 |
+| W5 | Platform | K3s 1.36.x, Traefik v3, a rehearsed runbook | W4 recommended | 11 | 4 |
 | W6 | Observability | Metrics, logs and alerts that would have caught this incident | W2, W5 | 9 | 2.5 |
 | W7 | New services | filebrowser for the editor, OpenMemory, Vikunja | W2, W3 | 8 | 3 |
 | W8 | Ansible and docs | Machine rebuild from git, documentation that is readable | W3, W4 | 10 | 2.5 |
+
+**W4 is not urgent.** No data is being rescued and the operator accepts loss for now, so backups are
+independent work rather than a gate. Its cost is that every workstream before it is unrecoverable.
 
 ## Task outlines
 
 Titles only. Each becomes a full plan when its workstream is picked up.
 
-### W0 — Rescue (plan written: `2026-11-10-w0-rescue.md`)
+### W0 — Longhorn cleanup (plan written: `2026-11-10-w0-cleanup.md`)
 
-1. Pre-flight inventory of the eleven pods and their claims
-2. Create and verify the rescue directory on the NAS
-3. Rescue the five large configuration volumes
-4. Rescue the two filebrowser volumes with SQLite integrity checks
-5. Rescue the remaining volumes and the two disposable ones
-6. Write the rescue manifest into git
-7. Remove finalizers from the stuck PVCs and PVs
-8. Delete Longhorn from the cluster and the repo
+1. Inventory the stuck claims and the eleven affected applications
+2. Stop those applications deliberately and clear the finalizers
+3. Delete `longhorn-system` and the repo leftovers
 
 ### W1 — Storage foundation
 
@@ -170,26 +168,21 @@ Titles only. Each becomes a full plan when its workstream is picked up.
 
 ## Recommended order
 
-Dependency order is W0 → W1 → {W2, W4, W3} → W5 → W6 → W7 → W8.
+W0 → W1 → {W2, W3} → W5 → W6 → W7 → W8. W4 sits independently wherever the operator wants it.
 
-Two slices are worth pulling forward regardless of priority because they are cheap and they remove
-the two largest risks:
+Two notes that change the old calculus:
 
-- **W0** — irreversible loss if delayed; one session.
-- **W4 tasks 1–4** — the OVH bucket and restic. They need only W1 (or even just the existing NFS
-  classes) and they make everything afterwards reversible.
-
-W7 task 2 (filebrowser) is the operator's stated urgent item, and it needs only W1, W2 and W3 task
-10 (authentik). It can run before the rest of W3.
+- **Nothing is time-critical any more.** No data is being rescued, so an extra week before W0 costs
+  nothing but a cluster that stays messy.
+- **W7 task 2 (filebrowser) is the operator's stated urgent item**, and it needs only W1, W2 and
+  W3 task 10 (authentik). It can run before the rest of W3.
 
 ## How to prioritise
 
-Judge each workstream by what it unblocks and what it costs:
-
 | If you want… | Do | Because |
 |---|---|---|
-| The editor working soonest | W0, W1, W2, W3.10, W7.1–4 | filebrowser needs storage, authentik and nothing else |
-| The fewest future surprises | W0, W4 | Rescue is irreversible, backups make the rest reversible |
+| The editor working soonest | W1, W2, W3.10, W7.1–4 | filebrowser needs storage and authentik, nothing else |
+| The fewest future surprises | W4 | Every workstream before it is unrecoverable. Not urgent, but cheap insurance. |
 | The cluster feeling normal | W0, W1, W2, W3 | The catalogue comes back |
-| A platform you can trust | W5 after W4 | Six minor upgrades need a tested restore and a test cluster |
-| Your own momentum | W0, W1, then pick | W0 and W1 are the only two that must come first |
+| A platform you can trust | W5 after W4 | Six minor upgrades without a tested restore is the largest risk left in the programme |
+| Your own momentum | W0, W1, then pick | W0 is now half a session and unblocks the rest |
