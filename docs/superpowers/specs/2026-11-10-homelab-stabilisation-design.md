@@ -202,27 +202,38 @@ merge, do the work, restore it. Never edit the live Application.
 
 ### 8.5 Secrets
 
-Today secrets are "created out of band" and the inventory in `AGENTS.md` §5 is unverified — which
-is why this rebuild cannot say with certainty which secret a chart needs.
+**Unchanged:** Kubernetes Secrets remain the runtime mechanism. Charts keep referencing
+`existingSecret` and `secretName` exactly as they do today. Nothing here changes how an app
+consumes a secret.
 
-This design adopts **SOPS with age** (both free, both offline): encrypted values files in git, one
-age key per operator, decrypted at deploy.
+Today those Secrets are created by hand and no record of their contents exists anywhere. That is
+why `AGENTS.md` §5 cannot be verified, and why a rebuild starts by guessing which keys each chart
+needs. The design problem is not "Kubernetes Secrets are wrong" — it is "there is no source of
+truth for what goes in them".
 
-How it actually deploys, which the earlier draft left vague:
+Two levels, and this is a preference to confirm rather than a technical requirement:
 
-- ArgoCD's repo-server runs a **KSOPS plugin** so a `selfHeal` sync can decrypt at render time.
-  Without a plugin, automation cannot see secrets and no app with a secret could be self-healing.
-- The age private key is **not** in git. It is created out of band, stored offline, and backed up
-  with the disaster-recovery set in W4. Losing it means re-encrypting every secret.
-- The three secrets that would break `argocd` itself live outside ArgoCD, as today.
+- **Level 1 — inventory plus encrypted dump (the minimum).** `docs/secrets.md` records every
+  Secret: name, namespace, keys, consumer, and where the value comes from. An encrypted
+  `secrets.yaml` (age, one file) joins the backup set so a rebuild can restore the values. Secrets
+  are still created by hand; ArgoCD still cannot see them. This is a day's work and it removes the
+  "nobody knows what is in there" failure.
+- **Level 2 — SOPS in git.** Same inventory, but values live encrypted in the repo and ArgoCD
+  decrypts them at render time through a KSOPS plugin in the repo-server. This is what lets an app
+  with a secret be `selfHeal`-ing, and what makes the whole cluster reproducible from git alone.
 
-Migration order matters: export the current secret *values* with an admin session **before** Wave A,
-because the read-only ServiceAccount cannot read them and the old values are the only record.
-For each secret decide explicitly: preserve (a login someone uses) or rotate (a leftover). Both
-outcomes get recorded in `docs/secrets.md`.
+Recommendation: **Level 1 in this rebuild, Level 2 as a follow-up.** Every wave in W3 has to
+recreate Secrets by hand anyway, and doing that once with an inventory in place is cheap. SOPS
+adds a plugin to the render path, which is a platform change — it belongs after the upgrades in
+W5, not before them on a cluster that is still broken.
 
-Rejected alternative: **Sealed Secrets** — decryption is bound to a cluster key, so a rebuild loses
-every secret. That is the failure mode this workstream exists to remove.
+Migration detail that applies either way: export the current values with an admin session **before
+Wave A**, because the read-only ServiceAccount cannot read Secrets and the old values are the only
+record. For each one, decide preserve (a login someone uses) or rotate (a leftover), and record the
+decision in `docs/secrets.md`.
+
+Rejected: **Sealed Secrets** — decryption is bound to a cluster key, so a rebuild loses every
+secret. That is the failure mode this workstream exists to remove.
 
 ### 8.6 Documentation
 
@@ -285,21 +296,54 @@ Recommendation: keep the official image, pinned by digest, and record it as the 
 Docker Hub dependency. Switching the image engine and the image source in the same wave doubles the
 risk on the component that everything else depends on.
 
-## 9. Workstreams
+### 8.8 Where each kind of knowledge lives
+
+Four kinds of information, four homes, no overlap. The failure mode this prevents is visible in the
+repo today: `TODO.MD` and `REBUILD.md` disagree with each other and with the cluster, because both
+are half-maintained stores of work state in a format nobody updates.
+
+| Kind | Lives in | Read by | Rationale |
+|---|---|---|---|
+| Decisions and designs | git, `docs/decisions/` and `docs/superpowers/specs/` | operator and agents, as files | Reviewed in a pull request; travels with the code; survives any service dying |
+| Evergreen knowledge (architecture, runbooks, secret inventory) | git, `docs/*.md` | operator and agents | Same reasons; agents can grep it, which no wiki API improves on |
+| Work state (what is being done, by whom, blocked, done) | **Vikunja only**, via API and MCP | operator and agents | Git is a poor queue; state changes many times a day and must not require a commit. This is the operator↔agent hub. |
+| Agent recall (facts learned, preferences, past mistakes) | **OpenMemory**, backed by PostgreSQL | agents | Needs semantic recall, not exact paths; per-agent scoping |
+
+Rules that follow:
+
+1. **No second todo store.** If it is work, it is a Vikunja task. No markdown todo lists, including
+   in `docs/`. `TODO.MD` dies with this rebuild.
+2. **No decisions in the task tracker.** A task links to a decision, it does not contain one.
+3. **Documentation is files, not a service.** A wiki is a *reading surface*, never the source of
+   truth. The existing Wiki.js deployment may keep a read-only mirror for phone access; if it dies,
+   nothing is lost.
+4. **The agent protocol is explicit.** An agent claims a Vikunja task, works, and reports back with
+   what changed and what it verified. A task that an agent cannot claim and close through the API is
+   not a task an agent should be given.
+
+Why not put documentation in a service (Outline, BookStack, Docmost): every one of them adds an API,
+an auth path and a second backup to a cluster that is currently recovering from having too many of
+each. None of them makes an agent better at finding the answer, because the hard part is knowing
+which document is authoritative — and that is solved by an index and a naming convention, not by a
+database.
 
 Each workstream has a scope and an acceptance test. They are ordered by dependency, not by
 importance — the operator sets priority.
+
+**Delivery format.** The builder has no write access to the cluster: the read-only ServiceAccount
+can read and cannot `exec`, patch, delete or read Secrets. Every cluster-side step is therefore
+written as a runbook the operator executes — exact command, expected output, and what to do when
+the output differs. Repo work (charts, values, Applications, documentation, scripts) is written
+directly. Each runbook step ends with a verification the operator pastes back, so the workstream
+can proceed without a second session re-investigating the cluster.
 
 ### W0 — Rescue the eleven volumes (time-critical)
 
 Nothing else starts until this is done, because every other change risks restarting a pod.
 
-1. **Gate: check what Longhorn left on the disks.** Before any node disk is reused, look for
-   `/var/lib/longhorn/replicas` on `streaming`, `nuc0` and `nas`. The eleven running volumes prove
-   their engine data still exists somewhere; the volumes backing the *deleted* PVCs may also still
-   be there as raw replica files. This is a half-hour check and it decides whether recovery is a
-   copy job or a lost cause. Record the answer; if replica data exists, the operator decides
-   whether it is worth recovering before W1 reuses the space.
+1. **Recovery gate — settled.** No Longhorn replica data remains on `nas`, `nuc0` or `streaming`
+   (checked 2026-11-10). Nothing is recoverable beyond the eleven volumes that are still mounted.
+   No recovery attempt; the apps whose PVC objects were deleted are rebuilt fresh in Wave A.
 2. Confirm the eleven running volumes are still readable (done: filebrowser serves HTTP, thelounge
    loaded its user, n8n is running its pruning job).
 3. Copy each volume out to `/mnt/storage/rescue/<app>/` on the NAS using `kubectl cp` per pod.
@@ -312,9 +356,9 @@ Nothing else starts until this is done, because every other change risks restart
 6. Publish the rescued set as the source of truth for restoration, in git (a manifest of what was
    recovered, sizes and checksums — not the data itself).
 
-Acceptance: eleven verified copies on the NAS, a recorded answer on residual Longhorn data, zero
-`longhorn` objects in the cluster, `kubectl get pvc -A | grep longhorn` empty, and no Longhorn
-references in the repo outside `docs/`.
+Acceptance: eleven verified copies on the NAS, zero `longhorn` objects in the cluster,
+`kubectl get pvc -A | grep longhorn` empty, and no Longhorn references in the repo outside
+`docs/`.
 
 ### W1 — Storage foundation
 
@@ -513,19 +557,16 @@ run in the same week.
 
 Left to the operator, because a wrong guess here changes what gets built:
 
-1. **Who runs the mutating steps?** The cluster connection available to the builder is read-only —
-   no `exec`, no Secret reads, no patch. W0's rescue, the finalizer removal and every wave need
-   writes. Either the operator runs them and the plan is a gated runbook with checkpoints, or the
-   builder is given admin access and the plan is a task list. This decides the shape of every
-   workstream's instructions, so it comes first.
-2. **Authentik.** It is the forward-auth for every UI, its callback is broken for filebrowser, and
+1. **Authentik.** It is the forward-auth for every UI, its callback is broken for filebrowser, and
    eleven values files reference its middlewares. Keep it, or replace it with something smaller?
    Its removal simplifies filebrowser and the proxy middlewares considerably.
-3. **Real capacity per node — disk before memory.** Postgres data, Prometheus TSDB, Loki at 90
+2. **Real capacity per node — disk before memory.** Postgres data, Prometheus TSDB, Loki at 90
    days, the restic working copy and the W0 rescue all land on `nas`, and none of those figures are
    visible from a read-only cluster role. Needed before W2, not before wave C. Memory figures are
    needed before wave C.
-4. **Media offsite scope.** Confirmed out of scope. If that changes, the cost model changes with it.
+3. **Media offsite scope.** Confirmed out of scope. If that changes, the cost model changes with it.
+4. **Confirm the four-way knowledge split in §8.8.** My proposal: designs and evergreen docs in git,
+   work state in Vikunja, agent recall in OpenMemory, and no wiki as a source of truth.
 
 Answered during design: charts are the operator's own where no official chart exists; images come
 from the upstream project or LinuxServer; Docker Hub is avoided, with the one PostgreSQL exception
@@ -534,11 +575,12 @@ recorded in §8.7.
 ## 12. Left to the builder
 
 - Exact chart list and versions per wave.
-- The upgrade runbook's step sequence and rollback commands.
+- The upgrade runbook's step sequence and rollback commands, written for the operator to execute.
 - Sizing for Prometheus, Loki and PostgreSQL.
-- The Vikunja and OpenMemory chart shape, since neither has an upstream chart that fits an
-  official-chart policy.
+- The Vikunja and OpenMemory chart shape, where no upstream chart exists or where the upstream one
+  does not meet §8.3.
 - The order in which the eleven non-critical rescued apps are rebuilt.
+- The `docs/` index and front-matter convention that makes §8.8 work in practice.
 
 ## 13. Risks
 
