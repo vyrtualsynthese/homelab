@@ -1,0 +1,553 @@
+# Homelab stabilisation and rebuild — design
+
+Date: 2026-11-10
+Status: draft for operator approval
+Supersedes: `REBUILD.md` and `TODO.MD` once approved (both are re-cut here)
+
+---
+
+## 1. Intent
+
+The homelab runs day-to-day services on a single K3s cluster of four hand-built nodes. It lost
+its storage layer to a Longhorn failure and has not been recovered. The goal is a cluster that is
+coherent again — every application either working or deliberately gone — with backups that have
+been tested, a platform that is not four years behind, and three new capabilities on top:
+file sharing for the editor, memory for the LLM, and a task hub that joins project todos to the
+LLM's todos.
+
+The reason this matters beyond "make it work": every incident so far was survivable in principle
+and fatal in practice because there was no backup, no alerting, and no document saying what the
+machines were. The rebuild is as much about removing those three failure modes as about restoring
+the apps.
+
+## 2. Where things stand
+
+Full evidence in `docs/audit/{observability-storage,argocd-helm,ansible-hosts}.md`.
+
+**Storage.** Longhorn is gone: the `longhorn-system` namespace has zero pods, the
+`longhorn`/`longhorn-static` StorageClasses no longer exist, and 36 PVs plus 11 PVCs are stuck
+`Terminating` with `driver.longhorn.io` finalizers that nothing can clear.
+
+**Apps.** 57 ArgoCD Applications. 30 are fully healthy. Roughly 20 pods have been `Pending` for 68
+days because their PVC objects were deleted. Three apps have been crash-looping for 92 days
+(17 723, 18 737 and 12 432 restarts). Eleven apps still run on volumes that are mid-deletion; the
+data is readable today and dies on the next pod restart.
+
+**GitOps is only half true.** About 34 of the 56 Applications have no `syncPolicy.automated` at
+all — no self-heal, no prune. They were applied once and never reconciled. `REBUILD.md` claims 31
+apps are self-healing; the real number is near 20.
+
+**Backups.** None work. The only offsite target is an AWS S3 bucket. The k3s and NAS hosts have
+had a daily cron since 2024 pointing at a script that was never deployed to them. The k3s script
+dumps a SQLite file that does not exist on an etcd cluster. The NAS script backs up a MinIO
+directory that was deleted in July 2024.
+
+**Platform.** K3s `v1.30.1+k3s1` against a current stable of `v1.36.x`. Traefik `2.9.4` (June
+2023) running from the K3s bundled addon. 106 repo files and 58 live objects use
+`traefik.containo.us/v1alpha1`; none use `traefik.io/v1alpha1`.
+
+**Observability.** Prometheus has alerting fully disabled and no remote write. Grafana provisions
+zero dashboards and has been `Pending` for 68 days because its claim is gone. Loki is a 32-line
+values file with no chart, no Application and no log shipper — there is no log pipeline at all.
+
+**Ansible.** Cannot run: no inventory, no `group_vars`, no `ansible.cfg` in the repo or its
+history. It also does not install K3s, containerd, node labels, NFS exports or the GPU stack, so
+it could not rebuild these machines even if it ran.
+
+## 3. Goals
+
+1. Every application in the catalogue either `Synced`/`Healthy` on stable storage, or deleted on
+   purpose and recorded as such.
+2. A working PostgreSQL that serves every app that needs one, on the official image, backed up.
+3. Offsite backup on a European provider, covering the control plane, PVC data, databases and
+   configuration, with a restore that has actually been performed.
+4. K3s and Traefik on supported versions, upgraded through a rehearsed, reversible procedure.
+5. Observability that would have caught this incident: alerts on Pending pods, unbound claims,
+   crash loops, certificate expiry, disk pressure and stale backups.
+6. Filebrowser serving the video and asset libraries to the editor.
+7. LLM memory in Postgres, reachable by agents over MCP.
+8. Vikunja as the task hub, with an API and MCP access for the LLM.
+9. Documentation that lets someone else operate this: architecture, runbooks, secret inventory,
+   disaster recovery.
+
+## 4. Non-goals
+
+- Rebuilding Longhorn or introducing any replicated storage layer.
+- A second permanent cluster, or a "staging" environment.
+- Offsite backup of the media library (multi-terabyte, replaceable, cost-prohibitive).
+- Migrating applications to a different orchestrator.
+- A shared multi-tenant platform; this is one operator's homelab.
+
+## 5. Anti-goals
+
+- **Any big-bang cutover.** Every step must be individually reversible.
+- **Enabling `selfHeal` before the rescue.** Turning on automation while eleven pods sit on
+  dying volumes will restart them and destroy the only surviving copies of their configuration.
+  This is the most dangerous single action available in this design.
+- **Fixing drift with `kubectl apply`.** If it is in ArgoCD, it changes in git.
+- **Reintroducing Bitnami, or any vendor whose chart licence can change under us.**
+
+## 6. Constraints
+
+- **One cluster, three control planes.** etcd quorum is two of three. Never upgrade two servers
+  at once. There is no environment to test in — one must be created.
+- **Free and open source only.** No proprietary licences, no Bitnami charts ever, no source-
+  available-with-restrictions products.
+- **Official Helm charts first, own charts second.** Remote official chart plus values in the repo
+  (pattern B) where one exists. Where none exists, the chart is written in this repo (pattern A) —
+  the operator maintains the charts. No vendored upstream charts.
+- **Official images only, and not from Docker Hub.** An image must come from the upstream project or
+  from LinuxServer, and must be pulled from `ghcr.io`, `quay.io`, `registry.k8s.io`, `lscr.io` or
+  the project's own registry. Docker Hub is a last resort. No third-party repackagers, and no image
+  built or maintained by the operator.
+- **`local-path` for configuration, NFS classes for media.** Confirmed by the operator. Every
+  workload pinned to a named node.
+- **No failover.** `local-path` plus a node pin means a node's disk loss is an app's total loss.
+  Backup is the only mitigation, which is why it cannot be last.
+- Secrets never in git. Files under `cluster/argocd/**` keep CRLF. Ingress is Traefik CRDs only.
+  LinuxServer workloads keep `TZ=Europe/Paris`, `PUID=1100`, `PGID=1100`.
+- **Eleven volumes are dying.** `filebrowser-config`, `filebrowser-db-2`, `calibre-config`,
+  `firefly-config-2`, `linkstack`, `n8n-2`, `syncthing-conf`, `thelounge-volume`,
+  `pgadmin-pgadmin4`, `prometheus-data`, `postiz` redis. Each dies on its next pod restart.
+
+## 7. Decisions taken
+
+| Decision | Value | Chosen by |
+|---|---|---|
+| Catalogue scope | Restore all, staged in waves | operator |
+| Placement | Every pod pinned to a named node | operator |
+| Config storage | `local-path`, node-bound | operator |
+| Media storage | NFS provisioner classes | operator, existing |
+| PostgreSQL | Restore as a real working instance, official image | operator |
+| Charts | Official chart where one exists, otherwise the operator's own chart | operator |
+| Images | Official upstream or LinuxServer only; no self-maintained images | operator |
+| Backup | Rebuild from scratch, European provider → **OVH** | operator |
+| LLM memory | **OpenMemory (Mem0)** on PostgreSQL | operator |
+| Task hub | **Vikunja** | operator |
+| Software licence policy | Free and open source only, never Bitnami | operator |
+| Scope of offsite backup | Config, databases, documents — not media | this design |
+
+## 8. Cross-cutting conventions
+
+These are decisions this design makes. Change them by changing this document.
+
+### 8.1 Placement map
+
+Each workload declares `nodeSelector: kubernetes.io/hostname: <node>` in its values, and its
+`local-path` claim lands on that same node. A pod and its config volume must never be movable
+independently.
+
+| Node | Role | Hosts | Rationale |
+|---|---|---|---|
+| `streaming` | GPU + media | Plex, the `*arr` stack, qbittorrent, autobrr, cross-seed, unpackerr, flaresolverr, seerr, calibre, kavita, tautulli, maintainerr, recyclarr | Plex needs the GPU; the rest stream from the NAS over NFS anyway |
+| `nas` | Storage + data-adjacent | PostgreSQL, filebrowser, syncthing, stash, Prometheus TSDB, Loki, and every NFS provisioner chart | The disks live here; config volumes on the same box as the data they serve |
+| `nuc0` | Application catalogue | authentik, dashy, wiki, firefly, guacamole, koillection, linkstack, ghostfolio, discourse, postiz, n8n, monitorss, minecraft, news-freshrss, Vikunja, OpenMemory | General-purpose x86, 32 GB |
+| `rbp2` | Control plane only | nothing | A Pi with an SSD, ARM64. Keeping it app-free avoids the multi-arch image problem entirely |
+
+`nuc0` is currently at ~28.5 GB of memory used and is the node to watch. `rbp2` reports ~4.3 GB
+used. Before wave C, measure real capacity per node and rebalance — the map above is a starting
+position, not a measured one.
+
+### 8.2 Storage classes
+
+Keep a small, named set and delete the rest:
+
+| Class | Purpose | Backing |
+|---|---|---|
+| `local-path` (default) | all configuration volumes, 128Mi unless noted | node disk |
+| `nfs-plex` | video library | `/mnt/storage/nfs/plexmedia` |
+| `nfs-audio` | music | NAS export |
+| `nfs-books` | books | NAS export |
+| `nfs-stash` | assets and documents | NAS export |
+| `nfs-downloads` | qbittorrent output | NAS export |
+| `nfs-syncthing` | syncthing folder | NAS export |
+
+Retire: `nfs-ssd` (its provisioner has been `ContainerCreating` for 68 days), `plex-media`
+(duplicate of `nfs-plex`, two charts for one export), `nfs-qbittorrent-config` (unused),
+and every reference to `nfs-ultrafaststorage` (a class that does not exist).
+
+PVC naming: `<app>-config` for configuration. Configuration volumes are sized 128Mi and grow on
+demand — the current mix of 1Gi through 50Gi config claims is a symptom of guessing.
+
+### 8.3 Chart policy
+
+1. **Official chart first.** Where the upstream project publishes a Helm chart, use it as pattern B:
+   remote chart, values in this repo, chart version in the Application's `targetRevision`, never in
+   `values.yaml`.
+2. **Otherwise, an owned chart.** The operator maintains one chart per app in `cluster/helm/`.
+   These are first-class, not scaffolding, and are kept to a single shape:
+   - image pinned by tag, never `latest`
+   - `strategy: Recreate` for anything with a configuration volume
+   - explicit `resources` (memory request and limit on every container)
+   - explicit `nodeSelector` from the placement map
+   - liveness and readiness probes
+   - `securityContext` that drops capabilities and avoids root where the image allows it
+   - one `values.yaml` per environment, no per-app template forks of the same logic
+3. **No vendored charts.** `prometheus`, `grafana`, `postiz`, `discourse`, `authentik`, `dashy` and
+   `ashuvidz-website` migrate to rule 1 or rule 2 on their next touch. Until then they are exempt
+   by name, not by category.
+4. **No Bitnami.** Not as a chart, not as an image.
+
+### 8.4 Sync policy
+
+Every Application ends with `automated: {prune: true, selfHeal: true}` and
+`syncOptions: [CreateNamespace=true]`. This is applied in two stages:
+
+- **Stage 1, after the rescue** (W0): the eleven rescued apps get automation, so their rebuild is
+  reconciled rather than hand-applied.
+- **Stage 2, at the end of each wave**: the apps in that wave get automation.
+
+Maintenance that requires the opposite gets a documented procedure: set `selfHeal: false` in git,
+merge, do the work, restore it. Never edit the live Application.
+
+### 8.5 Secrets
+
+Today secrets are "created out of band" and the inventory in `AGENTS.md` §5 is unverified — which
+is why this rebuild cannot say with certainty which secret a chart needs.
+
+This design adopts **SOPS with age** (both free, both offline): encrypted values files in git, one
+age key per operator, decrypted at deploy.
+
+How it actually deploys, which the earlier draft left vague:
+
+- ArgoCD's repo-server runs a **KSOPS plugin** so a `selfHeal` sync can decrypt at render time.
+  Without a plugin, automation cannot see secrets and no app with a secret could be self-healing.
+- The age private key is **not** in git. It is created out of band, stored offline, and backed up
+  with the disaster-recovery set in W4. Losing it means re-encrypting every secret.
+- The three secrets that would break `argocd` itself live outside ArgoCD, as today.
+
+Migration order matters: export the current secret *values* with an admin session **before** Wave A,
+because the read-only ServiceAccount cannot read them and the old values are the only record.
+For each secret decide explicitly: preserve (a login someone uses) or rotate (a leftover). Both
+outcomes get recorded in `docs/secrets.md`.
+
+Rejected alternative: **Sealed Secrets** — decryption is bound to a cluster key, so a rebuild loses
+every secret. That is the failure mode this workstream exists to remove.
+
+### 8.6 Documentation
+
+`docs/architecture.md` (what runs where and why), `docs/runbooks/*.md` (one per routine operation,
+including the upgrade runbook and the restore runbook), `docs/decisions/` (one short record per
+decision, starting with this document's table), `docs/secrets.md` (name, namespace, keys, consumer,
+never the value), `docs/disaster-recovery.md` (how to rebuild from an empty disk).
+
+### 8.7 Image and registry policy
+
+Two rules, in order:
+
+1. **Provenance.** The image comes from the upstream project itself — its own registry, `quay.io`,
+   `ghcr.io` under the project's organisation, or LinuxServer (`lscr.io/linuxserver/*`). No
+   third-party repackagers, no images the operator builds or maintains.
+2. **Registry.** Pull from `ghcr.io`, `quay.io`, `registry.k8s.io`, `lscr.io`, or a project's own
+   domain (`docker.n8n.io`, for example). **Avoid Docker Hub.**
+
+Where the two rules conflict, rule 1 wins: an image that exists officially only on Docker Hub is
+used rather than substituting an unofficial source. Every such image is listed below, so the
+exception surface is one visible list instead of scattered tags.
+
+| Image | Registry with no official alternative | Note |
+|---|---|---|
+| `postgres` | Docker Hub official only | **The one that matters.** See the note after this table. |
+| `busybox` | Docker Hub official only | init containers; five files |
+| `alpine` | Docker Hub official only | `qbittorrent` template, currently `:latest` |
+| `discourse/discourse` | Docker Hub only | upstream publishes nowhere else |
+| `guacamole/guacamole`, `guacamole/guacd` | Docker Hub only | Apache publishes there |
+| `vikunja/vikunja`, `mem0/openmemory-mcp` | Docker Hub only | verify on adoption; move if GHCR appears |
+
+Likely moves out of Docker Hub, to be verified image by image before swapping:
+
+| Current | Likely target |
+|---|---|
+| `sonarr`, `radarr`, `lidarr`, `prowlarr`, `bazarr`, `tautulli`, `calibre`, `kavita` | `lscr.io/linuxserver/*` — LinuxServer runs its own registry, so this also satisfies rule 2 |
+| `filebrowser/filebrowser`, `ghostfolio/ghostfolio`, `firefly-iii/firefly-iii`, `requarks/wiki` | `ghcr.io/<project>/<project>` |
+| `n8nio/n8n` | `docker.n8n.io/n8nio/n8n` |
+| `traefik` | `ghcr.io/traefik/traefik` with the official chart |
+
+Third-party images that must be replaced on provenance grounds, independent of registry:
+
+| Current image | Where | Replacement |
+|---|---|---|
+| `jacklul/pihole` | `rbp0`, `rbp1` compose | the Pi-hole project's own image |
+| `matusnovak/prometheus-smartctl` | `rbp0` compose | `prometheus-community`'s exporter |
+| `eko/pihole-exporter` or equivalent | `cluster/helm/monitoring/pihole-exporter` | verify an upstream exporter exists; if not, the app goes |
+
+Where no official image exists at all, the app is a candidate for deletion rather than for a
+third-party image — the catalogue is being pruned in the same pass.
+
+**The PostgreSQL exception.** The official PostgreSQL image is published only on Docker Hub. Two
+ways out, and the choice belongs to wave W2:
+
+- accept the single Docker Hub exception and pin the official image by digest; or
+- use `ghcr.io/cloudnative-pg/postgresql`, which is a project-published image on GHCR and runs
+  standalone, but is built for the CloudNativePG operator and carries that project's expectations.
+
+Recommendation: keep the official image, pinned by digest, and record it as the one deliberate
+Docker Hub dependency. Switching the image engine and the image source in the same wave doubles the
+risk on the component that everything else depends on.
+
+## 9. Workstreams
+
+Each workstream has a scope and an acceptance test. They are ordered by dependency, not by
+importance — the operator sets priority.
+
+### W0 — Rescue the eleven volumes (time-critical)
+
+Nothing else starts until this is done, because every other change risks restarting a pod.
+
+1. **Gate: check what Longhorn left on the disks.** Before any node disk is reused, look for
+   `/var/lib/longhorn/replicas` on `streaming`, `nuc0` and `nas`. The eleven running volumes prove
+   their engine data still exists somewhere; the volumes backing the *deleted* PVCs may also still
+   be there as raw replica files. This is a half-hour check and it decides whether recovery is a
+   copy job or a lost cause. Record the answer; if replica data exists, the operator decides
+   whether it is worth recovering before W1 reuses the space.
+2. Confirm the eleven running volumes are still readable (done: filebrowser serves HTTP, thelounge
+   loaded its user, n8n is running its pruning job).
+3. Copy each volume out to `/mnt/storage/rescue/<app>/` on the NAS using `kubectl cp` per pod.
+   Prefer `tar` through `kubectl exec` for anything with many small files or a SQLite database.
+4. Verify each copy: file count, total size, and `sqlite3 ... 'PRAGMA integrity_check'` on the two
+   filebrowser databases.
+5. Only after every copy verifies: remove the finalizers from the eleven PVCs and the 36 PVs,
+   delete `longhorn-system`, and delete the Longhorn leftovers from git
+   (`cluster/infrastructure/storageclass/lh-*.yaml`, `kubectl/ingressRoute/longhorn.yaml`).
+6. Publish the rescued set as the source of truth for restoration, in git (a manifest of what was
+   recovered, sizes and checksums — not the data itself).
+
+Acceptance: eleven verified copies on the NAS, a recorded answer on residual Longhorn data, zero
+`longhorn` objects in the cluster, `kubectl get pvc -A | grep longhorn` empty, and no Longhorn
+references in the repo outside `docs/`.
+
+### W1 — Storage foundation
+
+1. Repair or retire `nfs-ssd`: its provisioner cannot mount its own export root.
+2. Settle the qbittorrent downloads class — one class, one name, referenced by the chart.
+3. Collapse the duplicate classes in §8.2.
+4. Rewrite `nfs-qbittorrent-config` as a multi-source Application like its siblings.
+5. Fix the three broken Applications: `plex-media` path, `nfs-audio` values path,
+   `nfs-qbittorrent-config`.
+6. Establish the `local-path` + node-pin pattern in the chart template and apply it to one pilot
+   app end to end.
+
+Acceptance: every StorageClass in the cluster is in §8.2; every bound claim resolves; the pilot
+app survives a pod delete and a reschedule attempt (it should stay on its node).
+
+### W2 — PostgreSQL
+
+1. Plain StatefulSet on the official `postgres` image, current stable major, `local-path` on
+   `nas`, `strategy: Recreate`.
+2. One instance, one role and one database per consuming app. No shared superuser.
+3. Enable `pgvector` for OpenMemory.
+4. Initialisation as SQL in git, applied by a Job — not by hand.
+5. Backup: `pg_dump -Fc` per database on a schedule into OVH, plus the base backup path in W4.
+
+Acceptance: every database restores from its dump into a scratch instance; no application holds
+more privilege than it needs; no Bitnami chart remains.
+
+### W3 — Application waves
+
+Four waves, each ending `Synced`/`Healthy` and each getting automation switched on.
+
+- **Wave A — the broken sixteen.** bazarr, bazarr-anime, kavita, lidarr, maintainerr, tautulli,
+  koillection, discourse, news-freshrss, postiz, minecraft, monitorss, wiki, ghostfolio, and the
+  two database consumers from W2. New `local-path` config volumes, restored from the W0 copies
+  where a copy exists, fresh otherwise.
+- **Wave B — deletions.** readarr (abandoned upstream), maintainerr-anime (duplicate), and the
+  empty namespaces: nextcloud, synapse, inventree, inventree-lego, minio, orbital-sync, postfix,
+  test. Plus the orphan chart `cluster/helm/nfs/minio-nfs`.
+- **Wave C — the healthy but hand-built.** Migrate to the §8.3 chart shape, pin every image, add
+  probes, fix the sonarr exportarr port (7878 → 8989 on an 8989 service), move firefly and postiz
+  off native Ingress onto Traefik CRDs, and move every image to a GHCR, quay, `lscr.io` or
+  project-registry source per §8.7 — verifying each target exists before swapping.
+- **Wave D — the NFS apps and leftovers.** Dead chart `cluster/helm/databases/pgadmin`, orphan
+  `cluster/helm/monitoring/loki` directory, `cluster/helm/localpath/` reference in AGENTS.md,
+  and the `renovate` version mismatch between Application and values.
+
+Acceptance: no `Pending` pods cluster-wide; every Application `Synced`/`Healthy` with automation;
+no namespace without an owner.
+
+### W4 — Offsite: domains, DNS and backups
+
+The AWS exit starts here and is one workstream, not two.
+
+1. **Domains.** Two separate moves, only one of them decided:
+   - **Public DNS → OVH.** Decided. Export every existing zone record first and commit it as code.
+     Today the only DNS in git is the Pi-hole's internal wildcard file; the public records for
+     `ashuvidz.com` and `ashudev.com` exist nowhere in the repo, and nobody can currently say what
+     they are.
+   - **Registration → OVH.** Optional and not recommended. A transfer means a registrar lock period
+     and a second DNS cutover. The concentration-risk note below applies. Recommendation: keep the
+     registrar where it is unless its renewal price or terms force a move; move only the DNS.
+     If the registrar *does* move, pair it with an offline copy of the transfer auth codes.
+2. **Backups.** restic to OVH Object Storage over its S3-compatible API, EU region.
+   - Control plane: K3s's own etcd snapshots, uploaded off-box.
+   - PV data: every `local-path` config volume and the PostgreSQL data directory.
+   - Databases: the W2 dumps.
+   - Configuration: Ansible inventory and `group_vars`, Pi-hole and wg-easy configs, SOPS-encrypted
+     secrets, and `docs/`.
+   - Schedule, retention (7 daily, 4 weekly, 12 monthly), and a **monthly restore drill** recorded
+     in `docs/runbooks/restore.md`.
+3. **Remove the old path.** Delete the AWS S3 repository, the AWS keys, and the `/etc/environment`
+   plaintext credentials. Delete or rewrite `ansible/playbooks/backup-setup.yaml` entirely.
+
+Acceptance: a documented restore from OVH rebuilding one app's configuration and one database on a
+clean path, performed at least once; a monitoring alert fires if the newest snapshot is older than
+26 hours; no AWS credential anywhere.
+
+> Concentration risk, stated once: putting domains and backups in one account means a single
+> account lock costs you both at the same moment. Keeping the registrar at a different European
+> provider and using OVH only for object storage removes that. The operator chose OVH on cost;
+> this design records the recommendation without overriding it.
+
+### W5 — Platform upgrades
+
+1. **Build a throwaway test cluster.** Three K3s VMs under KVM/libvirt on `nas`, built by script,
+   stood up only for an upgrade window and destroyed afterwards. It runs ArgoCD and the same charts
+   from the same git branch, so the rehearsal exercises the real render path, not just `helm
+   template`. If `nas` cannot spare three VMs alongside PostgreSQL, the TSDB and Loki, the fallback
+   is a workstation; the requirement is three disposable machines, not a particular host.
+2. **Rehearse the restore** before touching production: etcd snapshot, wipe one test node, restore,
+   verify quorum. A backup nobody has restored is not a backup.
+3. **The GPU node cannot be rehearsed.** The test cluster has no GPU, and `streaming` carries Plex
+   and the whole media stack. Measured baseline on 2026-11-10, to be re-verified before the first
+   upgrade:
+
+   | Component | Version |
+   |---|---|
+   | GPU operator | `v26.3.1` |
+   | NVIDIA driver (container image) | `580.126.20-ubuntu22.04` |
+   | Container toolkit | `v1.19.0` |
+   | Device plugin | `v0.19.0` |
+   | Node Feature Discovery | `v0.18.3` |
+
+   So `streaming` gets: a snapshot before the first step, upgrade **last among the servers**, and an
+   explicit check after each step — `nvidia-smi` through the device plugin, one Plex transcode, one
+   `*arr` UI load. The driver image is tied to `ubuntu22.04`, which is also the node OS: any move to a
+   newer Ubuntu release has to carry the driver with it.
+4. **Traefik in three moves.** Official chart pinned to 2.11 (serves both API groups, so routing
+   never goes blind) — then rename everything to `traefik.io/v1alpha1` — then v3. Keep the existing
+   ACME claim so certificates are not re-issued (Let's Encrypt allows five duplicates a week).
+5. **K3s one minor at a time**, 1.31 → 1.36.x, servers in the order `nuc0`, `rbp2`, `streaming`,
+   then the `nas` agent last. Pin each step; never let the stable channel choose.
+
+Acceptance: all four nodes on the target version; zero `containo.us` references; the same
+certificate served before and after; the test cluster proved the runbook first.
+
+### W6 — Observability
+
+1. Remove the vendored Prometheus and Grafana charts and their Applications.
+2. `kube-prometheus-stack` as pattern B, TSDB on `local-path` on `nas`, 90-day retention, sized
+   against real disk rather than a 150Gi guess.
+3. Alertmanager to Discord, webhook from a secret.
+4. ServiceMonitors for the exporters; fix `mktxp` floating on `latest`, the `pihole-exporter`
+   container port mismatch, and drop the dead Longhorn scrape job.
+5. Loki and Alloy, both official charts, 90-day retention.
+6. Dashboards and alert rules as files in git.
+7. **The alert set that would have caught this incident:** pod `Pending` over 15 minutes, PVC
+   unbound over 15 minutes, `CrashLoopBackOff`, restart storms, node disk over 80 %, certificate
+   expiring within 14 days, newest backup older than 26 hours, ArgoCD Application `OutOfSync` over
+   an hour, etcd without a leader, node `NotReady`.
+
+Acceptance: every target up; one synthetic alert reaches Discord; dashboards survive a Grafana pod
+restart; deliberately breaking one thing produces the expected alert.
+
+### W7 — New services
+
+1. **Filebrowser.** Config and database on `local-path`, pinned to `nas`. Mount `nfs-plex` and
+   `nfs-stash`. Fix authentik forward-auth: the app currently returns 404 on
+   `/api/auth/callback`, which is why login fails. Create a scoped editor account with access to
+   the video and asset trees only. Sizing and bandwidth limits noted, since the editor works
+   remotely.
+2. **OpenMemory (Mem0)** against PostgreSQL with `pgvector`, MCP endpoint exposed to OpenCode,
+   pinned to `nuc0`, backed up with the rest of the database.
+3. **Vikunja** against PostgreSQL, API token for the LLM, MCP server, pinned to `nuc0`.
+4. **The join.** One document describing how a todo flows between a project, Vikunja and an agent's
+   memory, so the hub is a design rather than an aspiration.
+
+Acceptance: the editor can retrieve a video and upload an asset; an agent can write and recall a
+memory; an agent can create and close a Vikunja task.
+
+### W8 — Ansible and documentation
+
+1. **Inventory into the repo** — hosts, groups, and `group_vars` — with secrets SOPS-encrypted.
+   Without this the playbooks are unrunnable and the machines are undocumented.
+2. **Rewrite `setup-node.yaml`** for the actual Ubuntu version: drop `apt_key` and the `focal`
+   repo, add containerd, K3s role and token, node labels and taints, `open-iscsi`, NFS exports,
+   GPU host preparation, timezone, and a firewall.
+3. **Rewrite `upgrade-all.yaml`**: serial, drain, reboot, ordering, version pinning — or delete it
+   and route upgrades through the System Upgrade Controller. It must not be runnable as-is.
+4. **Write the documentation set** in §8.6, including the DR runbook tested in W4.
+
+Acceptance: a fresh Ubuntu host becomes a cluster member by running one playbook; the DR runbook
+has been executed at least once.
+
+## 10. Ordering
+
+Dependency order. **W0 is not movable.** Everything else can be reordered within these rules:
+backups (W4) must precede any platform upgrade (W5); PostgreSQL (W2) must precede the apps that
+need it and the two new services; each wave must finish before automation is enabled on it.
+
+```
+W0 rescue
+  └─ W1 storage
+       ├─ W2 postgres ──┐
+       ├─ W4 offsite ───┤
+       └─ W3 waves ─────┘
+                          └─ W5 platform
+                               └─ W6 observability
+                                    └─ W7 new services
+                                         └─ W8 ansible + docs
+```
+
+Two slices are worth pulling forward because they are cheap and high-value: **filebrowser** (W7.1)
+needs only W1 and the rescue, and **the OVH bucket plus restic for PVC data** needs only W1. Both
+can run before the bulk of W3.
+
+Alternative rejected: **repair everything, then backup.** It is the shortest path to a working
+media stack and the longest exposure to another silent loss. Rejected because the upgrade work in
+W5 cannot be safely attempted without a restore that has been tested.
+
+Alternative rejected: **backup first, repair later.** It leaves eleven dying volumes untouched for
+days while we build plumbing, for no benefit — the rescue and the bucket share no resources and can
+run in the same week.
+
+## 11. Open questions
+
+Left to the operator, because a wrong guess here changes what gets built:
+
+1. **Who runs the mutating steps?** The cluster connection available to the builder is read-only —
+   no `exec`, no Secret reads, no patch. W0's rescue, the finalizer removal and every wave need
+   writes. Either the operator runs them and the plan is a gated runbook with checkpoints, or the
+   builder is given admin access and the plan is a task list. This decides the shape of every
+   workstream's instructions, so it comes first.
+2. **Authentik.** It is the forward-auth for every UI, its callback is broken for filebrowser, and
+   eleven values files reference its middlewares. Keep it, or replace it with something smaller?
+   Its removal simplifies filebrowser and the proxy middlewares considerably.
+3. **Real capacity per node — disk before memory.** Postgres data, Prometheus TSDB, Loki at 90
+   days, the restic working copy and the W0 rescue all land on `nas`, and none of those figures are
+   visible from a read-only cluster role. Needed before W2, not before wave C. Memory figures are
+   needed before wave C.
+4. **Media offsite scope.** Confirmed out of scope. If that changes, the cost model changes with it.
+
+Answered during design: charts are the operator's own where no official chart exists; images come
+from the upstream project or LinuxServer; Docker Hub is avoided, with the one PostgreSQL exception
+recorded in §8.7.
+
+## 12. Left to the builder
+
+- Exact chart list and versions per wave.
+- The upgrade runbook's step sequence and rollback commands.
+- Sizing for Prometheus, Loki and PostgreSQL.
+- The Vikunja and OpenMemory chart shape, since neither has an upstream chart that fits an
+  official-chart policy.
+- The order in which the eleven non-critical rescued apps are rebuilt.
+
+## 13. Risks
+
+| Risk | Impact | Mitigation |
+|---|---|---|
+| A rescued pod restarts mid-copy | that app's config lost permanently | copy first, touch nothing, do W0 before any other change |
+| `selfHeal` enabled too early | mass restart of the eleven, data loss | automation staged behind W0, per §8.4 |
+| etdc quorum lost during a control-plane upgrade | cluster down, no easy recovery | test cluster, one server at a time, tested restore first |
+| ACME duplicate-certificate limit during the Traefik cutover | certificates unavailable for a week | reuse the existing ACME claim, single cutover window |
+| `local-path` node disk loss | app and config gone | backups from W4, monthly restore drill |
+| Backup target locked out (single account) | domains and backups lost together | keep the registrar separate, export zones to git |
+| 34 apps without self-heal are repaired by hand again | drift returns immediately | stage 2 automation at the end of every wave |
