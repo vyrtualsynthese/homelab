@@ -205,8 +205,8 @@ demand — the current mix of 1Gi through 50Gi config claims is a symptom of gue
 Every Application ends with `automated: {prune: true, selfHeal: true}` and
 `syncOptions: [CreateNamespace=true]`. This is applied in two stages:
 
-- **Stage 1, after the rescue** (W0): the eleven rescued apps get automation, so their rebuild is
-  reconciled rather than hand-applied.
+- **Stage 1, after W0:** each of the eleven affected apps gets automation as its rebuild lands, so
+  the rebuild is reconciled rather than hand-applied.
 - **Stage 2, at the end of each wave**: the apps in that wave get automation.
 
 Maintenance that requires the opposite gets a documented procedure: set `selfHeal: false` in git,
@@ -630,7 +630,7 @@ recorded in §8.7.
 - Sizing for Prometheus, Loki and PostgreSQL.
 - The Vikunja and OpenMemory chart shape, where no upstream chart exists or where the upstream one
   does not meet §8.3.
-- The order in which the eleven non-critical rescued apps are rebuilt.
+- The order in which the eleven affected apps are rebuilt.
 - The `docs/` index and front-matter convention that makes §8.8 work in practice.
 
 ## 13. Risks
