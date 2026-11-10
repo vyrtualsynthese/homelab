@@ -125,6 +125,9 @@ it could not rebuild these machines even if it ran.
 | Backup | Rebuild from scratch, European provider → **OVH** | operator |
 | LLM memory | **OpenMemory (Mem0)** on PostgreSQL | operator |
 | Task hub | **Vikunja** | operator |
+| Public DNS | Move from AWS Route 53 to OVH; registration only if forced | operator |
+| Authentik scope | SSO for every app eventually; internet-facing services first | operator |
+| Node pinning | `kubernetes.io/hostname` only; the `node-type` label is retired | operator |
 | Software licence policy | Free and open source only, never Bitnami | operator |
 | Scope of offsite backup | Config, databases, documents — not media | this design |
 
@@ -145,15 +148,14 @@ independently.
 | `nuc0` | Application catalogue | SSD ≥ 1 TB | authentik, dashy, wiki, firefly, guacamole, koillection, linkstack, ghostfolio, discourse, postiz, n8n, monitorss, minecraft, news-freshrss, Vikunja, OpenMemory | General-purpose x86, 32 GB |
 | `rbp2` | Control plane only | SSD | nothing | A Pi with an SSD, ARM64. Keeping it app-free avoids the multi-arch image problem entirely |
 
-Disk is therefore **not** a constraint anywhere: every node has at least a terabyte, and the NAS has
-30 TB of spinning rust plus 2 TB of NVMe. The binding constraints are RAM on `nuc0` and the fact that
-`local-path` ties a volume to one node.
+Disk is therefore **not** a constraint anywhere, and placement needs no special handling: the NAS
+root filesystem is on a **dedicated SSD used only for `local-path`**, so config volumes, PostgreSQL,
+the Prometheus TSDB and Loki all land on flash without extra configuration. The 30 TB mechanical
+array holds media, the W0 rescue copies and the restic working copy. The NVMe is not part of this
+design.
 
-Consequence worth stating: PostgreSQL, the Prometheus TSDB and Loki all live on `nas`, so put their
-volumes on the **NVMe** path rather than the spinning array. `local-path` writes under
-`/var/lib/rancher/k3s/storage` on the root filesystem, so this needs the NAS root — or a second
-`local-path` provisioner with its own path — to sit on the NVMe. Confirm with `lsblk` before W2.
-Bulk data (rescue copies, restic working copy, media) can stay on the mechanical array.
+The binding constraints are RAM on `nuc0` and the fact that `local-path` ties a volume to one node —
+which is exactly why the operator pins every pod rather than relying on a label.
 
 `nuc0` is currently at ~28.5 GB of memory used and is the node to watch. `rbp2` reports ~4.3 GB
 used. Before wave C, measure real capacity per node and rebalance — the map above is a starting
@@ -442,15 +444,18 @@ no namespace without an owner.
 
 The AWS exit starts here and is one workstream, not two.
 
-1. **Domains.** Two separate moves, only one of them decided:
-   - **Public DNS → OVH.** Decided. Export every existing zone record first and commit it as code.
-     Today the only DNS in git is the Pi-hole's internal wildcard file; the public records for
-     `ashuvidz.com` and `ashudev.com` exist nowhere in the repo, and nobody can currently say what
-     they are.
-   - **Registration → OVH.** Optional and not recommended. A transfer means a registrar lock period
-     and a second DNS cutover. The concentration-risk note below applies. Recommendation: keep the
-     registrar where it is unless its renewal price or terms force a move; move only the DNS.
-     If the registrar *does* move, pair it with an offline copy of the transfer auth codes.
+1. **Domains.** The public zones for `ashuvidz.com` and `ashudev.com` live in **AWS Route 53** and
+   move to OVH. Two separate moves, only one of them decided:
+   - **Public DNS → OVH.** Decided. Route 53 has no zone export, so the record sets come out through
+     the API (`list-resource-record-sets` per hosted zone), get converted to a zone file, and are
+     committed to the repo before anything is switched. Lower TTLs to the provider minimum at least
+     48 hours ahead, create the zone at OVH, switch the NS records at the registrar, verify every
+     name, then delete the Route 53 hosted zone. Watch for records that only make sense inside AWS —
+     alias records, health checks, DNSSEC keys — because those do not survive the move as-is.
+   - **Registration.** Optional and not recommended. A transfer means a registrar lock period and a
+     second DNS cutover. Recommendation: move only the DNS unless renewal price or terms force a
+     transfer. If it does move, keep the transfer auth codes offline.
+   - The concentration-risk note below applies to whichever path is taken.
 2. **Backups.** restic to OVH Object Storage over its S3-compatible API, EU region.
    - Control plane: K3s's own etcd snapshots, uploaded off-box.
    - PV data: every `local-path` config volume and the PostgreSQL data directory.
@@ -525,11 +530,21 @@ restart; deliberately breaking one thing produces the expected alert.
 
 ### W7 — New services
 
-1. **Filebrowser.** Config and database on `local-path`, pinned to `nas`. Mount `nfs-plex` and
-   `nfs-stash`. Fix authentik forward-auth: the app currently returns 404 on
-   `/api/auth/callback`, which is why login fails. Create a scoped editor account with access to
-   the video and asset trees only. Sizing and bandwidth limits noted, since the editor works
-   remotely.
+1. **Filebrowser — the editor's share, and it is internet-facing.** This is the one public
+   service in the rebuild, so authentik comes first (Wave C) and filebrowser is the pilot for the
+   SSO pattern.
+   - Storage: config and database on `local-path`, pinned to `nas`; mount `nfs-plex` and
+     `nfs-stash`. Restore the config from the W0 rescue copy rather than starting fresh.
+   - Auth: authentik forward-auth, with one provider and application in git. The current setup
+     returns 404 on `/api/auth/callback`, so the flow was never completed — treat it as greenfield,
+     not as a fix.
+   - Scope: the editor's account sees the video and asset trees only, read-write; no access to the
+     rest of the NAS. No anonymous browsing.
+   - Exposure: TLS via the existing resolver, on a name that is deliberately public. Rate limiting
+     at the proxy, and upload size limits sized to the editor's real files rather than the default.
+   - Bandwidth: the editor pulls video through the home uplink. State the expected file sizes and
+     whether the link can carry them before promising the workflow, because this is the part that
+     fails silently.
 2. **OpenMemory (Mem0)** against PostgreSQL with `pgvector`, MCP endpoint exposed to OpenCode,
    pinned to `nuc0`, backed up with the rest of the database.
 3. **Vikunja** against PostgreSQL, API token for the LLM, MCP server, pinned to `nuc0`.
@@ -585,35 +600,27 @@ run in the same week.
 
 ## 11. Open points
 
-Ordered by how much a wrong answer changes what gets built. Each has a default so work can continue
-if nobody answers.
+One left.
 
-1. **Editor access model (W7.1).** Does the editor get read-only or upload rights, and do they reach
-   it over the LAN, over WireGuard, or from the public internet? Default: read-write on the video
-   and asset trees only, over WireGuard, with a filebrowser-local account rather than SSO.
-2. **Registrar and current public DNS (W4.1).** Where do `ashuvidz.com` and `ashudev.com` live
-   today, and is there access to export the zones? Nothing in the repo records a single public
-   record, so this blocks the DNS move. Default: export first, move DNS only, leave registration.
-3. **Authentik scope (Wave C).** Which hosts should sit behind forward-auth — everything, or only
-   the ones exposed outside the LAN? Default: everything with a `kub.home.ashudev.com` name plus
-   the public ones, no exceptions carried over from the proof of concept.
-4. **Secrets level.** Level 1 (inventory plus one encrypted dump in the backup set) or straight to
-   Level 2 (SOPS in git, decrypted by the repo-server)? Default: Level 1 now, Level 2 after W5.
-5. **`node-type=general` versus hostname pins.** Several charts require `node-type=general` today,
-   and the placement map in §8.1 uses `kubernetes.io/hostname`. Default: hostname pins everywhere,
-   and the `node-type` label is retired with the last chart that uses it.
-6. **Confirm the four-way knowledge split in §8.8.** Designs and evergreen docs in git, work state
-   in Vikunja, agent recall in OpenMemory, no wiki as a source of truth. Default: as written.
-7. **Priority order.** The operator decides the workstream sequence. Default: the dependency order
-   in §10, with the filebrowser and OVH-bucket slices pulled forward.
-8. **NAS root filesystem.** Is `/` on the NVMe or on the mechanical array? A one-line `lsblk` check,
-   needed before W2 so PostgreSQL does not land on spinning rust by accident.
+1. **Priority order across the nine workstreams.** The operator sets it after reading the
+   implementation plan. Default until then: the dependency order in §10, with the filebrowser slice
+   and the OVH bucket pulled forward.
 
-Closed during design: Authentik is kept and rebuilt; disk capacity is sufficient everywhere (≥1 TB
-per node, 30 TB plus 2 TB NVMe on the NAS); media is out of offsite scope for now, decided per
-service; documentation is Markdown in git rendered by Material for MkDocs; charts are the operator's
-own where no official chart exists; images come from the upstream project or LinuxServer, with
-Docker Hub accepted where no alternative exists.
+Everything else is closed:
+
+| Point | Decision |
+|---|---|
+| Editor access | Public internet, authenticated by authentik. Read-write on the video and asset trees only. |
+| Domains | Public zones move from AWS Route 53 to OVH. Registration moves only if price or terms force it. |
+| Authentik | Kept, configuration rebuilt. SSO for every app eventually; internet-facing services first. |
+| Secrets | Level 1 — inventory plus one encrypted dump in the backup set. SOPS after W5. |
+| `node-type` label | Retired. Every pod is pinned by `kubernetes.io/hostname`. |
+| Knowledge split | As §8.8: git for designs and documents, Vikunja for work state, OpenMemory for agent recall. |
+| NAS storage | Root filesystem is a dedicated SSD used only for `local-path`, so PostgreSQL, the TSDB and Loki land on flash with no extra configuration. |
+| Media offsite | Out of scope for now, decided per service. |
+| Disk capacity | Sufficient everywhere: ≥1 TB per node, 30 TB mechanical plus 2 TB NVMe on the NAS. |
+| Documentation | Markdown in git, rendered by Material for MkDocs, Mermaid as code. |
+| Charts and images | Operator's own charts where no official chart exists; upstream or LinuxServer images; Docker Hub only where no alternative exists. |
 
 Answered during design: charts are the operator's own where no official chart exists; images come
 from the upstream project or LinuxServer; Docker Hub is avoided, with the one PostgreSQL exception
