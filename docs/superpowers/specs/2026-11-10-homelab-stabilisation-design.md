@@ -81,9 +81,9 @@ it could not rebuild these machines even if it ran.
 ## 5. Anti-goals
 
 - **Any big-bang cutover.** Every step must be individually reversible.
-- **Enabling `selfHeal` before the rescue.** Turning on automation while eleven pods sit on
-  dying volumes will restart them and destroy the only surviving copies of their configuration.
-  This is the most dangerous single action available in this design.
+- **A partial restart.** With no rescue, a pod that touches a doomed claim loses its data *and*
+  fails to start, leaving the app half-dead with no record of why. Each of the eleven is either
+  rebuilt now or stopped deliberately, never left to restart on its own.
 - **Fixing drift with `kubectl apply`.** If it is in ArgoCD, it changes in git.
 - **Reintroducing Bitnami, or any vendor whose chart licence can change under us.**
 
@@ -106,9 +106,9 @@ it could not rebuild these machines even if it ran.
   Backup is the only mitigation, which is why it cannot be last.
 - Secrets never in git. Files under `cluster/argocd/**` keep CRLF. Ingress is Traefik CRDs only.
   LinuxServer workloads keep `TZ=Europe/Paris`, `PUID=1100`, `PGID=1100`.
-- **Eleven volumes are dying.** `filebrowser-config`, `filebrowser-db-2`, `calibre-config`,
-  `firefly-config-2`, `linkstack`, `n8n-2`, `syncthing-conf`, `thelounge-volume`,
-  `pgadmin-pgadmin4`, `prometheus-data`, `postiz` redis. Each dies on its next pod restart.
+- **The eleven volumes are already gone.** Their contents are accepted as lost and every affected
+  application is reconfigured from scratch. Nothing in this programme attempts to recover them, and
+  no session is spent on it.
 
 ## 7. Decisions taken
 
@@ -364,28 +364,29 @@ the output differs. Repo work (charts, values, Applications, documentation, scri
 directly. Each runbook step ends with a verification the operator pastes back, so the workstream
 can proceed without a second session re-investigating the cluster.
 
-### W0 — Rescue the eleven volumes (time-critical)
+### W0 — Longhorn cleanup
 
-Nothing else starts until this is done, because every other change risks restarting a pod.
+No data is rescued. The operator is reconfiguring every application from scratch, so the eleven
+volumes that still exist are abandoned and their contents are accepted as lost. That removes the
+only time-critical step in the programme and removes the "do not restart anything" constraint that
+governed every other workstream.
 
-1. **Recovery gate — settled.** No Longhorn replica data remains on `nas`, `nuc0` or `streaming`
-   (checked 2026-11-10). Nothing is recoverable beyond the eleven volumes that are still mounted.
-   No recovery attempt; the apps whose PVC objects were deleted are rebuilt fresh in Wave A.
-2. Confirm the eleven running volumes are still readable (done: filebrowser serves HTTP, thelounge
-   loaded its user, n8n is running its pruning job).
-3. Copy each volume out to `/mnt/storage/rescue/<app>/` on the NAS using `kubectl cp` per pod.
-   Prefer `tar` through `kubectl exec` for anything with many small files or a SQLite database.
-4. Verify each copy: file count, total size, and `sqlite3 ... 'PRAGMA integrity_check'` on the two
-   filebrowser databases.
-5. Only after every copy verifies: remove the finalizers from the eleven PVCs and the 36 PVs,
-   delete `longhorn-system`, and delete the Longhorn leftovers from git
-   (`cluster/infrastructure/storageclass/lh-*.yaml`, `kubectl/ingressRoute/longhorn.yaml`).
-6. Publish the rescued set as the source of truth for restoration, in git (a manifest of what was
-   recovered, sizes and checksums — not the data itself).
+1. Confirm which claims are still `Terminating` and which pods are still holding them, so the set
+   is accurate on the day rather than from this document.
+2. Stop the workloads that depend on them: delete the eleven Applications' pods by letting each
+   Wave A/C rebuild recreate them, or scale them to zero first. Whatever is chosen, it is done
+   deliberately and recorded, not by casually syncing an Application.
+3. Remove the finalizers from the stuck PVCs and PVs, then delete `longhorn-system`.
+4. Delete the Longhorn leftovers from git: `cluster/infrastructure/storageclass/lh-*.yaml`,
+   `kubectl/ingressRoute/longhorn.yaml`, and the Longhorn references in `AGENTS.md`.
+5. Verify: no `longhorn` string in the cluster or the repo outside the historical notes in `docs/`.
 
-Acceptance: eleven verified copies on the NAS, zero `longhorn` objects in the cluster,
-`kubectl get pvc -A | grep longhorn` empty, and no Longhorn references in the repo outside
-`docs/`.
+Acceptance: no `longhorn` object in the cluster, no `longhorn` reference in the repo outside
+`docs/`, and a written list of which applications are now awaiting a fresh configuration.
+
+The eleven affected applications are: filebrowser, calibre, firefly, linkstack, n8n, syncthing,
+thelounge, pgadmin, Prometheus and postiz redis. Every one of them is either rebuilt in Wave A or
+Wave C, or replaced wholesale in W6.
 
 ### W1 — Storage foundation
 
@@ -534,7 +535,8 @@ restart; deliberately breaking one thing produces the expected alert.
    service in the rebuild, so authentik comes first (Wave C) and filebrowser is the pilot for the
    SSO pattern.
    - Storage: config and database on `local-path`, pinned to `nas`; mount `nfs-plex` and
-     `nfs-stash`. Restore the config from the W0 rescue copy rather than starting fresh.
+     `nfs-stash`. Configuration starts fresh — the old volume is abandoned, so budget for creating
+     the admin user and setting the share roots by hand.
    - Auth: authentik forward-auth, with one provider and application in git. The current setup
      returns 404 on `/api/auth/callback`, so the flow was never completed — treat it as greenfield,
      not as a fix.
@@ -556,8 +558,9 @@ memory; an agent can create and close a Vikunja task.
 
 ### W8 — Ansible and documentation
 
-1. **Inventory into the repo** — hosts, groups, and `group_vars` — with secrets SOPS-encrypted.
-   Without this the playbooks are unrunnable and the machines are undocumented.
+1. **Inventory into the repo** — hosts, groups, and `group_vars` — with the secret values in one
+   encrypted dump (§8.5 level 1). Without this the playbooks are unrunnable and the machines are
+   undocumented.
 2. **Rewrite `setup-node.yaml`** for the actual Ubuntu version: drop `apt_key` and the `focal`
    repo, add containerd, K3s role and token, node labels and taints, `open-iscsi`, NFS exports,
    GPU host preparation, timezone, and a firewall.
@@ -570,33 +573,28 @@ has been executed at least once.
 
 ## 10. Ordering
 
-Dependency order. **W0 is not movable.** Everything else can be reordered within these rules:
-backups (W4) must precede any platform upgrade (W5); PostgreSQL (W2) must precede the apps that
-need it and the two new services; each wave must finish before automation is enabled on it.
+Dependency order. Only three rules are hard:
+
+- **W1 before anything that needs storage.** Nothing schedules without a working StorageClass.
+- **W2 before the apps that need a database**, and before the two new services in W7.
+- **Each wave finished before automation is enabled on it** (§8.4 stage 2).
+
+Everything else is the operator's call. In particular **W4 is not a gate**: backups are deferred and
+the operator has accepted the risk of rebuilding without them. That makes W5 the riskiest workstream
+in the programme, because six minor platform upgrades would then run with no restore path — worth
+revisiting if W5 comes up before W4.
 
 ```
-W0 rescue
+W0 cleanup
   └─ W1 storage
-       ├─ W2 postgres ──┐
-       ├─ W4 offsite ───┤
-       └─ W3 waves ─────┘
-                          └─ W5 platform
-                               └─ W6 observability
-                                    └─ W7 new services
-                                         └─ W8 ansible + docs
+       ├─ W2 postgres ──┬─ W3 waves ──┬─ W6 observability (after W5)
+       │                └─ W7 new services
+       └─ W5 platform ─────────────────┘
+W4 offsite: not urgent, independent, take it whenever the operator wants it
 ```
 
-Two slices are worth pulling forward because they are cheap and high-value: **filebrowser** (W7.1)
-needs only W1 and the rescue, and **the OVH bucket plus restic for PVC data** needs only W1. Both
-can run before the bulk of W3.
-
-Alternative rejected: **repair everything, then backup.** It is the shortest path to a working
-media stack and the longest exposure to another silent loss. Rejected because the upgrade work in
-W5 cannot be safely attempted without a restore that has been tested.
-
-Alternative rejected: **backup first, repair later.** It leaves eleven dying volumes untouched for
-days while we build plumbing, for no benefit — the rescue and the bucket share no resources and can
-run in the same week.
+W3 and W7 can proceed in parallel with W5 only if the upgrades are rehearsed on the test cluster
+first; they touch the same ArgoCD applications otherwise.
 
 ## 11. Open points
 
@@ -640,9 +638,9 @@ recorded in §8.7.
 
 | Risk | Impact | Mitigation |
 |---|---|---|
-| A rescued pod restarts mid-copy | that app's config lost permanently | copy first, touch nothing, do W0 before any other change |
-| `selfHeal` enabled too early | mass restart of the eleven, data loss | automation staged behind W0, per §8.4 |
-| etdc quorum lost during a control-plane upgrade | cluster down, no easy recovery | test cluster, one server at a time, tested restore first |
+| Rebuilding without any backup (accepted) | a mistake in W3 costs that day's work and nothing older | small waves, one app at a time, configuration in git wherever the chart allows it; take W4 as soon as it stops feeling optional |
+| A doomed-claim pod restarts before it is rebuilt | the data is lost (already accepted) and the app is left half-dead with no record | decide each of the eleven in W0 — rebuild now or stop deliberately — and never leave one to restart on its own |
+| etcd quorum lost during a control-plane upgrade | cluster down, no easy recovery | test cluster, one server at a time, etcd snapshot verified before the first step |
 | ACME duplicate-certificate limit during the Traefik cutover | certificates unavailable for a week | reuse the existing ACME claim, single cutover window |
 | `local-path` node disk loss | app and config gone | backups from W4, monthly restore drill |
 | Backup target locked out (single account) | domains and backups lost together | keep the registrar separate, export zones to git |
