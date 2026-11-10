@@ -166,23 +166,28 @@ Titles only. Each becomes a full plan when its workstream is picked up.
 9. Runbooks: upgrade, restore, add a node, rotate a secret
 10. Disaster-recovery document, proved by one dry run
 
+## Priority
+
+**Operator's order, 2026-11-11: W5 first, W6 second.** Everything else follows.
+
+That inverts the dependency order and has two consequences worth stating once:
+
+1. **W5 runs with no restore path.** Backups (W4) are deferred, so an etcd or storage failure during
+   six minor platform upgrades is a rebuild-from-git rather than a restore. What the cluster holds
+   today is mostly reproducible, so the real cost is downtime rather than data — but it is a
+   deliberate one-way door.
+2. **W5 runs as the baseline is still noisy.** 20 pods `Pending` and three crash-looping mean that
+   after each upgrade step, a new failure is hard to distinguish from the existing ones. **W0 is half
+   a session** and buys a clean baseline; it is worth taking before W5 even though the operator did
+   not order it that way.
+
+Revised sequence: `W0 (recommended) → W5 → W6 → W1 → W2 → W3 → W7 → W4 → W8`.
+
 ## Recommended order
 
-W0 → W1 → {W2, W3} → W5 → W6 → W7 → W8. W4 sits independently wherever the operator wants it.
+The dependency order, kept here for reference: W0 → W1 → {W2, W3} → W5 → W6 → W7 → W8, with W4
+anywhere the operator wants it. The operator has chosen to start with W5.
 
-Two notes that change the old calculus:
-
-- **Nothing is time-critical any more.** No data is being rescued, so an extra week before W0 costs
-  nothing but a cluster that stays messy.
-- **W7 task 2 (filebrowser) is the operator's stated urgent item**, and it needs only W1, W2 and
-  W3 task 10 (authentik). It can run before the rest of W3.
-
-## How to prioritise
-
-| If you want… | Do | Because |
-|---|---|---|
-| The editor working soonest | W1, W2, W3.10, W7.1–4 | filebrowser needs storage and authentik, nothing else |
-| The fewest future surprises | W4 | Every workstream before it is unrecoverable. Not urgent, but cheap insurance. |
-| The cluster feeling normal | W0, W1, W2, W3 | The catalogue comes back |
-| A platform you can trust | W5 after W4 | Six minor upgrades without a tested restore is the largest risk left in the programme |
-| Your own momentum | W0, W1, then pick | W0 is now half a session and unblocks the rest |
+W5 (platform) and W6 (observability) are first by operator decision. Read their dependency notes
+above before starting: W5 carries the most risk in the programme because nothing backs it up, and W6
+is easiest to verify once the upgrade noise is gone.
