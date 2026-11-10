@@ -119,6 +119,7 @@ it could not rebuild these machines even if it ran.
 | Config storage | `local-path`, node-bound | operator |
 | Media storage | NFS provisioner classes | operator, existing |
 | PostgreSQL | Restore as a real working instance, official image | operator |
+| Authentik | Keep, and rebuild its configuration — it was a proof of concept and is still broken | operator |
 | Charts | Official chart where one exists, otherwise the operator's own chart | operator |
 | Images | Official upstream or LinuxServer only; no self-maintained images | operator |
 | Backup | Rebuild from scratch, European provider → **OVH** | operator |
@@ -137,12 +138,22 @@ Each workload declares `nodeSelector: kubernetes.io/hostname: <node>` in its val
 `local-path` claim lands on that same node. A pod and its config volume must never be movable
 independently.
 
-| Node | Role | Hosts | Rationale |
-|---|---|---|---|
-| `streaming` | GPU + media | Plex, the `*arr` stack, qbittorrent, autobrr, cross-seed, unpackerr, flaresolverr, seerr, calibre, kavita, tautulli, maintainerr, recyclarr | Plex needs the GPU; the rest stream from the NAS over NFS anyway |
-| `nas` | Storage + data-adjacent | PostgreSQL, filebrowser, syncthing, stash, Prometheus TSDB, Loki, and every NFS provisioner chart | The disks live here; config volumes on the same box as the data they serve |
-| `nuc0` | Application catalogue | authentik, dashy, wiki, firefly, guacamole, koillection, linkstack, ghostfolio, discourse, postiz, n8n, monitorss, minecraft, news-freshrss, Vikunja, OpenMemory | General-purpose x86, 32 GB |
-| `rbp2` | Control plane only | nothing | A Pi with an SSD, ARM64. Keeping it app-free avoids the multi-arch image problem entirely |
+| Node | Role | Capacity | Hosts | Rationale |
+|---|---|---|---|---|
+| `streaming` | GPU + media | SSD ≥ 1 TB | Plex, the `*arr` stack, qbittorrent, autobrr, cross-seed, unpackerr, flaresolverr, seerr, calibre, kavita, tautulli, maintainerr, recyclarr | Plex needs the GPU; the rest stream from the NAS over NFS anyway |
+| `nas` | Storage + data-adjacent | ~30 TB HDD + 2 TB NVMe | PostgreSQL, filebrowser, syncthing, stash, Prometheus TSDB, Loki, the restic working copy, the W0 rescue copies, and every NFS provisioner chart | The disks live here; config volumes on the same box as the data they serve |
+| `nuc0` | Application catalogue | SSD ≥ 1 TB | authentik, dashy, wiki, firefly, guacamole, koillection, linkstack, ghostfolio, discourse, postiz, n8n, monitorss, minecraft, news-freshrss, Vikunja, OpenMemory | General-purpose x86, 32 GB |
+| `rbp2` | Control plane only | SSD | nothing | A Pi with an SSD, ARM64. Keeping it app-free avoids the multi-arch image problem entirely |
+
+Disk is therefore **not** a constraint anywhere: every node has at least a terabyte, and the NAS has
+30 TB of spinning rust plus 2 TB of NVMe. The binding constraints are RAM on `nuc0` and the fact that
+`local-path` ties a volume to one node.
+
+Consequence worth stating: PostgreSQL, the Prometheus TSDB and Loki all live on `nas`, so put their
+volumes on the **NVMe** path rather than the spinning array. `local-path` writes under
+`/var/lib/rancher/k3s/storage` on the root filesystem, so this needs the NAS root — or a second
+`local-path` provisioner with its own path — to sit on the NVMe. Confirm with `lsblk` before W2.
+Bulk data (rescue copies, restic working copy, media) can stay on the mechanical array.
 
 `nuc0` is currently at ~28.5 GB of memory used and is the node to watch. `rbp2` reports ~4.3 GB
 used. Before wave C, measure real capacity per node and rebalance — the map above is a starting
@@ -241,6 +252,18 @@ secret. That is the failure mode this workstream exists to remove.
 including the upgrade runbook and the restore runbook), `docs/decisions/` (one short record per
 decision, starting with this document's table), `docs/secrets.md` (name, namespace, keys, consumer,
 never the value), `docs/disaster-recovery.md` (how to rebuild from an empty disk).
+
+**Reading surface: Material for MkDocs.** Markdown in git stays the source of truth — that is what
+agents read and what pull requests review — and MkDocs renders the same files into a site with
+navigation, search and a proper table of contents for a human. It is free and open source, there is
+no database and no state to back up, and the build is one command. Mermaid diagrams are supported
+through `pymdownx.superfences`, so graphs stay as code in the Markdown rather than becoming
+screenshots. GitHub also renders Mermaid natively, so the repository is readable without the build
+step at all.
+
+Serve the built site read-only from the cluster if a browsable URL is wanted; it is a static
+directory, so a plain web server and a Traefik route are the whole deployment, and losing it costs
+nothing.
 
 ### 8.7 Image and registry policy
 
@@ -403,6 +426,11 @@ Four waves, each ending `Synced`/`Healthy` and each getting automation switched 
   probes, fix the sonarr exportarr port (7878 → 8989 on an 8989 service), move firefly and postiz
   off native Ingress onto Traefik CRDs, and move every image to a GHCR, quay, `lscr.io` or
   project-registry source per §8.7 — verifying each target exists before swapping.
+
+  Include **authentik**, which runs but was a proof of concept and is still broken: its forward-auth
+  callback 404s for filebrowser, so the flow was never finished. Rebuild its configuration properly
+  — one forward-auth provider and application per host, in git — rather than repairing the ad-hoc
+  state. This is a prerequisite for W7.1, not an optional tidy-up.
 - **Wave D — the NFS apps and leftovers.** Dead chart `cluster/helm/databases/pgadmin`, orphan
   `cluster/helm/monitoring/loki` directory, `cluster/helm/localpath/` reference in AGENTS.md,
   and the `renovate` version mismatch between Application and values.
@@ -555,20 +583,37 @@ Alternative rejected: **backup first, repair later.** It leaves eleven dying vol
 days while we build plumbing, for no benefit — the rescue and the bucket share no resources and can
 run in the same week.
 
-## 11. Open questions
+## 11. Open points
 
-Left to the operator, because a wrong guess here changes what gets built:
+Ordered by how much a wrong answer changes what gets built. Each has a default so work can continue
+if nobody answers.
 
-1. **Authentik.** It is the forward-auth for every UI, its callback is broken for filebrowser, and
-   eleven values files reference its middlewares. Keep it, or replace it with something smaller?
-   Its removal simplifies filebrowser and the proxy middlewares considerably.
-2. **Real capacity per node — disk before memory.** Postgres data, Prometheus TSDB, Loki at 90
-   days, the restic working copy and the W0 rescue all land on `nas`, and none of those figures are
-   visible from a read-only cluster role. Needed before W2, not before wave C. Memory figures are
-   needed before wave C.
-3. **Media offsite scope.** Confirmed out of scope. If that changes, the cost model changes with it.
-4. **Confirm the four-way knowledge split in §8.8.** My proposal: designs and evergreen docs in git,
-   work state in Vikunja, agent recall in OpenMemory, and no wiki as a source of truth.
+1. **Editor access model (W7.1).** Does the editor get read-only or upload rights, and do they reach
+   it over the LAN, over WireGuard, or from the public internet? Default: read-write on the video
+   and asset trees only, over WireGuard, with a filebrowser-local account rather than SSO.
+2. **Registrar and current public DNS (W4.1).** Where do `ashuvidz.com` and `ashudev.com` live
+   today, and is there access to export the zones? Nothing in the repo records a single public
+   record, so this blocks the DNS move. Default: export first, move DNS only, leave registration.
+3. **Authentik scope (Wave C).** Which hosts should sit behind forward-auth — everything, or only
+   the ones exposed outside the LAN? Default: everything with a `kub.home.ashudev.com` name plus
+   the public ones, no exceptions carried over from the proof of concept.
+4. **Secrets level.** Level 1 (inventory plus one encrypted dump in the backup set) or straight to
+   Level 2 (SOPS in git, decrypted by the repo-server)? Default: Level 1 now, Level 2 after W5.
+5. **`node-type=general` versus hostname pins.** Several charts require `node-type=general` today,
+   and the placement map in §8.1 uses `kubernetes.io/hostname`. Default: hostname pins everywhere,
+   and the `node-type` label is retired with the last chart that uses it.
+6. **Confirm the four-way knowledge split in §8.8.** Designs and evergreen docs in git, work state
+   in Vikunja, agent recall in OpenMemory, no wiki as a source of truth. Default: as written.
+7. **Priority order.** The operator decides the workstream sequence. Default: the dependency order
+   in §10, with the filebrowser and OVH-bucket slices pulled forward.
+8. **NAS root filesystem.** Is `/` on the NVMe or on the mechanical array? A one-line `lsblk` check,
+   needed before W2 so PostgreSQL does not land on spinning rust by accident.
+
+Closed during design: Authentik is kept and rebuilt; disk capacity is sufficient everywhere (≥1 TB
+per node, 30 TB plus 2 TB NVMe on the NAS); media is out of offsite scope for now, decided per
+service; documentation is Markdown in git rendered by Material for MkDocs; charts are the operator's
+own where no official chart exists; images come from the upstream project or LinuxServer, with
+Docker Hub accepted where no alternative exists.
 
 Answered during design: charts are the operator's own where no official chart exists; images come
 from the upstream project or LinuxServer; Docker Hub is avoided, with the one PostgreSQL exception
