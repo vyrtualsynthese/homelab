@@ -1,25 +1,28 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "autobrr.fullname" . }}
+  name: {{ include "app.fullname" . }}
   labels:
-    {{- include "autobrr.labels" . | nindent 4 }}
+    {{- include "app.labels" . | nindent 4 }}
 spec:
-  replicas: 1
+  replicas: {{ .Values.replicaCount }}
   strategy:
-    type: {{ .Values.strategyType | default "Recreate" }}
+    type: {{ .Values.strategy }}
   selector:
     matchLabels:
-      {{- include "autobrr.selectorLabels" . | nindent 6 }}
+      {{- include "app.selectorLabels" . | nindent 6 }}
   template:
     metadata:
-      {{- with .Values.podAnnotations }}
       annotations:
+        {{- if .Values.env }}
+        checksum/env: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        {{- end }}
+        {{- with .Values.podAnnotations }}
         {{- toYaml . | nindent 8 }}
-      {{- end }}
+        {{- end }}
       labels:
-        {{- include "autobrr.labels" . | nindent 8 }}
-	{{- with .Values.podLabels }}
+        {{- include "app.labels" . | nindent 8 }}
+        {{- with .Values.podLabels }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
     spec:
@@ -27,37 +30,51 @@ spec:
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      serviceAccountName: {{ include "autobrr.serviceAccountName" . }}
+      serviceAccountName: {{ include "app.serviceAccountName" . }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      {{- $claimName := include "app.configClaimName" . }}
       containers:
         - name: {{ .Chart.Name }}
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- $envFrom := .Values.envFrom | default list }}
+          {{- if .Values.env }}
+          {{- $envFrom = prepend $envFrom (dict "configMapRef" (dict "name" (include "app.envConfigMapName" .))) }}
+          {{- end }}
+          {{- with $envFrom }}
           envFrom:
-            - configMapRef:
-                name: {{ template "autobrr.fullname" . }}-env
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.extraEnv }}
+          env:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           ports:
             - name: http
-              containerPort: {{ .Values.service.port }}
+              containerPort: {{ include "app.containerPort" . }}
               protocol: TCP
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
           volumeMounts:
-            - mountPath: /config
-              name: {{ include "autobrr.fullname" . }}-conf
-          {{- with .Values.volumeMounts }}
+            {{- if .Values.storage.enabled }}
+            - name: config
+              mountPath: {{ .Values.storage.mountPath }}
+            {{- end }}
+            {{- with .Values.volumeMounts }}
             {{- toYaml . | nindent 12 }}
-          {{- end }}
+            {{- end }}
       volumes:
-        - name: {{ include "autobrr.fullname" . }}-conf
+        {{- if .Values.storage.enabled }}
+        - name: config
           persistentVolumeClaim:
-            claimName: {{ default (printf (include "autobrr.fullname" .)) .Values.storage.existingClaim }}
-      {{- with .Values.volumes }}
+            claimName: {{ $claimName }}
+        {{- end }}
+        {{- with .Values.volumes }}
         {{- toYaml . | nindent 8 }}
-      {{- end }}
+        {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
@@ -69,4 +86,4 @@ spec:
       {{- with .Values.tolerations }}
       tolerations:
         {{- toYaml . | nindent 8 }}
-{{- end }}
+      {{- end }}

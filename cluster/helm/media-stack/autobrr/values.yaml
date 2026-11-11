@@ -1,33 +1,35 @@
 # Default values for autobrr.
-# This is a YAML-formatted file.
-# Declare variables to be passed into your templates.
+# This chart is the reference every other hand-maintained chart is copied from:
+# see docs/charts/README.md for the contract it is expected to satisfy.
+
+# -- Override the chart name.
+nameOverride: ""
+# -- Override the generated release name.
+fullnameOverride: ""
 
 replicaCount: 1
 
+# -- Deployment strategy. `Recreate` is required for anything with a config volume:
+# ReadWriteOnce volumes cannot be attached to an old and a new pod at the same time.
+strategy: Recreate
+
 image:
   repository: ghcr.io/autobrr/autobrr
-  pullPolicy: IfNotPresent
-  # Overrides the image tag whose default is the chart appVersion.
+  # -- Pin the tag. Never `latest`. Renovate manages this.
   tag: "v1.85.0"
-
-# Choose deployment strategy type
-strategyType: Recreate
+  pullPolicy: IfNotPresent
 
 imagePullSecrets: []
-nameOverride: ""
-fullnameOverride: ""
 
 serviceAccount:
-  # Specifies whether a service account should be created
+  # -- Create a dedicated ServiceAccount for the pod.
   create: true
-  # Automatically mount a ServiceAccount's API credentials?
   automount: true
-  # Annotations to add to the service account
-  annotations: {}
-  # The name of the service account to use.
-  # If not set and create is true, a name is generated using the fullname template
+  # -- Defaults to the fullname.
   name: ""
+  annotations: {}
 
+# -- Annotations added to the pod. `checksum/env` is added automatically.
 podAnnotations: {}
 podLabels: {}
 
@@ -48,22 +50,84 @@ service:
   type: ClusterIP
   port: 7474
 
-ingress:
+container:
+  # -- Container port. Defaults to `service.port` when left empty; set it only
+  # when the app listens on a different port than the Service exposes.
+  port: null
+
+ingressRoute:
+  # -- Render a Traefik IngressRoute. This repo never uses
+  # networking.k8s.io/v1 Ingress.
   enabled: true
-  className: ""
-  annotations:
-    {}
-    # kubernetes.io/ingress.class: nginx
-    # kubernetes.io/tls-acme: "true"
-  hosts:
-    - host: chart-example.local
-      paths:
-        - path: /
-          pathType: ImplementationSpecific
-  tls: []
-  #  - secretName: chart-example-tls
-  #    hosts:
-  #      - chart-example.local
+  # -- API group. `traefik.containo.us/v1alpha1` is what the cluster's Traefik
+  # 2.x watches today; flip this to `traefik.io/v1alpha1` when Traefik v3 lands.
+  apiVersion: traefik.containo.us/v1alpha1
+  # -- Traefik entry points. `web` is plain HTTP on kub.local; `websecure` is TLS.
+  entryPoints:
+    - web
+  # -- Single host. For a second host, copy the chart.
+  host: autobrr.kub.local
+  # -- Path prefix. `/` matches everything.
+  pathPrefix: /
+  # -- Middlewares, rendered as `<namespace>-<name>@kubernetescrd`.
+  # Example: [{ name: authentik, namespace: kube-system }]
+  middlewares: []
+  labels: {}
+  annotations: {}
+  tls:
+    # -- Send the router over TLS. Requires the tls block below to mean anything.
+    enabled: false
+    # -- Use a pre-existing certificate instead of asking Traefik to issue one.
+    secretName: ""
+    # -- Traefik ACME resolver name, for example `myresolver`.
+    certResolver: ""
+    # -- TLSOption resource name in this namespace.
+    options: ""
+
+storage:
+  # -- Render the config PersistentVolumeClaim. Set to false only when the app
+  # genuinely keeps no state.
+  enabled: true
+  # -- Use an existing claim instead of the one this chart creates.
+  existingClaim: ""
+  className: local-path
+  accessModes:
+    - ReadWriteOnce
+  # -- Config volumes hold settings, not media. 128Mi is the house standard.
+  size: 128Mi
+  # -- Where the config volume is mounted inside the container.
+  mountPath: /config
+
+# -- Environment variables rendered into a ConfigMap. Prefer this for anything
+# that is not a secret.
+env:
+  TZ: "Europe/Paris"
+  AUTOBRR__HOST: "0.0.0.0"
+  AUTOBRR__PORT: "7474"
+  # AUTOBRR__BASE_URL: ""
+  # AUTOBRR__LOG_LEVEL: ""
+  # AUTOBRR__SESSION_SECRET: ""
+
+# -- Extra variables that must not sit in a ConfigMap, for example
+# `- name: X` + `valueFrom.secretKeyRef`. Rendered verbatim into the container.
+extraEnv: []
+
+# -- Extra `envFrom` sources, rendered verbatim.
+envFrom: []
+
+# -- Additional volumes, rendered verbatim into the pod spec.
+volumes: []
+
+# -- Additional volume mounts, rendered verbatim into the container.
+volumeMounts: []
+
+nodeSelector:
+  # -- Every workload is pinned to a named node; local-path claims are node-bound.
+  kubernetes.io/hostname: streaming
+
+tolerations: []
+
+affinity: {}
 
 resources:
   {}
@@ -78,6 +142,8 @@ resources:
   #   cpu: 100m
   #   memory: 128Mi
 
+# NOTE: spelled `probs` here because that is the existing key. It is currently
+# unused by any template; wiring it up is a separate change.
 probs:
   failureThreshold: 3
   timeoutSeconds: 10
@@ -86,36 +152,3 @@ probs:
   path:
     startup: "/healthz/liveness"
     readiness: "/healthz/readiness"
-
-storage:
-  class: ~
-  accessModes: ReadWriteOnce
-  dataSize: 5Gi
-  # -- Use an existing PersistentVolumeClaim, overrides values above
-  existingClaim: "autobrr-config"
-
-# Additional volumes on the output Deployment definition.
-volumes: []
-
-# Additional volumeMounts on the output Deployment definition.
-volumeMounts: []
-
-nodeSelector:
-  kubernetes.io/hostname: streaming
-
-tolerations: []
-
-affinity: {}
-
-env:
-  TZ: "Europe/Paris"
-  AUTOBRR__HOST: "0.0.0.0"
-  AUTOBRR__PORT: "7474"
-  #AUTOBRR__BASE_URL: ""
-  #AUTOBRR__LOG_LEVEL: ""
-  #AUTOBRR__LOG_PATH: ""
-  #AUTOBRR__LOG_MAX_SIZE: ""
-  #AUTOBRR__LOG_MAX_BACKUPS: ""
-  #AUTOBRR__SESSION_SECRET: ""
-  #AUTOBRR__CUSTOM_DEFINITIONS: ""
-  #AUTOBRR__CHECK_FOR_UPDATES: ""
