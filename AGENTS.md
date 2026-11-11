@@ -3,6 +3,11 @@
 Operating notes for AI agents working in this repo. Read this before changing anything.
 Everything below was derived from the repo; items marked **[verify]** need cluster access.
 
+> **Read this first.** The cluster is mid-rebuild, and the authoritative documents are in
+> [`docs/`](docs/README.md) — audit, design, programme index and per-workstream plans. If this file
+> disagrees with them, they win. `TODO.MD` and `REBUILD.md` were deleted on 2026-11-11 because they
+> described a plan that no longer matched the cluster.
+
 ## 1. What this repo is
 
 A single K3s homelab managed by ArgoCD (GitOps) plus Ansible for host prep.
@@ -13,7 +18,7 @@ A single K3s homelab managed by ArgoCD (GitOps) plus Ansible for host prep.
 - No CI. Renovate updates images/chart versions; nothing runs on PR.
 - Secrets are never committed. See §5.
 
-Nodes: `nas` (worker; NFS + Longhorn storage), `streaming` (control-plane; NVIDIA GPU; runs most apps),
+Nodes: `nas` (worker; NFS exports + `local-path` on a dedicated SSD), `streaming` (control-plane; NVIDIA GPU; runs most apps),
 `nuc0` (control-plane), `rbp2` (control-plane Pi), `rbp0`/`rbp1` (edge Pis: Pi-hole + WireGuard).
 
 ## 2. How a change reaches the cluster
@@ -27,7 +32,7 @@ Consequences:
 - Editing `cluster/helm/**` only takes effect after the commit lands on `develop`.
 - Never `kubectl edit/apply` a GitOps-managed resource; automated `selfHeal` reverts it.
 - `cluster/infrastructure/**` is **not referenced by any Application** → applied by hand. That includes
-  the Traefik `HelmChartConfig`, middlewares, TLSStore and the Longhorn StorageClasses. **[verify]** intent.
+  the Traefik `HelmChartConfig`, middlewares and TLSStore. **[verify]** intent.
 
 ## 3. Three app patterns
 
@@ -88,9 +93,14 @@ prefer migrating to pattern B when touching these.
   - Public: `ashuvidz.com`, `forum.ashuvidz.com`, `wiki.ashuvidz.com`.
   - Cross-namespace middleware refs use `kube-system-<name>@kubernetescrd`.
 - Stateful apps: `strategy: Recreate`; one PVC per concern; `storageClassName: local-path` for config.
-  Shared media/data volumes use the dedicated NFS provisioner classes (`nfs-*`), not Longhorn.
+  Shared media/data volumes use the dedicated NFS provisioner classes (`nfs-*`). There is no
+  replicated volume class: Longhorn was abandoned after the 2026 disk failure and is not coming back.
 - LinuxServer images: `TZ=Europe/Paris`, `PUID=1100`, `PGID=1100`.
-- Placement: `nodeSelector: kubernetes.io/hostname: streaming` for most apps; `nas` for storage-bound ones.
+- Placement: `nodeSelector: kubernetes.io/hostname: <node>` — every workload is pinned to a named node,
+  and its `local-path` volume lands on that same node. `streaming` for GPU and media work, `nas` for
+  storage-bound apps, `nuc0` for the general catalogue, `rbp2` for nothing but the control plane.
+  The old `node-type` label is retired; do not reintroduce it.
+- Never pin a workload to `rbp2`. It is an ARM64 Raspberry Pi and several images have no ARM build.
 - Resources: every container sets memory requests/limits; CPU requests are tiny (1m–100m).
 - Monitoring: exporters expose 9707 (exportarr) with `prometheus.io/scrape` annotations; Prometheus
   scrapes via annotations.
@@ -156,22 +166,63 @@ while read -r v; do [ -f ".$v" ] || echo "BROKEN VALUES $v"; done < <(
   grep -rh '\$values/' cluster/argocd/projects | sed 's/.*\$values//' | tr -d "\"' \r" | sort -u)
 ```
 
-## 7. Known issues (repo evidence only, not yet confirmed on-cluster)
+## 7. Known issues
 
-1. `projects/nfs/plex-media.yaml` → `path: cluster/helm/nfs/plex-media`; the directory is `plexmedia`.
-2. `projects/nfs/nfs-audio.yaml` → `$values/cluster/helm/nfs/audio/values.yaml`; the directory is `nfs-audio/`.
-3. `projects/nfs/nfs-qbittorrent-config.yaml` uses `path:` on a directory containing only `values.yaml`
-   and `README.md` (no `Chart.yaml`) → should be multi-source like the other NFS apps. ArgoCD renders it
-   as a plain directory, finds no manifests, and reports **Synced/Healthy while deploying nothing**.
-4. `cluster/infrastructure/**` is outside GitOps (§2).
-5. `infrastructure/traefik/traefik-config.yaml:145`: `existingClaim` is over-indented, so YAML folds it into
-   `persistence.name`. Check which PVC Traefik actually got for ACME storage.
-6. `media-stack/sonarr/templates/deployment.yaml`: exportarr `URL` uses port `7878`; Sonarr listens on
-   `8989` (`sonarr-anime` has it right).
-7. All IngressRoutes use `traefik.containo.us/v1alpha1`. Correct for Traefik v2 (K3s 1.30); a Traefik v3
-   upgrade requires switching to `traefik.io/v1alpha1` across 57 files.
-8. Orphans: `cluster/helm/nfs/minio-nfs` (no Application), empty `cluster/helm/localpath/`, empty `TODO.MD`.
-9. `renovate.json` ignores `cluster/infrastructure/**`, `kubectl/**`, `ansible/**` — those are bumped by hand.
+Verified against the cluster on 2026-11-10. Evidence in `docs/audit/`; the plans that fix each item
+are in `docs/superpowers/plans/`.
+
+**Structural**
+
+1. Only ~20 of 56 Applications have `syncPolicy.automated` with `selfHeal` + `prune`. The other ~34
+   were applied once and are never reconciled, so a manual change to them sticks. This is the root
+   cause of most of the drift below. Fix it per wave, never all at once.
+2. `cluster/infrastructure/**` is outside GitOps (§2).
+3. **Backups do not work.** The only offsite target is an AWS S3 bucket. The k3s script dumps a
+   SQLite file on an etcd cluster; the NAS script backs up a MinIO path deleted in July 2024; and the
+   k3s and NAS hosts have had a daily cron since 2024 pointing at a script that was never deployed
+   to them. See `docs/audit/ansible-hosts.md`.
+4. Longhorn is gone: no pods, no StorageClasses, and 36 PVs plus 11 PVCs were stuck `Terminating`.
+   Their contents are abandoned by decision; every affected app is reconfigured from scratch.
+
+**Broken references**
+
+5. `projects/nfs/plex-media.yaml` → `path: cluster/helm/nfs/plex-media`; the directory is `plexmedia`.
+   This orphans the media NFS provisioner chart.
+6. `projects/nfs/nfs-audio.yaml` → `$values/cluster/helm/nfs/audio/values.yaml`; the directory is
+   `nfs-audio/`.
+7. `projects/nfs/nfs-qbittorrent-config.yaml` uses `path:` on a directory containing only
+   `values.yaml` and `README.md` (no `Chart.yaml`) → ArgoCD renders it as an empty directory and
+   reports **Synced/Healthy while deploying nothing**.
+
+**Chart defects**
+
+8. `media-stack/sonarr/templates/deployment.yaml:77`: exportarr `URL` uses port `7878`; Sonarr listens
+   on `8989` (`sonarr-anime` has it right).
+9. `infrastructure/traefik/traefik-config.yaml:145`: `existingClaim` is over-indented, so YAML folds it
+   into `persistence.name`. The live DaemonSet mounts `pvc-traefik-nfs`, which is the ACME store —
+   reuse that claim or the certificate is re-issued.
+10. Two files under `cluster/infrastructure/storageclass/` both declare `metadata.name: lh-performance`.
+    Applied by hand, the class does not exist, and nothing reads them.
+11. `firefly/templates/ingress-public.yaml` and `postiz/templates/postiz-ingress.yaml` use
+    `networking.k8s.io/v1` Ingress, against the Traefik-CRD-only rule in §4.
+12. Floating `latest` tags in `dashy`, `monitorss` (two images), `mktxp`, `linkstack`, `grafana`,
+    `minecraft`, `local-path`, and `alpine:latest` at
+    `media-stack/qbittorrent/templates/deployment.yaml:50`.
+
+**Ingress**
+
+13. All 58 live IngressRoutes and 106 repo files use `traefik.containo.us/v1alpha1`. Both CRD groups
+    are installed; the v3 upgrade requires moving to `traefik.io/v1alpha1` while still on 2.11.
+14. Orphans: `cluster/helm/nfs/minio-nfs` (full chart, no Application, MinIO is gone) and
+    `cluster/helm/monitoring/loki` (values only, no chart, no Application).
+
+**Version drift**
+
+15. Traefik `2.9.4` (June 2023) from the K3s bundled addon; K3s `1.30.1` against a `1.36.x` stable.
+16. Vendored charts `prometheus` 14.8.0 and `grafana` 6.52.5 are years behind the images they run.
+    No vendored charts are to be added; migrate these on their next touch.
+17. `renovate.json` ignores `cluster/infrastructure/**`, `kubectl/**` and `ansible/**` — those are
+    bumped by hand.
 
 ## 8. Rules
 
