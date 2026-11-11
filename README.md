@@ -18,7 +18,7 @@ portfolio.
 | Storage | `local-path` for configuration, NFS provisioner classes for media. **No replicated storage.** |
 | Replicated storage | Longhorn was abandoned after the disk failure. Its volumes are gone. |
 | Applications | 57 ArgoCD Applications; about 20 are unhealthy |
-| GitOps coverage | ~20 Applications have `selfHeal` + `prune`; ~34 were applied once and are not reconciled |
+| GitOps coverage | Auto-sync is enabled per Application from the ArgoCD UI; ~34 of the 56 manifests in git do not record it |
 | Backups | **Not working.** The offsite target is an AWS S3 bucket and no script covers the control plane or PVC data |
 | Observability | Prometheus with alerting disabled, Grafana down, no log pipeline |
 
@@ -65,8 +65,9 @@ Commit to `develop` → the ArgoCD root app (`cluster/argocd/argocd-root.yaml`) 
 - Editing `cluster/helm/**` takes effect when the commit reaches `develop`.
 - Never `kubectl edit` or `kubectl apply` a resource ArgoCD manages; drift is fixed in git.
 - `cluster/infrastructure/**` is **not** referenced by any Application and is applied by hand.
-- Only ~20 Applications self-heal. For the other ~34, a manual change is not reverted — which is
-  exactly how the drift described in `docs/audit/argocd-helm.md` accumulated.
+- Auto-sync is switched on from the ArgoCD UI rather than from git, because that is faster while
+  debugging. It works, but the manifests in git understate the real policy — and a root-app sync that
+  rewrites an Application can silently turn automation back off. Codify it per app when you touch it.
 
 ## Storage
 
