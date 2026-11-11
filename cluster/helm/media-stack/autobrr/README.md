@@ -1,68 +1,80 @@
-# Autobrr Helm Chart
+# autobrr
 
-Dashy helps you organize your self-hosted services by making them accessible from a single place.
+autobrr watches IRC announce channels and sends matching releases to your download client. It is the
+reference chart for every hand-maintained chart in this repo — see
+[`docs/charts/README.md`](../../../../docs/charts/README.md) for the contract it satisfies.
 
-## Original Project
+## Upstream
 
-+ Website: https://autobrr.com/
-+ Doc: https://autobrr.com/introduction
-+ Repo: https://github.com/autobrr/autobrr
+- Website: https://autobrr.com/
+- Docs: https://autobrr.com/introduction
+- Source: https://github.com/autobrr/autobrr
 
-## Prerequisites
+## How this chart is deployed here
 
-- Kubernetes 1.16+
-- Helm 3+
+Not with `helm install`. ArgoCD renders it from
+`cluster/argocd/projects/media-stack/autobrr.yaml`, using the chart in this directory and
+`values.yaml` next to it. The release name is the Application name, `autobrr`, so every object lands
+on the `autobrr` / `autobrr-config` / `autobrr-env` names.
 
-## Get Repo Info
-
-```console
-helm repo add selfhosted-helmcharts https://vyrtualsynthese.github.io/selfhosted-helmcharts/
-helm repo update
+```bash
+# what the cluster will render, exactly
+helm template autobrr cluster/helm/media-stack/autobrr --namespace media-stack
 ```
 
-_See [helm repo](https://helm.sh/docs/helm/helm_repo/) for command documentation._
+## What the values control
 
-## Install Chart
+| Value | Purpose | Default |
+|---|---|---|
+| `image.repository`, `image.tag` | Image. Tag is always pinned. | `ghcr.io/autobrr/autobrr`, `v1.85.0` |
+| `strategy` | Deployment strategy. Must stay `Recreate` with a config volume. | `Recreate` |
+| `service.port` | Port the Service exposes, and what the IngressRoute points at. | `7474` |
+| `container.port` | Only set when the app listens on a different port than the Service. | `null` (falls back to `service.port`) |
+| `ingressRoute.*` | Traefik CRD routing: host, entry points, middlewares, TLS. | `autobrr.kub.local`, `web`, no TLS |
+| `storage.*` | The config claim: class, size, mount path, or reuse an existing claim. | `local-path`, `128Mi`, `/config` |
+| `env` | Non-secret variables, rendered into a ConfigMap. | `TZ`, `AUTOBRR__HOST`, `AUTOBRR__PORT` |
+| `extraEnv` | Variables that must come from a Secret, via `valueFrom`. | `[]` |
+| `nodeSelector` | Node pin. Every workload is pinned. | `kubernetes.io/hostname: streaming` |
 
-```console
-# Helm
-$ helm install [RELEASE_NAME] selfhosted-helmcharts/autobrr
-```
+`probs`, `resources`, `podSecurityContext` and `securityContext` are present but deliberately
+unwired in this pass: the chart renders no probes and sets no default limits. Wiring them is a
+separate change, tracked in the design.
 
-_See [configuration](#configuration) below._
+## Ingress
 
-_See [helm install](https://helm.sh/docs/helm/helm_install/) for command documentation._
+Always a Traefik `IngressRoute`, never `networking.k8s.io/v1` Ingress. The API group is a value
+(`ingressRoute.apiVersion`) so the Traefik v3 migration becomes a values edit rather than a template
+edit. It must stay `traefik.containo.us/v1alpha1` while the cluster runs Traefik 2.x.
 
-## Uninstall Chart
+`kub.local` hosts use the `web` entry point and no TLS; they resolve through the Pi-hole wildcard
+record. Hosts under `kub.home.ashudev.com` use `websecure` with `certResolver: myresolver`.
 
-```console
-# Helm
-$ helm uninstall [RELEASE_NAME]
-```
+## Using this chart as a template
 
-This removes all the Kubernetes components associated with the chart and deletes the release.
+Copy the directory, then change only:
 
-_See [helm uninstall](https://helm.sh/docs/helm/helm_uninstall/) for command documentation._
+1. `Chart.yaml` — `name`, `description`, `home`, `sources`, `keywords`.
+2. `values.yaml` — `image`, `service.port`, `container.port` if needed, `ingressRoute.host`,
+   `nodeSelector`, `env`.
+3. Nothing in `templates/`. The helpers are unprefixed (`app.fullname`, `app.labels`,
+   `app.selectorLabels`) precisely so a copy works without a rename sweep.
 
-## Upgrading Chart
+The trade-off of unprefixed helpers: do not use two of these charts as subcharts of the same parent.
+This repo never does.
 
-```console
-# Helm
-$ helm upgrade [RELEASE_NAME] [CHART] --install
-```
+## Files
 
-_See [helm upgrade](https://helm.sh/docs/helm/helm_upgrade/) for command documentation._
+| File | Renders |
+|---|---|
+| `templates/deployment.yaml` | the Deployment |
+| `templates/service.yaml` | the ClusterIP Service |
+| `templates/serviceaccount.yaml` | the ServiceAccount |
+| `templates/configmap.yaml` | the env ConfigMap, only when `env` is non-empty |
+| `templates/persistentvolumeclaim.yaml` | the config claim, only when `storage.enabled` and no `existingClaim` |
+| `templates/ingressroute.yaml` | the Traefik IngressRoute |
+| `templates/NOTES.txt` | the install notes |
 
-## Configuration
+## Uninstalling
 
-See [Customizing the Chart Before Installing](https://helm.sh/docs/intro/using_helm/#customizing-the-chart-before-installing). To see all configurable options with detailed comments, visit the chart's [values.yaml](values.yaml), or run these configuration commands:
-
-```console
-# Helm 2
-$ helm inspect values self-hosted/autobrr
-
-# Helm 3
-$ helm show values self-hosted/autobrr
-```
-
-You may similarly use the above configuration commands on each chart [dependency](#dependencies) to see it's configurations.
+The config claim is created by this chart, so deleting the release deletes the claim. Take a copy
+first if it holds anything you want.

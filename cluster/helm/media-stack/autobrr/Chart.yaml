@@ -1,9 +1,16 @@
 apiVersion: v2
-appVersion: 1.57.0
-description: autobrr redefines download automation for torrents and Usenet, drawing
-  inspiration from tools like trackarr, autodl-irssi, and flexget. We've combined
-  the best of these worlds into one versatile tool that can do it all, and then some.
-icon: https://github.com/autobrr/autobrr/blob/develop/.github/images/logo.png
 name: autobrr
+description: autobrr monitors IRC announce channels and feeds matching releases to your download client.
 type: application
-version: 1.0.0
+# Chart version. Renovate bumps this when the image tag moves.
+version: 1.1.0
+# Must match image.tag in values.yaml.
+appVersion: "v1.85.0"
+icon: https://raw.githubusercontent.com/autobrr/autobrr/develop/.github/images/logo.png
+home: https://autobrr.com/
+sources:
+  - https://github.com/autobrr/autobrr
+keywords:
+  - torrent
+  - usenet
+  - automation
