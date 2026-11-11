@@ -14,22 +14,31 @@ Scripts and raw outputs: `/tmp/opencode/homelab-audit/{analyze.py,analyze.out,in
 
 | Sync policy | Count | Consequence |
 |---|---|---|
-| `automated` with `prune` + `selfHeal` + `CreateNamespace=true` | ~20 | genuinely reconciled |
-| `automated` without selfHeal/prune | small remainder | partially reconciled |
-| **no `syncPolicy.automated` at all** | ~34 | **applied by hand once, then never reconciled** |
+| `automated` with `prune` + `selfHeal` + `CreateNamespace=true` | ~20 | recorded in git |
+| `automated` without selfHeal/prune | small remainder | recorded in git |
+| **no `syncPolicy.automated` at all** | ~34 | **automation is enabled from the ArgoCD UI instead** |
 
-Apps with no automation include `ashuvidz`, `authentik`, `dashy`, `discourse`, `firefly`,
-`ghostfolio`, `guacamole`, `koillection`, `linkstack`, most media-stack `*arr` apps, all eight
-`nfs/*` apps, `postiz`, `wiki`, `n8n`, `news-freshrss`.
+> **Correction, 2026-11-11.** This section originally concluded that ~34 Applications were "applied
+> once and never reconciled", and called that the largest structural drift. That was an inference
+> from the repo files alone, and it was wrong. The operator enables auto-sync per Application from
+> the ArgoCD UI, because toggling it there is faster than a commit while debugging a pod. Those
+> applications *are* reconciled.
+>
+> The real finding is narrower and still worth fixing: the Application manifests in git understate
+> the policy, so a root-app sync that rewrites one can silently turn automation off. It is a
+> five-minute-per-app codification job, not a repair. See §8.4 of the design.
 
-Additional gap: `syncOptions` is empty for `ashuvidz`, `authentik`, `dashy` and all `nfs/*`
-apps, so their destination namespaces are not created by the Application. They exist on the
-cluster only because someone made them by hand.
+Apps with no automation recorded in git include `ashuvidz`, `authentik`, `dashy`, `discourse`,
+`firefly`, `ghostfolio`, `guacamole`, `koillection`, `linkstack`, most media-stack `*arr` apps, all
+eight `nfs/*` apps, `postiz`, `wiki`, `n8n`, `news-freshrss`.
 
-This is the single largest structural drift in the repo. The README and AGENTS.md describe a
-GitOps cluster; in practice roughly 60 % of the catalogue is a set of one-shot applies, and
-manual `helm` or `kubectl` changes on those apps are not reverted. `REBUILD.md` line 42 says
-"31 apps have selfHeal=true + prune=true" — the real figure is near 20.
+Additional gap: `syncOptions` is empty in git for `ashuvidz`, `authentik`, `dashy` and all `nfs/*`
+apps, so their destination namespaces are not created by the Application. They exist on the cluster
+only because someone made them by hand.
+
+`REBUILD.md` line 42 said "31 apps have selfHeal=true + prune=true". The repo bears that out for
+about 20; the rest are enabled on the ArgoCD side, so the cluster number is higher than the repo
+number and neither matches the note.
 
 ## 2. Reference integrity
 

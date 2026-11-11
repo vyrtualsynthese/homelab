@@ -33,9 +33,13 @@ days because their PVC objects were deleted. Three apps have been crash-looping 
 (17 723, 18 737 and 12 432 restarts). Eleven apps still run on volumes that are mid-deletion; the
 data is readable today and dies on the next pod restart.
 
-**GitOps is only half true.** About 34 of the 56 Applications have no `syncPolicy.automated` at
-all — no self-heal, no prune. They were applied once and never reconciled. `REBUILD.md` claims 31
-apps are self-healing; the real number is near 20.
+**GitOps automation is configured outside git.** About 34 of the 56 Application manifests carry no
+`syncPolicy.automated`. The applications themselves *are* reconciled — the operator enables
+auto-sync from the ArgoCD UI, because toggling it off there is faster than editing git while
+debugging pods. The drift is therefore not "half the catalogue is unmanaged", it is that the
+Application objects in git do not describe the cluster, and a root-app sync that touches them can
+silently reset a setting the operator set by hand. Fixing this is a five-minute-per-app codification
+job, not a repair.
 
 **Backups.** None work. The only offsite target is an AWS S3 bucket. The k3s and NAS hosts have
 had a daily cron since 2024 pointing at a script that was never deployed to them. The k3s script
@@ -202,15 +206,23 @@ demand — the current mix of 1Gi through 50Gi config claims is a symptom of gue
 
 ### 8.4 Sync policy
 
-Every Application ends with `automated: {prune: true, selfHeal: true}` and
-`syncOptions: [CreateNamespace=true]`. This is applied in two stages:
+Today auto-sync is switched on per Application **from the ArgoCD UI**, not from git. That is a
+deliberate habit — toggling it off in the UI is faster than a commit when debugging a pod — and it
+works. The cost is that the Application manifests in git understate the real policy, so a root-app
+sync that rewrites an Application can silently disable automation the operator turned on by hand.
 
-- **Stage 1, after W0:** each of the eleven affected apps gets automation as its rebuild lands, so
-  the rebuild is reconciled rather than hand-applied.
-- **Stage 2, at the end of each wave**: the apps in that wave get automation.
+The rebuild writes the policy into git, so the two agree:
 
-Maintenance that requires the opposite gets a documented procedure: set `selfHeal: false` in git,
-merge, do the work, restore it. Never edit the live Application.
+- Every Application ends with `automated: {prune: true, selfHeal: true}` and
+  `syncOptions: [CreateNamespace=true]`.
+- Debugging keeps its fast path: the documented procedure is to disable auto-sync in the UI, work,
+  re-enable it, and record the reason in the task. The UI stays the interface for a temporary
+  change; git stays the record of the intended one.
+- Codification happens per wave rather than in one commit, so a wave is fully in git before the next
+  begins.
+
+This is the cheapest item in the programme and it removes the reason the rest of the drift was
+invisible.
 
 ### 8.5 Secrets
 
@@ -648,4 +660,4 @@ recorded in §8.7.
 | ACME duplicate-certificate limit during the Traefik cutover | certificates unavailable for a week | reuse the existing ACME claim, single cutover window |
 | `local-path` node disk loss | app and config gone | backups from W4, monthly restore drill |
 | Backup target locked out (single account) | domains and backups lost together | keep the registrar separate, export zones to git |
-| 34 apps without self-heal are repaired by hand again | drift returns immediately | stage 2 automation at the end of every wave |
+| 34 Applications carry no sync policy in git | a root-app sync can silently disable automation the operator enabled in the UI | write the policy into git per wave, per §8.4 |
