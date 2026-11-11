@@ -28,13 +28,27 @@ checklist below is what makes that mechanical instead of archaeological.
 | 3 | `strategy: Recreate` whenever the app has a config volume | A `ReadWriteOnce` claim cannot attach to two pods |
 | 4 | `nodeSelector` pins the pod to one node, and the `local-path` claim lands there | There is no failover; pretending otherwise hides it |
 | 5 | Config claim named `<fullname>-config`, `storageClassName: local-path`, `128Mi` unless there is a reason | Config is small; sizes in the GiB range are a guess |
-| 6 | Env in a ConfigMap via `env`, secrets via `extraEnv` with `valueFrom` | The two paths must not diverge |
-| 7 | `checksum/env` pod annotation so an env change rolls the pod | Otherwise the ConfigMap changes and nothing restarts |
+| 6 | Configuration reaches the app by the rule in the next section | Indirection has to earn its keep |
+| 7 | Every name goes through `app.fullname` / `app.selectorLabels` | A copied chart still saying `autobrr-config` is a bug waiting for a restart |
 | 8 | Ingress is a Traefik `IngressRoute` with the API group in a value | This repo never uses `networking.k8s.io/v1`, and v3 needs a rename |
-| 9 | Every hardcoded name goes through `app.fullname` / `app.selectorLabels` | A copied chart that still says `autobrr-config` is a bug waiting for a restart |
-| 10 | Labels from `app.labels` on every object | Selectors and dashboards depend on them |
-| 11 | No tabs, and no tab indentation in any template | Invisible in review, fatal in YAML |
-| 12 | `helm lint` and `helm template <release> . --namespace <ns>` both pass | The only local test these charts have |
+| 9 | Labels from `app.labels` on every object | Selectors and dashboards depend on them |
+| 10 | No tabs, and no tab indentation in any template | Invisible in review, fatal in YAML |
+| 11 | `helm lint` and `helm template <release> . --namespace <ns>` both pass | The only local test these charts have |
+
+### How configuration reaches the app
+
+Three destinations, and the choice is not a matter of taste:
+
+| Configuration | Where it goes | Why |
+|---|---|---|
+| A plain value | **Inline `env:` in the Deployment** | Changing it changes the pod template, so the Deployment rolls by itself. No second object, no `checksum/config` annotation to fake the rollout |
+| A secret | **`extraEnv` with `valueFrom.secretKeyRef`**, or `envFrom.secretRef` for a bulk dump | Never in the plain map, so it cannot be pasted in by accident |
+| A file the app reads, such as `config.yaml` | **A ConfigMap mounted as a volume** | Only here does the ConfigMap earn its place: the app needs a file on disk, not a variable |
+
+A ConfigMap used to inject plain variables is a defect, not a style choice. It adds an object that
+can be missing, it hides the values from `kubectl describe pod`, and `envFrom` silently skips keys
+that are not valid environment-variable names. If a rollout is only correct because a
+`checksum/config` annotation was added, the ConfigMap was the wrong tool.
 
 ### Required once the app needs it
 
@@ -68,8 +82,8 @@ before you commit.
 
 ## What good looks like
 
-`autobrr` as of 2026-11-11: six objects render, no tabs, no hardcoded app name outside `Chart.yaml`
-and the values, ingress fully driven by values, and the claim name derived from the release so a copy
+`autobrr` as of 2026-11-11: five objects render, no tabs, no hardcoded app name outside `Chart.yaml`
+and the values, ingress fully driven by values, env inline in the Deployment, and the claim name derived from the release so a copy
 cannot collide with the original.
 
 ## Charts still to align

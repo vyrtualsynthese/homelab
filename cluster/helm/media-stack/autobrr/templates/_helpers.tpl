@@ -61,11 +61,6 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- default (printf "%s-config" (include "app.fullname" .)) .Values.storage.existingClaim }}
 {{- end }}
 
-{{/* Environment ConfigMap name. */}}
-{{- define "app.envConfigMapName" -}}
-{{- printf "%s-env" (include "app.fullname" .) }}
-{{- end }}
-
 {{/* Container port: explicit container.port, else the service port. */}}
 {{- define "app.containerPort" -}}
 {{- default .Values.service.port .Values.container.port }}

@@ -13,13 +13,10 @@ spec:
       {{- include "app.selectorLabels" . | nindent 6 }}
   template:
     metadata:
+      {{- with .Values.podAnnotations }}
       annotations:
-        {{- if .Values.env }}
-        checksum/env: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
-        {{- end }}
-        {{- with .Values.podAnnotations }}
         {{- toYaml . | nindent 8 }}
-        {{- end }}
+      {{- end }}
       labels:
         {{- include "app.labels" . | nindent 8 }}
         {{- with .Values.podLabels }}
@@ -40,16 +37,17 @@ spec:
             {{- toYaml .Values.securityContext | nindent 12 }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
-          {{- $envFrom := .Values.envFrom | default list }}
-          {{- if .Values.env }}
-          {{- $envFrom = prepend $envFrom (dict "configMapRef" (dict "name" (include "app.envConfigMapName" .))) }}
+          {{- $env := list }}
+          {{- range $name, $value := .Values.env }}
+          {{- $env = append $env (dict "name" $name "value" ($value | toString)) }}
           {{- end }}
-          {{- with $envFrom }}
-          envFrom:
+          {{- $env = concat $env (.Values.extraEnv | default list) }}
+          {{- with $env }}
+          env:
             {{- toYaml . | nindent 12 }}
           {{- end }}
-          {{- with .Values.extraEnv }}
-          env:
+          {{- with .Values.envFrom }}
+          envFrom:
             {{- toYaml . | nindent 12 }}
           {{- end }}
           ports:

@@ -32,8 +32,8 @@ helm template autobrr cluster/helm/media-stack/autobrr --namespace media-stack
 | `container.port` | Only set when the app listens on a different port than the Service. | `null` (falls back to `service.port`) |
 | `ingressRoute.*` | Traefik CRD routing: host, entry points, middlewares, TLS. | `autobrr.kub.local`, `web`, no TLS |
 | `storage.*` | The config claim: class, size, mount path, or reuse an existing claim. | `local-path`, `128Mi`, `/config` |
-| `env` | Non-secret variables, rendered into a ConfigMap. | `TZ`, `AUTOBRR__HOST`, `AUTOBRR__PORT` |
-| `extraEnv` | Variables that must come from a Secret, via `valueFrom`. | `[]` |
+| `env` | Non-secret variables, rendered **inline** into the container. Changing one rolls the pod. | `TZ`, `AUTOBRR__HOST`, `AUTOBRR__PORT` |
+| `extraEnv` | Variables sourced from a Secret, as `{ name, valueFrom }`. | `[]` |
 | `nodeSelector` | Node pin. Every workload is pinned. | `kubernetes.io/hostname: streaming` |
 
 `probs`, `resources`, `podSecurityContext` and `securityContext` are present but deliberately
@@ -66,13 +66,17 @@ This repo never does.
 
 | File | Renders |
 |---|---|
-| `templates/deployment.yaml` | the Deployment |
+| `templates/deployment.yaml` | the Deployment, including the env variables inline |
 | `templates/service.yaml` | the ClusterIP Service |
 | `templates/serviceaccount.yaml` | the ServiceAccount |
-| `templates/configmap.yaml` | the env ConfigMap, only when `env` is non-empty |
 | `templates/persistentvolumeclaim.yaml` | the config claim, only when `storage.enabled` and no `existingClaim` |
 | `templates/ingressroute.yaml` | the Traefik IngressRoute |
 | `templates/NOTES.txt` | the install notes |
+
+There is deliberately no ConfigMap: this app takes its configuration from
+environment variables only. A chart for an app that reads a `config.yaml` adds
+its own `templates/configmap.yaml` and mounts it — see the rule in
+[`docs/charts/README.md`](../../../../docs/charts/README.md).
 
 ## Uninstalling
 
