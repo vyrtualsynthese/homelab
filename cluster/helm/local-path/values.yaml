@@ -64,12 +64,18 @@ storageClass:
   # nodeAffinityKey: my.domain/stable-node-id
 
   ## Set a user pattern
-  userPattern: ""
+  ## Rendered into the StorageClass as the userPattern parameter, and exported to
+  ## the setup script as $VOL_USER. On its own it does nothing at all: the script
+  ## below has to chown with it. Both halves or neither.
+  userPattern: "1100"
 
   ## Set a group pattern
-  groupPattern: ""
+  groupPattern: "1100"
 
   ## Set a permission pattern (string). Quote numeric modes to preserve leading zeros (e.g. '0700').
+  ## Left empty deliberately. Empty keeps the 0777 mkdir, so any UID can still write.
+  ## Setting 0750 would break discourse's redis (uid 999), which shares this class.
+  ## Do it only once every workload on local-path runs as 1100.
   permPattern: ""
 
 # nodePathMap is the place user can customize where to store the data on each node.
@@ -202,7 +208,19 @@ configmap:
   setup: |-
     #!/bin/sh
     set -eu
+    # Create the volume directory. The mode is applied only when the directory is
+    # new, which is the normal case: every PV gets its own leaf directory.
     mkdir -m 0777 -p "$VOL_DIR"
+    # Apply userPattern/groupPattern when the StorageClass sets them. Without this
+    # the provisioner exports $VOL_USER/$VOL_GROUP and nobody reads them, so those
+    # StorageClass parameters would be decorative.
+    if [ -n "${VOL_USER:-}" ]; then
+      chown "${VOL_USER}${VOL_GROUP:+:$VOL_GROUP}" "$VOL_DIR"
+    fi
+    # permPattern wins when set; otherwise keep the 0777 from mkdir above.
+    if [ -n "${VOL_PERM:-}" ]; then
+      chmod "$VOL_PERM" "$VOL_DIR"
+    fi
   teardown: |-
     #!/bin/sh
     set -eu
