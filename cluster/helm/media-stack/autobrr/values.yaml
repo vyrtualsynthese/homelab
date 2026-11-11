@@ -33,18 +33,26 @@ serviceAccount:
 podAnnotations: {}
 podLabels: {}
 
+# Pod-level security. `fsGroup` is deliberately NOT set: local-path volumes are
+# hostPath-backed, and the kubelet does not apply fsGroup ownership to them, so
+# setting it would look meaningful and do nothing.
 podSecurityContext:
-  {}
-  # fsGroup: 2000
+  seccompProfile:
+    type: RuntimeDefault
 
+# Container-level security.
+#
+# `runAsNonRoot`, `runAsUser` and `readOnlyRootFilesystem` are deliberately left
+# unset. The config volume already exists and is owned by whatever the container
+# wrote as — almost certainly root. Changing the UID makes /config unreadable and
+# the app fails to start, and because local-path is hostPath the kubelet will not
+# fix the ownership for you. To enable them: chown the volume directory to the
+# target UID first, or start from a fresh claim.
 securityContext:
-  {}
-  # capabilities:
-  #   drop:
-  #   - ALL
-  # readOnlyRootFilesystem: true
-  # runAsNonRoot: true
-  # runAsUser: 1000
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
 
 service:
   type: ClusterIP
@@ -144,13 +152,22 @@ resources:
   #   cpu: 100m
   #   memory: 128Mi
 
-# NOTE: spelled `probs` here because that is the existing key. It is currently
-# unused by any template; wiring it up is a separate change.
-probs:
-  failureThreshold: 3
-  timeoutSeconds: 10
-  periodSeconds: 90
-  initialDelaySeconds: 40
-  path:
-    startup: "/healthz/liveness"
-    readiness: "/healthz/readiness"
+# Probes. The paths include the /api prefix — autobrr serves them under /api,
+# and a probe without it returns 404 and restarts the pod forever.
+probes:
+  liveness:
+    enabled: true
+    path: /api/healthz/liveness
+    initialDelaySeconds: 20
+    periodSeconds: 30
+    timeoutSeconds: 5
+    failureThreshold: 3
+  readiness:
+    enabled: true
+    # Reports 500 when the database is unreachable, so it is a real readiness
+    # check rather than a liveness one. Do not swap the two.
+    path: /api/healthz/readiness
+    initialDelaySeconds: 10
+    periodSeconds: 15
+    timeoutSeconds: 5
+    failureThreshold: 3

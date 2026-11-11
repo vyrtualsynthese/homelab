@@ -54,6 +54,30 @@ spec:
             - name: http
               containerPort: {{ include "app.containerPort" . }}
               protocol: TCP
+          {{- with .Values.probes.liveness }}
+          {{- if .enabled }}
+          livenessProbe:
+            httpGet:
+              path: {{ .path }}
+              port: http
+            initialDelaySeconds: {{ .initialDelaySeconds }}
+            periodSeconds: {{ .periodSeconds }}
+            timeoutSeconds: {{ .timeoutSeconds }}
+            failureThreshold: {{ .failureThreshold }}
+          {{- end }}
+          {{- end }}
+          {{- with .Values.probes.readiness }}
+          {{- if .enabled }}
+          readinessProbe:
+            httpGet:
+              path: {{ .path }}
+              port: http
+            initialDelaySeconds: {{ .initialDelaySeconds }}
+            periodSeconds: {{ .periodSeconds }}
+            timeoutSeconds: {{ .timeoutSeconds }}
+            failureThreshold: {{ .failureThreshold }}
+          {{- end }}
+          {{- end }}
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
           volumeMounts:

@@ -54,13 +54,29 @@ that are not valid environment-variable names. If a rollout is only correct beca
 
 | # | Requirement | Why |
 |---|---|---|
-| 13 | Probes: `tcpSocket` on the service port is enough for most apps | A wedged pod otherwise looks healthy to the scheduler |
+| 12 | A liveness probe on the app's own health endpoint, not on `/` | `/` often returns 200 with a broken backend |
+| 13 | A readiness probe that fails when a dependency is down, and **not** the same endpoint as liveness | Sharing them turns a database blip into a restart loop |
 | 14 | `resources.requests.memory` and `limits.memory` on every container | Without a limit one app can evict a node |
-| 15 | `securityContext` with `runAsUser`/`fsGroup` 1100 for LinuxServer images | They expect those IDs |
+| 15 | `allowPrivilegeEscalation: false`, `capabilities.drop: [ALL]`, `seccompProfile: RuntimeDefault` | Free, and breaks nothing that does not need privileges |
 | 16 | Extra volumes with an explicit `mountPath` under `/srv/` or the app's own path | Keeps the NFS-media convention readable |
 
-Items 13–16 are deferred for `autobrr` itself by decision. Do not copy the omission to a new chart
-without deciding it is also deferred for that app.
+### Changing the UID breaks the config volume
+
+**This is the trap in this repo.** `local-path` is hostPath-backed, and the kubelet does **not**
+apply `fsGroup` ownership to hostPath volumes. So:
+
+- Setting `runAsUser` on a pod whose config volume was written as root makes `/config` unreadable and
+  the app fails to start.
+- Setting `fsGroup` looks correct in review and does nothing at all.
+
+Before a chart moves to a non-root UID: read the current UID and the ownership of the volume first,
+then either `chown` the directory on the node or start from a fresh claim. Never flip the UID on a
+chart whose claim already holds data.
+
+| Chart | Probes | Hardening | Non-root UID |
+|---|---|---|---|
+| `autobrr` | yes | capabilities dropped, seccomp, no privilege escalation | deferred — the claim predates it |
+| everything else | no | no | no |
 
 ## Checking a chart against this list
 

@@ -35,10 +35,29 @@ helm template autobrr cluster/helm/media-stack/autobrr --namespace media-stack
 | `env` | Non-secret variables, rendered **inline** into the container. Changing one rolls the pod. | `TZ`, `AUTOBRR__HOST`, `AUTOBRR__PORT` |
 | `extraEnv` | Variables sourced from a Secret, as `{ name, valueFrom }`. | `[]` |
 | `nodeSelector` | Node pin. Every workload is pinned. | `kubernetes.io/hostname: streaming` |
+| `probes.{liveness,readiness}` | HTTP probes on autobrr's own endpoints, which live under `/api`. | enabled, 20s/10s delay |
+| `securityContext` | Drops all capabilities, no privilege escalation. | hardened |
 
-`probs`, `resources`, `podSecurityContext` and `securityContext` are present but deliberately
-unwired in this pass: the chart renders no probes and sets no default limits. Wiring them is a
-separate change, tracked in the design.
+`resources` is still empty: the chart sets no default limits, by decision.
+
+`runAsNonRoot` and `runAsUser` are deliberately unset. This claim was written by a root container, and
+`local-path` is hostPath-backed, so the kubelet will **not** fix the ownership for you — switching the
+UID makes `/config` unreadable and the app will not start. To do it safely, read the current UID and the
+volume ownership first, then `chown` the directory on the node or start from a fresh claim. The same
+applies to `fsGroup`, which looks meaningful in review and does nothing on a hostPath volume.
+
+## Probes
+
+autobrr exposes two endpoints under `/api`, and they are not interchangeable:
+
+| Probe | Path | Behaviour |
+|---|---|---|
+| liveness | `/api/healthz/liveness` | 200 while the process is alive |
+| readiness | `/api/healthz/readiness` | 500 when the database is unreachable |
+
+Using readiness for liveness would turn a database blip into a restart loop, so they stay separate.
+The paths must keep the `/api` prefix: without it Traefik is not involved and autobrr answers 404,
+which the kubelet treats as a failed probe.
 
 ## Ingress
 
