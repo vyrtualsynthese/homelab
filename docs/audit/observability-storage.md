@@ -1,5 +1,10 @@
 # Audit — observability and storage
 
+> **Snapshot, not a live view.** Captured 2026-11-10 against the cluster and the repo at that
+> moment. Findings are fixed by the plans in `docs/superpowers/plans/`, not by editing this file.
+> References to `REBUILD.md` or `TODO.MD` point at files deleted on 2026-11-11; recover them
+> with `git show 6be598ab:REBUILD.md`.
+
 Read-only audit of the homelab repo plus live cluster state, 2026-11-10.
 Repo root: `/home/vsynthese/.local/share/opencode/worktree/117be0/agent1`.
 Cluster reads via the read-only `opencode-mcp` ServiceAccount.

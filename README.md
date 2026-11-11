@@ -1,113 +1,121 @@
 # Homelab
-Kubernetes-first lab that runs my day-to-day services and doubles as a platform engineering portfolio. Everything is code-driven: GitOps for drift-free clusters, Ansible for host prep, and Helm for apps.
 
-## Why this is interesting
-- GitOps backbone: ArgoCD (`cluster/argocd/argocd-root.yaml`) keeps the cluster in sync with auto-prune/self-heal. It is private-only—no public exposure; use `kubectl port-forward svc/argocd-server -n argocd 8080:443` when you need the UI.
-- Host lifecycle as code: Ansible playbooks handle users/SSH, sudo hardening, upgrades, and restic backups (`ansible/playbooks/*.yaml`).
-- Platform building blocks: Traefik ingress, storage classes, and base services live in `cluster/infrastructure/`; monitoring lives under `cluster/helm/monitoring`.
-- App catalog: One Helm folder per stack (`cluster/helm/*`) spanning identity (authentik), automation (n8n, renovate), data (databases, syncthing), media, community, and hobby services.
-- Safety rails: Ad-hoc manifests and a smoke-test deployment at `kubectl/test-pod/TestDeployment.yaml` for quick PVC/ingress checks.
+A Kubernetes-first homelab: six hand-built machines, one K3s cluster, GitOps through ArgoCD, and
+Ansible for host preparation. It runs day-to-day services and doubles as a platform-engineering
+portfolio.
 
-## Architecture at a glance
+> **This cluster is mid-rebuild.** The storage layer was lost to a disk failure in 2026 and is being
+> rebuilt. Expect around 20 pods to be `Pending` and a handful of applications to be down. The plan
+> that fixes it, and the reason for every deviation from what this file used to claim, live in
+> [`docs/`](docs/README.md). Start with the programme index.
+
+## Current state
+
+| Thing | Reality, 2026-11-11 |
+|---|---|
+| K3s | `v1.30.1+k3s1` on all four nodes, containerd, embedded etcd |
+| Ingress | Traefik `2.9.4` from the K3s bundled addon (June 2023) |
+| Storage | `local-path` for configuration, NFS provisioner classes for media. **No replicated storage.** |
+| Replicated storage | Longhorn was abandoned after the disk failure. Its volumes are gone. |
+| Applications | 57 ArgoCD Applications; about 20 are unhealthy |
+| GitOps coverage | ~20 Applications have `selfHeal` + `prune`; ~34 were applied once and are not reconciled |
+| Backups | **Not working.** The offsite target is an AWS S3 bucket and no script covers the control plane or PVC data |
+| Observability | Prometheus with alerting disabled, Grafana down, no log pipeline |
+
+The full evidence is in [`docs/audit/`](docs/audit/), captured 2026-11-10.
+
+## Architecture
+
 ```mermaid
 flowchart LR
-  Git[(Git repo)] -->|sync| ArgoCD
-  ArgoCD --> Infra[cluster/infrastructure]
-  ArgoCD --> Apps[cluster/helm/*]
-  Infra --> Traefik[Traefik ingress]
-  Infra --> Storage[Longhorn / NFS]
-  Apps --> Users[(Users + Home)]
-  Storage --> Apps
-  Traefik --> Apps
-  Ansible[ansible/playbooks] --> Nodes[K3s nodes]
-  Nodes --> ArgoCD
+  Git[(Git repo)] -->|sync develop| ArgoCD[ArgoCD root app]
+  ArgoCD --> Apps[cluster/argocd/projects/**]
+  Apps --> Charts[cluster/helm/**]
+  Charts --> Pods[Workloads]
+  Pods --> LP[(local-path: config)]
+  Pods --> NFS[(NFS classes: media)]
+  Traefik[Traefik] --> Pods
+  Ansible[ansible/] -.host prep.-> Nodes[K3s nodes]
 ```
 
-## Hardware topology
 ```mermaid
 flowchart TB
-  Internet[(WAN)]
-  Firewall[Router / Firewall]
-  Switch[Core switch]
-  LanUsers[LAN devices]
-
-  subgraph Rack["Homelab rack"]
-    Nas["nas\nk3s worker\n12 vCPU / 64 GiB\nHeavy storage (NAS + NFS)"]
-    Streaming["streaming\nk3s control-plane\n16 vCPU / 32 GiB\nNVIDIA GPU"]
-    Nuc0["nuc0\nk3s control-plane\n8 vCPU / 32 GiB"]
-    Rbp2["rbp2\nk3s control-plane\nRaspberry Pi"]
-    Rbp0["rbp0\nedge node\nPi-hole + WireGuard"]
-    Rbp1["rbp1\nedge node\nPi-hole + WireGuard"]
-    Longhorn[(Longhorn storage pool)]
-    NFS[(NFS export on nas)]
+  WAN[(Internet)] --> Router[Livebox: DHCP + NAT]
+  Router --> Switch[Core switch]
+  subgraph Cluster["K3s cluster"]
+    Nas["nas — worker<br/>12 vCPU / 64 GiB<br/>~30 TB HDD + 2 TiB NVMe<br/>NFS exports"]
+    Str["streaming — control plane<br/>16 vCPU / 32 GiB<br/>NVIDIA GPU"]
+    Nuc["nuc0 — control plane<br/>8 vCPU / 32 GiB"]
+    Rbp2["rbp2 — control plane<br/>Raspberry Pi 4 + SSD"]
   end
-
-  Internet --> Firewall --> Switch
-  LanUsers --> Switch
-  Switch --> Nas
-  Switch --> Streaming
-  Switch --> Nuc0
-  Switch --> Rbp2
-  Switch --> Rbp0
-  Switch --> Rbp1
-  Nas --- Longhorn
-  Streaming --- Longhorn
-  Nuc0 --- Longhorn
-  Rbp2 --- Longhorn
-  Nas --> NFS
-  Streaming -. GPU Operator .-> Streaming
+  Router --> Rbp0["rbp0 — Pi-hole + WireGuard"]
+  Router --> Rbp1["rbp1 — Pi-hole + WireGuard"]
+  Switch --> Cluster
 ```
+
+The two Pi-holes are the LAN's DNS; the router does DHCP and NAT. K3s uses embedded etcd, so
+control-plane quorum is two of three — never restart or upgrade two servers at once.
+
+## How a change reaches the cluster
+
+Commit to `develop` → the ArgoCD root app (`cluster/argocd/argocd-root.yaml`) syncs
+`cluster/argocd` recursively → each Application under `projects/**` syncs its own source.
+
+- `cluster/argocd/projects/**` holds **Applications**, despite the folder name.
+- Editing `cluster/helm/**` takes effect when the commit reaches `develop`.
+- Never `kubectl edit` or `kubectl apply` a resource ArgoCD manages; drift is fixed in git.
+- `cluster/infrastructure/**` is **not** referenced by any Application and is applied by hand.
+- Only ~20 Applications self-heal. For the other ~34, a manual change is not reverted — which is
+  exactly how the drift described in `docs/audit/argocd-helm.md` accumulated.
+
+## Storage
+
+| Class | Use |
+|---|---|
+| `local-path` (default) | application configuration, node-bound |
+| `nfs-plex`, `nfs-audio`, `nfs-books`, `nfs-stash`, `nfs-downloads`, `nfs-syncthing` | media and data on the NAS |
+
+`local-path` volumes are tied to one node. Every workload is pinned to a named node and its
+configuration volume lands on that same node; there is no failover, by design.
 
 ## Repository map
-- `ansible/` — Makefile-driven playbooks: `setup-node.yaml`, `upgrade-all.yaml`, `backup-setup.yaml`, plus `restic_env.yaml.dist`.
-- `cluster/argocd/` — Root ArgoCD Application and project definitions for GitOps.
-- `cluster/infrastructure/` — Base cluster services (Traefik, storage classes, system controllers).
-- `cluster/helm/` — App-specific Helm values; iterate locally with `helm template <chart-dir> --values values.yaml`.
-- `kubectl/` — Standalone manifests (GPU operator values, ingress routes, smoke-test pod).
 
-## Quick actions
-- ▶️ Port-forward ArgoCD UI (private-only by design): `kubectl port-forward svc/argocd-server -n argocd 8080:443`
-- 🛠️ Render a chart locally (run inside its folder): `helm lint && helm template . --values values.yaml`
-- 🚀 Smoke-test PVC/ingress: `kubectl --context <cluster> apply --dry-run=server -f kubectl/test-pod/TestDeployment.yaml`
-- 🔧 Prep hosts: `cd ansible && make init && make setup-node`
-- 💾 Configure backups: `cd ansible && make backup-setup` (fill `restic_env.yaml.dist` first)
-
-## Bootstrap runbook
-1) Pull submodules (vendorized charts live here):
-```bash
-git submodule update --init --recursive
 ```
-2) Prep nodes with Ansible:
-```bash
-cd ansible
-make init           # install required collections
-make setup-node     # bootstrap users, packages, SSH keys (prompts for SSH password)
-make upgrade-all    # apply OS updates across the fleet
-make backup-setup   # configure restic (fill restic_env.yaml.dist first)
-```
-3) Seed GitOps once ArgoCD is installed in-cluster:
-```bash
-kubectl apply -n argocd -f cluster/argocd/argocd-root.yaml
-```
-The root app tracks the `develop` branch and syncs every app directory in `cluster/helm/` plus infrastructure.
-4) Validate charts and manifests before commits:
-```bash
-helm lint && helm template . --values values.yaml   # run inside a chart directory
-kubectl apply --dry-run=client -f <file>            # for raw manifests
-```
-5) Smoke-test cluster connectivity and storage:
-```bash
-kubectl --context <cluster> apply --dry-run=server -f kubectl/test-pod/TestDeployment.yaml
+ansible/                  host playbooks (see the caveat in ansible/README.MD)
+cluster/argocd/           root Application + per-app Applications (CRLF line endings)
+cluster/helm/             48 charts: local, values-only, and a few still vendored
+cluster/infrastructure/   Traefik config, storage classes — applied by hand
+kubectl/                  standalone manifests and one-shot helpers
+docs/                     audit, design, plans, runbooks — the authoritative documents
 ```
 
-## Copying or adapting this repo
-- Secrets are intentionally absent; supply your own vault/external secret store. `restic_env.yaml.dist` is a template only.
-- Update `cluster/argocd/argocd-root.yaml` with your `repoURL` and `targetRevision` before applying.
-- Storage/ingress assumptions come from `cluster/infrastructure/` (Traefik, Longhorn/NFS); adjust if you use other providers.
-- Keep YAML two-space indented with lowercase keys. Drive changes through GitOps instead of ad-hoc kubectl edits to keep drift visible.
+## Documentation
 
-## Current homelab snapshot
-- Nodes: `nas` (12 vCPU, ~64 GiB RAM, Intel iGPU) and `streaming` (16 vCPU, ~32 GiB RAM, NVIDIA GPU via GPU Operator); both on k3s v1.30 with containerd and Longhorn CSI.
-- Namespaces in use: `argocd`, `authentik`, `databases`, `monitoring`, `media-stack`, `minecraft`, `discourse`, `n8n`, `renovate`, `syncthing`, `ghostfolio`, `firefly`, `guacamole`, `wiki`, plus infra/system spaces (`longhorn-system`, `gpu-operator`, `node-feature-discovery`, etc.).
-- Core add-ons: Traefik ingress, Longhorn storage, NVIDIA GPU Operator, Node Feature Discovery, system-upgrade-controller.
-- Typical workloads: Plex and companions (`media-stack`), automation (`n8n`, `renovate`), finance (`firefly`, `ghostfolio`), identity (`authentik`), comms (`thelounge`, `synapse`, `discourse`), dashboards (`dashy`), and hobby services (`minecraft`, `wiki`).
+Everything authoritative sits in `docs/`, and [`docs/README.md`](docs/README.md) indexes it. The
+three files that used to describe this repo (`TODO.MD`, `REBUILD.md`, and an earlier version of this
+README) were deleted on 2026-11-11 because they disagreed with each other and with the cluster.
+
+## Validating before a commit
+
+```bash
+# render every self-contained chart
+for c in $(find cluster/helm -name Chart.yaml | xargs -n1 dirname); do
+  helm template test "$c" --namespace test-ns >/dev/null || echo "FAIL $c"
+done
+
+# check that ArgoCD references resolve (CRLF-safe)
+while read -r p; do [ -d "$p" ] || echo "BROKEN PATH $p"; done < <(
+  grep -rh '^    path:' cluster/argocd/projects | sed 's/^    path: *//' | tr -d "\"' \r")
+```
+
+Charts that need `helm dependency build` first: `authentik`, `dashy`, `ashuvidz-website`,
+`databases/pgadmin`, `discourse`, `postiz`.
+
+## Conventions
+
+Two-space YAML with lowercase keys. Files under `cluster/argocd/**` use CRLF. Ingress is Traefik
+CRDs only, never `networking.k8s.io/v1`. Secrets are never committed. LinuxServer workloads keep
+`TZ=Europe/Paris`, `PUID=1100`, `PGID=1100`.
+
+`AGENTS.md` holds the operating notes for agents working in this repo, including the conventions in
+more detail.
