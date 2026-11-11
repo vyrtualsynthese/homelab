@@ -98,8 +98,9 @@ storage:
   # -- Where the config volume is mounted inside the container.
   mountPath: /config
 
-# -- Environment variables rendered into a ConfigMap. Prefer this for anything
-# that is not a secret.
+# -- Environment variables, rendered inline into the container spec. Changing a
+# value changes the pod template, so the Deployment rolls by itself. Prefer this
+# for every non-secret value.
 env:
   TZ: "Europe/Paris"
   AUTOBRR__HOST: "0.0.0.0"
@@ -108,11 +109,12 @@ env:
   # AUTOBRR__LOG_LEVEL: ""
   # AUTOBRR__SESSION_SECRET: ""
 
-# -- Extra variables that must not sit in a ConfigMap, for example
-# `- name: X` + `valueFrom.secretKeyRef`. Rendered verbatim into the container.
+# -- Variables sourced from a Secret, as `{ name, valueFrom }`. Kept separate so
+# a secret can never be pasted into the plain map above by accident.
 extraEnv: []
 
-# -- Extra `envFrom` sources, rendered verbatim.
+# -- Bulk `envFrom` sources, usually `secretRef`. Rarely needed: prefer
+# `extraEnv` so each secret key is explicit in the manifest.
 envFrom: []
 
 # -- Additional volumes, rendered verbatim into the pod spec.
