@@ -73,9 +73,18 @@ Before a chart moves to a non-root UID: read the current UID and the ownership o
 then either `chown` the directory on the node or start from a fresh claim. Never flip the UID on a
 chart whose claim already holds data.
 
+The procedure that worked for `autobrr`, in order: scale the deployment to zero, resolve the claim to
+its PV and the PV to its hostPath, `chown -R 1100:1100` that directory over SSH on the node, then set
+`runAsUser`, `runAsGroup` and `runAsNonRoot`. Scale back up and confirm the app can still write its
+own state — a pod that starts and then fails on a write is the failure this order avoids.
+
+**New volumes are root-owned again.** The provisioner runs its setup script as root, so every freshly
+provisioned claim starts at root. Either re-chown per volume, or set `userPattern`/`groupPattern` on
+the local-path provisioner and stop doing this by hand.
+
 | Chart | Probes | Hardening | Non-root UID |
 |---|---|---|---|
-| `autobrr` | yes | capabilities dropped, seccomp, no privilege escalation | deferred — the claim predates it |
+| `autobrr` | yes | capabilities dropped, seccomp, no privilege escalation | **yes — 1100**, claim chowned first |
 | everything else | no | no | no |
 
 ## Checking a chart against this list
