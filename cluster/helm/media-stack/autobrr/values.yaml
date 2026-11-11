@@ -42,13 +42,15 @@ podSecurityContext:
 
 # Container-level security.
 #
-# `runAsNonRoot`, `runAsUser` and `readOnlyRootFilesystem` are deliberately left
-# unset. The config volume already exists and is owned by whatever the container
-# wrote as — almost certainly root. Changing the UID makes /config unreadable and
-# the app fails to start, and because local-path is hostPath the kubelet will not
-# fix the ownership for you. To enable them: chown the volume directory to the
-# target UID first, or start from a fresh claim.
+# The config volume was chowned to 1100:1100 on the node before this was enabled.
+# That step is required: local-path volumes are hostPath-backed, so the kubelet does
+# not apply fsGroup and will not fix ownership on its own. A newly provisioned claim
+# starts root-owned again — re-chown it, or set userPattern/groupPattern on the
+# local-path provisioner so new volumes are created with the right owner.
 securityContext:
+  runAsNonRoot: true
+  runAsUser: 1100
+  runAsGroup: 1100
   allowPrivilegeEscalation: false
   capabilities:
     drop:
