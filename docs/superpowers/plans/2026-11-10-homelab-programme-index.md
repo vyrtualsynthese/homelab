@@ -100,7 +100,7 @@ Titles only. Each becomes a full plan when its workstream is picked up.
 10. Wave C: authentik rebuilt as SSO
 11. Wave C: image and registry migration per §8.7
 12. Wave D: the NFS Applications and leftover dead directories
-13. Stage 2 automation: enable `selfHeal` and `prune` per wave
+13. Codify sync policy per wave: write `automated` + `selfHeal` + `prune` into the Applications, matching what the UI already does
 14. Final sweep: no Pending pods, no namespace without an owner
 
 ### W4 — Offsite
