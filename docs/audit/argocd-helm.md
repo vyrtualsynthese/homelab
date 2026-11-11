@@ -1,5 +1,10 @@
 # Audit — ArgoCD and Helm drift
 
+> **Snapshot, not a live view.** Captured 2026-11-10 against the cluster and the repo at that
+> moment. Findings are fixed by the plans in `docs/superpowers/plans/`, not by editing this file.
+> References to `REBUILD.md` or `TODO.MD` point at files deleted on 2026-11-11; recover them
+> with `git show 6be598ab:REBUILD.md`.
+
 Read-only audit, 2026-11-10. Repo root `.../worktree/117be0/agent1`.
 Scripts and raw outputs: `/tmp/opencode/homelab-audit/{analyze.py,analyze.out,ingress2.out,render-summary.txt}`.
 
