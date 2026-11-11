@@ -36,15 +36,25 @@ helm template autobrr cluster/helm/media-stack/autobrr --namespace media-stack
 | `extraEnv` | Variables sourced from a Secret, as `{ name, valueFrom }`. | `[]` |
 | `nodeSelector` | Node pin. Every workload is pinned. | `kubernetes.io/hostname: streaming` |
 | `probes.{liveness,readiness}` | HTTP probes on autobrr's own endpoints, which live under `/api`. | enabled, 20s/10s delay |
-| `securityContext` | Drops all capabilities, no privilege escalation. | hardened |
+| `securityContext` | Runs as 1100, drops all capabilities, no privilege escalation. | non-root |
 
 `resources` is still empty: the chart sets no default limits, by decision.
 
-`runAsNonRoot` and `runAsUser` are deliberately unset. This claim was written by a root container, and
-`local-path` is hostPath-backed, so the kubelet will **not** fix the ownership for you — switching the
-UID makes `/config` unreadable and the app will not start. To do it safely, read the current UID and the
-volume ownership first, then `chown` the directory on the node or start from a fresh claim. The same
-applies to `fsGroup`, which looks meaningful in review and does nothing on a hostPath volume.
+The container runs as **UID/GID 1100**, matching the `PUID`/`PGID` the rest of the stack uses. That only
+works because the config volume was chowned to 1100:1100 on the node first.
+
+`local-path` is hostPath-backed, so the kubelet does **not** apply `fsGroup` ownership — which is why
+`fsGroup` is absent rather than set to something plausible. Two consequences to remember:
+
+- **A newly provisioned claim starts root-owned.** The provisioner runs its setup script as root, so
+  the first restart after recreating the claim will fail on permissions. Re-chown, or set
+  `userPattern`/`groupPattern` on the local-path provisioner so new volumes are born with the right
+  owner.
+- **`reclaimPolicy: Retain`.** Deleting the claim leaves the old directory on `/mnt/ssd0`; it is not
+  the one the new claim gets.
+
+To change the UID on another chart: read `id` and `ls -ln /config` in a running pod first, chown the
+volume directory on its node with the deployment scaled to zero, then set the UID.
 
 ## Probes
 
