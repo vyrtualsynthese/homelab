@@ -539,7 +539,10 @@ directory is root-owned, and that the chart now renders 1100. Before the new pod
 2. scales `radarr-anime` to zero;
 3. resolves `radarr-anime-config` to its PV and the PV to its host path on `streaming`;
 4. runs `chown -R 1100:1100` on that directory;
-5. scales back to one, or leaves it down until the merge.
+5. leaves the Deployment at zero until the merge. Scaling it back to one would start the old
+   Deployment, which still renders `PUID`/`PGID 0`, and it would write root-owned files back into the
+   directory that was just fixed. Automation is paused, so nothing rescales it; the merge's sync then
+   starts the pod as 1100 for the first time.
 
 The failure this prevents: the pod starts, then fails on its first database write.
 
@@ -688,8 +691,8 @@ commands are in the spec's **Operator runbook** section; do not repeat them here
 
 1. Pause automation on both Applications in the ArgoCD UI.
 2. Patch Secrets `radarr` and `radarr-anime` from `~/.config/secrets/homelab.env`.
-3. Chown `radarr-anime-config` on `streaming`.
+3. Chown `radarr-anime-config` on `streaming`, then leave the Deployment at zero until the merge.
 4. Merge the PR.
-5. Sync `radarr`, verify, then sync `radarr-anime`, verify (pods `2/2`, `uid=1100`, `writable`, no 401,
-   `/ping` OK).
+5. Sync `radarr`, verify, then sync `radarr-anime`, verify (pods `2/2`, `/config` owned by `1100`,
+   `writable`, no 401, `/ping` OK).
 6. Re-enable automation.
