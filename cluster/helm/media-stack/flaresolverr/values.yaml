@@ -1,81 +1,130 @@
-# Default values for home.
-# This is a YAML-formatted file.
-# Declare variables to be passed into your templates.
+# Default values for flaresolverr.
+#
+# Written from the repo's reference chart (the one in this directory that
+# docs/charts/README.md points at) and its contract, but shaped around this app:
+# FlareSolverr keeps no state and has no web UI, so there is no config volume and no
+# IngressRoute, and the Prometheus exporter it ships with has its own block.
+
+# -- Override the chart name.
+nameOverride: ""
+# -- Override the generated release name.
+fullnameOverride: ""
 
 replicaCount: 1
 
+# -- Deployment strategy. `RollingUpdate` is safe here and better than the
+# reference chart's `Recreate`: the app mounts no ReadWriteOnce claim, so the new
+# pod can start and pass its probe before the old one is removed. There is no
+# state to lose between the two.
+strategy: RollingUpdate
+
 image:
   repository: ghcr.io/flaresolverr/flaresolverr
-  #repository: ghcr.io/flaresolverr/flaresolverr
-  pullPolicy: Always
-  # Overrides the image tag whose default is the chart appVersion.
-  tag: v3.5.0
+  # -- Pin the tag. Never `latest`. Renovate manages this.
+  tag: "v3.5.2"
+  pullPolicy: IfNotPresent
 
 imagePullSecrets: []
-nameOverride: ""
-fullnameOverride: ""
 
 serviceAccount:
-  # Specifies whether a service account should be created
-  create: false
-  # Annotations to add to the service account
-  annotations: {}
-  # The name of the service account to use.
-  # If not set and create is true, a name is generated using the fullname template
+  # -- Create a dedicated ServiceAccount. The app never talks to the Kubernetes
+  # API, so it also gets no mounted token.
+  create: true
+  automount: false
+  # -- Defaults to the fullname.
   name: ""
+  annotations: {}
 
-podAnnotations:
-  setGateway: "true"
+# -- Annotations added to the pod, on top of the scrape annotations this chart
+# renders itself. Do not repeat `prometheus.io/*` here.
+podAnnotations: {}
+podLabels: {}
 
+# Pod-level security. Deliberately empty for now: see "Deferred hardening" in the
+# README. The image already runs as the non-root user `flaresolverr`, but pinning
+# the numeric UID and enabling seccomp needs a live verification pass of its own.
 podSecurityContext: {}
-# fsGroup: 2000
 
+# Container-level security. See the README, "Deferred hardening".
 securityContext: {}
-# capabilities:
-#   drop:
-#   - ALL
-# readOnlyRootFilesystem: true
-# runAsNonRoot: true
-# runAsUser: 1000
 
 service:
+  # -- ClusterIP only. FlareSolverr is a backend for Prowlarr and other indexer
+  # clients, and upstream says it must never be reachable from outside. There is
+  # deliberately no IngressRoute in this chart.
   type: ClusterIP
-  port: 32400
+  port: 8191
 
-ingress:
+container:
+  # -- Container port. Defaults to `service.port` when left empty; set it only
+  # when the app listens on a different port than the Service exposes.
+  port: null
+
+# Prometheus exporter, built into the image but disabled upstream by default.
+# Enabling it starts a second HTTP listener on `port`, and this chart then adds the
+# `prometheus.io/*` annotations that the cluster's Prometheus uses to find pods.
+# Both environment variables are rendered from this block, so the announced port
+# cannot drift away from the port the exporter really listens on.
+metrics:
   enabled: true
-  className: no
-  annotations: {}
-  # kubernetes.io/ingress.class: nginx
-  # kubernetes.io/tls-acme: "true"
-  hosts:
-    - host: chart-example.local
-      paths:
-        - path: /
-          pathType: ImplementationSpecific
-  tls: []
-  #  - secretName: chart-example-tls
-  #    hosts:
-  #      - chart-example.local
+  port: 8192
+  path: /metrics
 
-resources:
-  {}
-  #requests:
-  #  cpu: 1m
-  #  memory: 128Mi
-  #limits:
-  #  memory: 512Mi
+# -- Environment variables, rendered inline into the container spec. Changing a
+# value changes the pod template, so the Deployment rolls by itself.
+# `PROMETHEUS_*` are not set here: they come from the `metrics` block above.
+env:
+  TZ: "Europe/Paris"
+  LOG_LEVEL: "info"
 
-autoscaling:
-  enabled: false
-  minReplicas: 1
-  maxReplicas: 100
-  targetCPUUtilizationPercentage: 80
-  # targetMemoryUtilizationPercentage: 80
+# -- Variables sourced from a Secret, as `{ name, valueFrom }`. Kept separate so a
+# secret can never be pasted into the plain map above by accident.
+extraEnv: []
+
+# -- Bulk `envFrom` sources, usually `secretRef`.
+envFrom: []
+
+# -- Additional volumes, rendered verbatim into the pod spec.
+volumes: []
+
+# -- Additional volume mounts, rendered verbatim into the container.
+volumeMounts: []
 
 nodeSelector:
+  # -- Every workload is pinned to a named node.
   kubernetes.io/hostname: streaming
 
 tolerations: []
 
 affinity: {}
+
+# Each challenge starts one Chromium process, so the ceiling is a browser peak and
+# not the idle footprint (about 130Mi). One request at a time fits comfortably; two
+# overlapping requests need more headroom than this limit.
+resources:
+  requests:
+    cpu: 10m
+    memory: 256Mi
+  limits:
+    memory: 1Gi
+
+# Probes. `/health` is FlareSolverr's own health endpoint: it answers 200 while the
+# process is serving. Unlike `/`, it is not written to the log, so a 30s liveness
+# probe no longer produces one log line per check.
+probes:
+  liveness:
+    enabled: true
+    path: /health
+    initialDelaySeconds: 20
+    periodSeconds: 30
+    timeoutSeconds: 5
+    failureThreshold: 3
+  readiness:
+    enabled: true
+    # The same endpoint on purpose: the app has no dependency such as a database
+    # or an upstream service whose failure could be reported separately.
+    path: /health
+    initialDelaySeconds: 10
+    periodSeconds: 15
+    timeoutSeconds: 5
+    failureThreshold: 3
