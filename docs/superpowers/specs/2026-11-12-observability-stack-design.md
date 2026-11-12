@@ -193,8 +193,13 @@ Every wrapper also sets `fullnameOverride` on its dependency to the bare compone
 `prometheus-node-exporter` on the two Prometheus sub-charts. Without it ArgoCD's release name —
 which equals the Application name — prepends itself and the Services become
 `prometheus-prometheus-server` and `grafana-grafana`, breaking every datasource URL, the three
-IngressRoutes and the Fluent Bit output host. Verified by rendering the wrappers: with the
-overrides the object names are exactly today's. Sub-charts that are
+IngressRoutes and the Fluent Bit output host.
+
+Prometheus needs one more: its server objects are named from `server.fullnameOverride`, not from
+the chart-level key, and that template falls back to `<release>-prometheus-server` whenever the
+release name does not contain the string `prometheus`. It is therefore pinned to
+`prometheus-server` explicitly, which makes the name independent of the Application's name.
+Verified by rendering every wrapper under two different release names. Sub-charts that are
 switched off (`alertmanager`, `pushgateway`, Loki gateway/canary/caches, Grafana sidecars and test
 framework, Fluent Bit test framework) contribute no image and no pin.
 
