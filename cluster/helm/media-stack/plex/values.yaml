@@ -229,13 +229,25 @@ tolerations: []
 
 affinity: {}
 
-# Sizing kept from the previous chart: Plex is CPU-heavy when it falls back to
-# software transcoding, and the memory ceiling covers several concurrent
-# streams. No CPU limit: a limit throttles the burst at stream start.
+# Sizing from Prometheus, 30 days on `streaming` (old pod, same workload, transcoding
+# was still possible then):
+#   memory working set   p50 1.40GiB, p95 2.19GiB, p99 2.19GiB, max 2.37GiB
+#                        — 55% of the 4GiB limit, no OOM
+#   CPU (5m rate)        p95 21m, p99 222m, max 1.72 cores at a burst
+#                        (scan or transcode start)
+#
+# Transcoding is disabled on this server, so the CPU bursts are metadata work and
+# container remux, not encoder work. Five simultaneous direct streams add roughly
+# 150-250MiB each on top of the ~2GiB library/database baseline, which peaks near
+# 3GiB and stays inside the 4GiB limit.
+#
+# The request is what the scheduler reserves, so it follows the measured steady
+# state (2GiB), not the limit. CPU has no limit: the node has 25GiB free and a
+# limit would throttle a library scan without protecting anything.
 resources:
   requests:
-    cpu: 500m
-    memory: 4Gi
+    cpu: 100m
+    memory: 2Gi
   limits:
     memory: 4Gi
 
