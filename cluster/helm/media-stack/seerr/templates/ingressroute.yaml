@@ -1,0 +1,86 @@
+{{- if .Values.ingress.enabled }}
+{{- $fullName := include "app.fullname" . }}
+{{- $match := printf "Host(`%s`)" .Values.ingress.host }}
+{{- if ne .Values.ingress.pathPrefix "/" }}
+{{- $match = printf "%s && PathPrefix(`%s`)" $match .Values.ingress.pathPrefix }}
+{{- end }}
+apiVersion: {{ .Values.ingress.apiVersion }}
+kind: IngressRoute
+metadata:
+  name: {{ $fullName }}-public
+  labels:
+    {{- include "app.labels" . | nindent 4 }}
+    {{- with .Values.ingress.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- with .Values.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - kind: Rule
+      match: {{ $match }}
+      {{- if or .Values.ingress.securityHeaders.enabled .Values.ingress.rateLimit.enabled .Values.ingress.middlewares }}
+      middlewares:
+        {{- if .Values.ingress.securityHeaders.enabled }}
+        - name: {{ $fullName }}-security
+        {{- end }}
+        {{- if .Values.ingress.rateLimit.enabled }}
+        - name: {{ $fullName }}-ratelimit
+        {{- end }}
+        {{- range .Values.ingress.middlewares }}
+        - name: {{ printf "%s-%s@kubernetescrd" .namespace .name }}
+        {{- end }}
+      {{- end }}
+      services:
+        - name: {{ $fullName }}
+          port: {{ .Values.service.port }}
+          scheme: http
+          passHostHeader: true
+  {{- if .Values.ingress.tls.enabled }}
+  tls:
+    {{- with .Values.ingress.tls.secretName }}
+    secretName: {{ . }}
+    {{- end }}
+    {{- with .Values.ingress.tls.certResolver }}
+    certResolver: {{ . }}
+    {{- end }}
+    {{- if .Values.ingress.tls.options.enabled }}
+    options:
+      name: {{ $fullName }}-tlsoption
+      namespace: {{ .Release.Namespace }}
+    {{- end }}
+  {{- end }}
+{{- if .Values.ingress.redirect.enabled }}
+---
+apiVersion: {{ .Values.ingress.apiVersion }}
+kind: IngressRoute
+metadata:
+  name: {{ $fullName }}-public-redirect
+  labels:
+    {{- include "app.labels" . | nindent 4 }}
+    {{- with .Values.ingress.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- with .Values.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  entryPoints:
+    - {{ .Values.ingress.redirect.entryPoint }}
+  routes:
+    - kind: Rule
+      match: {{ $match }}
+      middlewares:
+        - name: {{ $fullName }}-redirect-https
+      services:
+        - name: {{ $fullName }}
+          port: {{ .Values.service.port }}
+          scheme: http
+          passHostHeader: true
+{{- end }}
+{{- end }}
