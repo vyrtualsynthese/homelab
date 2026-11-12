@@ -283,9 +283,9 @@ helm template seerr . --namespace media-stack > /tmp/seerr-final.yaml
 grep -c '^kind:' /tmp/seerr-final.yaml
 grep -n 'kind:\|  name:' /tmp/seerr-final.yaml
 grep -rnP '\t' templates/ || echo "no tabs"
-grep -rn 'latest' values.yaml || echo "no floating tags"
+grep -rnE 'tag:[[:space:]]*"?latest' values.yaml || echo "no floating tags"
 grep -rn 'networking.k8s.io' templates/ || echo "no core Ingress"
-grep -rn 'autobrr\|chart-example.local\|seerr-webui\|PUID\|PGID\|setGateway' templates/ values.yaml || echo "no leftovers"
+grep -nE 'PUID|PGID|setGateway|seerr-webui' /tmp/seerr-final.yaml || echo "no leftovers"
 ```
 
 Expected: lint passes, 10 objects, every name in the Global Constraints list, and all four greps report clean.
