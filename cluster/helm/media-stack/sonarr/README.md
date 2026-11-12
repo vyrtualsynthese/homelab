@@ -69,6 +69,10 @@ The `exportarr` sidecar listens on 9707 and is scraped by pod annotation
 `exportarr` block. The metrics port is deliberately not on the Service: Prometheus scrapes the pod
 IP. Disabling `exportarr.enabled` removes the sidecar and the annotations together.
 
+If the target answers HTTP 500, exportarr is passing Sonarr's 401 through: the `secret` key in the
+`sonarr` Secret is stale, not the chart. Replace it with the API key from Sonarr's settings; a
+missing or wrong key is the one failure this sidecar cannot report any other way.
+
 ## Upgrading and rolling back
 
 The chart pins `4.0.20.3014-ls4`; the previous release was the series tag `4.0.19`. Sonarr migrates
