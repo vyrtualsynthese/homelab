@@ -213,9 +213,10 @@ After the merge, sync the Application by hand (auto-sync is off) and check:
 
 - Application `Synced`; pod `Running` as uid 1100; `tautulli-config` `Bound`.
 - `curl -s http://tautulli.kub.local/status` → `{"result":"success","message":"Ok"}`.
-- `kubectl -n media-stack delete ingressroute tautulli-public tautulli-public-redirect` and
-  `kubectl -n media-stack delete middleware tautulli-redirect-https tautulli-security`, then
-  confirm `tautulli.kub.home.ashudev.com` no longer answers.
+- `kubectl -n media-stack delete ingressroute tautulli-public tautulli-public-redirect`,
+  `kubectl -n media-stack delete middleware tautulli-redirect-https tautulli-security` and
+  `kubectl -n media-stack delete tlsoption tautulli-tlsoption` (all five exist in the cluster
+  today), then confirm `tautulli.kub.home.ashudev.com` no longer answers.
 - First run: point Tautulli at `http://plex.media-stack.svc.cluster.local:32400`, import history from
   Plex, set Log Level to Warning.
 
