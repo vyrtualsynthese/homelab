@@ -289,9 +289,6 @@ spec:
   syncPolicy:
     syncOptions:
       - CreateNamespace=true
-    automated:
-      prune: true
-      selfHeal: true
   source:
     repoURL: 'https://github.com/vyrtualsynthese/homelab.git'
     targetRevision: develop
@@ -477,7 +474,8 @@ kubectl -n monitoring create secret generic grafana \
 
 Same content as Task 1 Step 7 with `name: grafana` and `path: cluster/helm/monitoring/grafana`, then re-apply the CRLF conversion and the `file` check from that step.
 
-This is the file where `syncPolicy.automated` is new — the old Application had no automated block.
+The old Application carried no `automated` block and neither does this one: auto-sync is enabled by
+hand in the ArgoCD UI.
 
 - [ ] **Step 8: Commit**
 
@@ -676,9 +674,6 @@ spec:
   syncPolicy:
     syncOptions:
       - CreateNamespace=true
-    automated:
-      prune: true
-      selfHeal: true
   source:
     repoURL: 'https://github.com/vyrtualsynthese/homelab.git'
     targetRevision: develop
