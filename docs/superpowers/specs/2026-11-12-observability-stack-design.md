@@ -397,8 +397,10 @@ already mounts, enriches with the `kubernetes` filter, and pushes to Loki with t
 - `cluster/helm/monitoring/grafana/` in full — vendored chart, `templates/`, `dashboards/`, `ci/`,
   `README.md`, `.helmignore`. Replaced by the wrapper of the same name.
 - `cluster/helm/monitoring/loki/values.yaml` — replaced by the wrapper's `values.yaml` + `Chart.yaml`.
-- `.gitignore`: the line `!cluster/helm/monitoring/grafana/templates/secret.yaml` becomes dangling
-  and is removed.
+- `.gitignore`: the negation `!cluster/helm/monitoring/grafana/templates/secret.yaml` was already
+  removed (it pointed at a template that never held a secret), and two globs were added so the
+  built `charts/` and `Chart.lock` are never committed:
+  `cluster/helm/monitoring/*/charts/` and `cluster/helm/monitoring/*/Chart.lock`.
 
 Not deleted: the stuck `prometheus-data` PVC and the `longhorn-system` namespace. They belong to
 W0 and removing an Application does not touch a claim the chart never owned.
