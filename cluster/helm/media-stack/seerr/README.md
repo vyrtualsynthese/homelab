@@ -79,6 +79,10 @@ therefore answers the only honest question the app can answer: "is the process s
 The config claim is `seerr-config`: `local-path`, `ReadWriteOnce`, 128Mi, mounted at `/app/config`.
 It holds the SQLite request database, `settings.json`, the VAPID keys and the rotating logs.
 
+Verified live on 2026-11-13: the claim is `Bound` with that class, mode and size, and the running pod
+mounts it at `/app/config`. No `overseerr-config` claim exists in any namespace — that name in the
+storage audit is a stale remnant of the Overseerr → Seerr rename, not a second live claim.
+
 - **Do not replace the claim.** It is the only copy of every request and user setting. `local-path`
   cannot expand an existing claim, so changing `storage.size` makes ArgoCD fail on an immutable
   field; 128Mi is a label rather than a quota, not a limit the app can hit.
