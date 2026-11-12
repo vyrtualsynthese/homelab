@@ -143,7 +143,7 @@ the local-path provisioner and stop doing this by hand.
 | Chart | Probes | Hardening | Non-root UID |
 |---|---|---|---|
 | `autobrr` | yes | capabilities dropped, seccomp, no privilege escalation | **yes — 1100**, claim chowned first |
-| `flaresolverr` | yes, on `/health` | no — deferred on purpose, see the chart README | no — deferred on purpose |
+| `flaresolverr` | yes, on `/health` | capabilities dropped, seccomp, no privilege escalation | **yes — 1000**, read from the image, no claim to chown |
 | everything else | no | no | no |
 
 ## Checking a chart against this list

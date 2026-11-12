@@ -56,6 +56,8 @@ It renders three objects: the Deployment, a ClusterIP Service on port 8191, and 
 | `resources` | Memory request and limit. | `256Mi` request, `1Gi` limit |
 | `probes.{liveness,readiness}` | HTTP probes on `/health`. | enabled |
 | `serviceAccount.{create,automount}` | Dedicated account, no mounted token. | `true`, `false` |
+| `securityContext`, `podSecurityContext` | Non-root UID 1000, capabilities dropped, no privilege escalation, seccomp `RuntimeDefault`, `fsGroup` for the `/tmp` volume. See **Hardening**. | pinned |
+| `volumes`, `volumeMounts` | The RAM-backed `/tmp` Chromium writes its profile to. | 256Mi `emptyDir` on memory |
 
 ## Prometheus
 
@@ -122,25 +124,25 @@ Prometheus — `flaresolverr_request_total{domain, result}` with `result` set to
 For a single troubleshooting session, raise it with `--set env.LOG_LEVEL=debug`; the value is inline
 in the Deployment, so changing it rolls the pod.
 
-## Deferred hardening
+## Hardening
 
-Not in this chart yet, on purpose, because it changes the identity the process runs as and has to be
-verified against a live pod first:
+| Control | Value | Why it is safe here |
+|---|---|---|
+| `runAsNonRoot` + `runAsUser` / `runAsGroup` | `1000` / `1000` | The image already runs as `flaresolverr`, uid 1000 / gid 1000 — read from the image's own `/etc/passwd`. The number is required as well as the flag: the image's `USER` is a name, and the kubelet refuses to start a container whose non-root status it cannot verify |
+| `capabilities.drop` | `[ALL]` | Nothing in the app needs a capability; Chromium is launched with `--no-sandbox` |
+| `allowPrivilegeEscalation` | `false` | No setuid path is used |
+| `seccompProfile` | `RuntimeDefault` | The runtime's syscall filter. Chromium does not need the syscalls its own sandbox would (it is started unsandboxed) |
+| `/tmp` | `emptyDir` on memory, 256Mi | Each challenge creates and deletes a temporary Chromium profile there; unmounted it lands on the node's SSD. Upstream recommends `tmpfs` for exactly this |
+| `fsGroup` | `1000` | Makes that `emptyDir` writable for uid 1000. Normally `fsGroup` is a trap in this repo because `local-path` is hostPath-backed and ignores it — this pod has no claim, so it does what the README says it does |
 
-1. **Pin the UID.** The image runs as user `flaresolverr` (UID 1000, created by `useradd` in the
-   Dockerfile). Setting `runAsNonRoot: true` **without** `runAsUser` makes the pod fail to start,
-   because the kubelet cannot verify a name — it needs the number.
-2. **Drop capabilities** and set `allowPrivilegeEscalation: false`.
-3. **seccomp.** `RuntimeDefault` is the usual free win, but Chromium is a browser: it is worth one
-   sync with the pod logs open rather than assuming it.
-4. **RAM-backed `/tmp`.** Every challenge creates and deletes a temporary Chromium profile under
-   `/tmp`. Left alone that lands on the node's SSD (upstream recommends `tmpfs` for exactly this
-   reason). The mount is cheap; the catch is that an `emptyDir` mounted by the kubelet is not
-   necessarily writable by UID 1000 without an explicit `fsGroup`, so it belongs in the same
-   verification pass as the UID change.
+The one thing not done is `readOnlyRootFilesystem`: the app writes a patched `chromedriver` into its
+working directory at startup, so a read-only root would need a second writable volume for `/app` and
+another for Chromium's config directory. The gain over `drop: ALL` and a non-root UID is small, so it
+is left out rather than half-done.
 
 Chromium is started with `--no-sandbox --disable-dev-shm-usage`, so the usual `/dev/shm` problem does
-not apply here and no extra volume is needed for it.
+not apply here and no extra volume is needed for it. If a future image drops `--no-sandbox`, both the
+seccomp profile and the `/dev/shm` size become live questions again.
 
 ## Files
 
