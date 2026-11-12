@@ -17,10 +17,10 @@ portfolio.
 | Ingress | Traefik `2.9.4` from the K3s bundled addon (June 2023) |
 | Storage | `local-path` for configuration, NFS provisioner classes for media. **No replicated storage.** |
 | Replicated storage | Longhorn was abandoned after the disk failure. Its volumes are gone. |
-| Applications | 57 ArgoCD Applications; about 20 are unhealthy |
-| GitOps coverage | Auto-sync is enabled per Application from the ArgoCD UI; ~34 of the 56 manifests in git do not record it |
+| Applications | 58 ArgoCD Applications; about 20 are unhealthy |
+| GitOps coverage | Auto-sync is enabled per Application from the ArgoCD UI; ~34 of the 58 manifests in git do not record it |
 | Backups | **Not working.** The offsite target is an AWS S3 bucket and no script covers the control plane or PVC data |
-| Observability | Prometheus with alerting disabled, Grafana down, no log pipeline |
+| Observability | Prometheus (90 d of metrics), Grafana, Loki (30 d of logs) and Fluent Bit on `nas`; alerting deferred to its own feature |
 
 The full evidence is in [`docs/audit/`](docs/audit/), captured 2026-11-10.
 
