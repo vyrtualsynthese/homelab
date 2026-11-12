@@ -187,9 +187,12 @@ demand — the current mix of 1Gi through 50Gi config claims is a symptom of gue
 
 ### 8.3 Chart policy
 
-1. **Official chart first.** Where the upstream project publishes a Helm chart, use it as pattern B:
-   remote chart, values in this repo, chart version in the Application's `targetRevision`, never in
-   `values.yaml`.
+1. **Official chart as a dependency.** Where the upstream project publishes a Helm chart, the
+   repo owns a small chart in `cluster/helm/` whose `Chart.yaml` pins that chart to an exact
+   `version:`, and whose `values.yaml` pins the image repository and tag of every container it
+   renders. The chart version never lives in an Application's `targetRevision`. `charts/` and
+   `Chart.lock` are not committed — ArgoCD runs `helm dependency build` at sync time, and a
+   committed lock goes stale on the first Renovate bump.
 2. **Otherwise, an owned chart.** The operator maintains one chart per app in `cluster/helm/`.
    These are first-class, not scaffolding, and are kept to a single shape:
    - image pinned by tag, never `latest`
@@ -524,21 +527,19 @@ certificate served before and after; the test cluster proved the runbook first.
 
 ### W6 — Observability
 
-1. Remove the vendored Prometheus and Grafana charts and their Applications.
-2. `kube-prometheus-stack` as pattern B, TSDB on `local-path` on `nas`, 90-day retention, sized
-   against real disk rather than a 150Gi guess.
-3. Alertmanager to Discord, webhook from a secret.
-4. ServiceMonitors for the exporters; fix `mktxp` floating on `latest`, the `pihole-exporter`
-   container port mismatch, and drop the dead Longhorn scrape job.
-5. Loki and Alloy, both official charts, 90-day retention.
-6. Dashboards and alert rules as files in git.
-7. **The alert set that would have caught this incident:** pod `Pending` over 15 minutes, PVC
-   unbound over 15 minutes, `CrashLoopBackOff`, restart storms, node disk over 80 %, certificate
-   expiring within 14 days, newest backup older than 26 hours, ArgoCD Application `OutOfSync` over
-   an hour, etcd without a leader, node `NotReady`.
+Superseded by `2026-11-12-observability-stack-design.md`, which replaces the vendored Prometheus
+and Grafana charts and the values-only `loki/` directory with one owned wrapper chart per
+component.
 
-Acceptance: every target up; one synthetic alert reaches Discord; dashboards survive a Grafana pod
-restart; deliberately breaking one thing produces the expected alert.
+What survives from this workstream:
+
+1. The vendored `prometheus` and `grafana` charts and their Applications are removed.
+2. `mktxp`, `pihole-exporter` and `prometheus-smartctl` keep working unchanged: Prometheus still
+   scrapes them through their `prometheus.io/scrape` annotations, so no ServiceMonitor layer and
+   no operator CRDs are introduced.
+
+Deferred to their own features: alerting (Grafana unified alerting, Discord delivery), dashboards
+as code, and the `mktxp` floating `latest` tag.
 
 ### W7 — New services
 
