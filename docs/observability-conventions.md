@@ -130,11 +130,18 @@ Folder **Homelab**, created through the HTTP API:
 
 | Dashboard | uid | Panels | Purpose |
 |---|---|---|---|
-| Homelab · Health | `homelab-health` | 26 | Debug overview: KPIs, attention strip, nodes, workloads, storage, logs |
-| Homelab · Investigate | `homelab-investigate` | 27 | Deep dive: workloads, nodes, control plane, Prometheus |
-| Homelab · Logs | `homelab-logs` | 8 | Volume, errors, live stream with namespace/container filters |
-| Homelab · Disks | `homelab-disks` | 14 | SMART per drive, wear forecast |
+| Homelab · Health | `homelab-health` | 12 | First look: four counts, pods and targets needing attention, crash loops, restarts, firing alerts, errors, disk |
+| Homelab · Applications | `homelab-applications` | 9 | Debug one namespace: replicas, pods, CPU, memory, restarts, claims, dead exporters, recent errors |
+| Homelab · Platform | `homelab-platform` | 15 | Nodes, control plane and Prometheus when the problem is not an app |
+| Homelab · Logs | `homelab-logs` | 5 + rows | Volume, errors and warnings by container, log volume by node, live stream |
+| Homelab · Disks | `homelab-disks` | 11 | SMART per drive: status, life, temperature, hours, sectors, wear |
 | Homelab · Showcase | `homelab-showcase` | 13 | Presentation screen: drawn topology, four big numbers, network, storage, GPU |
+
+The old `homelab-investigate` was replaced by `homelab-platform` on 2026-11-12: its workload
+row duplicated the new Applications dashboard, and its node/control-plane/Prometheus panels are
+what Platform keeps. Tables use `labelsToFields` + `merge` + `organize`; a plain multi-query table
+shows only the first frame and leaks Kubernetes metadata columns. Legend names come from the
+`node` label, with `instance` mapped for `rbp0`/`rbp1` (they have no `node`).
 
 All four have a 30 s–1 m refresh and a 6 h–24 h default range. They are not
 backed up: Grafana's 5 GiB claim is the only copy. A `docker save` of the
