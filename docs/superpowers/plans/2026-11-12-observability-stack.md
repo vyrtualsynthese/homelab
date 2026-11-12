@@ -861,7 +861,8 @@ component.
 
 What survives from this workstream:
 
-1. The vendored `prometheus` and `grafana` charts and their Applications are removed.
+1. The vendored `prometheus` and `grafana` charts are replaced by wrapper charts; the two
+   Applications keep their names and paths.
 2. `mktxp`, `pihole-exporter` and `prometheus-smartctl` keep working unchanged: Prometheus still
    scrapes them through their `prometheus.io/scrape` annotations, so no ServiceMonitor layer and
    no operator CRDs are introduced.
