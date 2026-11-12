@@ -116,8 +116,8 @@ keywords:
 
 ```yaml
 # Default values for radarr.
-# This chart follows the contract in docs/charts/README.md and the shape of the
-# reference chart, media-stack/autobrr. The differences are the ones this app needs:
+# This chart follows the contract in docs/charts/README.md and the shape of
+# `prowlarr`, the worked *arr example. The differences are the ones this app needs:
 # a LinuxServer image that starts as root and drops to PUID/PGID, an exportarr
 # sidecar, probes on Radarr's own `/ping`, and the two media claims it reads.
 
@@ -346,8 +346,13 @@ In the pod's `volumes`, after the `config` volume and before `with .Values.volum
         {{- end }}
 ```
 
-The exportarr sidecar keeps prowlarr's structure, but its comment must describe this chart, not
-Prowlarr's stale-key defect. Use:
+The exportarr sidecar keeps prowlarr's structure, but its `args` list must select the Radarr
+handler: `args:` followed by `- radarr`, never prowlarr's `- prowlarr`. Everything else in that
+sidecar block stays as prowlarr has it — image, port, `PORT`, `URL`, `APIKEY` and resources. Copying
+the reference chart verbatim without this one-line change leaves exportarr running the Prowlarr
+handler against Radarr, which queries the wrong API.
+
+Its comment must also describe this chart, not Prowlarr's stale-key defect. Use:
 
 ```yaml
         # Exportarr sidecar. The API key is read from the Secret named after the
@@ -383,6 +388,9 @@ test "$(grep -c 'Probe:' /tmp/radarr-after.yaml)" = 3 && echo "three probes"
 grep -q 'image: "lscr.io/linuxserver/radarr:6.4.4.10685-ls326"' /tmp/radarr-after.yaml && echo "image ok"
 grep -q 'claimName: pvc-plex-media' /tmp/radarr-after.yaml && echo "media ok"
 grep -q 'claimName: pvc-nfs-qbittorrent-download-nfs-subdir-external-provisioner' /tmp/radarr-after.yaml && echo "downloads ok"
+grep -A1 'args:' /tmp/radarr-after.yaml | grep -q -- '- radarr' && echo "exporter args ok"
+! grep -q -- '- prowlarr' /tmp/radarr-after.yaml && echo "no prowlarr args"
+test "$(awk '/^kind:/{c++} END{print c}' /tmp/radarr-after.yaml)" = 5 && echo "five objects"
 ! grep -qE '32400|chart-example|radarr-webui|networking.k8s.io|value: "0"' /tmp/radarr-after.yaml && echo "legacy absent"
 ! grep -rnP '\t' cluster/helm/media-stack/radarr && echo "no tabs"
 ```
@@ -474,6 +482,7 @@ exactly these changes:
 | `Chart.yaml` | `name: radarr-anime`; description `Radarr for the anime library: a second instance with its own database, quality profile and root folder.` |
 | `values.yaml` | `ingressRoute.host: radarr-anime.kub.local` |
 | `README.md` | title `radarr-anime`; Application path and release name; add the UID migration runbook from Step 5 |
+| `templates/deployment.yaml` | exportarr `args` is `- radarr`, inherited from Task 1; nothing changes if the copy happens after this fix |
 | everything else | unchanged; the `PUID`/`PGID` values are already `"1100"` |
 
 Do not hardcode `radarr-anime-config` or `radarr-anime` anywhere: the fullname derives both.
@@ -501,6 +510,9 @@ awk '/^kind:/{k=$2} /^  name:/{print k, $2}' /tmp/radarr-anime-after.yaml | sort
 grep -q 'claimName: radarr-anime-config' /tmp/radarr-anime-after.yaml && echo "claim ok"
 grep -q 'Host(`radarr-anime.kub.local`)' /tmp/radarr-anime-after.yaml && echo "host ok"
 grep -A1 'secretKeyRef:' /tmp/radarr-anime-after.yaml | grep -q 'name: radarr-anime' && echo "exporter secret ok"
+grep -A1 'args:' /tmp/radarr-anime-after.yaml | grep -q -- '- radarr' && echo "exporter args ok"
+! grep -q -- '- prowlarr' /tmp/radarr-anime-after.yaml && echo "no prowlarr args"
+test "$(awk '/^kind:/{c++} END{print c}' /tmp/radarr-anime-after.yaml)" = 5 && echo "five objects"
 grep -A1 -- '- name: PUID' /tmp/radarr-anime-after.yaml | grep -q 'value: "1100"' && echo "uid 1100"
 ! grep -A1 -- '- name: PUID' /tmp/radarr-anime-after.yaml | grep -q 'value: "0"' && echo "uid not 0"
 ! grep -qE '32400|chart-example|radarr-webui|networking.k8s.io' /tmp/radarr-anime-after.yaml && echo "legacy absent"
@@ -574,10 +586,11 @@ LinuxServer instance off `PUID 0`, which is the chown runbook the contract's UID
 
 ```bash
 grep -n 'radarr' docs/charts/README.md
-! grep -rn 'reference implementation to copy' docs/charts/README.md && echo "copy language gone"
+test "$(grep -c '^| `radarr' docs/charts/README.md)" = 2 && echo "two radarr rows"
+grep -q '`radarr` and `radarr-anime` (2026-11-12)' docs/charts/README.md && echo "pair recorded"
 ```
 
-Expected: the three radarr mentions and `copy language gone`.
+Expected: the radarr mentions, then `two radarr rows` and `pair recorded`.
 
 - [ ] **Step 4: Commit**
 
