@@ -113,6 +113,20 @@ already accepts it. Files extracted while the pod ran as root are root-owned: un
 and the parent directories are writable by 1100, but a directory it cannot clean has to be removed or
 `chown`ed by hand on the NFS export.
 
+### Confirming the export is writable
+
+The liveness probe cannot see the download export: `GET /` never touches it, so a pod that cannot write
+there starts, passes its probe, and fails on the first extraction. Prove the mount as the UID the pod
+actually runs as, right after the first sync:
+
+```bash
+kubectl -n media-stack exec deploy/unpackerr -- \
+  sh -c 'touch /downloads/.unpackerr-write-check && rm /downloads/.unpackerr-write-check'
+```
+
+A permission error here is an NFS-side ownership problem, not a chart problem. Check the export's
+owner with `kubectl -n media-stack exec deploy/qbittorrent -c qbittorrent -- ls -nd /downloads`.
+
 ## The web UI
 
 v1 ships a web UI. This chart does not publish it: there is no Service and no route, so it is
