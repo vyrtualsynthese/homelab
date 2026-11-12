@@ -1,6 +1,7 @@
 # Grafana alert links — design
 
-2026-11-12. Status: awaiting operator approval.
+2026-11-12. Status: implemented the same day; live `appUrl` and the Discord test
+confirmed by the operator.
 
 ## Why
 
@@ -66,10 +67,14 @@ and the fact that it drives alert links.
    ConfigMap.
 2. After sync: `GET /api/frontend/settings` returns
    `appUrl: http://grafana.kub.local/`.
-3. Deliver one test notification through
-   `POST /api/alert-notifications/test` and confirm HTTP 200. The operator
-   reads the Discord message and checks that Source and Silence open
-   `grafana.kub.local`, not localhost.
+3. Deliver one test notification from the **Test** button on the contact point
+   (Alerting → Contact points → `discord-homelab`). Grafana 13 has no working
+   HTTP test route for a receiver created through the legacy provisioning API:
+   `/api/v1/provisioning/contact-points/<uid>/test` and
+   `/api/alertmanager/grafana/config/api/v1/receivers/<name>/test` return 404,
+   and `/apis/notifications.alerting.grafana.app/.../receivers/<name>/test`
+   answers "Receiver not found" for it. The operator reads the Discord message
+   and checks that Source and Silence open `grafana.kub.local`, not localhost.
 
 ## Risks and limits
 

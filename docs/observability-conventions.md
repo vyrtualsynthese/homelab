@@ -316,6 +316,11 @@ runs (config shows `retention_enabled: true`,
 - Alert rules: `GET/POST /api/v1/provisioning/alert-rules`, groups under
   `/api/v1/provisioning/folder/homelab/rule-groups/homelab-core`. Delivery is
   `/api/v1/provisioning/contact-points` and `/api/v1/provisioning/policies`.
+- Testing a contact point: use its **Test** button. Grafana 13 has no working
+  HTTP test route for a receiver created through the provisioning API — the
+  legacy paths return 404, and the `/apis/notifications.alerting.grafana.app`
+  route answers "Receiver not found" because the webhook lives in the legacy
+  store and its URL is a redacted secure field.
 - Validate every PromQL expression against Prometheus before saving it. The
   `DiskReallocatingSectors` bug is what skipping this costs.
 - Never `kubectl apply` a dashboard or rule; nothing in the repo produces them.

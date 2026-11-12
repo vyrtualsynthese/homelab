@@ -38,7 +38,7 @@
 - Consumes: nothing from earlier tasks.
 - Produces: `appUrl = http://grafana.kub.local/`, which Task 3 verifies and Task 2 documents.
 
-- [ ] **Step 1: Add the `grafana.ini` block**
+- [x] **Step 1: Add the `grafana.ini` block**
 
 In `cluster/helm/monitoring/grafana/values.yaml`, under `grafana:` and immediately after `fullnameOverride: grafana`, add:
 
@@ -51,12 +51,12 @@ In `cluster/helm/monitoring/grafana/values.yaml`, under `grafana:` and immediate
 
 (`grafana.ini` is the literal dotted key the upstream chart reads; do not split it into nested `grafana:` → `ini:` keys.)
 
-- [ ] **Step 2: Build the chart dependencies**
+- [x] **Step 2: Build the chart dependencies**
 
 Run: `helm dependency build cluster/helm/monitoring/grafana`
 Expected: `Saving 1 chart` / `Deleting outdated charts`, exit 0. Creates the gitignored `charts/` and `Chart.lock`.
 
-- [ ] **Step 3: Render and confirm the values reach the ConfigMap**
+- [x] **Step 3: Render and confirm the values reach the ConfigMap**
 
 Run:
 
@@ -67,7 +67,7 @@ helm template grafana cluster/helm/monitoring/grafana --namespace monitoring \
 
 Expected: `root_url = http://grafana.kub.local/` and `domain = grafana.kub.local` under `[server]`.
 
-- [ ] **Step 4: Confirm the datasource ConfigMap survives the render**
+- [x] **Step 4: Confirm the datasource ConfigMap survives the render**
 
 Run:
 
@@ -78,7 +78,7 @@ helm template grafana cluster/helm/monitoring/grafana --namespace monitoring \
 
 Expected: at least `1`. Zero means the values structure displaced the datasources block and the change must be corrected before committing.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add cluster/helm/monitoring/grafana/values.yaml
@@ -94,7 +94,7 @@ git commit -m "🔧 fix(grafana): set root_url so alert links point at grafana.k
 - Consumes: the URL from Task 1.
 - Produces: nothing later tasks read; operator-facing documentation.
 
-- [ ] **Step 1: Add the explanatory sentence**
+- [x] **Step 1: Add the explanatory sentence**
 
 After the sentence that starts `**Grafana** — \`http://grafana.kub.local\`.`, add:
 
@@ -104,7 +104,7 @@ Source and Silence links of every Discord alert from it; leaving it unset produc
 `http://localhost:3000/`.
 ```
 
-- [ ] **Step 2: Commit**
+- [x] **Step 2: Commit**
 
 ```bash
 git add docs/observability-conventions.md
@@ -121,27 +121,23 @@ Grafana service-account token, not cluster write access.
 **Interfaces:**
 - Consumes: `appUrl` produced by Task 1.
 
-- [ ] **Step 1: Confirm ArgoCD rolled the pod with the new ConfigMap**
+- [x] **Step 1: Confirm ArgoCD rolled the pod with the new ConfigMap**
 
 Run: `source ~/.config/secrets/homelab.env; curl -s -H "Authorization: Bearer $GRAFANA_TOKEN" http://grafana.kub.local/api/frontend/settings | python3 -c 'import json,sys; print(json.load(sys.stdin)["appUrl"])'`
 Expected: `http://grafana.kub.local/`. If it still prints localhost, wait for the Deployment rollout, then re-run.
 
-- [ ] **Step 2: Send one test notification**
+- [x] **Step 2: Send one test notification from the UI**
 
-Run:
+Open Alerting → Contact points → `discord-homelab` → **Test**.
 
-```bash
-source ~/.config/secrets/homelab.env
-curl -s -o /dev/null -w '%{http_code}\n' -X POST \
-  -H "Authorization: Bearer $GRAFANA_TOKEN" -H 'Content-Type: application/json' \
-  -d '{}' \
-  http://grafana.kub.local/api/v1/provisioning/contact-points/cg41e8u89snpca/test
-```
+Do not script this step. Grafana 13 exposes no working HTTP test route for a receiver
+created through the legacy provisioning API: `/api/v1/provisioning/contact-points/<uid>/test`
+and `/api/alertmanager/grafana/config/api/v1/receivers/<name>/test` return 404, and
+`/apis/notifications.alerting.grafana.app/v1beta1/namespaces/default/receivers/<name>/test`
+answers `Receiver not found`. The webhook URL is a redacted secure field, so a temporary
+receiver cannot be rebuilt either.
 
-Expected: `200` (or `202`). A `404` means the endpoint moved; use the contact point's
-**Test** button in the Grafana UI instead.
-
-- [ ] **Step 3: Read the Discord message**
+- [x] **Step 3: Read the Discord message**
 
 The test message's Source and Silence links must start with `http://grafana.kub.local/`.
 If Discord is not reachable at verification time, record this step as the only outstanding
