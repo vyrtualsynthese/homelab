@@ -608,7 +608,7 @@ W4 offsite: not urgent, independent, take it whenever the operator wants it
 W3 and W7 can proceed in parallel with W5 only if the upgrades are rehearsed on the test cluster
 first; they touch the same ArgoCD applications otherwise.
 
-**Operator's order (2026-11-11): W5, then W6.** This is their call and it overrides the default
+**Operator's order (2026-11-11): W5, then W6 (superseded — see the 2026-11-12 design).** This is their call and it overrides the default
 above. It has one cost that is worth writing down rather than arguing: W5 then runs with no backup
 and against a noisy baseline, so each upgrade step is harder to verify than it would be after W0 and
 W1. W0 — half a session — is the cheapest thing that improves those odds.
