@@ -76,7 +76,9 @@ the media stack already run.
 
 The old chart mounted `tautulli-config2`, a Longhorn claim that disappeared with the 2026 disk
 failure. That is what kept the pod `Pending` for 71 days. Nothing is migrated: the new claim starts
-empty, and Tautulli can import the watched history back from Plex on first run.
+empty, and it has to be that way — Tautulli only records history from the moment it is connected to
+Plex. Past history cannot be imported; Plex's own database does not keep enough detail (upstream
+FAQ, "Can Tautulli import history from before it was installed?").
 
 The image starts as **root**: `start.sh` renumbers its `tautulli` user to `PUID`/`PGID` (1100 here),
 chowns `/config`, then drops privileges with `gosu`. Consequences:
@@ -109,16 +111,19 @@ or need a sidecar that parses JSON. This is the documented exception the contrac
 
 ## Logs
 
-There is no environment variable for Tautulli's log level. It lives in `config.ini` on the claim,
-which the setup wizard writes; mounting a ConfigMap over that file would replace the wizard's file
-and lose every setting in it.
+Tautulli has no log-level setting and no environment variable for one. The only knob is **Enable
+Debug Logging** (`verbose_logs` in `config.ini`, under Settings → General → Show Advanced): off
+leaves `INFO` and above, on adds `DEBUG`. That file is written by the app, so mounting a ConfigMap
+over it would replace it and lose every other setting.
 
-So the chart sets nothing, and **after the first run, set Settings → Logging → Log Level to
-Warning**. Fluent Bit ships every container line on every node to Loki unfiltered, and Tautulli's
-default is `info`: a line per HTTP request and per playback event. The History and Users views in the
-UI are the operational record, not the log stream.
+The chart sets nothing, and **after the first run, untick Enable Debug Logging**. At `DEBUG`,
+Tautulli writes a line per URL request, per websocket reconnect and per Plex response; Fluent Bit
+ships every container line on every node to Loki with no filter. With debug off it still logs
+lifecycle events at `INFO` — roughly ten lines per restart or settings save — and that is the floor
+this app offers. The History and Users views are the operational record, not the log stream.
 
-This is a recorded exception to the contract's log rule, for an app whose level is not env-driven.
+This is a recorded exception to the contract's log rule: the app cannot be held at `warning`, and
+`INFO` with debug off is as quiet as it gets.
 
 ## Metrics
 
