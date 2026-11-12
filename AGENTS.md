@@ -190,11 +190,12 @@ are in `docs/superpowers/plans/`.
 
 **Structural**
 
-1. **Sync policy lives outside git.** Auto-sync is enabled per Application from the ArgoCD UI — faster
-   than a commit when debugging a pod — so ~34 of the 58 manifests record no `syncPolicy.automated`.
-   The apps are reconciled, but git does not say so, and a root-app sync that rewrites an Application
-   can silently switch automation off. Write the policy into git when you next touch each app (§8.4
-   of the design).
+1. **Sync policy lives outside git, by design.** Auto-sync is enabled per Application from the ArgoCD
+   UI — faster than a commit when debugging a pod. **No Application file records
+   `syncPolicy.automated`**, and a PR that adds it is a regression: a root-app sync rewrites the
+   Application to match git, which silently switches automation off until the operator re-enables it
+   in the UI. 38 of the 58 carry none; the other 20 are leftovers from before this rule and lose the
+   block when they are next touched (§8.4 of the design).
 2. `cluster/infrastructure/**` is outside GitOps (§2).
 3. **Backups do not work.** The only offsite target is an AWS S3 bucket. The k3s script dumps a
    SQLite file on an etcd cluster; the NAS script backs up a MinIO path deleted in July 2024; and the

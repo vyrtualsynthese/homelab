@@ -174,7 +174,8 @@ fails hard on a stale one — so the first Renovate PR would break all four sync
 constraint is an exact version, which is what makes the lock dispensable.
 
 `cluster/argocd/projects/monitoring/` gains `loki.yaml` and `fluent-bit.yaml`; `grafana.yaml` and
-`prometheus.yaml` keep their names and paths and get their `syncPolicy.automated` written in.
+`prometheus.yaml` keep their names and paths and lose the `syncPolicy.automated` block they
+carried.
 
 ### 5.2 Charts, repositories and pins
 
@@ -420,15 +421,14 @@ spec:
   destination: {server: 'https://kubernetes.default.svc', namespace: monitoring}
   syncPolicy:
     syncOptions: [CreateNamespace=true]
-    automated: {prune: true, selfHeal: true}
   source:
     repoURL: 'https://github.com/vyrtualsynthese/homelab.git'
     targetRevision: develop
     path: cluster/helm/monitoring/<component>
 ```
 
-`selfHeal` is new for Grafana (it was off in git) and consistent with the spec's rule that the
-policy lives in git.
+No `automated` block, in any of the four. Auto-sync is the operator's switch in the ArgoCD UI, and a
+PR that adds it to these files is a regression against the repo rule in AGENTS.md §7 item 1.
 
 ### 5.13 Deviation from `docs/charts/README.md`
 

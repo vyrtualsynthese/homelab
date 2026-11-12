@@ -213,18 +213,17 @@ deliberate habit — toggling it off in the UI is faster than a commit when debu
 works. The cost is that the Application manifests in git understate the real policy, so a root-app
 sync that rewrites an Application can silently disable automation the operator turned on by hand.
 
-The rebuild writes the policy into git, so the two agree:
+The rebuild keeps that habit, and it is now a rule rather than drift to be tidied away:
 
-- Every Application ends with `automated: {prune: true, selfHeal: true}` and
-  `syncOptions: [CreateNamespace=true]`.
-- Debugging keeps its fast path: the documented procedure is to disable auto-sync in the UI, work,
-  re-enable it, and record the reason in the task. The UI stays the interface for a temporary
-  change; git stays the record of the intended one.
-- Codification happens per wave rather than in one commit, so a wave is fully in git before the next
-  begins.
-
-This is the cheapest item in the programme and it removes the reason the rest of the drift was
-invisible.
+- **No Application in `cluster/argocd/projects/` records `syncPolicy.automated`.** The manifests
+  keep only what is structural: project, destination, `syncOptions: [CreateNamespace=true]`, and the
+  source. Auto-sync is the operator's switch, in the UI, per Application.
+- A root-app sync rewrites an Application to match git, so it removes the `automated` block from the
+  live object and automation stops. That is expected, not a sync bug: re-enable it in the UI.
+- Debugging therefore keeps its fast path — toggle off, work, toggle on — with nothing to commit
+  either way.
+- A PR that adds `automated:` is a regression, however convenient it looks, and it is the one thing
+  to look for when an Application stops reconciling after a root-app sync.
 
 ### 8.5 Secrets
 
@@ -661,4 +660,4 @@ recorded in §8.7.
 | ACME duplicate-certificate limit during the Traefik cutover | certificates unavailable for a week | reuse the existing ACME claim, single cutover window |
 | `local-path` node disk loss | app and config gone | backups from W4, monthly restore drill |
 | Backup target locked out (single account) | domains and backups lost together | keep the registrar separate, export zones to git |
-| 34 Applications carry no sync policy in git | a root-app sync can silently disable automation the operator enabled in the UI | write the policy into git per wave, per §8.4 |
+| 34 Applications carry no sync policy in git | a root-app sync can silently disable automation the operator enabled in the UI | expected by design: re-enable it in the UI, per §8.4 |
