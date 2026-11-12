@@ -38,6 +38,7 @@ helm template autobrr cluster/helm/media-stack/autobrr --namespace media-stack
 | `probes.{liveness,readiness}` | HTTP probes on autobrr's own endpoints, which live under `/api`. | enabled, 20s/10s delay |
 | `securityContext` | Runs as 1100, drops all capabilities, no privilege escalation. | non-root |
 | `resources` | Scheduler reservation and memory limit, sized from Prometheus. No CPU limit. | `10m`/`192Mi` request, `768Mi` memory limit |
+| `podAnnotations` | Extra pod annotations. Carries the Prometheus scrape annotations. | scrape on port 9074, path `/metrics` |
 
 The memory limit is a ceiling, not a target: autobrr holds ~155 MiB and peaks near
 290 MiB in normal use, so 768 MiB leaves room for a large announce burst or a database
@@ -85,6 +86,35 @@ autobrr exposes two endpoints under `/api`, and they are not interchangeable:
 Using readiness for liveness would turn a database blip into a restart loop, so they stay separate.
 The paths must keep the `/api` prefix: without it Traefik is not involved and autobrr answers 404,
 which the kubelet treats as a failed probe.
+
+## Metrics
+
+autobrr exports Prometheus metrics itself, on a listener that is separate from the web UI and
+disabled upstream by default. The chart turns it on with three variables in `env` and three
+annotations in `podAnnotations`; there is no exporter, sidecar or Service involved.
+
+| Variable | Value | Why |
+|---|---|---|
+| `AUTOBRR__METRICS_ENABLED` | `true` | Upstream default is `false` |
+| `AUTOBRR__METRICS_HOST` | `0.0.0.0` | Upstream default is `127.0.0.1`, which no other pod can reach |
+| `AUTOBRR__METRICS_PORT` | `9074` | The listener's own port, not `service.port` |
+
+Prometheus scrapes it through its `kubernetes-pods` job, which keeps pods annotated
+`prometheus.io/scrape: "true"` and reads the port and path from the other two annotations. That is
+the whole contract: a new exporter in this cluster needs the annotation, not a scrape config.
+
+The endpoint is unauthenticated. That is accepted because it is only reachable inside the cluster
+(the Service is `ClusterIP` and nothing routes port 9074); it costs release counters and IRC/feed
+state, not credentials. Basic auth exists at the app level (`AUTOBRR__METRICS_BASIC_AUTH_USERS`) but
+the annotation-based job cannot send credentials, so enabling it would mean a static job and a
+Secret in the Prometheus chart instead.
+
+To check it after a deploy:
+
+```bash
+curl -sG http://prometheus.kub.local/api/v1/query --data-urlencode \
+  'query=up{job="kubernetes-pods",pod=~"autobrr-.*"}'
+```
 
 ## Ingress
 
