@@ -63,8 +63,11 @@ It holds **no alert rules and no Alertmanager** (`alertmanager.enabled: false`,
 **Loki** — `http://loki.kub.local`, no authentication. Every line is a Fluent Bit
 JSON envelope; unwrap it in the query (see below). The UI is at `/ui`.
 
-**Grafana** — `http://grafana.kub.local`. The API needs a bearer token from
-`$GRAFANA_TOKEN`, exported by `~/.config/secrets/homelab.env`:
+**Grafana** — `http://grafana.kub.local`. `server.root_url` is set to that host
+in the wrapper chart, because Grafana builds the Source and Silence links of
+every Discord alert from it; leaving it unset produced
+`http://localhost:3000/`. The API needs a bearer token from `$GRAFANA_TOKEN`,
+exported by `~/.config/secrets/homelab.env`:
 
 ```bash
 source ~/.config/secrets/homelab.env
