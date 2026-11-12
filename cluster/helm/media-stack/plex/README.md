@@ -30,8 +30,8 @@ helm template plex cluster/helm/media-stack/plex --namespace media-stack
 ```
 
 It renders one Deployment, one Service (ClusterIP, 32400/TCP), one ServiceAccount, one
-PersistentVolumeClaim, two IngressRoutes (`plex-public` and `plex-public-redirect`), two
-Middlewares (redirect and security headers) and one TLSOption.
+PersistentVolumeClaim, two IngressRoutes (`plex-public` and `plex-public-redirect`), three
+Middlewares (redirect, security headers, rate limit) and one TLSOption.
 
 ## Why this chart differs from the reference
 
@@ -90,6 +90,28 @@ kubectl -n media-stack patch secret plex --type merge \
 `plex-config` claim makes ArgoCD fail on an immutable field. Replacing the claim means re-claiming
 the server and rescanning every library. HostPath does not enforce the number, so 128Mi is a label,
 not a quota. Leave it.
+
+## Security posture of the public endpoint
+
+Everything Traefik can enforce at the edge is enforced here. The one deliberate omission is a
+Content Security Policy: Plex Web loads inline scripts, workers and websockets, so a CSP written
+without testing against the app breaks it. The value exists and is empty; populate it only after
+watching the browser console against a staging host.
+
+- **TLS:** 1.2 floor, AEAD cipher suites only (no CBC), X25519 first with P-256 and P-384 as
+  fallbacks, `sniStrict: true` (the host is reached by name, never by bare IP). TLS 1.3 is used
+  automatically and its suites are not configurable in Go.
+- **HSTS:** one year, include subdomains, preload.
+- **Headers:** `frameDeny`, `contentTypeNosniff`, `browserXssFilter`, `referrerPolicy:
+  no-referrer`, `permissionsPolicy` denying camera, microphone, geolocation, payment and USB.
+- **Host allowlist:** `allowedHosts` accepts only the ingress host (with and without `:443`), so a
+  request carrying a different Host header gets a 421 even if a future router matches it.
+- **Rate limit:** 100 requests per second per source IP with a burst of 200. Plex Web loads a few
+  dozen assets at startup and playback is a handful of long-lived requests; this is far above
+  normal use and stops a request flood. Set `ingress.rateLimit.enabled: false` if a client ever
+  trips it.
+- **No auth middleware:** Plex clients cannot complete a forward-auth flow. The server's own
+  account model is the gate.
 
 ## Upgrading and rolling back
 
