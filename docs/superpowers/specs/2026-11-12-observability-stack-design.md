@@ -338,9 +338,10 @@ Loki uses no object storage and no MinIO: filesystem storage on its own claim.
   `rbp1` (192.168.1.38) run node-exporter, a smartctl exporter and the Docker metrics endpoint
   outside this cluster, so no annotation or endpoint discovery can ever find them; the old chart
   scraped them with static jobs. They are re-declared under `scrapeConfigs.rbp0` and
-  `scrapeConfigs.rbp1` with ports 9100, 9902 and 9323. This is the one place where scraping is not
-  annotation-driven, and it is deliberate: dropping them would silently remove host, disk and
-  container metrics for the two machines that run Pi-hole and WireGuard.
+  `scrapeConfigs.rbp1` with ports 9100, 9902 and 9323. This is the only target set that is not
+  discovered from Kubernetes objects (the chart also keeps its own static self-scrape, and a no-op
+  pushgateway job with no targets), and it is deliberate: dropping them would silently remove host,
+  disk and container metrics for the two machines that run Pi-hole and WireGuard.
 - RBAC: the chart creates its own ClusterRole/ClusterRoleBinding for pod, service, endpoint,
   node and configmap discovery. Nothing extra to grant.
 
