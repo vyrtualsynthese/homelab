@@ -98,9 +98,9 @@ scrape targets (38 up, 7 down). Series by job: `kubernetes-api-servers` 47 409,
   NVMe → `100 - percentage_used`, Samsung SATA → `wear_leveling_count`.
   Coalesce the three, or most SSDs render blank.
 - Drives that do not report an attribute render blank, never 0.
-- 18 series cover 17 drives: `nas` 11 (8 SATA, 2 NVMe, 1 SSD), `nuc0` 2,
-  `streaming` 2, `rbp2` 1, plus one SATA drive on each edge Pi with no `node`
-  label.
+- 18 series cover 18 drives: `nas` 11 (9 SATA, 2 NVMe), `nuc0` 2,
+  `streaming` 2, `rbp2` 1, `rbp0` 1 and `rbp1` 1. The two edge Pi drives carry
+  no `node` label; use `instance` to name them.
 
 **Fluent Bit** writes `Line_Format json`, so every Loki line is an envelope
 (`time`, `stream`, `log`, and a ~1 KB `kubernetes` block of labels, annotations
@@ -134,6 +134,7 @@ Folder **Homelab**, created through the HTTP API:
 | Homelab · Investigate | `homelab-investigate` | 27 | Deep dive: workloads, nodes, control plane, Prometheus |
 | Homelab · Logs | `homelab-logs` | 8 | Volume, errors, live stream with namespace/container filters |
 | Homelab · Disks | `homelab-disks` | 14 | SMART per drive, wear forecast |
+| Homelab · Showcase | `homelab-showcase` | 13 | Presentation screen: drawn topology, four big numbers, network, storage, GPU |
 
 All four have a 30 s–1 m refresh and a 6 h–24 h default range. They are not
 backed up: Grafana's 5 GiB claim is the only copy. A `docker save` of the
