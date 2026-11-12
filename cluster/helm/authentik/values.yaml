@@ -43,7 +43,7 @@ authentik:
     envFrom:
       - secretRef:
           name: authentik-env
-    addPrometheusAnnotations: false
+    addPrometheusAnnotations: true
     affinity:
       nodeAffinity:
         matchExpressions:
@@ -68,6 +68,18 @@ authentik:
         - /
       pathType: Prefix
       tls: []
+
+    # authentik always listens for metrics on 9300 (the chart sets
+    # AUTHENTIK_LISTEN__METRICS); `enabled` adds the dedicated Service that exposes
+    # it. With global.addPrometheusAnnotations above, that Service carries the
+    # scrape annotations, and the cluster's kubernetes-service-endpoints job picks
+    # it up — this chart annotates the Service, not the pod.
+    metrics:
+      enabled: true
+
+  worker:
+    metrics:
+      enabled: true
 
   postgresql:
     enabled: false
