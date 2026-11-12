@@ -10,12 +10,14 @@ fluent-bit:
     create: true
     nodeAccess: false
     eventsAccess: false
+  # Measured 2026-11-12 over 15 h, per DaemonSet pod: 6-9 MiB average, 11.6 MiB
+  # peak. 64 MiB leaves five times the observed peak for a log burst.
   resources:
     requests:
       cpu: 10m
-      memory: 64Mi
+      memory: 32Mi
     limits:
-      memory: 128Mi
+      memory: 64Mi
   livenessProbe:
     httpGet:
       path: /api/v2/health

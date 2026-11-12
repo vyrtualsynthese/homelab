@@ -14,12 +14,18 @@ loki:
     kind: StatefulSet
     nodeSelector:
       kubernetes.io/hostname: nas
+    # Measured 2026-11-12 over 15 h: 134 MiB average, 166 MiB p95, 217 MiB peak.
+    # 1 GiB keeps 4.6x the observed peak for compaction and 30-day queries.
     resources:
       requests:
         cpu: 100m
-        memory: 512Mi
+        memory: 256Mi
       limits:
-        memory: 2Gi
+        memory: 1Gi
+    # The rules sidecar watches for Prometheus-Operator rule ConfigMaps, which this
+    # cluster does not use. It held 78 MiB with no limit, more than half the main
+    # container's usage.
+    sidecar: false
     persistence:
       enabled: true
       size: 20Gi

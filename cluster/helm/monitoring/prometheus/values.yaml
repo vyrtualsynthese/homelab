@@ -26,10 +26,14 @@ prometheus:
     # 1Gi was not enough: the server was OOM-killed ~50s after every start.
     # Prometheus 3 sizes its own GC from the cgroup limit, so the limit has to
     # cover the scrape head, not just the steady state.
+    # Measured 2026-11-12 over 15 h: 1.26 GiB average, 1.74 GiB p95, 1.76 GiB
+    # peak. The 2 GiB ceiling is kept because Prometheus sizes its GC target from
+    # the cgroup limit; 1 GiB OOM-killed it on 2026-11-12. The request tracks the
+    # steady state so the scheduler reserves what it actually holds.
     resources:
       requests:
         cpu: 100m
-        memory: 768Mi
+        memory: 1Gi
       limits:
         memory: 2Gi
     image:
@@ -40,12 +44,13 @@ prometheus:
       image:
         repository: quay.io/prometheus-operator/prometheus-config-reloader
         tag: v0.95.2
+      # Measured 9.9 MiB peak over 15 h.
       resources:
         requests:
           cpu: 10m
-          memory: 32Mi
+          memory: 16Mi
         limits:
-          memory: 64Mi
+          memory: 32Mi
   kube-state-metrics:
     fullnameOverride: prometheus-kube-state-metrics
     nodeSelector:
