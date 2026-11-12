@@ -59,6 +59,38 @@ that are not valid environment-variable names. If a rollout is only correct beca
 | 14 | `resources.requests.memory` and `limits.memory` on every container | Without a limit one app can evict a node |
 | 15 | `allowPrivilegeEscalation: false`, `capabilities.drop: [ALL]`, `seccompProfile: RuntimeDefault` | Free, and breaks nothing that does not need privileges |
 | 16 | Extra volumes with an explicit `mountPath` under `/srv/` or the app's own path | Keeps the NFS-media convention readable |
+| 17 | If the image ships a Prometheus exporter, it is enabled and scraped (see **Metrics**) | An exporter that is off is an observability hole nobody notices until the incident |
+
+### Metrics
+
+**An app that ships a Prometheus exporter uses it.** Prometheus in this cluster discovers pods by
+annotation (`kubernetes-pods` job, no ServiceMonitor, no Operator), so the chart has to render all
+four:
+
+| Annotation | Value |
+|---|---|
+| `prometheus.io/scrape` | `"true"` |
+| `prometheus.io/scheme` | `http` |
+| `prometheus.io/port` | the exporter's own port |
+| `prometheus.io/path` | `/metrics`, unless the app serves metrics elsewhere |
+
+Rules that came out of `flaresolverr`:
+
+- **One values block turns the whole thing on.** The block renders the exporter's environment
+  variables (when it needs them, as FlareSolverr does), the named container port, and the
+  annotations together. Split across three places they drift, and the failure is silent: the pod is
+  scraped on a port nothing listens to and the target is simply down.
+- **The metrics port stays off the Service.** Prometheus scrapes the pod IP; a second Service port
+  only widens the app's surface for nothing. Exception: an app whose exporter listens on its own
+  port and whose chart ships a dedicated metrics Service (`authentik`) is scraped by the
+  `kubernetes-service-endpoints` job instead — still one annotation pair, just on the Service.
+- **In a hand-maintained chart, do not repeat `prometheus.io/*` in `podAnnotations`.** The chart
+  renders them; a second copy in the values is how the port and the path end up disagreeing. A
+  third-party wrapper chart has no template of its own, so there the values block is the only place
+  it can live.
+- **No exporter in the image?** Use a maintained sidecar if one exists (`exportarr` for the *arr
+  apps, `qbittorrent-exporter`, `mktxp` for MikroTik); never write one. An app with neither gets
+  nothing — silence is better than a metrics endpoint nobody maintains.
 
 ### Changing the UID breaks the config volume
 
@@ -85,6 +117,7 @@ the local-path provisioner and stop doing this by hand.
 | Chart | Probes | Hardening | Non-root UID |
 |---|---|---|---|
 | `autobrr` | yes | capabilities dropped, seccomp, no privilege escalation | **yes — 1100**, claim chowned first |
+| `flaresolverr` | yes, on `/health` | no — deferred on purpose, see the chart README | no — deferred on purpose |
 | everything else | no | no | no |
 
 ## Checking a chart against this list
@@ -99,6 +132,7 @@ grep -rnP '\t' templates/ || echo "no tabs"
 grep -rn 'latest' values.yaml || echo "no floating tags"
 grep -rn 'networking.k8s.io' templates/ || echo "no core Ingress"
 grep -rn 'autobrr\|<previous app name>' templates/ values.yaml || echo "no copy-paste leftovers"
+grep -rn 'prometheus.io/scrape' templates/ || echo "no scrape annotation — does the image ship an exporter?"
 ```
 
 That last one is the important one. Every chart in this repo was produced by copying another, and the
@@ -110,6 +144,11 @@ before you commit.
 `autobrr` as of 2026-11-11: five objects render, no tabs, no hardcoded app name outside `Chart.yaml`
 and the values, ingress fully driven by values, env inline in the Deployment, and the claim name derived from the release so a copy
 cannot collide with the original.
+
+`flaresolverr` as of 2026-11-12: the app-shaped version of the same chart. Three objects because the
+app keeps no state and is never exposed, `RollingUpdate` because there is no claim to fight over,
+probes on the app's own `/health`, and a `metrics` block that turns its exporter on in one place —
+environment, port and scrape annotations together.
 
 ## Charts still to align
 
