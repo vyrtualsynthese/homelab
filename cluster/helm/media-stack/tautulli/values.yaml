@@ -1,87 +1,202 @@
-# Default values for home.
-# This is a YAML-formatted file.
-# Declare variables to be passed into your templates.
+# Default values for tautulli.
+# This chart follows the contract in docs/charts/README.md and the shape of the
+# reference chart, media-stack/autobrr. The differences are the ones this app needs:
+# an image whose entrypoint starts as root and then drops to PUID/PGID, a config
+# claim, probes on Tautulli's own `/status` endpoint, and LAN-only exposure.
+
+# -- Override the chart name.
+nameOverride: ""
+# -- Override the generated release name.
+fullnameOverride: ""
 
 replicaCount: 1
 
+# -- Deployment strategy. `Recreate` is required for anything with a config volume:
+# ReadWriteOnce volumes cannot be attached to an old and a new pod at the same time.
+strategy: Recreate
+
 image:
+  # The project publishes the same build to Docker Hub and to GHCR; the upstream
+  # install docs name only Docker Hub. GHCR is the project's own organisation too,
+  # and the lab's image policy prefers it over Docker Hub, so this is the source.
   repository: ghcr.io/tautulli/tautulli
+  # -- Pin the tag. Never `latest`. Renovate manages this.
+  tag: "v2.19.1"
   pullPolicy: IfNotPresent
-  # Overrides the image tag whose default is the chart appVersion.
-  tag: v2.17.2
 
 imagePullSecrets: []
-nameOverride: ""
-fullnameOverride: ""
 
 serviceAccount:
-  # Specifies whether a service account should be created
-  create: false
-  # Annotations to add to the service account
-  annotations: {}
-  # The name of the service account to use.
-  # If not set and create is true, a name is generated using the fullname template
+  # -- Create a dedicated ServiceAccount. Tautulli never talks to the Kubernetes
+  # API, so it gets no mounted token either.
+  create: true
+  automount: false
+  # -- Defaults to the fullname.
   name: ""
+  annotations: {}
 
-podAnnotations:
-  setGateway: "true"
+# -- Annotations added to the pod.
+podAnnotations: {}
+podLabels: {}
 
-podSecurityContext: {}
-# fsGroup: 2000
+# Pod-level security.
+#
+# `fsGroup` is deliberately NOT set: local-path volumes are hostPath-backed, and
+# the kubelet does not apply fsGroup ownership to them, so setting it would look
+# meaningful and do nothing.
+podSecurityContext:
+  seccompProfile:
+    type: RuntimeDefault
 
+# Container-level security.
+#
+# The image's `start.sh` must run as root: it renumbers the `tautulli` user to
+# PUID/PGID, chowns `/config`, then drops privileges with `gosu`. That sequence is
+# why `runAsNonRoot` and `runAsUser` are absent (the container would not start), and
+# why the capability set keeps exactly the three calls the sequence makes.
+# `allowPrivilegeEscalation: false` does not break the drop: giving up privileges is
+# always permitted under no_new_privs.
 securityContext:
-  {}
-  # capabilities:
-  #   drop:
-  #   - ALL
-  # readOnlyRootFilesystem: true
-# runAsNonRoot: true
-# runAsUser: 1000
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+    add:
+      - CHOWN
+      - SETUID
+      - SETGID
 
 service:
   type: ClusterIP
-  port: 32400
+  port: 8181
 
-ingress:
+container:
+  # -- Container port. Defaults to `service.port` when left empty; set it only
+  # when the app listens on a different port than the Service exposes.
+  port: null
+
+ingressRoute:
+  # -- Render a Traefik IngressRoute. This repo never uses
+  # networking.k8s.io/v1 Ingress.
   enabled: true
-  className: no
+  # -- API group. `traefik.containo.us/v1alpha1` is what the cluster's Traefik
+  # 2.x watches today; flip this to `traefik.io/v1alpha1` when Traefik v3 lands.
+  apiVersion: traefik.containo.us/v1alpha1
+  # -- Traefik entry points. `web` is plain HTTP on kub.local; `websecure` is TLS.
+  # Tautulli is LAN-only, so it stays on `web`.
+  entryPoints:
+    - web
+  # -- Single host. For a second host, copy the chart.
+  host: tautulli.kub.local
+  # -- Path prefix. `/` matches everything.
+  pathPrefix: /
+  # -- Middlewares, rendered as `<namespace>-<name>@kubernetescrd`. Tautulli's own
+  # login is the gate; no forward-auth is wired.
+  middlewares: []
+  labels: {}
   annotations: {}
-  # kubernetes.io/ingress.class: nginx
-  # kubernetes.io/tls-acme: "true"
-  hosts:
-    - host: chart-example.local
-      paths:
-        - path: /
-          pathType: ImplementationSpecific
-  tls: []
-  #  - secretName: chart-example-tls
-  #    hosts:
-  #      - chart-example.local
+  tls:
+    # -- Send the router over TLS. Requires the tls block below to mean anything.
+    enabled: false
+    # -- Use a pre-existing certificate instead of asking Traefik to issue one.
+    secretName: ""
+    # -- Traefik ACME resolver name, for example `myresolver`.
+    certResolver: ""
+    # -- TLSOption resource name in this namespace.
+    options: ""
 
-resources:
-  limits:
-    memory: 1Gi
-  requests:
-    cpu: 10m
-    memory: 256Mi
+storage:
+  # -- Render the config PersistentVolumeClaim. Tautulli keeps its database and
+  # `config.ini` here; there is no state anywhere else.
+  enabled: true
+  # -- Use an existing claim instead of the one this chart creates.
+  existingClaim: ""
+  className: local-path
+  accessModes:
+    - ReadWriteOnce
+  # -- Config volumes hold settings and a SQLite database, not media. 128Mi is the
+  # house standard.
+  size: 128Mi
+  # -- Where the config volume is mounted inside the container. The image's
+  # `--datadir` is fixed at `/config`, so changing this breaks it.
+  mountPath: /config
 
-autoscaling:
-  enabled: false
-  minReplicas: 1
-  maxReplicas: 100
-  targetCPUUtilizationPercentage: 80
-  # targetMemoryUtilizationPercentage: 80
+# -- Environment variables, rendered inline into the container spec. Changing a
+# value changes the pod template, so the Deployment rolls by itself. Prefer this
+# for every non-secret value.
+env:
+  TZ: "Europe/Paris"
+  # The image starts as root, prepares /config, then drops to these IDs. They match
+  # the rest of the media stack. A fresh claim is chowned by the image at start, so
+  # no manual chown on the node is needed.
+  PUID: "1100"
+  PGID: "1100"
 
-nodeSelector: {}
+# -- Variables sourced from a Secret, as `{ name, valueFrom }`. Kept separate so
+# a secret can never be pasted into the plain map above by accident.
+extraEnv: []
+
+# -- Bulk `envFrom` sources, usually `secretRef`. Rarely needed: prefer
+# `extraEnv` so each secret key is explicit in the manifest.
+envFrom: []
+
+# -- Additional volumes, rendered verbatim into the pod spec.
+volumes: []
+
+# -- Additional volume mounts, rendered verbatim into the container.
+volumeMounts: []
+
+nodeSelector:
+  # -- Every workload is pinned to a named node; local-path claims are node-bound.
+  # Plex and the rest of the media stack run here.
+  kubernetes.io/hostname: streaming
 
 tolerations: []
 
-affinity:
-  nodeAffinity:
-    requiredDuringSchedulingIgnoredDuringExecution:
-      nodeSelectorTerms:
-        - matchExpressions:
-            - key: node-type
-              operator: In
-              values:
-                - general
+affinity: {}
+
+# Unmeasured. The app has not run since the 2026 disk failure, so there is no
+# Prometheus history for it: the numbers below are the previous chart's values, kept
+# because they are plausible for a ~150MiB Python process with a SQLite database.
+# Replace them from Prometheus a week after the first start, and again after the
+# first Plex history import, which is the one operation that can spike memory.
+#
+# No CPU limit, here or anywhere in this cluster: a limit throttles exactly the
+# short burst this app needs while importing history, and the node's capacity is the
+# real ceiling. The 10m request is only there so the scheduler places the pod.
+resources:
+  requests:
+    cpu: 10m
+    memory: 256Mi
+  limits:
+    memory: 1Gi
+
+# Probes. `/status` is Tautulli's own unauthenticated health endpoint: it answers
+# `{"result":"success","message":"Ok"}` with HTTP 200 as soon as the web stack is
+# serving, and the image's own HEALTHCHECK curls it. `/` would answer too, but it
+# redirects into the UI, so `/status` is the honest target.
+#
+# Readiness is disabled on purpose. Tautulli's dependency state — Plex reachability
+# at `/server_status`, SQLite integrity at `/status?check=database` — is reported in
+# the JSON body, always with HTTP 200. The kubelet cannot read a body, so a
+# readiness probe here would either duplicate liveness or need a sidecar that parses
+# JSON. Documented exception to contract requirement 13.
+#
+# The startup probe holds the other two through a first start after an upgrade, when
+# the database is migrated and the app can take noticeably longer than a restart.
+probes:
+  startup:
+    enabled: true
+    path: /status
+    periodSeconds: 5
+    timeoutSeconds: 5
+    failureThreshold: 30
+  liveness:
+    enabled: true
+    path: /status
+    initialDelaySeconds: 20
+    periodSeconds: 30
+    timeoutSeconds: 5
+    failureThreshold: 3
+  readiness:
+    enabled: false
