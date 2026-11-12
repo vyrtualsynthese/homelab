@@ -867,8 +867,8 @@ What survives from this workstream:
    scrapes them through their `prometheus.io/scrape` annotations, so no ServiceMonitor layer and
    no operator CRDs are introduced.
 
-Deferred to their own features: alerting (Grafana unified alerting, Discord delivery), dashboards
-as code, and the `mktxp` floating `latest` tag.
+Deferred to their own features: alerting (Grafana unified alerting, Discord delivery), which is
+what programme goal 5 still requires; dashboards as code; and the `mktxp` floating `latest` tag.
 ```
 
 - [ ] **Step 4: Retire pattern B in §8.3**
