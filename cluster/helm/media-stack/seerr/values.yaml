@@ -1,78 +1,242 @@
-# Default values for home.
-# This is a YAML-formatted file.
-# Declare variables to be passed into your templates.
+# Default values for seerr.
+# Built from the reference chart `../autobrr` and the contract in
+# docs/charts/README.md. The differences follow from what Seerr is: an app that
+# runs as an unprivileged baked-in user, keeps its database in /app/config, and
+# is published through Traefik on the lab's internal TLS host.
 
-image:
-  repository: ghcr.io/seerr-team/seerr
-  pullPolicy: IfNotPresent
-  # Overrides the image tag whose default is the chart appVersion.
-  tag: v3.4.1
-
-imagePullSecrets: []
+# -- Override the chart name.
 nameOverride: ""
+# -- Override the generated release name.
 fullnameOverride: ""
 
+replicaCount: 1
+
+# -- `Recreate` is required: the config claim is ReadWriteOnce, and a new pod
+# cannot attach it while the old one still holds it.
+strategy: Recreate
+
+image:
+  # -- Official image, maintained by the Seerr team.
+  repository: ghcr.io/seerr-team/seerr
+  # -- Pin the tag. Never `latest`. Renovate manages this.
+  tag: "v3.4.1"
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
 serviceAccount:
-  # Specifies whether a service account should be created
-  create: false
-  # Annotations to add to the service account
-  annotations: {}
-  # The name of the service account to use.
-  # If not set and create is true, a name is generated using the fullname template
+  # -- Create a dedicated ServiceAccount. Seerr never talks to the Kubernetes
+  # API, so it also gets no mounted token.
+  create: true
+  automount: false
+  # -- Defaults to the fullname.
   name: ""
+  annotations: {}
 
-podAnnotations:
-  setGateway: "true"
+# -- Pod annotations. Seerr ships no Prometheus exporter, so there is no scrape
+# annotation to render here.
+podAnnotations: {}
+podLabels: {}
 
-podSecurityContext: {}
-# fsGroup: 2000
+podSecurityContext:
+  # -- Runtime syscall filter. Free, and Seerr does not need anything it blocks.
+  seccompProfile:
+    type: RuntimeDefault
 
+# Container-level security.
+#
+# Seerr runs as the `node` user (UID 1000) baked into the official image. It
+# does not support PUID/PGID: the image never starts as root, so there is no
+# privilege drop to configure. The explicit UID matches what the pod already
+# uses, which is why the existing claim stays readable.
 securityContext:
-  {}
-  # capabilities:
-  #   drop:
-  #   - ALL
-  # readOnlyRootFilesystem: true
-# runAsNonRoot: true
-# runAsUser: 1000
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
 
 service:
+  # -- ClusterIP only. Traefik publishes 5055/TCP; the UI is not exposed on a
+  # second port.
   type: ClusterIP
-  port: 32400
+  port: 5055
+
+container:
+  # -- Container port. Defaults to `service.port` when left empty.
+  port: null
+
+storage:
+  # -- Render the config PersistentVolumeClaim.
+  enabled: true
+  # -- Use an existing claim instead of the one this chart creates.
+  existingClaim: ""
+  className: local-path
+  accessModes:
+    - ReadWriteOnce
+  # -- 128Mi is the house standard. local-path does not support volume
+  # expansion, so raising this on the existing claim makes ArgoCD fail on an
+  # immutable field. The claim holds the request database; replacing it loses
+  # every request, so leave it.
+  size: 128Mi
+  # -- Where the config volume is mounted. Seerr stores its database, settings
+  # and rotating file logs here.
+  mountPath: /app/config
+
+# -- Environment variables, rendered inline into the container spec. Changing a
+# value changes the pod template, so the Deployment rolls by itself.
+env:
+  TZ: "Europe/Paris"
+  # -- PORT is not set here: the Deployment renders it from `service.port`, so
+  # the app and the Service can never disagree about the listener.
+  # -- Only warnings and errors reach stdout, and therefore Loki. Seerr defaults
+  # to `debug`, which writes a line per scheduled job and per download-tracker
+  # poll every minute. Raise to `info` or `debug` temporarily while debugging;
+  # the app's own rotating logs under /app/config/logs keep the full record.
+  LOG_LEVEL: "warn"
+
+# -- Variables sourced from a Secret, as `{ name, valueFrom }`. Kept separate so
+# a secret can never be pasted into the plain map above by accident.
+extraEnv: []
+
+# -- Bulk `envFrom` sources, usually `secretRef`. Rarely needed: prefer
+# `extraEnv` so each secret key is explicit in the manifest.
+envFrom: []
+
+# -- Additional volumes, rendered verbatim into the pod spec.
+volumes: []
+
+# -- Additional volume mounts, rendered verbatim into the container.
+volumeMounts: []
 
 ingress:
+  # -- Render the Traefik routes. This repo never uses networking.k8s.io/v1
+  # Ingress.
   enabled: true
-  className: no
+  # -- API group. `traefik.containo.us/v1alpha1` is what the cluster's Traefik
+  # 2.x watches today; flip this to `traefik.io/v1alpha1` when Traefik v3 lands.
+  apiVersion: traefik.containo.us/v1alpha1
+  # -- Single host. For a second host, copy the chart.
+  host: seerr.kub.home.ashudev.com
+  # -- Path prefix. `/` matches everything.
+  pathPrefix: /
+  labels: {}
   annotations: {}
-  # kubernetes.io/ingress.class: nginx
-  # kubernetes.io/tls-acme: "true"
-  hosts:
-    - host: chart-example.local
-      paths:
-        - path: /
-          pathType: ImplementationSpecific
-  tls: []
-  #  - secretName: chart-example-tls
-  #    hosts:
-  #      - chart-example.local
-
-resources:
-  limits:
-    memory: 1Gi
-  requests:
-    cpu: 1m
-    memory: 256Mi
-
-autoscaling:
-  enabled: false
-  minReplicas: 1
-  maxReplicas: 100
-  targetCPUUtilizationPercentage: 80
-  # targetMemoryUtilizationPercentage: 80
+  # -- Extra middlewares, rendered as `<namespace>-<name>@kubernetescrd`.
+  # Deliberately no auth middleware: Seerr's own login is the gate, and the same
+  # host serves its API clients.
+  middlewares: []
+  # -- Plain HTTP on the `web` entry point, redirected to HTTPS.
+  redirect:
+    enabled: true
+    entryPoint: web
+  # -- Security headers on the secure route.
+  securityHeaders:
+    enabled: true
+    # -- Host names accepted by the middleware. Empty means the ingress host,
+    # with and without the explicit :443. Anything else gets a 421, which stops
+    # Host-header tricks from reaching Seerr under a different name.
+    allowedHosts: []
+    # -- Do not leak the request portal URL to third parties linked from the UI.
+    referrerPolicy: "no-referrer"
+    # -- Seerr uses none of these browser APIs; deny them at the edge.
+    permissionsPolicy: "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
+    # -- Only set when you have tested it against Seerr's Next.js UI, which
+    # loads inline scripts.
+    contentSecurityPolicy: ""
+  # -- Per-client rate limit. Seerr's UI loads a few dozen assets at once and
+  # the rest of its traffic is API calls, so 100/s with a burst of 200 is far
+  # above normal use while still stopping a request flood. It is per source IP
+  # as seen by Traefik. Set `enabled: false` if a client ever trips it.
+  rateLimit:
+    enabled: true
+    average: 100
+    burst: 200
+    period: 1
+  tls:
+    # -- Terminate TLS with the cluster's ACME resolver.
+    enabled: true
+    # -- Use a pre-existing certificate instead of asking Traefik to issue one.
+    secretName: ""
+    certResolver: myresolver
+    # -- Render and reference the chart's TLSOption.
+    options:
+      enabled: true
+      # -- Refuse a handshake whose SNI does not match a certificate Traefik
+      # holds. This endpoint is reached by name, never by bare IP.
+      sniStrict: true
+      # -- TLS 1.2 floor keeps older clients working; 1.3 is used automatically
+      # by clients that support it (its suites are not configurable in Go).
+      minVersion: VersionTLS12
+      # -- AEAD suites only. CBC suites are deliberately absent.
+      cipherSuites:
+        - TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256
+        - TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256
+        - TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384
+        - TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384
+        - TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305
+        - TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305
+      # -- X25519 first: fastest and most widely supported. The NIST curves are
+      # kept for clients that do not offer it.
+      curvePreferences:
+        - X25519
+        - CurveP256
+        - CurveP384
 
 nodeSelector:
+  # -- Every workload is pinned to a named node; the config claim lands here.
   kubernetes.io/hostname: streaming
 
 tolerations: []
 
 affinity: {}
+
+# Sizing from Prometheus, 30 days on `streaming`:
+#   memory working set   p50 322MiB, p95 325MiB, max 336MiB — 66% of the 512MiB
+#                        limit, no OOM
+#   CPU (5m rate)        p95 1m, max 5m
+#
+# The request is what the scheduler reserves, so it follows the measured steady
+# state (320Mi), not the limit. CPU has no limit: a limit would throttle a
+# library scan or a poster burst without protecting anything.
+resources:
+  requests:
+    cpu: 10m
+    memory: 320Mi
+  limits:
+    memory: 512Mi
+
+# Probes.
+#
+# `/api/v1/status` is Seerr's unauthenticated status endpoint: it answers 200
+# while the process is serving. Seerr exposes no endpoint that separates "the
+# process is up" from "the database is usable" — the public settings endpoint
+# reads an in-memory Settings object, not the database — so readiness uses the
+# same endpoint as liveness. This is a documented exception to the contract; a
+# guessed second endpoint would turn a slow database into a restart loop.
+#
+# The startup probe gates the other two because the first start after an upgrade
+# runs database migrations. 60 x 5s gives five minutes.
+probes:
+  startup:
+    enabled: true
+    path: /api/v1/status
+    periodSeconds: 5
+    timeoutSeconds: 5
+    failureThreshold: 60
+  liveness:
+    enabled: true
+    path: /api/v1/status
+    initialDelaySeconds: 20
+    periodSeconds: 30
+    timeoutSeconds: 5
+    failureThreshold: 3
+  readiness:
+    enabled: true
+    path: /api/v1/status
+    initialDelaySeconds: 10
+    periodSeconds: 15
+    timeoutSeconds: 5
+    failureThreshold: 3

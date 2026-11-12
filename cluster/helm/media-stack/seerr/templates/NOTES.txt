@@ -1,0 +1,22 @@
+{{ include "app.fullname" . }} has been deployed to namespace {{ .Release.Namespace }}.
+
+{{- if .Values.ingress.enabled }}
+
+Public URL:
+  {{ if .Values.ingress.tls.enabled }}https{{ else }}http{{ end }}://{{ .Values.ingress.host }}{{ .Values.ingress.pathPrefix }}
+{{- if .Values.ingress.redirect.enabled }}
+
+Plain HTTP on the `{{ .Values.ingress.redirect.entryPoint }}` entry point redirects here.
+{{- end }}
+{{- else }}
+
+The routes are disabled. Reach Seerr with a port-forward:
+
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "app.fullname" . }} {{ .Values.service.port }}:{{ .Values.service.port }}
+{{- end }}
+
+Configuration is stored in the claim {{ include "app.configClaimName" . }}.
+{{- if not .Values.storage.existingClaim }}
+
+That claim is created by this chart, so deleting the release deletes it too.
+{{- end }}

@@ -1,0 +1,29 @@
+{{- if and .Values.ingress.enabled .Values.ingress.securityHeaders.enabled }}
+{{- $hosts := .Values.ingress.securityHeaders.allowedHosts }}
+{{- if not $hosts }}
+{{- $hosts = list .Values.ingress.host (printf "%s:443" .Values.ingress.host) }}
+{{- end }}
+apiVersion: {{ .Values.ingress.apiVersion }}
+kind: Middleware
+metadata:
+  name: {{ include "app.fullname" . }}-security
+  labels:
+    {{- include "app.labels" . | nindent 4 }}
+spec:
+  headers:
+    {{- with $hosts }}
+    allowedHosts:
+      {{- toYaml . | nindent 6 }}
+    {{- end }}
+    frameDeny: true
+    browserXssFilter: true
+    contentTypeNosniff: true
+    stsIncludeSubdomains: true
+    stsPreload: true
+    stsSeconds: 31536000
+    referrerPolicy: {{ .Values.ingress.securityHeaders.referrerPolicy | quote }}
+    permissionsPolicy: {{ .Values.ingress.securityHeaders.permissionsPolicy | quote }}
+    {{- with .Values.ingress.securityHeaders.contentSecurityPolicy }}
+    contentSecurityPolicy: {{ . | quote }}
+    {{- end }}
+{{- end }}
