@@ -165,6 +165,8 @@ the local-path provisioner and stop doing this by hand.
 | `sonarr-anime` | yes, on `/ping` | seccomp, no privilege escalation; capabilities kept for the LinuxServer init | **no — the image starts as root, then drops to 1100** |
 | `recyclarr` | n/a (batch job) | capabilities dropped, seccomp, no privilege escalation, no API token | **yes — 1000**, the image's default and the claim's existing owner |
 | `tautulli` | yes, on `/status` | capabilities dropped except `CHOWN`/`SETUID`/`SETGID`, which the image's root init needs; seccomp; no privilege escalation | **no — the image starts as root, then drops to 1100** |
+| `radarr` | yes, on `/ping` | seccomp, no privilege escalation; capabilities kept for the LinuxServer init | **no — the image starts as root, then drops to 1100** |
+| `radarr-anime` | yes, on `/ping` | seccomp, no privilege escalation; capabilities kept for the LinuxServer init | **no — the image starts as root, then drops to 1100**; moved from 0 |
 | everything else | no | no | no |
 
 ## Checking a chart against this list
@@ -240,6 +242,13 @@ so readiness is disabled rather than pointed at liveness. Its image starts as ro
 `PUID`/`PGID`, so the capability set is `ALL` dropped plus the three calls that init makes. The chart
 creates the config claim: the previous one was a Longhorn volume that vanished in 2026, which is why
 the app had not run for 71 days.
+
+`radarr` and `radarr-anime` as of 2026-11-13: the same LinuxServer-plus-exporter pair as `sonarr` and
+`sonarr-anime`, five objects each. The two NFS media claims are named `downloads` and `media` values
+instead of raw pod spec; probes are on `/ping` with a 300s startup budget for the database migration;
+`RADARR__LOG__LEVEL` and `RADARR__LOG__CONSOLELEVEL` are both at `warn`. Claim names already matched
+the derived `<fullname>-config`, so no data moved. The `radarr-anime` instance also moved off
+`PUID 0`, which is the chown runbook the contract's UID section describes.
 
 ## Charts still to align
 
