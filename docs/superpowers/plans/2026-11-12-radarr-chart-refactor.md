@@ -693,6 +693,7 @@ commands are in the spec's **Operator runbook** section; do not repeat them here
 2. Patch Secrets `radarr` and `radarr-anime` from `~/.config/secrets/homelab.env`.
 3. Chown `radarr-anime-config` on `streaming`, then leave the Deployment at zero until the merge.
 4. Merge the PR.
-5. Sync `radarr`, verify, then sync `radarr-anime`, verify (pods `2/2`, `/config` owned by `1100`,
-   `writable`, no 401, `/ping` OK).
+5. Sync `radarr`, verify, then sync `radarr-anime`, verify (pods `2/2`, `1100` from `stat -c %u
+   /config`, nothing from `find /config ! -uid 1100` run as `abc`, `writable` on `/downloads` and
+   `/movies` as `abc`, no 401, `/ping` OK).
 6. Re-enable automation.

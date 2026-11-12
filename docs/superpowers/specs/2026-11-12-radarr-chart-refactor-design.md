@@ -247,23 +247,32 @@ protection against a deletion.
    kubectl -n media-stack get pods -l app.kubernetes.io/instance=radarr-anime -o wide
    kubectl -n media-stack exec -c radarr-anime deploy/radarr-anime -- stat -c %u /config
    kubectl -n media-stack exec -c radarr-anime deploy/radarr-anime -- s6-setuidgid abc \
-     sh -c 'test -w /config && test -w /downloads && test -w /movies && echo writable'
+     sh -c 'find /config ! -uid 1100 | head'
+   kubectl -n media-stack exec -c radarr-anime deploy/radarr-anime -- s6-setuidgid abc \
+     sh -c 'test -w /downloads && test -w /movies && echo writable'
    kubectl -n media-stack logs deploy/radarr -c radarr-exporter --tail=20
    kubectl -n media-stack logs deploy/radarr-anime -c radarr-anime-exporter --tail=20
    curl -s http://radarr.kub.local/ping
    curl -s http://radarr-anime.kub.local/ping
    ```
 
-   Expected: both pods `2/2 Running`, `1100` as the `/config` owner, `writable`, no 401 in either
-   exporter log, and `{"status":"OK"}` from both `/ping` endpoints. `stat -c %u /config` is the
-   ownership check, not `id`: the LinuxServer entrypoint runs as root and `id` reports 0. The write
-   test runs through `s6-setuidgid abc` because `kubectl exec` otherwise runs as that same root user,
-   and `test -w` as root proves nothing about the account the app uses — the switch to `abc` is what
-   makes the test meaningful. The `/config` part catches a missed recursive chown; the `/movies` and
-   `/downloads` parts catch root-owned media left by the old `PUID=0` process, because a write to a
-   directory only needs write permission on that directory. The init does not substitute for the
-   chown: it calls `lsiown abc:abc /config` without `-R`, and `lsiown` uses `find -maxdepth 0` unless
-   `-R` is passed, so only the top-level directory changes owner.
+   Expected: both pods `2/2 Running`, `1100` from `stat`, no output from `find`, `writable`, no 401
+   in either exporter log, and `{"status":"OK"}` from both `/ping` endpoints.
+
+   The three checks prove different things, and only one of them guards the chown:
+
+   - `stat -c %u /config` proves that the init ran. `lsiown abc:abc /config` runs without `-R`, so it
+     resets the top-level directory's owner to `abc` (1100) on every start; it says nothing about the
+     files inside. `id` is not the check: the entrypoint runs as root and `id` reports 0.
+   - `find /config ! -uid 1100`, run as `abc`, is the chown guard. Any path printed is a file the
+     recursive chown missed. The init cannot stand in for that chown: `lsiown` uses `find -maxdepth 0`
+     unless `-R` is passed, so only the top-level directory ever changes owner.
+   - `test -w /downloads && test -w /movies`, run as `abc`, proves the two mount roots are writable by
+     the app user — not that every directory below them is. A release folder left root-owned by the
+     old `PUID 0` process can still fail an import.
+
+   The `find` and `test -w` checks run through `s6-setuidgid abc` because `kubectl exec` otherwise
+   runs as that same root user, and neither would say anything about the account the app uses.
 
 7. **Re-enable automation** on both Applications in the UI, then confirm both report
    `Synced/Healthy`.
