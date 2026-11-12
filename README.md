@@ -18,7 +18,7 @@ portfolio.
 | Storage | `local-path` for configuration, NFS provisioner classes for media. **No replicated storage.** |
 | Replicated storage | Longhorn was abandoned after the disk failure. Its volumes are gone. |
 | Applications | 58 ArgoCD Applications; about 20 are unhealthy |
-| GitOps coverage | Auto-sync is enabled per Application from the ArgoCD UI; ~34 of the 58 manifests in git do not record it |
+| GitOps coverage | Auto-sync is enabled per Application from the ArgoCD UI; no manifest in git records it |
 | Backups | **Not working.** The offsite target is an AWS S3 bucket and no script covers the control plane or PVC data |
 | Observability | Prometheus with alerting disabled, Grafana down, no log pipeline |
 
