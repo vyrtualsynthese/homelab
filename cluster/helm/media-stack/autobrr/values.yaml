@@ -187,7 +187,25 @@ resources:
 
 # Probes. The paths include the /api prefix — autobrr serves them under /api,
 # and a probe without it returns 404 and restarts the pod forever.
+#
+# The startup probe runs first and holds liveness and readiness until the app
+# answers. autobrr's first start after an upgrade is slow: measured 83s on
+# 2026-11-12 (v1.85 -> v1.90, database read by a new version), against ~52s on
+# the previous image. The liveness budget below is only ~110s (20s delay + 3
+# failures every 30s), so without this gate a slower start gets a healthy pod
+# killed mid-startup, restarted, and killed again — a crash loop made by the
+# probe rather than the app. 30 failures x 5s gives 150s, about 1.8x the
+# measured start.
 probes:
+  startup:
+    enabled: true
+    # Same endpoint as liveness: the question is "is the process up", not "is
+    # the database ready" — readiness answers the latter and would never pass
+    # while the database is still loading.
+    path: /api/healthz/liveness
+    periodSeconds: 5
+    timeoutSeconds: 5
+    failureThreshold: 30
   liveness:
     enabled: true
     path: /api/healthz/liveness
