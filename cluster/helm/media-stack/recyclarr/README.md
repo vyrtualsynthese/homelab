@@ -109,9 +109,9 @@ state is regenerable, but the next run then re-downloads the guides.
 
 ## Schedule
 
-`0 6 * * *` in `Europe/Paris`. The old schedule was `0 5 * * *` interpreted by a UTC controller, which
-is the same 06:00 Paris run; the value is now stated so it does not move with a controller timezone
-change.
+`0 6 * * *` in `Europe/Paris`: a fixed 06:00 run, all year. The old `0 5 * * *` was 05:00 UTC, which
+is 06:00 Paris in winter and 07:00 in summer, so the summer run moves one hour earlier. The value is
+now stated so it cannot move again with the controller's timezone.
 
 `Forbid` is deliberate. A sync takes seconds; `Replace` would kill one halfway and leave an arr
 instance with some settings applied and some not. A skipped day is the cheaper failure and is visible

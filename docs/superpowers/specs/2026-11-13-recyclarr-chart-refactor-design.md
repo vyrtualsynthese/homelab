@@ -83,8 +83,9 @@ file on every run.
   `/config/recyclarr.yml` with `subPath`, mode `0444`. Each CronJob run starts a new pod, so the
   `subPath` staleness that matters for a Deployment does not apply here. The chart never templates or
   validates the YAML.
-- **Schedule `0 6 * * *` with `timeZone: Europe/Paris`**, identical start time to today's run (05:00
-  UTC = 06:00 Paris), but now explicit instead of depending on the controller's timezone.
+- **Schedule `0 6 * * *` with `timeZone: Europe/Paris`**: a fixed 06:00 Paris run. The old
+  `0 5 * * *` was 05:00 UTC — 06:00 Paris in winter and 07:00 in summer — so the summer run moves one
+  hour earlier; the schedule no longer drifts with the offset.
 - **`concurrencyPolicy: Forbid`**, not `Replace`: a sync takes seconds, and killing one halfway
   leaves an arr instance partly updated. A skipped day is cheaper than a torn sync.
 - **`startingDeadlineSeconds: 300`**, `backoffLimit: 1` (sync is idempotent), `activeDeadlineSeconds:
