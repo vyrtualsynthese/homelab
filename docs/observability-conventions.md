@@ -205,7 +205,7 @@ secure field), so the contact point is never rewritten by automation.
 | `NodeFilesystemReadOnly` | filesystem mounted read-only | 5m | critical | inactive |
 | `MonitoringDown` | `1 - up{job="prometheus"}`; `execErrState: Alerting` | 5m | critical | inactive |
 | `DriveNeedsReplacement` | SMART failed, exit != 0, <10 % life, or pending sectors | 10m | critical | **firing** on `nas /dev/sdf` |
-| `ScrapeTargetDown` | any non-node target down, including the edge Pis' SMART and Docker exporters; Prometheus and kube-state-metrics excluded (own rules) | 15m | warning | **firing, silenced** (7 media exporters) |
+| `ScrapeTargetDown` | any non-node target down, including the edge Pis' SMART and Docker exporters; Prometheus and kube-state-metrics excluded (own rules) | 15m | warning | **firing, silenced** (4 media exporters) |
 | `NodeCpuHigh` | >90 % by host | 15m | warning | inactive |
 | `NodeMemoryHigh` | >90 % of `MemAvailable` | 15m | warning | inactive |
 | `NodeTemperatureHigh` | hottest real sensor >80 °C | 10m | warning | inactive |
@@ -268,8 +268,8 @@ invalid PromQL and never evaluated.
   apps crash-looping since the Longhorn loss. They still show `firing`; only the
   notification is suppressed.
 - Until 2026-11-26: `alertname="ScrapeTargetDown", namespace="media-stack",
-  job="kubernetes-pods"` — the seven exporters are repaired by a separate job.
-  Remove it when they answer.
+  job="kubernetes-pods"` — the media-stack exporters are repaired by a separate
+  job. Remove it when they answer.
 
 A silence changes notification delivery, not alert state. A silenced rule still
 reports `firing` on the Health dashboard.
@@ -294,7 +294,7 @@ space than the 50 GiB provisioned. Loki's compactor retains by time; confirm it
 runs (config shows `retention_enabled: true`,
 `delete_request_store: filesystem`) before assuming old logs disappear.
 
-## Current health facts (2026-11-12)
+## Current health facts (2026-11-12; scrape targets re-checked 2026-11-13)
 
 - 6 hosts: `nas` (.41), `nuc0` (.27), `streaming` (.46), `rbp2` (.48), `rbp0`
   (.22), `rbp1` (.38). All answer.
@@ -304,9 +304,10 @@ runs (config shows `retention_enabled: true`,
 - 17 pods Pending are older than the 2-hour `PodPending` window, so they are
   deliberately outside the alert. The underlying claims are W0's cleanup, not
   monitoring's.
-- 7 scrape targets down, all `media-stack` exporters (`radarr`, `radarr-anime`,
-  `sonarr`, `sonarr-anime`, `prowlarr`, `qbittorrent`, `unpackerr`) — wrong app
-  side API keys and ports, deliberately deferred. **No alert reports them.**
+- 4 scrape targets down on 2026-11-13, all `media-stack` exporters (`radarr`,
+  `radarr-anime`, `qbittorrent-exporter`, `unpackerr`) — wrong app-side API keys
+  or ports, deliberately deferred. `ScrapeTargetDown` fires for them and is
+  silenced until 2026-11-26; the silence hides the notification, not the state.
 - `nas /dev/sdf` (Crucial BX500, holds `local-path`, therefore Prometheus, Loki,
   Grafana and every config volume) is at **0 % life left**, SMART exit code 32.
   It needs replacing; `DriveNeedsReplacement` is firing for it.
