@@ -403,9 +403,9 @@ already mounts, enriches with the `kubernetes` filter, and pushes to Loki with t
 - `cluster/helm/monitoring/grafana/` in full — vendored chart, `templates/`, `dashboards/`, `ci/`,
   `README.md`, `.helmignore`. Replaced by the wrapper of the same name.
 - `cluster/helm/monitoring/loki/values.yaml` — replaced by the wrapper's `values.yaml` + `Chart.yaml`.
-- `.gitignore`: the negation `!cluster/helm/monitoring/grafana/templates/secret.yaml` was already
-  removed (it pointed at a template that never held a secret), and two globs were added so the
-  built `charts/` and `Chart.lock` are never committed:
+- `.gitignore`: the negation `!cluster/helm/monitoring/grafana/templates/secret.yaml` was removed
+  with this change (it pointed at a template that never held a secret), and two globs were added so
+  the built `charts/` and `Chart.lock` are never committed:
   `cluster/helm/monitoring/*/charts/` and `cluster/helm/monitoring/*/Chart.lock`.
 
 Not deleted: the stuck `prometheus-data` PVC and the `longhorn-system` namespace. They belong to
@@ -509,6 +509,12 @@ On the cluster, after the first sync:
    `storage.tsdb.retention.time=90d`.
 9. `loki.kub.local/ui` responds.
 10. Running image tags equal the pins in the values files.
+11. Prometheus' `/targets` page lists the two `rbp0` and `rbp1` static jobs as `UP` on ports 9100,
+    9902 and 9323. This is the one part of the scrape configuration that no render can prove.
+12. A **plain-text** log line (not a JSON one) appears in Grafana Explore with its message body
+    intact. `Merge_Log On` with `Keep_Log Off` keeps the raw `log` field when the merge fails in most
+    builds, but not provably all, and the general "a log line appears" check above can be satisfied
+    by JSON-only traffic.
 
 ## 8. Acceptance
 

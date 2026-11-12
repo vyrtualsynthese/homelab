@@ -202,8 +202,8 @@ demand — the current mix of 1Gi through 50Gi config claims is a symptom of gue
    - liveness and readiness probes
    - `securityContext` that drops capabilities and avoids root where the image allows it
    - one `values.yaml` per environment, no per-app template forks of the same logic
-3. **No vendored charts.** `postiz`, `discourse`, `authentik`, `dashy` and `ashuvidz-website` migrate
-   to rule 1 or rule 2 on their next touch. Until then they are exempt by name, not by category.
+3. **No vendored charts.** `postiz` is the last one and migrates to rule 1 on its next touch. Until
+   then it is exempt by name, not by category.
 4. **No Bitnami.** Not as a chart, not as an image.
 
 ### 8.4 Sync policy
