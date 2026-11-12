@@ -1,14 +1,17 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ include "fullname" . }}
+  name: {{ include "app.fullname" . }}
   labels:
-    {{- include "labels" . | nindent 4 }}
+    {{- include "app.labels" . | nindent 4 }}
 spec:
   type: {{ .Values.service.type }}
   ports:
-    - port: 8191
-      name: flaresolverr
-      targetPort: flaresolverr
+    # Only the API port. The metrics port is scraped from the pod IP through the
+    # pod annotations, so it does not belong on the Service.
+    - name: http
+      port: {{ .Values.service.port }}
+      targetPort: http
+      protocol: TCP
   selector:
-    {{- include "selectorLabels" . | nindent 4 }}
+    {{- include "app.selectorLabels" . | nindent 4 }}
