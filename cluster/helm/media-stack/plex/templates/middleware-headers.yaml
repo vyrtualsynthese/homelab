@@ -1,0 +1,16 @@
+{{- if and .Values.ingress.enabled .Values.ingress.securityHeaders.enabled }}
+apiVersion: {{ .Values.ingress.apiVersion }}
+kind: Middleware
+metadata:
+  name: {{ include "app.fullname" . }}-security
+  labels:
+    {{- include "app.labels" . | nindent 4 }}
+spec:
+  headers:
+    frameDeny: true
+    browserXssFilter: true
+    contentTypeNosniff: true
+    stsIncludeSubdomains: true
+    stsPreload: true
+    stsSeconds: 31536000
+{{- end }}
