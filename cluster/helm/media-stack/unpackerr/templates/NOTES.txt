@@ -1,0 +1,11 @@
+{{ include "app.fullname" . }} has been deployed to namespace {{ .Release.Namespace }}.
+
+This deployment is not exposed. The v1 web UI is available on a port-forward:
+
+  kubectl -n {{ .Release.Namespace }} port-forward deploy/{{ include "app.fullname" . }} {{ .Values.container.port }}:{{ .Values.container.port }}
+
+API keys are read from the existing Secrets named in .Values.instances; none is
+stored in the chart.
+
+Prometheus metrics are off: v1 requires an API key for /metrics, which the
+cluster's annotation-based scrape job cannot send.

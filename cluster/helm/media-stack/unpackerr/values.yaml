@@ -1,84 +1,196 @@
-# Default values for home.
-# This is a YAML-formatted file.
-# Declare variables to be passed into your templates.
+# Default values for unpackerr.
+#
+# unpackerr extracts completed downloads in place so the *arr apps can import
+# them. It has no web UI in this deployment: the v1 UI exists on the pod IP but
+# nothing publishes it, and the chart renders no Service.
 
-replicaCount: 1
+# -- Override the chart name.
+nameOverride: ""
+# -- Override the generated release name.
+fullnameOverride: ""
+
+# -- Deployment strategy. `Recreate` on purpose: a second pod would scan the same
+# queue and extract the same archive into the same directory.
+strategy: Recreate
 
 image:
   repository: golift/unpackerr
-  pullPolicy: IfNotPresent
-  # Overrides the image tag whose default is the chart appVersion.
+  # -- Pin the tag. Renovate manages this. Keep appVersion equal to it.
   tag: "v1.0.1"
+  pullPolicy: IfNotPresent
 
 imagePullSecrets: []
-nameOverride: ""
-fullnameOverride: ""
 
 serviceAccount:
-  # Specifies whether a service account should be created
-  create: false
-  # Annotations to add to the service account
-  annotations: {}
-  # The name of the service account to use.
-  # If not set and create is true, a name is generated using the fullname template
+  # -- Create a dedicated ServiceAccount. unpackerr never calls the Kubernetes API.
+  create: true
+  automount: false
   name: ""
+  annotations: {}
 
-podAnnotations:
-  setGateway: "true"
-  prometheus.io/scrape: "true"
-  prometheus.io/scheme: "http"
-  prometheus.io/port: "5656"
+# -- Annotations added to the pod. There are no `prometheus.io/*` entries: v1
+# serves /metrics behind an API key, so the annotation-based scrape job cannot
+# use it. Adding them back without a credential produces a permanently down
+# target.
+podAnnotations: {}
+podLabels: {}
 
-podSecurityContext: {}
-# fsGroup: 2000
+podSecurityContext:
+  # -- Runtime's syscall filter. The image is a static Go binary on Alpine.
+  seccompProfile:
+    type: RuntimeDefault
 
 securityContext:
-  {}
-  # capabilities:
-  #   drop:
-  #   - ALL
-  # readOnlyRootFilesystem: true
-# runAsNonRoot: true
-# runAsUser: 1000
+  # -- The image declares no USER and would run as root. UID 1100 is what
+  # qBittorrent, Sonarr and the rest of media-stack use, and the NFS download
+  # export already accepts it.
+  runAsNonRoot: true
+  runAsUser: 1100
+  runAsGroup: 1100
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
 
-service:
-  type: ClusterIP
-  port: 32400
+container:
+  # -- HTTP listener port, named `http` in the pod. The chart renders
+  # UN_WEBSERVER_LISTEN_ADDR and the liveness probe from this one value, so the
+  # listener and the probe cannot disagree.
+  port: 5656
 
-ingress:
-  enabled: true
-  className: no
-  annotations: {}
-  # kubernetes.io/ingress.class: nginx
-  # kubernetes.io/tls-acme: "true"
-  hosts:
-    - host: chart-example.local
-      paths:
-        - path: /
-          pathType: ImplementationSpecific
-  tls: []
-  #  - secretName: chart-example-tls
-  #    hosts:
-  #      - chart-example.local
+# -- Environment variables, rendered inline into the container spec. Changing a
+# value changes the pod template, so the Deployment rolls by itself.
+env:
+  TZ: "Europe/Paris"
+  # Cuts the all-zero queue summary. The noise floor is one line per tracked item
+  # per minute (measured on 0.16.1 on 2026-11-13, about 13k lines a day, mostly
+  # "Imported, elapsed: N"). unpackerr has no log level; `quiet` is not an option
+  # because it silences errors too.
+  UN_ACTIVITY: "true"
+  UN_INTERVAL: "1m"
+  UN_START_DELAY: "1m"
+  UN_RETRY_DELAY: "5m"
+  UN_MAX_RETRIES: "10"
+  UN_PARALLEL: "1"
+  UN_FILE_MODE: "0644"
+  UN_DIR_MODE: "0755"
+  # The web server is the liveness target. `noauth` stops v1 from generating a
+  # temporary password at every start and printing it into Loki. Nothing
+  # publishes this port, so it is reachable by pod IP and port-forward only.
+  UN_WEBSERVER_UI_PASSWORD: "noauth"
+  # UN_DEBUG: "false"
+  # UN_LOG_QUEUES: "5m"
+  # UN_PROGRESS: "1m"
 
-resources:
-  {}
-  #requests:
-  #  cpu: 1m
-  #  memory: 16Mi
-  #limits:
-  #  memory: 512Mi
+# -- Starr instances. The key names the app and the index that appears in the
+# environment: `sonarr0` renders UN_SONARR_0_*, `radarr1` renders UN_RADARR_1_*.
+# Adding an instance is a block here plus one include line in the Deployment.
+instances:
+  sonarr0:
+    url: "http://sonarr:8989"
+    apiKeySecret:
+      name: sonarr
+      key: secret
+    paths:
+      - /downloads
+    protocols: "torrent,TorrentDownloadProtocol"
+    timeout: 1m
+    deleteOrig: false
+    deleteDelay: 30m
+  sonarr1:
+    url: "http://sonarr-anime:8989"
+    apiKeySecret:
+      name: sonarr-anime
+      key: secret
+    paths:
+      - /downloads
+    protocols: "torrent,TorrentDownloadProtocol"
+    timeout: 1m
+    deleteOrig: false
+    deleteDelay: 30m
+  radarr0:
+    url: "http://radarr:7878"
+    apiKeySecret:
+      name: radarr
+      key: secret
+    paths:
+      - /downloads
+    protocols: "torrent,TorrentDownloadProtocol"
+    timeout: 1m
+    deleteOrig: false
+    deleteDelay: 30m
+  radarr1:
+    url: "http://radarr-anime:7878"
+    apiKeySecret:
+      name: radarr-anime
+      key: secret
+    paths:
+      - /downloads
+    protocols: "torrent,TorrentDownloadProtocol"
+    timeout: 1m
+    deleteOrig: false
+    deleteDelay: 30m
 
-autoscaling:
-  enabled: false
-  minReplicas: 1
-  maxReplicas: 100
-  targetCPUUtilizationPercentage: 80
-  # targetMemoryUtilizationPercentage: 80
+downloads:
+  # -- qBittorrent's NFS export, the same claim the *arr apps mount. The chart
+  # does not create it.
+  existingClaim: pvc-nfs-qbittorrent-download-nfs-subdir-external-provisioner
+  mountPath: /downloads
+  readOnly: false
+
+# -- Variables sourced from a Secret, as `{ name, valueFrom }`. Kept separate so
+# a secret can never be pasted into the plain map above by accident.
+extraEnv: []
+# -- Bulk `envFrom` sources, usually `secretRef`.
+envFrom: []
+# -- Additional volumes, rendered verbatim into the pod spec.
+volumes: []
+# -- Additional volume mounts, rendered verbatim into the container.
+volumeMounts: []
 
 nodeSelector:
+  # -- Every workload is pinned to a named node.
   kubernetes.io/hostname: streaming
 
 tolerations: []
-
 affinity: {}
+
+# Sized from a measurement on 2026-11-13: 15 MiB and ~0.02m CPU while idle.
+# The request covers idle plus margin; the limit is headroom for the extraction
+# children, which were not running when the measurement was taken. Confirm with
+# `kubectl top pod` during a burst and adjust. Any non-zero request also moves
+# the pod out of the BestEffort class, which is what it had before.
+resources:
+  requests:
+    cpu: 10m
+    memory: 64Mi
+  limits:
+    memory: 512Mi
+
+probes:
+  liveness:
+    enabled: true
+    # v1 serves the SPA at `/` outside the auth wrappers, so it answers 200 while
+    # the process serves. unpackerr has no health endpoint: every /api route
+    # needs a permission, and the kubelet has no API key.
+    path: /
+    port: http
+    initialDelaySeconds: 20
+    periodSeconds: 30
+    timeoutSeconds: 5
+    failureThreshold: 3
+  readiness:
+    # No unauthenticated dependency-aware endpoint exists, and the chart renders
+    # no Service, so there is no traffic to gate. Pointing this at liveness
+    # would turn an *arr outage into a pod restart.
+    #
+    # The block stays here so the toggle renders a valid probe if it is ever
+    # turned on: enabling it duplicates liveness, which is a decision to take
+    # deliberately, not a default.
+    enabled: false
+    path: /
+    port: http
+    initialDelaySeconds: 10
+    periodSeconds: 15
+    timeoutSeconds: 5
+    failureThreshold: 3
