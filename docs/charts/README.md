@@ -60,6 +60,7 @@ that are not valid environment-variable names. If a rollout is only correct beca
 | 15 | `allowPrivilegeEscalation: false`, `capabilities.drop: [ALL]`, `seccompProfile: RuntimeDefault` | Free, and breaks nothing that does not need privileges |
 | 16 | Extra volumes with an explicit `mountPath` under `/srv/` or the app's own path | Keeps the NFS-media convention readable |
 | 17 | If the image ships a Prometheus exporter, it is enabled and scraped (see **Metrics**) | An exporter that is off is an observability hole nobody notices until the incident |
+| 18 | The app logs at `warning` or above, not at `info` (see **Logs**) | Fluent Bit ships every line to Loki with no filter; `info` is thousands of lines a day nobody reads |
 
 ### Metrics
 
@@ -93,6 +94,29 @@ Rules that came out of `flaresolverr`:
 - **No exporter in the image?** Use a maintained sidecar if one exists (`exportarr` for the *arr
   apps, `qbittorrent-exporter`, `mktxp` for MikroTik); never write one. An app with neither gets
   nothing — silence is better than a metrics endpoint nobody maintains.
+
+### Logs
+
+**Log at warnings and errors, not at `info`.** Fluent Bit tails every container on every node and
+ships every line to Loki unfiltered: there is no collection-side filter to fix it afterwards. So the
+app's own level is the only place the volume can be cut, and a chart that leaves it at the default is
+a chart that fills Loki with request lines nobody reads and buries the two lines that matter when
+something breaks.
+
+- Set the app's level to `warning` (or `error` where `warning` is pure noise) in `env`, never in a
+  ConfigMap. Inline, so the rollout follows the change.
+- **Two exceptions, both temporary:** while debugging a live problem, and while a new app is being
+  set up on the cluster. Raise the level for those, then put it back to `warning` once the app
+  behaves. A chart that merges at `info` is a regression, whatever the reason it was raised for.
+- **Keep the failures.** Startup failures and the errors that stop a request from being served must
+  still be visible at `warning`. If an app only reports them at `info`, say so in its README and pick
+  `error` deliberately — never leave the level at `info` just to preserve them.
+- **Whatever the level hides must be countable elsewhere:** a Prometheus counter, the app's own
+  database, its UI. If there is no other record of an outcome, log that outcome at `warning` rather
+  than dropping it silently.
+
+`flaresolverr` is the first chart to follow this: `LOG_LEVEL: warning`, with the counters carrying
+the challenge outcomes the log no longer prints.
 
 ### Changing the UID breaks the config volume
 
@@ -135,6 +159,7 @@ grep -rn 'latest' values.yaml || echo "no floating tags"
 grep -rn 'networking.k8s.io' templates/ || echo "no core Ingress"
 grep -rn 'autobrr\|<previous app name>' templates/ values.yaml || echo "no copy-paste leftovers"
 grep -rn 'prometheus.io/scrape' templates/ || echo "no scrape annotation — does the image ship an exporter?"
+grep -rniE 'log_?level' values.yaml || echo "no log level — what does the image default to, and is it info?"
 ```
 
 That last one is the important one. Every chart in this repo was produced by copying another, and the
@@ -149,8 +174,9 @@ cannot collide with the original.
 
 `flaresolverr` as of 2026-11-12: the app-shaped version of the same chart. Three objects because the
 app keeps no state and is never exposed, `RollingUpdate` because there is no claim to fight over,
-probes on the app's own `/health`, and a `metrics` block that turns its exporter on in one place —
-environment, port and scrape annotations together.
+probes on the app's own `/health`, a `metrics` block that turns its exporter on in one place —
+environment, port and scrape annotations together — and `LOG_LEVEL: warning`, with the counters
+carrying the outcomes the log no longer prints.
 
 ## Charts still to align
 
