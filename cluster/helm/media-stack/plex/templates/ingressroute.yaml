@@ -7,7 +7,7 @@
 apiVersion: {{ .Values.ingress.apiVersion }}
 kind: IngressRoute
 metadata:
-  name: {{ $fullName }}
+  name: {{ $fullName }}-public
   labels:
     {{- include "app.labels" . | nindent 4 }}
     {{- with .Values.ingress.labels }}
@@ -53,7 +53,7 @@ spec:
 apiVersion: {{ .Values.ingress.apiVersion }}
 kind: IngressRoute
 metadata:
-  name: {{ $fullName }}-redirect
+  name: {{ $fullName }}-public-redirect
   labels:
     {{- include "app.labels" . | nindent 4 }}
     {{- with .Values.ingress.labels }}
