@@ -34,7 +34,7 @@ Consequences:
 - `cluster/infrastructure/**` is **not referenced by any Application** → applied by hand. That includes
   the Traefik `HelmChartConfig`, middlewares and TLSStore. **[verify]** intent.
 
-## 3. Three app patterns
+## 3. App patterns
 
 ### A. Local chart (majority)
 
@@ -56,7 +56,7 @@ spec:
 
 The chart lives at `cluster/helm/<path>`; its version is `image.tag` in that chart's `values.yaml`.
 
-### B. Remote chart + values (preferred for third-party apps)
+### B. Remote chart + values (legacy for third-party apps)
 
 ```yaml
 spec:
@@ -75,11 +75,23 @@ spec:
 The repo directory then holds only `values.yaml` (no `Chart.yaml`). Examples: bazarr, bazarr-anime,
 calibre, filebrowser, postgres, pgadmin, renovate, local-path, books-media, nfs-audio.
 
+Not the way to add an external chart: new work uses pattern D, and these ten are converted
+separately.
+
 ### C. Vendored upstream chart
 
-`prometheus`, `grafana`, `postiz` commit the full upstream chart and edit it in place. Treat upstream
-files as vendored: change `values.yaml` unless you intend to fork. There is no clean upgrade path;
-prefer migrating to pattern B when touching these.
+`postiz` commits the full upstream chart and edits it in place. Treat upstream files as vendored:
+change `values.yaml` unless you intend to fork. There is no clean upgrade path; prefer migrating to
+pattern D when touching it. The vendored `prometheus` and `grafana` charts are gone — they are
+wrappers now (pattern D).
+
+### D. Wrapper chart with the official chart as a dependency
+
+The way external charts are consumed: the repo owns a small chart in `cluster/helm/` whose
+`Chart.yaml` pins the upstream chart to an exact `version:`, and whose `values.yaml` pins the image
+repository and tag of every container it renders. `charts/` and `Chart.lock` are gitignored —
+ArgoCD runs `helm dependency build` at sync time. Examples: `monitoring/prometheus`,
+`monitoring/grafana`, `monitoring/loki`, `monitoring/fluent-bit`, `authentik`, `dashy`.
 
 ## 4. Conventions
 
@@ -99,7 +111,9 @@ prefer migrating to pattern B when touching these.
 - Placement: `nodeSelector: kubernetes.io/hostname: <node>` — every workload is pinned to a named node,
   and its `local-path` volume lands on that same node. `streaming` for GPU and media work, `nas` for
   storage-bound apps, `nuc0` for the general catalogue, `rbp2` for nothing but the control plane.
-  The old `node-type` label is retired; do not reintroduce it.
+  Observability (Prometheus, Grafana, Loki) is a `nas` workload: ~50 GiB of `local-path` claims, no
+  NFS. The NAS's `/mnt/ultrafaststorage` is reserved for the qbittorrent download export; nothing
+  else goes there. The old `node-type` label is retired; do not reintroduce it.
 - Never pin a workload to `rbp2`. It is an ARM64 Raspberry Pi and several images have no ARM build.
 - Resources: every container sets memory requests/limits; CPU requests are tiny (1m–100m).
 - Monitoring: exporters expose 9707 (exportarr) with `prometheus.io/scrape` annotations; Prometheus
@@ -215,14 +229,16 @@ are in `docs/superpowers/plans/`.
 
 13. All 58 live IngressRoutes and 106 repo files use `traefik.containo.us/v1alpha1`. Both CRD groups
     are installed; the v3 upgrade requires moving to `traefik.io/v1alpha1` while still on 2.11.
-14. Orphans: `cluster/helm/nfs/minio-nfs` (full chart, no Application, MinIO is gone) and
-    `cluster/helm/monitoring/loki` (values only, no chart, no Application).
+14. Orphans: `cluster/helm/nfs/minio-nfs` (full chart, no Application, MinIO is gone). **Resolved for
+    the monitoring charts**: `cluster/helm/monitoring/loki` is now a wrapper chart with an
+    Application.
 
 **Version drift**
 
 15. Traefik `2.9.4` (June 2023) from the K3s bundled addon; K3s `1.30.1` against a `1.36.x` stable.
-16. Vendored charts `prometheus` 14.8.0 and `grafana` 6.52.5 are years behind the images they run.
-    No vendored charts are to be added; migrate these on their next touch.
+16. **Resolved for the monitoring charts:** the vendored `prometheus` 14.8.0 and `grafana` 6.52.5 are
+    replaced by wrapper charts on current upstream versions. No vendored charts are to be added;
+    migrate the remaining ones on their next touch.
 17. `renovate.json` ignores `cluster/infrastructure/**`, `kubectl/**` and `ansible/**` — those are
     bumped by hand.
 
