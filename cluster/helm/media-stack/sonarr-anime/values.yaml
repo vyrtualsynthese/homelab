@@ -1,4 +1,4 @@
-# Default values for sonarr.
+# Default values for sonarr-anime.
 # This chart follows the contract in docs/charts/README.md and the shape of the
 # reference chart, media-stack/prowlarr. The differences are the ones this app needs:
 # a LinuxServer image that starts as root and drops to PUID/PGID, two NFS media
@@ -172,7 +172,7 @@ exportarr:
   port: 9707
   apiKey:
     # -- Secret holding Sonarr's API key. Empty means the fullname, which is the
-    # `sonarr` Secret in the media-stack namespace.
+    # `sonarr-anime` Secret in the media-stack namespace.
     secretName: ""
     secretKey: secret
   resources:
