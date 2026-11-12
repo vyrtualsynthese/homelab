@@ -52,9 +52,13 @@ Secret values must be replaced.
   `runAsNonRoot` or `runAsUser` prevents it from starting, as documented in the `prowlarr` README.
   "Non-root" therefore means `PUID/PGID 1100` here, plus `allowPrivilegeEscalation: false` and the
   `RuntimeDefault` seccomp profile.
-- **Capabilities are not dropped.** The LinuxServer init must chown `/config` and switch user, so
-  `capabilities.drop: [ALL]` is not an option; only `allowPrivilegeEscalation: false` and the runtime
-  seccomp profile apply.
+- **Capabilities are not dropped.** The LinuxServer init must run as root to set `/config`'s top-level
+  ownership and then switch to `PUID`/`PGID`, so `capabilities.drop: [ALL]` is not an option; only
+  `allowPrivilegeEscalation: false` and the runtime seccomp profile apply. The init does **not** fix a
+  root-owned tree inside `/config`: it calls `lsiown abc:abc /config` without `-R`, and `lsiown` uses
+  `find -maxdepth 0` unless `-R` is passed, so only the directory itself changes owner. A tree left
+  root-owned by an earlier `PUID=0` run stays root-owned, which is why `radarr-anime` needs the manual
+  recursive `chown` in the operator runbook.
 - **`local-path` is hostPath-backed.** The kubelet does not apply `fsGroup`, so `fsGroup` is absent
   rather than set to something plausible.
 - **The live claims are `radarr-config` and `radarr-anime-config`.** Both equal `<fullname>-config` for
@@ -241,8 +245,9 @@ protection against a deletion.
    ```bash
    kubectl -n media-stack get pods -l app.kubernetes.io/instance=radarr -o wide
    kubectl -n media-stack get pods -l app.kubernetes.io/instance=radarr-anime -o wide
-   kubectl -n media-stack exec deploy/radarr-anime -- stat -c %u /config
-   kubectl -n media-stack exec deploy/radarr-anime -- sh -c 'test -w /config && test -w /downloads && test -w /movies && echo writable'
+   kubectl -n media-stack exec -c radarr-anime deploy/radarr-anime -- stat -c %u /config
+   kubectl -n media-stack exec -c radarr-anime deploy/radarr-anime -- s6-setuidgid abc \
+     sh -c 'test -w /config && test -w /downloads && test -w /movies && echo writable'
    kubectl -n media-stack logs deploy/radarr -c radarr-exporter --tail=20
    kubectl -n media-stack logs deploy/radarr-anime -c radarr-anime-exporter --tail=20
    curl -s http://radarr.kub.local/ping
@@ -251,10 +256,14 @@ protection against a deletion.
 
    Expected: both pods `2/2 Running`, `1100` as the `/config` owner, `writable`, no 401 in either
    exporter log, and `{"status":"OK"}` from both `/ping` endpoints. `stat -c %u /config` is the
-   ownership check, not `id`: the LinuxServer entrypoint runs as root and `id` reports 0. The
-   `/config` write test is the one that catches a missed chown; the `/movies` and `/downloads` tests
-   catch root-owned media left by the old `PUID=0` process, because a write to a directory only needs
-   write permission on that directory.
+   ownership check, not `id`: the LinuxServer entrypoint runs as root and `id` reports 0. The write
+   test runs through `s6-setuidgid abc` because `kubectl exec` otherwise runs as that same root user,
+   and `test -w` as root proves nothing about the account the app uses — the switch to `abc` is what
+   makes the test meaningful. The `/config` part catches a missed recursive chown; the `/movies` and
+   `/downloads` parts catch root-owned media left by the old `PUID=0` process, because a write to a
+   directory only needs write permission on that directory. The init does not substitute for the
+   chown: it calls `lsiown abc:abc /config` without `-R`, and `lsiown` uses `find -maxdepth 0` unless
+   `-R` is passed, so only the top-level directory changes owner.
 
 7. **Re-enable automation** on both Applications in the UI, then confirm both report
    `Synced/Healthy`.

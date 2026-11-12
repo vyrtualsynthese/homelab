@@ -136,7 +136,9 @@ step, not a chart change: this chart reads the key, it does not repair it.
 
 This is a LinuxServer image: it starts as **root**, prepares `/config`, then drops to
 `PUID`/`PGID`. That is why the values set those to `1100` and **do not** set `runAsNonRoot` or
-`runAsUser`; running the container directly as 1100 prevents the init from doing its job.
+`runAsUser`; running the container directly as 1100 prevents the init from doing its job. Preparing
+`/config` means setting the directory's own owner and switching user — it does not take ownership of
+the files inside, so a root-owned tree survives it.
 
 **Until 2026-11-12 this instance ran with `PUID`/`PGID 0`**, so everything in its config directory
 is owned by `root`. The chart now renders 1100, and the drop happens after the init: the pod starts,
@@ -162,10 +164,23 @@ The same `chown` applies to a claim recreated from scratch: `local-path` is host
 provisioner creates the directory as root, and the kubelet does not apply `fsGroup` to it either. The
 `autobrr` README describes the generic procedure.
 
-Check afterwards that `/config` is owned by 1100 —
-`kubectl -n media-stack exec deploy/radarr-anime -- stat -c %u /config`, expected `1100` — and that
-`/config` is writable by that user. Use `stat` on the directory rather than `id`: the LinuxServer
-entrypoint runs as root, so `id` reports 0 and reads as a false failure.
+Check afterwards that `/config` is owned by 1100 and that the app user can write to all three mounts:
+
+```bash
+kubectl -n media-stack exec -c radarr-anime deploy/radarr-anime -- stat -c %u /config
+kubectl -n media-stack exec -c radarr-anime deploy/radarr-anime -- s6-setuidgid abc \
+  sh -c 'test -w /config && test -w /downloads && test -w /movies && echo writable'
+```
+
+Expected `1100`, then `writable`. Use `stat` on the directory rather than `id`: the LinuxServer
+entrypoint runs as root, so `id` reports 0 and reads as a false failure. Run the write test through
+`s6-setuidgid abc`, because `kubectl exec` otherwise runs as that same root user and then `test -w`
+proves nothing about the account the app actually uses — it is the switch to `abc` that makes the
+test meaningful. The `/config` part catches a missed recursive chown; the `/movies` and `/downloads`
+parts catch root-owned media left by the old `PUID=0` process, because a write to a directory only
+needs write permission on that directory. The init does not cover this: it runs
+`lsiown abc:abc /config` without `-R`, which changes only the top-level directory's owner, never the
+tree inside it.
 
 ## Upgrading
 
