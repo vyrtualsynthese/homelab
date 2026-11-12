@@ -1,25 +1,134 @@
-# Default values for home.
-# This is a YAML-formatted file.
-# Declare variables to be passed into your templates.
+# Default values for radarr-anime.
+# This chart follows the contract in docs/charts/README.md and the shape of
+# `prowlarr`, the worked *arr example. The differences are the ones this app needs:
+# a LinuxServer image that starts as root and drops to PUID/PGID, an exportarr
+# sidecar, probes on Radarr's own `/ping`, and the two media claims it reads.
+
+# -- Override the chart name.
+nameOverride: ""
+# -- Override the generated release name.
+fullnameOverride: ""
 
 replicaCount: 1
 
+# -- `Recreate` is required with a ReadWriteOnce config volume.
+strategy: Recreate
+
 image:
-  repository: ghcr.io/linuxserver/radarr
+  # LinuxServer publishes on lscr.io. The image starts as root and drops to
+  # PUID/PGID through s6, so the securityContext cannot use runAsNonRoot.
+  repository: lscr.io/linuxserver/radarr
+  # -- Pin the tag. Never `latest`. Renovate manages this.
+  tag: "6.4.4.10685-ls326"
   pullPolicy: IfNotPresent
-  # Overrides the image tag whose default is the chart appVersion.
-  tag: 6.3.0
 
 imagePullSecrets: []
-nameOverride: ""
-fullnameOverride: ""
+
+serviceAccount:
+  # -- Create a dedicated ServiceAccount with no mounted token: Radarr never
+  # talks to the Kubernetes API.
+  create: true
+  automount: false
+  # -- Defaults to the fullname.
+  name: ""
+  annotations: {}
+
+# -- Extra pod annotations. Do not repeat `prometheus.io/*` here: the exportarr
+# block owns them, so the announced port cannot drift from the listener.
+podAnnotations: {}
+podLabels: {}
+
+# `fsGroup` is deliberately absent: local-path is hostPath-backed and the kubelet
+# does not apply fsGroup ownership to it. The LinuxServer init needs root to
+# prepare /config, then drops to PUID/PGID.
+podSecurityContext:
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+
+service:
+  type: ClusterIP
+  port: 7878
+
+container:
+  # -- Container port. Defaults to `service.port`; set only when the app listens
+  # somewhere else.
+  port: null
+
+ingressRoute:
+  # -- Render a Traefik IngressRoute. This repo never uses networking.k8s.io.
+  enabled: true
+  # -- API group. Flip to `traefik.io/v1alpha1` when Traefik v3 lands.
+  apiVersion: traefik.containo.us/v1alpha1
+  entryPoints:
+    - web
+  host: radarr-anime.kub.local
+  pathPrefix: /
+  middlewares: []
+  labels: {}
+  annotations: {}
+  tls:
+    enabled: false
+    secretName: ""
+    certResolver: ""
+    options: ""
+
+storage:
+  # -- Render the config claim. Radarr keeps its SQLite database there.
+  enabled: true
+  existingClaim: ""
+  className: local-path
+  accessModes:
+    - ReadWriteOnce
+  size: 128Mi
+  mountPath: /config
+
+# -- Inline environment. A change rolls the pod, so no ConfigMap.
+env:
+  TZ: "Europe/Paris"
+  # LinuxServer images drop from root to these IDs after preparing /config.
+  PUID: "1100"
+  PGID: "1100"
+  # Warnings and errors only: Fluent Bit ships every line to Loki unfiltered and
+  # Radarr's default is `info`, one line per request, scan and import. The file
+  # level and the console level (the one Loki sees) move together.
+  RADARR__LOG__LEVEL: "warn"
+  RADARR__LOG__CONSOLELEVEL: "warn"
+
+# -- Variables sourced from a Secret, as `{ name, valueFrom }`.
+extraEnv: []
+envFrom: []
+
+# qBittorrent's completed downloads. Radarr imports from here into the library.
+downloads:
+  existingClaim: pvc-nfs-qbittorrent-download-nfs-subdir-external-provisioner
+  mountPath: /downloads
+
+# The Plex movie library. Radarr writes new release folders here.
+media:
+  existingClaim: pvc-plex-media
+  mountPath: /movies
+
+# -- Additional volumes, rendered verbatim.
+volumes: []
+# -- Additional volume mounts, rendered verbatim.
+volumeMounts: []
 
 exportarr:
+  # -- Render the sidecar and its scrape annotations together.
+  enabled: true
   image:
     repository: ghcr.io/onedr0p/exportarr
     pullPolicy: IfNotPresent
-    # Overrides the image tag whose default is the chart appVersion.
-    tag: v2.3.0
+    tag: "v2.3.0"
+  # -- Port exportarr listens on, and the port in the scrape annotation.
+  port: 9707
+  apiKey:
+    # -- Secret holding Radarr's API key. Empty means the fullname.
+    secretName: ""
+    secretKey: secret
   resources:
     requests:
       cpu: 2m
@@ -27,79 +136,46 @@ exportarr:
     limits:
       memory: 112Mi
 
-serviceAccount:
-  # Specifies whether a service account should be created
-  create: false
-  # Annotations to add to the service account
-  annotations: {}
-  # The name of the service account to use.
-  # If not set and create is true, a name is generated using the fullname template
-  name: ""
-
-podAnnotations:
-  prometheus.io/scrape: "true"
-  prometheus.io/scheme: "http"
-  prometheus.io/port: "9707"
-
-podSecurityContext: {}
-# fsGroup: 2000
-
-securityContext:
-  {}
-  # capabilities:
-  #   drop:
-  #   - ALL
-  # readOnlyRootFilesystem: true
-# runAsNonRoot: true
-# runAsUser: 1000
-
-service:
-  type: ClusterIP
-  port: 32400
-
-ingress:
-  enabled: true
-  className: no
-  annotations: {}
-  # kubernetes.io/ingress.class: nginx
-  # kubernetes.io/tls-acme: "true"
-  hosts:
-    - host: chart-example.local
-      paths:
-        - path: /
-          pathType: ImplementationSpecific
-  tls: []
-  #  - secretName: chart-example-tls
-  #    hosts:
-  #      - chart-example.local
-
-resources:
-  requests:
-    cpu: 600m
-    memory: 2Gi
-  limits:
-    memory: 2Gi
-  # We usually recommend not to specify default resources and to leave this as a conscious
-  # choice for the user. This also increases chances charts run on environments with little
-  # resources, such as Minikube. If you do want to specify resources, uncomment the following
-  # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
-  # limits:
-  #   cpu: 100m
-  #   memory: 128Mi
-  # requests:
-  #   cpu: 100m
-  #   memory: 128Mi
-
-autoscaling:
-  enabled: false
-  minReplicas: 1
-  maxReplicas: 100
-  targetCPUUtilizationPercentage: 80
-  # targetMemoryUtilizationPercentage: 80
-
 nodeSelector:
+  # -- Every workload is pinned; local-path claims are node-bound.
   kubernetes.io/hostname: streaming
 
 tolerations: []
-
 affinity: {}
+
+# Sized from Prometheus over 30 days: 257Mi peak working set, 20m peak CPU.
+# No CPU limit, here or anywhere in this cluster: a limit throttles the short
+# burst an import or a library scan needs. The memory limit is about 4x the
+# observed peak.
+resources:
+  requests:
+    cpu: 10m
+    memory: 256Mi
+  limits:
+    memory: 1Gi
+
+# Probes on `/ping`, Radarr's own unauthenticated health endpoint.
+# Liveness and readiness share it on purpose: the only dependency is the SQLite
+# database, and a database that cannot be opened stops the process from starting.
+# Startup gets 300s because the first start after a version bump migrates it.
+probes:
+  startup:
+    enabled: true
+    path: /ping
+    periodSeconds: 5
+    timeoutSeconds: 5
+    failureThreshold: 60
+  liveness:
+    enabled: true
+    path: /ping
+    initialDelaySeconds: 20
+    periodSeconds: 30
+    timeoutSeconds: 5
+    failureThreshold: 3
+  readiness:
+    enabled: true
+    path: /ping
+    initialDelaySeconds: 10
+    periodSeconds: 15
+    timeoutSeconds: 5
+    failureThreshold: 3
