@@ -75,7 +75,12 @@ metrics:
 # `PROMETHEUS_*` are not set here: they come from the `metrics` block above.
 env:
   TZ: "Europe/Paris"
-  LOG_LEVEL: "info"
+  # Warnings and errors only. Fluent Bit ships every container line to Loki
+  # unfiltered, so the level is the only place to drop the noise; at `info`
+  # FlareSolverr also writes one line per challenge request and response. What
+  # disappears with the successes is covered by the exporter's counters
+  # (`flaresolverr_request_total{result="solved"}`), which survive the level change.
+  LOG_LEVEL: "warning"
 
 # -- Variables sourced from a Secret, as `{ name, valueFrom }`. Kept separate so a
 # secret can never be pasted into the plain map above by accident.
