@@ -1,4 +1,13 @@
 fluent-bit:
+  # Prometheus discovers each DaemonSet pod by annotation. The metrics are served by
+  # the HTTP server this chart already configures below (port 2020), and the path is
+  # not /metrics: Fluent Bit's Prometheus output lives at /api/v1/metrics/prometheus,
+  # so the default path would 404 on every node.
+  podAnnotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/scheme: http
+    prometheus.io/port: "2020"
+    prometheus.io/path: "/api/v1/metrics/prometheus"
   fullnameOverride: fluent-bit
   kind: DaemonSet
   image:
