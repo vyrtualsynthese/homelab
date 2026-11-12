@@ -157,6 +157,8 @@ the local-path provisioner and stop doing this by hand.
 | `flaresolverr` | yes, on `/health` | capabilities dropped, seccomp, no privilege escalation | **yes — 1000**, read from the image, no claim to chown |
 | `cross-seed` | liveness only | capabilities dropped, seccomp, no privilege escalation, no API token | **yes — 1100**, claim chowned first |
 | `prowlarr` | yes, on `/ping` | seccomp, no privilege escalation; capabilities kept for the LinuxServer init | **no — the image starts as root, then drops to 1100** |
+| `sonarr` | yes, on `/ping` | seccomp, no privilege escalation; capabilities kept for the LinuxServer init | **no — the image starts as root, then drops to 1100** |
+| `sonarr-anime` | yes, on `/ping` | seccomp, no privilege escalation; capabilities kept for the LinuxServer init | **no — the image starts as root, then drops to 1100** |
 | everything else | no | no | no |
 
 ## Checking a chart against this list
@@ -208,6 +210,13 @@ capabilities are not options. Only `allowPrivilegeEscalation: false` and the run
 are safe. Its exportarr sidecar answers HTTP 500 because Prowlarr returns 401 — the key in the
 `prowlarr` Secret is stale. That is a Secret value to replace, not a chart change, and it is
 recorded as debt in the chart README.
+
+`sonarr` and `sonarr-anime` as of 2026-11-12: the LinuxServer-plus-exporter pair, two charts because a
+shared chart is not allowed. Five objects each, two named NFS media mounts next to the config claim,
+probes on `/ping`, and both Sonarr log-level variables at `warn`. The exporter target is built from
+the release name and `service.port` instead of being typed in twice; the previous `sonarr` chart had
+`7878` in the target and `8989` in the Service, and the target never came up. The scrape annotations
+render from the same `exportarr` block, so the announced port cannot disagree with the listener.
 
 ## Charts still to align
 
