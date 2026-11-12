@@ -26,7 +26,7 @@ helm template autobrr cluster/helm/media-stack/autobrr --namespace media-stack
 
 | Value | Purpose | Default |
 |---|---|---|
-| `image.repository`, `image.tag` | Image. Tag is always pinned. | `ghcr.io/autobrr/autobrr`, `v1.85.0` |
+| `image.repository`, `image.tag` | Image. Tag is always pinned. | `ghcr.io/autobrr/autobrr`, `v1.90.0` |
 | `strategy` | Deployment strategy. Must stay `Recreate` with a config volume. | `Recreate` |
 | `service.port` | Port the Service exposes, and what the IngressRoute points at. | `7474` |
 | `container.port` | Only set when the app listens on a different port than the Service. | `null` (falls back to `service.port`) |
