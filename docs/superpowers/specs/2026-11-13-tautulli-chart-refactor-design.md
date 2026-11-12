@@ -174,11 +174,11 @@ documented exception `plex` carries. `allowPrivilegeEscalation: false` and
 
 ### Logs
 
-No environment variable sets Tautulli's log level; it lives in `config.ini` on the claim, which the
-setup wizard writes. Mounting a ConfigMap over it would replace the wizard's file and lose every
-setting in it. The chart therefore sets nothing, and the README says to set **Log Level: Warning**
-in Settings → Logging after first run — the contract's exception for apps whose level is not
-env-driven.
+Tautulli has no log-level setting: `config.ini` carries only `verbose_logs`, which switches `DEBUG`
+on or off over an `INFO` floor. The file is written by the app, so mounting a ConfigMap over it
+would replace it and lose every other setting; the chart therefore sets nothing, and the README says
+to untick **Enable Debug Logging** after first run. That is the contract's exception for an app
+whose level is not env-driven and whose quietest setting is still `INFO`.
 
 ### Resources
 
@@ -217,8 +217,8 @@ After the merge, sync the Application by hand (auto-sync is off) and check:
   `kubectl -n media-stack delete middleware tautulli-redirect-https tautulli-security` and
   `kubectl -n media-stack delete tlsoption tautulli-tlsoption` (all five exist in the cluster
   today), then confirm `tautulli.kub.home.ashudev.com` no longer answers.
-- First run: point Tautulli at `http://plex.media-stack.svc.cluster.local:32400`, import history from
-  Plex, set Log Level to Warning.
+- First run: point Tautulli at `http://plex.media-stack.svc.cluster.local:32400` with SSL off, and
+  untick Enable Debug Logging. History cannot be imported from Plex — recording starts at connection.
 
 ## Risks
 
