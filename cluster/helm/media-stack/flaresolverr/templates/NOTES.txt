@@ -1,0 +1,20 @@
+{{ include "app.fullname" . }} is running in namespace {{ .Release.Namespace }}.
+
+FlareSolverr is an internal API, not a web UI. It has no IngressRoute and its
+Service is ClusterIP only, because upstream warns that an exposed instance can be
+abused. Clients reach it inside the cluster:
+
+  http://{{ include "app.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local:{{ .Values.service.port }}
+
+For a manual check from your machine:
+
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "app.fullname" . }} {{ .Values.service.port }}:{{ .Values.service.port }}
+  curl http://127.0.0.1:{{ .Values.service.port }}/health
+{{- if .Values.metrics.enabled }}
+
+Prometheus discovers the pod through its annotations and scrapes
+http://<pod-ip>:{{ .Values.metrics.port }}{{ .Values.metrics.path }}.
+{{- end }}
+
+The container keeps no state, so this chart creates no PersistentVolumeClaim and
+there is nothing to back up or preserve when the release is deleted.
