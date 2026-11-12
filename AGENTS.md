@@ -13,8 +13,8 @@ Everything below was derived from the repo; items marked **[verify]** need clust
 A single K3s homelab managed by ArgoCD (GitOps) plus Ansible for host prep.
 
 - GitOps branch: `develop` (every Application pins `targetRevision: develop`).
-- 56 ArgoCD `Application` objects in `cluster/argocd/projects/**/*.yaml`.
-- 48 Helm charts under `cluster/helm/`.
+- 58 ArgoCD `Application` objects in `cluster/argocd/projects/**/*.yaml`.
+- 49 Helm charts under `cluster/helm/`.
 - No CI. Renovate updates images/chart versions; nothing runs on PR.
 - Secrets are never committed. See §5.
 
@@ -89,8 +89,9 @@ wrappers now (pattern D).
 
 The way external charts are consumed: the repo owns a small chart in `cluster/helm/` whose
 `Chart.yaml` pins the upstream chart to an exact `version:`, and whose `values.yaml` pins the image
-repository and tag of every container it renders. `charts/` and `Chart.lock` are gitignored —
-ArgoCD runs `helm dependency build` at sync time. Examples: `monitoring/prometheus`,
+repository and tag of every container it renders. `charts/` and `Chart.lock` are gitignored for the
+monitoring wrappers (`.gitignore` scopes the rule there) — ArgoCD runs `helm dependency build` at
+sync time. Examples: `monitoring/prometheus`,
 `monitoring/grafana`, `monitoring/loki`, `monitoring/fluent-bit`, `authentik`, `dashy`.
 
 ## 4. Conventions
@@ -113,7 +114,8 @@ ArgoCD runs `helm dependency build` at sync time. Examples: `monitoring/promethe
   storage-bound apps, `nuc0` for the general catalogue, `rbp2` for nothing but the control plane.
   Observability (Prometheus, Grafana, Loki) is a `nas` workload: ~50 GiB of `local-path` claims, no
   NFS. The NAS's `/mnt/ultrafaststorage` is reserved for the qbittorrent download export; nothing
-  else goes there. The old `node-type` label is retired; do not reintroduce it.
+  else goes there. DaemonSets (`fluent-bit`, `prometheus-node-exporter`) are not pinned: they must
+  run on every node, including `rbp2`. The old `node-type` label is retired; do not reintroduce it.
 - Never pin a workload to `rbp2`. It is an ARM64 Raspberry Pi and several images have no ARM build.
 - Resources: every container sets memory requests/limits; CPU requests are tiny (1m–100m).
 - Monitoring: exporters expose 9707 (exportarr) with `prometheus.io/scrape` annotations; Prometheus
@@ -148,7 +150,7 @@ Templates expect these Secrets to already exist; a missing one shows up as
 | renovate | `renovate` | external chart `existingSecret` |
 | monitoring | `pihole-exporter` | `key` |
 | monitoring | `mktxp-conf` | mounted as a file |
-| monitoring | `grafana` | chart-created admin creds unless `admin.existingSecret` is set |
+| monitoring | `grafana` | `admin-user`, `admin-password` — required; the chart reads it via `admin.existingSecret` |
 | kube-system | `local-cert` | Traefik default TLS cert (`TLSStore`) |
 | kube-system | `traefik-dashboard-auth` | basicAuth for the dashboard |
 
@@ -167,7 +169,8 @@ for c in $(find cluster/helm -name Chart.yaml | xargs -n1 dirname); do
 done
 ```
 
-Charts that need `helm dependency build`: `authentik`, `dashy`, `ashuvidz-website`,
+Charts that need `helm dependency build`: `monitoring/prometheus`, `monitoring/grafana`,
+`monitoring/loki`, `monitoring/fluent-bit`, `authentik`, `dashy`, `ashuvidz-website`,
 `databases/pgadmin`, `discourse`, `postiz`.
 
 Check that ArgoCD references resolve (CRLF-safe):
@@ -188,7 +191,7 @@ are in `docs/superpowers/plans/`.
 **Structural**
 
 1. **Sync policy lives outside git.** Auto-sync is enabled per Application from the ArgoCD UI — faster
-   than a commit when debugging a pod — so ~34 of the 56 manifests record no `syncPolicy.automated`.
+   than a commit when debugging a pod — so ~34 of the 58 manifests record no `syncPolicy.automated`.
    The apps are reconciled, but git does not say so, and a root-app sync that rewrites an Application
    can silently switch automation off. Write the policy into git when you next touch each app (§8.4
    of the design).
@@ -221,7 +224,7 @@ are in `docs/superpowers/plans/`.
     Applied by hand, the class does not exist, and nothing reads them.
 11. `firefly/templates/ingress-public.yaml` and `postiz/templates/postiz-ingress.yaml` use
     `networking.k8s.io/v1` Ingress, against the Traefik-CRD-only rule in §4.
-12. Floating `latest` tags in `dashy`, `monitorss` (two images), `mktxp`, `linkstack`, `grafana`,
+12. Floating `latest` tags in `dashy`, `monitorss` (two images), `mktxp`, `linkstack`,
     `minecraft`, `local-path`, and `alpine:latest` at
     `media-stack/qbittorrent/templates/deployment.yaml:50`.
 
@@ -246,7 +249,7 @@ are in `docs/superpowers/plans/`.
 
 - Never commit secrets, kubeconfigs, `*.pub` keys, or `restic_env.yaml` (see `.gitignore`).
 - Do not introduce a shared/library chart or restructure the per-app charts unless asked.
-- Do not merge the three app patterns into one; all three are in active use.
+- Do not merge the app patterns into one. A, C and D are in active use; B is legacy and converted one app at a time.
 - Changes go through git. Never apply manifests by hand to "fix" drift.
 - Adding an app means adding the chart (or values-only dir) **and** the Application file; the root app
   finds it automatically via `directory.recurse`.
