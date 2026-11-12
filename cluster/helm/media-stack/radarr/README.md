@@ -2,7 +2,7 @@
 
 Radarr manages a movie library: it watches indexers for releases that match the films you have asked
 for, hands the chosen release to a download client, then imports the finished download into the movie
-folder and renames it. It follows the chart contract in
+folder under its final name. It follows the chart contract in
 [`docs/charts/README.md`](../../../../docs/charts/README.md); the shape is copied from
 `media-stack/prowlarr`, with the differences this app needs: it reads two media claims, and its
 metrics exporter runs against Radarr's own API.
@@ -12,8 +12,9 @@ metrics exporter runs against Radarr's own API.
 - Website: https://radarr.video/
 - Source: https://github.com/Radarr/Radarr
 - Image: https://docs.linuxserver.io/images/docker-radarr/
-- Registry: `lscr.io`, the official one. The previous chart pulled a `ghcr.io/linuxserver` mirror tag;
-  this chart uses `lscr.io/linuxserver/radarr` directly.
+- Registry: `lscr.io`, the official one. The previous chart pulled from the
+  `ghcr.io/linuxserver/radarr` mirror rather than `lscr.io`; this chart uses
+  `lscr.io/linuxserver/radarr` directly.
 
 ## How this chart is deployed here
 
