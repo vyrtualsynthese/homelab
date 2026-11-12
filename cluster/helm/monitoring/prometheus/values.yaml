@@ -23,12 +23,15 @@ prometheus:
       size: 25Gi
     nodeSelector:
       kubernetes.io/hostname: nas
+    # 1Gi was not enough: the server was OOM-killed ~50s after every start.
+    # Prometheus 3 sizes its own GC from the cgroup limit, so the limit has to
+    # cover the scrape head, not just the steady state.
     resources:
       requests:
         cpu: 100m
-        memory: 512Mi
+        memory: 768Mi
       limits:
-        memory: 1Gi
+        memory: 2Gi
     image:
       repository: quay.io/prometheus/prometheus
       tag: v3.16.0
@@ -72,7 +75,18 @@ prometheus:
   # The two edge Pis run their exporters outside the cluster, so annotation
   # discovery can never find them. Ports: 9100 node-exporter, 9902 smartctl,
   # 9323 Docker.
+  #
+  # kubernetes-api-servers is half the series in this cluster: 35.9k of 65.8k
+  # measured on 2026-11-12, almost all of it histogram buckets that no
+  # dashboard reads. The counters stay, so request rate and error rate are
+  # still visible; the buckets are dropped before they reach the head.
   scrapeConfigs:
+    kubernetes-api-servers:
+      metric_relabel_configs:
+        - action: drop
+          source_labels:
+            - __name__
+          regex: "apiserver_.*_bucket"
     rbp0:
       enabled: true
       static_configs:
