@@ -3,12 +3,15 @@
 The web UI is not exposed. Reach it with a port-forward:
 
   kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "app.fullname" . }} {{ .Values.service.port }}:{{ .Values.service.port }}
+{{- if .Values.configFile.secretName }}
 
 Configuration is mounted read-only from Secret {{ .Values.configFile.secretName }}
 at {{ .Values.configFile.mountPath }}. Changing it requires a pod restart.
+{{- end }}
+{{- if .Values.storage.enabled }}
 
 State is stored in the claim {{ include "app.configClaimName" . }}.
 {{- if not .Values.storage.existingClaim }}
-
 That claim is created by this chart, so deleting the release deletes it too.
+{{- end }}
 {{- end }}

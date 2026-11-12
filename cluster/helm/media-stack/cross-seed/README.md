@@ -114,6 +114,10 @@ The claim is named `<fullname>-config` (`cross-seed-config`) and is created by t
 PersistentVolumeClaim. `local-path` is hostPath-backed, so the claim lands on the node the pod is
 pinned to (`streaming`).
 
+The old chart also mounted a second claim, `cross-seed2`, at `/cross-seed`; nothing is mounted there
+now, and that claim is deleted by hand only after the emptiness check (see
+[Uninstalling](#uninstalling)).
+
 Losing the claim loses the database and the seeding history. It does not lose the torrents
 themselves, which stay with qBittorrent.
 
@@ -142,6 +146,9 @@ reports dependency health: `/api/status` needs the API key, and pointing readine
 would just duplicate liveness, turning a qBittorrent or indexer blip into a restart loop. The Service
 carries no user traffic — the UI is reached by port-forward, not through it — so a pod that is
 alive but temporarily unable to reach qBittorrent does not need to be pulled out of a load balancer.
+
+There is deliberately no readiness values block: no unauthenticated dependency-aware endpoint exists,
+and the Service carries no user traffic.
 
 ## Running as UID 1100
 
@@ -173,7 +180,7 @@ The order matters, and it is one-time per claim:
    kubectl get pv <pv-name> -o jsonpath='{.spec.hostPath.path}'
    ```
 5. **Chown that directory** over SSH on `streaming`: `chown -R 1100:1100 <host-path>`.
-6. **Scale back up** and apply the chart.
+6. **Apply the chart** (the ArgoCD sync sets replicas back to 1).
 7. **Confirm a write**, not just a start. `kubectl -n media-stack exec deploy/cross-seed -- id` should
    show uid 1100, and the daemon must be able to write `cross-seed.db` in `/config`. A pod that starts
    and then fails on a write is the failure this order avoids.

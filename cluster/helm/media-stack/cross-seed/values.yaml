@@ -8,15 +8,18 @@ nameOverride: ""
 # -- Override the generated release name.
 fullnameOverride: ""
 
+# -- Replicas. Keep at 1: the config claim is ReadWriteOnce.
 replicaCount: 1
 
 # -- Required with a ReadWriteOnce config volume.
 strategy: Recreate
 
 image:
+  # -- Image repository. GHCR is the only source the image is published to.
   repository: ghcr.io/cross-seed/cross-seed
   # -- Pin the tag. Renovate manages this. Keep appVersion equal to it.
   tag: "6.13.9"
+  # -- Pull policy. The tag is pinned, so pulling every time buys nothing.
   pullPolicy: IfNotPresent
 
 imagePullSecrets: []
@@ -61,6 +64,7 @@ args:
 env:
   TZ: "Europe/Paris"
   # -- The image already sets this; stated so the mount path is explicit.
+  # Must match storage.mountPath: they are the same /config directory.
   CONFIG_DIR: "/config"
 
 extraEnv: []
@@ -69,29 +73,41 @@ envFrom: []
 storage:
   enabled: true
   existingClaim: ""
+  # -- StorageClass for the config claim. local-path is hostPath-backed.
   className: local-path
+  # -- Access modes for the config claim. ReadWriteOnce matches local-path.
   accessModes:
     - ReadWriteOnce
+  # -- Requested size. Holds the SQLite database, logs and cross-seeded copies.
   size: 128Mi
+  # -- Where the config claim mounts. Must match env.CONFIG_DIR and the
+  # directory part of configFile.mountPath.
   mountPath: /config
 
 configFile:
   # -- Secret that holds config.js. It must already exist in the namespace.
   secretName: cross-seed
   key: config.js
-  # -- Read-only subPath mount inside the config claim.
+  # -- Read-only subPath mount inside the config claim. Must live under
+  # storage.mountPath.
   mountPath: /config/config.js
 
 torrents:
   # -- qBittorrent's BT_backup on NFS. cross-seed reads it and injects through the API.
   existingClaim: pvc-nfs-qbittorrent-config-nfs-subdir-external-provisioner
+  # -- Sub-path of the claim that holds the BT_backup directory.
   subPath: qBittorrent/BT_backup
+  # -- Where qBittorrent's torrent files appear in the container.
   mountPath: /torrents
+  # -- cross-seed only reads torrents; it injects them through qBittorrent's API.
   readOnly: true
 
+# -- Extra pod volumes, rendered verbatim.
 volumes: []
+# -- Extra container volume mounts, rendered verbatim.
 volumeMounts: []
 
+# -- Node pin. local-path volumes land on this node, so it must stay accurate.
 nodeSelector:
   kubernetes.io/hostname: streaming
 
@@ -115,7 +131,3 @@ probes:
     periodSeconds: 30
     timeoutSeconds: 5
     failureThreshold: 3
-  readiness:
-    # No dependency-aware unauthenticated endpoint exists; /api/status needs
-    # the API key. The Service carries no user traffic, so readiness is off.
-    enabled: false
