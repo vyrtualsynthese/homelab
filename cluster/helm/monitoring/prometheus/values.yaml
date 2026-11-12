@@ -13,6 +13,7 @@ prometheus:
   prometheus-pushgateway:
     enabled: false
   server:
+    fullnameOverride: prometheus-server
     retention: 90d
     retentionSize: 20GB
     strategy:
