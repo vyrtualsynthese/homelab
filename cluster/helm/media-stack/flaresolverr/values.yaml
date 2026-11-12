@@ -40,13 +40,35 @@ serviceAccount:
 podAnnotations: {}
 podLabels: {}
 
-# Pod-level security. Deliberately empty for now: see "Deferred hardening" in the
-# README. The image already runs as the non-root user `flaresolverr`, but pinning
-# the numeric UID and enabling seccomp needs a live verification pass of its own.
-podSecurityContext: {}
+# Pod-level security.
+#
+# `fsGroup` is normally a trap in this repo: `local-path` is hostPath-backed and the
+# kubelet does not apply fsGroup ownership there. This pod has no claim at all — the
+# only volume is the RAM-backed `/tmp` below — and `fsGroup` is exactly how the
+# kubelet makes that volume writable for the non-root user.
+#
+# `seccompProfile: RuntimeDefault` applies the runtime's syscall filter. Chromium is
+# started with `--no-sandbox` (see the app source), so it does not need the syscalls
+# the sandbox would.
+podSecurityContext:
+  fsGroup: 1000
+  seccompProfile:
+    type: RuntimeDefault
 
-# Container-level security. See the README, "Deferred hardening".
-securityContext: {}
+# Container-level security.
+#
+# The image already runs as `flaresolverr`, uid 1000 / gid 1000 — read from the
+# image's own /etc/passwd, not assumed. `runAsNonRoot` needs the number as well:
+# the image's USER is a name, and the kubelet cannot verify a name, so it refuses to
+# start the container when only `runAsNonRoot` is set.
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
 
 service:
   # -- ClusterIP only. FlareSolverr is a backend for Prowlarr and other indexer
@@ -90,10 +112,21 @@ extraEnv: []
 envFrom: []
 
 # -- Additional volumes, rendered verbatim into the pod spec.
-volumes: []
+# `/tmp` is RAM-backed on purpose: every challenge creates and deletes a temporary
+# Chromium profile there, and on the default filesystem that lands on the node's SSD.
+# The upstream README recommends exactly this. 256Mi is their sizing (10-30Mi per
+# request, released when the request ends), and the size limit is what keeps a stuck
+# browser from eating the pod's memory budget.
+volumes:
+  - name: tmp
+    emptyDir:
+      medium: Memory
+      sizeLimit: 256Mi
 
 # -- Additional volume mounts, rendered verbatim into the container.
-volumeMounts: []
+volumeMounts:
+  - name: tmp
+    mountPath: /tmp
 
 nodeSelector:
   # -- Every workload is pinned to a named node.
