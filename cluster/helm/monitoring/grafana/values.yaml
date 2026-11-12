@@ -8,6 +8,10 @@ ingress:
 
 grafana:
   fullnameOverride: grafana
+  grafana.ini:
+    server:
+      root_url: http://grafana.kub.local/
+      domain: grafana.kub.local
   deploymentStrategy:
     type: Recreate
   nodeSelector:
