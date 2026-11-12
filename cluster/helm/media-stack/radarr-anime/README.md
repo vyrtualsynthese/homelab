@@ -52,7 +52,7 @@ helm template radarr-anime cluster/helm/media-stack/radarr-anime --namespace med
 | `container.port` | Only set when the container listens on a different port than the Service. | `null` (falls back to `service.port`) |
 | `storage.*` | The config claim: class, size, mount path, or reuse an existing claim. | `local-path`, `128Mi`, `/config` |
 | `downloads.existingClaim`, `downloads.mountPath` | qBittorrent's completed-downloads claim, and where it is mounted. | `pvc-nfs-qbittorrent-download-nfs-subdir-external-provisioner`, `/downloads` |
-| `media.existingClaim`, `media.mountPath` | The Plex media library claim and its mount; the anime root folder lives inside it. | `pvc-plex-media`, `/movies` |
+| `media.existingClaim`, `media.mountPath` | The Plex media library claim and its mount. This chart only mounts the shared library; the anime root folder inside it is the live app's setting to confirm in the Radarr UI. | `pvc-plex-media`, `/movies` |
 | `ingressRoute.*` | Traefik CRD routing: host, entry points, middlewares, TLS. | `radarr-anime.kub.local`, `web`, no TLS |
 | `env` | Non-secret variables, rendered inline into the container. Changing one rolls the pod. | `TZ`, `PUID`, `PGID`, log level |
 | `exportarr.*` | The metrics sidecar. See **Metrics**. | enabled on port 9707 |
@@ -68,7 +68,7 @@ Radarr needs two volumes beyond its config, and both are read-write:
 | Claim | Mount | Why |
 |---|---|---|
 | `pvc-nfs-qbittorrent-download-nfs-subdir-external-provisioner` | `/downloads` | qBittorrent writes the finished download here; Radarr imports from it, and can also delete the leftover folder after a successful import. |
-| `pvc-plex-media` | `/movies` | The shared library Plex reads; this instance owns the anime root folder inside it. Radarr writes the imported file into it under its final name. |
+| `pvc-plex-media` | `/movies` | The shared library Plex reads. Radarr writes the imported file into it under its final name. Which root folder inside it this instance uses is an app setting, not a chart value. |
 
 Both are shared NFS claims, not claims this chart creates: `existingClaim` is filled in, so no
 `PersistentVolumeClaim` object is rendered for either, and the app must never be the only writer.
@@ -122,9 +122,9 @@ The chart runs `exportarr` (a Prometheus exporter for the *arr apps) as a sideca
 container in the same pod — and, while `exportarr.enabled` is true, renders the `prometheus.io/*`
 annotations Prometheus uses to discover pods. Prometheus scrapes `:9707/metrics` on the pod.
 
-The sidecar's `args` must be `- radarr`. That argument selects which app's API exportarr talks to;
-left at `- prowlarr` it queries the Prowlarr endpoints against Radarr and every query answers 404 or
-the wrong shape. This is the one line that must differ from the reference chart.
+The sidecar's `args` must be `- radarr`. Keep this at `- radarr`: exportarr's `args` selects the
+handler, and any other value queries the wrong API against Radarr, so every request answers 404 or
+the wrong shape.
 
 **The Secret `radarr-anime` must hold this instance's current API key**, under the key `secret`. A key
 that no longer matches the app — the usual cause is a restore, a reinstall, or a database rebuilt from
@@ -140,7 +140,7 @@ This is a LinuxServer image: it starts as **root**, prepares `/config`, then dro
 
 **Until 2026-11-12 this instance ran with `PUID`/`PGID 0`**, so everything in its config directory
 is owned by `root`. The chart now renders 1100, and the drop happens after the init: the pod starts,
-serves, then fails on its first database write. `chown` the directory before the new pod starts.
+then fails on its first database write. `chown` the directory before the new pod starts.
 
 The operator does this once, before merging the chart change:
 
@@ -153,14 +153,19 @@ The operator does this once, before merging the chart change:
    `kubectl get pv <pv> -o jsonpath='{.spec.hostPath.path}'` (or `.spec.local.path`). Both are
    host paths on `streaming`, because the claim is `local-path`.
 4. On `streaming`, give that directory to 1100: `chown -R 1100:1100 <path>`.
-5. Scale back to one, or leave it at zero until the merge syncs the new chart.
+5. Leave the Deployment at zero until the merge. Scaling it back to one would start the old
+   Deployment, which still renders `PUID`/`PGID 0`, so it would write root-owned files back into the
+   directory that was just fixed. Automation is paused, so nothing rescales it; the merge's sync then
+   starts the pod as 1100 for the first time.
 
 The same `chown` applies to a claim recreated from scratch: `local-path` is hostPath-backed, the
 provisioner creates the directory as root, and the kubelet does not apply `fsGroup` to it either. The
 `autobrr` README describes the generic procedure.
 
-Check afterwards that the pod runs as 1100 (`kubectl -n media-stack exec deploy/radarr-anime --
-id -u`) and that `/config` is writable by that user.
+Check afterwards that `/config` is owned by 1100 —
+`kubectl -n media-stack exec deploy/radarr-anime -- stat -c %u /config`, expected `1100` — and that
+`/config` is writable by that user. Use `stat` on the directory rather than `id`: the LinuxServer
+entrypoint runs as root, so `id` reports 0 and reads as a false failure.
 
 ## Upgrading
 

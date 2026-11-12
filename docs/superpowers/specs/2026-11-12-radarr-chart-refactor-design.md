@@ -226,8 +226,11 @@ protection against a deletion.
    values up.
 
 3. **Chown `radarr-anime-config`.** Scale `radarr-anime` to zero, resolve `radarr-anime-config` to its
-   PV and the PV to its host path, `chown -R 1100:1100` it on `streaming`, scale back to one. This is
-   the `autobrr`/`cross-seed` procedure.
+   PV and the PV to its host path, `chown -R 1100:1100` it on `streaming`. **Then leave the Deployment
+   at zero until the merge.** Scaling it back up would start the old Deployment, which still renders
+   `PUID`/`PGID 0`, and it would write root-owned files back into the directory that was just fixed.
+   Automation is paused, so nothing rescales it; the merge sync in step 5 starts the pod as 1100 for
+   the first time. This is the `autobrr`/`cross-seed` procedure.
 
 4. **Merge the PR.** ArgoCD is paused, so nothing rolls yet.
 
@@ -238,7 +241,7 @@ protection against a deletion.
    ```bash
    kubectl -n media-stack get pods -l app.kubernetes.io/instance=radarr -o wide
    kubectl -n media-stack get pods -l app.kubernetes.io/instance=radarr-anime -o wide
-   kubectl -n media-stack exec deploy/radarr-anime -- id
+   kubectl -n media-stack exec deploy/radarr-anime -- stat -c %u /config
    kubectl -n media-stack exec deploy/radarr-anime -- sh -c 'test -w /config && test -w /downloads && test -w /movies && echo writable'
    kubectl -n media-stack logs deploy/radarr -c radarr-exporter --tail=20
    kubectl -n media-stack logs deploy/radarr-anime -c radarr-anime-exporter --tail=20
@@ -246,10 +249,12 @@ protection against a deletion.
    curl -s http://radarr-anime.kub.local/ping
    ```
 
-   Expected: both pods `2/2 Running`, `uid=1100`, `writable`, no 401 in either exporter log, and
-   `{"status":"OK"}` from both `/ping` endpoints. The `/config` write test is the one that catches a
-   missed chown; the `/movies` and `/downloads` tests catch root-owned media left by the old
-   `PUID=0` process, because a write to a directory only needs write permission on that directory.
+   Expected: both pods `2/2 Running`, `1100` as the `/config` owner, `writable`, no 401 in either
+   exporter log, and `{"status":"OK"}` from both `/ping` endpoints. `stat -c %u /config` is the
+   ownership check, not `id`: the LinuxServer entrypoint runs as root and `id` reports 0. The
+   `/config` write test is the one that catches a missed chown; the `/movies` and `/downloads` tests
+   catch root-owned media left by the old `PUID=0` process, because a write to a directory only needs
+   write permission on that directory.
 
 7. **Re-enable automation** on both Applications in the UI, then confirm both report
    `Synced/Healthy`.
