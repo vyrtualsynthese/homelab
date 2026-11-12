@@ -167,6 +167,7 @@ the local-path provisioner and stop doing this by hand.
 | `tautulli` | yes, on `/status` | capabilities dropped except `CHOWN`/`SETUID`/`SETGID`, which the image's root init needs; seccomp; no privilege escalation | **no — the image starts as root, then drops to 1100** |
 | `radarr` | yes, on `/ping` | seccomp, no privilege escalation; capabilities kept for the LinuxServer init | **no — the image starts as root, then drops to 1100** |
 | `radarr-anime` | yes, on `/ping` | seccomp, no privilege escalation; capabilities kept for the LinuxServer init | **no — the image starts as root, then drops to 1100**; `PUID` moved from 0 |
+| `unpackerr` | liveness only, on `/` | capabilities dropped, seccomp, no privilege escalation, no API token | **yes — 1100**, no claim to chown |
 | everything else | no | no | no |
 
 ## Checking a chart against this list
@@ -251,6 +252,12 @@ Claim names already matched the derived `<fullname>-config`, so no data moved. T
 instance also moved off `PUID 0`, which is the chown runbook the contract's UID section describes.
 Both exporter sidecars still answer 401 until the operator patches the stale keys in Secrets
 `radarr` and `radarr-anime`.
+
+`unpackerr` as of 2026-11-13: two objects because it keeps no state of its own and is never exposed,
+per-instance values (`sonarr0`, `radarr1`, …) that render `UN_<APP>_<i>_*` through one helper, API
+keys from the per-app Secrets, and metrics deliberately off because v1 requires an API key for
+`/metrics`. It is the worked example of the metrics rule's other half: when the exporter cannot be
+scraped by the annotation job, announce nothing rather than leave a target permanently down.
 
 ## Charts still to align
 
