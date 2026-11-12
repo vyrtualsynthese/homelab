@@ -1,57 +1,142 @@
-# Default values for home.
-# This is a YAML-formatted file.
-# Declare variables to be passed into your templates.
+# Default values for recyclarr.
+#
+# recyclarr is a batch command, not a service: it syncs TRaSH Guide settings
+# into Radarr and Sonarr and exits. There is no port, no UI, no probe and no
+# ingress. A CronJob runs it once a day; everything else here is what that run
+# needs.
 
-replicaCount: 1
-
-image:
-  repository: ghcr.io/recyclarr/recyclarr
-  pullPolicy: IfNotPresent
-  # Overrides the image tag whose default is the chart appVersion.
-  tag: 8.7.2
-
-imagePullSecrets: []
+# -- Override the chart name.
 nameOverride: ""
+# -- Override the generated release name.
 fullnameOverride: ""
 
+image:
+  # -- The official image. The Docker Hub namespace is a mirror of the same
+  # build; GHCR is what upstream publishes to.
+  repository: ghcr.io/recyclarr/recyclarr
+  # -- Pin the tag. Renovate manages this. Keep appVersion equal to it.
+  tag: "8.8.1"
+  # -- The tag is pinned, so pulling every time buys nothing.
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
 serviceAccount:
-  # Specifies whether a service account should be created
-  create: false
-  # Annotations to add to the service account
-  annotations: {}
-  # The name of the service account to use.
-  # If not set and create is true, a name is generated using the fullname template
+  # -- The pod never calls the Kubernetes API, so it gets a dedicated account
+  # with no token rather than the namespace default.
+  create: true
+  automount: false
+  # -- Defaults to the fullname.
   name: ""
+  annotations: {}
 
-podSecurityContext: {}
-# fsGroup: 2000
+# -- Annotations added to every pod the CronJob creates.
+podAnnotations: {}
+# -- Labels added to every pod, on top of the selector labels.
+podLabels: {}
 
+# Pod-level security. `fsGroup` is deliberately NOT set: local-path volumes are
+# hostPath-backed, and the kubelet does not apply fsGroup ownership to them, so
+# setting it would look meaningful and do nothing.
+podSecurityContext:
+  seccompProfile:
+    type: RuntimeDefault
+
+# Container-level security.
+#
+# UID 1000 is the official image's own default (it is rootless and documents
+# that PUID/PGID are not supported), and the config claim was already written by
+# that user, so no node-side chown is required. Raising this to 1100 needs the
+# claim chowned first or the run fails on its first write.
 securityContext:
-  {}
-  # capabilities:
-  #   drop:
-  #   - ALL
-  # readOnlyRootFilesystem: true
-# runAsNonRoot: true
-# runAsUser: 1000
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
 
-resources:
-  limits:
-    memory: 5128Mi
-  requests:
-    cpu: 100m
-    memory: 64Mi
+# -- Arguments after the image entrypoint (`recyclarr`). `sync` processes
+# every instance in the configuration and exits; there is no daemon here.
+args:
+  - sync
 
-autoscaling:
-  enabled: false
-  minReplicas: 1
-  maxReplicas: 100
-  targetCPUUtilizationPercentage: 80
-  # targetMemoryUtilizationPercentage: 80
+# -- Environment variables, inline in the container spec.
+env:
+  TZ: "Europe/Paris"
+  # -- The job's output goes to Loki; ANSI escapes are noise in it.
+  NO_COLOR: "1"
+  # -- Both directories are the claim, so downloaded resources, logs and state
+  # survive between runs. Stated explicitly so the mounts cannot drift from them.
+  RECYCLARR_CONFIG_DIR: "/config"
+  RECYCLARR_DATA_DIR: "/config"
+
+# -- Variables sourced from a Secret, as `{ name, valueFrom }`.
+extraEnv: []
+# -- Bulk `envFrom` sources, usually `secretRef`.
+envFrom: []
+
+# Schedule. The timezone is explicit: the CronJob controller runs in UTC, and
+# an unqualified schedule silently changes its local meaning when the offset
+# does. 06:00 Paris is what the old 05:00 UTC schedule meant.
+schedule: "0 6 * * *"
+timeZone: "Europe/Paris"
+# -- Do not start a late run after a node outage. A sync is not time-critical,
+# so a missed run is better than one at an arbitrary hour.
+startingDeadlineSeconds: 300
+# -- `Forbid`, not `Replace`: a run takes seconds, and killing one halfway
+# leaves an arr instance partly updated. Skipping a day is cheaper.
+concurrencyPolicy: Forbid
+# -- One retry. `recyclarr sync` is idempotent.
+backoffLimit: 1
+# -- Kill a hung run after 30 minutes instead of letting it hold the claim.
+activeDeadlineSeconds: 1800
+successfulJobsHistoryLimit: 3
+failedJobsHistoryLimit: 3
+
+storage:
+  # -- Render the config claim. Keep it on: the data directory lives in it.
+  enabled: true
+  # -- Use an existing claim instead of the one this chart creates.
+  existingClaim: ""
+  # -- local-path is hostPath-backed; the claim lands on the pinned node.
+  className: local-path
+  accessModes:
+    - ReadWriteOnce
+  # -- Holds recyclarr.yml, downloaded resources, logs and state. 128Mi is the
+  # house standard and has been enough for this job for two years.
+  size: 128Mi
+  mountPath: /config
+
+configFile:
+  # -- Secret holding recyclarr.yml. It must already exist in the namespace.
+  secretName: recyclarr
+  key: recyclarr.yml
+  # -- Read-only file inside the config claim. The chart never templates or
+  # validates its content.
+  mountPath: /config/recyclarr.yml
+
+# -- Extra pod volumes, rendered verbatim.
+volumes: []
+# -- Extra container volume mounts, rendered verbatim.
+volumeMounts: []
 
 nodeSelector:
-  kubernetes.io/hostname: streaming
+  # -- The recyclarr-config PersistentVolume is a local-path volume on nuc0, so
+  # the pod must run there. recyclarr touches no media and needs no GPU, which
+  # makes the general node its correct home.
+  kubernetes.io/hostname: nuc0
 
 tolerations: []
-
 affinity: {}
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 128Mi
+  limits:
+    # No CPU limit: the run is a short burst. The memory limit is a protection
+    # ceiling, not a measurement: a run finishes in seconds, shorter than the
+    # scrape interval, so cAdvisor holds no sample for it.
+    memory: 1Gi
