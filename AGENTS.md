@@ -194,8 +194,7 @@ are in `docs/superpowers/plans/`.
    UI — faster than a commit when debugging a pod. **No Application file records
    `syncPolicy.automated`**, and a PR that adds it is a regression: a root-app sync rewrites the
    Application to match git, which silently switches automation off until the operator re-enables it
-   in the UI. 38 of the 58 carry none; the other 20 are leftovers from before this rule and lose the
-   block when they are next touched (§8.4 of the design).
+   in the UI. None of the 58 carries it (§8.4 of the design).
 2. `cluster/infrastructure/**` is outside GitOps (§2).
 3. **Backups do not work.** The only offsite target is an AWS S3 bucket. The k3s script dumps a
    SQLite file on an etcd cluster; the NAS script backs up a MinIO path deleted in July 2024; and the

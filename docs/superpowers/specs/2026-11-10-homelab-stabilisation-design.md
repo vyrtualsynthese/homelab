@@ -33,8 +33,9 @@ days because their PVC objects were deleted. Three apps have been crash-looping 
 (17 723, 18 737 and 12 432 restarts). Eleven apps still run on volumes that are mid-deletion; the
 data is readable today and dies on the next pod restart.
 
-**GitOps automation is configured outside git.** About 34 of the 56 Application manifests carry no
-`syncPolicy.automated`. The applications themselves *are* reconciled — the operator enables
+**GitOps automation is configured outside git.** No Application manifest records
+`syncPolicy.automated` — the block was removed from all of them, and a root-app sync therefore
+removes it from the live objects. The applications themselves *are* reconciled — the operator enables
 auto-sync from the ArgoCD UI, because toggling it off there is faster than editing git while
 debugging pods. The drift is therefore not "half the catalogue is unmanaged", it is that the
 Application objects in git do not describe the cluster, and a root-app sync that touches them can
@@ -660,4 +661,4 @@ recorded in §8.7.
 | ACME duplicate-certificate limit during the Traefik cutover | certificates unavailable for a week | reuse the existing ACME claim, single cutover window |
 | `local-path` node disk loss | app and config gone | backups from W4, monthly restore drill |
 | Backup target locked out (single account) | domains and backups lost together | keep the registrar separate, export zones to git |
-| 34 Applications carry no sync policy in git | a root-app sync can silently disable automation the operator enabled in the UI | expected by design: re-enable it in the UI, per §8.4 |
+| No Application records a sync policy in git | a root-app sync can silently disable automation the operator enabled in the UI | expected by design: re-enable it in the UI, per §8.4 |
