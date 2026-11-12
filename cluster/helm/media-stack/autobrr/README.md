@@ -1,7 +1,7 @@
 # autobrr
 
 autobrr watches IRC announce channels and sends matching releases to your download client. It is the
-reference chart for every hand-maintained chart in this repo — see
+reference chart for the principles every hand-maintained chart follows — see
 [`docs/charts/README.md`](../../../../docs/charts/README.md) for the contract it satisfies.
 
 ## Upstream
@@ -136,18 +136,22 @@ edit. It must stay `traefik.containo.us/v1alpha1` while the cluster runs Traefik
 `kub.local` hosts use the `web` entry point and no TLS; they resolve through the Pi-hole wildcard
 record. Hosts under `kub.home.ashudev.com` use `websecure` with `certResolver: myresolver`.
 
-## Using this chart as a template
+## Using this chart as a reference
 
-Copy the directory, then change only:
+Read the contract, then build the chart the image needs. Take from this chart:
 
-1. `Chart.yaml` — `name`, `description`, `home`, `sources`, `keywords`.
-2. `values.yaml` — `image`, `service.port`, `container.port` if needed, `ingressRoute.host`,
-   `nodeSelector`, `env`.
-3. Nothing in `templates/`. The helpers are unprefixed (`app.fullname`, `app.labels`,
-   `app.selectorLabels`) precisely so a copy works without a rename sweep.
+- the naming helpers (`app.fullname`, `app.labels`, `app.selectorLabels`);
+- the claim name derived from the release;
+- values-driven routing, when the app is exposed at all;
+- the probe rule: liveness on the app's own health endpoint, readiness only when it says something
+  different.
 
-The trade-off of unprefixed helpers: do not use two of these charts as subcharts of the same parent.
-This repo never does.
+Adapt everything else to the image. Add named values for the app's own mounts and configuration
+sources instead of hiding them in raw pod spec. Leave out what the app does not need; `cross-seed`
+has no IngressRoute because its UI is not exposed.
+
+Do not copy this directory byte for byte. A chart that shares this chart's text but not its app's
+requirements is harder to maintain than one that shares only the contract.
 
 ## Files
 
@@ -160,9 +164,9 @@ This repo never does.
 | `templates/ingressroute.yaml` | the Traefik IngressRoute |
 | `templates/NOTES.txt` | the install notes |
 
-There is deliberately no ConfigMap: this app takes its configuration from
-environment variables only. A chart for an app that reads a `config.yaml` adds
-its own `templates/configmap.yaml` and mounts it — see the rule in
+There is deliberately no ConfigMap: this app takes its configuration from environment variables only.
+A chart for an app that reads a file adds a ConfigMap, or mounts a Secret when the file contains
+credentials, and documents whether a change needs a restart — see the rule in
 [`docs/charts/README.md`](../../../../docs/charts/README.md).
 
 ## Uninstalling

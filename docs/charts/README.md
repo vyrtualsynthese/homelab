@@ -1,11 +1,12 @@
 # Hand-maintained charts — the contract
 
 Most charts in `cluster/helm/` are written here rather than vendored. This page is the checklist
-every one of them is expected to satisfy, and
-[`cluster/helm/media-stack/autobrr`](../../cluster/helm/media-stack/autobrr) is the reference
-implementation to copy.
+every one of them is expected to satisfy. [`cluster/helm/media-stack/autobrr`](../../cluster/helm/media-stack/autobrr)
+is the reference implementation: a worked example of the principles and the contract below, not a
+directory to copy byte for byte.
 
-**Copy `autobrr`, change the four values that identify the app, and do not touch `templates/`.**
+**Use `autobrr` as a reference for naming, labels, claim shape and probe honesty, then build the
+chart the image actually needs.**
 
 ## Why a reference chart and not a shared library
 
@@ -14,8 +15,9 @@ decided in one file, and any per-app peculiarity becomes a values key nobody rem
 maintains these charts directly and wants each app to keep its own peculiarities. A reference chart
 gives a consistent starting point without coupling the apps.
 
-The consequence is real and accepted: a fix to the shared shape must be applied 20-odd times. The
-checklist below is what makes that mechanical instead of archaeological.
+The consequence is real and accepted: a fix to a shared principle must be applied 20-odd times. The
+contract below is what makes that mechanical. Each chart is allowed to diverge in its values and its
+templates where the image demands it; it is not allowed to diverge from the contract.
 
 ## The contract
 
@@ -43,7 +45,7 @@ Three destinations, and the choice is not a matter of taste:
 |---|---|---|
 | A plain value | **Inline `env:` in the Deployment** | Changing it changes the pod template, so the Deployment rolls by itself. No second object, no `checksum/config` annotation to fake the rollout |
 | A secret | **`extraEnv` with `valueFrom.secretKeyRef`**, or `envFrom.secretRef` for a bulk dump | Never in the plain map, so it cannot be pasted in by accident |
-| A file the app reads, such as `config.yaml` | **A ConfigMap mounted as a volume** | Only here does the ConfigMap earn its place: the app needs a file on disk, not a variable |
+| A file the app reads, such as `config.yaml` | **A ConfigMap mounted as a volume**, or a **Secret** when the file contains credentials | Only here does the extra object earn its place: the app needs a file on disk, not a variable. A `subPath` mount does not update on change, so the chart README must say a restart is required |
 
 A ConfigMap used to inject plain variables is a defect, not a style choice. It adds an object that
 can be missing, it hides the values from `kubectl describe pod`, and `envFrom` silently skips keys
@@ -118,6 +120,15 @@ something breaks.
 `flaresolverr` is the first chart to follow this: `LOG_LEVEL: warning`, with the counters carrying
 the challenge outcomes the log no longer prints.
 
+Readiness applies when the app serves traffic or exposes a dependency-aware endpoint. If the image
+has no unauthenticated endpoint that reports dependency health, do not point readiness at the
+liveness path just to fill the field: disable readiness and say why in the chart README. `cross-seed`
+is the worked example.
+
+This narrows requirement 13 rather than waiving it: 13 still applies whenever the app serves traffic
+or exposes an endpoint that reports dependency health, and steps aside only for a chart like
+`cross-seed` that does neither.
+
 ### Changing the UID breaks the config volume
 
 **This is the trap in this repo.** `local-path` is hostPath-backed, and the kubelet does **not**
@@ -144,6 +155,7 @@ the local-path provisioner and stop doing this by hand.
 |---|---|---|---|
 | `autobrr` | yes | capabilities dropped, seccomp, no privilege escalation | **yes — 1100**, claim chowned first |
 | `flaresolverr` | yes, on `/health` | capabilities dropped, seccomp, no privilege escalation | **yes — 1000**, read from the image, no claim to chown |
+| `cross-seed` | liveness only | capabilities dropped, seccomp, no privilege escalation, no API token | **yes — 1100**, claim chowned first |
 | everything else | no | no | no |
 
 ## Checking a chart against this list
@@ -162,15 +174,24 @@ grep -rn 'prometheus.io/scrape' templates/ || echo "no scrape annotation — doe
 grep -rniE 'log_?level' values.yaml || echo "no log level — what does the image default to, and is it info?"
 ```
 
-That last one is the important one. Every chart in this repo was produced by copying another, and the
-first defect found in `autobrr` was a README that described Dashy. Grep for the app you copied from
-before you commit.
+Copy-paste leftovers are still the most common defect: every chart in this repo started from another
+one. Grep for the original app's name and for its storage names before you commit, and check that the
+claim name is derived rather than hardcoded.
+
+The helpers are unprefixed (`app.fullname`, `app.labels`, `app.selectorLabels`) so a chart can be
+rebuilt from the reference without a rename sweep. The trade-off still stands: do not use two of
+these charts as subcharts of the same parent, or the helper names collide.
 
 ## What good looks like
 
-`autobrr` as of 2026-11-11: five objects render, no tabs, no hardcoded app name outside `Chart.yaml`
-and the values, ingress fully driven by values, env inline in the Deployment, and the claim name derived from the release so a copy
-cannot collide with the original.
+`autobrr` (2026-11-11): five objects render, ingress fully driven by values, env inline in the
+Deployment, claim name derived from the release.
+
+`cross-seed` (2026-11-12): four objects render, no ingress because the UI is not exposed, named
+`configFile` and `torrents` values instead of raw pod spec, liveness only, claim name derived from
+the release. It shares the naming helpers and the generic Service, ServiceAccount and claim
+templates with `autobrr`; the Deployment and the values are built around cross-seed's read-only
+config file, its NFS torrent directory and its liveness-only probe.
 
 `flaresolverr` as of 2026-11-12: the app-shaped version of the same chart. Three objects because the
 app keeps no state and is never exposed, `RollingUpdate` because there is no claim to fight over,
