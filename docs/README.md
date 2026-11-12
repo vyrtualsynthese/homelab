@@ -12,6 +12,7 @@ disagrees with one of these, these win.
 | [`superpowers/plans/2026-11-10-homelab-programme-index.md`](superpowers/plans/2026-11-10-homelab-programme-index.md) | The workstreams with estimates, dependencies and the operator's priority order. |
 | [`superpowers/plans/`](superpowers/plans/) | One implementation plan per workstream, written to the command. |
 | [`runbooks/`](runbooks/) | Procedures to execute, produced as workstreams land. |
+| [`observability-conventions.md`](observability-conventions.md) | The live monitoring stack: what runs, how to query it, the dashboards, the alert set and its known holes. Read before touching Grafana, Prometheus or Loki. |
 
 ## The audit set
 
