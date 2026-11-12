@@ -77,15 +77,15 @@ four:
 Rules that came out of `flaresolverr`:
 
 - **Turn the listener and the annotations on together.** Where the chart owns its templates, render
-  both from one values block (`flaresolverr`'s `metrics`). Where it does not — a third-party wrapper
-  — the exporter is already on and `podAnnotations` is the only knob (`grafana`, `loki`,
-  `fluent-bit`). Two independent edits are how the announced port stops matching the listener, and
-  the failure is silent: the pod is scraped on a port nothing listens to and the target is simply
-  down.
+  both from one values block (`flaresolverr`'s `metrics`). Where it does not — a wrapper around a
+  third-party chart — `podAnnotations` is the only knob, and the exporter may still need enabling in
+  the chart's own values. Two independent edits are how the announced port stops matching the
+  listener, and the failure is silent: the pod is scraped on a port nothing listens to and the target
+  is simply down.
 - **The metrics port stays off the Service.** Prometheus scrapes the pod IP; a second Service port
-  only widens the app's surface for nothing. Exception: an app whose exporter listens on its own
-  port and whose chart ships a dedicated metrics Service (`authentik`) is scraped by the
-  `kubernetes-service-endpoints` job instead — still one annotation pair, just on the Service.
+  only widens the app's surface for nothing. Exception: when a chart ships a dedicated metrics
+  Service of its own, the `kubernetes-service-endpoints` job scrapes that instead — still one
+  annotation pair, just on the Service.
 - **If the chart renders the annotations itself, do not also list them in `podAnnotations`.** A
   second copy is how the port and the path end up disagreeing. The reference chart predates its
   `metrics` block and does it in two places (`podAnnotations` plus the exporter's variables in
@@ -156,3 +156,6 @@ environment, port and scrape annotations together.
 
 Only non-public apps with hand-maintained charts are in scope for now. Public-facing apps wait,
 because their ingress, TLS and auth wiring is what changes first in W5 and W7.
+
+Metrics count as debt of the same kind. The rule above is recorded now and applied one chart at a
+time; `flaresolverr` is the first, and the rest are not aligned yet.
