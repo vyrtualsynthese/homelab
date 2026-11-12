@@ -22,6 +22,14 @@ grafana:
     registry: docker.io
     repository: grafana/grafana
     tag: 13.3.1-distroless
+  # Prometheus discovers the pod by annotation and scrapes Grafana's own /metrics
+  # on the container port. It is 3000, not the Service's 80: Prometheus scrapes the
+  # pod IP directly, so the Service port plays no part.
+  podAnnotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/scheme: http
+    prometheus.io/port: "3000"
+    prometheus.io/path: "/metrics"
   initChownData:
     image:
       registry: docker.io
