@@ -11,7 +11,7 @@ portfolio.
 
 ## Current state
 
-| Thing | Reality, 2026-11-12, plus the merged observability branch |
+| Thing | Reality on the cluster, 2026-11-12; counts include the observability branch |
 |---|---|
 | K3s | `v1.30.1+k3s1` on all four nodes, containerd, embedded etcd |
 | Ingress | Traefik `2.9.4` from the K3s bundled addon (June 2023) |
