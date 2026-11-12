@@ -64,6 +64,7 @@ automated sync and no prune policy. Delete them by hand after the first sync:
 ```bash
 kubectl -n media-stack delete ingressroute tautulli-public tautulli-public-redirect
 kubectl -n media-stack delete middleware tautulli-redirect-https tautulli-security
+kubectl -n media-stack delete tlsoption tautulli-tlsoption
 ```
 
 ## Storage and the UID
