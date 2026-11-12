@@ -98,6 +98,9 @@ upstream service. A probe that exercised Chromium would mean launching a browser
 readiness proves only that the server answers. The browser itself is tested once at startup and the
 process exits if that test fails, which is why the first liveness check waits 20 seconds.
 
+There is no startup probe, unlike `autobrr`: FlareSolverr logs `Test successful!` and starts serving
+about two seconds after the container starts, so there is no slow phase for one to cover.
+
 ## Deferred hardening
 
 Not in this chart yet, on purpose, because it changes the identity the process runs as and has to be
