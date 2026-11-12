@@ -17,5 +17,8 @@ build
 secret.yml
 secret.yaml
 providers.yaml
-!cluster/helm/monitoring/grafana/templates/secret.yaml
 *.env
+
+# Built by ArgoCD at sync time; never committed (see the observability design §5.1)
+cluster/helm/monitoring/*/charts/
+cluster/helm/monitoring/*/Chart.lock
