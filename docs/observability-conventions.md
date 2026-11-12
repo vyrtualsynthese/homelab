@@ -21,6 +21,25 @@ All four are wrapper charts under `cluster/helm/monitoring/`, one ArgoCD
 Application each; the design is
 `docs/superpowers/specs/2026-11-12-observability-stack-design.md`.
 
+**Resource sizing, measured 2026-11-12 over 15 h** (working set, per container):
+
+| Workload | avg | p95 | peak | request | limit |
+|---|---|---|---|---|---|
+| Prometheus | 1.26 GiB | 1.74 GiB | 1.76 GiB | 1Gi | 2Gi |
+| Grafana | 292 MiB | 346 MiB | 400 MiB | 256Mi | 512Mi |
+| Loki | 134 MiB | 166 MiB | 217 MiB | 256Mi | 1Gi |
+| Fluent Bit (per pod) | 6-9 MiB | 9.8 MiB | 11.6 MiB | 32Mi | 64Mi |
+| config-reloader | 9 MiB | 9.6 MiB | 9.9 MiB | 16Mi | 32Mi |
+
+Prometheus keeps its 2 GiB ceiling because it sizes its own GC from the cgroup
+limit and was OOM-killed at 1 GiB; only its request moved up to the measured
+steady state. Loki's rules sidecar is disabled — it watched for
+Prometheus-Operator rule ConfigMaps this cluster does not install, and held
+78 MiB with no limit. There are no CPU limits, by house rule. The numbers are
+low because the cluster produces little log and query traffic: a 30-day Loki
+query or a compaction burst is the case the headroom exists for, so re-measure
+before lowering Loki further.
+
 Three older exporters live beside them unchanged: `mktxp` and `pihole-exporter`
 on `nuc0`, and `prometheus-smartctl` as a DaemonSet (its pods on `nas`, `nuc0`,
 `streaming`, `rbp2`).
