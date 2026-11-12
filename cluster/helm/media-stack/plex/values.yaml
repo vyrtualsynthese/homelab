@@ -1,8 +1,8 @@
 # Default values for plex.
-# Written from the repo's reference chart, cluster/helm/media-stack/autobrr, and
-# the contract in docs/charts/README.md. The differences are all consequences of
-# what Plex is: the only internet-facing app in the lab, with a GPU, two shared
-# media claims and an exporter that lives in a sidecar.
+# Written from the repo's reference chart (the one docs/charts/README.md points
+# at) and the contract in docs/charts/README.md. The differences are all
+# consequences of what Plex is: the only internet-facing app in the lab, with a
+# GPU, two shared media claims and an exporter that lives in a sidecar.
 
 # -- Override the chart name.
 nameOverride: ""
