@@ -1,9 +1,9 @@
 # Observability conventions
 
 Homelab-specific facts for the `monitoring` stack. The general practice — how to
-choose a threshold, lay out a screen, verify a panel — lives in the
-`Observability and Alerting` skill (`~/.config/opencode/skills/`). This file only
-records what is true **here** and would be wrong elsewhere.
+choose a threshold, lay out a screen, verify a panel — lives in the project skill
+at `.opencode/skills/observability-and-alerting/SKILL.md`. This file only records
+what is true **here** and would be wrong elsewhere.
 
 State: 2026-11-12, after the stack was rebuilt and the dashboards were added.
 
