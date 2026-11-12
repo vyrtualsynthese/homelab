@@ -1,16 +1,16 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "cross-seed.fullname" . }}
+  name: {{ include "app.fullname" . }}
   labels:
-    {{- include "cross-seed.labels" . | nindent 4 }}
+    {{- include "app.labels" . | nindent 4 }}
 spec:
-  replicas: 1
+  replicas: {{ .Values.replicaCount }}
   strategy:
-    type: {{ .Values.strategyType | default "Recreate" }}
+    type: {{ .Values.strategy }}
   selector:
     matchLabels:
-      {{- include "cross-seed.selectorLabels" . | nindent 6 }}
+      {{- include "app.selectorLabels" . | nindent 6 }}
   template:
     metadata:
       {{- with .Values.podAnnotations }}
@@ -18,8 +18,8 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       labels:
-        {{- include "cross-seed.labels" . | nindent 8 }}
-	{{- with .Values.podLabels }}
+        {{- include "app.labels" . | nindent 8 }}
+        {{- with .Values.podLabels }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
     spec:
@@ -27,70 +27,109 @@ spec:
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      serviceAccountName: {{ include "cross-seed.serviceAccountName" . }}
+      serviceAccountName: {{ include "app.serviceAccountName" . }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
-      initContainers:
-        - name: init-cross-seed-config
-          image: busybox:1.35
-          command: [ 'sh', '-c', "cp /configmap/* /config" ]
-          volumeMounts:
-            - mountPath: /config
-              name: {{ include "cross-seed.fullname" . }}-config
-            - mountPath: /configmap
-              name: {{ include "cross-seed.fullname" . }}-configmap
+      {{- $claimName := include "app.configClaimName" . }}
       containers:
         - name: {{ .Chart.Name }}
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
-          command: ["cross-seed", "daemon"]
+          {{- with .Values.args }}
+          args:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- $env := list }}
+          {{- range $name, $value := .Values.env }}
+          {{- $env = append $env (dict "name" $name "value" ($value | toString)) }}
+          {{- end }}
+          {{- $env = concat $env (.Values.extraEnv | default list) }}
+          {{- with $env }}
+          env:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.envFrom }}
+          envFrom:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           ports:
             - name: http
-              containerPort: {{ .Values.service.port }}
+              containerPort: {{ include "app.containerPort" . }}
               protocol: TCP
+          {{- with .Values.probes.liveness }}
+          {{- if .enabled }}
+          livenessProbe:
+            httpGet:
+              path: {{ .path }}
+              port: http
+            initialDelaySeconds: {{ .initialDelaySeconds }}
+            periodSeconds: {{ .periodSeconds }}
+            timeoutSeconds: {{ .timeoutSeconds }}
+            failureThreshold: {{ .failureThreshold }}
+          {{- end }}
+          {{- end }}
+          {{- with .Values.probes.readiness }}
+          {{- if .enabled }}
+          readinessProbe:
+            httpGet:
+              path: {{ .path }}
+              port: http
+            initialDelaySeconds: {{ .initialDelaySeconds }}
+            periodSeconds: {{ .periodSeconds }}
+            timeoutSeconds: {{ .timeoutSeconds }}
+            failureThreshold: {{ .failureThreshold }}
+          {{- end }}
+          {{- end }}
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
           volumeMounts:
-            - name: {{ include "cross-seed.fullname" . }}-torrents
-              mountPath: /torrents
-              subPath: {{ .Values.storage.torrents.subPath }}
-            - mountPath: /config
-              name: {{ include "cross-seed.fullname" . }}-config
-            - mountPath: /cross-seed
-              name: {{ include "cross-seed.fullname" . }} 
-          {{- with .Values.volumeMounts }}
+            {{- if .Values.storage.enabled }}
+            - name: config
+              mountPath: {{ .Values.storage.mountPath }}
+            {{- end }}
+            {{- if .Values.configFile.secretName }}
+            - name: config-file
+              mountPath: {{ .Values.configFile.mountPath }}
+              subPath: {{ .Values.configFile.key }}
+              readOnly: true
+            {{- end }}
+            {{- if .Values.torrents.existingClaim }}
+            - name: torrents
+              mountPath: {{ .Values.torrents.mountPath }}
+              {{- with .Values.torrents.subPath }}
+              subPath: {{ . }}
+              {{- end }}
+              readOnly: {{ .Values.torrents.readOnly }}
+            {{- end }}
+            {{- with .Values.volumeMounts }}
             {{- toYaml . | nindent 12 }}
-          {{- end }}
+            {{- end }}
       volumes:
-        - name: {{ include "cross-seed.fullname" . }}-torrents
+        {{- if .Values.storage.enabled }}
+        - name: config
           persistentVolumeClaim:
-            claimName: {{ .Values.storage.torrents.existingClaim }}
-        - name: {{ include "cross-seed.fullname" . }}
-          persistentVolumeClaim:
-            claimName: {{ default (printf (include "cross-seed.fullname" .)) .Values.storage.crossSeed.existingClaim }}
-        - name: {{ include "cross-seed.fullname" . }}-config
-          persistentVolumeClaim:
-            claimName: {{ default (printf "%s-config" (include "cross-seed.fullname" .)) }}
-        {{ if not .Values.conf.existingSecret }}
-        - name: {{ include "cross-seed.fullname" . }}-configmap
-          configMap:
-            name: {{ include "cross-seed.fullname" . }}-config
-            items:
-              - key: "config.js"
-                path: config.js
-        {{ else if .Values.conf.existingSecret }}
-        - name: {{ include "cross-seed.fullname" . }}-configmap
+            claimName: {{ $claimName }}
+        {{- end }}
+        {{- if .Values.configFile.secretName }}
+        - name: config-file
           secret:
-            secretName: {{ .Values.conf.secretName }}
+            secretName: {{ .Values.configFile.secretName }}
+            defaultMode: 0444
             items:
-              - key: "config.js"
-                path: config.js
-        {{ end }}
-      {{- with .Values.volumes }}
+              - key: {{ .Values.configFile.key }}
+                path: {{ .Values.configFile.key }}
+        {{- end }}
+        {{- if .Values.torrents.existingClaim }}
+        - name: torrents
+          persistentVolumeClaim:
+            claimName: {{ .Values.torrents.existingClaim }}
+            readOnly: {{ .Values.torrents.readOnly }}
+        {{- end }}
+        {{- with .Values.volumes }}
         {{- toYaml . | nindent 8 }}
-      {{- end }}
+        {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
@@ -102,5 +141,4 @@ spec:
       {{- with .Values.tolerations }}
       tolerations:
         {{- toYaml . | nindent 8 }}
-{{- end }}
-
+      {{- end }}
