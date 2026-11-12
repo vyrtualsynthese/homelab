@@ -15,7 +15,8 @@
 - Chart versions, exact: `prometheus-community/prometheus` **29.47.2**, `grafana-community/grafana` **14.4.1**, `grafana-community/loki` **21.2.1**, `fluent/fluent-bit` **0.58.3**. No ranges, no `*`.
 - Image pins, exact: `quay.io/prometheus/prometheus:v3.16.0`, `quay.io/prometheus-operator/prometheus-config-reloader:v0.95.2`, `quay.io/prometheus/node-exporter:v1.12.1`, `registry.k8s.io/kube-state-metrics/kube-state-metrics:v2.20.0`, `docker.io/grafana/grafana:13.3.1-distroless`, `docker.io/library/busybox:1.38.0`, `docker.io/curlimages/curl:8.23.0`, `docker.io/grafana/loki:3.7.9`, `cr.fluentbit.io/fluent/fluent-bit:5.1.3`. Never `latest`.
 - Sub-chart settings are nested under the dependency's name (`prometheus:`, `grafana:`, `loki:`, `fluent-bit:`). Top-level keys in a wrapper are the wrapper's own (`traefik:`, `ingress:`) and are not passed down.
-- **Every wrapper sets `fullnameOverride`** on its dependency to the bare component name. ArgoCD names the Helm release after the Application, so a chart called `prometheus` in a release called `prometheus` renders `prometheus-prometheus-server` without it — and every service name in this plan (`prometheus-server`, `grafana`, `loki`) plus the datasource URLs would be wrong. Prometheus also overrides its two sub-charts (`prometheus-kube-state-metrics`, `prometheus-node-exporter`) to keep today's names.
+- **Every wrapper sets `fullnameOverride`** on its dependency to the bare component name. ArgoCD names the Helm release after the Application, so a chart called `prometheus` in a release called `prometheus` renders `prometheus-prometheus-server` without it — and every service name in this plan (`prometheus-server`, `grafana`, `loki`) plus the datasource URLs would be wrong. Prometheus is the exception that needs two: its server objects come from a separate `server.fullnameOverride`, so that one is set to `prometheus-server` as well, and its two sub-charts are pinned to `prometheus-kube-state-metrics` and `prometheus-node-exporter`.
+- **Render every chart with the release name ArgoCD will use** (`prometheus`, `grafana`, `loki`, `fluent-bit`), never an invented one: the Prometheus server name falls back to `<release>-prometheus-server` when the release name does not contain `prometheus`, which is how a rename would silently break the datasources.
 - One namespace, `monitoring`. Every pod `nodeSelector: {kubernetes.io/hostname: nas}` except the two DaemonSets (`prometheus-node-exporter`, `fluent-bit`), which run on all four nodes.
 - Volumes: `prometheus-server` 25Gi, `loki` 20Gi, `grafana` 5Gi, default `local-path` class. Nothing on `/mnt/ultrafaststorage`.
 - Retention: metrics `90d` with `retentionSize: 20GB`; logs `720h` enforced by the Loki compactor.
@@ -129,6 +130,7 @@ prometheus:
   prometheus-pushgateway:
     enabled: false
   server:
+    fullnameOverride: prometheus-server
     retention: 90d
     retentionSize: 20GB
     strategy:
@@ -216,7 +218,7 @@ Expected: `Saving 1 charts` / `Downloading prometheus from repo https://promethe
 - [ ] **Step 6: Render and assert**
 
 ```bash
-helm template monitoring cluster/helm/monitoring/prometheus -n monitoring > /tmp/prom.yaml
+helm template prometheus cluster/helm/monitoring/prometheus -n monitoring > /tmp/prom.yaml
 grep -q 'image: "quay.io/prometheus/prometheus:v3.16.0"' /tmp/prom.yaml
 grep -q -- '--storage.tsdb.retention.time=90d' /tmp/prom.yaml
 grep -q -- '--storage.tsdb.retention.size=20GB' /tmp/prom.yaml
@@ -225,14 +227,14 @@ grep -q 'registry.k8s.io/kube-state-metrics/kube-state-metrics:v2.20.0' /tmp/pro
 grep -q 'kubernetes.io/hostname: nas' /tmp/prom.yaml
 grep -q 'traefik.containo.us/v1alpha1' /tmp/prom.yaml
 grep -q 'name: prometheus-server' /tmp/prom.yaml
-helm template monitoring cluster/helm/monitoring/prometheus -n monitoring \
+helm template prometheus cluster/helm/monitoring/prometheus -n monitoring \
   --show-only templates/ingressroute.yaml > /tmp/prom-route.yaml
 grep -q 'Host(`prometheus.kub.local`)' /tmp/prom-route.yaml
 grep -q 'name: prometheus-server' /tmp/prom-route.yaml
 ! grep -q 'storageClassName' /tmp/prom.yaml
 ! grep -qE '^  name: .*(alertmanager|pushgateway)' /tmp/prom.yaml
 ! grep -q 'latest' /tmp/prom.yaml
-! grep -q 'networking.k8s.io' /tmp/prom.yaml
+! grep -q 'apiVersion: networking.k8s.io' /tmp/prom.yaml
 echo OK
 ```
 
@@ -402,7 +404,7 @@ cp cluster/helm/monitoring/prometheus/templates/ingressroute.yaml \
 ```bash
 helm dependency build cluster/helm/monitoring/grafana
 helm lint cluster/helm/monitoring/grafana -n monitoring
-helm template monitoring cluster/helm/monitoring/grafana -n monitoring > /tmp/graf.yaml
+helm template grafana cluster/helm/monitoring/grafana -n monitoring > /tmp/graf.yaml
 grep -q 'docker.io/grafana/grafana:13.3.1-distroless' /tmp/graf.yaml
 grep -q 'docker.io/library/busybox:1.38.0' /tmp/graf.yaml
 grep -q 'existingSecret: grafana' /tmp/graf.yaml || grep -q 'secretName: grafana' /tmp/graf.yaml
@@ -414,13 +416,13 @@ grep -q 'http://prometheus-server.monitoring.svc.cluster.local' /tmp/graf.yaml
 grep -q 'http://loki.monitoring.svc.cluster.local:3100' /tmp/graf.yaml
 grep -q 'kubernetes.io/hostname: nas' /tmp/graf.yaml
 grep -q 'type: Recreate' /tmp/graf.yaml
-helm template monitoring cluster/helm/monitoring/grafana -n monitoring \
+helm template grafana cluster/helm/monitoring/grafana -n monitoring \
   --show-only templates/ingressroute.yaml > /tmp/graf-route.yaml
 grep -q 'Host(`grafana.kub.local`)' /tmp/graf-route.yaml
 grep -q 'name: grafana' /tmp/graf-route.yaml
 ! grep -q 'storageClassName' /tmp/graf.yaml
 ! grep -q 'latest' /tmp/graf.yaml
-! grep -q 'networking.k8s.io' /tmp/graf.yaml
+! grep -q 'apiVersion: networking.k8s.io' /tmp/graf.yaml
 echo OK
 ```
 
@@ -605,7 +607,7 @@ Copy from Task 1 Step 4, unchanged.
 ```bash
 helm dependency build cluster/helm/monitoring/loki
 helm lint cluster/helm/monitoring/loki -n monitoring
-helm template monitoring cluster/helm/monitoring/loki -n monitoring > /tmp/loki.yaml
+helm template loki cluster/helm/monitoring/loki -n monitoring > /tmp/loki.yaml
 grep -q 'docker.io/grafana/loki:3.7.9' /tmp/loki.yaml
 grep -q -- '-target=all,ui' /tmp/loki.yaml
 grep -q 'retention_enabled: true' /tmp/loki.yaml
@@ -614,7 +616,7 @@ grep -q 'retention_period: 720h' /tmp/loki.yaml
 grep -q 'object_store: filesystem' /tmp/loki.yaml
 grep -q 'kubernetes.io/hostname: nas' /tmp/loki.yaml
 grep -c 'kind: StatefulSet' /tmp/loki.yaml
-helm template monitoring cluster/helm/monitoring/loki -n monitoring \
+helm template loki cluster/helm/monitoring/loki -n monitoring \
   --show-only templates/ingressroute.yaml > /tmp/loki-route.yaml
 grep -q 'Host(`loki.kub.local`)' /tmp/loki-route.yaml
 grep -q 'name: loki' /tmp/loki-route.yaml
@@ -766,7 +768,7 @@ The chart's default second input (`systemd`, `kubelet.service`) is deliberately 
 ```bash
 helm dependency build cluster/helm/monitoring/fluent-bit
 helm lint cluster/helm/monitoring/fluent-bit -n monitoring
-helm template monitoring cluster/helm/monitoring/fluent-bit -n monitoring > /tmp/fb.yaml
+helm template fluent-bit cluster/helm/monitoring/fluent-bit -n monitoring > /tmp/fb.yaml
 grep -q 'kind: DaemonSet' /tmp/fb.yaml
 grep -q 'cr.fluentbit.io/fluent/fluent-bit:5.1.3' /tmp/fb.yaml
 grep -q 'Host loki.monitoring.svc.cluster.local' /tmp/fb.yaml
