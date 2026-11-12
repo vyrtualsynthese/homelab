@@ -951,6 +951,7 @@ Expected: no output.
 grep -rl 'path: cluster/helm/monitoring' cluster/argocd/projects/monitoring | sort
 grep -rn 'ingressroute.yaml' cluster/helm/monitoring | wc -l
 grep -rn 'traefik.containo.us\|networking.k8s.io' cluster/helm/monitoring | grep -v 'fluent-bit' | sort
+grep -q -- '- job_name: rbp0' <(helm template prometheus cluster/helm/monitoring/prometheus -n monitoring)
 ```
 
 Expected: four Application files; three template files; the third command lists the three `values.yaml` `apiVersion` lines and three template `apiVersion` lines, and no `networking.k8s.io`.
