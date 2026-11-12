@@ -2,7 +2,7 @@
 
 > **For agentic workers:** this plan is executed with the Grafana HTTP API. Each task ends
 > with a validation step (every query returns data) and a screenshot check at 1920×1080.
-> Steps use `- [ ]` for tracking.
+> Steps use `- [x]` for tracking.
 
 **Goal:** Make the five Grafana dashboards honest, readable and quick to debug from, without
 changing what is stored in Prometheus or Loki.
@@ -57,51 +57,51 @@ built). This plan covers the four working dashboards.
 
 **Files:** `/tmp/opencode/vis/build-health.js`
 
-- [ ] 11 panels: four counts (machines, containers, data stored, pods not running), an attention
+- [x] 11 panels: four counts (machines, containers, data stored, pods not running), an attention
       table with namespace/pod/status/reason/age, a dead-targets table, firing alerts, apps not
       fully running, restarts in the last hour, error rate by namespace, disk use by host.
-- [ ] Tables use `joinByField` + `organize`; age is `time() - kube_pod_created`, unit `s`.
-- [ ] Every query validated; screenshot at 1080p shows no metadata columns.
+- [x] Tables use `joinByField` + `organize`; age is `time() - kube_pod_created`, unit `s`.
+- [x] Every query validated; screenshot at 1080p shows no metadata columns.
 
 ### Task 3: New Applications dashboard
 
 **Files:** `/tmp/opencode/vis/build-applications.js`
 
-- [ ] Eight panels with a `namespace` multi-variable: apps not fully running, pods not running,
+- [x] Eight panels with a `namespace` multi-variable: apps not fully running, pods not running,
       CPU and memory per pod, restarts, PVC usage, dead targets in the namespace, recent errors.
-- [ ] Screenshot shows readable pod names and reasons.
+- [x] Screenshot shows readable pod names and reasons.
 
 ### Task 4: Platform replaces Investigate
 
 **Files:** `/tmp/opencode/vis/build-platform.js`
 
-- [ ] Keep nodes, control plane and Prometheus panels; add node temperature and filesystem use.
-- [ ] New uid `homelab-platform`; delete `homelab-investigate` only after the screenshot passes.
-- [ ] Every host series named `nas`, `nuc0`, `streaming`, `rbp2`, `rbp0`, `rbp1`.
+- [x] Keep nodes, control plane and Prometheus panels; add node temperature and filesystem use.
+- [x] New uid `homelab-platform`; delete `homelab-investigate` only after the screenshot passes.
+- [x] Every host series named `nas`, `nuc0`, `streaming`, `rbp2`, `rbp0`, `rbp1`.
 
 ### Task 5: Logs polish
 
 **Files:** `/tmp/opencode/vis/patch-logs.js`
 
-- [ ] Legends `{{container}}` / `{{node}}`; error query with word boundaries and a default
+- [x] Legends `{{container}}` / `{{node}}`; error query with word boundaries and a default
       exclude list for access-log noise; level column visible in the stream.
-- [ ] Error count drops to a believable number; screenshot checked.
+- [x] Error count drops to a believable number; screenshot checked.
 
 ### Task 6: Disks polish
 
 **Files:** `/tmp/opencode/vis/patch-disks.js`
 
-- [ ] Rebuild the drive table with host, device, model, capacity, life, temperature, power-on
+- [x] Rebuild the drive table with host, device, model, capacity, life, temperature, power-on
       years, SMART status, reallocated and pending sectors, merged into one frame.
-- [ ] Legend text `host /dev/x · model`; `Oldest` gains a years unit; no `Infinity`.
-- [ ] Screenshot checked; blank stays blank.
+- [x] Legend text `host /dev/x · model`; `Oldest` gains a years unit; no `Infinity`.
+- [x] Screenshot checked; blank stays blank.
 
 ### Task 7: Documentation and commit
 
 **Files:** `docs/observability-conventions.md`
 
-- [ ] Dashboard table updated: uids, panel counts, one-line purpose each.
-- [ ] Commit the doc change; dashboards remain in Grafana's database only.
+- [x] Dashboard table updated: uids, panel counts, one-line purpose each.
+- [x] Commit the doc change; dashboards remain in Grafana's database only.
 
 ## Verification
 
