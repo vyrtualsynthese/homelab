@@ -154,6 +154,12 @@ prometheus:
       image:
         repository: quay.io/prometheus-operator/prometheus-config-reloader
         tag: v0.95.2
+      resources:
+        requests:
+          cpu: 10m
+          memory: 32Mi
+        limits:
+          memory: 64Mi
   kube-state-metrics:
     fullnameOverride: prometheus-kube-state-metrics
     nodeSelector:
