@@ -265,3 +265,7 @@ as the **read-only** ServiceAccount `kube-system/opencode-mcp`, using `~/.kube/m
   `disabled_tools = ["configuration_view"]` so the token is never printed).
 - The human kubeconfig stays cluster-admin (`system:admin`). Do not point the MCP server at it.
 - To grant writes, create a scoped Role for the ServiceAccount and bind it — do not reuse admin.
+- Observability has its own document: [`docs/observability-conventions.md`](docs/observability-conventions.md)
+  covers the live stack, how to query Prometheus/Loki/Grafana without cluster access, the
+  dashboards, the alert set and its known holes. Dashboards and alert rules are in Grafana's
+  database, never in git.
