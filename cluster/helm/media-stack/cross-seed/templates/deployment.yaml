@@ -83,14 +83,6 @@ spec:
               subPath: {{ .Values.configFile.key }}
               readOnly: true
             {{- end }}
-            {{- if .Values.torrents.existingClaim }}
-            - name: torrents
-              mountPath: {{ .Values.torrents.mountPath }}
-              {{- with .Values.torrents.subPath }}
-              subPath: {{ . }}
-              {{- end }}
-              readOnly: {{ .Values.torrents.readOnly }}
-            {{- end }}
             {{- with .Values.volumeMounts }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
@@ -109,12 +101,6 @@ spec:
             items:
               - key: {{ .Values.configFile.key }}
                 path: {{ .Values.configFile.key }}
-        {{- end }}
-        {{- if .Values.torrents.existingClaim }}
-        - name: torrents
-          persistentVolumeClaim:
-            claimName: {{ .Values.torrents.existingClaim }}
-            readOnly: {{ .Values.torrents.readOnly }}
         {{- end }}
         {{- with .Values.volumes }}
         {{- toYaml . | nindent 8 }}

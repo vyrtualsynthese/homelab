@@ -1,9 +1,9 @@
 # cross-seed
 
 cross-seed matches a torrent you already seed on one tracker against the same release on another
-tracker, so the same files seed in both places. It reads qBittorrent's torrent files, searches your
-Torznab indexers (the feed format tracker indexers expose), and injects the matching torrent through
-qBittorrent's API.
+tracker, so the same files seed in both places. It reads the torrents qBittorrent already has,
+searches your Torznab indexers (the feed format tracker indexers expose), and injects the matching
+torrent through qBittorrent's API.
 
 ## Upstream
 
@@ -47,7 +47,6 @@ helm template cross-seed cluster/helm/media-stack/cross-seed --namespace media-s
 | `container.port` | Only set when the container listens on a different port than the Service. | `null` (falls back to `service.port`) |
 | `storage.*` | The config claim: class, size, mount path, or reuse an existing claim. | `local-path`, `128Mi`, `/config` |
 | `configFile.*` | The Secret holding `config.js`, its key, and where it mounts. | Secret `cross-seed`, key `config.js`, `/config/config.js` |
-| `torrents.*` | qBittorrent's `BT_backup` claim, sub-path, mount path and read-only flag. | NFS claim, `qBittorrent/BT_backup`, `/torrents`, read-only |
 | `probes.*` | Liveness on `/api/ping`; readiness disabled on purpose. | liveness on, 20s/30s |
 | `resources.*` | Requests and limits. There is a memory limit but no CPU limit, so torrent parsing is never throttled. | `50m`/`128Mi` request, `512Mi` limit |
 | `securityContext` | Runs as UID/GID 1100, drops all capabilities, no privilege escalation. | non-root |
@@ -66,6 +65,11 @@ it does not template or validate its content.
 
 The Secret **must already exist in the namespace before the first sync**. The chart does not create
 it, and a missing Secret leaves the pod in `CreateContainerConfigError`.
+
+`config.js` must set `useClientTorrents: true` and must **not** set `torrentDir`. cross-seed reads
+torrents through qBittorrent's API; the two options are mutually exclusive, and a `config.js` that
+still contains `torrentDir` fails configuration validation at startup. The chart does not mount a
+torrent directory.
 
 Two consequences:
 
@@ -123,16 +127,16 @@ themselves, which stay with qBittorrent.
 
 ## Torrents
 
-cross-seed reads qBittorrent's `BT_backup` directory over NFS, mounted **read-only** at `/torrents`.
-The mount is a sub-path (`qBittorrent/BT_backup`) of the existing qBittorrent config claim.
+cross-seed indexes qBittorrent's torrents through its API, using `useClientTorrents: true` in
+`config.js`. There is no torrent directory mount: the chart no longer mounts qBittorrent's
+`BT_backup` path, so it has no dependency on qBittorrent's config claim.
 
-cross-seed never writes there. It injects the matched torrent through qBittorrent's API, and
-qBittorrent creates the files. That is why the mount is read-only and why cross-seed needs
-qBittorrent's credentials in `config.js` rather than filesystem access.
+This is the upstream-recommended mode. It supports qBittorrent's SQLite mode and torrents that were
+renamed or moved in the client, and it needs qBittorrent's credentials in `config.js` rather than
+filesystem access. Injection still goes through the same qBittorrent API.
 
-The NFS directory is owned by qBittorrent's `PUID`, 1100, so the read-only mount needs no ownership
-change when cross-seed moves to UID 1100. If it turns out unreadable, the fix is on the NFS side, not
-in the chart.
+`useClientTorrents` and `torrentDir` cannot both be set. If the Secret still contains `torrentDir`,
+the daemon exits at configuration validation, so update the Secret before syncing this chart.
 
 ## Probes and readiness
 
