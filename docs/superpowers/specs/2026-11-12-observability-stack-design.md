@@ -209,6 +209,12 @@ node-exporter, pushgateway) and `loki-21.2.1` (rollout-operator). So no OCI regi
 only the three Helm repositories need to be reachable from ArgoCD's repo-server. **Call I made:**
 keep the upstream repositories rather than mirroring them locally.
 
+A local rebuild is not idempotent: `helm dependency build` writes a `Chart.lock`, and a second run
+with that file present fails unless the repository is registered in the local Helm config. ArgoCD
+never sees the lock (it is gitignored and its checkout is fresh), so this only bites a person
+working locally — `rm cluster/helm/monitoring/<component>/Chart.lock` then rebuild, or register the
+repository with `helm repo add`.
+
 ### 5.3 Namespace, placement, resources
 
 All four in `monitoring`. Every pod gets `nodeSelector: {kubernetes.io/hostname: nas}` **except**
@@ -241,7 +247,7 @@ maximise density.
 | Volume | Claim | Size | Retention |
 |---|---|---|---|
 | Prometheus TSDB | `prometheus-server` | 25Gi | `90d`, hard cap `20GB` (`retentionSize`) |
-| Loki chunks + index | `loki` (StatefulSet) | 20Gi | `720h` (30 days) via the compactor |
+| Loki chunks + index | `storage-loki-0` (StatefulSet template) | 20Gi | `720h` (30 days) via the compactor |
 | Grafana database | `grafana` | 5Gi | n/a |
 
 All three use the default `local-path` class, so they bind on `/mnt/ssd0` on `nas` because the pods
