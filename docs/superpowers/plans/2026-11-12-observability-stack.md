@@ -318,7 +318,7 @@ git commit -m "♻️ refactor(monitoring): wrap the official Prometheus chart a
 ### Task 2: Grafana wrapper chart and the admin Secret cutover
 
 **Files:**
-- Delete: `cluster/helm/monitoring/grafana/` (vendored chart: `Chart.yaml`, `README.md`, `values.yaml`, `values.schema.json`, `ci/`, `dashboards/`, `files/`, `templates/`)
+- Delete: `cluster/helm/monitoring/grafana/` (vendored chart: `Chart.yaml`, `README.md`, `values.yaml`, `.helmignore`, `ci/`, `dashboards/`, `templates/`)
 - Create: `cluster/helm/monitoring/grafana/Chart.yaml`
 - Create: `cluster/helm/monitoring/grafana/values.yaml`
 - Create: `cluster/helm/monitoring/grafana/templates/ingressroute.yaml`
@@ -428,8 +428,8 @@ helm lint cluster/helm/monitoring/grafana -n monitoring
 helm template grafana cluster/helm/monitoring/grafana -n monitoring > /tmp/graf.yaml
 grep -q 'docker.io/grafana/grafana:13.3.1-distroless' /tmp/graf.yaml
 grep -q 'docker.io/library/busybox:1.38.0' /tmp/graf.yaml
-grep -q 'existingSecret: grafana' /tmp/graf.yaml || grep -q 'secretName: grafana' /tmp/graf.yaml
 grep -q 'secretKeyRef' /tmp/graf.yaml
+grep -A3 'secretKeyRef' /tmp/graf.yaml | grep -q 'name: grafana'
 grep -q 'admin-user' /tmp/graf.yaml
 grep -q 'admin-password' /tmp/graf.yaml
 ! grep -q 'kind: Secret' /tmp/graf.yaml
@@ -447,7 +447,7 @@ grep -q 'name: grafana' /tmp/graf-route.yaml
 echo OK
 ```
 
-Expected: `OK`. If `admin-user`/`admin-password` are missing, `admin.existingSecret` is not nested under `grafana:`. If `kind: Secret` appears, the chart is generating its own admin Secret — meaning `admin.existingSecret` did not reach the sub-chart, and the operator's preserved Secret would be overwritten on every sync.
+Expected: `OK`. If `admin-user`/`admin-password` are missing, `admin.existingSecret` is not nested under `grafana:`. If `kind: Secret` appears, the chart is generating its own admin Secret — meaning `admin.existingSecret` did not reach the sub-chart, and the operator's preserved Secret would be overwritten on every sync. Chart 14.4.1 renders the reference as `secretKeyRef: {key: ..., name: grafana}`, so the literals `existingSecret:`/`secretName:` never appear in its output; the `secretKeyRef` checks are the real ones.
 
 - [ ] **Step 6: Operator step — keep the admin Secret across the prune**
 

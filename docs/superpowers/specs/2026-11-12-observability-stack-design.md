@@ -395,7 +395,7 @@ already mounts, enriches with the `kubernetes` filter, and pushes to Loki with t
 - `cluster/helm/monitoring/prometheus/` in full — vendored chart, `templates/`, `charts/`,
   `Chart.lock`, `README.md`. Replaced by the wrapper of the same name.
 - `cluster/helm/monitoring/grafana/` in full — vendored chart, `templates/`, `dashboards/`, `ci/`,
-  `files/`, `README.md`, `values.schema.json`. Replaced by the wrapper of the same name.
+  `README.md`, `.helmignore`. Replaced by the wrapper of the same name.
 - `cluster/helm/monitoring/loki/values.yaml` — replaced by the wrapper's `values.yaml` + `Chart.yaml`.
 - `.gitignore`: the line `!cluster/helm/monitoring/grafana/templates/secret.yaml` becomes dangling
   and is removed.
