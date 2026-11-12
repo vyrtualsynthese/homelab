@@ -1,0 +1,17 @@
+apiVersion: {{ .Values.traefik.apiVersion }}
+kind: IngressRoute
+metadata:
+  name: {{ .Chart.Name }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: {{ .Chart.Name }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  entryPoints:
+    - web
+  routes:
+    - match: Host(`{{ .Values.ingress.host }}`)
+      kind: Rule
+      services:
+        - name: {{ .Values.ingress.service }}
+          port: {{ .Values.ingress.port }}
