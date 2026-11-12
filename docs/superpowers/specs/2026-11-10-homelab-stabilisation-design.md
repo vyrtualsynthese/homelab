@@ -33,7 +33,7 @@ days because their PVC objects were deleted. Three apps have been crash-looping 
 (17 723, 18 737 and 12 432 restarts). Eleven apps still run on volumes that are mid-deletion; the
 data is readable today and dies on the next pod restart.
 
-**GitOps automation is configured outside git.** About 34 of the 58 Application manifests carry no
+**GitOps automation is configured outside git.** About 34 of the 56 Application manifests carry no
 `syncPolicy.automated`. The applications themselves *are* reconciled — the operator enables
 auto-sync from the ArgoCD UI, because toggling it off there is faster than editing git while
 debugging pods. The drift is therefore not "half the catalogue is unmanaged", it is that the
