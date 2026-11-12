@@ -164,6 +164,7 @@ the local-path provisioner and stop doing this by hand.
 | `sonarr` | yes, on `/ping` | seccomp, no privilege escalation; capabilities kept for the LinuxServer init | **no — the image starts as root, then drops to 1100** |
 | `sonarr-anime` | yes, on `/ping` | seccomp, no privilege escalation; capabilities kept for the LinuxServer init | **no — the image starts as root, then drops to 1100** |
 | `recyclarr` | n/a (batch job) | capabilities dropped, seccomp, no privilege escalation, no API token | **yes — 1000**, the image's default and the claim's existing owner |
+| `tautulli` | yes, on `/status` | capabilities dropped except `CHOWN`/`SETUID`/`SETGID`, which the image's root init needs; seccomp; no privilege escalation | **no — the image starts as root, then drops to 1100** |
 | everything else | no | no | no |
 
 ## Checking a chart against this list
@@ -230,6 +231,15 @@ The CronJob's schedule, timezone, concurrency policy and deadlines are values; t
 by an init container; the claim is derived from the release and stays on `nuc0`, where its PV lives.
 It runs as UID 1000, the image's own default and the claim's existing owner, so enabling non-root cost
 no node-side `chown` and needs no runbook.
+
+`tautulli` as of 2026-11-13: the first chart in the media stack with **no public route at all**. One
+IngressRoute on the `web` entry point at `tautulli.kub.local`, no TLS, no redirect, because the app
+is LAN-only. It also carries the second deliberate readiness exception: Tautulli reports Plex
+reachability and SQLite integrity only in a JSON body with HTTP 200, which the kubelet cannot read,
+so readiness is disabled rather than pointed at liveness. Its image starts as root and drops to
+`PUID`/`PGID`, so the capability set is `ALL` dropped plus the three calls that init makes. The chart
+creates the config claim: the previous one was a Longhorn volume that vanished in 2026, which is why
+the app had not run for 71 days.
 
 ## Charts still to align
 
