@@ -19,7 +19,8 @@ Secret values must be replaced.
 
 ## Goals
 
-- Both charts render the same object set and values schema as `prowlarr`.
+- Both charts render the same object set and the same values schema as `prowlarr`, plus the two named
+  media mounts.
 - Every object name is derived from the release, with no change to the live claim names.
 - `radarr-anime` stops running its application as root: `PUID`/`PGID` move from `0` to `1100`.
 - Liveness, readiness and startup probe Radarr's own unauthenticated `/ping`.
@@ -51,6 +52,9 @@ Secret values must be replaced.
   `runAsNonRoot` or `runAsUser` prevents it from starting, as documented in the `prowlarr` README.
   "Non-root" therefore means `PUID/PGID 1100` here, plus `allowPrivilegeEscalation: false` and the
   `RuntimeDefault` seccomp profile.
+- **Capabilities are not dropped.** The LinuxServer init must chown `/config` and switch user, so
+  `capabilities.drop: [ALL]` is not an option; only `allowPrivilegeEscalation: false` and the runtime
+  seccomp profile apply.
 - **`local-path` is hostPath-backed.** The kubelet does not apply `fsGroup`, so `fsGroup` is absent
   rather than set to something plausible.
 - **The live claims are `radarr-config` and `radarr-anime-config`.** Both equal `<fullname>-config` for
@@ -143,7 +147,9 @@ behind.
 
 The chart keeps the `exportarr` sidecar, exposed as an `exportarr` values block. While
 `exportarr.enabled` is true, the Deployment renders the four `prometheus.io/*` annotations from that
-block, so the announced port cannot drift from the listener.
+block, so the announced port cannot drift from the listener. The sidecar's `args` list selects the
+application handler and must be `radarr`; leaving the reference chart's `prowlarr` value would query
+the wrong API.
 
 The 401 is not a chart defect. Both keys in `homelab.env` answer **200** against
 `/api/v3/system/status`, so the running Secrets are stale. The operator patches both Secrets from
