@@ -1,79 +1,150 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "fullname" . }}
+  name: {{ include "app.fullname" . }}
   labels:
-    {{- include "labels" . | nindent 4 }}
+    {{- include "app.labels" . | nindent 4 }}
 spec:
-  replicas: 1
+  replicas: {{ .Values.replicaCount }}
   strategy:
-    type: Recreate
+    type: {{ .Values.strategy }}
   selector:
     matchLabels:
-      {{- include "selectorLabels" . | nindent 6 }}
+      {{- include "app.selectorLabels" . | nindent 6 }}
   template:
     metadata:
-      {{- with .Values.podAnnotations }}
+      {{- if or .Values.exportarr.enabled .Values.podAnnotations }}
       annotations:
+        {{- if .Values.exportarr.enabled }}
+        prometheus.io/scrape: "true"
+        prometheus.io/scheme: http
+        prometheus.io/port: {{ .Values.exportarr.port | quote }}
+        prometheus.io/path: "/metrics"
+        {{- end }}
+        {{- with .Values.podAnnotations }}
         {{- toYaml . | nindent 8 }}
+        {{- end }}
       {{- end }}
       labels:
-        {{- include "selectorLabels" . | nindent 8 }}
+        {{- include "app.labels" . | nindent 8 }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
     spec:
-      volumes:
-        - name: prowlarr-config-volume
-          persistentVolumeClaim:
-            claimName: prowlarr-config
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      serviceAccountName: {{ include "serviceAccountName" . }}
+      serviceAccountName: {{ include "app.serviceAccountName" . }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      {{- $claimName := include "app.configClaimName" . }}
       containers:
         - name: {{ .Chart.Name }}
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
-          ports:
-            - name: prowlarr-webui
-              containerPort: 9696
+          {{- $env := list }}
+          {{- range $name, $value := .Values.env }}
+          {{- $env = append $env (dict "name" $name "value" ($value | toString)) }}
+          {{- end }}
+          {{- $env = concat $env (.Values.extraEnv | default list) }}
+          {{- with $env }}
           env:
-            - name: "TZ"
-              value: "Europe/Paris"
-            - name: "PUID"
-              value: "1100"
-            - name: "PGID"
-              value: "1100"
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.envFrom }}
+          envFrom:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          ports:
+            - name: http
+              containerPort: {{ include "app.containerPort" . }}
+              protocol: TCP
+          {{- with .Values.probes.startup }}
+          {{- if .enabled }}
+          startupProbe:
+            httpGet:
+              path: {{ .path }}
+              port: http
+            periodSeconds: {{ .periodSeconds }}
+            timeoutSeconds: {{ .timeoutSeconds }}
+            failureThreshold: {{ .failureThreshold }}
+          {{- end }}
+          {{- end }}
+          {{- with .Values.probes.liveness }}
+          {{- if .enabled }}
+          livenessProbe:
+            httpGet:
+              path: {{ .path }}
+              port: http
+            initialDelaySeconds: {{ .initialDelaySeconds }}
+            periodSeconds: {{ .periodSeconds }}
+            timeoutSeconds: {{ .timeoutSeconds }}
+            failureThreshold: {{ .failureThreshold }}
+          {{- end }}
+          {{- end }}
+          {{- with .Values.probes.readiness }}
+          {{- if .enabled }}
+          readinessProbe:
+            httpGet:
+              path: {{ .path }}
+              port: http
+            initialDelaySeconds: {{ .initialDelaySeconds }}
+            periodSeconds: {{ .periodSeconds }}
+            timeoutSeconds: {{ .timeoutSeconds }}
+            failureThreshold: {{ .failureThreshold }}
+          {{- end }}
+          {{- end }}
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
           volumeMounts:
-            - name: prowlarr-config-volume
-              mountPath: /config
+            {{- if .Values.storage.enabled }}
+            - name: config
+              mountPath: {{ .Values.storage.mountPath }}
+            {{- end }}
+            {{- with .Values.volumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+        {{- if .Values.exportarr.enabled }}
+        # Exportarr sidecar. Wiring copied from the pre-refactor chart and left
+        # alone in this change: the target answers HTTP 500 because Prowlarr
+        # returns 401 — the key in the `prowlarr` Secret is stale, not the
+        # variable name. Replacing that Secret value is a separate operation.
         - name: {{ .Chart.Name }}-exporter
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
-          image: "{{ .Values.exportarr.image.repository }}:{{ .Values.exportarr.image.tag | default .Chart.AppVersion }}"
+          image: "{{ .Values.exportarr.image.repository }}:{{ .Values.exportarr.image.tag }}"
           imagePullPolicy: {{ .Values.exportarr.image.pullPolicy }}
           ports:
-            - name: exporter
-              containerPort: 9707
+            - name: metrics
+              containerPort: {{ .Values.exportarr.port }}
+              protocol: TCP
           env:
-            - name: "PORT"
-              value: "9707"
-            - name: "URL"
-              value: "http://{{ .Chart.Name }}:9696"
-            - name: "APIKEY"
+            - name: PORT
+              value: {{ .Values.exportarr.port | quote }}
+            - name: URL
+              value: "http://{{ include "app.fullname" . }}:{{ .Values.service.port }}"
+            - name: APIKEY
               valueFrom:
                 secretKeyRef:
-                  name: prowlarr
-                  key: secret
+                  name: {{ include "app.exportarrSecretName" . }}
+                  key: {{ .Values.exportarr.apiKey.secretKey }}
           args:
             - prowlarr
           resources:
             {{- toYaml .Values.exportarr.resources | nindent 12 }}
+        {{- end }}
+      volumes:
+        {{- if .Values.storage.enabled }}
+        - name: config
+          persistentVolumeClaim:
+            claimName: {{ $claimName }}
+        {{- end }}
+        {{- with .Values.volumes }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

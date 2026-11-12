@@ -57,7 +57,7 @@ that are not valid environment-variable names. If a rollout is only correct beca
 | # | Requirement | Why |
 |---|---|---|
 | 12 | A liveness probe on the app's own health endpoint, not on `/` | `/` often returns 200 with a broken backend |
-| 13 | A readiness probe that fails when a dependency is down, and **not** the same endpoint as liveness | Sharing them turns a database blip into a restart loop |
+| 13 | A readiness probe that fails when a dependency is down, and **not** the same endpoint as liveness | Sharing them turns a database blip into a restart loop. If the app has no dependency that can fail while the process stays up, sharing the endpoint is fine — record why in the chart README |
 | 14 | `resources.requests.memory` and `limits.memory` on every container | Without a limit one app can evict a node |
 | 15 | `allowPrivilegeEscalation: false`, `capabilities.drop: [ALL]`, `seccompProfile: RuntimeDefault` | Free, and breaks nothing that does not need privileges |
 | 16 | Extra volumes with an explicit `mountPath` under `/srv/` or the app's own path | Keeps the NFS-media convention readable |
@@ -156,6 +156,7 @@ the local-path provisioner and stop doing this by hand.
 | `autobrr` | yes | capabilities dropped, seccomp, no privilege escalation | **yes — 1100**, claim chowned first |
 | `flaresolverr` | yes, on `/health` | capabilities dropped, seccomp, no privilege escalation | **yes — 1000**, read from the image, no claim to chown |
 | `cross-seed` | liveness only | capabilities dropped, seccomp, no privilege escalation, no API token | **yes — 1100**, claim chowned first |
+| `prowlarr` | yes, on `/ping` | seccomp, no privilege escalation; capabilities kept for the LinuxServer init | **no — the image starts as root, then drops to 1100** |
 | everything else | no | no | no |
 
 ## Checking a chart against this list
@@ -198,6 +199,15 @@ app keeps no state and is never exposed, `RollingUpdate` because there is no cla
 probes on the app's own `/health`, a `metrics` block that turns its exporter on in one place —
 environment, port and scrape annotations together — and `LOG_LEVEL: warning`, with the counters
 carrying the outcomes the log no longer prints.
+
+`prowlarr` as of 2026-11-12: the same shape for a LinuxServer image. Five objects, including the
+config claim, probes on `/ping`, and `PROWLARR__LOG__LEVEL` / `PROWLARR__LOG__CONSOLELEVEL` at
+`warn`. The hardening stops where the LinuxServer init starts: the image must run as root to
+prepare `/config` and then drop to `PUID`/`PGID`, so `runAsNonRoot`, `runAsUser` and dropping all
+capabilities are not options. Only `allowPrivilegeEscalation: false` and the runtime seccomp profile
+are safe. Its exportarr sidecar answers HTTP 500 because Prowlarr returns 401 — the key in the
+`prowlarr` Secret is stale. That is a Secret value to replace, not a chart change, and it is
+recorded as debt in the chart README.
 
 ## Charts still to align
 
