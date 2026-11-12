@@ -70,18 +70,6 @@ spec:
             failureThreshold: {{ .failureThreshold }}
           {{- end }}
           {{- end }}
-          {{- with .Values.probes.readiness }}
-          {{- if .enabled }}
-          readinessProbe:
-            httpGet:
-              path: {{ .path }}
-              port: http
-            initialDelaySeconds: {{ .initialDelaySeconds }}
-            periodSeconds: {{ .periodSeconds }}
-            timeoutSeconds: {{ .timeoutSeconds }}
-            failureThreshold: {{ .failureThreshold }}
-          {{- end }}
-          {{- end }}
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
           volumeMounts:
@@ -116,6 +104,7 @@ spec:
         - name: config-file
           secret:
             secretName: {{ .Values.configFile.secretName }}
+            # Secret files are root-owned; 0444 keeps them readable to UID 1100.
             defaultMode: 0444
             items:
               - key: {{ .Values.configFile.key }}
