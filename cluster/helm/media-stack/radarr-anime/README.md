@@ -2,7 +2,7 @@
 
 Radarr manages a movie library: it watches indexers for releases that match the films you have asked
 for, hands the chosen release to a download client, then imports the finished download into the movie
-folder and renames it. It follows the chart contract in
+folder under its final name. It follows the chart contract in
 [`docs/charts/README.md`](../../../../docs/charts/README.md); the shape is copied from
 `media-stack/prowlarr`, with the differences this app needs: it reads two media claims, and its
 metrics exporter runs against Radarr's own API.
@@ -17,8 +17,9 @@ names (`radarr-anime`, `radarr-anime-config`) derive from the release name.
 - Website: https://radarr.video/
 - Source: https://github.com/Radarr/Radarr
 - Image: https://docs.linuxserver.io/images/docker-radarr/
-- Registry: `lscr.io`, the official one. The previous chart pulled a `ghcr.io/linuxserver` mirror tag;
-  this chart uses `lscr.io/linuxserver/radarr` directly.
+- Registry: `lscr.io`, the official one. The previous chart pulled from the
+  `ghcr.io/linuxserver/radarr` mirror rather than `lscr.io`; this chart uses
+  `lscr.io/linuxserver/radarr` directly.
 
 ## How this chart is deployed here
 
@@ -160,12 +161,15 @@ The operator does this once, before merging the chart change:
    directory that was just fixed. Automation is paused, so nothing rescales it; the merge's sync then
    starts the pod as 1100 for the first time.
 
+Then merge the PR and sync `radarr-anime` from the ArgoCD UI. The checks below need the new pod; the
+Deployment stays at zero until that sync.
+
 The same `chown` applies to a claim recreated from scratch: `local-path` is hostPath-backed, the
 provisioner creates the directory as root, and the kubelet does not apply `fsGroup` to it either. The
 `autobrr` README describes the generic procedure.
 
-Check three things afterwards: that the init ran, that the tree is owned by 1100, and that the two
-media mounts are writable by the app user.
+After the sync, check three things: that the init ran, that the tree is owned by 1100, and that the
+two media mounts are writable by the app user.
 
 ```bash
 # the init ran: it resets the top-level directory owner on every start
@@ -178,7 +182,8 @@ kubectl -n media-stack exec -c radarr-anime deploy/radarr-anime -- s6-setuidgid 
   sh -c 'test -w /downloads && test -w /movies && echo writable'
 ```
 
-Expected: `1100`, no output from `find`, then `writable`.
+Expected: `1100`, no paths printed from `find` (`Permission denied` lines on stderr are fine), then
+`writable`.
 
 `stat -c %u /config` proves only that the init ran. `lsiown abc:abc /config` runs without `-R` and
 resets the top-level directory's owner to `abc` (1100) on every start, so it says nothing about the

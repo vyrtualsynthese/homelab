@@ -256,8 +256,9 @@ protection against a deletion.
    curl -s http://radarr-anime.kub.local/ping
    ```
 
-   Expected: both pods `2/2 Running`, `1100` from `stat`, no output from `find`, `writable`, no 401
-   in either exporter log, and `{"status":"OK"}` from both `/ping` endpoints.
+   Expected: both pods `2/2 Running`, `1100` from `stat`, no paths printed from `find` (`Permission
+   denied` lines on stderr are fine), `writable`, no 401 in either exporter log, and `{"status":"OK"}`
+   from both `/ping` endpoints.
 
    The three checks prove different things, and only one of them guards the chown:
 

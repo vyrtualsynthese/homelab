@@ -166,7 +166,7 @@ the local-path provisioner and stop doing this by hand.
 | `recyclarr` | n/a (batch job) | capabilities dropped, seccomp, no privilege escalation, no API token | **yes — 1000**, the image's default and the claim's existing owner |
 | `tautulli` | yes, on `/status` | capabilities dropped except `CHOWN`/`SETUID`/`SETGID`, which the image's root init needs; seccomp; no privilege escalation | **no — the image starts as root, then drops to 1100** |
 | `radarr` | yes, on `/ping` | seccomp, no privilege escalation; capabilities kept for the LinuxServer init | **no — the image starts as root, then drops to 1100** |
-| `radarr-anime` | yes, on `/ping` | seccomp, no privilege escalation; capabilities kept for the LinuxServer init | **no — the image starts as root, then drops to 1100**; moved from 0 |
+| `radarr-anime` | yes, on `/ping` | seccomp, no privilege escalation; capabilities kept for the LinuxServer init | **no — the image starts as root, then drops to 1100**; `PUID` moved from 0 |
 | everything else | no | no | no |
 
 ## Checking a chart against this list
@@ -244,11 +244,13 @@ creates the config claim: the previous one was a Longhorn volume that vanished i
 the app had not run for 71 days.
 
 `radarr` and `radarr-anime` as of 2026-11-13: the same LinuxServer-plus-exporter pair as `sonarr` and
-`sonarr-anime`, five objects each. The two NFS media claims are named `downloads` and `media` values
-instead of raw pod spec; probes are on `/ping` with a 300s startup budget for the database migration;
-`RADARR__LOG__LEVEL` and `RADARR__LOG__CONSOLELEVEL` are both at `warn`. Claim names already matched
-the derived `<fullname>-config`, so no data moved. The `radarr-anime` instance also moved off
-`PUID 0`, which is the chown runbook the contract's UID section describes.
+`sonarr-anime`, five objects each. The two NFS media claims are exposed as named `downloads` and
+`media` values rather than hardcoded pod volumes; probes are on `/ping` with a 300s startup budget
+for the database migration; `RADARR__LOG__LEVEL` and `RADARR__LOG__CONSOLELEVEL` are both at `warn`.
+Claim names already matched the derived `<fullname>-config`, so no data moved. The `radarr-anime`
+instance also moved off `PUID 0`, which is the chown runbook the contract's UID section describes.
+Both exporter sidecars still answer 401 until the operator patches the stale keys in Secrets
+`radarr` and `radarr-anime`.
 
 ## Charts still to align
 
