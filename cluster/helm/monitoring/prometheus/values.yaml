@@ -87,6 +87,17 @@ prometheus:
           source_labels:
             - __name__
           regex: "apiserver_.*_bucket"
+    # K3s runs the API server, etcd, scheduler and kubelet in one process, so
+    # every control-plane node's kubelet endpoint republishes the whole control
+    # plane: 102.6k of this cluster's 196k series, ~93% of them duplicated
+    # three times over and already collected by the job above. Keep the kubelet
+    # and volume families this job exists for.
+    kubernetes-nodes:
+      metric_relabel_configs:
+        - action: drop
+          source_labels:
+            - __name__
+          regex: "apiserver_.*|etcd_.*|scheduler_.*|controller_.*|workqueue_.*|rest_client_.*|go_.*|process_.*|apiextensions_.*|aggregator_.*|authentication_.*|authorization_.*|field_validation_.*|watch_cache_.*|node_authorizer_.*|kubernetes_feature_enabled"
     rbp0:
       enabled: true
       static_configs:
