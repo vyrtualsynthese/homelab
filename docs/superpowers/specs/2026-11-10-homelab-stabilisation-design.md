@@ -33,7 +33,7 @@ days because their PVC objects were deleted. Three apps have been crash-looping 
 (17 723, 18 737 and 12 432 restarts). Eleven apps still run on volumes that are mid-deletion; the
 data is readable today and dies on the next pod restart.
 
-**GitOps automation is configured outside git.** About 34 of the 56 Application manifests carry no
+**GitOps automation is configured outside git.** About 34 of the 58 Application manifests carry no
 `syncPolicy.automated`. The applications themselves *are* reconciled — the operator enables
 auto-sync from the ArgoCD UI, because toggling it off there is faster than editing git while
 debugging pods. The drift is therefore not "half the catalogue is unmanaged", it is that the
@@ -202,9 +202,8 @@ demand — the current mix of 1Gi through 50Gi config claims is a symptom of gue
    - liveness and readiness probes
    - `securityContext` that drops capabilities and avoids root where the image allows it
    - one `values.yaml` per environment, no per-app template forks of the same logic
-3. **No vendored charts.** `prometheus`, `grafana`, `postiz`, `discourse`, `authentik`, `dashy` and
-   `ashuvidz-website` migrate to rule 1 or rule 2 on their next touch. Until then they are exempt
-   by name, not by category.
+3. **No vendored charts.** `postiz`, `discourse`, `authentik`, `dashy` and `ashuvidz-website` migrate
+   to rule 1 or rule 2 on their next touch. Until then they are exempt by name, not by category.
 4. **No Bitnami.** Not as a chart, not as an image.
 
 ### 8.4 Sync policy
@@ -448,9 +447,9 @@ Four waves, each ending `Synced`/`Healthy` and each getting automation switched 
   callback 404s for filebrowser, so the flow was never finished. Rebuild its configuration properly
   — one forward-auth provider and application per host, in git — rather than repairing the ad-hoc
   state. This is a prerequisite for W7.1, not an optional tidy-up.
-- **Wave D — the NFS apps and leftovers.** Dead chart `cluster/helm/databases/pgadmin`, orphan
-  `cluster/helm/monitoring/loki` directory, `cluster/helm/localpath/` reference in AGENTS.md,
-  and the `renovate` version mismatch between Application and values.
+- **Wave D — the NFS apps and leftovers.** Dead chart `cluster/helm/databases/pgadmin`,
+  `cluster/helm/localpath/` reference in AGENTS.md, and the `renovate` version mismatch between
+  Application and values.
 
 Acceptance: no `Pending` pods cluster-wide; every Application `Synced`/`Healthy` with automation;
 no namespace without an owner.
@@ -533,13 +532,14 @@ component.
 
 What survives from this workstream:
 
-1. The vendored `prometheus` and `grafana` charts and their Applications are removed.
+1. The vendored `prometheus` and `grafana` charts are replaced by wrapper charts; the two
+   Applications keep their names and paths.
 2. `mktxp`, `pihole-exporter` and `prometheus-smartctl` keep working unchanged: Prometheus still
    scrapes them through their `prometheus.io/scrape` annotations, so no ServiceMonitor layer and
    no operator CRDs are introduced.
 
-Deferred to their own features: alerting (Grafana unified alerting, Discord delivery), dashboards
-as code, and the `mktxp` floating `latest` tag.
+Deferred to their own features: alerting (Grafana unified alerting, Discord delivery) — which is
+what programme goal 5 still requires —, dashboards as code, and the `mktxp` floating `latest` tag.
 
 ### W7 — New services
 
@@ -599,7 +599,7 @@ revisiting if W5 comes up before W4.
 ```
 W0 cleanup
   └─ W1 storage
-       ├─ W2 postgres ──┬─ W3 waves ──┬─ W6 observability (after W5)
+       ├─ W2 postgres ──┬─ W3 waves ──┬─ W6 observability (after W5, superseded — see the 2026-11-12 design)
        │                └─ W7 new services
        └─ W5 platform ─────────────────┘
 W4 offsite: not urgent, independent, take it whenever the operator wants it
