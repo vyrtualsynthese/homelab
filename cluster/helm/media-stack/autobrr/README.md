@@ -35,7 +35,7 @@ helm template autobrr cluster/helm/media-stack/autobrr --namespace media-stack
 | `env` | Non-secret variables, rendered **inline** into the container. Changing one rolls the pod. | `TZ`, `AUTOBRR__HOST`, `AUTOBRR__PORT` |
 | `extraEnv` | Variables sourced from a Secret, as `{ name, valueFrom }`. | `[]` |
 | `nodeSelector` | Node pin. Every workload is pinned. | `kubernetes.io/hostname: streaming` |
-| `probes.{liveness,readiness}` | HTTP probes on autobrr's own endpoints, which live under `/api`. | enabled, 20s/10s delay |
+| `probes.{startup,liveness,readiness}` | HTTP probes on autobrr's own endpoints, which live under `/api`. The startup probe gates the other two through a slow first boot. | enabled; startup 5s × 30, liveness 20s delay, readiness 10s delay |
 | `securityContext` | Runs as 1100, drops all capabilities, no privilege escalation. | non-root |
 | `resources` | Scheduler reservation and memory limit, sized from Prometheus. No CPU limit. | `10m`/`192Mi` request, `768Mi` memory limit |
 | `podAnnotations` | Extra pod annotations. Carries the Prometheus scrape annotations. | scrape on port 9074, path `/metrics` |
@@ -80,12 +80,23 @@ autobrr exposes two endpoints under `/api`, and they are not interchangeable:
 
 | Probe | Path | Behaviour |
 |---|---|---|
+| startup | `/api/healthz/liveness` | Runs before the other two; 5s × 30 = 150s budget |
 | liveness | `/api/healthz/liveness` | 200 while the process is alive |
 | readiness | `/api/healthz/readiness` | 500 when the database is unreachable |
 
 Using readiness for liveness would turn a database blip into a restart loop, so they stay separate.
 The paths must keep the `/api` prefix: without it Traefik is not involved and autobrr answers 404,
 which the kubelet treats as a failed probe.
+
+The startup probe exists because of a measured cold start, not as a precaution: the first boot after
+the v1.90.0 upgrade took 83s to bind port 7474 (~52s on the previous image, while the new version
+read the old version's database). Liveness alone allows ~110s (20s delay plus 3 failures every 30s),
+so an 83s start leaves barely half a minute of margin — and a start slower than the budget gets a
+healthy pod killed, restarted, and killed again, which is a crash loop caused by the probe. The
+startup probe holds liveness and readiness until the app answers once, with a 150s budget.
+
+It probes the liveness endpoint rather than readiness on purpose: during a cold start the database
+is legitimately not ready, so a readiness-based startup probe would never pass.
 
 ## Metrics
 

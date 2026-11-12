@@ -3,7 +3,7 @@ name: autobrr
 description: autobrr monitors IRC announce channels and feeds matching releases to your download client.
 type: application
 # Chart version. Renovate bumps this when the image tag moves.
-version: 1.3.0
+version: 1.4.0
 # Must match image.tag in values.yaml.
 appVersion: "v1.90.0"
 icon: https://raw.githubusercontent.com/autobrr/autobrr/develop/.github/images/logo.png
