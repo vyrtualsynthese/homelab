@@ -5,7 +5,8 @@ choose a threshold, lay out a screen, verify a panel — lives in the project sk
 at `.opencode/skills/observability-and-alerting/SKILL.md`. This file only records
 what is true **here** and would be wrong elsewhere.
 
-State: 2026-11-12, verified against the live cluster. Re-verify the "measured"
+State: 2026-11-12, verified against the live cluster; alert rules and the
+recyclarr batch-job facts re-verified on 2026-11-13. Re-verify the "measured"
 numbers before trusting them in a new document.
 
 ## What runs where
@@ -182,7 +183,7 @@ dashboard JSON is not a backup either — the SQLite file is what would be lost.
 ## Alerting
 
 Grafana unified alerting, folder `Homelab`, rule group `homelab-core`,
-evaluation interval **60 s**. **25 rules**, one contact point, two routes by
+evaluation interval **60 s**. **27 rules**, one contact point, two routes by
 severity.
 
 **Delivery**: contact point `discord-homelab` (type `discord`).
@@ -191,7 +192,7 @@ Warnings repeat every **12 h**; a child route matching `severity="critical"`
 repeats every **1 h**. The webhook URL is not readable through the API (it is a
 secure field), so the contact point is never rewritten by automation.
 
-**Rule set and live state on 2026-11-12:**
+**Rule set and live state on 2026-11-13:**
 
 | Rule | Condition | for | Severity | State |
 |---|---|---|---|---|
@@ -204,7 +205,7 @@ secure field), so the contact point is never rewritten by automation.
 | `NodeFilesystemReadOnly` | filesystem mounted read-only | 5m | critical | inactive |
 | `MonitoringDown` | `1 - up{job="prometheus"}`; `execErrState: Alerting` | 5m | critical | inactive |
 | `DriveNeedsReplacement` | SMART failed, exit != 0, <10 % life, or pending sectors | 10m | critical | **firing** on `nas /dev/sdf` |
-| `ScrapeTargetDown` | any non-node target down | 15m | warning | **firing, silenced** (7 media exporters) |
+| `ScrapeTargetDown` | any non-node target down, including the edge Pis' SMART and Docker exporters; Prometheus and kube-state-metrics excluded (own rules) | 15m | warning | **firing, silenced** (7 media exporters) |
 | `NodeCpuHigh` | >90 % by host | 15m | warning | inactive |
 | `NodeMemoryHigh` | >90 % of `MemAvailable` | 15m | warning | inactive |
 | `NodeTemperatureHigh` | hottest real sensor >80 °C | 10m | warning | inactive |
@@ -216,10 +217,33 @@ secure field), so the contact point is never rewritten by automation.
 | `DiskReallocatingSectors` | any new sector in 1 h | 5m | warning | inactive |
 | `RestartStorm` | 5+ restarts in an hour | 5m | warning | **firing, silenced** (the three long-broken apps) |
 | `OOMKilled` | terminated by OOM in the last hour | 5m | warning | inactive |
+| `JobFailed` | any Job with a failed pod, no success, and younger than 2 h | 5m | warning | inactive |
+| `RecyclarrNotSucceeding` | no successful recyclarr run in 26 h | 5m | warning | inactive |
 | `CertificateExpiring` | newest Traefik cert per SAN <21 days | 1h | warning | inactive |
 | `PodCrashLooping` | CrashLoopBackOff | 15m | warning | **firing, silenced** ×3 |
 | `PodPending` | Pending, created <2 h ago | 15m | warning | inactive |
 | `LokiSilent` | no Fluent Bit lines in 10 min | 10m | warning | inactive |
+
+**`JobFailed`** is the batch-workload rule. Its expression is
+`((kube_job_status_failed > 0) unless on(namespace, job_name) (kube_job_status_succeeded > 0)) and on(namespace, job_name) ((time() - kube_job_status_start_time) < 7200)`:
+it fires for a Job whose pod failed and whose retry did not succeed, and it
+resolves by itself after two hours even if the failed Job object stays in the
+history. That window is what keeps one bad night from firing for days.
+
+**`RecyclarrNotSucceeding`** covers the other half: a run that never starts or
+never finishes leaves no failure to alert on. It fires when
+`kube_cronjob_status_last_successful_time` is more than 26 h old — one daily slot
+plus two hours of slack — and resolves on the next successful run. It is scoped
+to recyclarr because KSM 2.20 no longer publishes `kube_cronjob_spec_schedule`,
+so a generic rule cannot know how often each CronJob should succeed.
+
+`ScrapeTargetDown` excludes the Prometheus self-scrape and kube-state-metrics
+targets; `MonitoringDown` and `KubeStateMetricsDown` own those two conditions, and
+without the exclusion one dead component sent a critical and a warning at once. It
+also covers the edge Pis' SMART (`:9902`) and Docker (`:9323`) exporters, which
+`NodeDown` does not watch — that rule only sees their node exporter on `:9100`.
+Those targets are static, so the alert names the instance IP rather than a host
+label.
 
 `noDataState: OK` everywhere, because every expression returns no series while
 healthy. `MonitoringDown` and `LokiSilent` alert on evaluation errors too, so a
@@ -298,10 +322,12 @@ runs (config shows `retention_enabled: true`,
   that resolves but serves nothing is not detected.
 - **No GPU XID/ECC alert.** The NVIDIA exporter on this cluster does not publish
   those families; only temperature, utilisation and frame-buffer use exist.
-- **Application coverage is limited to pods, restarts and core namespaces.**
-  `CoreDeploymentDown` covers kube-system, monitoring and argocd only. A broken
-  app in another namespace shows up through `PodCrashLooping`, `PodPending` or
-  `RestartStorm`, not through a replica check.
+- **Application coverage is limited to pods, restarts, core namespaces and
+  batch jobs.** `CoreDeploymentDown` covers kube-system, monitoring and argocd
+  only. A broken app in another namespace shows up through `PodCrashLooping`,
+  `PodPending` or `RestartStorm`, not through a replica check. `JobFailed`
+  covers every Job, but only `recyclarr` has per-schedule staleness coverage;
+  the other CronJobs fail loudly but a run that never starts is silent.
 - **Alerting is a single point of failure**: Grafana evaluates and delivers. If
   Grafana, Prometheus or `nas` goes down, no message is sent. The operator
   accepts this risk (watchdog declined on 2026-11-12).
