@@ -50,7 +50,7 @@ It renders three objects: the Deployment, a ClusterIP Service on port 8191, and 
 | `service.port` | Port the Service exposes. | `8191` |
 | `container.port` | Only set when the app listens on a different port than the Service. | `null` (falls back to `service.port`) |
 | `metrics.*` | Prometheus exporter: on/off, port, path. Also renders the `prometheus.io/*` annotations and the `PROMETHEUS_*` variables, so all four cannot disagree. | enabled, `8192`, `/metrics` |
-| `env` | Non-secret variables, rendered **inline** into the container. Changing one rolls the pod. | `TZ`, `LOG_LEVEL` |
+| `env` | Non-secret variables, rendered **inline** into the container. Changing one rolls the pod. | `TZ`, `LOG_LEVEL: warning` |
 | `extraEnv` | Variables sourced from a Secret, as `{ name, valueFrom }`. | `[]` |
 | `nodeSelector` | Node pin. Every workload is pinned. | `kubernetes.io/hostname: streaming` |
 | `resources` | Memory request and limit. | `256Mi` request, `1Gi` limit |
@@ -98,8 +98,29 @@ upstream service. A probe that exercised Chromium would mean launching a browser
 readiness proves only that the server answers. The browser itself is tested once at startup and the
 process exits if that test fails, which is why the first liveness check waits 20 seconds.
 
-There is no startup probe, unlike `autobrr`: FlareSolverr logs `Test successful!` and starts serving
-about two seconds after the container starts, so there is no slow phase for one to cover.
+There is no startup probe, unlike `autobrr`: FlareSolverr starts serving about two seconds after the
+container starts, so there is no slow phase for one to cover.
+
+## Logging
+
+`LOG_LEVEL: warning`. Fluent Bit tails every container on the node and ships the lines to Loki
+unfiltered, so the level in the app is the only place to cut the volume. At `info` FlareSolverr
+writes one line per challenge request and one per response, plus the startup banner — a few thousand
+lines a day for an app nobody watches, which buries the lines that matter when something breaks.
+
+What still reaches Loki at `warning`:
+
+- a failed browser test at startup, and Chromium launch errors (`logging.error`);
+- uncaught exceptions while handling a challenge, with the message;
+- warnings about request parameters removed in v2 (`headers`, `userAgent`, `returnRawHtml`, ...).
+
+What disappears: the startup banner, the per-request lines, and the challenge result text. The
+result is returned to the caller anyway, and the exported counters keep the outcome visible in
+Prometheus — `flaresolverr_request_total{domain, result}` with `result` set to `solved`,
+`not_detected` or `error`.
+
+For a single troubleshooting session, raise it with `--set env.LOG_LEVEL=debug`; the value is inline
+in the Deployment, so changing it rolls the pod.
 
 ## Deferred hardening
 
