@@ -76,18 +76,20 @@ four:
 
 Rules that came out of `flaresolverr`:
 
-- **One values block turns the whole thing on.** The block renders the exporter's environment
-  variables (when it needs them, as FlareSolverr does), the named container port, and the
-  annotations together. Split across three places they drift, and the failure is silent: the pod is
-  scraped on a port nothing listens to and the target is simply down.
+- **Turn the listener and the annotations on together.** Where the chart owns its templates, render
+  both from one values block (`flaresolverr`'s `metrics`). Where it does not — a third-party wrapper
+  — the exporter is already on and `podAnnotations` is the only knob (`grafana`, `loki`,
+  `fluent-bit`). Two independent edits are how the announced port stops matching the listener, and
+  the failure is silent: the pod is scraped on a port nothing listens to and the target is simply
+  down.
 - **The metrics port stays off the Service.** Prometheus scrapes the pod IP; a second Service port
   only widens the app's surface for nothing. Exception: an app whose exporter listens on its own
   port and whose chart ships a dedicated metrics Service (`authentik`) is scraped by the
   `kubernetes-service-endpoints` job instead — still one annotation pair, just on the Service.
-- **In a hand-maintained chart, do not repeat `prometheus.io/*` in `podAnnotations`.** The chart
-  renders them; a second copy in the values is how the port and the path end up disagreeing. A
-  third-party wrapper chart has no template of its own, so there the values block is the only place
-  it can live.
+- **If the chart renders the annotations itself, do not also list them in `podAnnotations`.** A
+  second copy is how the port and the path end up disagreeing. The reference chart predates its
+  `metrics` block and does it in two places (`podAnnotations` plus the exporter's variables in
+  `env`); that works because the port appears twice in one file and gets reviewed together.
 - **No exporter in the image?** Use a maintained sidecar if one exists (`exportarr` for the *arr
   apps, `qbittorrent-exporter`, `mktxp` for MikroTik); never write one. An app with neither gets
   nothing — silence is better than a metrics endpoint nobody maintains.
