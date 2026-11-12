@@ -46,6 +46,34 @@ spec:
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       initContainers:
+        {{- if .Values.waitForDownloads.enabled }}
+        # Runs as the same uid as qBittorrent (PUID) so the probe sees exactly
+        # what the main container will see on the NFS export. Bounded wait:
+        # after 2 minutes it proceeds and lets qBittorrent start anyway.
+        - name: wait-for-downloads
+          image: {{ .Values.waitForDownloads.image }}
+          securityContext:
+            runAsUser: 1100
+            runAsGroup: 1100
+          command:
+            - sh
+            - -c
+            - |
+              i=0
+              until touch /downloads/.mount-probe 2>/dev/null; do
+                i=$((i+1))
+                if [ "$i" -ge 60 ]; then
+                  echo "downloads volume still not writable after 120s, proceeding"
+                  exit 0
+                fi
+                sleep 2
+              done
+              rm -f /downloads/.mount-probe
+              echo "downloads volume ready"
+          volumeMounts:
+            - name: qbittorrent-download-volume
+              mountPath: /downloads
+        {{- end }}
         - name: init-qbittorrent
           image: alpine:latest
           command: [ 'sh', '-c', "apk update && apk add unzip && wget https://github.com/WDaan/VueTorrent/releases/download/v2.35.0/vuetorrent.zip && unzip vuetorrent.zip && cp -r vuetorrent /config/ui" ]

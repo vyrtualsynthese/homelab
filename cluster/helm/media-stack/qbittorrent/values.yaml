@@ -64,19 +64,42 @@ ingress:
   #    hosts:
   #      - chart-example.local
 
+# Memory measured with Prometheus (2.5h window, 197 seeding torrents):
+# working set peaked at 15.99GiB against the old 16GiB limit, of which
+# 13.93GiB was page cache from mmap disk I/O and only 0.07GiB was RSS.
+# Disk I/O is now POSIX (disk_io_type=2) and memory_working_set_limit=6144,
+# so the process footprint is bounded by a ~6GiB libtorrent cache plus
+# small anonymous memory. 12GiB keeps ~5GiB of headroom over that target.
+# CPU peaked at 601m with five concurrent race torrents. The request follows the
+# repo convention (1m-100m) because a request only reserves scheduling; what
+# protects a race burst is that there is deliberately no CPU limit, so the
+# single libtorrent network thread can use idle capacity instead of being
+# throttled the moment a race starts.
 resources:
   requests:
-    cpu: 1
-    memory: 4Gi
+    cpu: 100m
+    memory: 6Gi
   limits:
-    memory: 16Gi
+    memory: 12Gi
 
+# WireGuard in kernel mode: the tunnel's buffers live in the kernel, not in
+# this container. Measured peak is 4MiB memory and 0.02m CPU, so the previous
+# 256Mi/50m reservation was pure over-reservation.
 vpnresources:
   requests:
-    cpu: 50m
-    memory: 256Mi
+    cpu: 10m
+    memory: 64Mi
   limits:
-    memory: 256Mi
+    memory: 128Mi
+
+# qBittorrent drops torrents it cannot restore ("Failed to restore torrent")
+# when it starts before the NFS downloads volume answers. Two restarts earlier
+# today lost 8 and 14 torrent entries that way. This init container waits for
+# /downloads to accept a write before the main container starts, and gives up
+# after two minutes rather than blocking the deployment forever.
+waitForDownloads:
+  enabled: true
+  image: busybox:1.36
 
 autoscaling:
   enabled: false
