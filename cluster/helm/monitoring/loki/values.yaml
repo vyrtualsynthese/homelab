@@ -9,6 +9,18 @@ ingress:
 loki:
   fullnameOverride: loki
   deploymentMode: Monolithic
+  # Prometheus discovers the pod by annotation. Loki serves /metrics on the same
+  # HTTP port as its API (3100), so there is no second listener to enable. The
+  # chart's own ServiceMonitor support needs the Prometheus Operator, which this
+  # cluster does not run. `defaults` is the only pod-annotation key the chart's
+  # schema accepts from here — `loki.podAnnotations` in this wrapper's namespace
+  # would land on the subchart root and fail validation.
+  defaults:
+    podAnnotations:
+      prometheus.io/scrape: "true"
+      prometheus.io/scheme: http
+      prometheus.io/port: "3100"
+      prometheus.io/path: "/metrics"
   singleBinary:
     replicas: 1
     kind: StatefulSet
