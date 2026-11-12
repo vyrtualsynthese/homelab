@@ -39,7 +39,7 @@ helm template prowlarr cluster/helm/media-stack/prowlarr --namespace media-stack
 | `probes.{startup,liveness,readiness}` | HTTP probes on `/ping`. Startup gates the other two through a first start after an upgrade. | enabled; startup 5s × 30, liveness 20s delay, readiness 10s delay |
 | `securityContext` | Container hardening that does not break the LinuxServer init. | no privilege escalation |
 | `resources` | Scheduler reservation and memory limit, sized from Prometheus. No CPU limit. | `10m`/`256Mi` request, `1Gi` memory limit |
-| `exportarr.*` | The metrics sidecar. See **Metrics** for its current, deliberately unfinished state. | enabled on port 9707 |
+| `exportarr.*` | The metrics sidecar: image, port, API-key Secret reference and resources. See **Metrics** for rotation. | enabled on port 9707 |
 
 ## LinuxServer image and the UID trap
 
@@ -95,18 +95,43 @@ health views in the UI, not the log stream.
 
 ## Metrics
 
-The chart runs `exportarr` as a sidecar (a second container in the same pod) and, while
-`exportarr.enabled` is true, renders the `prometheus.io/*` annotations Prometheus uses to discover
-pods. **It is not working today:** `/metrics` answers HTTP 500 and Prometheus reports the target
-down.
+The chart runs `exportarr` as a sidecar (a second container in the same pod). The `exportarr` values
+block owns the listener, the `prometheus.io/*` annotations and the API-key reference together, so
+disabling it removes the sidecar and the annotations in one edit and the announced port cannot drift
+from the listener. The metrics port stays off the Service: Prometheus scrapes the pod IP through the
+`kubernetes-pods` job.
 
-This change deliberately leaves the sidecar's wiring alone. The cause is known and is not the
-environment variable name — exportarr v2.3 still accepts `APIKEY` as an alias for `API_KEY`. Its log
-shows Prowlarr returning **401** for every request, so the API key in the `prowlarr` Secret no longer
-matches the app's current key. Replacing that Secret value is a separate, deliberate operation.
+The sidecar is pinned to `v2.3.0`, the newest published exportarr release (August 2025). A v3 rewrite
+exists on `main` with no tag and no image; do not move to it. `APIKEY` is exportarr v1's spelling of
+`API_KEY`, and v2.3 still accepts it, which is why this chart uses that name.
 
-Until then, do not copy this block as a model: the working shape is a `metrics` block that turns the
-listener and the annotations on together, as `flaresolverr` does.
+The key comes from the `prowlarr` Secret (`secret` key); the app's own `config.xml` is not mounted
+into the sidecar. A key that no longer matches the app makes every collector answer HTTP 401,
+`/metrics` answer 500 and the Prometheus target go down — while the pod stays `Ready`, because no
+probe covers the exporter. The query that catches it:
+
+```
+up{job="kubernetes-pods", pod=~"prowlarr.*"}
+```
+
+`PROWLARR_API_KEY` in `~/.config/secrets/homelab.env` holds the key Prowlarr is running with (see
+[`docs/observability-conventions.md`](../../../../docs/observability-conventions.md)). To rotate the
+Secret, from the operator's shell:
+
+```bash
+. ~/.config/secrets/homelab.env
+kubectl -n media-stack patch secret prowlarr --type merge \
+  -p "$(printf '{"data":{"secret":"%s"}}' "$(printf %s "$PROWLARR_API_KEY" | base64 -w0)")"
+kubectl -n media-stack delete pod -l app.kubernetes.io/name=prowlarr
+```
+
+`patch` rather than `create secret --dry-run | kubectl apply`: the latter replaces the whole `data`
+map and would drop any other key in that Secret. The pod has to be replaced afterwards, because the
+sidecar reads the variable when the container starts. The value must be 20–32 alphanumeric
+characters; exportarr refuses to start otherwise, so a stray newline is a crash-loop, not a 401.
+
+Wiring verified working on 2026-11-12 after rotating the key: target `up`, `/metrics` HTTP 200, 21
+indexers reported.
 
 ## Ingress
 

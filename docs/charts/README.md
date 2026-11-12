@@ -207,9 +207,10 @@ config claim, probes on `/ping`, and `PROWLARR__LOG__LEVEL` / `PROWLARR__LOG__CO
 `warn`. The hardening stops where the LinuxServer init starts: the image must run as root to
 prepare `/config` and then drop to `PUID`/`PGID`, so `runAsNonRoot`, `runAsUser` and dropping all
 capabilities are not options. Only `allowPrivilegeEscalation: false` and the runtime seccomp profile
-are safe. Its exportarr sidecar answers HTTP 500 because Prowlarr returns 401 — the key in the
-`prowlarr` Secret is stale. That is a Secret value to replace, not a chart change, and it is
-recorded as debt in the chart README.
+are safe. Its exportarr sidecar is wired from one `exportarr` block that carries the listener, the
+scrape annotations and the API-key Secret reference together. The key was rotated to the app's
+current value on 2026-11-12, and the Prometheus target is verified `up`; `APIKEY` is exportarr v1's
+spelling, still accepted by v2.3.0, the newest published release.
 
 `sonarr` and `sonarr-anime` as of 2026-11-12: the LinuxServer-plus-exporter pair, two charts because a
 shared chart is not allowed. Five objects each, two named NFS media mounts next to the config claim,
