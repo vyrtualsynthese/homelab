@@ -208,18 +208,63 @@ ingress:
   redirect:
     enabled: true
     entryPoint: web
-  # -- Security headers on the secure route.
+  # -- Security headers on the secure route. This is an internet-facing
+  # endpoint, so everything the middleware can set is set, except a Content
+  # Security Policy: Plex Web loads inline scripts, workers and websockets, and
+  # a CSP written without testing against the app breaks it. Add one only after
+  # reading the browser console against a staging host.
   securityHeaders:
     enabled: true
+    # -- Host names accepted by the middleware. Empty means the ingress host,
+    # with and without the explicit :443. Anything else gets a 421, which stops
+    # Host-header tricks from reaching Plex under a different name.
+    allowedHosts: []
+    # -- Do not leak the server URL to third parties linked from the web UI.
+    referrerPolicy: "no-referrer"
+    # -- Plex uses none of these browser APIs; deny them at the edge.
+    permissionsPolicy: "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
+    # -- Only set when you have tested it against Plex Web.
+    contentSecurityPolicy: ""
+  # -- Per-client rate limit. Plex Web loads a few dozen assets at once and
+  # playback is a handful of long-lived requests, so 100/s with a burst of 200
+  # is far above normal use while still stopping a request flood. It is per
+  # source IP as seen by Traefik, which is the real client for internet traffic.
+  rateLimit:
+    enabled: true
+    average: 100
+    burst: 200
+    period: 1
   tls:
     # -- Terminate TLS with the cluster's ACME resolver.
     enabled: true
     # -- Use a pre-existing certificate instead of asking Traefik to issue one.
     secretName: ""
     certResolver: myresolver
-    # -- Render and reference the chart's TLSOption.
+    # -- Render and reference the chart's TLSOption. The reference carries the
+    # namespace explicitly, and the option itself is hardened below.
     options:
       enabled: true
+      # -- Refuse a handshake whose SNI does not match a certificate Traefik
+      # holds. This endpoint is reached by name, never by bare IP.
+      sniStrict: true
+      # -- TLS 1.2 floor keeps older TVs and Plex apps working; 1.3 is used
+      # automatically by clients that support it (its suites are not
+      # configurable in Go).
+      minVersion: VersionTLS12
+      # -- AEAD suites only. CBC suites are deliberately absent.
+      cipherSuites:
+        - TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256
+        - TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256
+        - TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384
+        - TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384
+        - TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305
+        - TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305
+      # -- X25519 first: fastest and most widely supported. The NIST curves are
+      # kept for clients that do not offer it.
+      curvePreferences:
+        - X25519
+        - CurveP256
+        - CurveP384
 
 nodeSelector:
   # -- Every workload is pinned to a named node; the GPU and the claims live here.
