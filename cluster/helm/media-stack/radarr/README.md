@@ -12,8 +12,8 @@ metrics exporter runs against Radarr's own API.
 - Website: https://radarr.video/
 - Source: https://github.com/Radarr/Radarr
 - Image: https://docs.linuxserver.io/images/docker-radarr/
-- Registry: `lscr.io`. LinuxServer's images moved there from Docker Hub and `ghcr.io`; this chart
-  pulls `lscr.io/linuxserver/radarr` directly.
+- Registry: `lscr.io`, the official one. The previous chart pulled a `ghcr.io/linuxserver` mirror tag;
+  this chart uses `lscr.io/linuxserver/radarr` directly.
 
 ## How this chart is deployed here
 
@@ -62,15 +62,18 @@ Radarr needs two volumes beyond its config, and both are read-write:
 | Claim | Mount | Why |
 |---|---|---|
 | `pvc-nfs-qbittorrent-download-nfs-subdir-external-provisioner` | `/downloads` | qBittorrent writes the finished download here; Radarr imports from it, and can also delete the leftover folder after a successful import. |
-| `pvc-plex-media` | `/movies` | The library Plex reads. Radarr creates the release folder, moves the file into it and renames it. |
+| `pvc-plex-media` | `/movies` | The library Plex reads. Radarr writes the imported file into it under its final name. |
 
 Both are shared NFS claims, not claims this chart creates: `existingClaim` is filled in, so no
 `PersistentVolumeClaim` object is rendered for either, and the app must never be the only writer.
 Read-only would break the import — a mount without write access cannot create the destination
-folder, and most imports are a move, not a copy.
+folder, and Radarr also deletes the source once the file is in the library.
 
-The two paths must stay on the same filesystem or the import degrades to a copy. Both come from the
-same NFS server here, which is why the import is a rename and stays instant.
+The two paths are separate NFS exports on the NAS — `/mnt/ultrafaststorage/nfs` for downloads and
+`/mnt/storage/nfs/plexmedia` for the library — so inside the pod they are different filesystems. A
+rename across filesystems fails, so the import is a copy-then-delete, not a rename: Radarr writes a
+full copy into the library and then removes the source. Keeping downloads and the library on the
+same export is what restores the rename.
 
 ## Probes
 
@@ -137,9 +140,9 @@ before the pod starts. The `autobrr` README describes the procedure.
 
 ## Upgrading
 
-`image.tag` and `appVersion` move together: Renovate updates the tag in `values.yaml` and the
-`appVersion` in `Chart.yaml`, but if you bump it by hand, change both. The `appVersion` becomes the
-`app.kubernetes.io/version` label and is what tells you which version a pod is actually running.
+Renovate moves `image.tag` only; bump `appVersion` in the same commit by hand so the two stay equal.
+The `appVersion` becomes the `app.kubernetes.io/version` label and is what tells you which version a
+pod is actually running, so a chart left behind is a chart that reports the wrong version.
 
 ## Files
 
