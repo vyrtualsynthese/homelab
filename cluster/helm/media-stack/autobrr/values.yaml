@@ -30,7 +30,16 @@ serviceAccount:
   annotations: {}
 
 # -- Annotations added to the pod. `checksum/env` is added automatically.
-podAnnotations: {}
+# The three `prometheus.io/*` keys put the pod in Prometheus's annotation-based
+# `kubernetes-pods` job: that job keeps only pods carrying `scrape: "true"` and
+# builds the address from the port annotation, so the metrics listener below is
+# reachable without a Service, a sidecar or a scrape config. The path is
+# explicit because the job falls back to `/metrics` and the failure mode of a
+# wrong default is an empty target, not an error.
+podAnnotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/port: "9074"
+  prometheus.io/path: "/metrics"
 podLabels: {}
 
 # Pod-level security. `fsGroup` is deliberately NOT set: local-path volumes are
@@ -121,6 +130,13 @@ env:
   # temporarily when troubleshooting; the release history in the UI/DB is the
   # operational record, not the logs.
   AUTOBRR__LOG_LEVEL: "WARN"
+  # Prometheus metrics. autobrr serves them on a listener of its own, not on
+  # the web UI port, and they are off by default. The host must be 0.0.0.0:
+  # the upstream default is 127.0.0.1, which only the pod itself can reach, and
+  # the symptom is a target that never comes up rather than an error.
+  AUTOBRR__METRICS_ENABLED: "true"
+  AUTOBRR__METRICS_HOST: "0.0.0.0"
+  AUTOBRR__METRICS_PORT: "9074"
   # AUTOBRR__BASE_URL: ""
   # AUTOBRR__SESSION_SECRET: ""
 
