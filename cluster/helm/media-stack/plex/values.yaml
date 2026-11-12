@@ -1,88 +1,254 @@
-# Default values for home.
-# This is a YAML-formatted file.
-# Declare variables to be passed into your templates.
+# Default values for plex.
+# Written from the repo's reference chart, cluster/helm/media-stack/autobrr, and
+# the contract in docs/charts/README.md. The differences are all consequences of
+# what Plex is: the only internet-facing app in the lab, with a GPU, two shared
+# media claims and an exporter that lives in a sidecar.
 
-image:
-  repository: ghcr.io/linuxserver/plex
-  pullPolicy: IfNotPresent
-  # Overrides the image tag whose default is the chart appVersion.
-  tag: 1.43.3
-
-imagePullSecrets: []
+# -- Override the chart name.
 nameOverride: ""
+# -- Override the generated release name.
 fullnameOverride: ""
 
+replicaCount: 1
+
+# -- `Recreate` is required: the config claim is ReadWriteOnce, and a new pod
+# cannot attach it while the old one still holds it.
+strategy: Recreate
+
+image:
+  # -- Official Plex image. LinuxServer's image added a package channel selector
+  # and its own init; the official one is the maintainer's, and the tag is the
+  # version.
+  repository: plexinc/pms-docker
+  # -- Pin the tag. Never `latest`. Renovate manages this.
+  tag: "1.43.5.11079-b3b13e506"
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
 serviceAccount:
-  # Specifies whether a service account should be created
-  create: false
-  # Annotations to add to the service account
-  annotations: {}
-  # The name of the service account to use.
-  # If not set and create is true, a name is generated using the fullname template
+  # -- Create a dedicated ServiceAccount. Plex never talks to the Kubernetes API,
+  # so it also gets no mounted token.
+  create: true
+  automount: false
+  # -- Defaults to the fullname.
   name: ""
+  annotations: {}
 
+# -- Pod hostname. Becomes the server's default display name on a fresh install;
+# once the server is claimed, the name stored in /config wins.
+hostname: ""
+
+# -- Pod annotations. The scrape annotations are rendered from `metrics` below.
 podAnnotations: {}
+podLabels: {}
 
-podSecurityContext: {}
-# fsGroup: 2000
+podSecurityContext:
+  # -- Runtime syscall filter. Free, and Plex does not need anything it blocks.
+  seccompProfile:
+    type: RuntimeDefault
 
+# Container-level security.
+#
+# The official entrypoint is s6: it moves the baked-in `plex` user to `PLEX_UID`,
+# chowns /config and then drops privileges. CHOWN, SETUID and SETGID are required
+# for that sequence. Dropping ALL of them, as the reference chart does, makes Plex
+# fail to start while the pod still reports Running. This is the one documented
+# exception to the contract's capability rule (see the README).
 securityContext:
-  privileged: true
-  # capabilities:
-  #   drop:
-  #   - ALL
-  # readOnlyRootFilesystem: true
-# runAsNonRoot: true
-# runAsUser: 1000
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+    add:
+      - CHOWN
+      - SETUID
+      - SETGID
 
 service:
+  # -- ClusterIP only. Traefik publishes 32400/TCP; Tautulli and the arr apps
+  # reach this Service by name in the same namespace. The old NodePort and the
+  # DLNA/discovery ports are gone: without hostNetwork Plex's local discovery
+  # never worked through them.
   type: ClusterIP
   port: 32400
 
-ingress:
-  enabled: true
-  className: no
-  annotations: {}
-  # kubernetes.io/ingress.class: nginx
-  # kubernetes.io/tls-acme: "true"
-  hosts:
-    - host: chart-example.local
-      paths:
-        - path: /
-          pathType: ImplementationSpecific
-  tls: []
-  #  - secretName: chart-example-tls
-  #    hosts:
-  #      - chart-example.local
+container:
+  # -- Container port. Defaults to `service.port` when left empty.
+  port: null
 
+# -- NVIDIA container runtime. This is what gives Plex NVENC. The Intel
+# QuickSync path is deliberately not provided: the chart mounts no /dev/dri and
+# adds no extra groups for it.
+runtimeClassName: nvidia
+
+storage:
+  # -- Render the config PersistentVolumeClaim.
+  enabled: true
+  # -- Use an existing claim instead of the one this chart creates.
+  existingClaim: ""
+  className: local-path
+  accessModes:
+    - ReadWriteOnce
+  # -- 128Mi is the house standard and cannot be raised on an existing claim:
+  # local-path does not support volume expansion, and replacing the claim means
+  # re-claiming the server and rescanning every library. HostPath does not
+  # enforce the number, so this is a label, not a quota.
+  size: 128Mi
+  # -- Where the config volume is mounted. Plex records this path in its library
+  # settings; changing it breaks every library.
+  mountPath: /config
+
+# -- Media claims created by the NFS provisioner charts and shared with sonarr,
+# radarr, bazarr, lidarr and filebrowser. The claim names are fixed pool names,
+# not derived from the release, so they must not be renamed.
+media:
+  - name: plex-media
+    existingClaim: pvc-plex-media
+    mountPath: /media
+  - name: audio
+    existingClaim: pvc-nfs-audio-nfs-subdir-external-provisioner
+    mountPath: /audio
+
+# Transcoder scratch is ephemeral: Plex deletes it when a transcode ends. A
+# claim here was 128Mi, which fills on the first 4K transcode; 10Gi covers
+# several concurrent ones in RAM-free SSD space.
+volumes:
+  - name: transcode
+    emptyDir:
+      sizeLimit: 10Gi
+
+volumeMounts:
+  - name: transcode
+    mountPath: /transcode
+
+# -- Environment variables, rendered inline into the container spec. Changing a
+# value changes the pod template, so the Deployment rolls by itself.
+env:
+  TZ: "Europe/Paris"
+  # -- Full URL with a trailing slash. The image publishes this to plex.tv as the
+  # address clients can reach, and a malformed value shows up as "server
+  # unreachable" in every client rather than as an error here.
+  ADVERTISE_IP: "https://plex.kub.home.ashudev.com:443/"
+  # -- Lets LAN and pod-CIDR traffic skip Plex authentication.
+  ALLOWED_NETWORKS: "192.168.1.0/16,10.42.0.0/16"
+  # -- The config volume was written by uid/gid 1100, so the official image's
+  # plex user is moved to the same ids. Changing these makes /config unreadable.
+  PLEX_UID: "1100"
+  PLEX_GID: "1100"
+  # -- NVENC through the NVIDIA runtime.
+  NVIDIA_VISIBLE_DEVICES: "all"
+  NVIDIA_DRIVER_CAPABILITIES: "compute,video,utility"
+
+# -- Variables sourced from a Secret, as `{ name, valueFrom }`.
+extraEnv:
+  # First-run only; ignored once the server is claimed. Kept so a rebuild from
+  # scratch does not need a manual login.
+  - name: PLEX_CLAIM
+    valueFrom:
+      secretKeyRef:
+        name: plex
+        key: plex_claim
+
+# -- Bulk `envFrom` sources, usually `secretRef`.
+envFrom: []
+
+# Prometheus exporter, run as a sidecar in the Plex pod. It reaches the server on
+# the pod's loopback, and the four annotations below are rendered from this block
+# so the announced port cannot drift from the port the exporter listens on.
+metrics:
+  enabled: true
+  image:
+    repository: ghcr.io/cplieger/plex-exporter
+    # -- Pin the tag. Never `latest`. Renovate manages this.
+    tag: "v5.0.0"
+    pullPolicy: IfNotPresent
+  port: 9594
+  path: /metrics
+  resources:
+    requests:
+      cpu: 10m
+      memory: 64Mi
+    limits:
+      memory: 128Mi
+
+ingress:
+  # -- Render the public Traefik routes. This is the lab's only internet-facing
+  # app, and it is the reason this chart differs most from the reference.
+  enabled: true
+  # -- API group. `traefik.containo.us/v1alpha1` is what the cluster's Traefik
+  # 2.x watches today; flip this to `traefik.io/v1alpha1` when Traefik v3 lands.
+  apiVersion: traefik.containo.us/v1alpha1
+  host: plex.kub.home.ashudev.com
+  pathPrefix: /
+  labels: {}
+  annotations: {}
+  # -- Extra middlewares, rendered as `<namespace>-<name>@kubernetescrd`.
+  # Deliberately no auth middleware: Plex clients cannot complete a forward-auth
+  # flow, so the app's own account model is the gate.
+  middlewares: []
+  # -- Plain HTTP on the `web` entry point, redirected to HTTPS.
+  redirect:
+    enabled: true
+    entryPoint: web
+  # -- Security headers on the secure route.
+  securityHeaders:
+    enabled: true
+  tls:
+    # -- Terminate TLS with the cluster's ACME resolver.
+    enabled: true
+    # -- Use a pre-existing certificate instead of asking Traefik to issue one.
+    secretName: ""
+    certResolver: myresolver
+    # -- Render and reference the chart's TLSOption.
+    options:
+      enabled: true
+
+nodeSelector:
+  # -- Every workload is pinned to a named node; the GPU and the claims live here.
+  kubernetes.io/hostname: streaming
+
+tolerations: []
+
+affinity: {}
+
+# Sizing kept from the previous chart: Plex is CPU-heavy when it falls back to
+# software transcoding, and the memory ceiling covers several concurrent
+# streams. No CPU limit: a limit throttles the burst at stream start.
 resources:
   requests:
     cpu: 500m
     memory: 4Gi
   limits:
     memory: 4Gi
-  #  nvidia.com/gpu: 1 # requesting 1 GPU
-  # We usually recommend not to specify default resources and to leave this as a conscious
-  # choice for the user. This also increases chances charts run on environments with little
-  # resources, such as Minikube. If you do want to specify resources, uncomment the following
-  # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
-  # limits:
-  #   cpu: 100m
-  #   memory: 128Mi
-  # requests:
-  #   cpu: 100m
-  #   memory: 128Mi
 
-autoscaling:
-  enabled: false
-  minReplicas: 1
-  maxReplicas: 100
-  targetCPUUtilizationPercentage: 80
-  # targetMemoryUtilizationPercentage: 80
-
-nodeSelector:
-  kubernetes.io/hostname: streaming
-
-tolerations: []
-
-affinity: {}
+# Probes.
+#
+# `/identity` is Plex's own unauthenticated endpoint: it answers 200 while the
+# server is serving and 503 before the database is ready. The startup probe
+# gates the other two because a first start after an upgrade migrates the
+# library database and can take minutes. 60 x 5s gives five minutes.
+probes:
+  startup:
+    enabled: true
+    path: /identity
+    periodSeconds: 5
+    timeoutSeconds: 5
+    failureThreshold: 60
+  liveness:
+    enabled: true
+    path: /identity
+    initialDelaySeconds: 20
+    periodSeconds: 30
+    timeoutSeconds: 5
+    failureThreshold: 3
+  readiness:
+    enabled: true
+    # The same endpoint on purpose. Plex exposes no endpoint that separates
+    # "process is up" from "library database is usable"; hard-coding a guess
+    # would turn a slow scan into a restart loop. Documented exception.
+    path: /identity
+    initialDelaySeconds: 10
+    periodSeconds: 15
+    timeoutSeconds: 5
+    failureThreshold: 3
