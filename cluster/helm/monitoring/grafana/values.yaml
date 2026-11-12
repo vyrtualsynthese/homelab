@@ -12,10 +12,13 @@ grafana:
     type: Recreate
   nodeSelector:
     kubernetes.io/hostname: nas
+  # Measured 2026-11-12 over 15 h: 292 MiB average, 346 MiB p95, 400 MiB peak
+  # while loading dashboards. The request covers the steady state; the ceiling
+  # keeps 112 MiB of headroom for a render or query burst.
   resources:
     requests:
       cpu: 50m
-      memory: 192Mi
+      memory: 256Mi
     limits:
       memory: 512Mi
   image:
