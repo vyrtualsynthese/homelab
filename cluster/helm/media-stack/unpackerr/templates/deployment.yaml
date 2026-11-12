@@ -1,16 +1,18 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "fullname" . }}
+  name: {{ include "app.fullname" . }}
   labels:
-    {{- include "labels" . | nindent 4 }}
+    {{- include "app.labels" . | nindent 4 }}
 spec:
+  # One pod, always. A second replica would poll the same queue and extract the
+  # same archive into the same directory.
   replicas: 1
   strategy:
-    type: Recreate
+    type: {{ .Values.strategy }}
   selector:
     matchLabels:
-      {{- include "selectorLabels" . | nindent 6 }}
+      {{- include "app.selectorLabels" . | nindent 6 }}
   template:
     metadata:
       {{- with .Values.podAnnotations }}
@@ -18,129 +20,92 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       labels:
-        {{- include "selectorLabels" . | nindent 8 }}
+        {{- include "app.labels" . | nindent 8 }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
     spec:
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      serviceAccountName: {{ include "serviceAccountName" . }}
+      serviceAccountName: {{ include "app.serviceAccountName" . }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
-      volumes:
-        - name: qbittorrent-download-volume
-          persistentVolumeClaim:
-            claimName: pvc-nfs-qbittorrent-download-nfs-subdir-external-provisioner
       containers:
         - name: {{ .Chart.Name }}
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
-          resources:
-            {{- toYaml .Values.resources | nindent 12 }}
           ports:
-            - name: metrics
-              containerPort: 5656
+            - name: http
+              containerPort: {{ .Values.container.port }}
               protocol: TCP
           env:
-            - name: "TZ"
-              value: "Europe/Paris"
-            - name: "UN_DEBUG"
-              value: "false"
-            - name: "UN_LOG_FILES"
-              value: "10"
-            - name: "UN_LOG_FILE_MB"
-              value: "10"
-            - name: "UN_INTERVAL"
-              value: "1m"
-            - name: "UN_START_DELAY"
-              value: "1m"
-            - name: "UN_RETRY_DELAY"
-              value: "5m"
-            - name: "UN_MAX_RETRIES"
-              value: "10"
-            - name: "UN_PARALLEL"
-              value: "1"
-            - name: "UN_FILE_MODE"
-              value: "0644"
-            - name: "UN_DIR_MODE"
-              value: "0755"
-            - name: "UN_SONARR_0_URL"
-              value: "http://sonarr:8989"
-            - name: "UN_SONARR_0_API_KEY"
-              value: "86075165a5c54b8f88071a4ddf10c247"
-            - name: "UN_SONARR_0_PATHS_0"
-              value: "/downloads"
-            - name: "UN_SONARR_0_PROTOCOLS"
-              value: "torrent"
-            - name: "UN_SONARR_0_TIMEOUT"
-              value: "1m"
-            - name: "UN_SONARR_0_DELETE_ORIG"
-              value: "false"
-            - name: "UN_SONARR_0_DELETE_DELAY"
-              value: "30m"
-            - name: "UN_SONARR_1_URL"
-              value: "http://sonarr-anime:8989"
-            - name: "UN_SONARR_1_API_KEY"
-              value: "acdad7862d2a4fa6a98c1e9e76de8a3e"
-            - name: "UN_SONARR_1_PATHS_0"
-              value: "/downloads"
-            - name: "UN_SONARR_1_PROTOCOLS"
-              value: "torrent"
-            - name: "UN_SONARR_1_TIMEOUT"
-              value: "1m"
-            - name: "UN_SONARR_1_DELETE_ORIG"
-              value: "false"
-            - name: "UN_SONARR_1_DELETE_DELAY"
-              value: "30m"
-            - name: "UN_RADARR_0_URL"
-              value: "http://radarr:7878"
-            - name: "UN_RADARR_0_API_KEY"
-              value: "3182ca7ce6d440c08948b0f97ca92f74"
-            - name: "UN_RADARR_0_PATHS_0"
-              value: "/downloads"
-            - name: "UN_RADARR_0_PROTOCOLS"
-              value: "torrent"
-            - name: "UN_RADARR_0_TIMEOUT"
-              value: "1m"
-            - name: "UN_RADARR_0_DELETE_ORIG"
-              value: "false"
-            - name: "UN_RADARR_0_DELETE_DELAY"
-              value: "30m"
-            - name: "UN_RADARR_1_URL"
-              value: "http://radarr-anime:7878"
-            - name: "UN_RADARR_1_API_KEY"
-              value: "8cbaaf757e0f4a7b9e373ac6c80fc676"
-            - name: "UN_RADARR_1_PATHS_0"
-              value: "/downloads"
-            - name: "UN_RADARR_1_PROTOCOLS"
-              value: "torrent"
-            - name: "UN_RADARR_1_TIMEOUT"
-              value: "1m"
-            - name: "UN_RADARR_1_DELETE_ORIG"
-              value: "false"
-            - name: "UN_RADARR_1_DELETE_DELAY"
-              value: "30m"
-            # - name: "UN_LIDARR_0_URL"
-            #   value: "http://lidarr:8686"
-            # - name: "UN_LIDARR_0_API_KEY"
-            #   value: "9e0af94da2b94fefa04cccf388fe0d94"
-            # - name: "UN_LIDARR_0_PATHS_0"
-            #   value: "/downloads"
-            # - name: "UN_LIDARR_0_PROTOCOLS"
-            #   value: "torrent"
-            # - name: "UN_LIDARR_0_TIMEOUT"
-            #   value: "1m"
-            # - name: "UN_LIDARR_0_DELETE_ORIG"
-            #   value: "false"
-            # - name: "UN_LIDARR_0_DELETE_DELAY"
-            #   value: "30m"
-            - name: "UN_WEBSERVER_METRICS"
-              value: "false"
+            {{- range $name, $value := .Values.env }}
+            - name: {{ $name }}
+              value: {{ $value | toString | quote }}
+            {{- end }}
+            # Rendered from container.port so the listener and the probe cannot drift.
+            - name: UN_WEBSERVER_LISTEN_ADDR
+              value: "0.0.0.0:{{ .Values.container.port }}"
+            {{- include "app.starrEnv" (dict "prefix" "SONARR" "index" 0 "instance" .Values.instances.sonarr0) | nindent 12 }}
+            {{- include "app.starrEnv" (dict "prefix" "SONARR" "index" 1 "instance" .Values.instances.sonarr1) | nindent 12 }}
+            {{- include "app.starrEnv" (dict "prefix" "RADARR" "index" 0 "instance" .Values.instances.radarr0) | nindent 12 }}
+            {{- include "app.starrEnv" (dict "prefix" "RADARR" "index" 1 "instance" .Values.instances.radarr1) | nindent 12 }}
+            {{- with .Values.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          {{- with .Values.envFrom }}
+          envFrom:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.probes.liveness }}
+          {{- if .enabled }}
+          livenessProbe:
+            httpGet:
+              path: {{ .path }}
+              port: {{ .port }}
+            initialDelaySeconds: {{ .initialDelaySeconds }}
+            periodSeconds: {{ .periodSeconds }}
+            timeoutSeconds: {{ .timeoutSeconds }}
+            failureThreshold: {{ .failureThreshold }}
+          {{- end }}
+          {{- end }}
+          {{- with .Values.probes.readiness }}
+          {{- if .enabled }}
+          readinessProbe:
+            httpGet:
+              path: {{ .path }}
+              port: {{ .port }}
+            initialDelaySeconds: {{ .initialDelaySeconds }}
+            periodSeconds: {{ .periodSeconds }}
+            timeoutSeconds: {{ .timeoutSeconds }}
+            failureThreshold: {{ .failureThreshold }}
+          {{- end }}
+          {{- end }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
           volumeMounts:
-            - mountPath: /downloads
-              name: qbittorrent-download-volume
+            - name: downloads
+              mountPath: {{ .Values.downloads.mountPath }}
+              {{- if .Values.downloads.readOnly }}
+              readOnly: true
+              {{- end }}
+            {{- with .Values.volumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+      volumes:
+        - name: downloads
+          persistentVolumeClaim:
+            claimName: {{ .Values.downloads.existingClaim }}
+            {{- if .Values.downloads.readOnly }}
+            readOnly: true
+            {{- end }}
+        {{- with .Values.volumes }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
