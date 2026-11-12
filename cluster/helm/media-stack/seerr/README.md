@@ -159,7 +159,8 @@ config claim is not touched by the upgrade. If the new image fails to start, set
 back.
 
 The first refactor rollout also changed the pod shape (dedicated ServiceAccount, explicit UID/GID,
-dropped capabilities, restart probes, `LOG_LEVEL=warn`, `PORT` derived from `service.port`). That
+dropped capabilities, restart probes, `LOG_LEVEL=warn`, `PORT` derived from the container port
+and `CONFIG_DIRECTORY` from the mount path). That
 change has already been applied; only the image tag moves now.
 
 ## Checking the chart against the contract
