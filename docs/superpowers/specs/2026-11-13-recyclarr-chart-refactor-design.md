@@ -50,7 +50,7 @@ container that copies a Secret into a claim.
 - Moving the claim to `streaming`. A bound `local-path` claim cannot move; the operator chose to keep
   the claim, so the pod pins to `nuc0` and the placement table is corrected instead.
 - A Service, an IngressRoute or probes. The app is a batch command with no listener.
-- Notifications, `settings.yml` or anything from the unreleased v9.
+- Notifications, the content of `settings.yml`, or anything from the unreleased v9.
 
 ## Approaches
 
@@ -99,8 +99,9 @@ file on every run.
 - **No probes, no Service, no ingress, no metrics.** A CronJob has no long-running process to probe
   and recyclarr ships no exporter, so silence is correct rather than an omission.
 - **Log level debt.** v8 exposes no level control; a run prints about twenty lines once a day. The
-  contract's `warning` rule applies when the app offers the knob — v9's `settings.yml` will. Recorded
-  in the README so it is not mistaken for an oversight.
+  contract's `warning` rule applies when the app offers the knob. v8.8 reads a `settings.yml` but its
+  schema has no logging section; v9 adds `server.logging` there. Recorded in the README so it is not
+  mistaken for an oversight.
 
 ## Files
 

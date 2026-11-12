@@ -94,6 +94,14 @@ Everything recyclarr persists lives in the claim mounted at `/config`:
 | `resources/` | downloaded guide data and templates |
 | `logs/` | one log file per run, pruned by recyclarr's own log janitor (20 files) |
 | `state/` | recyclarr's own bookkeeping between runs |
+| `settings.yml` | recyclarr's settings file: `git_path`, SSL validation, log janitor, notifications. Created with a schema comment on the first run; when absent, the defaults apply |
+| `configs/` | extra configuration files. Every `.yml` or `.yaml` here is loaded **in addition to** the Secret, non-recursively |
+| `includes/` | include templates referenced by `include:` in the configuration |
+
+Only `recyclarr.yml` comes from the Secret. Everything else in the table is written by recyclarr on
+the claim and is not managed by the chart — which also means a YAML file dropped into `configs/` is
+loaded alongside the Secret, not instead of it. `settings.yml` is created by the image itself (v8.8
+writes one with a schema comment); the chart neither renders nor validates it.
 
 The claim is named `<fullname>-config` (`recyclarr-config`) and is created by the chart. Set
 `storage.existingClaim` to bind an existing claim instead; the chart then renders no
@@ -131,8 +139,9 @@ error. `NO_COLOR=1` keeps ANSI escapes out of Loki.
 
 **Debt: the level is not controllable in v8.** recyclarr v8 has no log-level setting or flag; the
 contract's "log at warning" rule applies when the app offers the knob. A once-a-day, seven-second run
-is not the volume problem that rule exists for. The unreleased v9 adds `settings.yml`, and its logging
-settings are where this gets fixed.
+is not the volume problem that rule exists for. recyclarr already creates a `settings.yml` in the
+claim, but v8.8's settings schema has no logging section; the unreleased v9 adds `server.logging`
+there, and that is where this gets fixed.
 
 ## Known data debt
 
