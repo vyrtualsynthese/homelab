@@ -150,44 +150,73 @@ dashboard JSON is not a backup either — the SQLite file is what would be lost.
 ## Alerting
 
 Grafana unified alerting, folder `Homelab`, rule group `homelab-core`,
-evaluation interval **60 s**. 13 rules, one contact point, one default route.
+evaluation interval **60 s**. **25 rules**, one contact point, two routes by
+severity.
 
-**Delivery**: contact point `discord-homelab` (type `discord`), default
-notification policy `group_by [alertname, namespace]`, `group_wait 30s`,
-`group_interval 5m`, `repeat_interval 4h`. Severity is a label only; it does not
-change the route, the channel or the repeat interval.
+**Delivery**: contact point `discord-homelab` (type `discord`).
+`group_by [alertname, instance]`, `group_wait 30s`, `group_interval 5m`.
+Warnings repeat every **12 h**; a child route matching `severity="critical"`
+repeats every **1 h**. The webhook URL is not readable through the API (it is a
+secure field), so the contact point is never rewritten by automation.
 
 **Rule set and live state on 2026-11-12:**
 
-| Rule | Threshold | for | State |
-|---|---|---|---|
-| `NodeDown` | node-exporter absent, all 6 hosts | 5m | inactive |
-| `NodeCpuHigh` | >90 % | 15m | inactive |
-| `NodeMemoryHigh` | >90 % of `MemAvailable` | 15m | inactive |
-| `NodeTemperatureHigh` | thermal zone >80 °C | 10m | inactive |
-| `GpuTemperatureHigh` | `DCGM_FI_DEV_GPU_TEMP` >80 °C | 10m | inactive |
-| `DiskTooHot` | drive >55 °C | 15m | inactive |
-| `DiskFillingUp` | filesystem >85 % | 30m | inactive |
-| `PVCFillingUp` | claim >85 % | 30m | inactive (blind for `local-path`, see above) |
-| `DriveNeedsReplacement` | SMART failed, exit != 0, <10 % life, or pending sectors | 10m | **firing** on `nas /dev/sdf` |
-| `DiskReallocatingSectors` | any new sector in 1 h | 5m | **broken, never fires** |
-| `PodCrashLooping` | CrashLoopBackOff | 15m | **firing** ×3, silenced |
-| `PodPending` | pending, created <2 h ago | 15m | inactive |
-| `MonitoringDown` | Prometheus self-scrape missing; `execErrState: Alerting` | 5m | inactive |
+| Rule | Condition | for | Severity | State |
+|---|---|---|---|---|
+| `NodeDown` | `1 - up` for the six node exporters | 5m | critical | inactive |
+| `KubeNodeNotReady` | node Ready condition false | 5m | critical | inactive |
+| `CoreDeploymentDown` | 0 available replicas in kube-system/monitoring/argocd | 10m | critical | inactive |
+| `CoreStatefulSetDown` | ready < desired in those namespaces | 10m | critical | inactive |
+| `CoreDaemonSetDown` | available < desired in those namespaces | 10m | critical | inactive |
+| `KubeStateMetricsDown` | `absent(up{service=...} == 1)` | 5m | critical | inactive |
+| `NodeFilesystemReadOnly` | filesystem mounted read-only | 5m | critical | inactive |
+| `MonitoringDown` | `1 - up{job="prometheus"}`; `execErrState: Alerting` | 5m | critical | inactive |
+| `DriveNeedsReplacement` | SMART failed, exit != 0, <10 % life, or pending sectors | 10m | critical | **firing** on `nas /dev/sdf` |
+| `ScrapeTargetDown` | any non-node target down | 15m | warning | **firing, silenced** (7 media exporters) |
+| `NodeCpuHigh` | >90 % by host | 15m | warning | inactive |
+| `NodeMemoryHigh` | >90 % of `MemAvailable` | 15m | warning | inactive |
+| `NodeTemperatureHigh` | hottest real sensor >80 °C | 10m | warning | inactive |
+| `GpuTemperatureHigh` | `DCGM_FI_DEV_GPU_TEMP` >80 °C | 10m | warning | inactive |
+| `DiskTooHot` | drive >55 °C | 15m | warning | inactive |
+| `DiskFillingUp` | filesystem >85 % | 30m | warning | inactive |
+| `DiskWillFill` | predicted full in 24 h above 80 % used | 30m | warning | inactive |
+| `PVCFillingUp` | claim >85 % (NFS claims only) | 30m | warning | inactive |
+| `DiskReallocatingSectors` | any new sector in 1 h | 5m | warning | inactive |
+| `RestartStorm` | 5+ restarts in an hour | 5m | warning | **firing, silenced** (the three long-broken apps) |
+| `OOMKilled` | terminated by OOM in the last hour | 5m | warning | inactive |
+| `CertificateExpiring` | newest Traefik cert per SAN <21 days | 1h | warning | inactive |
+| `PodCrashLooping` | CrashLoopBackOff | 15m | warning | **firing, silenced** ×3 |
+| `PodPending` | Pending, created <2 h ago | 15m | warning | inactive |
+| `LokiSilent` | no Fluent Bit lines in 10 min | 10m | warning | inactive |
 
-`noDataState: OK` everywhere, because every expression is written to return no
-series while healthy. Only `MonitoringDown` alerts on evaluation errors, so a
-Prometheus restart produces one message, not thirteen.
+`noDataState: OK` everywhere, because every expression returns no series while
+healthy. `MonitoringDown` and `LokiSilent` alert on evaluation errors too, so a
+Prometheus restart or a dead Loki produces one message rather than none.
 
-**`DiskReallocatingSectors` is invalid PromQL**:
-`delta(max by (...)(metric)[1h])` fails with *ranges only allowed for vector
-selectors*. The fix is a subquery: `delta(max by (...)(metric)[1h:])`. Until
-then a drive that starts reallocating sectors is not reported.
+**The rule pattern matters.** A PromQL comparison such as `up == 0` returns the
+value `0` when true, and the threshold condition is "above 0" — so it can never
+fire. Rules must return a **positive value when firing**: `1 - up`,
+`replicas - ready`, `0 - predict_linear(...)`, `1 - kube_node_status_condition`,
+or an explicit `> 85` / `> 55` / `> 80` inside the expression. The original set
+had `NodeDown` and `MonitoringDown` silently dead this way, and
+`DriveNeedsReplacement` survived only because the failing drive also reported
+`exit_code = 32`.
 
-A 30-day silence matches
-`pod=~"ghostfolio-.*|wiki-app-.*|monitorss-bot-.*"` — three apps that have been
-crash-looping since the Longhorn loss. They still show `firing`; the silence only
-suppresses the notification. Remove it when the apps are fixed.
+**`DiskReallocatingSectors`** uses a subquery,
+`delta(max by (...)(metric)[1h:]) > 0`. The previous form without the colon was
+invalid PromQL and never evaluated.
+
+**Silences** (both have an expiry and a comment):
+
+- Until 2026-12-12: `pod=~"ghostfolio-.*|wiki-app-.*|monitorss-bot-.*"` — three
+  apps crash-looping since the Longhorn loss. They still show `firing`; only the
+  notification is suppressed.
+- Until 2026-11-26: `alertname="ScrapeTargetDown", namespace="media-stack",
+  job="kubernetes-pods"` — the seven exporters are repaired by a separate job.
+  Remove it when they answer.
+
+A silence changes notification delivery, not alert state. A silenced rule still
+reports `firing` on the Health dashboard.
 
 ## Storage and retention
 
@@ -228,21 +257,22 @@ runs (config shows `retention_enabled: true`,
 
 ## Known gaps
 
-- **No alert on scrape targets being down.** `up == 0` is only covered for the
-  six node-exporter jobs. The 7 dead media exporters have been invisible since
-  the rebuild; a target that dies silently takes its app's metrics with it.
 - **`PVCFillingUp` is blind for `local-path` claims** (25 of 36 claims publish
-  volume stats, mostly NFS).
-- **No backup-freshness metric**, no certificate-expiry check, no blackbox probe,
-  no GPU XID/ECC alert, no node filesystem read-only alert, no deployment
-  replica alert.
-- **No service-level alerting**: a pod can disappear and nothing fires unless it
-  is crash-looping or pending.
+  volume stats, mostly NFS). The node filesystem rule covers the same disk, at a
+  coarser grain.
+- **No backup-freshness metric.** Backups do not run today, so an alert would
+  either never fire or lie.
+- **No blackbox probe, no certificate check outside Traefik.** A public hostname
+  that resolves but serves nothing is not detected.
+- **No GPU XID/ECC alert.** The NVIDIA exporter on this cluster does not publish
+  those families; only temperature, utilisation and frame-buffer use exist.
+- **Application coverage is limited to pods, restarts and core namespaces.**
+  `CoreDeploymentDown` covers kube-system, monitoring and argocd only. A broken
+  app in another namespace shows up through `PodCrashLooping`, `PodPending` or
+  `RestartStorm`, not through a replica check.
 - **Alerting is a single point of failure**: Grafana evaluates and delivers. If
-  Grafana, Prometheus or `nas` goes down, there is no channel left to say so.
-  `MonitoringDown` only helps while Grafana itself still runs.
-- **Summaries name the instance IP** (`NodeDown`, `NodeCpuHigh`) instead of the
-  host, and no rule carries a `runbook_url` or an action line.
+  Grafana, Prometheus or `nas` goes down, no message is sent. The operator
+  accepts this risk (watchdog declined on 2026-11-12).
 - No metrics for the NFS provisioners or the Pi-hole resolver itself (only its
   exporter).
 - Dashboards and rules are not in git and are not backed up.
