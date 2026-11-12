@@ -148,9 +148,9 @@ independently.
 
 | Node | Role | Capacity | Hosts | Rationale |
 |---|---|---|---|---|
-| `streaming` | GPU + media | SSD ≥ 1 TB | Plex, the `*arr` stack, qbittorrent, autobrr, cross-seed, unpackerr, flaresolverr, seerr, calibre, kavita, tautulli, maintainerr, recyclarr | Plex needs the GPU; the rest stream from the NAS over NFS anyway |
+| `streaming` | GPU + media | SSD ≥ 1 TB | Plex, the `*arr` stack, qbittorrent, autobrr, cross-seed, unpackerr, flaresolverr, seerr, calibre, kavita, tautulli, maintainerr | Plex needs the GPU; the rest stream from the NAS over NFS anyway |
 | `nas` | Storage + data-adjacent | ~30 TB HDD + 2 TB NVMe | PostgreSQL, filebrowser, syncthing, stash, Prometheus TSDB, Loki, the restic working copy, and every NFS provisioner chart | The disks live here; config volumes on the same box as the data they serve |
-| `nuc0` | Application catalogue | SSD ≥ 1 TB | authentik, dashy, wiki, firefly, guacamole, koillection, linkstack, ghostfolio, discourse, postiz, n8n, monitorss, minecraft, news-freshrss, Vikunja, OpenMemory | General-purpose x86, 32 GB |
+| `nuc0` | Application catalogue | SSD ≥ 1 TB | authentik, dashy, wiki, firefly, guacamole, koillection, linkstack, ghostfolio, discourse, postiz, n8n, monitorss, minecraft, news-freshrss, Vikunja, OpenMemory, recyclarr | General-purpose x86, 32 GB. `recyclarr` reads no media and needs no GPU; its config claim is a `local-path` PV on this node |
 | `rbp2` | Control plane only | SSD | nothing | A Pi with an SSD, ARM64. Keeping it app-free avoids the multi-arch image problem entirely |
 
 Disk is therefore **not** a constraint anywhere, and placement needs no special handling: the NAS
