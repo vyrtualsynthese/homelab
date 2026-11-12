@@ -10,7 +10,7 @@ each one follows from what Seerr is.
 
 ## Upstream
 
-- Image: `ghcr.io/seerr-team/seerr`, pinned to `v3.4.1`.
+- Image: `ghcr.io/seerr-team/seerr`, pinned to `v3.5.2`.
 - Docs: <https://docs.seerr.dev/>
 - Source: <https://github.com/seerr-team/seerr>
 
@@ -141,12 +141,26 @@ the repo has one public-route dialect:
 None. Seerr creates its own session secret, VAPID keys and SQLite database under `/app/config`, so
 this chart expects no pre-existing Secret and no `envFrom` source.
 
-## The pod rolls once on the first sync
+## Upgrading
 
-The refactor does not change the image, but the pod template changes: dedicated ServiceAccount,
-explicit UID/GID, dropped capabilities, restart probes, `LOG_LEVEL=warn`, and a `PORT` derived from
-`service.port`. Expect one rollout and one restart. The config claim is untouched, so no data
-migration runs beyond what the same image already does on every start.
+The chart pins the image tag; changing `image.tag` and `Chart.yaml.appVersion` together is the whole
+upgrade. Renovate does this automatically for patch and minor releases.
+
+**v3.5.2 (2026-11-12)** is a security release: it fixes three vulnerabilities whose details are
+published on 2026-11-15. It also carries the v3.5.0 change to the Plex and Jellyfin library API:
+`GET /api/v1/settings/{plex,jellyfin}/library` no longer accepts `sync` or `enable`, and reading
+libraries no longer changes their enabled state. The web UI already uses the new endpoints. Nothing
+in this chart calls those routes, so no values change is needed; an external script that syncs or
+toggles libraries must move to `POST .../library/sync` and `PUT .../library/{libraryId}`.
+
+Seerr runs its database migrations during startup, gated by the five-minute startup probe. The
+config claim is not touched by the upgrade. If the new image fails to start, set `image.tag` and
+`appVersion` back to `v3.4.1`; a migration may be one-way, so check the release notes before rolling
+back.
+
+The first refactor rollout also changed the pod shape (dedicated ServiceAccount, explicit UID/GID,
+dropped capabilities, restart probes, `LOG_LEVEL=warn`, `PORT` derived from `service.port`). That
+change has already been applied; only the image tag moves now.
 
 ## Checking the chart against the contract
 
