@@ -37,8 +37,25 @@ helm template autobrr cluster/helm/media-stack/autobrr --namespace media-stack
 | `nodeSelector` | Node pin. Every workload is pinned. | `kubernetes.io/hostname: streaming` |
 | `probes.{liveness,readiness}` | HTTP probes on autobrr's own endpoints, which live under `/api`. | enabled, 20s/10s delay |
 | `securityContext` | Runs as 1100, drops all capabilities, no privilege escalation. | non-root |
+| `resources` | Scheduler reservation and memory limit, sized from Prometheus. No CPU limit. | `10m`/`192Mi` request, `768Mi` memory limit |
 
-`resources` is still empty: the chart sets no default limits, by decision.
+The memory limit is a ceiling, not a target: autobrr holds ~155 MiB and peaks near
+290 MiB in normal use, so 768 MiB leaves room for a large announce burst or a database
+rebuild. There is deliberately **no CPU limit** — a limit would throttle the short burst this
+app needs at startup, and the node's capacity is the real ceiling. A 10m request is only
+there so the scheduler knows the pod exists.
+
+To re-measure before changing these numbers (Prometheus is on `nas`):
+
+```bash
+curl -sG http://prometheus.kub.local/api/v1/query --data-urlencode \
+  'query=max_over_time(container_memory_working_set_bytes{namespace="media-stack",pod=~"autobrr-.*",container="autobrr"}[1h])/2^20'
+curl -sG http://prometheus.kub.local/api/v1/query --data-urlencode \
+  'query=rate(container_cpu_usage_seconds_total{namespace="media-stack",pod=~"autobrr-.*",container="autobrr"}[5m])'
+```
+
+The history begins on 2026-11-12, when the monitoring stack was rebuilt, so the first sizing
+rests on one day of data. Widen the window to two weeks before tightening anything.
 
 The container runs as **UID/GID 1100**, matching the `PUID`/`PGID` the rest of the stack uses. That only
 works because the config volume was chowned to 1100:1100 on the node first.

@@ -146,18 +146,28 @@ tolerations: []
 
 affinity: {}
 
+# Sizing comes from Prometheus, not from a template comment. Measured over the
+# first day on `streaming` (see the chart README for the queries):
+#   memory in use (working set)  175-290Mi steady, 481Mi peak in the first
+#                                minutes after start — mostly file cache, the
+#                                process itself holds ~155Mi
+#   CPU                          5m at p95, 23m at peak, ~580m for the first
+#                                minute after start
+#
+# No CPU limit, here or anywhere in this cluster: a limit throttles exactly the
+# short burst this app needs at startup, and the node's capacity is the real
+# ceiling. Reserving a token 10m is enough for the scheduler to place the pod
+# honestly; the app is idle the rest of the day.
+#
+# The memory limit is roughly 2.5x the observed peak on purpose — headroom for
+# a large announce burst or a database rebuild, with the file cache as the first
+# thing the kernel reclaims under pressure.
 resources:
-  {}
-  # We usually recommend not to specify default resources and to leave this as a conscious
-  # choice for the user. This also increases chances charts run on environments with little
-  # resources, such as Minikube. If you do want to specify resources, uncomment the following
-  # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
-  # limits:
-  #   cpu: 100m
-  #   memory: 128Mi
-  # requests:
-  #   cpu: 100m
-  #   memory: 128Mi
+  requests:
+    cpu: 10m
+    memory: 192Mi
+  limits:
+    memory: 768Mi
 
 # Probes. The paths include the /api prefix — autobrr serves them under /api,
 # and a probe without it returns 404 and restarts the pod forever.
