@@ -165,6 +165,12 @@ metrics:
     pullPolicy: IfNotPresent
   port: 9594
   path: /metrics
+  # -- Where the exporter reads the Plex admin token. The chart never creates
+  # this key; a missing one makes the pod fail to start, which is the loud
+  # failure we want.
+  tokenSecret:
+    name: plex
+    key: plex_token
   resources:
     requests:
       cpu: 10m
