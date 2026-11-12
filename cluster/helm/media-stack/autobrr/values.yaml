@@ -115,8 +115,13 @@ env:
   TZ: "Europe/Paris"
   AUTOBRR__HOST: "0.0.0.0"
   AUTOBRR__PORT: "7474"
+  # Only warnings and errors reach stdout, and therefore Loki. autobrr's
+  # default is INFO, which logs a line per HTTP request and per announce —
+  # at ~1,200 releases/hour that is almost all noise. Raise to INFO or DEBUG
+  # temporarily when troubleshooting; the release history in the UI/DB is the
+  # operational record, not the logs.
+  AUTOBRR__LOG_LEVEL: "WARN"
   # AUTOBRR__BASE_URL: ""
-  # AUTOBRR__LOG_LEVEL: ""
   # AUTOBRR__SESSION_SECRET: ""
 
 # -- Variables sourced from a Secret, as `{ name, valueFrom }`. Kept separate so
