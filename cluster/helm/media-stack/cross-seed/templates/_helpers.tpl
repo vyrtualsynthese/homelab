@@ -1,16 +1,20 @@
 {{/*
-Expand the name of the chart.
+Name helpers.
+
+These are deliberately NOT prefixed with the chart name. The names are shared by
+convention across the hand-maintained charts, so a chart can be copied without a
+rename sweep and the generic Service, ServiceAccount and claim templates stay
+identical between apps. The trade-off: do not use two of these charts as
+subcharts of each other, because the helper names would collide.
 */}}
-{{- define "cross-seed.name" -}}
+
+{{/* Chart name, overridable. */}}
+{{- define "app.name" -}}
 {{- default .Chart.Name .Values.nameOverride | trunc 63 | trimSuffix "-" }}
 {{- end }}
 
-{{/*
-Create a default fully qualified app name.
-We truncate at 63 chars because some Kubernetes name fields are limited to this (by the DNS naming spec).
-If release name contains chart name it will be used as a full name.
-*/}}
-{{- define "cross-seed.fullname" -}}
+{{/* Fully qualified release name. */}}
+{{- define "app.fullname" -}}
 {{- if .Values.fullnameOverride }}
 {{- .Values.fullnameOverride | trunc 63 | trimSuffix "-" }}
 {{- else }}
@@ -23,40 +27,42 @@ If release name contains chart name it will be used as a full name.
 {{- end }}
 {{- end }}
 
-{{/*
-Create chart name and version as used by the chart label.
-*/}}
-{{- define "cross-seed.chart" -}}
+{{/* Chart name and version, as used by the helm.sh/chart label. */}}
+{{- define "app.chart" -}}
 {{- printf "%s-%s" .Chart.Name .Chart.Version | replace "+" "_" | trunc 63 | trimSuffix "-" }}
 {{- end }}
 
-{{/*
-Common labels
-*/}}
-{{- define "cross-seed.labels" -}}
-helm.sh/chart: {{ include "cross-seed.chart" . }}
-{{ include "cross-seed.selectorLabels" . }}
+{{/* Common labels, applied to every object. */}}
+{{- define "app.labels" -}}
+helm.sh/chart: {{ include "app.chart" . }}
+{{ include "app.selectorLabels" . }}
 {{- if .Chart.AppVersion }}
 app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
 {{- end }}
 app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{- end }}
 
-{{/*
-Selector labels
-*/}}
-{{- define "cross-seed.selectorLabels" -}}
-app.kubernetes.io/name: {{ include "cross-seed.name" . }}
+{{/* Selector labels. Changing these orphans the existing pods. */}}
+{{- define "app.selectorLabels" -}}
+app.kubernetes.io/name: {{ include "app.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
 
-{{/*
-Create the name of the service account to use
-*/}}
-{{- define "cross-seed.serviceAccountName" -}}
+{{/* Service account name, honouring serviceAccount.create. */}}
+{{- define "app.serviceAccountName" -}}
 {{- if .Values.serviceAccount.create }}
-{{- default (include "cross-seed.fullname" .) .Values.serviceAccount.name }}
+{{- default (include "app.fullname" .) .Values.serviceAccount.name }}
 {{- else }}
 {{- default "default" .Values.serviceAccount.name }}
 {{- end }}
+{{- end }}
+
+{{/* Configuration volume claim: an existing claim, or one this chart creates. */}}
+{{- define "app.configClaimName" -}}
+{{- default (printf "%s-config" (include "app.fullname" .)) .Values.storage.existingClaim }}
+{{- end }}
+
+{{/* Container port: explicit container.port, else the service port. */}}
+{{- define "app.containerPort" -}}
+{{- default .Values.service.port .Values.container.port }}
 {{- end }}
