@@ -54,6 +54,17 @@ spec:
             - name: http
               containerPort: {{ include "app.containerPort" . }}
               protocol: TCP
+          {{- with .Values.probes.startup }}
+          {{- if .enabled }}
+          startupProbe:
+            httpGet:
+              path: {{ .path }}
+              port: http
+            periodSeconds: {{ .periodSeconds }}
+            timeoutSeconds: {{ .timeoutSeconds }}
+            failureThreshold: {{ .failureThreshold }}
+          {{- end }}
+          {{- end }}
           {{- with .Values.probes.liveness }}
           {{- if .enabled }}
           livenessProbe:
