@@ -1,7 +1,7 @@
 # Default values for cross-seed.
 #
 # cross-seed is not a web app here: the UI is never exposed. Everything it needs
-# is the /config claim, a config.js Secret, and qBittorrent's torrent directory.
+# is the /config claim and a config.js Secret; torrents come from qBittorrent's API.
 
 # -- Override the chart name.
 nameOverride: ""
@@ -91,16 +91,6 @@ configFile:
   # -- Read-only subPath mount inside the config claim. Must live under
   # storage.mountPath.
   mountPath: /config/config.js
-
-torrents:
-  # -- qBittorrent's BT_backup on NFS. cross-seed reads it and injects through the API.
-  existingClaim: pvc-nfs-qbittorrent-config-nfs-subdir-external-provisioner
-  # -- Sub-path of the claim that holds the BT_backup directory.
-  subPath: qBittorrent/BT_backup
-  # -- Where qBittorrent's torrent files appear in the container.
-  mountPath: /torrents
-  # -- cross-seed only reads torrents; it injects them through qBittorrent's API.
-  readOnly: true
 
 # -- Extra pod volumes, rendered verbatim.
 volumes: []

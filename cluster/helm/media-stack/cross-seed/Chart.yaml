@@ -3,7 +3,7 @@ name: cross-seed
 description: Cross-seeds existing torrents across multiple trackers using Torznab indexers.
 type: application
 # Chart version. It moves independently of the image.
-version: 1.0.0
+version: 1.1.0
 # Must equal image.tag in values.yaml. cross-seed image tags drop the release's leading v.
 appVersion: "6.13.9"
 icon: https://www.cross-seed.org/img/cross-seed.svg
