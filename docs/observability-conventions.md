@@ -118,11 +118,21 @@ reports 95 °C on `nct6775 temp6`, an unconnected header; alerting on
 `node_hwmon_temp_celsius` would fire there permanently. GPU temperature is
 `DCGM_FI_DEV_GPU_TEMP` from the NVIDIA exporter on `streaming`.
 
-**Volume stats are partial**: `kubelet_volume_stats_*` exists for only 25 of the
-36 claims, and some of those are reported under control-plane instances. Claims
-on `local-path` bound to `nas` mostly do not appear, so `PVCFillingUp` and the
-Volume-usage panels see the NFS claims and miss the rest. Treat a missing line
-as unknown, not as healthy.
+**Volume stats are partial, and the reason is structural**: the K3s kubelet
+publishes `kubelet_volume_stats_*` only for volumes whose plugin can measure
+bytes — the NFS claims here. `local-path` is a hostPath directory, so its 17
+claims (including Prometheus 25 GiB, Loki 20 GiB and Grafana 5 GiB) publish no
+per-claim bytes at all. The panels show blank for them, and `PVCFillingUp` is
+NFS-only by construction. Their capacity is still covered: each local-path
+directory sits on a real filesystem (`/mnt/ssd0` on `nas`, `streaming` and
+`rbp2`), and `DiskFillingUp` / `DiskWillFill` watch every filesystem. `/mnt/ssd0`
+on `nas` was 5.2 % used on 2026-11-12.
+
+The live `local-path-config` ConfigMap has a typo: its map entry is `nuc`, while
+the node is `nuc0`. `nuc0` therefore falls back to
+`/opt/local-path-provisioner` on its root filesystem instead of `/mnt/ssd0`.
+Harmless today (the root disk is monitored), wrong if that node is meant to use
+its SSD.
 
 ## Dashboards
 
