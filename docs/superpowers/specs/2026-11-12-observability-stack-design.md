@@ -328,12 +328,19 @@ Loki uses no object storage and no MinIO: filesystem storage on its own claim.
   `server.persistentVolume.size: 25Gi`, `server.strategy.type: Recreate`.
 - `server.nodeSelector`, `kube-state-metrics.nodeSelector` → `nas`. Node-exporter stays a
   DaemonSet on all nodes.
-- **Scraping contract unchanged:** chart version 29 ships its annotation-based jobs
-  (`kubernetes-service-endpoints`, `kubernetes-pods`, `kubernetes-nodes`,
+- **Scraping contract unchanged for everything inside the cluster:** chart version 29 ships its
+  annotation-based jobs (`kubernetes-service-endpoints`, `kubernetes-pods`, `kubernetes-nodes`,
   `kubernetes-nodes-cadvisor`, `kubernetes-api-servers`) as structured defaults under
   `scrapeConfigs`. They are left at their defaults, so every `prometheus.io/scrape` annotation in
   the repo keeps working, and no ServiceMonitor layer is introduced. The dead `longhorn` static
   job disappears by construction, because the new chart has no such job.
+- **Two external targets are carried over explicitly.** The edge Pis `rbp0` (192.168.1.22) and
+  `rbp1` (192.168.1.38) run node-exporter, a smartctl exporter and the Docker metrics endpoint
+  outside this cluster, so no annotation or endpoint discovery can ever find them; the old chart
+  scraped them with static jobs. They are re-declared under `scrapeConfigs.rbp0` and
+  `scrapeConfigs.rbp1` with ports 9100, 9902 and 9323. This is the one place where scraping is not
+  annotation-driven, and it is deliberate: dropping them would silently remove host, disk and
+  container metrics for the two machines that run Pi-hole and WireGuard.
 - RBAC: the chart creates its own ClusterRole/ClusterRoleBinding for pod, service, endpoint,
   node and configmap discovery. Nothing extra to grant.
 

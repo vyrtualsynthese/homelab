@@ -180,6 +180,24 @@ prometheus:
         memory: 32Mi
       limits:
         memory: 64Mi
+  # The two edge Pis run their exporters outside the cluster, so annotation
+  # discovery can never find them. Ports: 9100 node-exporter, 9902 smartctl,
+  # 9323 Docker.
+  scrapeConfigs:
+    rbp0:
+      enabled: true
+      static_configs:
+        - targets:
+            - 192.168.1.22:9100
+            - 192.168.1.22:9902
+            - 192.168.1.22:9323
+    rbp1:
+      enabled: true
+      static_configs:
+        - targets:
+            - 192.168.1.38:9100
+            - 192.168.1.38:9902
+            - 192.168.1.38:9323
 ```
 
 - [ ] **Step 4: Write `templates/ingressroute.yaml`**
@@ -233,6 +251,9 @@ grep -q 'Host(`prometheus.kub.local`)' /tmp/prom-route.yaml
 grep -q 'name: prometheus-server' /tmp/prom-route.yaml
 ! grep -q 'storageClassName' /tmp/prom.yaml
 ! grep -qE '^  name: .*(alertmanager|pushgateway)' /tmp/prom.yaml
+grep -q -- '- job_name: rbp0' /tmp/prom.yaml
+grep -q '192.168.1.22:9323' /tmp/prom.yaml
+grep -q '192.168.1.38:9902' /tmp/prom.yaml
 ! grep -q 'latest' /tmp/prom.yaml
 ! grep -q 'apiVersion: networking.k8s.io' /tmp/prom.yaml
 echo OK
