@@ -171,6 +171,17 @@ metrics:
   tokenSecret:
     name: plex
     key: plex_token
+  # -- The exporter image is distroless and runs as `nonroot:nonroot` (uid/gid
+  # 65532). `runAsNonRoot` needs the number too: the kubelet cannot verify a
+  # user name and refuses to start the container when only the flag is set.
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 65532
+    runAsGroup: 65532
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop:
+        - ALL
   resources:
     requests:
       cpu: 10m

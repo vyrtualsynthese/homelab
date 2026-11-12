@@ -30,8 +30,8 @@ helm template plex cluster/helm/media-stack/plex --namespace media-stack
 ```
 
 It renders one Deployment, one Service (ClusterIP, 32400/TCP), one ServiceAccount, one
-PersistentVolumeClaim, two IngressRoutes (secure + HTTP redirect), two Middlewares (redirect and
-security headers) and one TLSOption.
+PersistentVolumeClaim, two IngressRoutes (`plex-public` and `plex-public-redirect`), two
+Middlewares (redirect and security headers) and one TLSOption.
 
 ## Why this chart differs from the reference
 
@@ -103,7 +103,28 @@ cp -a /mnt/ssd0/pvc-05380ca4-64ce-40c2-a838-5b801c8aad37_media-stack_plex-config
 ```
 
 If the migration fails: scale Plex down, restore that copy over the hostPath, set `image.tag` back
-to `1.43.3.10828-00f62d37d`, and scale up.
+to `1.43.3.10828-00f62d37d` (the official image's build of the version that was running), and
+scale up.
+
+After the sync, confirm the routes were adopted in place rather than duplicated:
+
+```bash
+kubectl -n media-stack get ingressroute
+# expect exactly plex-public and plex-public-redirect
+```
+
+Two routers matching the same host on `websecure` are resolved non-deterministically, so a leftover
+`plex-public` from the old chart would silently drop the security-headers middleware.
+
+## Confirming NVIDIA transcoding
+
+Transcoding silently falls back to the CPU when the GPU is not visible. After the rollout, play a
+title that forces a transcode and check both:
+
+- the Plex dashboard marks the stream as hardware transcoding (`hw`), and
+- `kubectl -n media-stack exec deploy/plex -c plex -- nvidia-smi` shows a Plex process using the GPU.
+
+The chart provides no Intel QuickSync path: there is no `/dev/dri` mount and no extra group.
 
 ## Checking a chart against the contract
 
