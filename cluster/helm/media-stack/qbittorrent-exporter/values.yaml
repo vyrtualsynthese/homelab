@@ -60,12 +60,15 @@ ingress:
   #    hosts:
   #      - chart-example.local
 
+# Measured peak with Prometheus: 113MiB memory and 0.5m CPU. The old 512Mi
+# request reserved half a gigabyte for a process that never used a quarter of
+# it, which is schedulable capacity the node cannot give to anything else.
 resources:
   requests:
-    cpu: 25m
-    memory: 512Mi
+    cpu: 10m
+    memory: 64Mi
   limits:
-    memory: 1024Mi
+    memory: 256Mi
 
 autoscaling:
   enabled: false
