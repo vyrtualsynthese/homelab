@@ -129,6 +129,10 @@ This narrows requirement 13 rather than waiving it: 13 still applies whenever th
 or exposes an endpoint that reports dependency health, and steps aside only for a chart like
 `cross-seed` that does neither.
 
+A batch workload is the other exception, and it is a stronger one: a `CronJob` has no long-running
+process and no listener, so a probe has nothing to check. The Job's exit status and `backoffLimit` are
+the health signal, and the run's logs are the record. `recyclarr` is the worked example.
+
 ### Changing the UID breaks the config volume
 
 **This is the trap in this repo.** `local-path` is hostPath-backed, and the kubelet does **not**
@@ -159,6 +163,7 @@ the local-path provisioner and stop doing this by hand.
 | `prowlarr` | yes, on `/ping` | seccomp, no privilege escalation; capabilities kept for the LinuxServer init | **no — the image starts as root, then drops to 1100** |
 | `sonarr` | yes, on `/ping` | seccomp, no privilege escalation; capabilities kept for the LinuxServer init | **no — the image starts as root, then drops to 1100** |
 | `sonarr-anime` | yes, on `/ping` | seccomp, no privilege escalation; capabilities kept for the LinuxServer init | **no — the image starts as root, then drops to 1100** |
+| `recyclarr` | n/a (batch job) | capabilities dropped, seccomp, no privilege escalation, no API token | **yes — 1000**, the image's default and the claim's existing owner |
 | everything else | no | no | no |
 
 ## Checking a chart against this list
@@ -218,6 +223,13 @@ probes on `/ping`, and both Sonarr log-level variables at `warn`. The exporter t
 the release name and `service.port` instead of being typed in twice; the previous `sonarr` chart had
 `7878` in the target and `8989` in the Service, and the target never came up. The scrape annotations
 render from the same `exportarr` block, so the announced port cannot disagree with the listener.
+
+`recyclarr` as of 2026-11-13: the batch-job case. Three objects, no listener, no probes, no metrics.
+The CronJob's schedule, timezone, concurrency policy and deadlines are values; the Secret holding
+`recyclarr.yml` is mounted read-only at `/config/recyclarr.yml` instead of being copied into the claim
+by an init container; the claim is derived from the release and stays on `nuc0`, where its PV lives.
+It runs as UID 1000, the image's own default and the claim's existing owner, so enabling non-root cost
+no node-side `chown` and needs no runbook.
 
 ## Charts still to align
 
