@@ -493,7 +493,7 @@ git commit -m "♻️ refactor(monitoring): wrap the community Grafana chart and
 
 **Interfaces:**
 - Consumes: nothing.
-- Produces: Service `loki` port 3100, UI at `/ui`, claim `loki`; 30-day retention enforced by the compactor. Task 2's Loki datasource and Task 4's output block both point at `loki.monitoring.svc.cluster.local:3100`.
+- Produces: Service `loki` port 3100, UI at `/ui`, claim `storage-loki-0` (the StatefulSet's volume claim template is named `storage`, so the claim is `<template>-<statefulset>-0`); 30-day retention enforced by the compactor. Task 2's Loki datasource and Task 4's output block both point at `loki.monitoring.svc.cluster.local:3100`.
 
 - [ ] **Step 1: Remove the values-only directory**
 
