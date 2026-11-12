@@ -1,7 +1,7 @@
 # radarr chart refactor — design
 
 **Date:** 2026-11-12
-**Status:** draft for approval
+**Status:** approved 2026-11-12
 **Charts:** `cluster/helm/media-stack/radarr`, `cluster/helm/media-stack/radarr-anime`
 
 ## Intent
