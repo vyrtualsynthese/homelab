@@ -118,6 +118,8 @@ spec:
         - name: plex-exporter
           image: "{{ .Values.metrics.image.repository }}:{{ .Values.metrics.image.tag }}"
           imagePullPolicy: {{ .Values.metrics.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.metrics.securityContext | nindent 12 }}
           env:
             # The sidecar shares the pod network, so Plex is on the pod's own loopback.
             - name: PLEX_URL
