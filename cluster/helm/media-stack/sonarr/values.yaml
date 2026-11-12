@@ -1,25 +1,179 @@
-# Default values for home.
-# This is a YAML-formatted file.
-# Declare variables to be passed into your templates.
+# Default values for sonarr.
+# This chart follows the contract in docs/charts/README.md and the shape of the
+# reference chart, media-stack/prowlarr. The differences are the ones this app needs:
+# a LinuxServer image that starts as root and drops to PUID/PGID, two NFS media
+# mounts, an exportarr sidecar, and probes on Sonarr's own `/ping` endpoint.
+
+# -- Override the chart name.
+nameOverride: ""
+# -- Override the generated release name.
+fullnameOverride: ""
 
 replicaCount: 1
 
+# -- Deployment strategy. `Recreate` is required for anything with a config volume:
+# ReadWriteOnce volumes cannot be attached to an old and a new pod at the same time.
+strategy: Recreate
+
 image:
+  # LinuxServer publishes on lscr.io and mirrors on ghcr.io; this chart keeps the
+  # registry it already pulls from. The image starts as root and drops to PUID/PGID
+  # through s6; that is why the securityContext below cannot use runAsNonRoot
+  # (see the chart README).
   repository: ghcr.io/linuxserver/sonarr
+  # -- Pin the full release tag. `4.0.20` is the series tag and moves; this one does not.
+  tag: "4.0.20.3014-ls4"
   pullPolicy: IfNotPresent
-  # Overrides the image tag whose default is the chart appVersion.
-  tag: 4.0.19
 
 imagePullSecrets: []
-nameOverride: ""
-fullnameOverride: ""
 
+serviceAccount:
+  # -- Create a dedicated ServiceAccount. Sonarr never talks to the Kubernetes
+  # API, so it gets no mounted token either.
+  create: true
+  automount: false
+  # -- Defaults to the fullname.
+  name: ""
+  annotations: {}
+
+# -- Annotations added to the pod, on top of the scrape annotations this chart
+# renders itself while the exporter is enabled. Do not repeat `prometheus.io/*`
+# here: the exporter block below owns them, so the announced port cannot drift
+# from the listener.
+podAnnotations: {}
+podLabels: {}
+
+# Pod-level security.
+#
+# `fsGroup` is deliberately NOT set: local-path volumes are hostPath-backed, and
+# the kubelet does not apply fsGroup ownership to them, so setting it would look
+# meaningful and do nothing.
+#
+# The LinuxServer image is not started as a non-root user: its s6 init must run
+# as root to prepare `/config` and then drop to PUID/PGID 1100. Setting
+# `runAsNonRoot` or `runAsUser` here prevents the container from starting at all.
+# `allowPrivilegeEscalation: false` and the runtime seccomp profile still apply.
+podSecurityContext:
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+
+service:
+  type: ClusterIP
+  port: 8989
+
+container:
+  # -- Container port. Defaults to `service.port` when left empty; set it only
+  # when the app listens on a different port than the Service exposes.
+  port: null
+
+ingressRoute:
+  # -- Render a Traefik IngressRoute. This repo never uses
+  # networking.k8s.io/v1 Ingress.
+  enabled: true
+  # -- API group. `traefik.containo.us/v1alpha1` is what the cluster's Traefik
+  # 2.x watches today; flip this to `traefik.io/v1alpha1` when Traefik v3 lands.
+  apiVersion: traefik.containo.us/v1alpha1
+  # -- Traefik entry points. `web` is plain HTTP on kub.local; `websecure` is TLS.
+  entryPoints:
+    - web
+  # -- Single host. For a second host, copy the chart.
+  host: sonarr.kub.local
+  # -- Path prefix. `/` matches everything.
+  pathPrefix: /
+  # -- Middlewares, rendered as `<namespace>-<name>@kubernetescrd`.
+  # Example: [{ name: authentik, namespace: kube-system }]
+  middlewares: []
+  labels: {}
+  annotations: {}
+  tls:
+    # -- Send the router over TLS. Requires the tls block below to mean anything.
+    enabled: false
+    # -- Use a pre-existing certificate instead of asking Traefik to issue one.
+    secretName: ""
+    # -- Traefik ACME resolver name, for example `myresolver`.
+    certResolver: ""
+    # -- TLSOption resource name in this namespace.
+    options: ""
+
+storage:
+  # -- Render the config PersistentVolumeClaim. Set to false only when the app
+  # genuinely keeps no state.
+  enabled: true
+  # -- Use an existing claim instead of the one this chart creates.
+  existingClaim: ""
+  className: local-path
+  accessModes:
+    - ReadWriteOnce
+  # -- Config volumes hold settings, not media. 128Mi is the house standard.
+  size: 128Mi
+  # -- Where the config volume is mounted inside the container.
+  mountPath: /config
+
+# -- Environment variables, rendered inline into the container spec. Changing a
+# value changes the pod template, so the Deployment rolls by itself. Prefer this
+# for every non-secret value.
+env:
+  TZ: "Europe/Paris"
+  # LinuxServer images drop from root to these IDs after preparing /config.
+  # They match the rest of the media stack.
+  PUID: "1100"
+  PGID: "1100"
+  # Warnings and errors only. Fluent Bit ships every container line to Loki
+  # unfiltered, and Sonarr's default is `info`: one line per request, search and
+  # import. `SONARR__LOG__LEVEL` is the file level, `CONSOLELEVEL` is stdout (the
+  # one Loki sees); both are raised together so a debugging session does not
+  # leave one of them behind. The history and activity views in the UI are the
+  # operational record, not the log.
+  SONARR__LOG__LEVEL: "warn"
+  SONARR__LOG__CONSOLELEVEL: "warn"
+
+# -- Variables sourced from a Secret, as `{ name, valueFrom }`. Kept separate so
+# a secret can never be pasted into the plain map above by accident.
+extraEnv: []
+
+# -- Bulk `envFrom` sources, usually `secretRef`. Rarely needed: prefer
+# `extraEnv` so each secret key is explicit in the manifest.
+envFrom: []
+
+# qBittorrent's NFS download directory. Sonarr imports from here and writes
+# nothing back, but the mount stays read-write because the *arr apps move and
+# rename files during import.
+downloads:
+  claim: pvc-nfs-qbittorrent-download-nfs-subdir-external-provisioner
+  mountPath: /downloads
+  readOnly: false
+
+# Plex's media pool, shared with the other *arr apps and filebrowser.
+media:
+  claim: pvc-plex-media
+  mountPath: /movies
+  readOnly: false
+
+# Sonarr's Prometheus exporter, run as a sidecar (exportarr).
+#
+# The target is built from the release name and `service.port`, so it cannot
+# point at a port Sonarr does not listen on: the old chart had 7878 typed here
+# and 8989 in the Service, and the target stayed down from the day it shipped.
+# The scrape annotations are rendered from this block, so disabling the sidecar
+# removes them too.
 exportarr:
+  # -- Render the sidecar and its scrape annotations.
+  enabled: true
   image:
     repository: ghcr.io/onedr0p/exportarr
     pullPolicy: IfNotPresent
-    # Overrides the image tag whose default is the chart appVersion.
-    tag: v2.3.0
+    # v2.3.0 is the newest release (12 Aug 2025).
+    tag: "v2.3.0"
+  # -- Port exportarr listens on, and the port named in the scrape annotation.
+  port: 9707
+  apiKey:
+    # -- Secret holding Sonarr's API key. Empty means the fullname, which is the
+    # `sonarr` Secret in the media-stack namespace.
+    secretName: ""
+    secretKey: secret
   resources:
     requests:
       cpu: 2m
@@ -27,79 +181,65 @@ exportarr:
     limits:
       memory: 112Mi
 
-serviceAccount:
-  # Specifies whether a service account should be created
-  create: false
-  # Annotations to add to the service account
-  annotations: {}
-  # The name of the service account to use.
-  # If not set and create is true, a name is generated using the fullname template
-  name: ""
-
-podAnnotations:
-  prometheus.io/scrape: "true"
-  prometheus.io/scheme: "http"
-  prometheus.io/port: "9707"
-
-podSecurityContext: {}
-# fsGroup: 2000
-
-securityContext:
-  {}
-  # capabilities:
-  #   drop:
-  #   - ALL
-  # readOnlyRootFilesystem: true
-# runAsNonRoot: true
-# runAsUser: 1000
-
-service:
-  type: ClusterIP
-  port: 32400
-
-ingress:
-  enabled: true
-  className: no
-  annotations: {}
-  # kubernetes.io/ingress.class: nginx
-  # kubernetes.io/tls-acme: "true"
-  hosts:
-    - host: chart-example.local
-      paths:
-        - path: /
-          pathType: ImplementationSpecific
-  tls: []
-  #  - secretName: chart-example-tls
-  #    hosts:
-  #      - chart-example.local
-
-resources:
-  requests:
-    cpu: 100m
-    memory: 512Mi
-  limits:
-    memory: 1000Mi
-  # We usually recommend not to specify default resources and to leave this as a conscious
-  # choice for the user. This also increases chances charts run on environments with little
-  # resources, such as Minikube. If you do want to specify resources, uncomment the following
-  # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
-  # limits:
-  #   cpu: 100m
-  #   memory: 128Mi
-  # requests:
-  #   cpu: 100m
-  #   memory: 128Mi
-
-autoscaling:
-  enabled: false
-  minReplicas: 1
-  maxReplicas: 100
-  targetCPUUtilizationPercentage: 80
-  # targetMemoryUtilizationPercentage: 80
-
 nodeSelector:
+  # -- Every workload is pinned to a named node; local-path claims are node-bound.
   kubernetes.io/hostname: streaming
 
 tolerations: []
 
 affinity: {}
+
+# Sized from Prometheus over the 30 days before 2026-11-12:
+#   memory in use (working set)  216Mi average, 299Mi peak
+#   CPU                          ~31m at p95
+#
+# No CPU limit, here or anywhere in this cluster: a limit throttles exactly the
+# short burst this app needs during an import or a library scan, and the node's
+# capacity is the real ceiling. The 10m request is only there so the scheduler
+# places the pod.
+#
+# The memory limit is about 2.5x the observed peak. The request is above the
+# average rather than below it, so the scheduler reserves what the app actually
+# holds.
+resources:
+  requests:
+    cpu: 10m
+    memory: 256Mi
+  limits:
+    memory: 768Mi
+
+# Probes. `/ping` is Sonarr's own unauthenticated health endpoint and answers
+# `{"status":"OK"}` as soon as the web stack is serving. The API's `/health`
+# endpoint would be a stronger readiness check but it requires the API key, and a
+# probe cannot read a Secret.
+#
+# Liveness and readiness share the endpoint on purpose, as in prowlarr: Sonarr's
+# only dependency is its SQLite database on the config volume, and a database
+# that cannot be opened stops the process from starting at all, so there is no
+# separate dependency whose failure readiness could report while liveness stays
+# green.
+#
+# The startup probe holds the other two through a first start after a version
+# upgrade, when the database is migrated and Sonarr can take noticeably longer
+# than a restart.
+probes:
+  startup:
+    enabled: true
+    path: /ping
+    periodSeconds: 5
+    timeoutSeconds: 5
+    failureThreshold: 30
+  liveness:
+    enabled: true
+    path: /ping
+    initialDelaySeconds: 20
+    periodSeconds: 30
+    timeoutSeconds: 5
+    failureThreshold: 3
+  readiness:
+    enabled: true
+    path: /ping
+    initialDelaySeconds: 10
+    periodSeconds: 15
+    timeoutSeconds: 5
+    failureThreshold: 3
