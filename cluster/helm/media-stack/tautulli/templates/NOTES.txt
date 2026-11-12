@@ -21,6 +21,6 @@ Configuration is stored in the claim {{ include "app.configClaimName" . }}.
 That claim is created by this chart, so deleting the release deletes it too.
 {{- end }}
 
-First run: point Tautulli at Plex (http://plex.{{ .Release.Namespace }}.svc.cluster.local:32400),
-then set Settings -> Logging -> Log Level to Warning. There is no environment
-variable for the log level; it lives in config.ini on the claim.
+First run: point Tautulli at Plex (http://plex.{{ .Release.Namespace }}.svc.cluster.local:32400)
+with SSL off, then untick Settings -> General -> Show Advanced -> Enable Debug Logging. There is no
+environment variable for the log level; it lives in config.ini on the claim.
