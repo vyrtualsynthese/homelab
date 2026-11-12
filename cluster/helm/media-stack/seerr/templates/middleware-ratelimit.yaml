@@ -1,0 +1,13 @@
+{{- if and .Values.ingress.enabled .Values.ingress.rateLimit.enabled }}
+apiVersion: {{ .Values.ingress.apiVersion }}
+kind: Middleware
+metadata:
+  name: {{ include "app.fullname" . }}-ratelimit
+  labels:
+    {{- include "app.labels" . | nindent 4 }}
+spec:
+  rateLimit:
+    average: {{ .Values.ingress.rateLimit.average }}
+    burst: {{ .Values.ingress.rateLimit.burst }}
+    period: {{ .Values.ingress.rateLimit.period }}
+{{- end }}

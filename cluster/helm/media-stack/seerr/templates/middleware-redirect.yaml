@@ -1,0 +1,12 @@
+{{- if and .Values.ingress.enabled .Values.ingress.redirect.enabled }}
+apiVersion: {{ .Values.ingress.apiVersion }}
+kind: Middleware
+metadata:
+  name: {{ include "app.fullname" . }}-redirect-https
+  labels:
+    {{- include "app.labels" . | nindent 4 }}
+spec:
+  redirectScheme:
+    scheme: https
+    permanent: true
+{{- end }}
