@@ -108,10 +108,12 @@ spec:
             {{- toYaml . | nindent 12 }}
             {{- end }}
         {{- if .Values.exportarr.enabled }}
-        # Exportarr sidecar. Wiring copied from the pre-refactor chart and left
-        # alone in this change: the target answers HTTP 500 because Prowlarr
-        # returns 401 — the key in the `prowlarr` Secret is stale, not the
-        # variable name. Replacing that Secret value is a separate operation.
+        # Exportarr sidecar. The scrape annotations above come from the same
+        # values block, so the announced port cannot drift from this listener.
+        # APIKEY is exportarr v1's spelling, still accepted by v2.3; the key is
+        # in the `prowlarr` Secret. A key that no longer matches the app answers
+        # 401 on every collector and /metrics reports 500, with the pod still
+        # Ready — check the Prometheus target, not the pod.
         - name: {{ .Chart.Name }}-exporter
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}

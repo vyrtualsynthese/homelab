@@ -145,11 +145,13 @@ volumeMounts: []
 
 # Prowlarr's Prometheus exporter, run as a sidecar (exportarr).
 #
-# The wiring is copied from the pre-refactor chart and deliberately not fixed in
-# this change: its target answers HTTP 500 because Prowlarr returns 401 for every
-# request, so the exporter's API key does not match the app's current key. That is
-# a Secret value to replace, not a chart change. The scrape annotations are
-# rendered from this block, so disabling the sidecar removes them too.
+# The scrape annotations are rendered from this block, so disabling the sidecar
+# removes them too and the announced port cannot drift from the listener.
+#
+# The key comes from the `prowlarr` Secret. `APIKEY` is the v1 spelling of
+# `API_KEY` and exportarr v2.3 still accepts it. A key that no longer matches the
+# app makes /metrics answer HTTP 500 while the pod stays Ready, so check the
+# Prometheus target, not the pod status. The chart README has the rotation steps.
 exportarr:
   # -- Render the sidecar and its scrape annotations.
   enabled: true
