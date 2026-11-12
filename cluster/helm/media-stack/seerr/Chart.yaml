@@ -3,7 +3,7 @@ name: seerr
 description: Seerr request portal on the official image, published through Traefik.
 type: application
 # Chart version. Renovate bumps this when the image tag moves.
-version: 1.1.0
+version: 1.1.1
 # Must match image.tag in values.yaml.
 appVersion: "v3.5.2"
 home: https://docs.seerr.dev/

@@ -40,7 +40,7 @@ spec:
             - name: http
               containerPort: {{ include "app.containerPort" . }}
               protocol: TCP
-          {{- $env := list (dict "name" "PORT" "value" (.Values.service.port | toString)) }}
+          {{- $env := list (dict "name" "PORT" "value" (include "app.containerPort" .)) (dict "name" "CONFIG_DIRECTORY" "value" .Values.storage.mountPath) }}
           {{- range $name, $value := .Values.env }}
           {{- $env = append $env (dict "name" $name "value" ($value | toString)) }}
           {{- end }}
