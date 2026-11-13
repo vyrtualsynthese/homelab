@@ -7,7 +7,7 @@ metadata:
 spec:
   type: {{ .Values.service.type }}
   ports:
-    - port: 8080
+    - port: {{ .Values.service.port }}
       name: torrent-webui
       targetPort: torrent-webui
   selector:
