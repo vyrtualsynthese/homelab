@@ -193,6 +193,8 @@ Two habits follow:
 | `bazarr-anime` | yes, on `/` | seccomp, no privilege escalation; capabilities kept for the LinuxServer init | **no — the image starts as root, then drops to 1100** |
 | `unpackerr` | liveness only, on `/` | capabilities dropped, seccomp, no privilege escalation, no API token | **yes — 1100**, no claim to chown |
 | `maintainerr` | yes, `/api/health/live` and `/api/health/ready` | capabilities dropped, seccomp, no privilege escalation, no API token | **yes — 1000**, the image's own UID; the claim is `0777` and owned by 1100 |
+| `calibre-web-automated` | startup and liveness only, both on `/` | capabilities dropped except `CHOWN`/`SETUID`/`SETGID`, which the LinuxServer init needs; seccomp; no privilege escalation; no API token | **no — the image starts as root, then drops to 1100**; config claim `10Gi`, not `128Mi` |
+| `kavita` | startup and liveness only, both on `/api/health` | capabilities dropped except `CHOWN`/`SETUID`/`SETGID`, which the LinuxServer init needs; seccomp; no privilege escalation; no API token; read-only root filesystem on trial | **no — the image starts as root, then drops to 1100** |
 | everything else | no | no | no |
 
 ## Resource sizing: the reviewed set
@@ -380,6 +382,30 @@ differ, which works only because of the directory mode. It is also the first app
 authentication at all**: upstream's model is an appliance on a network you control, so the LAN
 boundary is the only access control and the route stays on `web` at `maintainerr.kub.local`. The app
 had been `Pending` for 76 days on a claim the old chart named and never created.
+
+`calibre-web-automated` as of 2026-11-13: the first app chart outside the monitoring stack whose
+config claim is sized in GiB rather than `128Mi` — 10Gi, because `/config/processed_books` keeps a
+copy of every file the import pipeline processes, the only per-book recovery point for a bad
+conversion or a bad metadata edit. The ingest drop folder is a second claim on the same node. It
+owns the book library on the NAS and marks it read-only in Kavita's pod spec, so the single-writer
+rule is enforced by the pod specs. Readiness is disabled, the exception `tautulli` and `cross-seed`
+already record: its real dependency, the NFS library, has no endpoint that reports its health, so
+readiness on `/` would duplicate liveness and turn a share blip into a restart loop. The log level is
+debt of `bazarr`'s kind — no documented variable selects it, so the chart sets none, accepts default
+`INFO`, and leaves the activity view and the app database as the operational record. It is also the
+first chart where the access control is a proxy allow list rather than the hostname: the UI can
+delete books and rewrite files, and `calibre.kub.local` is only a DNS entry, so an `ipWhiteList`
+Middleware restricted to `192.168.1.0/24` is what stops a request, with `403`, before the app sees it.
+
+`kavita` as of 2026-11-13: a rebuild, not a touch-up. The old pods sat `Pending` for months on a
+Longhorn claim that vanished in the 2026 disk failure, so the chart now creates `kavita-config` on
+`local-path`, 2Gi because the page cache it keeps under `/config` grows with the library. The
+library claim is mounted **read-only**, the manifest side of CWA's single-writer rule, and Kavita is
+the only authority on reading position. It is the first of these charts to serve only a public
+hostname: `kavita.kub.home.ashudev.com` over TLS on `websecure`, with a plain-HTTP router that
+redirects, and no LAN route by decision. Readiness is disabled for the shared reason — a database it
+cannot open stops the process from starting, so there is no dependency that can fail while the
+process stays healthy.
 
 ## Charts still to align
 
