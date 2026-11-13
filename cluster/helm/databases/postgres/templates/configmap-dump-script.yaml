@@ -13,8 +13,17 @@ Why it is shaped the way it is:
 - Every dump is verified before the run is considered good: non-empty file and
   a readable table of contents (pg_restore --list), so a truncated page or a
   broken format shows up at 03:30, not on the day of a restore.
-- Retention deletes by age, so a failed dump never manages to delete the last
-  good copy of anything.
+- The dump is written to "<name>.partial" and only renamed once it passed both
+  checks, so a half-written file never carries a name that looks like a good
+  one. Leftover .partial files are removed at the start of each run.
+- Retention prunes BEFORE the dumps are taken. Deletion is by age, so it can
+  never reach the newest file, and pruning first means a volume that filled up
+  overnight is freed on the next run instead of making every later run fail on
+  a full disk for ever.
+- "fsGroup" is not a guarantee here: dumps is local-path, which is hostPath
+  backed, and the kubelet does not apply fsGroup to hostPath. The write test at
+  the top of the script is what proves /dumps is writable, and it fails with a
+  message naming the real remedy instead of a bare permission error mid-run.
 */}}
 apiVersion: v1
 kind: ConfigMap
@@ -27,17 +36,26 @@ data:
   dump-all.sh: |
     #!/usr/bin/env bash
     set -euo pipefail
+    umask 077
+    if ! touch /dumps/.write-test 2>/dev/null; then
+      echo "/dumps is not writable by uid $(id -u); fix the claim's ownership on nas" >&2
+      exit 1
+    fi
+    rm -f /dumps/.write-test
+    find /dumps -maxdepth 1 -type f -name '*.partial' -delete
+    find /dumps -maxdepth 1 -name '*.dump' -type f -mtime +{{ .Values.dumps.retentionDays }} -delete
     export PGPASSWORD="${BACKUP_PASSWORD:?}"
-    mapfile -t dbs < <(psql -h postgres -U backup -d postgres -At -c \
+    dbs_out=$(psql -h postgres -U backup -d postgres -At -c \
       "SELECT datname FROM pg_database WHERE datistemplate = false AND datname <> 'postgres' ORDER BY 1")
-    if [ "${#dbs[@]}" -eq 0 ]; then
+    mapfile -t dbs <<< "$dbs_out"
+    if [ "${#dbs[@]}" -eq 0 ] || [ -z "${dbs[0]}" ]; then
       echo "no application databases exist; refusing to report success" >&2
       exit 1
     fi
     for db in "${dbs[@]}"; do
       out="/dumps/${db}-$(date -u +%Y%m%dT%H%M%SZ).dump"
-      pg_dump -h postgres -U backup -d "$db" -Fc -Z6 -f "$out"
-      [ -s "$out" ] || { echo "empty dump: $out" >&2; exit 1; }
-      pg_restore --list "$out" > /dev/null
+      pg_dump -h postgres -U backup -d "$db" -Fc -Z6 -f "${out}.partial"
+      [ -s "${out}.partial" ] || { echo "empty dump: ${out}.partial" >&2; exit 1; }
+      pg_restore --list "${out}.partial" > /dev/null
+      mv "${out}.partial" "$out"
     done
-    find /dumps -maxdepth 1 -name '*.dump' -type f -mtime +{{ .Values.dumps.retentionDays }} -delete
