@@ -1,24 +1,18 @@
 apiVersion: v2
 name: lidarr
-description: A Helm chart for Kubernetes
-
-# A chart can be either an 'application' or a 'library' chart.
-#
-# Application charts are a collection of templates that can be packaged into versioned archives
-# to be deployed.
-#
-# Library charts provide useful utilities or functions for the chart developer. They're included as
-# a dependency of application charts to inject those utilities and functions into the rendering
-# pipeline. Library charts do not define any templates and therefore cannot be deployed.
+description: Lidarr is a music collection manager for Usenet and BitTorrent users. It watches indexers, grabs releases and files them into the audio library Plex reads.
 type: application
-
-# This is the chart version. This version number should be incremented each time you make changes
-# to the chart and its templates, including the app version.
-# Versions are expected to follow Semantic Versioning (https://semver.org/)
-version: 0.1.0
-
-# This is the version number of the application being deployed. This version number should be
-# incremented each time you make changes to the application. Versions are not expected to
-# follow Semantic Versioning. They should reflect the version the application is using.
-# It is recommended to use it with quotes.
-appVersion: "1.0.0"
+# Chart version. Renovate bumps this when the image tag moves.
+version: 1.0.0
+# Must match image.tag in values.yaml.
+appVersion: "3.1.6.5079-ls48"
+icon: https://raw.githubusercontent.com/Lidarr/Lidarr/develop/Logo/1024.png
+home: https://lidarr.audio/
+sources:
+  - https://github.com/Lidarr/Lidarr
+keywords:
+  - music
+  - pvr
+  - torrent
+  - usenet
+  - automation
