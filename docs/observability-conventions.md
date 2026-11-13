@@ -137,17 +137,27 @@ and image hashes). Log panels unwrap it in the query:
 Labels are `job=fluent-bit`, `namespace`, `container`, `node`; the pod name is
 structured metadata, not a label.
 
-**Temperature**: use `node_thermal_zone_temp` for host temperature. The NAS
-reports 95 °C on `nct6775 temp6`, an unconnected header; alerting on
-`node_hwmon_temp_celsius` would fire there permanently. GPU temperature is
-`DCGM_FI_DEV_GPU_TEMP` from the NVIDIA exporter on `streaming`.
+**qBittorrent** (`martabal/qbittorrent-exporter`, metrics `qbittorrent_*`):
+qBittorrent 5.2 answers `/api/v2/auth/login` with `204 No Content` and sets a
+`QBT_SID_<webui port>` cookie, so the exporter needs
+`QBITTORRENT_COOKIE_NAME=QBT_SID_8080` in this cluster. The Java exporter it
+replaced (`caseyscarborough` v1.3.5) expects `200` and a cookie named `SID` and
+cannot log in at all. Tracker collection costs one Web API call per distinct
+tracker — about 40 here — which pushed the collection past Prometheus's 10 s
+scrape timeout on 2026-11-13; the chart turns it off.
 
-`streaming` needs the same treatment: it publishes no CPU package sensor (no
-`k10temp` or `coretemp` chip), and its hottest `node_hwmon_temp_celsius` series
-are `pci0000:00/0000:00:18.3` and a `wmi_bus` sensor at 86–89 °C. That is what
-`NodeTemperatureHigh` matches, so the rule has been firing for it since
-2026-11-13T01:18 with no CPU reading behind it. It needs a chip exclusion, the
-way `nct6775` was excluded for `nas`.
+**Temperature**: `NodeTemperatureHigh` and the Platform panel now read only
+CPU/SoC chips — `platform_coretemp_0`, `thermal_thermal_zone0`, `k10temp`,
+`zenpower`. Three junk sensors are excluded by construction rather than one:
+the NAS's unconnected `nct6775` header (95 °C), and on `streaming` a PCIe root
+port and an ACPI/WMI sensor, both at 86–89 °C.
+
+`streaming` publishes **no CPU sensor at all**, so the rule is deliberately
+silent there; its GPU temperature is `DCGM_FI_DEV_GPU_TEMP` from the NVIDIA
+exporter, covered by `GpuTemperatureHigh`. Do not "fix" the silence by widening
+the selector: the 89 °C reading is a sensor that is not measuring the CPU.
+Per-host maxima after the change (2026-11-13): `nas` 44, `nuc0` 45, `streaming`
+16.8 (the ACPI zone), `rbp2` 54.5, `rbp0` 50.1, `rbp1` 48.7.
 
 **Volume stats are partial, and the reason is structural**: the K3s kubelet
 publishes `kubelet_volume_stats_*` only for volumes whose plugin can measure
@@ -177,7 +187,7 @@ Folder **Homelab**, created through the HTTP API:
 | Homelab · Logs | `homelab-logs` | 5 + rows | Volume, errors and warnings by container, log volume by node, live stream |
 | Homelab · Disks | `homelab-disks` | 11 | SMART per drive: status, life, temperature, hours, sectors, wear |
 | Homelab · Showcase | `homelab-showcase` | 13 | Presentation screen: drawn topology, four big numbers, network, storage, GPU |
-| Homelab · Media | `homelab-media` | 8 + rows | Media stack: app health issues, queues, missing items, indexers, release intake, Plex sessions and library |
+| Homelab · Media | `homelab-media` | 9 + rows | Media stack: app health issues, queues, missing items, indexers, release intake, qBittorrent transfer, Plex sessions and library |
 
 The old `homelab-investigate` was replaced by `homelab-platform` on 2026-11-12: its workload
 row duplicated the new Applications dashboard, and its node/control-plane/Prometheus panels are
@@ -221,7 +231,7 @@ secure field), so the contact point is never rewritten by automation.
 | `ScrapeTargetDown` | any non-node target down, including the edge Pis' SMART and Docker exporters; Prometheus and kube-state-metrics excluded (own rules) | 15m | warning | **firing, silenced** (qbittorrent-exporter only) |
 | `NodeCpuHigh` | >90 % by host | 15m | warning | inactive |
 | `NodeMemoryHigh` | >90 % of `MemAvailable` | 15m | warning | inactive |
-| `NodeTemperatureHigh` | hottest real sensor >80 °C | 10m | warning | **firing** on `streaming` (sensor identity under review) |
+| `NodeTemperatureHigh` | hottest CPU or SoC sensor >80 °C | 10m | warning | inactive |
 | `GpuTemperatureHigh` | `DCGM_FI_DEV_GPU_TEMP` >80 °C | 10m | warning | inactive |
 | `DiskTooHot` | drive >55 °C | 15m | warning | inactive |
 | `DiskFillingUp` | filesystem >85 % | 30m | warning | inactive |
