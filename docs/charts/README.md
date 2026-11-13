@@ -189,6 +189,8 @@ Two habits follow:
 | `radarr` | yes, on `/ping` | seccomp, no privilege escalation; capabilities kept for the LinuxServer init | **no — the image starts as root, then drops to 1100** |
 | `radarr-anime` | yes, on `/ping` | seccomp, no privilege escalation; capabilities kept for the LinuxServer init | **no — the image starts as root, then drops to 1100**; `PUID` moved from 0 |
 | `lidarr` | yes, on `/ping` | seccomp, no privilege escalation; capabilities kept for the LinuxServer init | **no — the image starts as root, then drops to 1100** |
+| `bazarr` | yes, on `/` | seccomp, no privilege escalation; capabilities kept for the LinuxServer init | **no — the image starts as root, then drops to 1100** |
+| `bazarr-anime` | yes, on `/` | seccomp, no privilege escalation; capabilities kept for the LinuxServer init | **no — the image starts as root, then drops to 1100** |
 | `unpackerr` | liveness only, on `/` | capabilities dropped, seccomp, no privilege escalation, no API token | **yes — 1100**, no claim to chown |
 | `maintainerr` | yes, `/api/health/live` and `/api/health/ready` | capabilities dropped, seccomp, no privilege escalation, no API token | **yes — 1000**, the image's own UID; the claim is `0777` and owned by 1100 |
 | everything else | no | no | no |
@@ -285,6 +287,17 @@ level is `debug`, the noisiest in the stack, so both `LIDARR__LOG__LEVEL` and
 `LIDARR__LOG__CONSOLELEVEL` are at `warn`. The config claim is new, so the first start mints a new API
 key: the exporter stays down until the operator pastes it into `homelab.env` and the `lidarr` Secret,
 and the chart README says so instead of leaving it to be discovered.
+
+`bazarr` and `bazarr-anime` as of 2026-11-13: five objects each, one config claim and the shared
+`pvc-plex-media` at `/media`, probes on `/` with a 300 s startup budget for a first start on a fresh
+`/config`. The `exportarr` block is present and **off**: exportarr v2.3.0's Bazarr collector walks
+every episode on each scrape and takes tens of seconds, the 60 s interval would overlap, and the flag
+that removes the walk (`DISABLE_EPISODE_METRICS`) is unreleased. No scrape annotation renders while
+the block is off, so Bazarr is absent from the target list rather than present and down. Bazarr's
+logger has only INFO and DEBUG and no variable selects either, so the chart sets no log level and
+records the INFO volume as accepted debt instead of inventing a warning level that does not exist.
+Both charts keep the `pvc-plex-media` mount read-write because subtitle files are written next to the
+videos, and both keep the LinuxServer root-then-`PUID`/`PGID` init.
 
 `unpackerr` as of 2026-11-13: two objects because it keeps no state of its own and is never exposed,
 per-instance values (`sonarr0`, `radarr1`, …) that render `UN_<APP>_<i>_*` through one helper, API
