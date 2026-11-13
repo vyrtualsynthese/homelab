@@ -20,10 +20,17 @@ Why it is shaped the way it is:
   never reach the newest file, and pruning first means a volume that filled up
   overnight is freed on the next run instead of making every later run fail on
   a full disk for ever.
+  The price of that order, stated plainly: while dumping is broken for several
+  nights, the retained dumps keep ageing out, so dumps.retentionDays (14) is the
+  time from "dumps stopped working" to total loss of the dump history. That is
+  the trade chosen on purpose — a full volume heals by itself, without a human,
+  which is worth more than a longer tolerated outage of unknown length.
 - "fsGroup" is not a guarantee here: dumps is local-path, which is hostPath
-  backed, and the kubelet does not apply fsGroup to hostPath. The write test at
-  the top of the script is what proves /dumps is writable, and it fails with a
-  message naming the real remedy instead of a bare permission error mid-run.
+  backed, and the kubelet does not apply fsGroup to hostPath. Writability is
+  proved twice, in this order: a permission test that consumes no space, then a
+  real file creation. The permission test comes first so that a volume which is
+  full — cannot create a file, but is perfectly writable — still gets pruned
+  instead of being reported as an ownership problem.
 */}}
 apiVersion: v1
 kind: ConfigMap
@@ -37,13 +44,14 @@ data:
     #!/usr/bin/env bash
     set -euo pipefail
     umask 077
+    [ -w /dumps ] || { echo "/dumps is not writable by uid $(id -u); fix the claim's ownership on nas" >&2; exit 1; }
+    find /dumps -maxdepth 1 -type f -name '*.partial' -delete
+    find /dumps -maxdepth 1 -name '*.dump' -type f -mtime +{{ .Values.dumps.retentionDays }} -delete
     if ! touch /dumps/.write-test 2>/dev/null; then
-      echo "/dumps is not writable by uid $(id -u); fix the claim's ownership on nas" >&2
+      echo "/dumps cannot create files (out of space or inodes); prune it or grow the claim" >&2
       exit 1
     fi
     rm -f /dumps/.write-test
-    find /dumps -maxdepth 1 -type f -name '*.partial' -delete
-    find /dumps -maxdepth 1 -name '*.dump' -type f -mtime +{{ .Values.dumps.retentionDays }} -delete
     export PGPASSWORD="${BACKUP_PASSWORD:?}"
     dbs_out=$(psql -h postgres -U backup -d postgres -At -c \
       "SELECT datname FROM pg_database WHERE datistemplate = false AND datname <> 'postgres' ORDER BY 1")
