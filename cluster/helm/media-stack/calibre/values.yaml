@@ -74,12 +74,16 @@ ingress:
   tls: []
 
 
+# Sized from Prometheus on 2026-11-13 over the 39h it holds: 880Mi average and
+# 880Mi peak, flat — calibre holds its whole index in memory and never releases
+# it, so the old 1Gi limit sat at 88% permanently. 2Gi is the same ~2.2x margin
+# the rest of the stack uses.
 resources:
   requests:
     cpu: 2m
-    memory: 256Mi
+    memory: 512Mi
   limits:
-    memory: 1024Mi
+    memory: 2Gi
   # We usually recommend not to specify default resources and to leave this as a conscious
   # choice for the user. This also increases chances charts run on environments with little
   # resources, such as Minikube. If you do want to specify resources, uncomment the following

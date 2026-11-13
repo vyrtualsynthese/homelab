@@ -190,11 +190,13 @@ tolerations: []
 
 affinity: {}
 
-# Sized from Prometheus over the 30 days before 2026-11-12:
-#   memory in use (working set)  302Mi average, 380Mi peak
-#   CPU                          ~8m at p95
+# Sized from Prometheus on 2026-11-13 over the 39h it holds:
+#   memory in use (working set)  310Mi average, 800Mi peak
+#   CPU                          32m average, 154m peak
 #
 # This instance holds a larger library than `sonarr`, so it runs higher on memory.
+# The earlier 30-day sample predates the post-Longhorn rebuild of this app and
+# understated the working set by half; the 1Gi limit was filled to 80%.
 # No CPU limit, here or anywhere in this cluster: a limit throttles exactly the
 # short burst this app needs during an import or a library scan, and the node's
 # capacity is the real ceiling. The 10m request is only there so the scheduler
@@ -206,9 +208,9 @@ affinity: {}
 resources:
   requests:
     cpu: 10m
-    memory: 384Mi
+    memory: 512Mi
   limits:
-    memory: 1Gi
+    memory: 2Gi
 
 # Probes. `/ping` is Sonarr's own unauthenticated health endpoint and answers
 # `{"status":"OK"}` as soon as the web stack is serving. The API's `/health`

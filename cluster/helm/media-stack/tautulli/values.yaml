@@ -164,12 +164,14 @@ affinity: {}
 # No CPU limit, here or anywhere in this cluster: a limit throttles exactly the
 # short burst this app needs while importing history, and the node's capacity is the
 # real ceiling. The 10m request is only there so the scheduler places the pod.
+# Sized from Prometheus on 2026-11-13 over the 39h it holds: 120Mi average and
+# 120Mi peak, against a 256Mi request and a 1Gi limit.
 resources:
   requests:
     cpu: 10m
-    memory: 256Mi
+    memory: 128Mi
   limits:
-    memory: 1Gi
+    memory: 512Mi
 
 # Probes. `/status` is Tautulli's own unauthenticated health endpoint: it answers
 # `{"result":"success","message":"Ok"}` with HTTP 200 as soon as the web stack is

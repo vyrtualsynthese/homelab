@@ -155,17 +155,16 @@ nodeSelector:
 tolerations: []
 affinity: {}
 
-# Sized from a measurement on 2026-11-13: 15 MiB and ~0.02m CPU while idle.
-# The request covers idle plus margin; the limit is headroom for the extraction
-# children, which were not running when the measurement was taken. Confirm with
-# `kubectl top pod` during a burst and adjust. Any non-zero request also moves
-# the pod out of the BestEffort class, which is what it had before.
+# Sized from Prometheus on 2026-11-13 over the 39h it holds: 30Mi average and
+# 460Mi peak — the peak is the extraction children unpacking a large archive,
+# not steady state, and it filled the 512Mi limit to 92%. The limit is now 1Gi so
+# a big archive finishes instead of being killed halfway through.
 resources:
   requests:
     cpu: 10m
     memory: 64Mi
   limits:
-    memory: 512Mi
+    memory: 1Gi
 
 probes:
   liveness:

@@ -189,10 +189,12 @@ affinity: {}
 # No CPU limit, here or anywhere in this cluster: a limit throttles exactly the
 # short burst this app needs while it renders posters, and the node's capacity is
 # the real ceiling. The 25m request is only there so the scheduler places the pod.
+# Sized from Prometheus on 2026-11-13 over the 39h it holds: 190Mi average and
+# 230Mi peak, against a 512Mi request that reserved twice the app.
 resources:
   requests:
     cpu: 25m
-    memory: 512Mi
+    memory: 256Mi
   limits:
     memory: 1Gi
 
