@@ -1,6 +1,6 @@
 # unpackerr
 
-[unpackerr](https://unpackerr.zip) watches the download queues of Lidarr, Radarr, Readarr and Sonarr
+[unpackerr](https://unpackerr.zip) watches the download queues of Lidarr, Radarr and Sonarr
 and extracts completed archives in place, so the *arr app can import them. This is the
 [Unpackerr/unpackerr](https://github.com/Unpackerr/unpackerr) project; the image comes from Docker Hub
 as `golift/unpackerr`.
