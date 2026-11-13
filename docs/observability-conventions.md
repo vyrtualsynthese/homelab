@@ -102,11 +102,11 @@ Grafana claim.
   OOM loop of 2026-11-12.
 
 **Measured on 2026-11-13:** 121,431 head series, ~1,980 samples/s, 48 scrape
-targets (47 up, 1 down). Series by job: `kubernetes-api-servers` 49 243,
+targets (all up). Series by job: `kubernetes-api-servers` 49 243,
 `kubernetes-service-endpoints` 27 748, `kubernetes-nodes-cadvisor` 22 105,
 `kubernetes-pods` 8 841, `kubernetes-nodes` 7 207, `rbp0` 1 343, `rbp1` 1 341,
 `prometheus` 1 309. The `kubernetes-pods` growth is the exportarr sidecars and
-the Plex, autobrr and n8n exporters; the 1 down target is `qbittorrent-exporter`.
+the Plex, autobrr, n8n and qBittorrent exporters.
 
 ## Exporter quirks
 
