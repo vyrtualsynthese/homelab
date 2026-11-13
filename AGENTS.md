@@ -14,7 +14,7 @@ A single K3s homelab managed by ArgoCD (GitOps) plus Ansible for host prep.
 
 - GitOps branch: `develop` (every Application pins `targetRevision: develop`).
 - 58 ArgoCD `Application` objects in `cluster/argocd/projects/**/*.yaml`.
-- 51 Helm charts under `cluster/helm/`.
+- 52 Helm charts under `cluster/helm/`.
 - No CI. Renovate updates images/chart versions; nothing runs on PR.
 - Secrets are never committed. See §5.
 
@@ -62,11 +62,11 @@ The chart lives at `cluster/helm/<path>`; its version is `image.tag` in that cha
 spec:
   sources:
     - repoURL: "https://vyrtualsynthese.github.io/selfhosted-helmcharts/"
-      chart: calibre
+      chart: filebrowser
       targetRevision: 0.1.2          # chart version lives here, not in values.yaml
       helm:
         valueFiles:
-          - $values/cluster/helm/media-stack/calibre/values.yaml
+          - $values/cluster/helm/media-stack/filebrowser/values.yaml
     - repoURL: "https://github.com/vyrtualsynthese/homelab.git"
       targetRevision: develop
       ref: values
@@ -75,7 +75,7 @@ spec:
 The repo directory then holds only `values.yaml` (no `Chart.yaml`). Examples: calibre, filebrowser,
 postgres, pgadmin, renovate, local-path, books-media, nfs-audio.
 
-Not the way to add an external chart: new work uses pattern D, and these eight are converted
+Not the way to add an external chart: new work uses pattern D, and these seven are converted
 separately.
 
 ### C. Vendored upstream chart
@@ -110,8 +110,9 @@ sync time. Examples: `monitoring/prometheus`,
   replicated volume class: Longhorn was abandoned after the 2026 disk failure and is not coming back.
 - LinuxServer images: `TZ=Europe/Paris`, `PUID=1100`, `PGID=1100`.
 - Placement: `nodeSelector: kubernetes.io/hostname: <node>` — every workload is pinned to a named node,
-  and its `local-path` volume lands on that same node. `streaming` for GPU and media work, `nas` for
-  storage-bound apps, `nuc0` for the general catalogue, `rbp2` for nothing but the control plane.
+  and its `local-path` volume lands on that same node. `streaming` for GPU and media work
+  (`calibre-web-automated` and the rest), `nas` for storage-bound apps, `nuc0` for the general
+  catalogue, `rbp2` for nothing but the control plane.
   Observability (Prometheus, Grafana, Loki) is a `nas` workload: ~50 GiB of `local-path` claims, no
   NFS. The NAS's `/mnt/ultrafaststorage` is reserved for the qbittorrent download export; nothing
   else goes there. DaemonSets (`fluent-bit`, `prometheus-node-exporter`) are not pinned: they must
