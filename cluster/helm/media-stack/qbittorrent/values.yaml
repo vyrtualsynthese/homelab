@@ -46,7 +46,11 @@ securityContext:
 
 service:
   type: ClusterIP
-  port: 32400
+  # The qBittorrent WebUI listens on 8080, which is also the container port the
+  # Deployment opens and the port the IngressRoute targets by name. This value
+  # was 32400 (Plex's port, left over from the scaffold) and the Service template
+  # ignored it, so the two could disagree without anyone noticing.
+  port: 8080
 
 ingress:
   enabled: true
