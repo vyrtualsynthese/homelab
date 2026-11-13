@@ -1,0 +1,79 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: postgres-bootstrap
+  namespace: {{ .Release.Namespace }}
+  # Not include "postgres.labels": it hardcodes app: postgres, which would clash
+  # with the label this object is identified by, and duplicate keys resolve to
+  # the last one written.
+  labels:
+    app: postgres-bootstrap
+spec:
+  backoffLimit: 3
+  template:
+    metadata:
+      labels:
+        app: postgres-bootstrap
+      annotations:
+        checksum/bootstrap: {{ include (print $.Template.BasePath "/configmap-bootstrap.yaml") . | sha256sum }}
+    spec:
+      restartPolicy: Never
+      nodeSelector:
+        {{- toYaml .Values.nodeSelector | nindent 8 }}
+      securityContext:
+        runAsUser: 999
+        runAsGroup: 999
+        fsGroup: 999
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: bootstrap
+          image: "{{ .Values.image.repository }}@{{ .Values.image.digest }}"
+          imagePullPolicy: IfNotPresent
+          command:
+            - bash
+            - -c
+            - |
+              # On a first sync the Job races the StatefulSet: a psql that runs
+              # before the server accepts connections just burns a backoff.
+              until pg_isready -h postgres -U postgres; do sleep 3; done
+              psql -h postgres -U postgres -d postgres \
+                -v backup_password="$BACKUP_PASSWORD" \
+                -v exporter_password="$EXPORTER_PASSWORD" \
+                -f /sql/bootstrap.sql
+          env:
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-superuser
+                  key: postgres-password
+            - name: BACKUP_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: pg-backup
+                  key: backup-password
+            - name: EXPORTER_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: pg-exporter
+                  key: exporter-password
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              cpu: 100m
+              memory: 128Mi
+          volumeMounts:
+            - name: bootstrap-sql
+              mountPath: /sql
+              readOnly: true
+      volumes:
+        - name: bootstrap-sql
+          configMap:
+            name: postgres-bootstrap

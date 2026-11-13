@@ -39,6 +39,8 @@ spec:
           args:
             - -c
             - config_file=/etc/postgresql/postgresql.conf
+            - -c
+            - hba_file=/etc/postgresql-hba/pg_hba.conf
           ports:
             - name: postgres
               containerPort: 5432
@@ -100,6 +102,9 @@ spec:
             - name: postgres-config
               mountPath: /etc/postgresql
               readOnly: true
+            - name: postgres-hba
+              mountPath: /etc/postgresql-hba
+              readOnly: true
         - name: exporter
           image: "{{ .Values.exporter.repository }}:{{ .Values.exporter.tag }}"
           imagePullPolicy: IfNotPresent
@@ -136,3 +141,6 @@ spec:
         - name: postgres-config
           configMap:
             name: postgres-config
+        - name: postgres-hba
+          configMap:
+            name: postgres-pg-hba
