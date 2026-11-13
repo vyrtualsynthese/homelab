@@ -25,6 +25,17 @@ disagrees with one of these, these win.
 These are dated on purpose. They describe the cluster at one moment and will drift; a later
 workstream supersedes them by producing a runbook, not by editing the audit.
 
+## Faults that are tracked, not fixed
+
+Known conditions that are accepted for now, each with a record rather than an alert nobody can act
+on. Read the record before opening a new investigation into one of them.
+
+| Fault | Record | How it is tracked |
+|---|---|---|
+| `streaming` runs at its thermal ceiling; the cooler needs money, not configuration | [`decisions/2026-11-13-streaming-overheating-deferred.md`](decisions/2026-11-13-streaming-overheating-deferred.md) | `NodeTemperatureHigh` fires; a time-boxed silence keeps the state visible without messaging |
+| `nuc0` overheats and throttles by design of its chassis; replacement node is the fix | [`decisions/2026-11-13-nuc0-throttling-accepted.md`](decisions/2026-11-13-nuc0-throttling-accepted.md) | Document only, deliberately no alert |
+| qBittorrent's Web UI stops answering during downloads | [`qbittorrent-webui-stalls.md`](qbittorrent-webui-stalls.md) | Measurements and the decisive test; no fix applied |
+
 ## Where each kind of knowledge lives
 
 Set out in the design at §8.8, and worth repeating because it is the rule that stops the drift:

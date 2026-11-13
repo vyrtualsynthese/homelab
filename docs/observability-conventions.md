@@ -14,7 +14,7 @@ repairs. Re-verify the "measured" numbers before trusting them in a new document
 | Component | Version | Placement | Data |
 |---|---|---|---|
 | Prometheus | 3.16.0 | `nas`, 2 GiB limit | 25 GiB `local-path`, 90 d / 20 GiB cap |
-| Grafana | 13.3.1 | `nas`, 512 MiB limit | 5 GiB `local-path` |
+| Grafana | 13.3.1 | `nas`, 768 MiB limit | 5 GiB `local-path` |
 | Loki | 3.7.9 | `nas`, monolithic | 20 GiB `local-path`, 30 d retention |
 | Fluent Bit | 5.1.3 | DaemonSet, all 4 nodes | tails `/var/log/containers/*.log` only |
 
@@ -27,10 +27,16 @@ Application each; the design is
 | Workload | avg | p95 | peak | request | limit |
 |---|---|---|---|---|---|
 | Prometheus | 1.26 GiB | 1.74 GiB | 1.76 GiB | 1Gi | 2Gi |
-| Grafana | 292 MiB | 346 MiB | 400 MiB | 256Mi | 512Mi |
+| Grafana | 292 MiB | 346 MiB | 400 MiB | 256Mi | 768Mi |
 | Loki | 134 MiB | 166 MiB | 217 MiB | 256Mi | 1Gi |
 | Fluent Bit (per pod) | 6-9 MiB | 9.8 MiB | 11.6 MiB | 32Mi | 64Mi |
 | config-reloader | 9 MiB | 9.6 MiB | 9.9 MiB | 16Mi | 32Mi |
+
+Grafana's limit moved from 512 MiB to 768 MiB on 2026-11-13: the rebuilt pod
+peaked at 370 MiB, filling the old limit to 74 %, and Grafana evaluates and
+delivers every alert in the cluster. The other rows are unchanged; the wider
+stack review of that date is the table in
+[`charts/README.md`](charts/README.md#resource-sizing-the-reviewed-set).
 
 Prometheus keeps its 2 GiB ceiling because it sizes its own GC from the cgroup
 limit and was OOM-killed at 1 GiB; only its request moved up to the measured
@@ -169,6 +175,15 @@ the reading follows load. `NodeTemperatureHigh` fires for it and that is
 correct — the fix is cooling, not a wider or narrower selector. Per-host maxima
 on 2026-11-13: `nas` 43, `nuc0` 44, `streaming` 82, `rbp2` 54, `rbp0` 50,
 `rbp1` 51.
+
+Both x86 nodes that run hot are accepted faults with a dated record rather than
+a tunable threshold:
+[`decisions/2026-11-13-streaming-overheating-deferred.md`](decisions/2026-11-13-streaming-overheating-deferred.md)
+(`streaming`, cooling deferred for budget) and
+[`decisions/2026-11-13-nuc0-throttling-accepted.md`](decisions/2026-11-13-nuc0-throttling-accepted.md)
+(`nuc0`, 95 °C peak and 2 005 hardware throttle events in the 39 h to
+2026-11-13, already repasted, no alert on purpose). Read those before filing a
+new temperature finding.
 
 **Volume stats are partial, and the reason is structural**: the K3s kubelet
 publishes `kubelet_volume_stats_*` only for volumes whose plugin can measure
