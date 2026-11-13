@@ -167,6 +167,7 @@ the local-path provisioner and stop doing this by hand.
 | `tautulli` | yes, on `/status` | capabilities dropped except `CHOWN`/`SETUID`/`SETGID`, which the image's root init needs; seccomp; no privilege escalation | **no — the image starts as root, then drops to 1100** |
 | `radarr` | yes, on `/ping` | seccomp, no privilege escalation; capabilities kept for the LinuxServer init | **no — the image starts as root, then drops to 1100** |
 | `radarr-anime` | yes, on `/ping` | seccomp, no privilege escalation; capabilities kept for the LinuxServer init | **no — the image starts as root, then drops to 1100**; `PUID` moved from 0 |
+| `lidarr` | yes, on `/ping` | seccomp, no privilege escalation; capabilities kept for the LinuxServer init | **no — the image starts as root, then drops to 1100** |
 | `unpackerr` | liveness only, on `/` | capabilities dropped, seccomp, no privilege escalation, no API token | **yes — 1100**, no claim to chown |
 | everything else | no | no | no |
 
@@ -252,6 +253,16 @@ Claim names already matched the derived `<fullname>-config`, so no data moved. T
 instance also moved off `PUID 0`, which is the chown runbook the contract's UID section describes.
 Both exporter sidecars still answer 401 until the operator patches the stale keys in Secrets
 `radarr` and `radarr-anime`.
+
+`lidarr` as of 2026-11-13: the sonarr pair's shape with a second media claim. Five objects, the
+config claim created by the chart because the previous one was Longhorn and vanished with the 2026
+disk failure, `/downloads` and `/audio` as named values, and probes on `/ping` — which is not a plain
+process ping: `PingController` reads the config repository, so it answers 500 when the database
+cannot be opened, and readiness shares it rather than inventing a second endpoint. Its default log
+level is `debug`, the noisiest in the stack, so both `LIDARR__LOG__LEVEL` and
+`LIDARR__LOG__CONSOLELEVEL` are at `warn`. The config claim is new, so the first start mints a new API
+key: the exporter stays down until the operator pastes it into `homelab.env` and the `lidarr` Secret,
+and the chart README says so instead of leaving it to be discovered.
 
 `unpackerr` as of 2026-11-13: two objects because it keeps no state of its own and is never exposed,
 per-instance values (`sonarr0`, `radarr1`, …) that render `UN_<APP>_<i>_*` through one helper, API
