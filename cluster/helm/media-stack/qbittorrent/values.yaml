@@ -16,6 +16,13 @@ vpnimage:
   # Overrides the image tag whose default is the chart appVersion.
   tag: 1.0.20260223
 
+# The post-download hook calls cross-seed by name. The pod runs with
+# dnsPolicy: None and public resolvers on purpose, so cluster names do not
+# resolve; this alias maps the one name the hook needs without routing the
+# torrent client's DNS through the cluster. It is the cross-seed Service
+# ClusterIP; update it if that Service is recreated.
+crossSeedServiceIP: "10.43.104.9"
+
 imagePullSecrets: []
 nameOverride: ""
 fullnameOverride: ""
