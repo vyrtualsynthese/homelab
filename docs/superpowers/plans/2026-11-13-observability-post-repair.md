@@ -10,6 +10,10 @@
 
 **Spec:** `docs/observability-conventions.md` (live facts and rules) plus the inspection evidence in this plan.
 
+**Status:** executed 2026-11-13. Tasks 1–3 and 5 are complete; Task 4 is
+operator-pending. The checkboxes stay unticked because they record the plan as
+written, not its execution state.
+
 ## Global Constraints
 
 - Never `kubectl apply` a dashboard or a rule. Use the Grafana HTTP API with `$GRAFANA_TOKEN`.
@@ -158,9 +162,9 @@ git commit -m "📝 docs(monitoring): add the media deployment-down rule"
 ### Task 3: Let qBittorrent resolve `cross-seed` without changing its DNS policy
 
 **Files:**
-- Modify: `cluster/helm/media-stack/qbittorrent/values.yaml`
+- Modify: `cluster/helm/media-stack/qbittorrent/values.yaml` (also where the
+  ClusterIP maintenance note lives; this chart has no README)
 - Modify: `cluster/helm/media-stack/qbittorrent/templates/deployment.yaml`
-- Modify: `cluster/helm/media-stack/qbittorrent/README.md`
 
 **Interfaces:**
 - Consumes: the `cross-seed` Service ClusterIP (currently `10.43.104.9`).
@@ -211,7 +215,9 @@ curl -sG http://loki.kub.local/loki/api/v1/query \
   --data-urlencode 'query=sum(count_over_time({job="fluent-bit",namespace="media-stack",container="qbittorrent"} |= "Could not resolve host: cross-seed" [1h]))'
 ```
 
-Expected: no result an hour after a completed download. If the Service is ever recreated with a new ClusterIP, update `crossSeedServiceIP` — note that in the README.
+Expected: no result an hour after a completed download. If the Service is ever recreated with a new ClusterIP, update `crossSeedServiceIP` — the note sits next to the value in `values.yaml`.
+
+**Post-merge gate:** after the ArgoCD sync, confirm the qBittorrent pod was recreated (a `hostAliases` change only applies to a new pod) and run the Loki query above after the next completed download. Do not close the follow-up PR before this passes.
 
 - [ ] **Step 5: Commit**
 
@@ -270,7 +276,10 @@ curl -s -H "Authorization: Bearer $GRAFANA_TOKEN" \
   'http://grafana.kub.local/api/alertmanager/grafana/api/v2/silences' | python3 -c 'import sys,json;[print(s["id"],s["comment"][:70]) for s in json.load(sys.stdin)]'
 ```
 
-Expected: 28 rules (27 + `MediaDeploymentDown`), three silences, no silence on `NodeTemperatureHigh`.
+Expected: 28 rules (27 + `MediaDeploymentDown`), two active silences (the
+ghostfolio/wiki/monitorss apps and the `nas /dev/sdf` drive), no silence on
+`NodeTemperatureHigh`. The media-stack silence expired with the
+`qbittorrent-exporter` recovery on 2026-11-13.
 
 - [ ] **Step 2: Commit**
 
