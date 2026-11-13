@@ -9,6 +9,9 @@ the policy looks correct.
 concurrencyPolicy: Forbid, because the dumps claim is ReadWriteOnce: a second
 pod would sit Pending on the volume and eventually be killed, which reads like a
 dump failure. Forbid makes an overlapping run a no-op instead.
+
+Because Forbid blocks every later night while one run is stuck, a hung run has
+to end on its own: activeDeadlineSeconds on the Job template does that.
 */}}
 apiVersion: batch/v1
 kind: CronJob
@@ -33,6 +36,14 @@ spec:
       labels:
         app: {{ include "postgres.name" . }}-dump
     spec:
+      # A hung pg_dump (server gone, network stalled) would otherwise run until
+      # the next daytime reboot. Four hours is far beyond a normal run for these
+      # databases, and concurrencyPolicy: Forbid means one immortal run would
+      # stop every following night, which is the expensive failure here.
+      activeDeadlineSeconds: 14400
+      # A failing night must not re-dump the whole instance seven times; the
+      # default of 6 turns one broken credential into an hour of I/O.
+      backoffLimit: 2
       template:
         metadata:
           # The NetworkPolicy selector. Not decorative; see the header.
@@ -44,6 +55,9 @@ spec:
             checksum/dump-script: {{ include (print $.Template.BasePath "/configmap-dump-script.yaml") . | sha256sum }}
         spec:
           restartPolicy: Never
+          # This job talks to PostgreSQL and to nothing else: no API server, so
+          # no need to hand it a token.
+          automountServiceAccountToken: false
           # Same node as the database: dumps is local-path and ReadWriteOnce, so
           # its volume lives on one node and the pod has to run there.
           nodeSelector:
@@ -51,7 +65,10 @@ spec:
           securityContext:
             runAsUser: 999
             runAsGroup: 999
-            # fsGroup lets the dump user write into the claim's root directory.
+            # Does NOT make /dumps writable: dumps is local-path, which is
+            # hostPath backed, and the kubelet does not apply fsGroup to a
+            # hostPath volume. The script's own write test is the guarantee; this
+            # is kept only so the pod matches the database's security posture.
             fsGroup: 999
             seccompProfile:
               type: RuntimeDefault
