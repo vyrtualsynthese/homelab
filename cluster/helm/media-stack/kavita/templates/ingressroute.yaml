@@ -1,0 +1,76 @@
+{{- if .Values.ingressRoute.enabled }}
+{{- $fullName := include "app.fullname" . }}
+{{- $match := printf "Host(`%s`)" .Values.ingressRoute.host }}
+{{- if ne .Values.ingressRoute.pathPrefix "/" }}
+{{- $match = printf "%s && PathPrefix(`%s`)" $match .Values.ingressRoute.pathPrefix }}
+{{- end }}
+apiVersion: {{ .Values.ingressRoute.apiVersion }}
+kind: IngressRoute
+metadata:
+  name: {{ $fullName }}-public
+  labels:
+    {{- include "app.labels" . | nindent 4 }}
+    {{- with .Values.ingressRoute.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- with .Values.ingressRoute.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - kind: Rule
+      match: {{ $match }}
+      {{- with .Values.ingressRoute.middlewares }}
+      middlewares:
+        {{- range . }}
+        - name: {{ printf "%s-%s@kubernetescrd" .namespace .name }}
+        {{- end }}
+      {{- end }}
+      services:
+        - name: {{ $fullName }}
+          port: {{ .Values.service.port }}
+  {{- if .Values.ingressRoute.tls.enabled }}
+  tls:
+    {{- with .Values.ingressRoute.tls.secretName }}
+    secretName: {{ . }}
+    {{- end }}
+    {{- with .Values.ingressRoute.tls.certResolver }}
+    certResolver: {{ . }}
+    {{- end }}
+    {{- with .Values.ingressRoute.tls.options }}
+    options:
+      name: {{ . }}
+      namespace: {{ $.Release.Namespace }}
+    {{- end }}
+  {{- end }}
+{{- if .Values.ingressRoute.redirectToHttps }}
+---
+apiVersion: {{ .Values.ingressRoute.apiVersion }}
+kind: IngressRoute
+metadata:
+  name: {{ $fullName }}-public-redirect
+  labels:
+    {{- include "app.labels" . | nindent 4 }}
+    {{- with .Values.ingressRoute.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- with .Values.ingressRoute.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  entryPoints:
+    - web
+  routes:
+    - kind: Rule
+      match: {{ $match }}
+      middlewares:
+        - name: {{ $fullName }}-redirect-https
+      services:
+        - name: {{ $fullName }}
+          port: {{ .Values.service.port }}
+{{- end }}
+{{- end }}
