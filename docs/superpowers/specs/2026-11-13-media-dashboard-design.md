@@ -135,3 +135,16 @@ storage (bytes), items.
 - Media alerting: a queue stuck at `error`, `*_system_health_issues` lasting over an hour, an
   indexer down for a day. Not in this change.
 - `qbittorrent-exporter` stays a `ScrapeTargetDown` warning until it answers.
+
+## Addendum 2026-11-13: the qBittorrent panel
+
+The non-goal "any panel on torrent client state" was written while
+`qbittorrent-exporter` was dead. The chart now runs the maintained Go exporter
+(PR #1056), so the Intake row gained a fourth panel, `qBittorrent`, at 6×7:
+download speed, upload speed, torrent count and free space on the download
+volume, each with its own unit.
+
+This breaks the three-panels-per-row budget by one. Accepted: the four panels
+are four numbers from one source each, not a second idea, and the row answers a
+single question — "is anything stopping content from arriving?". The other three
+Intake panels narrowed from 8 to 6 columns to keep the row on one line.
