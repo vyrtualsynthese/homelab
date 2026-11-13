@@ -11,14 +11,7 @@ spec:
   syncPolicy:
     syncOptions:
       - CreateNamespace=true
-  sources:
-    - repoURL: 'registry-1.docker.io/bitnamicharts'
-      path: postgresql
-      chart: postgresql
-      targetRevision: 15.5.23
-      helm:
-        valueFiles:
-          - $values/cluster/helm/databases/postgres/values.yaml
-    - repoURL: 'https://github.com/vyrtualsynthese/homelab.git'
-      targetRevision: develop
-      ref: values
+  source:
+    repoURL: 'https://github.com/vyrtualsynthese/homelab.git'
+    targetRevision: develop
+    path: cluster/helm/databases/postgres
