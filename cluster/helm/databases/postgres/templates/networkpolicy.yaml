@@ -1,0 +1,60 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "postgres.name" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "postgres.labels" . | nindent 4 }}
+spec:
+  # Ingress only, on purpose. A NetworkPolicy that lists no egress rule leaves
+  # egress on its default of "allow everything": the exporter polls apiserver-free
+  # localhost, the dump job reaches object storage, and DNS keeps working. Adding
+  # an egress rule here would silently cut all three off.
+  policyTypes:
+    - Ingress
+  # Once this policy exists, the database accepts port 5432 only from the sources
+  # below; every other pod, in every namespace, is denied.
+  podSelector:
+    matchLabels:
+      app: {{ include "postgres.name" . }}
+  ingress:
+    # The applications that own a database on this instance. Kubernetes labels
+    # every namespace with kubernetes.io/metadata.name=<name>, so no extra label
+    # has to be applied to them.
+    {{- range .Values.networkPolicy.consumerNamespaces }}
+    {{- if . }}
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ . }}
+      ports:
+        - protocol: TCP
+          port: 5432
+    {{- end }}
+    {{- end }}
+    # The bootstrap Job lives in this namespace, which the policy denies by
+    # default. Without this rule a rebuild with the policy in place leaves the Job
+    # retrying until backoffLimit is spent and no client credential ever exists.
+    - from:
+        - podSelector:
+            matchLabels:
+              app: postgres-bootstrap
+      ports:
+        - protocol: TCP
+          port: 5432
+    # The dump CronJob. It writes to the dumps claim and needs no other traffic.
+    - from:
+        - podSelector:
+            matchLabels:
+              app: postgres-dump
+      ports:
+        - protocol: TCP
+          port: 5432
+    # pgAdmin is the operator's web front end; it connects as a normal client.
+    - from:
+        - podSelector:
+            matchLabels:
+              app: pgadmin
+      ports:
+        - protocol: TCP
+          port: 5432
