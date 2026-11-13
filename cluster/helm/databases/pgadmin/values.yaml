@@ -19,11 +19,11 @@ pgadmin:
   strategy:
     type: Recreate
 
-  # Chart 1.50.0 appVersion is 9.8. Pinned here so an upstream bump cannot move
-  # the image silently.
+  # Chart 1.72.0 appVersion is 9.19. Pinned here so an upstream bump cannot
+  # move the image silently.
   image:
     repository: dpage/pgadmin4
-    tag: "9.8"
+    tag: "9.19"
     pullPolicy: IfNotPresent
 
   # Web login. Only the password is read from the Secret (key below); the email
