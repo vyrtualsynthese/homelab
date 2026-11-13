@@ -86,17 +86,20 @@ retired.
 kubectl -n media-stack exec deploy/calibre -- sh -c 'find /books -maxdepth 3 -name metadata.db; ls -ln /books | head -5'
 ```
 
-Expected: exactly one path, `/books/metadata.db`, then five lines of the library root, owned by
-`1100`.
+Expected: one path, then five lines of the library root, owned by `1100`. On this cluster the
+library is **`/books/calibre-lib/metadata.db`**, inside a `calibre-lib` directory on the share root —
+so the directory to register with CWA is `/calibre-library/calibre-lib`, and the one Kavita scans is
+`/books/calibre-lib`.
 
-- **One path** — note it. The rest of this runbook assumes `/books/metadata.db`; if yours sits
-  deeper (say `/books/Calibre Library/metadata.db`), substitute it in step 2 and use the same
-  relative path under `/calibre-library` in steps 8 and 10. CWA finds it either way.
-- **More than one** — stop. CWA's auto-detect mounts the *largest* database it finds, so more than
-  one is a decision, and the wrong one is discovered days later. Move the extra files off the share,
-  re-run this command, then continue.
+- **One path** — note its *directory*, not the file: every later step wants the directory.
+- **More than one** — stop. Two `metadata.db` files means a decision, and the wrong one is
+  discovered days later. Move the extra files off the share, re-run this command, then continue.
 - **Nothing** — stop. The library is not where the design assumes and the cutover has nothing to
   adopt.
+
+A `metadata.db` of **zero bytes at the share root** is CWA's own: its auto-mount created one when it
+failed to find the library. The chart disables that service (`DISABLE_LIBRARY_AUTOMOUNT`), and the
+file is deleted in step 7.
 
 The library is on the share, not in Calibre's `/config`; `/config` holds Calibre's own settings and
 is a claim that is already being deleted, which is why step 2 treats its backup as best-effort.
@@ -175,9 +178,9 @@ kubectl -n media-stack delete svc/calibre ingress/calibre configmap/calibre-env 
 The old Ingress served two hosts, `calibre.kub.local` **and** `calibre-gui.kub.local`; both go with
 it.
 
-> **Do not sync the `calibre` Application from here on.** It stays in ArgoCD, shows `OutOfSync`, and
-> is removed by the follow-up commit in step 11. A sync would recreate the Deployment, the Service
-> and the shadowing Ingress.
+> **Do not sync the `calibre` Application.** It was retired once Calibre-Web Automated had the
+> collection; until the root app prunes it, a sync would recreate the Deployment, the Service and the
+> shadowing Ingress.
 
 ## Step 4 — Make sure no old Kavita pod can claim the new volume
 
@@ -297,6 +300,59 @@ outcomes below are the requirement):
 
 If a label has been renamed, match the meaning. Two progress stores is the failure this table exists
 to prevent, so the sync toggles are the ones worth re-reading before you move on.
+
+### If the database path field is read-only
+
+CWA locks the field at `/admin/dbconfig` whenever **a** library is already registered — including the
+empty one its auto-mount invented. With `DISABLE_LIBRARY_AUTOMOUNT` in the chart that inventing stops,
+but a claim created before the flag was set keeps the registration in `app.db`, and the field stays
+locked. Write the setting where the UI would have written it, with the app **stopped**:
+
+```bash
+kubectl -n media-stack scale deploy calibre-web-automated --replicas=0
+kubectl -n media-stack get pods -l app.kubernetes.io/instance=calibre-web-automated   # wait for: No resources found
+
+cat > /tmp/cwa-sql.json <<'JSON'
+{"spec":{"securityContext":{"runAsUser":0},"containers":[{"name":"cwa-sql","image":"ghcr.io/crocodilestick/calibre-web-automated:v4.0.8","command":["sh","-c","id; sqlite3 /config/app.db \"UPDATE settings SET config_calibre_dir='/calibre-library/calibre-lib'; SELECT changes();\"; sqlite3 /config/app.db 'select id, config_calibre_dir from settings;'"],"volumeMounts":[{"name":"cfg","mountPath":"/config"}]}],"volumes":[{"name":"cfg","persistentVolumeClaim":{"claimName":"calibre-web-automated-config"}}]}}
+JSON
+
+kubectl -n media-stack run cwa-sql --rm -it --restart=Never \
+  --image=ghcr.io/crocodilestick/calibre-web-automated:v4.0.8 \
+  --overrides "$(cat /tmp/cwa-sql.json)"
+
+kubectl -n media-stack scale deploy calibre-web-automated --replicas=1
+```
+
+Expected: `uid=0`, then `1` from `changes()`, then `1|/calibre-library/calibre-lib`.
+
+**The app must be at zero replicas while that runs.** Under `NETWORK_SHARE_MODE` CWA holds an
+exclusive lock on its own SQLite files, and a second writer is refused with
+`attempt to write a readonly database` — which reads like a permissions fault and is not one: a
+brand-new database in the same directory writes fine. That is also why `kubectl exec` cannot do this
+while the app is up.
+
+If `changes()` returns `0`, there is no settings row and the database is beyond editing. Replace it,
+at the cost of the admin account and settings:
+
+```bash
+kubectl -n media-stack scale deploy calibre-web-automated --replicas=0
+kubectl -n media-stack run cwa-reset --rm -it --restart=Never --image=busybox:1.36.1 \
+  --overrides='{"spec":{"securityContext":{"runAsUser":0},"containers":[{"name":"cwa-reset","image":"busybox:1.36.1","command":["sh","-c","ls -ln /config | head; rm -fv /config/app.db /config/app.db-journal /config/app.db-wal /config/app.db-shm"],"volumeMounts":[{"name":"cfg","mountPath":"/config"}]}],"volumes":[{"name":"cfg","persistentVolumeClaim":{"claimName":"calibre-web-automated-config"}}]}}'
+kubectl -n media-stack scale deploy calibre-web-automated --replicas=1
+```
+
+A fresh `app.db` makes the UI ask you to create the admin account again — that prompt is the proof
+that the app owns the database. Then set the path at `/admin/dbconfig`, which is editable while no
+library is registered.
+
+Finally, delete the empty database CWA left at the share root, so nothing can ever point at it:
+
+```bash
+kubectl -n media-stack exec deploy/calibre-web-automated -- sh -c 'rm -v /calibre-library/metadata.db 2>/dev/null || echo "already gone"'
+```
+
+`curl -sI http://calibre.kub.local/` answering `302 → /login` (instead of `→ /admin/dbconfig`) is the
+sign that the library is loaded.
 
 ## Step 8 — Ingest one real book (runtime check 1: read-only root filesystem)
 
@@ -472,9 +528,13 @@ alert rules live in Grafana's database, never in git, so the document is the onl
 
 Everything below waits a week.
 
-**Retire the old Application and its chart** in a follow-up commit: `cluster/argocd/projects/media-stack/calibre.yaml`
-and `cluster/helm/media-stack/calibre/`. Do this before clearing the claim, so no root-app sync can
-re-apply anything.
+**The old Application and its chart are already retired** — `cluster/argocd/projects/media-stack/calibre.yaml`
+and `cluster/helm/media-stack/calibre/` were removed once CWA had the collection. Confirm the root app
+pruned them, and only then clear the claim, so no root-app sync can re-apply anything:
+
+```bash
+kubectl -n argocd get application calibre    # expect: NotFound
+```
 
 **Clear the dead claim**, PV first and then its claim — their finalizers name a CSI driver that no
 longer exists, so they will never clear on their own:
