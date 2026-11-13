@@ -99,7 +99,7 @@ vpnresources:
 # after two minutes rather than blocking the deployment forever.
 waitForDownloads:
   enabled: true
-  image: busybox:1.36
+  image: busybox:1.38
 
 autoscaling:
   enabled: false
