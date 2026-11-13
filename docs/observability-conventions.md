@@ -351,9 +351,10 @@ runs (config shows `retention_enabled: true`,
   It needs replacing; `DriveNeedsReplacement` fires for it and is silenced until
   2026-12-12.
 - `streaming` runs warm: `k10temp` reads **Tctl 84 °C / Tccd1 78 °C** at about
-  21 % CPU on 2026-11-13, and `gigabyte_wmi temp3` mirrors Tctl. This is the CPU,
-  not an unconnected header; `NodeTemperatureHigh` is firing for a real reading.
-  Check fans and airflow. The GPU is at 40 °C and the NVMe at 47–57 °C.
+  21 % CPU on 2026-11-13, and `gigabyte_wmi temp3` mirrors Tctl. This is a real
+  CPU reading, but the CPU-only `NodeTemperatureHigh` selector matches the `chip`
+  label, which is the PCI address here, so the rule is silent on it. Check fans
+  and airflow. The GPU is at 40 °C and the NVMe at 47–57 °C.
 
 ## Known gaps
 
