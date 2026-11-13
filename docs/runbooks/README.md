@@ -12,6 +12,8 @@ performed at least once — a procedure nobody has run is a guess with a title.
 | `add-a-node.md` | W8 | pending |
 | `rotate-a-secret.md` | W8 | pending |
 | `books-cutover.md` | W6 Task 6 | pending — first run is the cutover it describes |
+| `postgres-add-database.md` | W2 Task 7 | pending — proved on first use |
+| `postgres-restore.md` | W2 Task 7 | pending — proved on first use |
 
 Conventions: each runbook states its preconditions, the exact commands, the output that means
 success, and the rollback. Anything destructive says so in the first line.
