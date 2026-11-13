@@ -28,9 +28,10 @@ both Applications are manual-sync, so every apply below is a button you press.
 - No `calibre` Deployment, Service, Ingress, ConfigMap or ServiceAccount is left in `media-stack`.
 - `metadata.db.pre-cwa-2026-11-13` sits next to `metadata.db` on the share.
 
-Two runtime checks are decided here, not before: whether CWA survives a read-only root filesystem
-(step 8), and whether Kavita honours `Logging__LogLevel__*` (step 9). Both charts ship the setting on
-trial and both READMEs say so.
+Three runtime checks are decided here, not before: whether CWA survives a read-only root filesystem
+(step 8), whether Kavita survives the same setting (step 9), and whether Kavita honours
+`Logging__LogLevel__*` (step 9). Both charts ship the read-only setting on trial and both READMEs say
+so.
 
 ## Before you start
 
@@ -331,7 +332,7 @@ If the upload never appears, the CWA README's *Ingest* section has the two rules
 file must be owned by 1100, and a partially written file must not be dropped into the ingest folder.
 The navbar's **Library Refresh** re-runs the ingest over anything still waiting.
 
-## Step 9 — Sync Kavita, first run, library scan (runtime check 2: log level)
+## Step 9 — Sync Kavita, first run, library scan (runtime checks 2 and 3: read-only root filesystem, log level)
 
 Kavita comes after the repair so that its first index sees the library in its final shape: it
 identifies a series by folder path, so a metadata edit that renames a folder afterwards costs that
@@ -373,6 +374,21 @@ curl -s localhost:5000/api/health; echo
 
 Expected: `Ok`. (`curl: (52) Empty reply` or a refused connection means the pod is not serving yet;
 check `kubectl -n media-stack logs deploy/kavita`.)
+
+**The read-only root filesystem is on trial here too.** `securityContext.readOnlyRootFilesystem: true`
+with `emptyDir` at `/run` and `/tmp` stays only if the pod keeps running and the scan below completes
+with it on. A restart, or a scan that fails while the UI stays up, is the signal:
+
+```bash
+kubectl -n media-stack get pods -l app.kubernetes.io/instance=kavita
+kubectl -n media-stack logs deploy/kavita --tail=200 | grep -i 'read-only file system\|EROFS'
+```
+
+A match, a `CrashLoopBackOff`, or a failed scan means the image writes outside the mounted paths.
+Then, in a follow-up commit: set `securityContext.readOnlyRootFilesystem: false` in
+`cluster/helm/media-stack/kavita/values.yaml` (the two `emptyDir` volumes are gated on the same value
+and drop with it), note the reason in that chart's README under *Hardening and the UID*, and resync.
+Do not leave the setting on if it breaks the app.
 
 Then the UI at <https://kavita.kub.home.ashudev.com/>: the first-run screen creates the admin account.
 Nothing is migrated, so this is a first start. Then **Settings → Libraries → Add Library**: type

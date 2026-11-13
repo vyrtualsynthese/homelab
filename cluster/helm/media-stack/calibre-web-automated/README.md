@@ -206,9 +206,10 @@ minutes between the first start and the first login — not beyond that.
 | liveness | `/` | after a 30s delay, every 30s: three failures restart the container |
 | readiness | — | deliberately disabled |
 
-`/` is the endpoint the image's own `HEALTHCHECK` uses. It redirects to `/login` and answers 200; the
-kubelet follows redirects, so a passing probe means the web stack is serving, not merely that the
-process exists.
+`/` is the endpoint the image's own `HEALTHCHECK` uses. It answers `302` towards `/login`; an HTTP
+probe treats any `2xx`–`3xx` as success and does not follow the redirect, so the probe passes on the
+redirect itself. That is the point: it answers only when the web stack is serving, not merely when
+the process exists.
 
 **Readiness is disabled on purpose** (documented exception to contract requirement 13). CWA has no
 unauthenticated endpoint that reports dependency health, and its real dependency — the NFS library —
@@ -277,6 +278,10 @@ place:
    a target nothing serves.
 5. **No log level above `INFO`** (requirement 18) — no knob exists; see
    [Log-level debt](#log-level-debt).
+6. **Liveness on `/`, not on an app-specific health endpoint** (requirement 12) — the image ships no
+   unauthenticated endpoint that reports the state of a dependency, so `/` is the only thing that
+   answers without a session; see [Probes and readiness](#probes-and-readiness). `unpackerr` carries
+   the same exception for the same reason.
 
 ## Upgrading
 

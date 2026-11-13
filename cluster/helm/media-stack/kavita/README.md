@@ -88,6 +88,12 @@ deleted by the sync. Remove it by hand after the first sync:
 kubectl -n media-stack delete middleware kavita-security
 ```
 
+Because that Middleware was never named by a route, its deletion changes no response: the public
+hostname sends **no HSTS header and no frame-deny header**, and it sent none before either. That is
+the state the chart ships. Adding those headers to a public host is a real question, but it is a
+separate decision: it needs a Middleware that a route actually names, and it was not part of this
+rebuild.
+
 ## Storage
 
 | Mount | Claim | Holds |

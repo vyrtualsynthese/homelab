@@ -1,8 +1,9 @@
 {{- /* The allow list is the access control for this app: the route itself is on the
 `web` entry point and answers anyone who can resolve the name. It renders only while
-both the route and the ranges exist, because an empty `sourceRange` list is not "no
-restriction" - Traefik reads it as a list that matches nobody and rejects every
-request.
+both the route and the ranges exist: an empty `sourceRanges` list renders no
+Middleware at all, so there is no access control and the route answers whoever
+reaches the proxy. That is why the value must never be left empty in an environment
+reachable from outside the LAN.
 
 `ipWhiteList` is the Traefik v2 spelling, confirmed against the v2.9 docs; the live
 CRD field is confirmed once against the running cluster after the first sync. Traefik
