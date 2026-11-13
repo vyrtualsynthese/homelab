@@ -54,7 +54,8 @@ sidecar `ghcr.io/onedr0p/exportarr:v2.3.0`.
 - **A non-root UID or `fsGroup`.** The claim is a root-owned hostPath directory; `runAsUser` makes the
   container fail at startup and `fsGroup` silently does nothing. The render must contain none of them.
 - **Exporter with no key.** `APIKEY` reads Secret `lidarr` key `secret`. If that Secret is missing the
-  sidecar container does not start and the pod is `1/2`; if the key is stale the target answers 401.
+  sidecar container does not start and the pod is `1/2`; if the key is stale the target is down with
+  the HTTP 500 exportarr returns when Lidarr answers 401.
   Both point at the Secret, never at the chart.
 - **Unknown log-level variables.** Lidarr ignores variables it does not know and silently keeps
   `debug`. Both `LIDARR__LOG__LEVEL` and `LIDARR__LOG__CONSOLELEVEL` must be present with `warn`.
@@ -232,7 +233,8 @@ git commit -m "🔧 chore(lidarr): rebuild the chart on the sonarr shape"
   it is reachable, how it is deployed here (`helm template` command), a table of where this chart
   differs from the reference, the documented exceptions to the contract (shared `/ping` endpoint and
   why it is dependency-aware, root-then-`PUID` init with no `fsGroup`, 128Mi claim), the Secret and
-  the `LIDARR_API_KEY` restore command, metrics and the 401 meaning, what to do after the first start
+  the `LIDARR_API_KEY` restore command with the restart it needs, metrics and the 500-means-401
+  meaning, what to do after the first start
   (root folder `/audio`, quality profile, Prowlarr app entry, qBittorrent category), and the
   unmeasured resources note.
 
