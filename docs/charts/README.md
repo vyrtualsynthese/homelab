@@ -151,9 +151,13 @@ its PV and the PV to its hostPath, `chown -R 1100:1100` that directory over SSH 
 `runAsUser`, `runAsGroup` and `runAsNonRoot`. Scale back up and confirm the app can still write its
 own state — a pod that starts and then fails on a write is the failure this order avoids.
 
-**New volumes are root-owned again.** The provisioner runs its setup script as root, so every freshly
-provisioned claim starts at root. Either re-chown per volume, or set `userPattern`/`groupPattern` on
-the local-path provisioner and stop doing this by hand.
+**New volumes now arrive writable by any UID.** The `local-path` chart sets `userPattern` and
+`groupPattern` to `1100` and leaves `permPattern` empty, so the provisioner's setup script creates
+each volume directory `0777` and chowns it to `1100:1100`. A chart running as 1100 owns its claim; a
+chart running as another UID can still write, but the files it creates belong to that UID. Setting
+`permPattern` — `0750`, say — would break the non-owner charts first, and `maintainerr` (UID 1000) is
+the worked example. Claims provisioned before that change are still root-owned, which is why the
+table below records a manual `chown` for `autobrr` and `cross-seed`.
 
 **A fresh claim binds to the node the *old* pod made eligible.** `local-path` is
 `WaitForFirstConsumer`, so a claim binds to whichever node the scheduler picks for a pod that uses it —
