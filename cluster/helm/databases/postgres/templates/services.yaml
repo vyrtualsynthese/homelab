@@ -7,13 +7,15 @@ metadata:
     {{- include "postgres.labels" . | nindent 4 }}
 spec:
   type: ClusterIP
-  # The pod is ready only when BOTH containers are: postgres and the exporter.
-  # The exporter cannot authenticate until Job/postgres-bootstrap has created its
-  # role, and the Job finds the server through this Service. Without this flag
-  # the endpoint list stays empty, the Job cannot connect, and the first sync
-  # deadlocks. Publishing not-ready addresses breaks that cycle; clients that
-  # connect too early get a plain "connection refused", which the Job's wait loop
-  # retries.
+  # On the first sync, Job/postgres-bootstrap must reach the database before the
+  # pod is Ready: the roles it creates do not exist yet, so the exporter sidecar
+  # cannot authenticate and the pod never becomes Ready. The Job finds the server
+  # through this Service, so the address has to be published while the pod is
+  # still not ready; otherwise the endpoint list stays empty, the Job cannot
+  # connect, and the first sync deadlocks. The same applies while any container
+  # of the pod is crash-looping: the address must stay published so the server
+  # remains reachable. Consequence: a consumer connecting during startup may see
+  # connection-refused rather than a held connection, and must retry.
   publishNotReadyAddresses: true
   selector:
     app: {{ include "postgres.name" . }}

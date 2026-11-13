@@ -35,6 +35,9 @@ spec:
         checksum/bootstrap: {{ include (print $.Template.BasePath "/configmap-bootstrap.yaml") . | sha256sum }}
     spec:
       restartPolicy: Never
+      # The bootstrap pod talks to PostgreSQL and reads two Secrets through its
+      # environment; it never calls the Kubernetes API.
+      automountServiceAccountToken: false
       nodeSelector:
         {{- toYaml .Values.nodeSelector | nindent 8 }}
       securityContext:

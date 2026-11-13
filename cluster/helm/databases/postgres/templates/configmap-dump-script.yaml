@@ -11,8 +11,9 @@ Why it is shaped the way it is:
 - An empty list fails the run instead of exiting 0. A CronJob that reports
   success while writing nothing is worse than a red one, because nobody looks.
 - Every dump is verified before the run is considered good: non-empty file and
-  a readable table of contents (pg_restore --list), so a truncated page or a
-  broken format shows up at 03:30, not on the day of a restore.
+  a readable table of contents (pg_restore --list). That reads the archive's
+  table of contents, so it catches an empty or structurally broken dump, but not
+  truncation inside the data blocks. The restore drill is the real proof.
 - The dump is written to "<name>.partial" and only renamed once it passed both
   checks, so a half-written file never carries a name that looks like a good
   one. Leftover .partial files are removed at the start of each run.

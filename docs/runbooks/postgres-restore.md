@@ -249,8 +249,29 @@ No drill has been run yet (2026-11-13). The first row is the W2 acceptance drill
 The same steps, with the target being the real instance instead of the scratch one. This is the case
 after `nas` survives but the database pod or its claim did not.
 
-1. Recreate the `postgres` StatefulSet with an empty `postgres-data` claim as ArgoCD does, then
-   force the bootstrap Job to run again:
+1. Recreate the data claim, let the Application rebuild the pod, then force the bootstrap Job. In
+   order:
+
+   ```bash
+   # 1. Stop the pod that holds the claim: a claim in use cannot be deleted.
+   kubectl -n databases delete pod postgres-0 --ignore-not-found
+   # 2. Delete the damaged claim. With local-path (reclaim policy Delete) the backing
+   #    directory on nas goes with it — this is the destructive step.
+   kubectl -n databases delete pvc postgres-data
+   # 3. Recreate the claim, the StatefulSet and the pod from git.
+   argocd app sync postgres
+   # 4. Wait for the new server, not for pod Ready: the exporter sidecar cannot
+   #    authenticate until the Job below has created its role, so the pod stays
+   #    NotReady until then and `--for=condition=Ready` would time out.
+   kubectl -n databases wait --for=jsonpath='{.status.phase}'=Running pod/postgres-0 --timeout=300s
+   timeout 300 bash -c 'until kubectl -n databases exec postgres-0 -c postgres -- pg_isready -U postgres >/dev/null 2>&1; do sleep 3; done'
+   ```
+
+   If only the pod was lost, none of that is needed: `kubectl -n databases delete pod postgres-0`
+   and the StatefulSet recreates it on the surviving claim, with every row intact. The claim is the
+   data; the pod is not. Do not delete the claim to "restart cleanly".
+
+   Then force the bootstrap Job:
 
    ```bash
    kubectl -n databases delete job -l app=postgres-bootstrap
@@ -293,9 +314,25 @@ after `nas` survives but the database pod or its claim did not.
    statements. The database must exist and be empty; the restore fills it.
 
 4. Get the dump onto the database pod and restore it. The database pod does not mount the dumps
-   claim, so the file is copied over first:
+   claim, so the file is copied over first.
+
+   The restore reads `postgres-dumps`. That claim survives losing the pod, the StatefulSet or the
+   whole `databases` namespace, but **not** losing the claim itself: if step 1 deleted it too, or the
+   disk under it is gone, there is no local copy and the offsite one (W4) does not exist yet. Check
+   it before promising a restore:
 
    ```bash
+   kubectl -n databases get pvc postgres-dumps
+   ```
+
+   The dump is only readable through the `dumps-ls` helper pod: it is the sole object mounting
+   `postgres-dumps`, and the drill's teardown deletes it. **`dumps-ls` must exist before the copy
+   runs** — create it with the manifest from [Step 1](#step-1--find-the-newest-dump) when the `get`
+   below is empty:
+
+   ```bash
+   kubectl -n databases get pod dumps-ls   # empty: create it with the manifest from Step 1
+   kubectl -n databases exec dumps-ls -- ls -lt /dumps
    kubectl -n databases cp dumps-ls:/dumps/<db>-<UTC>.dump postgres-0:/tmp/
    kubectl -n databases exec -it statefulset/postgres -c postgres -- bash
    # inside: pg_restore -U postgres -d "<db>" --no-owner --role=<role> --exit-on-error \

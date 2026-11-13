@@ -78,7 +78,7 @@ then fails authentication for no visible reason.
 | Symptom | Cause |
 |---|---|
 | Pod `CreateContainerConfigError`, event `secret "…" not found` | The Secret is missing, was created in the wrong namespace, or the key inside it is renamed. |
-| `Job/postgres-bootstrap` runs and fails, exporter sidecar never ready | The Secrets exist with the expected keys, so the pod starts, and the SQL fails: the server did not accept connections within the 300 s wait, or the superuser password does not match the one that initialised `PGDATA`. A missing Secret or key never gets this far — its pod waits in `CreateContainerConfigError`. |
+| `Job/postgres-bootstrap` runs and fails, exporter sidecar never ready | The Secrets exist with the expected keys, so the pod starts, and the SQL fails: the server did not accept connections within the 300 s wait, or the superuser password does not match the one that initialised `PGDATA`. A missing Secret or key never gets this far — its pod waits in `CreateContainerConfigError`. A Job that has already failed stays failed — its name is content-addressed and it has no TTL, so a sync does not re-run it; delete it and sync: `kubectl -n databases delete job -l app=postgres-bootstrap`. |
 | `password authentication failed for user "backup"` in the dump Job's logs | `pg-backup` holds a different value from the one the role was created with. |
 | Dump Job fails and `/dumps` stays empty | Not a Secret problem: no application database exists. The CronJob exits non-zero rather than reporting a false success, so the red Job is the expected state until the first database is added. |
 

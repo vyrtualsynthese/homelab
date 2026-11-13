@@ -1,6 +1,10 @@
 {{/*
 Two explicit claims rather than volumeClaimTemplates: the dump CronJob mounts
 postgres-dumps by name, which a claim template cannot provide.
+
+Both claims are marked keep: postgres-data holds the database, and postgres-dumps
+is the only local recovery copy. Deleting either is now a deliberate manual act,
+not something a prune or a release uninstall can do by accident.
 */}}
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -9,6 +13,10 @@ metadata:
   namespace: {{ .Release.Namespace }}
   labels:
     {{- include "postgres.labels" . | nindent 4 }}
+  # Kept on purpose: this claim is the data. Deletion must be manual.
+  annotations:
+    helm.sh/resource-policy: keep
+    argocd.argoproj.io/sync-options: Delete=false
 spec:
   accessModes:
     - ReadWriteOnce
@@ -24,6 +32,11 @@ metadata:
   namespace: {{ .Release.Namespace }}
   labels:
     {{- include "postgres.labels" . | nindent 4 }}
+  # Kept on purpose: this claim holds the only local copy of the dumps. Deletion
+  # must be manual.
+  annotations:
+    helm.sh/resource-policy: keep
+    argocd.argoproj.io/sync-options: Delete=false
 spec:
   accessModes:
     - ReadWriteOnce
