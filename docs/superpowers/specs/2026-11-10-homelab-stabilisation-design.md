@@ -435,7 +435,7 @@ Four waves, each ending `Synced`/`Healthy` and each getting automation switched 
   koillection, discourse, news-freshrss, postiz, minecraft, monitorss, wiki, ghostfolio, and the
   two database consumers from W2. New `local-path` config volumes, restored from the W0 copies
   where a copy exists, fresh otherwise.
-- **Wave B — deletions.** readarr (abandoned upstream), maintainerr-anime (duplicate), and the
+- **Wave B — deletions.** The abandoned audiobook manager, maintainerr-anime (duplicate), and the
   empty namespaces: nextcloud, synapse, inventree, inventree-lego, minio, orbital-sync, postfix,
   test. Plus the orphan chart `cluster/helm/nfs/minio-nfs`.
 - **Wave C — the healthy but hand-built.** Migrate to the §8.3 chart shape, pin every image, add

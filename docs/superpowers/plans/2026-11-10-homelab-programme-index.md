@@ -92,7 +92,7 @@ Titles only. Each becomes a full plan when its workstream is picked up.
 2. Wave A: discourse, koillection, news-freshrss
 3. Wave A: postiz, minecraft, monitorss
 4. Wave A: wiki and ghostfolio, both crash-looping
-5. Wave B: delete readarr and maintainerr-anime
+5. Wave B: delete the abandoned audiobook manager and maintainerr-anime
 6. Wave B: delete the eight empty namespaces and the minio chart
 7. Wave C: chart shape, pins and probes across the media stack
 8. Wave C: fix the sonarr exportarr port

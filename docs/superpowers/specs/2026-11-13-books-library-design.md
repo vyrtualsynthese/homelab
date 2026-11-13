@@ -96,7 +96,7 @@ storage that already works, and the Calibre desktop's own state is not worth pre
   being revisited.
 - No second database service, no PostgreSQL, no MariaDB.
 - No change to `cluster/helm/nfs/books-media` or its StorageClass.
-- No repair of the `readarr` workload, which also sits on a vanished claim.
+- No repair of the other workload that sits on a vanished claim.
 - No scheduled backup of `metadata.db` in this chart. The cutover takes one copy next to the
   original, and the recurring copy belongs to the backup workstream, which is broken cluster-wide
   (`AGENTS.md` §7.3) and is not a chart-shaped fix. The books themselves stay on the share and carry

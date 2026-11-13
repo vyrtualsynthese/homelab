@@ -27,7 +27,7 @@ written, not its execution state.
 
 ## Review Focus
 
-1. **`readarr` and `kavita` have zero available replicas on purpose** (unrepaired, Pending claims). A workload-down rule that ignores this fires two false warnings every 12 h. Exclude them by name until their claims are rebuilt.
+1. **Two apps have zero available replicas on purpose** (unrepaired, Pending claims). A workload-down rule that ignores this fires two false warnings every 12 h. Exclude them by name until their claims are rebuilt.
 2. **qBittorrent's `dnsPolicy: None` is deliberate** to keep DNS inside the VPN. Adding the cluster DNS would resolve `cross-seed` but send tracker lookups through the node resolver. Prefer a `hostAliases` entry over changing the resolver.
 3. **Bazarr's path mapping must be fixed in the app, not the chart.** The chart mount `/media` is correct; the mapping that turns `/movies/...` into `/media/media/...` is not.
 4. **Maintainerr's warnings may describe a real library mismatch, not a log-level bug.** Do not lower the level to hide them; confirm whether the unmatched titles are meant to be outside Sonarr/Radarr first.
@@ -102,13 +102,14 @@ git commit -m "📝 docs(monitoring): record the streaming temperature sensor de
 
 **Interfaces:**
 - Consumes: `kube_deployment_status_replicas_available`.
-- Produces: rule `MediaDeploymentDown`, warning, `for: 10m`, excluding `readarr` and `kavita`.
+- Produces: rule `MediaDeploymentDown`, warning, `for: 10m`, excluding `kavita` and the other
+  unrepaired app.
 
 - [ ] **Step 1: Prove the expression on an unrepaired deployment**
 
 ```bash
 curl -sG http://prometheus.kub.local/api/v1/query \
-  --data-urlencode 'query=1 - kube_deployment_status_replicas_available{namespace="media-stack",deployment="readarr"}'
+  --data-urlencode 'query=1 - kube_deployment_status_replicas_available{namespace="media-stack",deployment="kavita"}'
 ```
 
 Expected: `1` (zero available). This is the value that must fire.
@@ -118,7 +119,7 @@ Expected: `1` (zero available). This is the value that must fire.
 Read the group, append a rule cloned from `RestartStorm` (`uid dg43j29hq835sd`) with:
 
 - title `MediaDeploymentDown`
-- expression `1 - kube_deployment_status_replicas_available{namespace="media-stack",deployment="readarr"}`
+- expression `1 - kube_deployment_status_replicas_available{namespace="media-stack",deployment="kavita"}`
 - `for: 1m`, severity `warning`, `noDataState: OK`, `execErrState: OK`
 - summary `{{ $labels.namespace }}/{{ $labels.deployment }} has no available replicas`
 
@@ -130,23 +131,23 @@ curl -s -H "Authorization: Bearer $GRAFANA_TOKEN" \
 # append the rule, then PUT the group back to the same URL
 ```
 
-Expected after ~2 minutes: one firing instance naming `media-stack/readarr`.
+Expected after ~2 minutes: one firing instance naming `media-stack/kavita`.
 
 - [ ] **Step 3: Widen the expression and confirm the false positive goes away**
 
 Set the expression to:
 
 ```
-1 - kube_deployment_status_replicas_available{namespace="media-stack",deployment!~"readarr|kavita"}
+1 - kube_deployment_status_replicas_available{namespace="media-stack",deployment!~"kavita"}
 ```
 
-Expected: the readarr instance resolves; the rule state is `inactive` with every repaired app at `1` available.
+Expected: the kavita instance resolves; the rule state is `inactive` with every repaired app at `1` available.
 
 - [ ] **Step 4: Record the rule**
 
 Add the row to the alert table in `docs/observability-conventions.md`:
 
-`| `MediaDeploymentDown` | a media-stack Deployment at 0 available (readarr/kavita excluded until repaired) | 10m | warning | inactive |`
+`| `MediaDeploymentDown` | a media-stack Deployment at 0 available (kavita excluded until repaired) | 10m | warning | inactive |`
 
 and remove the sentence in Known gaps that says a broken app in another namespace never gets a replica check.
 

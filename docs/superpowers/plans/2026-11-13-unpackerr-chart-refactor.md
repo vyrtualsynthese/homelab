@@ -79,7 +79,7 @@ Expected: `image: "golift/unpackerr:0.16.1"`
 ```yaml
 apiVersion: v2
 name: unpackerr
-description: Unpackerr extracts completed downloads so Lidarr, Radarr, Readarr and Sonarr can import them.
+description: Unpackerr extracts completed downloads so Lidarr, Radarr and Sonarr can import them.
 type: application
 # Chart version. It moves independently of the image.
 version: 1.0.0
