@@ -37,6 +37,20 @@ postgresql:
   log_min_duration_statement: 1000
 
 networkPolicy:
+  # Off, and this is a finding, not a preference (2026-11-13).
+  #
+  # On this cluster any NetworkPolicy selecting the database pod isolates it: the
+  # default-drop is installed and the allow rules are never translated, so even a
+  # one-rule policy naming a single namespace refuses every connection. Verified
+  # with the full policy, then with a minimal one, then with no policy at all
+  # (which connects). Until the platform can enforce NetworkPolicy, a policy in
+  # git means an unreachable database, so the chart ships it switched off.
+  #
+  # The database is still not reachable from outside the cluster: the Service is
+  # ClusterIP, there is no ingress for 5432, and CONNECT is revoked from PUBLIC on
+  # every database. Re-enable this once enforcement is known to work, and prove it
+  # with a denied connection from a namespace that is not in the list.
+  enabled: false
   consumerNamespaces:
     - authentik
     - discourse

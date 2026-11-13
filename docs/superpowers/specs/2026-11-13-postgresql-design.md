@@ -340,6 +340,16 @@ only the hostname and, where the value was a leftover, the password.
   `namespaceSelector` on `kubernetes.io/metadata.name`), and from the pgAdmin pod inside
   `databases` itself (selected by `podSelector` on `app: pgadmin`). Egress stays default-allowed so
   DNS and the dump job work.
+- **The policy ships switched off, and that is a finding (2026-11-13).** On this cluster any
+  NetworkPolicy selecting the database pod isolates it: the default-drop is installed and the allow
+  rules are never translated into permits. The full ten-rule policy refused every source, including
+  a namespace it named explicitly; a minimal one-rule policy refused too; with no policy at all the
+  same probe connects. Until enforcement works, a policy in git means an unreachable database, so
+  `networkPolicy.enabled` defaults to `false` and the template is correct and ready. Re-enable it
+  when the platform can enforce it, and prove it with a denied connection from a namespace that is
+  not in the list. The database is still unreachable from outside the cluster without it: ClusterIP
+  only, no ingress for 5432, `CONNECT` revoked from `PUBLIC` everywhere, `scram-sha-256` in
+  `pg_hba.conf`.
 - No TLS on 5432. **Accepted risk, stated plainly:** between `nas` (database) and `nuc0` (most
   applications), credentials and query traffic cross the physical LAN in clear text. The
   mitigations are the network policy, the LAN being a switched home network, and no exposure
@@ -521,8 +531,10 @@ the two deleted claims. Recording them here so the handover is explicit rather t
 2. `\du` shows `postgres`, `backup` and `postgres_exporter` only, until a database is added; every
    role created by the runbook is `NOSUPERUSER NOCREATEROLE NOCREATEDB`, and no application ever
    connects as `postgres`.
-3. A connection attempt from a namespace outside the allow-list (e.g. a test pod in `default`)
-   fails to open 5432.
+3. ~~A connection attempt from a namespace outside the allow-list (e.g. a test pod in `default`)
+   fails to open 5432.~~ **Cannot be met on this cluster** — see §6.7: any policy isolates the pod
+   entirely. The criterion becomes: the policy is switched off and the design records why; when
+   enforcement is fixed, this test comes back with it.
 4. From a workstation on the LAN, `pgadmin.kub.local` loads with the admin login; from outside the
    LAN it does not; and 5432 is not reachable from outside the cluster at all.
 5. The dump CronJob dumped every existing database tonight, each file `pg_restore --list`-clean.
