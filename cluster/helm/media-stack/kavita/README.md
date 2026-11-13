@@ -178,23 +178,31 @@ a restart loop. `tautulli` and `cross-seed` record the same exception.
 
 ## Logs
 
-Kavita is an ASP.NET Core app, so the chart sets the framework's own configuration keys:
+Kavita configures Serilog itself, in `Kavita.Server/Logging/LogLevelOptions.cs`: a
+`LoggingLevelSwitch` at `Information`, then `ReadFrom.Configuration(context.Configuration)`, then
+hardcoded `Error` overrides for `Microsoft`, `Microsoft.Hosting.Lifetime`, `Hangfire` and
+`Microsoft.AspNetCore.Hosting.Internal.WebHost`.
+
+**The framework keys do not work.** The first running pod printed a line per HTTP request at
+`Information` with `Logging__LogLevel__Default` and `Logging__LogLevel__Microsoft` both set to
+`Warning` — Kavita never reads that section.
+
+The lever that matches the code is the `Serilog` section, which .NET maps from environment
+variables:
 
 | Variable | Value | What it controls |
 |---|---|---|
-| `Logging__LogLevel__Default` | `Warning` | The .NET logger's default level |
-| `Logging__LogLevel__Microsoft` | `Warning` | The noisy Microsoft namespace, which logs a line per request |
+| `Serilog__MinimumLevel__Default` | `Warning` | Serilog's default level, which is the `Information` floor behind the request lines |
 
-**This has not been confirmed in a running pod**, because the app has not run since the claim that
-kept it `Pending` disappeared. Verify after the first start:
+Verify after a restart that `RequestLoggingMiddleware` lines are gone:
 
 ```bash
-kubectl -n media-stack logs deploy/kavita --tail=100
+kubectl -n media-stack logs deploy/kavita --tail=100 | grep -c RequestLoggingMiddleware
 ```
 
-If request lines still appear at `INFO`, Kavita's own Serilog configuration is overriding the
-framework keys. In that case remove both variables and record the debt here, the way `bazarr` does:
-a knob that does nothing is worse than none, because the next person believes the level is set.
+Zero is the expected answer. If it is still printing them, remove the variable and record the debt
+here the way `bazarr` does: a knob that does nothing is worse than none, because the next person
+believes the level is set. Until a lever works, Kavita's volume in Loki is accepted debt.
 Fluent Bit ships every container line on every node to Loki unfiltered, so the level is the only
 place the volume can be cut.
 
