@@ -97,6 +97,16 @@ spec:
             periodSeconds: 20
             timeoutSeconds: 5
             failureThreshold: 3
+          # Why the data claim is writable, and what fsGroup does not do:
+          # the pod sets fsGroup: 999 for consistency with the rest of the repo, but
+          # the kubelet does not apply fsGroup to hostPath-backed volumes, and
+          # local-path is hostPath. Ownership on this volume is managed by two other
+          # facts: the local-path provisioner creates the volume directory with mode
+          # 0777 (so UID 999 can write), and PGDATA is the nested subdirectory
+          # "/var/lib/postgresql/data/pgdata", which initdb then owns at 0700. If the
+          # provisioner's mode ever changes (permPattern), initdb fails on a directory
+          # it cannot write; the fix is to widen the mode or move the UID, never to
+          # expect fsGroup to cover it.
           volumeMounts:
             - name: data
               mountPath: /var/lib/postgresql/data
@@ -107,7 +117,7 @@ spec:
               mountPath: /etc/postgresql-hba
               readOnly: true
         - name: exporter
-          image: "{{ .Values.exporter.repository }}:{{ .Values.exporter.tag }}"
+          image: "{{ .Values.exporter.repository }}@{{ .Values.exporter.digest }}"
           imagePullPolicy: IfNotPresent
           ports:
             - name: metrics
