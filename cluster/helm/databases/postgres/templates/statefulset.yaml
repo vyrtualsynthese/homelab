@@ -20,6 +20,7 @@ spec:
         app: {{ include "postgres.name" . }}
       annotations:
         checksum/postgresql-config: {{ include (print $.Template.BasePath "/configmap-postgresql.yaml") . | sha256sum }}
+        checksum/pg-hba: {{ include (print $.Template.BasePath "/configmap-pg-hba.yaml") . | sha256sum }}
         prometheus.io/scrape: "true"
         prometheus.io/port: "9187"
     spec:
