@@ -48,17 +48,32 @@ podLabels: {}
 # `fsGroup` is deliberately NOT set: local-path volumes are hostPath-backed, and
 # the kubelet does not apply fsGroup ownership to them, so setting it would look
 # meaningful and do nothing.
-#
-# The LinuxServer image is not started as a non-root user: its s6 init must run
-# as root to prepare `/config` and then drop to PUID/PGID 1100. Setting
-# `runAsNonRoot` or `runAsUser` here prevents the container from starting at all.
-# `allowPrivilegeEscalation: false` and the runtime seccomp profile still apply.
 podSecurityContext:
   seccompProfile:
     type: RuntimeDefault
 
+# Container-level security.
+#
+# The image is a LinuxServer base: `s6` starts as root, prepares `/config`, then
+# drops to PUID/PGID 1100. That is why `runAsNonRoot` and `runAsUser` are absent —
+# the container would not start — and why the capability set keeps exactly the
+# three calls that init makes: CHOWN to fix ownership of `/config`, SETUID/SETGID
+# to drop. Nothing else is granted, and `privileged` is stated so the default is
+# never left to a reviewer's memory.
+#
+# `readOnlyRootFilesystem` is an attempt, not a settled fact: it stays only if the
+# container starts, indexes a library and serves a page with it on. The Deployment
+# mounts emptyDir at /run and /tmp for this reason. If the image turns out to
+# write somewhere else, flip this one value to false: the setting and both
+# emptyDirs come out together, and the chart README records why — a setting that
+# breaks the app is worse than its absence.
 securityContext:
   allowPrivilegeEscalation: false
+  privileged: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop: [ALL]
+    add: [CHOWN, SETUID, SETGID]
 
 service:
   type: ClusterIP
@@ -107,9 +122,11 @@ storage:
   className: local-path
   accessModes:
     - ReadWriteOnce
-  # -- 2Gi, not the usual 128Mi. `/config` holds Kavita's SQLite database plus
-  # the cover thumbnails and the page cache it generates for every chapter it
-  # has served; a library of a few hundred series fills 128Mi on its own.
+  # -- 2Gi, not the usual 128Mi. `/config` holds Kavita's SQLite database plus the
+  # cover thumbnails and the page cache it generates for every chapter it has
+  # served, and that cache grows with the library. The number is a guess, recorded
+  # as such: the app has not run in this shape, so it is re-sized from what the
+  # claim actually holds after the library is indexed.
   size: 2Gi
   # -- Where the config volume is mounted inside the container.
   mountPath: /config
@@ -183,15 +200,20 @@ resources:
 # would duplicate liveness and turn a slow response into a restart loop. This is
 # the documented readiness exception (see the chart README).
 #
-# The startup probe holds the other one through a first start after a version
-# upgrade, when Kavita migrates the database and generates its cover cache.
+# The startup probe holds the other one through a first start. A restart after an
+# upgrade only migrates the database, which 150s covers; a first boot on a fresh
+# `/config` creates that database, runs the migrations that follow and seeds the
+# default user, so the budget follows `calibre-web-automated`'s first-start shape —
+# 10s × 60 = 600s. Nothing waits that long in practice; the ceiling only means a
+# slow first boot is not killed and restarted in a loop, and liveness does not run
+# until startup succeeds.
 probes:
   startup:
     enabled: true
     path: /api/health
-    periodSeconds: 5
+    periodSeconds: 10
     timeoutSeconds: 5
-    failureThreshold: 30
+    failureThreshold: 60
   liveness:
     enabled: true
     path: /api/health
