@@ -1,0 +1,99 @@
+{{/*
+Nightly verified dump of every application database.
+
+The pod-template label app: postgres-dump is load-bearing: NetworkPolicy/postgres
+denies all ingress by default and admits port 5432 from that label alone. Put
+the label on the CronJob object only and the job times out on every run while
+the policy looks correct.
+
+concurrencyPolicy: Forbid, because the dumps claim is ReadWriteOnce: a second
+pod would sit Pending on the volume and eventually be killed, which reads like a
+dump failure. Forbid makes an overlapping run a no-op instead.
+*/}}
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "postgres.name" . }}-dump
+  namespace: {{ .Release.Namespace }}
+  # Not include "postgres.labels", for the same reason as Job/postgres-bootstrap:
+  # it hardcodes app: postgres, which would collide with the label this object is
+  # identified by, and duplicate YAML keys resolve to the last one written.
+  labels:
+    app: {{ include "postgres.name" . }}-dump
+spec:
+  schedule: {{ .Values.dumps.schedule | quote }}
+  # A sync or a node reboot at 03:30 must not silently drop the night's dump,
+  # but an hour late is still the same night; past that, wait for tomorrow.
+  startingDeadlineSeconds: 3600
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    metadata:
+      labels:
+        app: {{ include "postgres.name" . }}-dump
+    spec:
+      template:
+        metadata:
+          # The NetworkPolicy selector. Not decorative; see the header.
+          labels:
+            app: {{ include "postgres.name" . }}-dump
+          annotations:
+            # A script change must roll the next run: the pod template is what
+            # the controller compares, and the script itself lives in a ConfigMap.
+            checksum/dump-script: {{ include (print $.Template.BasePath "/configmap-dump-script.yaml") . | sha256sum }}
+        spec:
+          restartPolicy: Never
+          # Same node as the database: dumps is local-path and ReadWriteOnce, so
+          # its volume lives on one node and the pod has to run there.
+          nodeSelector:
+            {{- toYaml .Values.nodeSelector | nindent 12 }}
+          securityContext:
+            runAsUser: 999
+            runAsGroup: 999
+            # fsGroup lets the dump user write into the claim's root directory.
+            fsGroup: 999
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: dump
+              image: "{{ .Values.image.repository }}@{{ .Values.image.digest }}"
+              imagePullPolicy: IfNotPresent
+              command:
+                - /bin/bash
+                - /scripts/dump-all.sh
+              env:
+                - name: BACKUP_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: pg-backup
+                      key: backup-password
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop:
+                    - ALL
+              resources:
+                requests:
+                  cpu: 50m
+                  memory: 64Mi
+                limits:
+                  cpu: 500m
+                  memory: 256Mi
+              volumeMounts:
+                - name: dump-script
+                  mountPath: /scripts
+                  readOnly: true
+                - name: dumps
+                  mountPath: /dumps
+          volumes:
+            - name: dump-script
+              # No defaultMode: the job runs the file through /bin/bash, so it needs
+              # no exec bit, and "0555" is read as octal by one YAML parser and as
+              # five hundred and fifty-five by another.
+              configMap:
+                name: {{ include "postgres.name" . }}-dump-script
+            - name: dumps
+              # The claim this chart creates in pvc.yaml; mounted, never re-declared.
+              persistentVolumeClaim:
+                claimName: {{ include "postgres.name" . }}-dumps
