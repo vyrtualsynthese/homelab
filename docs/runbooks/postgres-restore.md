@@ -242,7 +242,10 @@ untested.
 | Date (UTC) | Database | Dump restored | Tables checked | Source rows | Restored rows | Result | Operator |
 |---|---|---|---|---|---|---|---|
 
-No drill has been run yet (2026-11-13). The first row is the W2 acceptance drill.
+The dump side is proved: on 2026-11-13 the CronJob produced dumps of the `acceptance` database and
+`pg_restore --list` read each one clean. **No restore has been recorded here yet**, so this runbook
+stays `pending`: a dump nobody has restored from is a file, not a backup. The first row is written
+when the drill is run — the steps below are what produces it.
 
 ## Restoring the production instance
 
