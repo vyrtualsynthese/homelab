@@ -176,11 +176,15 @@ tolerations: []
 
 affinity: {}
 
-# Unmeasured. The app has not run since the 2026 disk failure, so there is no
-# Prometheus history for it. The numbers budget a Node process holding a SQLite
-# handle and rendering posters on demand (sharp, node-canvas): a few hundred MiB
-# resident, with a spike during a large collection run. Replace them from Prometheus
-# a week after the first start.
+# Measured on 2026-11-13, the rebuilt instance's first day: 250MiB resident after
+# two full rule runs over the 186-movie and 141-show libraries, with the poster and
+# metadata caches warm. That was 98% of the 256Mi request it shipped with, because
+# the Node heap does not give memory back after a run.
+#
+# The request is therefore 512Mi, twice the measurement. The 1Gi limit is the
+# headroom for rendering a large collection's posters (sharp, node-canvas); re-read
+# both from Prometheus after a week of scheduled runs rather than trusting this
+# single reading.
 #
 # No CPU limit, here or anywhere in this cluster: a limit throttles exactly the
 # short burst this app needs while it renders posters, and the node's capacity is
@@ -188,7 +192,7 @@ affinity: {}
 resources:
   requests:
     cpu: 25m
-    memory: 256Mi
+    memory: 512Mi
   limits:
     memory: 1Gi
 
