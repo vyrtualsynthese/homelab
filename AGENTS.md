@@ -13,7 +13,8 @@ Everything below was derived from the repo; items marked **[verify]** need clust
 A single K3s homelab managed by ArgoCD (GitOps) plus Ansible for host prep.
 
 - GitOps branch: `develop` (every Application pins `targetRevision: develop`).
-- 58 ArgoCD `Application` objects in `cluster/argocd/projects/**/*.yaml`.
+- 59 ArgoCD `Application` objects in `cluster/argocd/projects/**/*.yaml`. The old `calibre` one is still
+  counted: a follow-up commit removes it after the books cutover, not this branch.
 - 52 Helm charts under `cluster/helm/`.
 - No CI. Renovate updates images/chart versions; nothing runs on PR.
 - Secrets are never committed. See §5.

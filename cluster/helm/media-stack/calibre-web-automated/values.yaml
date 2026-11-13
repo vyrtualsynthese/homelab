@@ -149,9 +149,10 @@ extraEnv: []
 # `extraEnv` so each secret key is explicit in the manifest.
 envFrom: []
 
-# Probes. `/` is the endpoint the image's own HEALTHCHECK uses: it redirects to
-# `/login` and answers 200, which the kubelet follows, so the probe reports "the
-# web stack is serving" rather than "the process exists".
+# Probes. `/` is the endpoint the image's own HEALTHCHECK uses: it answers a 302 to
+# `/login`, and an HTTP probe accepts 2xx-3xx without following the redirect, so the
+# probe passes on the redirect itself. That reports "the web stack is serving"
+# rather than "the process exists".
 #
 # Readiness is disabled on purpose. CWA has no unauthenticated endpoint that
 # reports dependency health, and its real dependency — the NFS library — is not
