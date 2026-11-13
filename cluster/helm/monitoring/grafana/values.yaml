@@ -16,15 +16,16 @@ grafana:
     type: Recreate
   nodeSelector:
     kubernetes.io/hostname: nas
-  # Measured 2026-11-12 over 15 h: 292 MiB average, 346 MiB p95, 400 MiB peak
-  # while loading dashboards. The request covers the steady state; the ceiling
-  # keeps 112 MiB of headroom for a render or query burst.
+  # Sized from Prometheus on 2026-11-13 over the 39h it holds: 300Mi average and
+  # 370Mi peak. The 512Mi limit filled to 74%, and this app now evaluates and
+  # delivers every alert in the cluster, so the headroom matters more here than
+  # the footprint suggests.
   resources:
     requests:
       cpu: 50m
       memory: 256Mi
     limits:
-      memory: 512Mi
+      memory: 768Mi
   image:
     registry: docker.io
     repository: grafana/grafana

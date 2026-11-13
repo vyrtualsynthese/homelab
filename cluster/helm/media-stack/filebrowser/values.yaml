@@ -65,12 +65,15 @@ ingress:
           pathType: Prefix
   tls: []
 
+# Sized from Prometheus on 2026-11-13 over the 39h it holds: 10Mi average and
+# 20Mi peak. The previous 512Mi request reserved 25x what the app uses and the
+# 1Gi limit existed only on paper.
 resources:
   requests:
     cpu: 1m
-    memory: 512Mi
+    memory: 64Mi
   limits:
-    memory: 1024Mi
+    memory: 256Mi
 
 storage:
   config:
