@@ -1,0 +1,25 @@
+{{ include "app.fullname" . }} has been deployed to namespace {{ .Release.Namespace }}.
+
+{{- if .Values.ingressRoute.enabled }}
+
+URL:
+  http://{{ .Values.ingressRoute.host }}{{ .Values.ingressRoute.pathPrefix }}
+
+That host resolves only inside the LAN: it is the Pi-hole wildcard record for
+`kub.local`, not a public name. The router is on the `web` entry point, so it is
+plain HTTP by design.
+{{- else }}
+
+The IngressRoute is disabled. Reach it with a port-forward:
+
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "app.fullname" . }} {{ .Values.service.port }}:{{ .Values.service.port }}
+{{- end }}
+
+Configuration is stored in the claim {{ include "app.configClaimName" . }}.
+{{- if not .Values.storage.existingClaim }}
+
+That claim is created by this chart, so deleting the release deletes it too.
+{{- end }}
+
+The app has no login. Anyone who can reach the URL can read every stored credential
+and download the whole database, so keep it on the LAN.
