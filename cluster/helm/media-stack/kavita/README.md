@@ -31,7 +31,7 @@ suffix.
 helm template kavita cluster/helm/media-stack/kavita --namespace media-stack
 ```
 
-It renders seven objects: the Deployment, the Service (ClusterIP, 5000/TCP), the ServiceAccount, the
+It renders eight objects: the Deployment, the Service (ClusterIP, 5000/TCP), the ServiceAccount, the
 PersistentVolumeClaim `kavita-config`, two IngressRoutes (`kavita-public`, `kavita-public-redirect`),
 the redirect Middleware (`kavita-redirect-https`) and the TLSOption (`kavita-tlsoption`).
 
@@ -49,8 +49,8 @@ the redirect Middleware (`kavita-redirect-https`) and the TLSOption (`kavita-tls
 | `env` | Non-secret variables, rendered **inline** into the container. Changing one rolls the pod. | `TZ`, `PUID`, `PGID`, the two `Logging__*`, `DOTNET_HOSTBUILDER__RELOADCONFIGONCHANGE` |
 | `extraEnv` | Variables sourced from a Secret, as `{ name, valueFrom }`. | `[]` |
 | `nodeSelector` | Node pin. Every workload is pinned. | `kubernetes.io/hostname: streaming` |
-| `probes.{startup,liveness,readiness}` | HTTP probes on `/api/health`. Startup gates liveness through a first start after an upgrade. | enabled; startup 5s × 30, liveness 20s delay, readiness **disabled** |
-| `securityContext` | Container hardening that does not break the image's root init. | no privilege escalation |
+| `probes.{startup,liveness,readiness}` | HTTP probes on `/api/health`. Startup gates liveness through a first boot on a fresh `/config`. | enabled; startup 10s × 60, liveness 20s delay, readiness **disabled** |
+| `securityContext` | Container hardening, including the capability set the LinuxServer init needs and the read-only root filesystem attempt. | no privilege escalation, not privileged, `ALL` dropped except `CHOWN`/`SETUID`/`SETGID`, read-only root filesystem with `emptyDir` at `/run` and `/tmp` |
 | `resources` | Scheduler reservation and memory limit. No CPU limit. | `15m`/`256Mi` request, `1Gi` memory limit |
 
 ## Image
@@ -121,22 +121,35 @@ leaves the pod queued against its old UID.
 
 `pvc-books-media-nfs-subdir-external-provisioner` is shared with Calibre-Web Automated, which writes
 it. Kavita's mount is declared `readOnly: true` in the pod spec, so the single-writer rule is
-enforced by the manifest rather than by Kavita's good behaviour. No other workload mounts that claim.
+enforced by the manifest rather than by Kavita's good behaviour. No workload other than CWA mounts
+that claim.
 
 The library files are owned by UID 1100, which is what Kavita's `PUID`/`PGID` run as. Nothing on the
 node needs a `chown`, and Kavita never writes there.
 
-## The UID (LinuxServer root init)
+## Hardening and the UID (LinuxServer root init)
 
 The image is a LinuxServer build: `s6` starts as **root**, prepares `/config`, then drops privileges
-to `PUID`/`PGID` 1100. Consequences:
+to `PUID`/`PGID` 1100. The security context follows from that, and matches
+`media-stack/calibre-web-automated`:
 
-- `runAsNonRoot` and `runAsUser` are not set: the container would not start.
-- `allowPrivilegeEscalation: false` and `seccompProfile: RuntimeDefault` apply and break nothing.
-  The capability set is left at the image's default, as in `sonarr` and `tautulli`, because the init
-  calls `chown`/`setuid`/`setgid` before the drop.
-- `fsGroup` is deliberately absent: the kubelet does not apply it to hostPath-backed volumes, so it
-  would look meaningful and do nothing.
+| Setting | Value | Why |
+|---|---|---|
+| `allowPrivilegeEscalation` | `false` | The init does not need to gain privileges, only to drop them |
+| `privileged` | `false` | Stated explicitly so the default is never left to memory |
+| `capabilities.drop` | `[ALL]` | Start from nothing |
+| `capabilities.add` | `[CHOWN, SETUID, SETGID]` | The three calls the init makes: `chown` to fix `/config` ownership, `setuid`/`setgid` to become `PUID`/`PGID`. Nothing else is granted |
+| `readOnlyRootFilesystem` | `true` | An attempt — see below |
+| pod `seccompProfile` | `RuntimeDefault` | Free, and the image needs nothing it blocks |
+| `runAsNonRoot`, `runAsUser` | absent | The container would not start: the init is root before the drop |
+| `fsGroup` | absent | The kubelet does not apply it to hostPath-backed volumes, so it would look meaningful and do nothing |
+
+**The read-only root filesystem is an attempt, not a settled fact.** It stays only if the container
+starts, indexes a library and serves a page with it on. The Deployment mounts two `emptyDir` volumes
+at `/run` and `/tmp` so the .NET runtime and the LinuxServer init have somewhere to write. If the
+image turns out to write anywhere else, set `securityContext.readOnlyRootFilesystem` to `false`: the
+setting and both `emptyDir` mounts are gated on that one value, so the revert is one line and the
+render drops them together. A setting that breaks the app is worse than its absence.
 
 A fresh claim is chowned by the image at every start, so no manual node-side step is needed.
 
@@ -144,7 +157,7 @@ A fresh claim is chowned by the image at every start, so no manual node-side ste
 
 | Probe | Path | Behaviour |
 |---|---|---|
-| startup | `/api/health` | Runs before the other two; 5s × 30 = 150s budget through a first start after an upgrade, when Kavita migrates the database and builds its cover cache |
+| startup | `/api/health` | Runs before the other two; 10s × 60 = 600s budget. A restart after an upgrade only needs the migration, but a first boot on a fresh `/config` creates the database, runs the migrations and seeds the default user, so the ceiling follows `calibre-web-automated`'s first-start shape. Liveness does not run until startup succeeds |
 | liveness | `/api/health` | Answers 200 as soon as the web stack is serving |
 | readiness | — | **disabled** (see below) |
 
@@ -214,7 +227,7 @@ cleanup step. Titles that change only inside the metadata, without moving the fo
 
 | File | Renders |
 |---|---|
-| `templates/deployment.yaml` | the Deployment, the inline env, the probes and both claim mounts |
+| `templates/deployment.yaml` | the Deployment, the inline env, the probes, both claim mounts and the two `emptyDir`s the read-only root filesystem needs |
 | `templates/service.yaml` | the ClusterIP Service |
 | `templates/serviceaccount.yaml` | the ServiceAccount, with no mounted token |
 | `templates/persistentvolumeclaim.yaml` | the config claim, only when `storage.enabled` and no `existingClaim` |
