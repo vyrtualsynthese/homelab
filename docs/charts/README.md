@@ -186,6 +186,7 @@ Two habits follow:
 | `radarr-anime` | yes, on `/ping` | seccomp, no privilege escalation; capabilities kept for the LinuxServer init | **no — the image starts as root, then drops to 1100**; `PUID` moved from 0 |
 | `lidarr` | yes, on `/ping` | seccomp, no privilege escalation; capabilities kept for the LinuxServer init | **no — the image starts as root, then drops to 1100** |
 | `unpackerr` | liveness only, on `/` | capabilities dropped, seccomp, no privilege escalation, no API token | **yes — 1100**, no claim to chown |
+| `maintainerr` | yes, `/api/health/live` and `/api/health/ready` | capabilities dropped, seccomp, no privilege escalation, no API token | **yes — 1000**, the image's own UID; the claim is `0777` and owned by 1100 |
 | everything else | no | no | no |
 
 ## Checking a chart against this list
@@ -286,6 +287,17 @@ per-instance values (`sonarr0`, `radarr1`, …) that render `UN_<APP>_<i>_*` thr
 keys from the per-app Secrets, and metrics deliberately off because v1 requires an API key for
 `/metrics`. It is the worked example of the metrics rule's other half: when the exporter cannot be
 scraped by the annotation job, announce nothing rather than leave a target permanently down.
+
+`maintainerr` as of 2026-11-13: the first chart whose readiness probe is a real dependency check.
+`/api/health/live` answers while the process serves and never touches the database; `/api/health/ready`
+runs `SELECT 1` and returns `503` when the SQLite file is missing, locked or corrupt — its own path,
+so no exception is needed. The image already runs as UID 1000 and never as root, and the chart keeps
+it there: `ALL` capabilities dropped, no root phase, and a fresh claim the `local-path` provisioner
+creates `0777` and chowns to 1100. It is the one chart where the process UID and the claim owner
+differ, which works only because of the directory mode. It is also the first app with **no
+authentication at all**: upstream's model is an appliance on a network you control, so the LAN
+boundary is the only access control and the route stays on `web` at `maintainerr.kub.local`. The app
+had been `Pending` for 76 days on a claim the old chart named and never created.
 
 ## Charts still to align
 
