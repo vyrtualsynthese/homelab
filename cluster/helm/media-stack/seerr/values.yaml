@@ -214,32 +214,37 @@ resources:
 
 # Probes.
 #
-# `/api/v1/status` is Seerr's unauthenticated status endpoint: it answers 200
-# while the process is serving. Seerr exposes no endpoint that separates "the
-# process is up" from "the database is usable" — the public settings endpoint
-# reads an in-memory Settings object, not the database — so readiness uses the
-# same endpoint as liveness. This is a documented exception to the contract; a
-# guessed second endpoint would turn a slow database into a restart loop.
+# `/api/v1/status/appdata` is Seerr's unauthenticated application-data endpoint:
+# it answers 200 while the process serves and reports whether `/app/config` is
+# accessible. It is deliberately not `/api/v1/status`: that route performs the
+# GitHub update check when the `versionCheck` setting is on, and a slow or
+# unreachable GitHub can hold it past the probe timeout.
+#
+# Seerr exposes no endpoint that separates "the process is up" from "the
+# database is usable" — the public settings endpoint reads an in-memory Settings
+# object, not the database — so readiness uses the same endpoint as liveness.
+# This is a documented exception to the contract; a guessed second endpoint
+# would turn a slow database into a restart loop.
 #
 # The startup probe gates the other two because the first start after an upgrade
 # runs database migrations. 60 x 5s gives five minutes.
 probes:
   startup:
     enabled: true
-    path: /api/v1/status
+    path: /api/v1/status/appdata
     periodSeconds: 5
     timeoutSeconds: 5
     failureThreshold: 60
   liveness:
     enabled: true
-    path: /api/v1/status
+    path: /api/v1/status/appdata
     initialDelaySeconds: 20
     periodSeconds: 30
     timeoutSeconds: 5
     failureThreshold: 3
   readiness:
     enabled: true
-    path: /api/v1/status
+    path: /api/v1/status/appdata
     initialDelaySeconds: 10
     periodSeconds: 15
     timeoutSeconds: 5
