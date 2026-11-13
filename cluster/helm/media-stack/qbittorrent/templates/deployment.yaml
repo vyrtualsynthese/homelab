@@ -25,6 +25,12 @@ spec:
         nameservers:
           - 1.1.1.1
           - 1.0.0.1
+      {{- with .Values.crossSeedServiceIP }}
+      hostAliases:
+        - ip: {{ . | quote }}
+          hostnames:
+            - cross-seed
+      {{- end }}
       volumes:
         - name: qbittorrent-vpn-config-volume
           persistentVolumeClaim:
