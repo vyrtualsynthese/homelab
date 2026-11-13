@@ -27,12 +27,18 @@ Both objects are dead, not degraded. Nothing is recoverable.
 | Object | State | Evidence |
 |---|---|---|
 | `postgres` | Bitnami chart `postgresql` 15.5.23, image `16.4.0-debian-12-r2` | `cluster/argocd/projects/databases/postgres.yaml` |
-| | Pod cannot schedule: `nodeAffinity` requires `node-type: general` | `cluster/helm/databases/postgres/values.yaml:17-26`; the label is retired (§7 of the stabilisation design) |
-| | Data claim `databases-postgres` was a Longhorn volume | `values.yaml:30`; `audit/observability-storage.md` §2.2 lists `postgres` among the losses |
+| | Pod `postgres-postgresql-0` has been `Pending` for 95 days. The scheduler's own reason, from the event of 2026-09-30: `persistentvolumeclaim "databases-postgres2" not found`. No claim named `databases-postgres*` exists in the namespace. | `kubectl -n databases describe pod postgres-postgresql-0` |
+| | Git asks for `existingClaim: databases-postgres`, the live pod asks for `databases-postgres2` — drift on top of the loss. The claim was a Longhorn volume either way. | `values.yaml:30`; `audit/observability-storage.md` §2.2 |
 | | Backup claim `databases-postgres-backup`, same fate | `values.yaml:41` |
 | `pgadmin` | Application uses upstream `runix/pgadmin4` 1.50.0 while the in-repo chart is unused | `cluster/argocd/projects/databases/pgadmin.yaml`, `cluster/helm/databases/pgadmin/` |
-| | Same retired `node-type` affinity; `existingClaim: pgadmin`, while the live claim was `pgadmin-pgadmin4` | `cluster/helm/databases/pgadmin/values.yaml:127`, `129-136` |
+| | Still running (`pgadmin-pgadmin4-6779457bd9`, 92 days, on `nas`) on a 10 Gi Longhorn claim that is `Terminating` — it lives until that pod restarts | `kubectl -n databases get pvc` |
+| | `existingClaim: pgadmin` in git, while the live claim is `pgadmin-pgadmin4` | `cluster/helm/databases/pgadmin/values.yaml:127` |
 | | Ingress through `networking.k8s.io/v1` plus Traefik annotations | `values.yaml:34-48` — against the Traefik-CRD-only rule |
+
+Verified against the live cluster on 2026-11-13, which corrects two things this document first assumed:
+
+- **The `node-type` label still exists on the nodes** (`nas`→`nas`, `nuc0`→`general`, `rbp2`→`small`, `streaming`→`computing`). It is retired from charts by decision, not removed from the machines. The affinity in the Bitnami values is therefore *not* why that pod is stuck; the missing claim is.
+- **`pgadmin-pgadmin4` is a live, `Terminating` claim.** A new chart that reproduces that name cannot create it. The replacement uses its own claim name (§6.11), and the old one is cleared by hand like the other Longhorn leftovers.
 
 Consequence: there is no data to migrate, no dump to import, and no working backup anywhere. The
 rebuild starts from empty, which is consistent with the eleven lost volumes being accepted as lost.
@@ -199,6 +205,8 @@ flowchart LR
 | `postgres-dumps` | 20 Gi | `local-path` | 14 days of dumps |
 
 Two claims on purpose: a dump that fills its volume must never be able to take the database down.
+`local-path` is `WaitForFirstConsumer` (verified live), so both stay `Pending` until a pod that
+mounts them is scheduled — that is normal, not a fault to chase.
 
 Sizing for the stated workload (≤9 databases, ≤1 GiB total):
 
@@ -398,13 +406,17 @@ replication lag (always zero, deliberately).
 - Owned wrapper chart in `cluster/helm/databases/pgadmin/` around `runix/pgadmin4`, pinned to an
   exact version — pattern D, the same shape as the monitoring wrappers. The in-repo chart that
   exists today becomes the real source instead of dead weight.
-- `local-path` claim, `nodeSelector` on `nuc0` (it is an admin tool, not storage-bound), no
-  `node-type` affinity.
+- Its claim is **`pgadmin-config`**, created by the wrapper chart, not the chart default. The old
+  claim `pgadmin-pgadmin4` is `Terminating` on Longhorn and cannot be recreated until its finalizers
+  are cleared (the same hand operation as every other Longhorn leftover). A new name sidesteps that
+  entirely, and the old objects are deleted rather than adopted.
+- `local-path`, `nodeSelector` on `nuc0` (it is an admin tool, not storage-bound), no `node-type`
+  affinity.
 - **Local network only (operator).** IngressRoute on the `web` entrypoint with host
-  `pgadmin.kub.local`, plus a Traefik `IPAllowList` middleware pinned to the home LAN CIDR
-  (`192.168.1.0/24` today — the same LAN `plex` trusts; confirm the subnet when writing it). No
-  public hostname, no `myresolver`, no exposure through the public entrypoint. Container port 80
-  stays inside the cluster.
+  `pgadmin.kub.local`, plus a Traefik `IPAllowList` middleware pinned to the home LAN CIDR —
+  **`192.168.1.0/24`, confirmed live**: the nodes are `192.168.1.27/.41/.46/.48` and the Traefik
+  `LoadBalancer` answers on all four. No public hostname, no `myresolver`, no `websecure`
+  entrypoint. Container port 80 stays inside the cluster.
 - **An admin login of its own (operator, 2026-11-13).** pgAdmin's web login is a local account:
   `Secret/pgadmin` key `password`, with the login email set as a plain value in the chart
   (`env.email`). Chart `runix/pgadmin4` 1.50.0 reads only the password from the Secret
@@ -531,6 +543,7 @@ the two deleted claims. Recording them here so the handover is explicit rather t
 | pgAdmin is a UI that reaches every database | everyday connection is the read-only `backup` role; the superuser password is never saved in it; LAN-only IP allowlist; its config volume (with encrypted credentials) is part of the W4 backup set |
 | Databases created by hand drift from the intended shape (no owner, `PUBLIC` connect left on, a superuser role) | §6.5 is a written procedure with the four rules inline, and `\du`/`\l` are the check; the runbook keeps a dated log of what was created and why |
 | A database exists that nobody remembers creating | the dump job enumerates what exists, and its output is a de facto inventory; the runbook log says what each one is for |
+| Old Bitnami objects outlive the Application rewrite — `StatefulSet/postgres-postgresql` (632 days, `0/1`), `Service/postgres-postgresql`, `-hl`, `-metrics`, and a `Deployment/alpine` stuck at `0/1` for 500 days | They are deleted by hand in the bring-up task, after the new instance is healthy. ArgoCD prune removes only what the *old* Application still owned, and the Application is being replaced, so nothing guarantees it. |
 
 ## 11. Left to the builder
 
