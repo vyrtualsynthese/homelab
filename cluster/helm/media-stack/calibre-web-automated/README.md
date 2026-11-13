@@ -54,12 +54,11 @@ chart is plain configuration, and it is rendered inline in the Deployment's `env
 | `/config` | `<fullname>-config`, 10Gi, `local-path` | `app.db`, Calibre's own configuration, thumbnails, logs, and the backup of every processed file (see [Backups](#backups-of-originals)) |
 | `/cwa-book-ingest` | `<fullname>-ingest`, 1Gi, `local-path` | The drop folder the import pipeline watches. Files leave it as soon as they are processed |
 | `/calibre-library` | `pvc-books-media-nfs-subdir-external-provisioner` (existing) | The library itself, read-write. It stays on the NAS and is shared with Kavita, which mounts it read-only |
-| `/run`, `/tmp` | `emptyDir` | Only rendered while `securityContext.readOnlyRootFilesystem` is true — see [Read-only root filesystem](#read-only-root-filesystem-on-trial) |
+| `/run`, `/tmp` | `emptyDir` | Only rendered while `securityContext.readOnlyRootFilesystem` is true — see [Read-only root filesystem](#read-only-root-filesystem-off) |
 
-The library is in place already: CWA adopts `metadata.db` where it sits instead of importing the
-collection again. Its auto-detect walks the mounted directory and takes the **largest** database it
-finds, so more than one `metadata.db` on the share is a decision to make before the first start, not
-after.
+The library is in place already: CWA adopts the existing `metadata.db` instead of importing the
+collection again. Auto-mount is **off** (see [Library auto-mount](#library-auto-mount-off)), so the
+database path is set once in the UI and CWA never invents a library of its own.
 
 Both claims land on the node the pod is pinned to (`streaming`) because `local-path` is
 hostPath-backed and `WaitForFirstConsumer`. Two new claims therefore bind to whatever node the first
@@ -216,18 +215,33 @@ unauthenticated endpoint that reports dependency health, and its real dependency
 is not exposed by any route. Pointing readiness at `/` would duplicate liveness and turn a share blip
 into a restart loop. `tautulli` and `cross-seed` carry the same exception.
 
-## Read-only root filesystem (on trial)
+## Read-only root filesystem (off)
 
-`securityContext.readOnlyRootFilesystem` is `true`, with `emptyDir` volumes at `/run` and `/tmp` so
-the image has somewhere to write. **This is an attempt, not a proven setting.** It is kept only if
-the container comes up and one ingest completes with it on.
+`securityContext.readOnlyRootFilesystem` is **`false`**. It was tried on the first start of the
+cutover and the image does not survive it: the update-notification and theme-migration services write
+notice files into `/app`, and the container logged
 
-The runtime dependency is exactly this: a writable `/run` and `/tmp`, plus the three mounted claims.
-If the image writes outside those paths, the container fails at start (or the ingest fails while the
-web UI stays up). The fix in that case is to set
-`securityContext.readOnlyRootFilesystem: false` in `values.yaml`: the Deployment gates the two
-`emptyDir` volumes on the same value, so they disappear with it. Record the reason here when that
-happens — a setting that breaks the app is worse than the absence of it.
+```
+[Errno 30] Read-only file system: '/app/cwa_update_notice'
+[Errno 30] Read-only file system: '/app/theme_migration_notice'
+```
+
+The web UI stayed up, so this was not a crash loop — it was a setting that quietly broke background
+work, which is why it came out. The Deployment renders the two `emptyDir` volumes for `/run` and
+`/tmp` only while the setting is on, so they disappear with it.
+
+The rest of the hardening stands: `allowPrivilegeEscalation: false`, `privileged: false`,
+`seccompProfile: RuntimeDefault`, and `ALL` capabilities dropped except the three the `s6` init needs.
+
+## Library auto-mount (off)
+
+`DISABLE_LIBRARY_AUTOMOUNT` is **`true`**. On the first start the auto-mount service did not find the
+library at `calibre-lib/metadata.db`, created an empty `metadata.db` at the mount root, and pointed
+CWA at it — hence the `/admin/dbconfig` redirect and `no such table: custom_columns` in the logs. It
+also owns the database-path field in the UI while it runs, so the real library could not be selected.
+
+With it off, the path is set once at `/admin/dbconfig` and stored in `app.db` on the config claim.
+Set it to the **directory** that holds `metadata.db`, for example `/calibre-library/calibre-lib`.
 
 ## Root-then-1100 init
 

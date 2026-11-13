@@ -146,14 +146,15 @@ env:
   # They match the rest of the media stack.
   PUID: "1100"
   PGID: "1100"
-  # .NET reads its configuration from environment variables with `__` as the
-  # section separator, so these two are ASP.NET Core's own `Logging:LogLevel`
-  # keys rather than a Kavita variable. They put the ASP.NET Core logger — the
-  # one that prints a line per HTTP request — at Warning instead of Information.
-  # Whether Kavita's own logger honours them is unconfirmed until a pod runs: see
-  # the Logs section of the chart README before trusting the volume in Loki.
-  Logging__LogLevel__Default: "Warning"
-  Logging__LogLevel__Microsoft: "Warning"
+  # Kavita configures Serilog from `config/appsettings.json` through
+  # `ReadFrom.Configuration`, and applies its own minimum level before that. The
+  # framework's `Logging__*` keys therefore change nothing — a running pod logged a
+  # line per request at Information with them set. The key Serilog reads is the
+  # `Serilog` section, which .NET maps from `Serilog__<Section>__<Key>`:
+  # `Serilog:MinimumLevel:Default` is the lever. Confirm after a restart that the
+  # `RequestLoggingMiddleware` lines are gone; if they are not, remove this and
+  # record the debt in the chart README, the way `bazarr` does.
+  Serilog__MinimumLevel__Default: "Warning"
   # Stops the .NET host builder watching appsettings.json for edits at runtime.
   # That watcher exists for development; in a container the file never changes,
   # so it is only a file watch and a log line. Carried over from the old chart.

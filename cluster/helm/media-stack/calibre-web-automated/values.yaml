@@ -59,15 +59,15 @@ podSecurityContext:
 # exactly the three calls that init makes: CHOWN to fix ownership, SETUID/SETGID to
 # drop. Nothing else is granted.
 #
-# `readOnlyRootFilesystem` is an attempt, not a settled fact: it stays only if the
-# container starts and one ingest completes with it on. The Deployment mounts
-# emptyDir at /run and /tmp for this reason. If the image turns out to write
-# somewhere else, the setting and the two emptyDirs come out together and the chart
-# README records why — a setting that breaks the app is worse than its absence.
+# `readOnlyRootFilesystem` was tried and does not work: the image writes its update
+# and theme-migration notices into `/app`, and the container logged
+# `[Errno 30] Read-only file system: '/app/cwa_update_notice'` on the first start.
+# It is off, and the Deployment renders the two emptyDirs for /run and /tmp only
+# while it is on, so they disappear with it. Evidence is in the chart README.
 securityContext:
   allowPrivilegeEscalation: false
   privileged: false
-  readOnlyRootFilesystem: true
+  readOnlyRootFilesystem: false
   capabilities:
     drop: [ALL]
     add: [CHOWN, SETUID, SETGID]
@@ -139,6 +139,14 @@ env:
   # Upstream's wiki still calls NFS unsupported while the release README documents
   # this mode; the chart README states that caveat in full.
   NETWORK_SHARE_MODE: "true"
+  # The library auto-mount service is off. On the first start it did not find
+  # `calibre-lib/metadata.db` on the share and created an empty database at the
+  # mount root instead, which CWA then tried to use — the redirect to
+  # `/admin/dbconfig` and the `no such table: custom_columns` errors. While the
+  # service runs it also owns the database-path field, so the UI cannot be pointed
+  # at the real library. With it off, the path is set once in
+  # `/admin/dbconfig` and kept in `app.db` on the config claim.
+  DISABLE_LIBRARY_AUTOMOUNT: "true"
 
 # -- Variables sourced from a Secret, as `{ name, valueFrom }`. Kept separate so
 # a secret can never be pasted into the plain map above by accident. CWA binds no
