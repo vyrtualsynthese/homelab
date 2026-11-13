@@ -146,22 +146,29 @@ cannot log in at all. Tracker collection costs one Web API call per distinct
 tracker — about 40 here — which pushed the collection past Prometheus's 10 s
 scrape timeout on 2026-11-13; the chart turns it off.
 
-**Temperature**: host temperature comes from `node_hwmon_temp_celsius`, and
-`node_hwmon_chip_names` names the driver. `NodeTemperatureHigh` and the Platform
-panel read only CPU/SoC chips — `platform_coretemp_0`, `thermal_thermal_zone0`,
-`k10temp`, `zenpower` by `chip` label. Three junk sensors are excluded by
-construction rather than one: the NAS's unconnected `nct6775` header (95 °C),
-and on `streaming` a PCIe root port and an ACPI/WMI sensor, both at 86–89 °C.
+**Temperature**: `node_hwmon_chip_names` carries the driver name for each hwmon
+`chip`, and the `chip` label itself is a device path — `k10temp` on `streaming`
+appears as `pci0000:00_0000:00:18_3`, which looks like a motherboard sensor and
+is not one. `NodeTemperatureHigh` and the Platform panel therefore select by
+driver, not by path:
 
-`streaming` *does* publish a CPU sensor, but the selector misses it:
-`node_hwmon_chip_names{node="streaming",chip="pci0000:00_0000:00:18_3"}` is
-`k10temp`, with `Tctl` 84 °C and `Tccd1` 78 °C at about 21 % CPU (the
-`gigabyte_wmi` zone mirrors Tctl). The rule matches the `chip` label, which is
-the PCI address here, so the CPU-only selector is silent on the one host with a
-real 80 °C+ reading. Either match `chip_name` (the driver) instead of `chip`, or
-record the blind spot; widening to the ACPI/WMI zones is still wrong.
-Per-host maxima after the change (2026-11-13): `nas` 44, `nuc0` 45, `streaming`
-16.8 (the ACPI zone), `rbp2` 54.5, `rbp0` 50.1, `rbp1` 48.7.
+```
+node_hwmon_temp_celsius
+  and on(instance, chip)
+node_hwmon_chip_names{chip_name=~"k10temp|coretemp|zenpower|cpu_thermal"}
+```
+
+That reads the CPU package on the three x86 nodes (`coretemp` on `nas` and
+`nuc0`, `k10temp` on `streaming`) and the SoC on the three Pis
+(`cpu_thermal`), and skips `nct6796` (the NAS's unconnected header, 95 °C),
+`acpitz` (16.8 °C on `streaming`, meaningless), `gigabyte_wmi`, `nvme` and
+`iwlwifi_1`.
+
+`streaming` is genuinely hot: `Tctl` 81–91 °C at 10–28 % CPU on 2026-11-13, and
+the reading follows load. `NodeTemperatureHigh` fires for it and that is
+correct — the fix is cooling, not a wider or narrower selector. Per-host maxima
+on 2026-11-13: `nas` 43, `nuc0` 44, `streaming` 82, `rbp2` 54, `rbp0` 50,
+`rbp1` 51.
 
 **Volume stats are partial, and the reason is structural**: the K3s kubelet
 publishes `kubelet_volume_stats_*` only for volumes whose plugin can measure
@@ -236,7 +243,7 @@ secure field), so the contact point is never rewritten by automation.
 | `ScrapeTargetDown` | any non-node target down, including the edge Pis' SMART and Docker exporters; Prometheus and kube-state-metrics excluded (own rules) | 15m | warning | inactive |
 | `NodeCpuHigh` | >90 % by host | 15m | warning | inactive |
 | `NodeMemoryHigh` | >90 % of `MemAvailable` | 15m | warning | inactive |
-| `NodeTemperatureHigh` | hottest CPU or SoC sensor >80 °C | 10m | warning | inactive (misses `streaming`'s k10temp; see Temperature) |
+| `NodeTemperatureHigh` | hottest CPU or SoC sensor, selected by hwmon driver >80 °C | 10m | warning | **firing** on `streaming` |
 | `GpuTemperatureHigh` | `DCGM_FI_DEV_GPU_TEMP` >80 °C | 10m | warning | inactive |
 | `DiskTooHot` | drive >55 °C | 15m | warning | inactive |
 | `DiskFillingUp` | filesystem >85 % | 30m | warning | inactive |
@@ -350,11 +357,10 @@ runs (config shows `retention_enabled: true`,
   Grafana and every config volume) is at **0 % life left**, SMART exit code 32.
   It needs replacing; `DriveNeedsReplacement` fires for it and is silenced until
   2026-12-12.
-- `streaming` runs warm: `k10temp` reads **Tctl 84 °C / Tccd1 78 °C** at about
-  21 % CPU on 2026-11-13, and `gigabyte_wmi temp3` mirrors Tctl. This is a real
-  CPU reading, but the CPU-only `NodeTemperatureHigh` selector matches the `chip`
-  label, which is the PCI address here, so the rule is silent on it. Check fans
-  and airflow. The GPU is at 40 °C and the NVMe at 47–57 °C.
+- `streaming` runs hot: `k10temp` reads **Tctl 81–91 °C** at 10–28 % CPU on
+  2026-11-13, and the value follows load, so `NodeTemperatureHigh` firing for it
+  is correct. The `gigabyte_wmi` zone mirrors Tctl; the GPU is at 40 °C and the
+  NVMe at 46–57 °C. Check fans and airflow — the alert is telling the truth.
 
 ## Known gaps
 
