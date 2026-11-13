@@ -41,9 +41,10 @@ existing Secret, use `<app>-db` with the key `password`.
 ## Step 1 — generate the password
 
 ```bash
-APP=firefly               # role, database and the Secret name pg-<app>
+APP=firefly               # role, database, and the suffix of the Secret in databases/
 APP_NS=firefly            # the namespace the application runs in
-APP_SECRET=firefly-db     # the name and key its chart reads; see Naming
+APP_SECRET=firefly-db     # the Secret its chart reads; see Naming
+APP_SECRET_KEY=DB_PASSWORD  # that Secret's password key; the check pod reads this one
 PW=$(openssl rand -hex 24)
 ```
 
@@ -53,13 +54,21 @@ Hex on purpose: the value contains no character that SQL or a shell would need e
 
 ```bash
 kubectl -n databases create secret generic "pg-$APP" --from-literal=password="$PW"
-kubectl -n "$APP_NS" create secret generic "$APP_SECRET" --from-literal=password="$PW"
+kubectl -n "$APP_NS" create secret generic "$APP_SECRET" --from-literal="$APP_SECRET_KEY=$PW"
 ```
 
-If the application chart reads a different key (`DB_PASSWORD`, `POSTGRES_PASSWORD`, …), use that key
-on the second command **and in the check pod's manifest below**. The key on `pg-<app>` stays
-`password`. The two values must be identical: the role is created from one copy and the application
-logs in with the other.
+The key on `pg-<app>` is always `password`; the key on the application's Secret is whatever its
+chart reads — `password` for the wiki, `DB_PASSWORD` for firefly, `POSTGRES_PASSWORD` for
+guacamole — and it is the value of `APP_SECRET_KEY` used by the check pod in Step 4. The two
+values must be identical: the role is created from one copy and the application logs in with the
+other.
+
+A chart may read several keys from that Secret, and the non-secret ones must survive: firefly
+reads `DB_DATABASE` and `DB_USERNAME` as well, koillection four keys in all, discourse two. Where
+the Secret already exists with those keys, do not run the second command — it fails with
+`AlreadyExists`, which stops the run — set the password key in a copy of the existing object and
+apply it, or recreate it with every key it had. The keys each chart expects are listed in
+[`../secrets.md`](../secrets.md).
 
 Success: both commands print `secret/pg-<app> created` and `secret/<app>-db created`.
 
@@ -116,9 +125,9 @@ Then check the shape from the same session:
 ```
 
 - `\du` lists the role with no `Superuser`, `Create role` or `Create DB` attribute.
-- `\l` lists the database owned by `<app>`, and its access-privileges column must **not** start with
-  `=` — that would be PUBLIC's own entry, i.e. the revoke did not happen. It should contain
-  `<app>=CTc/<app>` and `backup=c/<app>`.
+- `\l` lists the database owned by `<app>`, and its access-privileges column must contain no entry
+  whose grantee is empty — that empty grantee is `PUBLIC`, so an entry for it means the revoke did
+  not happen. The column should show `<app>=CTc/<app>` and `backup=c/<app>`.
 
 ## Step 4 — prove the connection from the application's namespace
 
@@ -144,7 +153,7 @@ spec:
           valueFrom:
             secretKeyRef:
               name: $APP_SECRET
-              key: password
+              key: $APP_SECRET_KEY
       command:
         - psql
         - -h
@@ -156,7 +165,13 @@ spec:
         - -v
         - ON_ERROR_STOP=1
         - -c
-        - CREATE TABLE _check (id int); INSERT INTO _check VALUES (1); SELECT count(*) FROM _check; DROP TABLE _check;
+        - CREATE TABLE _check (id int)
+        - -c
+        - INSERT INTO _check VALUES (1)
+        - -c
+        - SELECT count(*) FROM _check
+        - -c
+        - DROP TABLE _check
 EOF
 kubectl -n "$APP_NS" wait --for=jsonpath='{.status.phase}'=Succeeded pod/pg-check --timeout=90s
 kubectl -n "$APP_NS" logs pg-check
@@ -164,7 +179,8 @@ kubectl -n "$APP_NS" delete pod pg-check
 ```
 
 The pod is a plain client pod pulled on first use; `postgres:18.7` is the instance's tag, from
-`cluster/helm/databases/postgres/values.yaml`.
+`cluster/helm/databases/postgres/values.yaml`. The four statements are four `-c` arguments, so psql
+runs them in one session, in order, and prints each statement's tag.
 
 Success is this, in the logs:
 

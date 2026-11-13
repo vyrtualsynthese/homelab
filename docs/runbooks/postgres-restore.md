@@ -217,7 +217,9 @@ the time between the dump and the count — check the dump's timestamp in its na
 lost rows instead of gaining them is not explained by time.
 
 Do not use `pg_stat_user_tables.n_live_tup` for this: it is an estimate refreshed by the statistics
-collector, and a fresh restore has not been analysed yet.
+collector, and a fresh restore has not been analysed yet. Row counts prove that the rows arrived;
+they say nothing about constraints, indexes or sequences — a restore that loses those still passes
+this check, which is why `--exit-on-error` and the silence in Step 3 matter as much as the numbers.
 
 ## Step 5 — teardown
 
@@ -247,14 +249,51 @@ No drill has been run yet (2026-11-13). The first row is the W2 acceptance drill
 The same steps, with the target being the real instance instead of the scratch one. This is the case
 after `nas` survives but the database pod or its claim did not.
 
-1. Let ArgoCD recreate the `postgres` StatefulSet with an empty `postgres-data` claim, and wait for
-   `Job/postgres-bootstrap` to complete. That recreates the `backup` and `postgres_exporter` roles,
-   not the application roles.
-2. For each database in the add-database log, in this order: recreate the role and database (steps
-   1–3 of [`postgres-add-database.md`](postgres-add-database.md)), get the dump onto the database
-   pod, run the `pg_restore` line from Step 3 with `-d <db>` — the database exists already, so no
-   `createdb` — then start the application. The database pod does not mount the dumps claim, so the
-   file is copied over first:
+1. Recreate the `postgres` StatefulSet with an empty `postgres-data` claim as ArgoCD does, then
+   force the bootstrap Job to run again:
+
+   ```bash
+   kubectl -n databases delete job -l app=postgres-bootstrap
+   kubectl -n databases wait --for=condition=complete job -l app=postgres-bootstrap --timeout=300s
+   ```
+
+   That Job is what creates the `backup` and `postgres_exporter` roles, and it will not do so by
+   itself: its name is content-addressed (`postgres-bootstrap-<digest>`) and it has no TTL, so the
+   completed object from before the rebuild is still in the namespace and never runs again. Without
+   this step `backup` does not exist, the restore's `GRANT CONNECT … TO backup` fails, and the
+   nightly dump breaks. Deleting the object is how it is re-run: its SQL is idempotent
+   (`CREATE ROLE … WHERE NOT EXISTS … \gexec`), so it changes nothing that already exists.
+
+   If the `wait` answers `no matching resources found`, the Job has not been recreated yet — sync
+   the `postgres` Application (it is a normal resource in the chart, not a sync hook) and repeat the
+   `wait`. The four instance Secrets from [`../secrets.md`](../secrets.md) must exist first: a
+   missing `pg-backup` leaves the Job's pod in `CreateContainerConfigError`, which the `wait` will
+   report only as a timeout.
+
+2. For each database in the add-database log, settle its password **before** touching the role,
+   because a role whose password no Secret holds is an application that cannot log in. The Secrets
+   are not inside the dumps.
+
+   - If `databases/pg-<role>` survived, read the password from it and use that value verbatim. Do
+     not create or overwrite anything:
+
+     ```bash
+     kubectl -n databases get secret "pg-<role>" -o jsonpath='{.data.password}' | base64 -d
+     ```
+
+   - If it is gone, generate one (`openssl rand -hex 24`) and create both copies, as in steps 1–2 of
+     [`postgres-add-database.md`](postgres-add-database.md). Where the application's Secret also
+     survived, only its password key is written; where it did not, recreate it with every key its
+     chart reads — the list is in [`../secrets.md`](../secrets.md). `kubectl create secret` fails
+     hard on an existing name, so check before running it.
+
+3. Recreate the role and the database with the password from step 2: the SQL block of step 3 in
+   [`postgres-add-database.md`](postgres-add-database.md) — `CREATE ROLE … LOGIN PASSWORD …`, the
+   `CREATE DATABASE … OWNER`, `REVOKE ALL ON DATABASE … FROM PUBLIC` and both `GRANT CONNECT`
+   statements. The database must exist and be empty; the restore fills it.
+
+4. Get the dump onto the database pod and restore it. The database pod does not mount the dumps
+   claim, so the file is copied over first:
 
    ```bash
    kubectl -n databases cp dumps-ls:/dumps/<db>-<UTC>.dump postgres-0:/tmp/
@@ -265,10 +304,9 @@ after `nas` survives but the database pod or its claim did not.
 
    The restore must finish **before** the application pod starts, otherwise it writes into a
    database that is still being filled and the row counts never match again.
-3. If a Secret for the database is gone, recreate both copies with one value, then
-   `ALTER ROLE <role> PASSWORD '<value>'`. The Secrets are not inside the dumps.
-4. If the target database still holds data that matters, dump it before overwriting it — the restore
-   in step 2 does not ask twice.
+
+5. If the target database still holds data that matters, dump it before overwriting it — the restore
+   in step 4 does not ask twice.
 
 The case this runbook cannot fix: **`nas`'s disk is lost.** The dumps live on it, the offsite copy
 is W4 and does not exist yet, and there is no other copy. That is stated in the design (§6.8) and it
