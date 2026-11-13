@@ -50,7 +50,7 @@ the redirect Middleware (`kavita-redirect-https`) and the TLSOption (`kavita-tls
 | `extraEnv` | Variables sourced from a Secret, as `{ name, valueFrom }`. | `[]` |
 | `nodeSelector` | Node pin. Every workload is pinned. | `kubernetes.io/hostname: streaming` |
 | `probes.{startup,liveness,readiness}` | HTTP probes on `/api/health`. Startup gates liveness through a first boot on a fresh `/config`. | enabled; startup 10s × 60, liveness 20s delay, readiness **disabled** |
-| `securityContext` | Container hardening, including the capability set the LinuxServer init needs and the read-only root filesystem attempt. | no privilege escalation, not privileged, `ALL` dropped except `CHOWN`/`SETUID`/`SETGID`, read-only root filesystem with `emptyDir` at `/run` and `/tmp` |
+| `securityContext` | Container hardening, including the capability set the LinuxServer init needs and the read-only root filesystem. | no privilege escalation, not privileged, `ALL` dropped except `CHOWN`/`SETUID`/`SETGID`, read-only root filesystem with `emptyDir` at `/run` and `/tmp` |
 | `resources` | Scheduler reservation and memory limit. No CPU limit. | `15m`/`256Mi` request, `1Gi` memory limit |
 
 ## Image
@@ -150,12 +150,12 @@ to `PUID`/`PGID` 1100. The security context follows from that, and matches
 | `runAsNonRoot`, `runAsUser` | absent | The container would not start: the init is root before the drop |
 | `fsGroup` | absent | The kubelet does not apply it to hostPath-backed volumes, so it would look meaningful and do nothing |
 
-**The read-only root filesystem is an attempt, not a settled fact.** It stays only if the container
-starts, indexes a library and serves a page with it on. The Deployment mounts two `emptyDir` volumes
-at `/run` and `/tmp` so the .NET runtime and the LinuxServer init have somewhere to write. If the
-image turns out to write anywhere else, set `securityContext.readOnlyRootFilesystem` to `false`: the
-setting and both `emptyDir` mounts are gated on that one value, so the revert is one line and the
-render drops them together. A setting that breaks the app is worse than its absence.
+**The read-only root filesystem is kept.** The container starts, serves the API and the web UI with
+it on, and the Deployment mounts two `emptyDir` volumes at `/run` and `/tmp` so the .NET runtime and
+the LinuxServer init have somewhere to write. The remaining check is the first library scan, which
+runs after the cutover; if it fails with a write error, set
+`securityContext.readOnlyRootFilesystem` to `false` — the setting and both `emptyDir` mounts are gated
+on that one value, so the revert is one line and the render drops them together.
 
 A fresh claim is chowned by the image at every start, so no manual node-side step is needed.
 
@@ -178,33 +178,26 @@ a restart loop. `tautulli` and `cross-seed` record the same exception.
 
 ## Logs
 
-Kavita configures Serilog itself, in `Kavita.Server/Logging/LogLevelOptions.cs`: a
-`LoggingLevelSwitch` at `Information`, then `ReadFrom.Configuration(context.Configuration)`, then
-hardcoded `Error` overrides for `Microsoft`, `Microsoft.Hosting.Lifetime`, `Hangfire` and
-`Microsoft.AspNetCore.Hosting.Internal.WebHost`.
+**No lever works, and this is accepted debt.** Kavita clears its configuration sources at startup —
+`Kavita.Server/Program.cs` calls `config.Sources.Clear()` and then loads only
+`config/appsettings.json` and its environment-specific sibling. Environment variables are therefore
+never read: `Logging__LogLevel__Default`, `Logging__LogLevel__Microsoft` and
+`Serilog__MinimumLevel__Default` were each tried in a running pod and each left the level at
+`Information`, one line per HTTP request.
 
-**The framework keys do not work.** The first running pod printed a line per HTTP request at
-`Information` with `Logging__LogLevel__Default` and `Logging__LogLevel__Microsoft` both set to
-`Warning` — Kavita never reads that section.
+The level is set in `Kavita.Server/Logging/LogLevelOptions.cs` (a `LoggingLevelSwitch` at
+`Information`, then `ReadFrom.Configuration`, then hardcoded `Error` overrides for `Microsoft`,
+`Microsoft.Hosting.Lifetime`, `Hangfire` and `Microsoft.AspNetCore.Hosting.Internal.WebHost`). The
+only way to change it is to replace `config/appsettings.json` inside the image — a `subPath` ConfigMap
+over a file the image ships, which breaks on the next upgrade.
 
-The lever that matches the code is the `Serilog` section, which .NET maps from environment
-variables:
+So the chart sets nothing, and the volume in Loki is recorded here rather than hidden: Fluent Bit
+ships every container line to Loki unfiltered, and Kavita contributes a line per request. This is the
+same position as `bazarr`, whose logger has only INFO and DEBUG and no variable selects either.
 
-| Variable | Value | What it controls |
-|---|---|---|
-| `Serilog__MinimumLevel__Default` | `Warning` | Serilog's default level, which is the `Information` floor behind the request lines |
-
-Verify after a restart that `RequestLoggingMiddleware` lines are gone:
-
-```bash
-kubectl -n media-stack logs deploy/kavita --tail=100 | grep -c RequestLoggingMiddleware
-```
-
-Zero is the expected answer. If it is still printing them, remove the variable and record the debt
-here the way `bazarr` does: a knob that does nothing is worse than none, because the next person
-believes the level is set. Until a lever works, Kavita's volume in Loki is accepted debt.
-Fluent Bit ships every container line on every node to Loki unfiltered, so the level is the only
-place the volume can be cut.
+If a future release reads environment variables again, `Serilog__MinimumLevel__Default: "Warning"` is
+the key to try first — `ReadFrom.Configuration` is already wired, so only the cleared sources stand in
+the way.
 
 ## Metrics
 
