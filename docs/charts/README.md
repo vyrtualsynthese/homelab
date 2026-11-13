@@ -193,8 +193,8 @@ Two habits follow:
 | `bazarr-anime` | yes, on `/` | seccomp, no privilege escalation; capabilities kept for the LinuxServer init | **no — the image starts as root, then drops to 1100** |
 | `unpackerr` | liveness only, on `/` | capabilities dropped, seccomp, no privilege escalation, no API token | **yes — 1100**, no claim to chown |
 | `maintainerr` | yes, `/api/health/live` and `/api/health/ready` | capabilities dropped, seccomp, no privilege escalation, no API token | **yes — 1000**, the image's own UID; the claim is `0777` and owned by 1100 |
-| `calibre-web-automated` | startup and liveness only, both on `/` | capabilities dropped except `CHOWN`/`SETUID`/`SETGID`, which the LinuxServer init needs; seccomp; no privilege escalation; no API token; read-only root filesystem on trial | **no — the image starts as root, then drops to 1100**; config claim `10Gi`, not `128Mi` |
-| `kavita` | startup and liveness only, both on `/api/health` | capabilities dropped except `CHOWN`/`SETUID`/`SETGID`, which the LinuxServer init needs; seccomp; no privilege escalation; no API token; read-only root filesystem on trial; public TLS route | **no — the image starts as root, then drops to 1100** |
+| `calibre-web-automated` | startup and liveness only, both on `/` | capabilities dropped except `CHOWN`/`SETUID`/`SETGID`, which the LinuxServer init needs; seccomp; no privilege escalation; no API token; **no** read-only root filesystem — the image writes notices into `/app` | **no — the image starts as root, then drops to 1100**; config claim `10Gi`, not `128Mi` |
+| `kavita` | startup and liveness only, both on `/api/health` | capabilities dropped except `CHOWN`/`SETUID`/`SETGID`, which the LinuxServer init needs; seccomp; no privilege escalation; no API token; read-only root filesystem with `emptyDir` at `/run` and `/tmp`; public TLS route | **no — the image starts as root, then drops to 1100** |
 | everything else | no | no | no |
 
 ## Resource sizing: the reviewed set
@@ -220,7 +220,6 @@ Source: Prometheus on 2026-11-13, the 39 h of history it holds, `container_memor
 | `media-stack/sonarr` | 570Mi | 256Mi → **384Mi** | 768Mi → **1.5Gi** | same sample, same drift |
 | `media-stack/bazarr-anime` | 660Mi | 256Mi → **384Mi** | 768Mi → **1.5Gi** | the old pair was a guess made while the app was Pending |
 | `media-stack/bazarr` | 480Mi | 256Mi → **384Mi** | 768Mi → **1.5Gi** | kept identical to `bazarr-anime`: one image, two libraries |
-| `media-stack/calibre` | 880Mi flat | 256Mi → **512Mi** | 1Gi → **2Gi** | holds its index forever, so the 1Gi limit sat at 88 % permanently |
 | `media-stack/unpackerr` | 460Mi burst | 64Mi (unchanged) | 512Mi → **1Gi** | the peak is extraction children, and 92 % of the limit risks killing a big archive |
 | `n8n` | 420Mi | 256Mi (unchanged) | 512Mi → **768Mi** | 85 % of the limit on a workflow run |
 | `monitoring/grafana` | 370Mi | 256Mi (unchanged) | 512Mi → **768Mi** | it evaluates and delivers every alert in the cluster; 74 % is not enough headroom |
