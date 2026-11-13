@@ -1,121 +1,238 @@
 # Default values for bazarr.
-# This is a YAML-formatted file.
-# Declare variables to be passed into your templates.
+# This chart follows the contract in docs/charts/README.md and the shape of the
+# sonarr chart. The differences are the ones this app needs: a LinuxServer image
+# that starts as root and drops to PUID/PGID, one shared NFS media mount, and an
+# exportarr sidecar that stays off until exportarr v3.
+
+# -- Override the chart name.
+nameOverride: ""
+# -- Override the generated release name.
+fullnameOverride: ""
 
 replicaCount: 1
 
-image:
-  repository: ghcr.io/linuxserver/bazarr
-  pullPolicy: IfNotPresent
-  # Overrides the image tag whose default is the chart appVersion.
-  tag: "1.6.0"
+# -- Deployment strategy. `Recreate` is required for anything with a config volume:
+# ReadWriteOnce volumes cannot be attached to an old and a new pod at the same time.
+strategy: Recreate
 
-# Choose deployment strategy type
-strategyType: Recreate
+image:
+  # LinuxServer publishes on lscr.io and mirrors on ghcr.io; this chart keeps the
+  # registry it already pulls from. The image starts as root and drops to PUID/PGID
+  # through s6; that is why the securityContext below cannot use runAsNonRoot
+  # (see the chart README).
+  repository: ghcr.io/linuxserver/bazarr
+  # -- Pin the full release tag. 1.6.2 is the newest stable release (26 Sep 2026).
+  tag: "1.6.2"
+  pullPolicy: IfNotPresent
 
 imagePullSecrets: []
-nameOverride: ""
-fullnameOverride: ""
 
 serviceAccount:
-  # Specifies whether a service account should be created
+  # -- Create a dedicated ServiceAccount. Bazarr never talks to the Kubernetes
+  # API, so it gets no mounted token either.
   create: true
-  # Automatically mount a ServiceAccount's API credentials?
-  automount: true
-  # Annotations to add to the service account
-  annotations: {}
-  # The name of the service account to use.
-  # If not set and create is true, a name is generated using the fullname template
+  automount: false
+  # -- Defaults to the fullname.
   name: ""
+  annotations: {}
 
+# -- Annotations added to the pod, on top of the scrape annotations this chart
+# renders itself while the exporter is enabled. Do not repeat `prometheus.io/*`
+# here: the exporter block below owns them, so the announced port cannot drift
+# from the listener.
 podAnnotations: {}
 podLabels: {}
 
-podSecurityContext: {}
-# fsGroup: 2000
+# Pod-level security.
+#
+# `fsGroup` is deliberately NOT set: local-path volumes are hostPath-backed, and
+# the kubelet does not apply fsGroup ownership to them, so setting it would look
+# meaningful and do nothing.
+#
+# The LinuxServer image is not started as a non-root user: its s6 init must run
+# as root to prepare `/config` and then drop to PUID/PGID 1100. Setting
+# `runAsNonRoot` or `runAsUser` here prevents the container from starting at all.
+# `allowPrivilegeEscalation: false` and the runtime seccomp profile still apply.
+podSecurityContext:
+  seccompProfile:
+    type: RuntimeDefault
 
 securityContext:
-  {}
-  # capabilities:
-  #   drop:
-  #   - ALL
-  # readOnlyRootFilesystem: true
-# runAsNonRoot: true
-# runAsUser: 1000
+  allowPrivilegeEscalation: false
 
 service:
   type: ClusterIP
   port: 6767
 
-ingress:
-  enabled: true
-  className: ""
-  annotations:
-    traefik.ingress.kubernetes.io/router.entrypoints: "web,websecure"
-    traefik.ingress.kubernetes.io/router.middlewares: "kube-system-redirect-https@kubernetescrd"
-  hosts:
-    - host: bazarr.kub.local
-      paths:
-        - path: /
-          pathType: Prefix
-  tls: []
-  #  - secretName: chart-example-tls
-  #    hosts:
-  #      - chart-example.local
+container:
+  # -- Container port. Defaults to `service.port` when left empty; set it only
+  # when the app listens on a different port than the Service exposes.
+  port: null
 
-resources:
-  requests:
-    cpu: 1m
-    memory: 256Mi
-  limits:
-    memory: 2Gi
-  # We usually recommend not to specify default resources and to leave this as a conscious
-  # choice for the user. This also increases chances charts run on environments with little
-  # resources, such as Minikube. If you do want to specify resources, uncomment the following
-  # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
-  # limits:
-  #   cpu: 100m
-  #   memory: 128Mi
-  # requests:
-#   cpu: 100m
-#   memory: 128Mi
+ingressRoute:
+  # -- Render a Traefik IngressRoute. This repo never uses
+  # networking.k8s.io/v1 Ingress.
+  enabled: true
+  # -- API group. `traefik.containo.us/v1alpha1` is what the cluster's Traefik
+  # 2.x watches today; flip this to `traefik.io/v1alpha1` when Traefik v3 lands.
+  apiVersion: traefik.containo.us/v1alpha1
+  # -- Traefik entry points. `web` is plain HTTP on kub.local; this host is
+  # internal-only, so there is no TLS and no redirect.
+  entryPoints:
+    - web
+  # -- Single host. For a second host, copy the chart.
+  host: bazarr.kub.local
+  # -- Path prefix. `/` matches everything.
+  pathPrefix: /
+  # -- Middlewares, rendered as `<namespace>-<name>@kubernetescrd`.
+  # Example: [{ name: authentik, namespace: kube-system }]
+  middlewares: []
+  labels: {}
+  annotations: {}
+  tls:
+    # -- Send the router over TLS. Requires the tls block below to mean anything.
+    enabled: false
+    # -- Use a pre-existing certificate instead of asking Traefik to issue one.
+    secretName: ""
+    # -- Traefik ACME resolver name, for example `myresolver`.
+    certResolver: ""
+    # -- TLSOption resource name in this namespace.
+    options: ""
 
 storage:
-  config:
-    class: ~
-    accessModes: ReadWriteOnce
-    dataSize: 2Gi
-    # -- Use an existing PersistentVolumeClaim, overrides values above
-    existingClaim: "bazarr-config"
+  # -- Render the config PersistentVolumeClaim. Set to false only when the app
+  # genuinely keeps no state.
+  enabled: true
+  # -- Use an existing claim instead of the one this chart creates.
+  existingClaim: ""
+  className: local-path
+  accessModes:
+    - ReadWriteOnce
+  # -- Config volumes hold settings, not media. 128Mi is the house standard.
+  size: 128Mi
+  # -- Where the config volume is mounted inside the container.
+  mountPath: /config
 
-  media:
-    class: ~
-    accessModes: ReadWriteOnce
-    dataSize: 2Gi
-    # -- Use an existing PersistentVolumeClaim, overrides values above
-    existingClaim: "pvc-plex-media"
+# -- Environment variables, rendered inline into the container spec. Changing a
+# value changes the pod template, so the Deployment rolls by itself. Prefer this
+# for every non-secret value.
+env:
+  TZ: "Europe/Paris"
+  # LinuxServer images drop from root to these IDs after preparing /config.
+  # They match the rest of the media stack.
+  PUID: "1100"
+  PGID: "1100"
+  # No log level here on purpose. Bazarr's logger has only INFO and DEBUG, and no
+  # environment variable selects either: the level is the `general.debug` flag in
+  # `/config/config/config.yaml`. There is no warning level to set, so this chart
+  # sets nothing. The UI's history and the exporter (when it lands) are the
+  # operational record; the chart README records the exception.
 
-# Additional volumes on the output Deployment definition.
-volumes: []
+# -- Variables sourced from a Secret, as `{ name, valueFrom }`. Kept separate so
+# a secret can never be pasted into the plain map above by accident.
+extraEnv: []
 
-# Additional volumeMounts on the output Deployment definition.
-volumeMounts: []
+# -- Bulk `envFrom` sources, usually `secretRef`. Rarely needed: prefer
+# `extraEnv` so each secret key is explicit in the manifest.
+envFrom: []
 
-nodeSelector: {}
+# Plex's media pool, shared with the other *arr apps and filebrowser. Bazarr
+# reads the videos and writes subtitle files next to them, so the mount is
+# read-write and one claim covers both the TV and movie trees.
+media:
+  claim: pvc-plex-media
+  mountPath: /media
+  readOnly: false
+
+# Bazarr's Prometheus exporter, run as a sidecar (exportarr).
+#
+# It is present but OFF. Exportarr v2.3.0's Bazarr collector walks every episode
+# on each scrape and takes tens of seconds; Prometheus scrapes every 60 s here,
+# so overlapping scrapes would be skipped and Bazarr's CPU would go to the walk
+# instead of subtitle searches. The flag that removes the walk
+# (`DISABLE_EPISODE_METRICS`) is on main and unreleased. Enable this when
+# exportarr v3 ships; v3 also renames the sidecar's `APIKEY` variable to
+# `API_KEY`.
+#
+# The target is built from the release name and `service.port`, so it cannot
+# point at a port Bazarr does not listen on. The scrape annotations are rendered
+# from this block, so enabling the sidecar adds them with it; while it is off, no
+# annotation renders.
+exportarr:
+  # -- Render the sidecar and its scrape annotations.
+  enabled: false
+  image:
+    repository: ghcr.io/onedr0p/exportarr
+    pullPolicy: IfNotPresent
+    # v2.3.0 is the newest release (12 Aug 2025).
+    tag: "v2.3.0"
+  # -- Port exportarr listens on, and the port named in the scrape annotation.
+  port: 9707
+  apiKey:
+    # -- Secret holding Bazarr's API key. Empty means the fullname, which is the
+    # `bazarr` Secret in the media-stack namespace, once it exists.
+    secretName: ""
+    secretKey: secret
+  resources:
+    requests:
+      cpu: 2m
+      memory: 56Mi
+    limits:
+      memory: 112Mi
+
+nodeSelector:
+  # -- Every workload is pinned to a named node; local-path claims are node-bound.
+  kubernetes.io/hostname: streaming
 
 tolerations: []
 
-affinity:
-  nodeAffinity:
-    requiredDuringSchedulingIgnoredDuringExecution:
-      nodeSelectorTerms:
-        - matchExpressions:
-            - key: node-type
-              operator: In
-              values:
-                - general
+affinity: {}
 
-env:
-  TZ: "Europe/Paris"
-  PUID: "1100"
-  PGID: "1100"
+# No measurement exists for this app: the pod has been Pending since 2026-09-02,
+# so its Prometheus series stop there. This is the same house pair as the Sonarr
+# charts — 256Mi request, 768Mi limit — chosen above Bazarr's usual idle
+# footprint so a subtitle scan has room. Re-measure after it has run for a few
+# days and adjust.
+#
+# No CPU limit, here or anywhere in this cluster: a limit throttles exactly the
+# short burst this app needs during a scan, and the node's capacity is the real
+# ceiling. The 10m request is only there so the scheduler places the pod.
+resources:
+  requests:
+    cpu: 10m
+    memory: 256Mi
+  limits:
+    memory: 768Mi
+
+# Probes. `/` is the only unauthenticated endpoint Bazarr answers: the API's
+# status endpoint requires the API key, and a probe cannot read a Secret.
+#
+# Liveness and readiness share it on purpose: Bazarr's dependencies are Sonarr,
+# Radarr and the subtitle providers, and their failure does not stop Bazarr's own
+# web stack. There is no endpoint the kubelet could use to tell the two apart, so
+# a second path would only invent a way to restart a healthy pod. The chart
+# README records the exception.
+#
+# The 300 s startup budget covers the first start on a fresh `/config`, when
+# Bazarr creates its database and settings before it answers.
+probes:
+  startup:
+    enabled: true
+    path: /
+    periodSeconds: 5
+    timeoutSeconds: 5
+    failureThreshold: 60
+  liveness:
+    enabled: true
+    path: /
+    initialDelaySeconds: 20
+    periodSeconds: 30
+    timeoutSeconds: 5
+    failureThreshold: 3
+  readiness:
+    enabled: true
+    path: /
+    initialDelaySeconds: 10
+    periodSeconds: 15
+    timeoutSeconds: 5
+    failureThreshold: 3

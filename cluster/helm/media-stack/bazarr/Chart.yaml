@@ -1,0 +1,16 @@
+apiVersion: v2
+name: bazarr
+description: Bazarr is the subtitle manager for Sonarr and Radarr. It watches both libraries, finds missing subtitles and writes them next to the videos.
+type: application
+# Chart version. Renovate bumps this when the image tag moves.
+version: 1.0.0
+# Must match image.tag in values.yaml.
+appVersion: "1.6.2"
+icon: https://www.bazarr.media/assets/img/logo.png
+home: https://www.bazarr.media/
+sources:
+  - https://github.com/morpheus65535/bazarr
+keywords:
+  - subtitles
+  - pvr
+  - automation
