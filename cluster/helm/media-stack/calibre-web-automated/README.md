@@ -40,6 +40,8 @@ helm template calibre-web-automated cluster/helm/media-stack/calibre-web-automat
 | ServiceAccount | `calibre-web-automated`, with no API token mounted |
 | PersistentVolumeClaim | `calibre-web-automated-config`, 10Gi, `local-path` |
 | PersistentVolumeClaim | `calibre-web-automated-ingest`, 1Gi, `local-path` |
+| Middleware | `calibre-web-automated-allowlist`, `ipWhiteList` over `192.168.1.0/24` |
+| IngressRoute | `calibre-web-automated`, `web` entry point, `Host(calibre.kub.local) && PathPrefix(/)` |
 
 The two claims are created by this chart only while `storage.<name>.enabled` is true and
 `existingClaim` is empty. There is no ConfigMap and no Secret: everything the app needs from the
@@ -136,14 +138,65 @@ CWA is the only writer to the library, and Kavita's mount of the same claim is d
 `readOnly: true` in its pod spec, so the rule is enforced by the manifests rather than by good
 behaviour.
 
+## Route and access control
+
+The chart renders one `IngressRoute` on the `web` entry point for **`calibre.kub.local`**, and one
+`Middleware` — a small Traefik object that runs before a request reaches the app — named
+`calibre-web-automated-allowlist`. That Middleware holds a list of allowed source networks
+(`ingressRoute.sourceRanges`, `192.168.1.0/24` by default) and rejects every request that did not come
+from one of them.
+
+**The allow list is the access control, not the name.** `calibre.kub.local` is only a DNS entry: anyone
+who can resolve that name reaches Traefik, and the proxy then answers only if the client address sits
+inside a listed range — anything else gets `403 Forbidden`. Reading a `.kub.local` name as a boundary is
+how an internal app ends up reachable from outside the LAN.
+
+Two consequences worth stating plainly:
+
+- **An empty `sourceRanges` list is not a safe default.** It renders no Middleware at all, leaving the
+  route with no restriction for whoever can reach the proxy. It is a deliberate setting, never a
+  fallback.
+- **The allow list runs first in the middleware chain**, before anything listed under
+  `ingressRoute.middlewares`. A request from outside the ranges is dropped at the proxy instead of being
+  handed to an authentication middleware that would offer it a login page.
+
+To read from outside the LAN, add the VPN's address range next to the existing one and commit. If
+something between the client and the proxy rewrites addresses before Traefik sees the request, the range
+to add is the one the **proxy** sees, not the one the client has — turn on Traefik's access log for a
+minute if the range is not obvious; it records the address the request arrived from.
+
+The field is `ipWhiteList` on the Traefik **2.9.4** this cluster runs; Traefik v3 renames it to
+`ipAllowList`, together with the CRD group in `ingressRoute.apiVersion`. The field name comes from the
+Traefik 2.9 documentation, because the CRD schema is not readable through the read-only account used for
+automation — **confirm the live object once after the first sync**:
+
+```bash
+kubectl -n media-stack get middleware calibre-web-automated-allowlist -o yaml
+# expect spec.ipWhiteList.sourceRange: [192.168.1.0/24]
+```
+
+### If the list locks you out
+
+A wrong range denies the browser you are using, and there is no way back in through the name. The
+Service does not care about the route, so a port-forward bypasses Traefik entirely:
+
+```bash
+kubectl -n media-stack port-forward svc/calibre-web-automated 8083:8083
+# then open http://localhost:8083
+```
+
+Fix `ingressRoute.sourceRanges`, commit, and let ArgoCD sync. That escape hatch is why a bad range is an
+inconvenience rather than an outage — and why the list is worth one thought before the first sync, not
+after.
+
 ## Credentials
 
 The image starts with the upstream default login, **`admin` / `admin123`**.
 
 Change that password on the first login, before anything else is imported. The app is an
 administration interface: it can delete books and rewrite files in the library. The route in front of
-it is LAN-only, which is why the default is tolerable for the few minutes between the first start and
-the first login — not beyond that.
+it is LAN-only ([why](#route-and-access-control)), which is why the default is tolerable for the few
+minutes between the first start and the first login — not beyond that.
 
 ## Probes and readiness
 
@@ -243,6 +296,8 @@ snapshot of the database.
 | `templates/service.yaml` | the ClusterIP Service, 8083 → 8083 |
 | `templates/serviceaccount.yaml` | the ServiceAccount, with no token mounted |
 | `templates/persistentvolumeclaim.yaml` | the `-config` and `-ingest` claims, each gated on its own `enabled` and `existingClaim` |
+| `templates/middleware-allowlist.yaml` | the `ipWhiteList` Middleware, rendered only while the route and its `sourceRanges` both exist |
+| `templates/ingressroute.yaml` | the IngressRoute: one rule, the allow list first in the chain, then any middleware from values |
 | `templates/_helpers.tpl` | the naming helpers, copied verbatim from `media-stack/sonarr` |
 
 `app.configClaimName` is present and unused: the helper file is deliberately identical to the
