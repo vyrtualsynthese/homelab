@@ -109,7 +109,7 @@ driver left to clear them. The 150Gi `prometheus-data` and 20Gi claims
 Three classes of damage:
 
 1. **Gone and already broken** — the PVC object itself is deleted, so the pod cannot schedule:
-   bazarr, bazarr-anime, kavita, lidarr, maintainerr, maintainerr-anime, readarr, tautulli,
+   bazarr, bazarr-anime, kavita, lidarr, maintainerr, maintainerr-anime, tautulli,
    grafana, koillection, discourse, news-freshrss, postiz-uploads, minecraft, monitorss-mongo,
    postgres, databases-postgres-backup.
 2. **Running on borrowed time** — the PVC is `Terminating` but the pod still holds the mount:
