@@ -1,84 +1,208 @@
-# Default values for home.
-# This is a YAML-formatted file.
-# Declare variables to be passed into your templates.
+# Default values for kavita.
+# This chart follows the contract in docs/charts/README.md and the shape of the
+# reference chart, media-stack/sonarr. The differences are the ones this app
+# needs: a LinuxServer image that starts as root and drops to PUID/PGID, a
+# read-only library mount shared with Calibre-Web Automated, probes on Kavita's
+# own `/api/health`, and a public host behind TLS.
 
-image:
-  repository: ghcr.io/linuxserver/kavita
-  pullPolicy: IfNotPresent
-  # Overrides the image tag whose default is the chart appVersion.
-  tag: 0.8.8
-
-imagePullSecrets: []
+# -- Override the chart name.
 nameOverride: ""
+# -- Override the generated release name.
 fullnameOverride: ""
 
+replicaCount: 1
+
+# -- Deployment strategy. `Recreate` is required for anything with a config
+# volume: ReadWriteOnce volumes cannot be attached to an old and a new pod at the
+# same time.
+strategy: Recreate
+
+image:
+  # LinuxServer publishes on lscr.io and mirrors on ghcr.io; this chart keeps the
+  # registry it already pulls from. The image starts as root and drops to PUID/PGID
+  # through s6; that is why the securityContext below cannot use runAsNonRoot
+  # (see the chart README).
+  repository: ghcr.io/linuxserver/kavita
+  # -- Pin the full release tag. `0.9.1` is the series tag and moves; this one does not.
+  tag: "v0.9.1.4-ls132"
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
 serviceAccount:
-  # Specifies whether a service account should be created
-  create: false
-  # Annotations to add to the service account
-  annotations: {}
-  # The name of the service account to use.
-  # If not set and create is true, a name is generated using the fullname template
+  # -- Create a dedicated ServiceAccount. Kavita never talks to the Kubernetes
+  # API, so it gets no mounted token either.
+  create: true
+  automount: false
+  # -- Defaults to the fullname.
   name: ""
+  annotations: {}
 
-podAnnotations:
-  setGateway: "true"
+# -- Annotations added to the pod. Kavita ships no Prometheus exporter, so there
+# is no scrape annotation to render here.
+podAnnotations: {}
+podLabels: {}
 
-podSecurityContext: {}
-# fsGroup: 2000
+# Pod-level security.
+#
+# `fsGroup` is deliberately NOT set: local-path volumes are hostPath-backed, and
+# the kubelet does not apply fsGroup ownership to them, so setting it would look
+# meaningful and do nothing.
+#
+# The LinuxServer image is not started as a non-root user: its s6 init must run
+# as root to prepare `/config` and then drop to PUID/PGID 1100. Setting
+# `runAsNonRoot` or `runAsUser` here prevents the container from starting at all.
+# `allowPrivilegeEscalation: false` and the runtime seccomp profile still apply.
+podSecurityContext:
+  seccompProfile:
+    type: RuntimeDefault
 
-securityContext: {}
-  # capabilities:
-  #   drop:
-  #   - ALL
-  # readOnlyRootFilesystem: true
-# runAsNonRoot: true
-# runAsUser: 1000
+securityContext:
+  allowPrivilegeEscalation: false
 
 service:
   type: ClusterIP
-  port: 32400
+  port: 5000
 
-ingress:
+container:
+  # -- Container port. Defaults to `service.port` when left empty; set it only
+  # when the app listens on a different port than the Service exposes.
+  port: null
+
+ingressRoute:
+  # -- Render the Traefik IngressRoutes. This repo never uses a core-v1 Ingress
+  # object: Traefik's own CRDs only.
   enabled: true
-  className: no
+  # -- API group. `traefik.containo.us/v1alpha1` is what the cluster's Traefik
+  # 2.x watches today; flip this to `traefik.io/v1alpha1` when Traefik v3 lands.
+  apiVersion: traefik.containo.us/v1alpha1
+  # -- Public host, served over TLS on `websecure`. The plain-HTTP router on
+  # `web` redirects here.
+  host: kavita.kub.home.ashudev.com
+  # -- Path prefix. `/` matches everything.
+  pathPrefix: /
+  # -- Render the `web` router that redirects to HTTPS, and the Middleware it uses.
+  redirectToHttps: true
+  # -- Middlewares on the HTTPS router, rendered as
+  # `<namespace>-<name>@kubernetescrd`. The redirect router always carries the
+  # redirect Middleware instead.
+  middlewares: []
+  labels: {}
   annotations: {}
-  # kubernetes.io/ingress.class: nginx
-  # kubernetes.io/tls-acme: "true"
-  hosts:
-    - host: chart-example.local
-      paths:
-        - path: /
-          pathType: ImplementationSpecific
-  tls: []
-  #  - secretName: chart-example-tls
-  #    hosts:
-  #      - chart-example.local
+  tls:
+    # -- Send the router over TLS.
+    enabled: true
+    # -- Use a pre-existing certificate instead of asking Traefik to issue one.
+    secretName: ""
+    # -- Traefik ACME resolver name.
+    certResolver: myresolver
+    # -- TLSOption resource in this namespace, rendered by `templates/tls-option.yaml`.
+    options: kavita-tlsoption
 
+storage:
+  # -- Render the config PersistentVolumeClaim.
+  enabled: true
+  # -- Use an existing claim instead of the one this chart creates.
+  existingClaim: ""
+  className: local-path
+  accessModes:
+    - ReadWriteOnce
+  # -- 2Gi, not the usual 128Mi. `/config` holds Kavita's SQLite database plus
+  # the cover thumbnails and the page cache it generates for every chapter it
+  # has served; a library of a few hundred series fills 128Mi on its own.
+  size: 2Gi
+  # -- Where the config volume is mounted inside the container.
+  mountPath: /config
+  # Calibre-Web Automated's library: the same claim it writes, mounted read-only
+  # here. Kavita is a reader, never a writer (see the chart README).
+  library:
+    claim: pvc-books-media-nfs-subdir-external-provisioner
+    mountPath: /books
+    readOnly: true
+
+# -- Environment variables, rendered inline into the container spec. Changing a
+# value changes the pod template, so the Deployment rolls by itself. Prefer this
+# for every non-secret value.
+env:
+  TZ: "Europe/Paris"
+  # LinuxServer images drop from root to these IDs after preparing /config.
+  # They match the rest of the media stack.
+  PUID: "1100"
+  PGID: "1100"
+  # .NET reads its configuration from environment variables with `__` as the
+  # section separator, so these two are ASP.NET Core's own `Logging:LogLevel`
+  # keys rather than a Kavita variable. They put the ASP.NET Core logger — the
+  # one that prints a line per HTTP request — at Warning instead of Information.
+  # Whether Kavita's own logger honours them is unconfirmed until a pod runs: see
+  # the Logs section of the chart README before trusting the volume in Loki.
+  Logging__LogLevel__Default: "Warning"
+  Logging__LogLevel__Microsoft: "Warning"
+  # Stops the .NET host builder watching appsettings.json for edits at runtime.
+  # That watcher exists for development; in a container the file never changes,
+  # so it is only a file watch and a log line. Carried over from the old chart.
+  DOTNET_HOSTBUILDER__RELOADCONFIGONCHANGE: "false"
+
+# -- Variables sourced from a Secret, as `{ name, valueFrom }`. Kept separate so
+# a secret can never be pasted into the plain map above by accident.
+extraEnv: []
+
+# -- Bulk `envFrom` sources, usually `secretRef`. Rarely needed: prefer
+# `extraEnv` so each secret key is explicit in the manifest.
+envFrom: []
+
+nodeSelector:
+  # -- Every workload is pinned to a named node; local-path claims are node-bound.
+  kubernetes.io/hostname: streaming
+
+tolerations: []
+
+affinity: {}
+
+# Sized from the existing deployment's steady state: 15m CPU request, 256Mi
+# memory request, 1Gi memory limit.
+#
+# No CPU limit, here or anywhere in this cluster: a limit throttles exactly the
+# short burst this app needs while generating a chapter's page cache, and the
+# node's capacity is the real ceiling. The 15m request is only there so the
+# scheduler places the pod.
 resources:
   requests:
     cpu: 15m
     memory: 256Mi
   limits:
-    memory: 1024Mi
+    memory: 1Gi
 
-autoscaling:
-  enabled: false
-  minReplicas: 1
-  maxReplicas: 100
-  targetCPUUtilizationPercentage: 80
-  # targetMemoryUtilizationPercentage: 80
-
-nodeSelector: {}
-
-tolerations: []
-
-affinity:
-  nodeAffinity:
-    requiredDuringSchedulingIgnoredDuringExecution:
-      nodeSelectorTerms:
-        - matchExpressions:
-            - key: node-type
-              operator: In
-              values:
-                - general
+# Probes. `/api/health` is Kavita's unauthenticated health endpoint and answers
+# as soon as the web stack is serving; `/` would answer too but redirects into
+# the UI, so it is not used.
+#
+# Readiness is off on purpose. Kavita's only dependency is its SQLite database on
+# the config volume, and a database that cannot be opened stops the process from
+# starting at all; there is no second endpoint whose failure readiness could
+# report while liveness stays green. Pointing readiness at `/api/health` as well
+# would duplicate liveness and turn a slow response into a restart loop. This is
+# the documented readiness exception (see the chart README).
+#
+# The startup probe holds the other one through a first start after a version
+# upgrade, when Kavita migrates the database and generates its cover cache.
+probes:
+  startup:
+    enabled: true
+    path: /api/health
+    periodSeconds: 5
+    timeoutSeconds: 5
+    failureThreshold: 30
+  liveness:
+    enabled: true
+    path: /api/health
+    initialDelaySeconds: 20
+    periodSeconds: 30
+    timeoutSeconds: 5
+    failureThreshold: 3
+  readiness:
+    enabled: false
+    path: /api/health
+    initialDelaySeconds: 10
+    periodSeconds: 15
+    timeoutSeconds: 5
+    failureThreshold: 3
