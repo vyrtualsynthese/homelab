@@ -393,6 +393,7 @@ git commit -m "♻️ refactor(postgres): sync the owned chart instead of the Bi
 - Rewrite: `cluster/helm/databases/pgadmin/values.yaml`
 - Create: `cluster/helm/databases/pgadmin/templates/ingressroute.yaml`
 - Create: `cluster/helm/databases/pgadmin/templates/middleware.yaml`
+- Create: `cluster/helm/databases/pgadmin/templates/pvc.yaml`
 - Modify: `.gitignore` (scoped to this chart's built dependencies)
 - Modify: `cluster/argocd/projects/databases/pgadmin.yaml` (CRLF preserved)
 
@@ -429,10 +430,13 @@ dependencies:
 `env.email` set to the operator's login email (plain value, not a secret);
 `persistentVolume.enabled: true`, `persistentVolume.size: 10Gi`,
 `persistentVolume.storageClass: local-path` (the chart key is `storageClass`, not
-`storageClassName`); `resources` requests 50m/256Mi, limits 500m/512Mi;
-`nodeSelector: {kubernetes.io/hostname: nuc0}`; `podLabels: {app: pgadmin}` (the PostgreSQL network
-policy selects on it); `networkPolicy.enabled: false` (the controls are the Traefik allowlist and the
-PostgreSQL policy); `ingress.enabled: false`; and `serverDefinitions`:
+`storageClassName`), **and `persistentVolume.existingClaim: pgadmin-config`** — the claim the wrapper
+creates in Step 4. The chart's default name would be `pgadmin-pgadmin4`, which exists in the
+namespace as a `Terminating` Longhorn claim and cannot be created again; `resources` requests
+50m/256Mi, limits 500m/512Mi; `nodeSelector: {kubernetes.io/hostname: nuc0}`; `podLabels: {app:
+pgadmin}` (the PostgreSQL network policy selects on it); `networkPolicy.enabled: false` (the
+controls are the Traefik allowlist and the PostgreSQL policy); `ingress.enabled: false`; and
+`serverDefinitions`:
 
 ```yaml
 serverDefinitions:
@@ -457,15 +461,20 @@ serverDefinitions:
       MaintenanceDB: "postgres"
 ```
 
-- [ ] **Step 4: Write `templates/middleware.yaml`** — `Middleware/pgadmin-lan-only`,
-`apiVersion: traefik.containo.us/v1alpha1`, `spec.ipAllowList.sourceRange: ["192.168.1.0/24"]`.
+- [ ] **Step 4: Write `templates/pvc.yaml`** — `PersistentVolumeClaim/pgadmin-config`, 10Gi,
+`storageClassName: local-path`, `ReadWriteOnce`. Explicit, because the chart default name collides
+with a `Terminating` claim.
 
-- [ ] **Step 5: Write `templates/ingressroute.yaml`** — `IngressRoute/pgadmin` with
+- [ ] **Step 5: Write `templates/middleware.yaml`** — `Middleware/pgadmin-lan-only`,
+`apiVersion: traefik.containo.us/v1alpha1`, `spec.ipAllowList.sourceRange: ["192.168.1.0/24"]`
+(confirmed live: nodes `.27`, `.41`, `.46`, `.48`).
+
+- [ ] **Step 6: Write `templates/ingressroute.yaml`** — `IngressRoute/pgadmin` with
 `entryPoints: [web]`, one route `match: Host(`pgadmin.kub.local`)`, `kind: Rule`, middleware
 `pgadmin-lan-only`, and a service whose name and port are taken from the rendered subchart Service
 (default `pgadmin-pgadmin4`, port 80). No `websecure`, no `tls` block, no `certResolver`.
 
-- [ ] **Step 6: Build the dependency and render**
+- [ ] **Step 7: Build the dependency and render**
 
 ```bash
 helm dependency build cluster/helm/databases/pgadmin
@@ -479,9 +488,9 @@ grep -q 'entryPoints: \[web\]' /tmp/pga.yaml
 ! grep -q 'node-type' /tmp/pga.yaml
 ! grep -q 'networking.k8s.io' /tmp/pga.yaml
 ```
-Expected: all pass. Read the rendered Service name and make Step 5's reference match it.
+Expected: all pass. Read the rendered Service name and make Step 6's reference match it.
 
-- [ ] **Step 7: Keep the built dependency out of git**
+- [ ] **Step 8: Keep the built dependency out of git**
 
 Append to `.gitignore`, in the same style as the monitoring rule:
 
@@ -491,11 +500,11 @@ cluster/helm/databases/pgadmin/charts/
 cluster/helm/databases/pgadmin/Chart.lock
 ```
 
-- [ ] **Step 8: Rewrite the Application** (same shape as Task 5 Step 1, name `pgadmin`, path
+- [ ] **Step 9: Rewrite the Application** (same shape as Task 5 Step 1, name `pgadmin`, path
 `cluster/helm/databases/pgadmin`), then confirm CRLF, `! grep -q automated`, and `! grep -q
 networking.k8s.io`.
 
-- [ ] **Step 9: Commit**
+- [ ] **Step 10: Commit**
 
 ```bash
 git add .gitignore cluster/helm/databases/pgadmin cluster/argocd/projects/databases/pgadmin.yaml
@@ -553,10 +562,11 @@ git commit -m "📝 docs(postgres): secrets inventory and the add-database, rest
 
 ---
 
-### Task 8: Cluster bring-up and acceptance (needs cluster access)
+### Task 8: Cluster bring-up and acceptance (needs write access)
 
-This task is not repository work. It is the gate the design's §9 describes; a session without cluster
-access stops after Task 7 and hands this task to the operator.
+This task is not repository work. It is the gate the design's §9 describes. The read-only Kubernetes
+MCP can confirm state at each step, but creating Secrets, syncing Applications and deleting objects
+need the operator's admin kubeconfig.
 
 - [ ] **Step 1: Create the four Secrets by hand** in `databases`: `postgres-superuser` with
 `postgres-password`, `pg-backup` with `backup-password`, `pg-exporter` with `exporter-password`,
@@ -574,15 +584,38 @@ kubectl -n databases exec postgres-0 -c postgres -- psql -U postgres -Atc 'SELEC
 kubectl -n databases exec postgres-0 -c postgres -- psql -U postgres -Atc '\du'
 kubectl -n databases exec postgres-0 -c exporter -- wget -qO- http://127.0.0.1:9187/metrics | head -3
 ```
-Expected: pod `Running` with both containers ready, bootstrap Job `Complete`, claims `postgres-data`
-and `postgres-dumps` `Bound`, databases `postgres`, `template0`, `template1` only, roles `backup`,
-`postgres`, `postgres_exporter`, and exporter metrics returning `pg_up 1`. Anything else is a
-failure to explain, not a bonus.
+Expected: pod `Running` with both containers ready, bootstrap Job `Complete`, databases `postgres`,
+`template0`, `template1` only, roles `backup`, `postgres`, `postgres_exporter`, and exporter metrics
+returning `pg_up 1`. Claims `postgres-data` and `postgres-dumps` are `Bound` once the pod is
+scheduled — `local-path` is `WaitForFirstConsumer`, so a `Pending` claim before the pod exists is
+normal. Anything else is a failure to explain, not a bonus.
 
-- [ ] **Step 4: Walk the add-database runbook once** — create `acceptance` with role `acceptance`,
+- [ ] **Step 4: Delete the old Bitnami leftovers, now that the new instance answers**
+
+```bash
+kubectl -n databases delete statefulset postgres-postgresql
+kubectl -n databases delete svc postgres-postgresql postgres-postgresql-hl postgres-postgresql-metrics
+kubectl -n databases delete deployment alpine
+```
+Expected: the 95-day `Pending` pod, its three Services and the 500-day `alpine` Deployment are gone.
+They are not ours to prune: the Application that owned them is being replaced.
+
+- [ ] **Step 5: Clear the `Terminating` pgAdmin claim**
+
+`pvc/pgadmin-pgadmin4` has been `Terminating` on Longhorn since the disk loss. Patch the PV's
+finalizers first, then the claim's (`AGENTS.md` §7 item 4):
+```bash
+kubectl get pv | grep pgadmin
+kubectl patch pv <pv-name> -p '{"metadata":{"finalizers":null}}' --type=merge
+kubectl -n databases patch pvc pgadmin-pgadmin4 -p '{"metadata":{"finalizers":null}}' --type=merge
+```
+Expected: the claim disappears. The new chart uses `pgadmin-config`, so this is cleanup, not a
+dependency — do it in either order.
+
+- [ ] **Step 6: Walk the add-database runbook once** — create `acceptance` with role `acceptance`,
 its two Secrets, and the §6.5 SQL. Confirm `\l` shows it owned by `acceptance`.
 
-- [ ] **Step 5: Prove connectivity and the policy**
+- [ ] **Step 7: Prove connectivity and the policy**
 
 ```bash
 kubectl -n wiki run psql-test --rm -it --image=postgres:18.7 --restart=Never -- \
@@ -593,7 +626,7 @@ kubectl -n default run psql-denied --rm -it --image=postgres:18.7 --restart=Neve
 Expected: the first succeeds; the second times out or is refused. If the second also succeeds, the
 network policy is not being enforced — record it and do not call goal 2 met.
 
-- [ ] **Step 6: Wait for the dump, then restore it**
+- [ ] **Step 8: Wait for the dump, then restore it**
 
 Next morning (or `kubectl -n databases create job --from=cronjob/postgres-dump dump-now`):
 ```bash
@@ -602,14 +635,14 @@ kubectl -n databases logs job/postgres-dump-<timestamp>
 Expected: one file for `acceptance`, no errors. Then walk `postgres-restore.md`, record the date and
 row counts, and drop the acceptance database.
 
-- [ ] **Step 7: pgAdmin check** — from a workstation on the LAN, load `pgadmin.kub.local`, log in with
+- [ ] **Step 9: pgAdmin check** — from a workstation on the LAN, load `pgadmin.kub.local`, log in with
 the admin account, confirm both pre-registered servers are listed, connect as `backup` and browse.
 From outside the LAN, confirm it does not load.
 
-- [ ] **Step 8: Add the four alerts in Grafana** (dump file older than 26 hours, database pod not
+- [ ] **Step 10: Add the four alerts in Grafana** (dump file older than 26 hours, database pod not
 ready, data volume above 85 %, `pg_up == 0`), and note them in `docs/observability-conventions.md`.
 
-- [ ] **Step 9: Final gate**
+- [ ] **Step 11: Final gate**
 
 ```bash
 for c in cluster/helm/databases/postgres cluster/helm/databases/pgadmin; do
