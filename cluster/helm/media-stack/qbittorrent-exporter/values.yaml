@@ -1,82 +1,79 @@
-# Default values for home.
-# This is a YAML-formatted file.
-# Declare variables to be passed into your templates.
+# Default values for qbittorrent-exporter.
+# This chart follows the contract in docs/charts/README.md. The app is a single
+# Go binary: no config volume, no Service of its own, one metrics port, and
+# credentials read from a Secret that already exists.
+
+# -- Override the chart name.
+nameOverride: ""
+# -- Override the generated release name.
+fullnameOverride: ""
 
 replicaCount: 1
 
 image:
-  repository: caseyscarborough/qbittorrent-exporter
+  repository: ghcr.io/martabal/qbittorrent-exporter
+  # -- Pinned release. v2.0.4 (25 Oct 2026) is the first release that accepts
+  # qBittorrent 5.2's `204 No Content` login reply and its `QBT_SID_<port>`
+  # session cookie. The abandoned caseyscarborough image (v1.3.5) cannot log in
+  # to qBittorrent 5.2 at all; the chart README records why.
+  tag: "v2.0.4"
   pullPolicy: IfNotPresent
-  # Overrides the image tag whose default is the chart appVersion.
-  tag: v1.3.5
 
 imagePullSecrets: []
-nameOverride: ""
-fullnameOverride: ""
 
 serviceAccount:
-  # Specifies whether a service account should be created
+  # -- The exporter never talks to the Kubernetes API, so it runs as the
+  # namespace's `default` account with no mounted token.
   create: false
-  # Annotations to add to the service account
-  annotations: {}
-  # The name of the service account to use.
-  # If not set and create is true, a name is generated using the fullname template
+  automount: false
+  # -- Defaults to `default` while `create` is false.
   name: ""
-
-podAnnotations:
-  setGateway: "true"
-  prometheus.io/scrape: "true"
-  prometheus.io/scheme: "http"
-  prometheus.io/port: "17871"
-
-podSecurityContext: {}
-# fsGroup: 2000
-
-securityContext: {}
-  # capabilities:
-  #   drop:
-  #   - ALL
-  # readOnlyRootFilesystem: true
-# runAsNonRoot: true
-# runAsUser: 1000
-
-service:
-  type: ClusterIP
-  port: 32400
-
-ingress:
-  enabled: true
-  className: no
   annotations: {}
-  # kubernetes.io/ingress.class: nginx
-  # kubernetes.io/tls-acme: "true"
-  hosts:
-    - host: chart-example.local
-      paths:
-        - path: /
-          pathType: ImplementationSpecific
-  tls: []
-  #  - secretName: chart-example-tls
-  #    hosts:
-  #      - chart-example.local
 
-# Measured peak with Prometheus: 113MiB memory and 0.5m CPU. The old 512Mi
-# request reserved half a gigabyte for a process that never used a quarter of
-# it, which is schedulable capacity the node cannot give to anything else.
+exporter:
+  # -- Port the exporter listens on. The scrape annotation is rendered from this
+  # value, so the announced port cannot drift from the listener.
+  port: 8090
+  # -- qBittorrent Web API base URL, resolved through the Service in this
+  # namespace.
+  baseUrl: "http://qbittorrent:8080"
+  # -- Session cookie name. qBittorrent 5.2 renamed the `SID` cookie to
+  # `QBT_SID_<webui port>`; this cluster's qBittorrent listens on 8080. A wrong
+  # value is a 403 on every API call after a successful login, which looks like
+  # an authentication failure in the logs.
+  cookieName: "QBT_SID_8080"
+  # -- Existing Secret holding the Web API credentials, keys `username` and
+  # `password`.
+  existingSecret: qbittorrent-exporter
+
+# -- Extra pod annotations, on top of the four `prometheus.io/*` annotations the
+# template renders from `exporter.port`. Do not repeat them here.
+podAnnotations: {}
+
+# Pod-level security. The image is a static Go binary on Alpine with no USER
+# directive, so it runs as root inside the container; `runAsNonRoot` would stop
+# it from starting. The settings below still apply and cost nothing.
+podSecurityContext:
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+
+# -- The Go exporter is roughly 20 times smaller than the Java one it replaces,
+# which peaked at 113 MiB. Re-measure after the switch and lower the limit if it
+# stays near the request.
 resources:
   requests:
     cpu: 10m
-    memory: 64Mi
+    memory: 32Mi
   limits:
-    memory: 256Mi
+    memory: 128Mi
 
-autoscaling:
-  enabled: false
-  minReplicas: 1
-  maxReplicas: 100
-  targetCPUUtilizationPercentage: 80
-  # targetMemoryUtilizationPercentage: 80
-
+# -- Every workload is pinned to one node in this repo; there is no failover.
 nodeSelector:
   kubernetes.io/hostname: streaming
 
