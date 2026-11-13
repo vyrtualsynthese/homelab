@@ -1,24 +1,17 @@
 apiVersion: v2
 name: maintainerr
-description: A Helm chart for Kubernetes
-
-# A chart can be either an 'application' or a 'library' chart.
-#
-# Application charts are a collection of templates that can be packaged into versioned archives
-# to be deployed.
-#
-# Library charts provide useful utilities or functions for the chart developer. They're included as
-# a dependency of application charts to inject those utilities and functions into the rendering
-# pipeline. Library charts do not define any templates and therefore cannot be deployed.
+description: Maintainerr builds collections from rules and removes the matching media once a collection's rule says to.
 type: application
-
-# This is the chart version. This version number should be incremented each time you make changes
-# to the chart and its templates, including the app version.
-# Versions are expected to follow Semantic Versioning (https://semver.org/)
-version: 0.1.0
-
-# This is the version number of the application being deployed. This version number should be
-# incremented each time you make changes to the application. Versions are not expected to
-# follow Semantic Versioning. They should reflect the version the application is using.
-# It is recommended to use it with quotes.
-appVersion: "1.0.0"
+# Chart version. Bumps are manual: image.tag, appVersion and this version move together.
+version: 1.0.0
+# Must match image.tag in values.yaml.
+appVersion: "3.32.0"
+icon: https://raw.githubusercontent.com/Maintainerr/Maintainerr/v3.32.0/apps/ui/public/logo.png
+home: https://maintainerr.info/
+sources:
+  - https://github.com/Maintainerr/Maintainerr
+keywords:
+  - plex
+  - jellyfin
+  - cleanup
+  - media

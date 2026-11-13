@@ -1,0 +1,44 @@
+{{- if .Values.ingressRoute.enabled }}
+apiVersion: {{ .Values.ingressRoute.apiVersion }}
+kind: IngressRoute
+metadata:
+  name: {{ include "app.fullname" . }}
+  labels:
+    {{- include "app.labels" . | nindent 4 }}
+    {{- with .Values.ingressRoute.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- with .Values.ingressRoute.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  entryPoints:
+    {{- toYaml .Values.ingressRoute.entryPoints | nindent 4 }}
+  routes:
+    - kind: Rule
+      match: Host(`{{ .Values.ingressRoute.host }}`){{- if ne .Values.ingressRoute.pathPrefix "/" }} && PathPrefix(`{{ .Values.ingressRoute.pathPrefix }}`){{- end }}
+      {{- with .Values.ingressRoute.middlewares }}
+      middlewares:
+        {{- range . }}
+        - name: {{ printf "%s-%s@kubernetescrd" .namespace .name }}
+        {{- end }}
+      {{- end }}
+      services:
+        - name: {{ include "app.fullname" . }}
+          port: {{ .Values.service.port }}
+  {{- if .Values.ingressRoute.tls.enabled }}
+  tls:
+    {{- with .Values.ingressRoute.tls.secretName }}
+    secretName: {{ . }}
+    {{- end }}
+    {{- with .Values.ingressRoute.tls.certResolver }}
+    certResolver: {{ . }}
+    {{- end }}
+    {{- with .Values.ingressRoute.tls.options }}
+    options:
+      name: {{ . }}
+      namespace: {{ $.Release.Namespace }}
+    {{- end }}
+  {{- end }}
+{{- end }}

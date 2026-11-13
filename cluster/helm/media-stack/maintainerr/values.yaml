@@ -1,94 +1,228 @@
-# Default values for home.
-# This is a YAML-formatted file.
-# Declare variables to be passed into your templates.
+# Default values for maintainerr.
+#
+# This chart follows the contract in docs/charts/README.md and the shape of the
+# reference chart, media-stack/autobrr. The differences are the ones this app needs:
+# an image that already runs as a non-root UID, a data directory at /opt/data, a
+# real pair of health endpoints, and a LAN-only route for an app with no login.
+
+# -- Override the chart name.
+nameOverride: ""
+# -- Override the generated release name.
+fullnameOverride: ""
 
 replicaCount: 1
 
+# -- Deployment strategy. `Recreate` is required for anything with a config volume:
+# ReadWriteOnce volumes cannot be attached to an old and a new pod at the same time.
+strategy: Recreate
+
 image:
+  # The project publishes the same build to Docker Hub and to GHCR; GHCR is the
+  # project's own registry and the lab's image policy prefers it.
   repository: ghcr.io/maintainerr/maintainerr
+  # -- Pin the tag; a rolling tag makes every deploy a different app. Upstream
+  # tags carry no `v` prefix.
+  # Bumps are manual and move this tag, `appVersion` and the chart `version` together.
+  tag: "3.32.0"
   pullPolicy: IfNotPresent
-  # Overrides the image tag whose default is the chart appVersion.
-  tag: 3.21.1
 
 imagePullSecrets: []
-nameOverride: ""
-fullnameOverride: ""
 
 serviceAccount:
-  # Specifies whether a service account should be created
-  create: false
-  # Annotations to add to the service account
-  annotations: {}
-  # The name of the service account to use.
-  # If not set and create is true, a name is generated using the fullname template
+  # -- Create a dedicated ServiceAccount. The app never talks to the Kubernetes
+  # API, so it gets no mounted token either.
+  create: true
+  automount: false
+  # -- Defaults to the fullname.
   name: ""
+  annotations: {}
 
+# -- Annotations added to the pod.
 podAnnotations: {}
+podLabels: {}
 
+# Pod-level security.
+#
+# `fsGroup` is deliberately NOT set: local-path volumes are hostPath-backed, and the
+# kubelet does not apply fsGroup ownership to them, so setting it would look
+# meaningful and do nothing.
 podSecurityContext:
-  fsGroup: 1000
-# fsGroup: 2000
+  seccompProfile:
+    type: RuntimeDefault
 
+# Container-level security.
+#
+# The image ships `USER node` (UID 1000) and never starts as root, so running as
+# 1000 is the configuration upstream documents and needs no root phase.
+#
+# One consequence to know about: the local-path provisioner creates each new volume
+# `0777` and chowns it to `1100:1100`, so this process is not the owner but can
+# still write. That is why no `chown` on the node is needed. If `permPattern` is ever
+# set on the local-path chart, this is the first chart to break, with
+# `Failed to stage the UI` in its logs.
 securityContext:
-  runAsUser: 1000
   runAsNonRoot: true
-  # capabilities:
-  #   drop:
-  #   - ALL
-  # readOnlyRootFilesystem: true
-# runAsNonRoot: true
-# runAsUser: 1000
+  runAsUser: 1000
+  runAsGroup: 1000
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
 
 service:
   type: ClusterIP
-  port: 80
+  port: 6246
 
-ingress:
+container:
+  # -- Container port. Defaults to `service.port` when left empty; set it only
+  # when the app listens on a different port than the Service exposes.
+  port: null
+
+ingressRoute:
+  # -- Render a Traefik IngressRoute. The core Kubernetes Ingress API is not used
+  # anywhere in this repo.
   enabled: true
-  className: no
+  # -- API group. `traefik.containo.us/v1alpha1` is what the cluster's Traefik
+  # 2.x watches today; flip this to `traefik.io/v1alpha1` when Traefik v3 lands.
+  apiVersion: traefik.containo.us/v1alpha1
+  # -- Traefik entry points. `web` is plain HTTP on kub.local; `websecure` is TLS.
+  # This app has no login of its own, so it stays on `web`, inside the LAN.
+  entryPoints:
+    - web
+  # -- Single host. For a second host, copy the chart.
+  host: maintainerr.kub.local
+  # -- Path prefix. `/` matches everything.
+  pathPrefix: /
+  # -- Middlewares, rendered as `<namespace>-<name>@kubernetescrd`. None is wired:
+  # the LAN boundary is the access control, as upstream intends for this app.
+  middlewares: []
+  labels: {}
   annotations: {}
-  # kubernetes.io/ingress.class: nginx
-  # kubernetes.io/tls-acme: "true"
-  hosts:
-    - host: chart-example.local
-      paths:
-        - path: /
-          pathType: ImplementationSpecific
-  tls: []
-  #  - secretName: chart-example-tls
-  #    hosts:
-  #      - chart-example.local
+  tls:
+    # -- Send the router over TLS. Must stay false for a LAN-only, `web` route.
+    enabled: false
+    # -- Use a pre-existing certificate instead of asking Traefik to issue one.
+    secretName: ""
+    # -- Traefik ACME resolver name, for example `myresolver`.
+    certResolver: ""
+    # -- TLSOption resource name in this namespace.
+    options: ""
 
-resources:
-  {}
-  # We usually recommend not to specify default resources and to leave this as a conscious
-  # choice for the user. This also increases chances charts run on environments with little
-  # resources, such as Minikube. If you do want to specify resources, uncomment the following
-  # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
-  # limits:
-  #   cpu: 100m
-  #   memory: 128Mi
-  # requests:
-  #   cpu: 100m
-  #   memory: 128Mi
+storage:
+  # -- Render the data PersistentVolumeClaim. Everything the app keeps — the SQLite
+  # database, its logs, and a staged copy of the web UI — lives here.
+  enabled: true
+  # -- Use an existing claim instead of the one this chart creates.
+  existingClaim: ""
+  className: local-path
+  accessModes:
+    - ReadWriteOnce
+  # -- 256Mi rather than the house default of 128Mi: the image copies its web UI
+  # into this directory on every boot, so peak usage is roughly two copies while the
+  # old one is replaced, before the database and the logs are counted.
+  size: 256Mi
+  # -- Where the data volume is mounted. The image's `DATA_DIR` is fixed at
+  # `/opt/data`, so changing this breaks the app.
+  mountPath: /opt/data
 
-autoscaling:
-  enabled: false
-  minReplicas: 1
-  maxReplicas: 100
-  targetCPUUtilizationPercentage: 80
-  # targetMemoryUtilizationPercentage: 80
+# -- Environment variables, rendered inline into the container spec. Changing a
+# value changes the pod template, so the Deployment rolls by itself.
+env:
+  TZ: "Europe/Paris"
+  # Fluent Bit ships every container line to Loki without filtering, and this app
+  # schedules rules and writes a line per evaluation at `info`. `warn` keeps the
+  # failures that matter (a failed deletion, an unreachable integration) and drops
+  # the routine noise. Raise it temporarily while debugging, then put it back.
+  LOG_LEVEL: "warn"
+  # The anonymous weekly usage report is on by default for new installs. This
+  # appliance is on a private network and has nothing to contribute; upstream
+  # provides the flag to turn it off.
+  TELEMETRY: "off"
 
-nodeSelector: {}
+# -- Variables sourced from a Secret, as `{ name, valueFrom }`. Kept separate so
+# a secret can never be pasted into the plain map above by accident.
+extraEnv: []
+
+# -- Bulk `envFrom` sources, usually `secretRef`. Rarely needed: prefer
+# `extraEnv` so each secret key is explicit in the manifest.
+envFrom: []
+
+# -- Additional volumes, rendered verbatim into the pod spec.
+#
+# The media library is deliberately not mounted. Doing so enables Maintainerr's
+# leftover-folder cleanup, which deletes empty directories after a removal; that is
+# opt-in. To turn it on, mount the shared media claim at the same container path the
+# *arr apps use for their root folder, read-write:
+#
+#   volumes:
+#     - name: media
+#       persistentVolumeClaim:
+#         claimName: pvc-plex-media
+#
+#   volumeMounts:
+#     - name: media
+#       mountPath: /movies
+volumes: []
+
+# -- Additional volume mounts, rendered verbatim into the container.
+volumeMounts: []
+
+nodeSelector:
+  # -- Every workload is pinned to a named node; local-path claims are node-bound.
+  # Plex and the rest of the media stack run here.
+  kubernetes.io/hostname: streaming
 
 tolerations: []
 
-affinity:
-  nodeAffinity:
-    requiredDuringSchedulingIgnoredDuringExecution:
-      nodeSelectorTerms:
-        - matchExpressions:
-            - key: node-type
-              operator: In
-              values:
-                - general
+affinity: {}
+
+# Unmeasured. The app has not run since the 2026 disk failure, so there is no
+# Prometheus history for it. The numbers budget a Node process holding a SQLite
+# handle and rendering posters on demand (sharp, node-canvas): a few hundred MiB
+# resident, with a spike during a large collection run. Replace them from Prometheus
+# a week after the first start.
+#
+# No CPU limit, here or anywhere in this cluster: a limit throttles exactly the
+# short burst this app needs while it renders posters, and the node's capacity is
+# the real ceiling. The 25m request is only there so the scheduler places the pod.
+resources:
+  requests:
+    cpu: 25m
+    memory: 256Mi
+  limits:
+    memory: 1Gi
+
+# Probes. This app is the first in the media stack whose health endpoints map
+# cleanly onto the kubelet's two questions, so readiness is real rather than an
+# exception.
+probes:
+  # -- `/api/health/live` answers as soon as the HTTP server listens and never
+  # touches the database. Startup gates the other two through a first boot, which
+  # stages the UI, bootstraps the server and runs the initial migrations: a 180s
+  # budget.
+  startup:
+    enabled: true
+    path: /api/health/live
+    periodSeconds: 5
+    timeoutSeconds: 5
+    failureThreshold: 36
+  # -- `/api/health/live` again: a wedged process is restarted, a database blip is
+  # not.
+  liveness:
+    enabled: true
+    path: /api/health/live
+    initialDelaySeconds: 20
+    periodSeconds: 30
+    timeoutSeconds: 5
+    failureThreshold: 3
+  # -- `/api/health/ready` runs `SELECT 1` and answers 503 when the SQLite file is
+  # missing, locked or corrupt, so this is a genuine dependency check on its own
+  # path. It deliberately does not test Plex or the *arr apps: an upstream outage
+  # should not take this pod out of rotation.
+  readiness:
+    enabled: true
+    path: /api/health/ready
+    initialDelaySeconds: 5
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
