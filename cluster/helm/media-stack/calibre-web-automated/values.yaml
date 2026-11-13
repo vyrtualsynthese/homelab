@@ -1,0 +1,204 @@
+# Default values for calibre-web-automated.
+# This chart follows the contract in docs/charts/README.md and the shape of the
+# reference chart, media-stack/sonarr. The differences are the ones this app needs:
+# a LinuxServer-style image that starts as root and drops to PUID/PGID, two claims
+# of its own next to a library that already lives on NFS, and a read-only root
+# filesystem that is still on trial (see the chart README).
+
+# -- Override the chart name.
+nameOverride: ""
+# -- Override the generated release name.
+fullnameOverride: ""
+
+replicaCount: 1
+
+# -- Deployment strategy. `Recreate` is required here, for two reasons: the two
+# config-side claims are ReadWriteOnce and cannot attach to an old and a new pod at
+# once, and a rolling update would briefly run two Calibre instances against the
+# same `metadata.db` on the share — the exact hazard this change exists to remove.
+strategy: Recreate
+
+image:
+  # The project publishes the same build to Docker Hub and to GHCR; this chart
+  # takes GHCR, which the lab's image policy prefers.
+  repository: ghcr.io/crocodilestick/calibre-web-automated
+  # -- Pin the full release tag. A moving tag would make every deploy a different
+  # app; Renovate manages this.
+  tag: "v4.0.8"
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
+serviceAccount:
+  # -- Create a dedicated ServiceAccount. CWA never talks to the Kubernetes API,
+  # so it gets no mounted token either.
+  create: true
+  automount: false
+  # -- Defaults to the fullname.
+  name: ""
+  annotations: {}
+
+# -- Annotations added to the pod. The image ships no Prometheus exporter, so this
+# chart renders no scrape annotation: a target nothing serves is worse than none.
+podAnnotations: {}
+
+# Pod-level security.
+#
+# `fsGroup` is deliberately NOT set: local-path volumes are hostPath-backed, and
+# the kubelet does not apply fsGroup ownership to them, so setting it would look
+# meaningful and do nothing.
+podSecurityContext:
+  seccompProfile:
+    type: RuntimeDefault
+
+# Container-level security.
+#
+# The image is a LinuxServer base: `s6` starts as root, prepares `/config` and the
+# ingest folder, then drops to PUID/PGID. That is why `runAsNonRoot` and `runAsUser`
+# are absent — the container would not start — and why the capability set keeps
+# exactly the three calls that init makes: CHOWN to fix ownership, SETUID/SETGID to
+# drop. Nothing else is granted.
+#
+# `readOnlyRootFilesystem` is an attempt, not a settled fact: it stays only if the
+# container starts and one ingest completes with it on. The Deployment mounts
+# emptyDir at /run and /tmp for this reason. If the image turns out to write
+# somewhere else, the setting and the two emptyDirs come out together and the chart
+# README records why — a setting that breaks the app is worse than its absence.
+securityContext:
+  allowPrivilegeEscalation: false
+  privileged: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop: [ALL]
+    add: [CHOWN, SETUID, SETGID]
+
+service:
+  type: ClusterIP
+  port: 8083
+
+container:
+  # -- Container port. Defaults to `service.port` when left empty; set it only
+  # when the app listens on a different port than the Service exposes. CWA reads
+  # `CWA_PORT_OVERRIDE` if the listener ever has to move with it.
+  port: null
+
+storage:
+  # CWA keeps its own state on two local-path claims and works on a library that
+  # already lives on the NAS. They are separate claims on purpose: different sizes,
+  # different lifetimes, and only the library is shared with another app.
+  config:
+    # -- Render the config claim. Holds `app.db`, Calibre's own configuration,
+    # thumbnails, and a copy of everything CWA processes.
+    enabled: true
+    # -- Use an existing claim instead of the one this chart creates.
+    existingClaim: ""
+    className: local-path
+    accessModes: [ReadWriteOnce]
+    # -- 10Gi against the 128Mi house standard, on purpose: `/config/processed_books`
+    # keeps the original of every converted or repaired book, zipped daily, and that
+    # backup is the safety net for a bad conversion. 128Mi fills on the first import.
+    # The size is a guess with headroom, to be re-sized from use.
+    size: 10Gi
+    # -- Where the config volume is mounted inside the container.
+    mountPath: /config
+  ingest:
+    # -- Render the ingest claim: the drop folder the ingest service watches.
+    enabled: true
+    existingClaim: ""
+    className: local-path
+    accessModes: [ReadWriteOnce]
+    # -- Small on purpose: files leave it as soon as they are processed, and the web
+    # UI's Upload button feeds the same pipeline. It stays on local-path rather than
+    # NFS, and it must not live inside the library mount: CWA forbids binds made
+    # within other binds.
+    size: 1Gi
+    mountPath: /cwa-book-ingest
+  # The library already exists on the NAS and CWA adopts it in place. It is not
+  # `local-path` because it must outlive one node: the share holds `metadata.db` and
+  # every book, and Kavita reads the same claim.
+  library:
+    claim: pvc-books-media-nfs-subdir-external-provisioner
+    mountPath: /calibre-library
+    # -- Read-write: CWA is the single writer, to `metadata.db` and to the book
+    # files themselves, since its metadata and cover edits are written into them.
+    readOnly: false
+
+# -- Environment variables, rendered inline into the container spec. Changing a
+# value changes the pod template, so the Deployment rolls by itself. Prefer this
+# for every non-secret value: a ConfigMap would add an object that can be missing
+# and hide the values from `kubectl describe pod`.
+env:
+  TZ: "Europe/Paris"
+  # The image starts as root, prepares the claims, then drops to these IDs. They
+  # match the rest of the media stack, and the library files are owned by 1100.
+  PUID: "1100"
+  PGID: "1100"
+  # Required, not optional. On a network share this disables SQLite's write-ahead
+  # log (whose locking assumption NFS violates), skips the recursive `chown` that
+  # fails on NFS, and switches the ingest watchers from inotify to polling.
+  # Upstream's wiki still calls NFS unsupported while the release README documents
+  # this mode; the chart README states that caveat in full.
+  NETWORK_SHARE_MODE: "true"
+
+# -- Variables sourced from a Secret, as `{ name, valueFrom }`. Kept separate so
+# a secret can never be pasted into the plain map above by accident. CWA binds no
+# Secret today.
+extraEnv: []
+
+# -- Bulk `envFrom` sources, usually `secretRef`. Rarely needed: prefer
+# `extraEnv` so each secret key is explicit in the manifest.
+envFrom: []
+
+# Probes. `/` is the endpoint the image's own HEALTHCHECK uses: it redirects to
+# `/login` and answers 200, which the kubelet follows, so the probe reports "the
+# web stack is serving" rather than "the process exists".
+#
+# Readiness is disabled on purpose. CWA has no unauthenticated endpoint that
+# reports dependency health, and its real dependency — the NFS library — is not
+# exposed by any route, so a readiness probe could only duplicate liveness and turn
+# a share blip into a restart loop. That is the documented exception already used by
+# tautulli and cross-seed (contract requirement 13).
+#
+# The startup budget is long on purpose: the first start creates the library
+# database and Calibre's configuration from scratch.
+probes:
+  startup:
+    enabled: true
+    path: /
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 60
+  liveness:
+    enabled: true
+    path: /
+    initialDelaySeconds: 30
+    periodSeconds: 30
+    timeoutSeconds: 5
+    failureThreshold: 3
+  readiness:
+    enabled: false
+    path: /
+    initialDelaySeconds: 0
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+
+# Unmeasured: the app has not run in this shape yet. The limit is generous on
+# purpose: a PDF-to-EPUB conversion runs Calibre and Ghostscript at once, and that
+# is the peak. There is no CPU limit, per the house rule — the node's capacity is
+# the real ceiling — and the small request exists so the scheduler places the pod.
+resources:
+  requests:
+    cpu: 25m
+    memory: 512Mi
+  limits:
+    memory: 2Gi
+
+nodeSelector:
+  # -- Every workload is pinned to a named node; local-path claims are node-bound
+  # and land where the pod runs. `streaming` holds the rest of the media stack.
+  kubernetes.io/hostname: streaming
+
+tolerations: []
+
+affinity: {}
