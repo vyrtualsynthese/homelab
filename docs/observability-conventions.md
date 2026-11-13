@@ -5,9 +5,9 @@ choose a threshold, lay out a screen, verify a panel — lives in the project sk
 at `.opencode/skills/observability-and-alerting/SKILL.md`. This file only records
 what is true **here** and would be wrong elsewhere.
 
-State: 2026-11-13, verified against the live cluster; the scrape targets and the
-media-stack silence were re-checked after the media chart repairs. Re-verify the
-"measured" numbers before trusting them in a new document.
+State: 2026-11-13, verified against the live cluster; the scrape targets, the
+media-stack silence and the media dashboard were re-checked after the media chart
+repairs. Re-verify the "measured" numbers before trusting them in a new document.
 
 ## What runs where
 
@@ -101,11 +101,12 @@ Grafana claim.
   follows the cgroup limit, so lowering it below the working set restarts the
   OOM loop of 2026-11-12.
 
-**Measured on 2026-11-12:** 116,742 head series, ~97 M samples appended, 45
-scrape targets (38 up, 7 down). Series by job: `kubernetes-api-servers` 47 409,
-`kubernetes-service-endpoints` 27 488, `kubernetes-nodes-cadvisor` 21 311,
-`kubernetes-pods` 7 143, `kubernetes-nodes` 7 101, `prometheus` 1 363, `rbp0` 1
-343, `rbp1` 1 341.
+**Measured on 2026-11-13:** 121,431 head series, ~1,980 samples/s, 48 scrape
+targets (47 up, 1 down). Series by job: `kubernetes-api-servers` 49 243,
+`kubernetes-service-endpoints` 27 748, `kubernetes-nodes-cadvisor` 22 105,
+`kubernetes-pods` 8 841, `kubernetes-nodes` 7 207, `rbp0` 1 343, `rbp1` 1 341,
+`prometheus` 1 309. The `kubernetes-pods` growth is the exportarr sidecars and
+the Plex, autobrr and n8n exporters; the 1 down target is `qbittorrent-exporter`.
 
 ## Exporter quirks
 
@@ -141,6 +142,13 @@ reports 95 °C on `nct6775 temp6`, an unconnected header; alerting on
 `node_hwmon_temp_celsius` would fire there permanently. GPU temperature is
 `DCGM_FI_DEV_GPU_TEMP` from the NVIDIA exporter on `streaming`.
 
+`streaming` needs the same treatment: it publishes no CPU package sensor (no
+`k10temp` or `coretemp` chip), and its hottest `node_hwmon_temp_celsius` series
+are `pci0000:00/0000:00:18.3` and a `wmi_bus` sensor at 86–89 °C. That is what
+`NodeTemperatureHigh` matches, so the rule has been firing for it since
+2026-11-13T01:18 with no CPU reading behind it. It needs a chip exclusion, the
+way `nct6775` was excluded for `nas`.
+
 **Volume stats are partial, and the reason is structural**: the K3s kubelet
 publishes `kubelet_volume_stats_*` only for volumes whose plugin can measure
 bytes — the NFS claims here. `local-path` is a hostPath directory, so its 17
@@ -169,6 +177,7 @@ Folder **Homelab**, created through the HTTP API:
 | Homelab · Logs | `homelab-logs` | 5 + rows | Volume, errors and warnings by container, log volume by node, live stream |
 | Homelab · Disks | `homelab-disks` | 11 | SMART per drive: status, life, temperature, hours, sectors, wear |
 | Homelab · Showcase | `homelab-showcase` | 13 | Presentation screen: drawn topology, four big numbers, network, storage, GPU |
+| Homelab · Media | `homelab-media` | 8 + rows | Media stack: app health issues, queues, missing items, indexers, release intake, Plex sessions and library |
 
 The old `homelab-investigate` was replaced by `homelab-platform` on 2026-11-12: its workload
 row duplicated the new Applications dashboard, and its node/control-plane/Prometheus panels are
@@ -176,7 +185,11 @@ what Platform keeps. Tables use `labelsToFields` + `merge` + `organize`; a plain
 shows only the first frame and leaks Kubernetes metadata columns. Legend names come from the
 `node` label, with `instance` mapped for `rbp0`/`rbp1` (they have no `node`).
 
-All four have a 30 s–1 m refresh and a 6 h–24 h default range. They are not
+Media panels name their series from `app_kubernetes_io_instance`, not `pod`, because a pod name
+changes on every restart. `Playback bandwidth` is blank while nobody streams:
+`plex_session_bandwidth_kbps` is only published during playback, and a zero would be a lie.
+
+All seven have a 30 s–1 m refresh and a 6 h–24 h default range. They are not
 backed up: Grafana's 5 GiB claim is the only copy. A `docker save` of the
 dashboard JSON is not a backup either — the SQLite file is what would be lost.
 
@@ -269,15 +282,15 @@ invalid PromQL and never evaluated.
 - Until 2026-12-12: `pod=~"ghostfolio-.*|wiki-app-.*|monitorss-bot-.*"` — three
   apps crash-looping since the Longhorn loss. They still show `firing`; only the
   notification is suppressed.
-- Until 2026-11-26: `alertname="ScrapeTargetDown", namespace="media-stack",
-  job="kubernetes-pods", pod=~"qbittorrent-exporter-.*"` — that one exporter
-  answers 500 because its qBittorrent login is rejected. It was narrowed on
-  2026-11-13 from the whole namespace once the rebuilt media exporters started
-  answering: keep it narrow, so a regression in `lidarr`, `radarr`, `sonarr` or
-  `prowlarr` alerts again. Remove it when the exporter is fixed.
 - Until 2026-12-12: `alertname="DriveNeedsReplacement"` with the `nas /dev/sdf`
   labels — the drive is known dead (`docs/audit/ansible-hosts.md`) and waiting on
   a replacement. Only the notification is suppressed; the rule still fires.
+
+The `alertname="ScrapeTargetDown", namespace="media-stack"` silence was **removed
+on 2026-11-13**, together with its narrow `pod=~"qbittorrent-exporter-.*"`
+revision: the exporter was replaced and now answers, the rule has no match, and
+only the notification was ever suppressed. A media exporter that breaks from now
+on will notify.
 
 A silence changes notification delivery, not alert state. A silenced rule still
 reports `firing` on the Health dashboard.
@@ -302,25 +315,26 @@ space than the 50 GiB provisioned. Loki's compactor retains by time; confirm it
 runs (config shows `retention_enabled: true`,
 `delete_request_store: filesystem`) before assuming old logs disappear.
 
-## Current health facts (2026-11-12; scrape targets re-checked 2026-11-13)
+## Current health facts (2026-11-13)
 
 - 6 hosts: `nas` (.41), `nuc0` (.27), `streaming` (.46), `rbp2` (.48), `rbp0`
   (.22), `rbp1` (.38). All answer.
-- 133 pods known, 104 Running, 16 Pending, 1 ContainerCreating, 2
-  CrashLoopBackOff, 1 Error, 1 Terminating. 8 Completed.
+- 132 pods known, 112 Running, 11 Pending, 1 Failed, 8 Completed.
 - 36 PVCs; 12 are stuck `Terminating` from Longhorn.
-- 17 pods Pending are older than the 2-hour `PodPending` window, so they are
-  deliberately outside the alert. The underlying claims are W0's cleanup, not
-  monitoring's.
-- 1 scrape target down on 2026-11-13: `qbittorrent-exporter` (500, its
-  qBittorrent login is rejected). The rebuilt `radarr`, `radarr-anime`, `lidarr`,
-  `sonarr`, `sonarr-anime` and `prowlarr` exporters answer with real data;
-  `unpackerr` and the `bazarr` pair publish no target on purpose. `ScrapeTargetDown`
-  fires for the one exporter and is silenced, narrowly, until 2026-11-26; the
-  silence hides the notification, not the state.
+- 11 Pending, none younger than the 2-hour `PodPending` window, so the alert is
+  correctly inactive. The pending set is W0's cleanup, not monitoring's.
+- All 48 scrape targets answer on 2026-11-13. The rebuilt `radarr`,
+  `radarr-anime`, `lidarr`, `sonarr`, `sonarr-anime` and `prowlarr` exporters
+  answer with real data; `unpackerr` and the `bazarr` pair publish no target on
+  purpose. `qbittorrent-exporter` now runs
+  `ghcr.io/martabal/qbittorrent-exporter:v2.0.4` on port 8090 and publishes 58
+  `qbittorrent_*` names; the caseyscarborough v1.3.5 image it replaced could not
+  log in to qBittorrent 5.2 at all. `ScrapeTargetDown` is inactive and its
+  media-stack silence is gone.
 - `nas /dev/sdf` (Crucial BX500, holds `local-path`, therefore Prometheus, Loki,
   Grafana and every config volume) is at **0 % life left**, SMART exit code 32.
-  It needs replacing; `DriveNeedsReplacement` is firing for it.
+  It needs replacing; `DriveNeedsReplacement` fires for it and is silenced until
+  2026-12-12.
 
 ## Known gaps
 
