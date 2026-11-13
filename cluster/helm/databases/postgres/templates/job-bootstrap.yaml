@@ -8,6 +8,15 @@ metadata:
   # the last one written.
   labels:
     app: postgres-bootstrap
+  annotations:
+    # A sync hook, not a plain Job: a Job's pod template is immutable, so the
+    # checksum/bootstrap annotation below makes every ConfigMap edit a rejected
+    # update ("field is immutable") and ArgoCD can never re-run the Job.
+    # BeforeHookCreation deletes the previous Job first, which gives the new
+    # object a clean pod template. PostSync also means the server exists and has
+    # finished initialising before the SQL runs.
+    argocd.argoproj.io/hook: PostSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
 spec:
   backoffLimit: 3
   template:
