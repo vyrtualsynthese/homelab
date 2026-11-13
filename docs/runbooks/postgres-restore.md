@@ -250,15 +250,28 @@ The same steps, with the target being the real instance instead of the scratch o
 after `nas` survives but the database pod or its claim did not.
 
 1. Recreate the data claim, let the Application rebuild the pod, then force the bootstrap Job. In
-   order:
+   order.
+
+   First, switch auto-sync off for the `postgres` Application in the ArgoCD UI. That is where
+   automation lives in this repo — no Application file records `syncPolicy.automated` — and with it
+   on, `selfHeal` puts the replica back within seconds of the scale below.
 
    ```bash
-   # 1. Stop the pod that holds the claim: a claim in use cannot be deleted.
-   kubectl -n databases delete pod postgres-0 --ignore-not-found
-   # 2. Delete the damaged claim. With local-path (reclaim policy Delete) the backing
-   #    directory on nas goes with it — this is the destructive step.
+   # 1. Take the StatefulSet out of the way before touching the claim. Deleting the pod alone
+   #    deadlocks: the StatefulSet recreates it at once, the new pod names the claim, and
+   #    kubernetes.io/pvc-protection holds the claim in Terminating for as long as ANY pod
+   #    references it — whatever phase that pod is in.
+   kubectl -n databases scale statefulset postgres --replicas=0
+   kubectl -n databases wait --for=delete pod/postgres-0 --timeout=120s
+   # 2. Delete the damaged claim. That is destructive to the claim, not to the bytes:
+   #    local-path runs reclaimPolicy: Retain, so deleting the claim leaves the
+   #    backing directory on nas in place and turns the PV Released. A new claim of
+   #    the same name provisions a fresh, empty directory; the old Released PV has
+   #    to be deleted by hand, and its directory removed when the space is wanted.
+   #    This is still the step that loses the data path when the dumps were the only copy.
    kubectl -n databases delete pvc postgres-data
-   # 3. Recreate the claim, the StatefulSet and the pod from git.
+   # 3. Recreate the claim, the StatefulSet and the pod from git. The sync restores the
+   #    replica count to the chart's value.
    argocd app sync postgres
    # 4. Wait for the new server, not for pod Ready: the exporter sidecar cannot
    #    authenticate until the Job below has created its role, so the pod stays
@@ -266,6 +279,8 @@ after `nas` survives but the database pod or its claim did not.
    kubectl -n databases wait --for=jsonpath='{.status.phase}'=Running pod/postgres-0 --timeout=300s
    timeout 300 bash -c 'until kubectl -n databases exec postgres-0 -c postgres -- pg_isready -U postgres >/dev/null 2>&1; do sleep 3; done'
    ```
+
+   Switch auto-sync back on once the instance answers.
 
    If only the pod was lost, none of that is needed: `kubectl -n databases delete pod postgres-0`
    and the StatefulSet recreates it on the surviving claim, with every row intact. The claim is the
@@ -316,19 +331,23 @@ after `nas` survives but the database pod or its claim did not.
 4. Get the dump onto the database pod and restore it. The database pod does not mount the dumps
    claim, so the file is copied over first.
 
-   The restore reads `postgres-dumps`. That claim survives losing the pod, the StatefulSet or the
-   whole `databases` namespace, but **not** losing the claim itself: if step 1 deleted it too, or the
-   disk under it is gone, there is no local copy and the offsite one (W4) does not exist yet. Check
-   it before promising a restore:
+   The restore reads `postgres-dumps`. That claim survives losing the pod or the StatefulSet, but
+   **not** deleting the claim or the `databases` namespace: `helm.sh/resource-policy: keep` only
+   covers a `helm uninstall`, and `argocd.argoproj.io/sync-options: Delete=false` only covers an
+   ArgoCD prune — neither intercepts a namespace deletion. Because the class is `Retain`, the bytes
+   are still on `nas` after a namespace deletion, but the claim object is gone and nothing here
+   rebuilds it, so treat a namespace deletion as "no local copy". If step 1 deleted the claim too,
+   or the disk under it is gone, there is no local copy either, and the offsite one (W4) does not
+   exist yet. Check it before promising a restore:
 
    ```bash
    kubectl -n databases get pvc postgres-dumps
    ```
 
-   The dump is only readable through the `dumps-ls` helper pod: it is the sole object mounting
-   `postgres-dumps`, and the drill's teardown deletes it. **`dumps-ls` must exist before the copy
-   runs** — create it with the manifest from [Step 1](#step-1--find-the-newest-dump) when the `get`
-   below is empty:
+   The dump is only readable through the `dumps-ls` helper pod: no dump run is in progress and
+   therefore nothing else is mounting it right now, and the drill's teardown deletes it.
+   **`dumps-ls` must exist before the copy runs** — create it with the manifest from
+   [Step 1](#step-1--find-the-newest-dump) when the `get` below is empty:
 
    ```bash
    kubectl -n databases get pod dumps-ls   # empty: create it with the manifest from Step 1
