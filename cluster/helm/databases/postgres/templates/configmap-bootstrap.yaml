@@ -25,3 +25,7 @@ data:
     GRANT CONNECT ON DATABASE postgres TO postgres_exporter;
 
     REVOKE CONNECT ON DATABASE postgres FROM PUBLIC;
+
+    -- After the revoke, deliberately: the dumping role reads and dumps the
+    -- postgres database itself, so it needs its own grant once PUBLIC has none.
+    GRANT CONNECT ON DATABASE postgres TO backup;
