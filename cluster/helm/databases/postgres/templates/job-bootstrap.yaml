@@ -1,23 +1,31 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: postgres-bootstrap
+  # Content-addressed name: the SQL digest is part of the object's identity. A
+  # Job's pod template is immutable, so a fixed name would turn every edit of
+  # configmap-bootstrap.yaml into a rejected update ("field is immutable") and
+  # the new SQL would never run. With the digest in the name, an edit creates a
+  # new Job and leaves the old, completed one behind for ArgoCD to prune.
+  #
+  # Deliberately NOT a sync hook: a PostSync hook runs only once the synced
+  # resources are healthy, and this pod is not healthy until the exporter sidecar
+  # is up, which needs the role this Job creates. As a normal resource it runs on
+  # every sync and the wait loop below covers the server still initialising.
+  #
+  # The chart has no "postgres.fullname": "postgres.name" is the release-stable
+  # name of the instance, so the Job name stays postgres-bootstrap-<digest>.
+  name: {{ include "postgres.name" . }}-bootstrap-{{ include (print $.Template.BasePath "/configmap-bootstrap.yaml") . | sha256sum | trunc 8 }}
   namespace: {{ .Release.Namespace }}
   # Not include "postgres.labels": it hardcodes app: postgres, which would clash
   # with the label this object is identified by, and duplicate keys resolve to
   # the last one written.
   labels:
     app: postgres-bootstrap
-  annotations:
-    # A sync hook, not a plain Job: a Job's pod template is immutable, so the
-    # checksum/bootstrap annotation below makes every ConfigMap edit a rejected
-    # update ("field is immutable") and ArgoCD can never re-run the Job.
-    # BeforeHookCreation deletes the previous Job first, which gives the new
-    # object a clean pod template. PostSync also means the server exists and has
-    # finished initialising before the SQL runs.
-    argocd.argoproj.io/hook: PostSync
-    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
 spec:
+  # No ttlSecondsAfterFinished, on purpose: the name is content-addressed, so a
+  # completed Job must stay in the cluster. ArgoCD then sees an existing, healthy
+  # resource and leaves it alone; a Job that vanished after completion would be
+  # recreated on every sync. Do not add a TTL here to "tidy up".
   backoffLimit: 3
   template:
     metadata:
@@ -44,8 +52,11 @@ spec:
             - -c
             - |
               # On a first sync the Job races the StatefulSet: a psql that runs
-              # before the server accepts connections just burns a backoff.
-              until pg_isready -h postgres -U postgres; do sleep 3; done
+              # before the server accepts connections just burns a backoff. The
+              # wait is bounded so a database that never comes up fails the Job
+              # instead of hanging it forever, which is what backoffLimit counts.
+              timeout 300 bash -c 'until pg_isready -h postgres -U postgres; do sleep 3; done' \
+                || { echo 'postgres did not accept connections within 300s' >&2; exit 1; }
               psql -h postgres -U postgres -d postgres \
                 -v backup_password="$BACKUP_PASSWORD" \
                 -v exporter_password="$EXPORTER_PASSWORD" \
