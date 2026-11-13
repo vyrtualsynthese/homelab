@@ -146,16 +146,20 @@ cannot log in at all. Tracker collection costs one Web API call per distinct
 tracker — about 40 here — which pushed the collection past Prometheus's 10 s
 scrape timeout on 2026-11-13; the chart turns it off.
 
-**Temperature**: `NodeTemperatureHigh` and the Platform panel now read only
-CPU/SoC chips — `platform_coretemp_0`, `thermal_thermal_zone0`, `k10temp`,
-`zenpower`. Three junk sensors are excluded by construction rather than one:
-the NAS's unconnected `nct6775` header (95 °C), and on `streaming` a PCIe root
-port and an ACPI/WMI sensor, both at 86–89 °C.
+**Temperature**: host temperature comes from `node_hwmon_temp_celsius`, and
+`node_hwmon_chip_names` names the driver. `NodeTemperatureHigh` and the Platform
+panel read only CPU/SoC chips — `platform_coretemp_0`, `thermal_thermal_zone0`,
+`k10temp`, `zenpower` by `chip` label. Three junk sensors are excluded by
+construction rather than one: the NAS's unconnected `nct6775` header (95 °C),
+and on `streaming` a PCIe root port and an ACPI/WMI sensor, both at 86–89 °C.
 
-`streaming` publishes **no CPU sensor at all**, so the rule is deliberately
-silent there; its GPU temperature is `DCGM_FI_DEV_GPU_TEMP` from the NVIDIA
-exporter, covered by `GpuTemperatureHigh`. Do not "fix" the silence by widening
-the selector: the 89 °C reading is a sensor that is not measuring the CPU.
+`streaming` *does* publish a CPU sensor, but the selector misses it:
+`node_hwmon_chip_names{node="streaming",chip="pci0000:00_0000:00:18_3"}` is
+`k10temp`, with `Tctl` 84 °C and `Tccd1` 78 °C at about 21 % CPU (the
+`gigabyte_wmi` zone mirrors Tctl). The rule matches the `chip` label, which is
+the PCI address here, so the CPU-only selector is silent on the one host with a
+real 80 °C+ reading. Either match `chip_name` (the driver) instead of `chip`, or
+record the blind spot; widening to the ACPI/WMI zones is still wrong.
 Per-host maxima after the change (2026-11-13): `nas` 44, `nuc0` 45, `streaming`
 16.8 (the ACPI zone), `rbp2` 54.5, `rbp0` 50.1, `rbp1` 48.7.
 
@@ -206,7 +210,7 @@ dashboard JSON is not a backup either — the SQLite file is what would be lost.
 ## Alerting
 
 Grafana unified alerting, folder `Homelab`, rule group `homelab-core`,
-evaluation interval **60 s**. **27 rules**, one contact point, two routes by
+evaluation interval **60 s**. **28 rules**, one contact point, two routes by
 severity.
 
 **Delivery**: contact point `discord-homelab` (type `discord`).
@@ -224,14 +228,15 @@ secure field), so the contact point is never rewritten by automation.
 | `CoreDeploymentDown` | 0 available replicas in kube-system/monitoring/argocd | 10m | critical | inactive |
 | `CoreStatefulSetDown` | ready < desired in those namespaces | 10m | critical | inactive |
 | `CoreDaemonSetDown` | available < desired in those namespaces | 10m | critical | inactive |
+| `MediaDeploymentDown` | a `media-stack` Deployment at 0 available (`readarr`/`kavita` excluded until repaired) | 10m | warning | inactive |
 | `KubeStateMetricsDown` | `absent(up{service=...} == 1)` | 5m | critical | inactive |
 | `NodeFilesystemReadOnly` | filesystem mounted read-only | 5m | critical | inactive |
 | `MonitoringDown` | `1 - up{job="prometheus"}`; `execErrState: Alerting` | 5m | critical | inactive |
 | `DriveNeedsReplacement` | SMART failed, exit != 0, <10 % life, or pending sectors | 10m | critical | **firing** on `nas /dev/sdf` |
-| `ScrapeTargetDown` | any non-node target down, including the edge Pis' SMART and Docker exporters; Prometheus and kube-state-metrics excluded (own rules) | 15m | warning | **firing, silenced** (qbittorrent-exporter only) |
+| `ScrapeTargetDown` | any non-node target down, including the edge Pis' SMART and Docker exporters; Prometheus and kube-state-metrics excluded (own rules) | 15m | warning | inactive |
 | `NodeCpuHigh` | >90 % by host | 15m | warning | inactive |
 | `NodeMemoryHigh` | >90 % of `MemAvailable` | 15m | warning | inactive |
-| `NodeTemperatureHigh` | hottest CPU or SoC sensor >80 °C | 10m | warning | inactive |
+| `NodeTemperatureHigh` | hottest CPU or SoC sensor >80 °C | 10m | warning | inactive (misses `streaming`'s k10temp; see Temperature) |
 | `GpuTemperatureHigh` | `DCGM_FI_DEV_GPU_TEMP` >80 °C | 10m | warning | inactive |
 | `DiskTooHot` | drive >55 °C | 15m | warning | inactive |
 | `DiskFillingUp` | filesystem >85 % | 30m | warning | inactive |
@@ -245,7 +250,7 @@ secure field), so the contact point is never rewritten by automation.
 | `CertificateExpiring` | newest Traefik cert per SAN <21 days | 1h | warning | inactive |
 | `PodCrashLooping` | CrashLoopBackOff | 15m | warning | **firing, silenced** ×3 |
 | `PodPending` | Pending, created <2 h ago | 15m | warning | inactive |
-| `LokiSilent` | no Fluent Bit lines in 10 min | 10m | warning | inactive |
+| `LokiSilent` | no Fluent Bit lines in 10 min (`noDataState: Alerting`) | 10m | warning | inactive |
 
 **`JobFailed`** is the batch-workload rule. Its expression is
 `((kube_job_status_failed > 0) unless on(namespace, job_name) (kube_job_status_succeeded > 0)) and on(namespace, job_name) ((time() - kube_job_status_start_time) < 7200)`:
@@ -345,6 +350,10 @@ runs (config shows `retention_enabled: true`,
   Grafana and every config volume) is at **0 % life left**, SMART exit code 32.
   It needs replacing; `DriveNeedsReplacement` fires for it and is silenced until
   2026-12-12.
+- `streaming` runs warm: `k10temp` reads **Tctl 84 °C / Tccd1 78 °C** at about
+  21 % CPU on 2026-11-13, and `gigabyte_wmi temp3` mirrors Tctl. This is the CPU,
+  not an unconnected header; `NodeTemperatureHigh` is firing for a real reading.
+  Check fans and airflow. The GPU is at 40 °C and the NVMe at 47–57 °C.
 
 ## Known gaps
 
@@ -357,15 +366,18 @@ runs (config shows `retention_enabled: true`,
   that resolves but serves nothing is not detected.
 - **No GPU XID/ECC alert.** The NVIDIA exporter on this cluster does not publish
   those families; only temperature, utilisation and frame-buffer use exist.
-- **Application coverage is limited to pods, restarts, core namespaces and
-  batch jobs.** `CoreDeploymentDown` covers kube-system, monitoring and argocd
-  only. A broken app in another namespace shows up through `PodCrashLooping`,
-  `PodPending` or `RestartStorm`, not through a replica check. `JobFailed`
-  covers every Job, but only `recyclarr` has per-schedule staleness coverage;
-  the other CronJobs fail loudly but a run that never starts is silent.
-- **`NodeTemperatureHigh` may be reading a non-CPU sensor on `streaming`.** On
-  2026-11-13 it fires at 83–91 °C on two ACPI/WMI zones while node CPU is about
-  20 % and the GPU reports 40 °C. Identified, not yet resolved.
+- **Application coverage is limited to pods, restarts, `media-stack` and the
+  core namespaces.** `CoreDeploymentDown` covers kube-system, monitoring and
+  argocd; `MediaDeploymentDown` covers `media-stack`, with `readarr` and `kavita`
+  excluded until their claims are rebuilt. A broken app in any other namespace
+  shows up through `PodCrashLooping`, `PodPending` or `RestartStorm`, not through
+  a replica check. `JobFailed` covers every Job, but only `recyclarr` has
+  per-schedule staleness coverage; the other CronJobs fail loudly but a run that
+  never starts is silent.
+- **qBittorrent's `cross-seed` alias is a literal ClusterIP.** The pod keeps
+  `dnsPolicy: None`, so `hostAliases` maps `cross-seed` to `crossSeedServiceIP`
+  in the chart. If that Service is recreated with a new IP, the completion hook
+  fails silently; re-check the value.
 - **Alerting is a single point of failure**: Grafana evaluates and delivers. If
   Grafana, Prometheus or `nas` goes down, no message is sent. The operator
   accepts this risk (watchdog declined on 2026-11-12).
