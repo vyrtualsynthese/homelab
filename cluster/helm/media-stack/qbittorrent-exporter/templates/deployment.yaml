@@ -40,6 +40,10 @@ spec:
               value: {{ .Values.exporter.baseUrl | quote }}
             - name: QBITTORRENT_COOKIE_NAME
               value: {{ .Values.exporter.cookieName | quote }}
+            - name: ENABLE_TRACKER
+              value: {{ .Values.exporter.enableTracker | quote }}
+            - name: QBITTORRENT_TIMEOUT
+              value: {{ .Values.exporter.timeoutSeconds | quote }}
             - name: QBITTORRENT_USERNAME
               valueFrom:
                 secretKeyRef:
