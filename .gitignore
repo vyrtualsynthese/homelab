@@ -22,3 +22,7 @@ providers.yaml
 # Built by ArgoCD at sync time; never committed (see the observability design §5.1)
 cluster/helm/monitoring/*/charts/
 cluster/helm/monitoring/*/Chart.lock
+
+# Built by ArgoCD at sync time (see the PostgreSQL design §6.11)
+cluster/helm/databases/pgadmin/charts/
+cluster/helm/databases/pgadmin/Chart.lock
