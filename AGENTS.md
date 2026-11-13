@@ -201,8 +201,22 @@ are in `docs/superpowers/plans/`.
    SQLite file on an etcd cluster; the NAS script backs up a MinIO path deleted in July 2024; and the
    k3s and NAS hosts have had a daily cron since 2024 pointing at a script that was never deployed
    to them. See `docs/audit/ansible-hosts.md`.
-4. Longhorn is gone: no pods, no StorageClasses, and 36 PVs plus 11 PVCs were stuck `Terminating`.
-   Their contents are abandoned by decision; every affected app is reconfigured from scratch.
+4. **Longhorn is gone, but it cannot bury its dead.** The `longhorn-system` namespace still exists
+   and is empty: no driver, no StorageClass, and every app was rebuilt on `local-path` or one of the
+   NFS classes. What survives is 38 PVs and 11 PVCs stuck `Terminating` (last counted 2026-11-13).
+   Their contents were abandoned by decision, and **they will never clear on their own**: the
+   finalizers name the Longhorn CSI driver (`external-attacher/driver-longhorn-io`), which no longer
+   exists to remove itself, and some also carry `kubernetes.io/pv-protection` until the matching
+   claim goes. Clearing one is a hand operation — patch the finalizers away, PV first and then the
+   PVC:
+
+   ```bash
+   kubectl patch pv <name> -p '{"metadata":{"finalizers":null}}' --type=merge
+   kubectl -n <namespace> patch pvc <name> -p '{"metadata":{"finalizers":null}}' --type=merge
+   ```
+
+   `maintainerr-anime-config` was cleared this way on 2026-11-13. The rest are inert: they hold no
+   data, block nothing, and show up only in `kubectl get pv` and in namespace health counts.
 
 **Broken references**
 
