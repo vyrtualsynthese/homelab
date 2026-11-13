@@ -252,8 +252,8 @@ After the merge, sync the Application by hand (auto-sync is off):
 - Application `Synced`; `lidarr-config` `Bound`; pod on `streaming`.
 - `curl -s http://lidarr.kub.local/ping` → `{"status":"OK"}`; pod `2/2` once the Secret holds a key,
   `1/2` until then.
-- Prometheus target `container="lidarr-exporter"` is `up`, or `down` with a 401 that points at the
-  Secret and not the chart.
+- Prometheus target `container="lidarr-exporter"` is `up`, or `down` with the HTTP 500 that exportarr
+  returns when Lidarr answers 401 — which points at the Secret, not the chart.
 - Setup wizard: root folder `/audio`, quality profile, then Prowlarr → Settings → Apps → add Lidarr
   with `http://lidarr:8686` and the key.
 
