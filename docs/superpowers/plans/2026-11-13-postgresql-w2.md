@@ -181,12 +181,17 @@ on the exporter role is required *after* the `REVOKE`, or the sidecar cannot scr
 - [ ] **Step 2: Write `templates/job-bootstrap.yaml`**
 
 `Job` with `backoffLimit: 3`, `restartPolicy: Never`, label `app: postgres-bootstrap`; one container
-based on the same image, command `bash -c 'psql -h postgres -U postgres -d postgres -v
-backup_password="$BACKUP_PASSWORD" -v exporter_password="$EXPORTER_PASSWORD" -f /sql/bootstrap.sql'`;
-env `PGPASSWORD` from `postgres-superuser`/`postgres-password`, `BACKUP_PASSWORD` from
-`pg-backup`/`backup-password`, `EXPORTER_PASSWORD` from `pg-exporter`/`exporter-password`; the
-ConfigMap mounted at `/sql`; resources 10m/32Mi request, 100m/128Mi limit. Annotate the pod template
-with `checksum/bootstrap: {{ include (print $.Template.BasePath "/configmap-bootstrap.yaml") . | sha256sum }}`.
+based on the same image, command that waits for the server and then applies the SQL:
+`bash -c 'until pg_isready -h postgres -U postgres; do sleep 3; done; psql -h postgres -U postgres -d
+postgres -v backup_password="$BACKUP_PASSWORD" -v exporter_password="$EXPORTER_PASSWORD" -f
+/sql/bootstrap.sql'`; env `PGPASSWORD` from `postgres-superuser`/`postgres-password`,
+`BACKUP_PASSWORD` from `pg-backup`/`backup-password`, `EXPORTER_PASSWORD` from
+`pg-exporter`/`exporter-password`; the ConfigMap mounted at `/sql`; resources 10m/32Mi request,
+100m/128Mi limit. Annotate the pod template with `checksum/bootstrap: {{ include (print
+$.Template.BasePath "/configmap-bootstrap.yaml") . | sha256sum }}`.
+
+The wait loop matters: on a first sync the Job races the StatefulSet, and a Job that exhausts
+`backoffLimit` against a database still initialising fails the sync for no reason.
 
 - [ ] **Step 3: Write `templates/configmap-pg-hba.yaml`** — `local all postgres peer` first, then
 `host all all 0.0.0.0/0 scram-sha-256`, and `host all all ::/0 scram-sha-256`. No `trust` line.
@@ -243,7 +248,7 @@ for ns in authentik discourse firefly guacamole koillection wiki; do
 done
 grep -q 'app: postgres-dump' /tmp/pg.yaml
 grep -q 'app: pgadmin' /tmp/pg.yaml
-! grep -q 'kind: Ingress' /tmp/pg.yaml
+! grep -q '^kind: Ingress$' /tmp/pg.yaml
 ! grep -Eq 'type: (LoadBalancer|NodePort)' /tmp/pg.yaml
 ```
 Expected: no `MISSING` output, all `grep` succeed.
@@ -273,7 +278,7 @@ git commit -m "🔒 feat(postgres): deny by default and allow only the consumer 
 #!/usr/bin/env bash
 set -euo pipefail
 export PGPASSWORD="${BACKUP_PASSWORD:?}"
-mapfile -t dbs < <(psql -h 127.0.0.1 -U backup -d postgres -At -c \
+mapfile -t dbs < <(psql -h postgres -U backup -d postgres -At -c \
   "SELECT datname FROM pg_database WHERE datistemplate = false AND datname <> 'postgres' ORDER BY 1")
 if [ "${#dbs[@]}" -eq 0 ]; then
   echo "no application databases exist; refusing to report success" >&2
@@ -281,12 +286,15 @@ if [ "${#dbs[@]}" -eq 0 ]; then
 fi
 for db in "${dbs[@]}"; do
   out="/dumps/${db}-$(date -u +%Y%m%dT%H%M%SZ).dump"
-  pg_dump -h 127.0.0.1 -U backup -d "$db" -Fc -Z6 -f "$out"
+  pg_dump -h postgres -U backup -d "$db" -Fc -Z6 -f "$out"
   [ -s "$out" ] || { echo "empty dump: $out" >&2; exit 1; }
   pg_restore --list "$out" > /dev/null
 done
 find /dumps -maxdepth 1 -name '*.dump' -type f -mtime +{{ .Values.dumps.retentionDays }} -delete
 ```
+
+The host is the Service name `postgres`, not `127.0.0.1`: this job is its own pod, unlike the
+metrics sidecar which shares the database pod's network namespace.
 
 - [ ] **Step 2: Check the script parses, and that the empty case really fails**
 
