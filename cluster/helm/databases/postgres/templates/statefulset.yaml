@@ -19,6 +19,7 @@ spec:
       labels:
         app: {{ include "postgres.name" . }}
       annotations:
+        checksum/postgresql-config: {{ include (print $.Template.BasePath "/configmap-postgresql.yaml") . | sha256sum }}
         prometheus.io/scrape: "true"
         prometheus.io/port: "9187"
     spec:
@@ -70,6 +71,7 @@ spec:
                 - -h
                 - 127.0.0.1
             periodSeconds: 5
+            timeoutSeconds: 5
             failureThreshold: 12
           readinessProbe:
             exec:
@@ -80,6 +82,7 @@ spec:
                 - -h
                 - 127.0.0.1
             periodSeconds: 10
+            timeoutSeconds: 5
           livenessProbe:
             exec:
               command:
@@ -89,6 +92,7 @@ spec:
                 - -h
                 - 127.0.0.1
             periodSeconds: 20
+            timeoutSeconds: 5
             failureThreshold: 3
           volumeMounts:
             - name: data
