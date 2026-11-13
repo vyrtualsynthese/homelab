@@ -250,7 +250,7 @@ secure field), so the contact point is never rewritten by automation.
 | `CoreDeploymentDown` | 0 available replicas in kube-system/monitoring/argocd | 10m | critical | inactive |
 | `CoreStatefulSetDown` | ready < desired in those namespaces | 10m | critical | inactive |
 | `CoreDaemonSetDown` | available < desired in those namespaces | 10m | critical | inactive |
-| `MediaDeploymentDown` | a `media-stack` Deployment at 0 available (`readarr` excluded until its claim is rebuilt) | 10m | warning | inactive |
+| `MediaDeploymentDown` | a `media-stack` Deployment at 0 available | 10m | warning | inactive |
 | `KubeStateMetricsDown` | `absent(up{service=...} == 1)` | 5m | critical | inactive |
 | `NodeFilesystemReadOnly` | filesystem mounted read-only | 5m | critical | inactive |
 | `MonitoringDown` | `1 - up{job="prometheus"}`; `execErrState: Alerting` | 5m | critical | inactive |
@@ -390,13 +390,14 @@ runs (config shows `retention_enabled: true`,
   those families; only temperature, utilisation and frame-buffer use exist.
 - **Application coverage is limited to pods, restarts, `media-stack` and the
   core namespaces.** `CoreDeploymentDown` covers kube-system, monitoring and
-  argocd; `MediaDeploymentDown` covers `media-stack`, with `readarr` excluded
-  until its claim is rebuilt. `kavita` came off the exclusion on 2026-11-13, when
-  its rebuilt chart gave it a claim and a running pod. A broken app in any other namespace
-  shows up through `PodCrashLooping`, `PodPending` or `RestartStorm`, not through
-  a replica check. `JobFailed` covers every Job, but only `recyclarr` has
-  per-schedule staleness coverage; the other CronJobs fail loudly but a run that
-  never starts is silent.
+  argocd; `MediaDeploymentDown` covers `media-stack` with no exclusions. One
+  exclusion was retired on 2026-11-13 when the app got a real claim and a running
+  pod, and a second was dropped when its abandoned app was deleted instead of
+  rebuilt. A broken app in any other namespace shows up through
+  `PodCrashLooping`, `PodPending` or `RestartStorm`, not through a replica
+  check. `JobFailed` covers every Job, but only `recyclarr` has per-schedule
+  staleness coverage; the other CronJobs fail loudly but a run that never starts
+  is silent.
 - **qBittorrent's `cross-seed` alias is a literal ClusterIP.** The pod keeps
   `dnsPolicy: None`, so `hostAliases` maps `cross-seed` to `crossSeedServiceIP`
   in the chart. If that Service is recreated with a new IP, the completion hook
