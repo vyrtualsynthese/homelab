@@ -7,6 +7,11 @@ metadata:
     app.kubernetes.io/name: {{ .Chart.Name }}
     app.kubernetes.io/instance: {{ .Release.Name }}
 spec:
-  ipAllowList:
+  # ipWhiteList, not ipAllowList: the CRD installed in this cluster
+  # (middlewares.traefik.containo.us v1alpha1) only declares the pre-2.5 name.
+  # Traefik 2.9.4 still honours it, and the API server silently prunes any field
+  # the schema does not know — which is what left this object with an empty spec
+  # and the allowlist unenforced. Rename both together, with the CRDs, in W5.
+  ipWhiteList:
     sourceRange:
       - {{ .Values.traefik.lanCidr }}

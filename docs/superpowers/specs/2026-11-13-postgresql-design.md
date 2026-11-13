@@ -428,10 +428,15 @@ replication lag (always zero, deliberately).
 - `local-path`, `nodeSelector` on `nuc0` (it is an admin tool, not storage-bound), no `node-type`
   affinity.
 - **Local network only (operator).** IngressRoute on the `web` entrypoint with host
-  `pgadmin.kub.local`, plus a Traefik `IPAllowList` middleware pinned to the home LAN CIDR —
+  `pgadmin.kub.local`, plus a Traefik allowlist middleware pinned to the home LAN CIDR —
   **`192.168.1.0/24`, confirmed live**: the nodes are `192.168.1.27/.41/.46/.48` and the Traefik
   `LoadBalancer` answers on all four. No public hostname, no `myresolver`, no `websecure`
   entrypoint. Container port 80 stays inside the cluster.
+  It is `spec.ipWhiteList`, not `ipAllowList`: the CRD installed here
+  (`middlewares.traefik.containo.us` v1alpha1) only declares the pre-2.5 name, and the API server
+  **prunes fields the schema does not know**, silently. The first sync shipped `ipAllowList`, the
+  object stored `spec: {}`, and the allowlist was never enforced while ArgoCD sat `OutOfSync`.
+  Rename middleware and CRDs together in W5.
 - **An admin login of its own (operator, 2026-11-13).** pgAdmin's web login is a local account:
   `Secret/pgadmin` key `password`, with the login email set as a plain value in the chart
   (`env.email`). Chart `runix/pgadmin4` 1.50.0 reads only the password from the Secret
@@ -574,6 +579,6 @@ the two deleted claims. Recording them here so the handover is explicit rather t
   `--data-checksums` (recommended: yes, it is free and catches corruption).
 - Metrics exporter port, alert thresholds beyond the four named.
 - The pgAdmin wrapper chart: how the `runix` chart is wrapped, the exact `serverDefinitions`
-  payload, whether the `IPAllowList` middleware lives in the chart or in
+  payload, whether the allowlist middleware lives in the chart or in
   `cluster/infrastructure/`, and the exact LAN CIDR to allow.
 - The wording of the two runbooks, and the log table shape they keep.
