@@ -5,9 +5,9 @@ choose a threshold, lay out a screen, verify a panel — lives in the project sk
 at `.opencode/skills/observability-and-alerting/SKILL.md`. This file only records
 what is true **here** and would be wrong elsewhere.
 
-State: 2026-11-12, verified against the live cluster; alert rules and the
-recyclarr batch-job facts re-verified on 2026-11-13. Re-verify the "measured"
-numbers before trusting them in a new document.
+State: 2026-11-13, verified against the live cluster; the scrape targets and the
+media-stack silence were re-checked after the media chart repairs. Re-verify the
+"measured" numbers before trusting them in a new document.
 
 ## What runs where
 
@@ -205,10 +205,10 @@ secure field), so the contact point is never rewritten by automation.
 | `NodeFilesystemReadOnly` | filesystem mounted read-only | 5m | critical | inactive |
 | `MonitoringDown` | `1 - up{job="prometheus"}`; `execErrState: Alerting` | 5m | critical | inactive |
 | `DriveNeedsReplacement` | SMART failed, exit != 0, <10 % life, or pending sectors | 10m | critical | **firing** on `nas /dev/sdf` |
-| `ScrapeTargetDown` | any non-node target down, including the edge Pis' SMART and Docker exporters; Prometheus and kube-state-metrics excluded (own rules) | 15m | warning | **firing, silenced** (4 media exporters) |
+| `ScrapeTargetDown` | any non-node target down, including the edge Pis' SMART and Docker exporters; Prometheus and kube-state-metrics excluded (own rules) | 15m | warning | **firing, silenced** (qbittorrent-exporter only) |
 | `NodeCpuHigh` | >90 % by host | 15m | warning | inactive |
 | `NodeMemoryHigh` | >90 % of `MemAvailable` | 15m | warning | inactive |
-| `NodeTemperatureHigh` | hottest real sensor >80 °C | 10m | warning | inactive |
+| `NodeTemperatureHigh` | hottest real sensor >80 °C | 10m | warning | **firing** on `streaming` (sensor identity under review) |
 | `GpuTemperatureHigh` | `DCGM_FI_DEV_GPU_TEMP` >80 °C | 10m | warning | inactive |
 | `DiskTooHot` | drive >55 °C | 15m | warning | inactive |
 | `DiskFillingUp` | filesystem >85 % | 30m | warning | inactive |
@@ -245,9 +245,11 @@ also covers the edge Pis' SMART (`:9902`) and Docker (`:9323`) exporters, which
 Those targets are static, so the alert names the instance IP rather than a host
 label.
 
-`noDataState: OK` everywhere, because every expression returns no series while
-healthy. `MonitoringDown` and `LokiSilent` alert on evaluation errors too, so a
-Prometheus restart or a dead Loki produces one message rather than none.
+`noDataState` is `OK` on every rule **except `LokiSilent`**, which is `Alerting`
+on no data: its expression returns an empty vector when no lines arrive, and that
+is exactly the condition it must report. `MonitoringDown` and `LokiSilent` also
+raise on evaluation errors (`execErrState: Alerting`), so a Prometheus restart or
+a dead Loki produces one message rather than none.
 
 **The rule pattern matters.** A PromQL comparison such as `up == 0` returns the
 value `0` when true, and the threshold condition is "above 0" — so it can never
@@ -262,14 +264,20 @@ had `NodeDown` and `MonitoringDown` silently dead this way, and
 `delta(max by (...)(metric)[1h:]) > 0`. The previous form without the colon was
 invalid PromQL and never evaluated.
 
-**Silences** (both have an expiry and a comment):
+**Silences** (each has an expiry and a comment):
 
 - Until 2026-12-12: `pod=~"ghostfolio-.*|wiki-app-.*|monitorss-bot-.*"` — three
   apps crash-looping since the Longhorn loss. They still show `firing`; only the
   notification is suppressed.
 - Until 2026-11-26: `alertname="ScrapeTargetDown", namespace="media-stack",
-  job="kubernetes-pods"` — the media-stack exporters are repaired by a separate
-  job. Remove it when they answer.
+  job="kubernetes-pods", pod=~"qbittorrent-exporter-.*"` — that one exporter
+  answers 500 because its qBittorrent login is rejected. It was narrowed on
+  2026-11-13 from the whole namespace once the rebuilt media exporters started
+  answering: keep it narrow, so a regression in `lidarr`, `radarr`, `sonarr` or
+  `prowlarr` alerts again. Remove it when the exporter is fixed.
+- Until 2026-12-12: `alertname="DriveNeedsReplacement"` with the `nas /dev/sdf`
+  labels — the drive is known dead (`docs/audit/ansible-hosts.md`) and waiting on
+  a replacement. Only the notification is suppressed; the rule still fires.
 
 A silence changes notification delivery, not alert state. A silenced rule still
 reports `firing` on the Health dashboard.
@@ -304,10 +312,12 @@ runs (config shows `retention_enabled: true`,
 - 17 pods Pending are older than the 2-hour `PodPending` window, so they are
   deliberately outside the alert. The underlying claims are W0's cleanup, not
   monitoring's.
-- 4 scrape targets down on 2026-11-13, all `media-stack` exporters (`radarr`,
-  `radarr-anime`, `qbittorrent-exporter`, `unpackerr`) — wrong app-side API keys
-  or ports, deliberately deferred. `ScrapeTargetDown` fires for them and is
-  silenced until 2026-11-26; the silence hides the notification, not the state.
+- 1 scrape target down on 2026-11-13: `qbittorrent-exporter` (500, its
+  qBittorrent login is rejected). The rebuilt `radarr`, `radarr-anime`, `lidarr`,
+  `sonarr`, `sonarr-anime` and `prowlarr` exporters answer with real data;
+  `unpackerr` and the `bazarr` pair publish no target on purpose. `ScrapeTargetDown`
+  fires for the one exporter and is silenced, narrowly, until 2026-11-26; the
+  silence hides the notification, not the state.
 - `nas /dev/sdf` (Crucial BX500, holds `local-path`, therefore Prometheus, Loki,
   Grafana and every config volume) is at **0 % life left**, SMART exit code 32.
   It needs replacing; `DriveNeedsReplacement` is firing for it.
@@ -329,6 +339,9 @@ runs (config shows `retention_enabled: true`,
   `PodPending` or `RestartStorm`, not through a replica check. `JobFailed`
   covers every Job, but only `recyclarr` has per-schedule staleness coverage;
   the other CronJobs fail loudly but a run that never starts is silent.
+- **`NodeTemperatureHigh` may be reading a non-CPU sensor on `streaming`.** On
+  2026-11-13 it fires at 83–91 °C on two ACPI/WMI zones while node CPU is about
+  20 % and the GPU reports 40 °C. Identified, not yet resolved.
 - **Alerting is a single point of failure**: Grafana evaluates and delivers. If
   Grafana, Prometheus or `nas` goes down, no message is sent. The operator
   accepts this risk (watchdog declined on 2026-11-12).
