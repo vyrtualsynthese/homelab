@@ -68,7 +68,7 @@ the seven dead media-stack targets; that annotation is one of them.
 - No Prometheus scrape config change; metrics stay off here (see Decisions).
 - No key rotation in this branch. The keys are in git history and must be rotated in the four *arr
   apps; that is recorded as a required handover step, not performed here.
-- No Lidarr or Readarr instance. The old template had a commented-out Lidarr block with a key in
+- No Lidarr instance. The old template had a commented-out Lidarr block with a key in
   it; it is removed and the README says how to add one.
 - No change to `cluster/argocd/projects/media-stack/unpackerr.yaml`.
 - No edit to the dated health snapshot in `docs/observability-conventions.md`.
