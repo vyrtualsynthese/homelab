@@ -1,0 +1,16 @@
+apiVersion: v2
+name: bazarr-anime
+description: A second Bazarr instance for the anime library. Same image and shape as bazarr, with its own config claim, host and API key.
+type: application
+# Chart version. Renovate bumps this when the image tag moves.
+version: 1.0.0
+# Must match image.tag in values.yaml.
+appVersion: "1.6.2"
+icon: https://www.bazarr.media/assets/img/logo.png
+home: https://www.bazarr.media/
+sources:
+  - https://github.com/morpheus65535/bazarr
+keywords:
+  - subtitles
+  - pvr
+  - automation
