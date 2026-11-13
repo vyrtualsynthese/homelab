@@ -58,3 +58,11 @@ spec:
       ports:
         - protocol: TCP
           port: 5432
+    # Prometheus, which scrapes the exporter sidecar's port 9187 by pod annotation.
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+      ports:
+        - protocol: TCP
+          port: 9187
