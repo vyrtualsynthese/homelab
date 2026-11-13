@@ -212,9 +212,7 @@ the input to a rebuild: nothing recreates these databases automatically.
 
 | Date (UTC) | Application | Role = database | App namespace | Secret pair | Operator | Notes |
 |---|---|---|---|---|---|---|
-
-No database has been created through this procedure yet (2026-11-13). The first row is written by
-the W2 acceptance drill.
+| 2026-11-13 | `acceptance` (throwaway) | `acceptance` | `wiki` | `databases/pg-acceptance` + `wiki/acceptance-app` | operator | W2 acceptance drill; two rows written to a `drill` table, then dumped and the dump verified with `pg_restore --list`. The first role this procedure ever created, so the SQL, the two Secrets and the connection test are proved. The restore half is recorded in `postgres-restore.md`.
 
 ## Success, in one place
 
