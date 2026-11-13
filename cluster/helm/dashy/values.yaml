@@ -32,12 +32,16 @@ dashy:
     initialDelaySeconds: 40
     path: "/"
 
+  # Sized from Prometheus on 2026-11-13 over the 39h it holds: 250Mi average and
+  # 270Mi peak. The upstream defaults (500m CPU, 512Mi memory, 4Gi limit) were
+  # never adjusted for this deployment; the 4Gi limit is the upstream chart's, not
+  # a measured number.
   resources:
     requests:
-      cpu: 500m
-      memory: 512Mi
+      cpu: 10m
+      memory: 256Mi
     limits:
-      memory: 4Gi
+      memory: 1Gi
 
   affinity:
     nodeAffinity:

@@ -60,8 +60,11 @@ n8n:
     #      - chart-example.local
 
   resources:
+    # Sized from Prometheus on 2026-11-13 over the 39h it holds: 420Mi average
+    # and 420Mi peak. The 512Mi limit left 15% of headroom for a workflow run,
+    # which is not enough for this app.
     limits:
-      memory: 512Mi
+      memory: 768Mi
     requests:
       cpu: 10m
       memory: 256Mi

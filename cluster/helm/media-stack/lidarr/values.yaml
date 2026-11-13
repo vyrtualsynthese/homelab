@@ -192,12 +192,14 @@ tolerations: []
 
 affinity: {}
 
-# Unmeasured. Lidarr has not run since the 2026 disk failure and Prometheus holds
-# no series for it over the 90 days it keeps, so these follow sonarr's measured
-# profile (10m CPU, 256Mi working set) with a larger memory limit: the first full
-# scan of the music library is the one operation this app can be expected to
-# exceed a series library's working set, and an OOM there means starting the scan
-# again. Replace both numbers from Prometheus after a week of real traffic.
+# Sized from Prometheus on 2026-11-13 over the 39h it holds:
+#   memory in use (working set)  590Mi average, 930Mi peak
+#   CPU                          210m average, 735m peak during a scan
+#
+# The previous 1Gi limit was sized from sonarr's profile before this app had run
+# again after the 2026 disk failure. The real peak fills it to 93%, and a scan
+# that crosses the limit loses the scan, so the limit follows the measured peak
+# now: 2Gi is about 2.2x.
 #
 # No CPU limit, here or anywhere in this cluster: a limit throttles exactly the
 # short burst this app needs during an import or a library scan, and the node's
@@ -206,9 +208,9 @@ affinity: {}
 resources:
   requests:
     cpu: 10m
-    memory: 256Mi
+    memory: 512Mi
   limits:
-    memory: 1Gi
+    memory: 2Gi
 
 # Probes. `/ping` is Lidarr's own unauthenticated health endpoint. It is a
 # stronger check than a plain process ping: PingController reads the config

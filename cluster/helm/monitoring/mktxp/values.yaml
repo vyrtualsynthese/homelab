@@ -46,10 +46,12 @@ ingress:
   className: ""
   annotations: {}
 
+# Sized from Prometheus on 2026-11-13 over the 39h it holds: 30Mi average and
+# 30Mi peak. The 128Mi request was four times the app.
 resources:
   requests:
     cpu: 1m
-    memory: 128Mi
+    memory: 64Mi
   limits:
     memory: 256Mi
   # We usually recommend not to specify default resources and to leave this as a conscious
