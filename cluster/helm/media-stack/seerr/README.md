@@ -45,8 +45,8 @@ It renders ten objects:
 | Middleware | `seerr-redirect-https` |
 | TLSOption | `seerr-tlsoption` |
 
-Every one of those names already exists in the cluster except the ServiceAccount and the rate-limit
-Middleware. ArgoCD adopts the rest in place; the config claim is never deleted or recreated.
+All of those names exist in the cluster; ArgoCD adopts them in place. The config claim is never
+deleted or recreated.
 
 ## Why this chart differs from the reference
 
@@ -141,6 +141,14 @@ the repo has one public-route dialect:
 - **No Content Security Policy:** the Next.js UI loads inline scripts. The value exists and is
   empty; populate it only after watching the browser console against a staging host.
 
+## Changing the host
+
+`ingress.host` changes the Traefik routes only. Seerr stores its own `applicationUrl` in
+`/app/config/settings.json`; update it in Settings → General at the same time. Notification links,
+login redirects and webhooks use that stored value, so changing only the chart leaves them pointing
+at the old name. The chart cannot set it because it is database state, not a process environment
+variable.
+
 ## Secrets
 
 None. Seerr creates its own session secret, VAPID keys and SQLite database under `/app/config`, so
@@ -163,10 +171,8 @@ config claim is not touched by the upgrade. If the new image fails to start, set
 `appVersion` back to `v3.4.1`; a migration may be one-way, so check the release notes before rolling
 back.
 
-The first refactor rollout also changed the pod shape (dedicated ServiceAccount, explicit UID/GID,
-dropped capabilities, restart probes, `LOG_LEVEL=warn`, `PORT` derived from the container port
-and `CONFIG_DIRECTORY` from the mount path). That
-change has already been applied; only the image tag moves now.
+The refactor rollout has already been applied; the image tag and the parameter fixes are the only
+changes since.
 
 ## Checking the chart against the contract
 

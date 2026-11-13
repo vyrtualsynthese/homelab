@@ -40,6 +40,11 @@ spec:
             - name: http
               containerPort: {{ include "app.containerPort" . }}
               protocol: TCP
+          {{- range .Values.extraEnv }}
+          {{- if has .name (list "PORT" "CONFIG_DIRECTORY") }}
+          {{- fail (printf "extraEnv must not set %s; the chart derives it from values" .name) }}
+          {{- end }}
+          {{- end }}
           {{- $env := list (dict "name" "PORT" "value" (include "app.containerPort" .)) (dict "name" "CONFIG_DIRECTORY" "value" .Values.storage.mountPath) }}
           {{- range $name, $value := .Values.env }}
           {{- $env = append $env (dict "name" $name "value" ($value | toString)) }}
