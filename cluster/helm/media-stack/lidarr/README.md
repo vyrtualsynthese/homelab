@@ -76,20 +76,25 @@ kubectl -n media-stack create secret generic lidarr \
   --from-literal=secret="$LIDARR_API_KEY"      # first time
 kubectl -n media-stack patch secret lidarr --type merge \
   -p "{\"data\":{\"secret\":\"$(printf %s "$LIDARR_API_KEY" | base64 -w0)\"}}"   # later rotations
+kubectl -n media-stack rollout restart deployment/lidarr
 ```
 
-Until the Secret exists and holds the current key, the exporter container fails to start or answers
-401, and the pod reports `1/2`. The app container is unaffected.
+**The restart is part of the change, not an afterthought.** `APIKEY` is an environment value read
+when the container starts, so a patched Secret is invisible to the running sidecar until its pod is
+replaced. Without the restart the target stays down and the Secret looks innocent.
+
+Until the Secret exists, the sidecar container does not start and the pod reports `1/2`. The app
+container is unaffected either way.
 
 ## Metrics
 
 The `exportarr` sidecar listens on 9707 and is scraped by pod annotation (`prometheus.io/scrape`,
-`prometheus.io/port`, `prometheus.io/path`), all rendered from the `exportarr` block. The metrics port
-is deliberately not on the Service: Prometheus scrapes the pod IP. Disabling `exportarr.enabled`
-removes the sidecar and the annotations together.
+`prometheus.io/scheme`, `prometheus.io/port`, `prometheus.io/path`), all rendered from the `exportarr`
+block. The metrics port is deliberately not on the Service: Prometheus scrapes the pod IP. Disabling
+`exportarr.enabled` removes the sidecar and the annotations together.
 
-If the target answers HTTP 500, exportarr is passing Lidarr's 401 through: the `secret` key in the
-`lidarr` Secret is stale, not the chart.
+If the target is **down with HTTP 500**, exportarr is passing Lidarr's 401 through: the `secret` key
+in the `lidarr` Secret is stale or the pod has not been restarted since it was patched, not the chart.
 
 ## Resources are unmeasured
 
