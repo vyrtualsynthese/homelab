@@ -250,7 +250,7 @@ secure field), so the contact point is never rewritten by automation.
 | `CoreDeploymentDown` | 0 available replicas in kube-system/monitoring/argocd | 10m | critical | inactive |
 | `CoreStatefulSetDown` | ready < desired in those namespaces | 10m | critical | inactive |
 | `CoreDaemonSetDown` | available < desired in those namespaces | 10m | critical | inactive |
-| `MediaDeploymentDown` | a `media-stack` Deployment at 0 available (`readarr`/`kavita` excluded until repaired) | 10m | warning | inactive |
+| `MediaDeploymentDown` | a `media-stack` Deployment at 0 available (`readarr` excluded until its claim is rebuilt) | 10m | warning | inactive |
 | `KubeStateMetricsDown` | `absent(up{service=...} == 1)` | 5m | critical | inactive |
 | `NodeFilesystemReadOnly` | filesystem mounted read-only | 5m | critical | inactive |
 | `MonitoringDown` | `1 - up{job="prometheus"}`; `execErrState: Alerting` | 5m | critical | inactive |
@@ -390,8 +390,9 @@ runs (config shows `retention_enabled: true`,
   those families; only temperature, utilisation and frame-buffer use exist.
 - **Application coverage is limited to pods, restarts, `media-stack` and the
   core namespaces.** `CoreDeploymentDown` covers kube-system, monitoring and
-  argocd; `MediaDeploymentDown` covers `media-stack`, with `readarr` and `kavita`
-  excluded until their claims are rebuilt. A broken app in any other namespace
+  argocd; `MediaDeploymentDown` covers `media-stack`, with `readarr` excluded
+  until its claim is rebuilt. `kavita` came off the exclusion on 2026-11-13, when
+  its rebuilt chart gave it a claim and a running pod. A broken app in any other namespace
   shows up through `PodCrashLooping`, `PodPending` or `RestartStorm`, not through
   a replica check. `JobFailed` covers every Job, but only `recyclarr` has
   per-schedule staleness coverage; the other CronJobs fail loudly but a run that
