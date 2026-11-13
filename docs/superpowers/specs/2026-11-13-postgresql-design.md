@@ -1,7 +1,8 @@
 # Design — the shared PostgreSQL instance (W2)
 
 - **Date:** 2026-11-13
-- **Status:** draft for approval
+- **Status:** approved (operator, 2026-11-13), with the revisions of the same day: no pre-created
+  databases, no `pgvector`, an admin login on pgAdmin.
 - **Supersedes:** the W2 sketch in `2026-11-10-homelab-stabilisation-design.md` §W2 and the
   `postgres` row of `audit/argocd-helm.md` §3. It confirms the shape that sketch chose and fills in
   everything it left open.
@@ -36,7 +37,10 @@ Both objects are dead, not degraded. Nothing is recoverable.
 Consequence: there is no data to migrate, no dump to import, and no working backup anywhere. The
 rebuild starts from empty, which is consistent with the eleven lost volumes being accepted as lost.
 
-**Consumers today** (all already point at `postgres-postgresql.databases.svc.cluster.local`):
+**Expected consumers** (all already point at `postgres-postgresql.databases.svc.cluster.local`).
+None of them gets a database in this workstream; each one gets its role and database from the §6.5
+procedure when its application is rebuilt in W3. The table is the inventory of names to expect, and
+the record of which Secret holds each password:
 
 | App | Namespace | Database | Role | Credential source |
 |---|---|---|---|---|
@@ -56,12 +60,15 @@ future tenants: OpenMemory (needs `pgvector`) and Vikunja.
 
 **Goals**
 
-1. A single PostgreSQL 18 primary in `databases`, one role and one database per application, no
-   application holding superuser.
+1. A single PostgreSQL 18 primary in `databases`, serving one non-superuser role per application.
+   **Databases are created on demand, one at a time, when an application is rebuilt — not in
+   advance and not by a batch job** (operator, 2026-11-13). The instance starts with its superuser
+   and the read-only backup role, and nothing else.
 2. Reaching it requires being in the cluster and in an allow-listed namespace.
-3. A nightly logical backup per database, verified, retained locally, and shipped offsite by the W4
-   restic job once that exists.
-4. Every database proven restorable into a scratch instance before the workstream is called done.
+3. A nightly logical backup of every database that exists, verified, retained locally, and shipped
+   offsite by the W4 restic job once that exists.
+4. The add-a-database procedure and the restore procedure both proven, on a scratch database,
+   before the workstream is called done.
 5. All of it declared in git: chart, SQL, CronJob, network policy, Application file.
 
 **Non-goals**
@@ -71,6 +78,8 @@ future tenants: OpenMemory (needs `pgvector`) and Vikunja.
 3. Per-application instances. One instance is the requirement.
 4. TLS on port 5432 in this phase (see §6.7 for the risk and the revisit condition).
 5. Moving off the cluster. §6.12 keeps the door open; it is not this workstream.
+6. The `pgvector` extension (operator, 2026-11-13). If OpenMemory ever needs it, that is a separate
+   change with its own image and its own risk — not a silent part of this one.
 
 **Anti-goals — these would make it a failure even if it runs**
 
@@ -135,9 +144,9 @@ exists today. Objects it renders:
 | `StatefulSet/postgres` | one pod, `Recreate` semantics, data claim on `local-path` |
 | `Service/postgres` | ClusterIP, port 5432 — the only name applications use |
 | `Service/postgres-headless` | required by `StatefulSet.spec.serviceName`; no consumers |
-| `ConfigMap/postgres-init` | the SQL that creates roles, databases and extensions |
-| `Job/postgres-init` | applies that SQL, idempotent, runs on every sync where the ConfigMap changed |
-| `CronJob/postgres-dump` | nightly per-database dumps into a separate claim |
+| `ConfigMap/postgres-bootstrap` | first-boot SQL: the read-only `backup` role, `REVOKE CONNECT` on `postgres` |
+| `Job/postgres-bootstrap` | applies it once; idempotent, safe to re-run |
+| `CronJob/postgres-dump` | nightly dumps of every database into a separate claim |
 | `NetworkPolicy/postgres` | default-deny ingress in `databases`, then allow 5432 from the consumer namespaces |
 | `ConfigMap/postgres-config` | `postgresql.conf` overrides, mounted and included |
 
@@ -158,12 +167,12 @@ flowchart LR
     CJ --> SS
     CJ --> DUMPS
   end
-  A1[authentik] --> SVC
-  A2[discourse] --> SVC
-  A3[firefly] --> SVC
-  A4[guacamole] --> SVC
-  A5[koillection] --> SVC
-  A6[wiki] --> SVC
+  A1[authentik] -.->|W3, on demand| SVC
+  A2[discourse] -.->|W3, on demand| SVC
+  A3[firefly] -.->|W3, on demand| SVC
+  A4[guacamole] -.->|W3, on demand| SVC
+  A5[koillection] -.->|W3, on demand| SVC
+  A6[wiki] -.->|W3, on demand| SVC
   LAN[workstation on the LAN] -->|pgadmin.kub.local, allowlisted| PGA[pgAdmin]
   PGA --> SVC
   DUMPS -.->|restic job, W4| OVH[(OVH Object Storage)]
@@ -173,14 +182,12 @@ flowchart LR
 
 `postgres:18.7`, pinned by digest. **(design)**
 
-- Plain official image, not `pgvector/pgvector`, even though OpenMemory will need the extension.
-  Reason: the component everything depends on should change one thing at a time; adding an
-  extension to an image is a restart with the same major version and the same on-disk format, so
-  it is a cheap later step, not a migration.
-- The swap, when OpenMemory is built: `pgvector/pgvector:0.8.7-pg18` (same PostgreSQL, the
-  extension compiled in), then `CREATE EXTENSION vector` in that one database. No dump/reload.
-- Digest pinning, not just the tag: `postgres:18.7` resolves to a moving digest on Docker Hub.
-  Renovate can bump the digest line.
+- Plain official image. No extension is added, `pgvector` included in that refusal (operator,
+  2026-11-13). The image is the upstream one, the tag is the current minor, and the digest is
+  pinned because `postgres:18.7` resolves to a moving digest on Docker Hub. Renovate can bump the
+  digest line.
+- Nothing is pre-enabled either. `CREATE EXTENSION` in a database is a decision made when an
+  application needs it, not a default.
 
 ### 6.3 Storage and sizing
 
@@ -223,33 +230,54 @@ exporter; if that crosses ~2 GiB, raise the limit before the buffers.
 - No `initContainer` games. `PGDATA` lives at `/var/lib/postgresql/data` on the claim; the official
   image initialises it on first start with `POSTGRES_PASSWORD` from `postgres-superuser`.
 
-### 6.5 Roles and databases
+### 6.5 Roles and databases, created on demand
 
-Six databases, each owned by its own role. Created by `ConfigMap/postgres-init` and applied by
-`Job/postgres-init` — no hand-run SQL, no superuser for applications.
+**Decision (operator, 2026-11-13): no database is created ahead of its application.** The instance
+comes up with two roles — the `postgres` superuser and the read-only `backup` role — and exactly
+the databases the official image creates (`postgres`, `template0`, `template1`). Everything else is
+added when an application needs it, through a documented procedure, so the operator sees each one
+appear and knows what it is for.
+
+**Bootstrap (once, in the chart).** `Job/postgres-bootstrap` runs SQL from a ConfigMap:
 
 ```sql
--- pattern per application; x is the database, also the role name
-SELECT 'CREATE ROLE x LOGIN PASSWORD ' || quote_literal(current_setting('app.pw_x'))
- WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'x')\gexec
-SELECT 'CREATE DATABASE x OWNER x'
- WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'x')\gexec
-REVOKE ALL ON DATABASE x FROM PUBLIC;
-GRANT CONNECT ON DATABASE x TO x;
+-- read-only dumping role; password comes from the Secret, never from this file
+CREATE ROLE backup LOGIN PASSWORD :'backup_password';
+GRANT pg_read_all_data TO backup;
+REVOKE CONNECT ON DATABASE postgres FROM PUBLIC;
 ```
 
-Rules the job enforces:
+Guarded with `WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'backup')\gexec` so a re-run
+is a no-op. The `REVOKE` is what stops an application that guesses `postgres` from connecting.
 
-- Every role is `NOSUPERUSER NOCREATEROLE NOCREATEDB NOREPLICATION`.
-- `REVOKE CONNECT ON DATABASE ... FROM PUBLIC` on every database, including `postgres`. An
-  application that guesses another's database name still cannot connect.
-- The role owns its database and nothing else. `template1` is untouched, so new databases do not
-  inherit grants.
-- `CONNECT` for the backup role, which is `pg_read_all_data` and therefore can dump everything
-  without being superuser: `CREATE ROLE backup LOGIN; GRANT pg_read_all_data TO backup;`
-  Passwords arrive as environment variables read from Secrets; **no password is ever written into
-  the ConfigMap or the chart**.
-- Re-running the job changes nothing. That is what makes it safe to run on every sync.
+**On demand — `docs/runbooks/postgres-add-database.md`.** One procedure, run when an application is
+rebuilt, producing the same shape every time:
+
+1. Generate a password and create two Secrets: `pg-<app>` in `databases` and the app's own secret
+   in its namespace (same value; recorded as a pair in `docs/secrets.md`).
+2. Run the SQL as the superuser, from a `psql` session in the pod or from pgAdmin:
+
+```sql
+CREATE ROLE <app> LOGIN PASSWORD '<from the secret>' NOSUPERUSER NOCREATEROLE NOCREATEDB NOREPLICATION;
+CREATE DATABASE <app> OWNER <app>;
+REVOKE ALL ON DATABASE <app> FROM PUBLIC;
+GRANT CONNECT ON DATABASE <app> TO <app>;
+GRANT CONNECT ON DATABASE <app> TO backup;
+```
+
+3. Prove it: connect as `<app>` from a pod in the application's namespace, create a table, write,
+   read, drop it.
+4. Note the date and the application in the runbook's log table.
+
+The rules the procedure encodes, so they hold whether it is run by hand or later automated: no
+role is ever superuser or can create databases; `CONNECT` is revoked from `PUBLIC` on every
+database, so guessing another application's database name does not get a connection; the role owns
+its own database and nothing else; `template1` is untouched, so new databases inherit no grants;
+`backup` gets `CONNECT` so the dump job covers new databases without anyone remembering to update
+it.
+
+This is deliberately less automated than a batch job, and it is the trade the operator asked for:
+a database exists because someone needed it, not because a list said so.
 
 `pg_hba.conf` (rendered by the chart into `PGDATA` via `POSTGRES_HOST_AUTH_METHOD` defaults + an
 explicit `pg_hba` ConfigMap): `scram-sha-256` for all `host` lines, `local` peer for the `postgres`
@@ -261,10 +289,11 @@ Two levels, matching §8.5 of the stabilisation design (inventory plus encrypted
 
 | Secret | Namespace | Keys | Consumer |
 |---|---|---|---|
-| `postgres-superuser` | `databases` | `postgres-password` | the pod; nobody else |
-| `pg-backup` | `databases` | `backup-password` | `CronJob/postgres-dump` |
-| `pg-<app>` | `databases` | `password` | `Job/postgres-init` only |
-| `<app>-db` / `authentik-env` / `discourse` / `koillection` / `wikijs` | the app's namespace | as today (see §2 table) | the application |
+| `postgres-superuser` | `databases` | `postgres-password` | the pod; pgAdmin for admin work (password never saved) |
+| `pg-backup` | `databases` | `backup-password` | the bootstrap job and `CronJob/postgres-dump` |
+| `pgadmin` | `databases` | `password` (email is a non-secret value) | pgAdmin's own web login |
+| `pg-<app>` | `databases` | `password` | created with the database, per §6.5 |
+| `<app>-db` / `authentik-env` / `discourse` / `koillection` / `wikijs` | the app's namespace | as today (see §2 table) | created with the database, per §6.5 |
 
 A Kubernetes Secret is namespaced, so one password necessarily exists twice: once in `databases`
 where the role is created, once in the application's namespace where it is consumed. The copy is
@@ -298,14 +327,18 @@ only the hostname and, where the value was a leftover, the password.
 
 Nightly, 03:30, `CronJob/postgres-dump` as role `backup`:
 
-1. For each database in a list held in a ConfigMap: `pg_dump -Fc -Z6 -d <db> -f /dumps/<db>-<UTC
-   date>.dump`.
+1. Enumerate the databases that exist, so a database added by hand is backed up the same night with
+   nothing to remember: `psql -Atc "SELECT datname FROM pg_database WHERE datistemplate = false AND
+   datname <> 'postgres'"`, then `pg_dump -Fc -Z6 -d <db> -f /dumps/<db>-<UTC date>.dump` for each.
 2. Verify each file with `pg_restore --list` — catches a truncated or empty dump the same night,
    which is the failure mode a dump job usually has.
 3. Delete dumps older than 14 days.
-4. Exit non-zero if any step failed, so the `Job` object is the visible record.
+4. Exit non-zero if any step failed, so the `Job` object is the visible record. A night where the
+   only dump produced is the empty set for a database that was just created is not a success, so
+   the job also fails on a zero-byte file.
 
-`pg_dumpall --globals-only` is **not** run: roles are SQL in git and reproducible.
+`pg_dumpall --globals-only` is **not** run: roles are created by §6.5 and recorded in the runbook,
+so a dump that cannot recreate them is not a loss — the procedure is the record.
 
 The 14 local dumps are the recoverable copy in this phase. Offsite is W4: restic copies
 `/dumps` (and the app config volumes) to OVH Object Storage with 7 daily / 4 weekly / 12 monthly
@@ -330,8 +363,9 @@ The procedure, also written as `docs/runbooks/postgres-restore.md`:
    the scratch instance if the check is cheap.
 4. Delete the scratch instance.
 
-Acceptance is one drill per database, recorded in the runbook with a date. A drill that has never
-been run is why the old setup looked fine until it was needed.
+Acceptance is one drill, on a database created by the §6.5 procedure, recorded in the runbook with a
+date; every later database gets one when it appears. A drill that has never been run is why the old
+setup looked fine until it was needed.
 
 Alerting (added in Grafana, where alert rules live): dump file older than 26 hours, database pod
 not ready, data volume above 85 %, `postgres_exporter` `pg_up == 0`.
@@ -358,12 +392,16 @@ ratio, database sizes, replication lag (always zero, deliberately).
   (`192.168.1.0/24` today — the same LAN `plex` trusts; confirm the subnet when writing it). No
   public hostname, no `myresolver`, no exposure through the public entrypoint. Container port 80
   stays inside the cluster.
-- **Two connections, different privileges.** The everyday connection uses the read-only `backup`
-  role (`pg_read_all_data`): enough for browsing tables, plans and queries, and it cannot change
-  anything. The `postgres` superuser is registered as a separate server entry used only for
-  administration, and its password is **never saved** in pgAdmin's config. Saved passwords for the
-  read-only role are allowed and are encrypted with pgAdmin's master password; that master password
-  is not stored anywhere in the cluster.
+- **An admin login of its own (operator, 2026-11-13).** pgAdmin's web login is a local account:
+  `Secret/pgadmin` key `password`, with the login email set as a plain value in the chart
+  (`env.email`). Chart `runix/pgadmin4` 1.50.0 reads only the password from the Secret
+  (`secretKeys.pgadminPasswordKey`, default `password`), so the email is not a secret and must be
+  written in the values file. Nobody gets an account but the operator; there is no sign-up page in
+  pgAdmin, and this is not SSO — authentik in front of it is a later, optional layer.
+- **The database servers are pre-registered** through the chart's `serverDefinitions`: one entry for
+  `postgres.databases.svc.cluster.local` as `postgres` (administration, password prompted and
+  **never saved**), one as `backup` (everyday browsing, password may be saved). That is what makes
+  pgAdmin useful on first login instead of a form to fill in.
 - Its own configuration database is backed up with the `nuc0` config volumes (W4), not with the
   PostgreSQL dumps. `docs/secrets.md` records that this volume therefore contains encrypted
   database credentials, which the W4 backup inherits.
@@ -404,19 +442,20 @@ and the new pod cannot schedule. On top of that, `discourse`'s and `koillection`
 deleted with Longhorn, so neither can start until W3 Wave A rebuilds them. Repointing them here
 would mean shipping changes that are known-broken on arrival.
 
-What W2 does instead, per database: run a throwaway client pod **in each consumer's namespace**,
-with that consumer's role and the Service name, and prove it connects, reads and writes. That is
-the property the database is responsible for. The one-line host changes are then a W3 task with a
-recorded starting point:
+For the one database W2 creates, as a rehearsal: run a throwaway client pod **in a consumer's
+namespace**, with the role the procedure created and the Service name, and prove it connects,
+reads and writes. That is the property the database is responsible for — and with §6.5 it also
+proves the procedure, since that throwaway database is created by the procedure itself. The
+one-line host changes are then a W3 task with a recorded starting point:
 
 | Chart | Change (W3) |
 |---|---|
-| authentik | `authentik.postgresql.host` → `postgres.databases.svc.cluster.local` |
-| discourse | `externalDatabase.host`; `create: true` becomes `false` (the init job creates role and database) |
-| firefly | `DB_HOST` value |
-| guacamole | `POSTGRES_HOSTNAME` value |
-| koillection | `DB_HOST` comes from its Secret — update the Secret, not the chart |
-| wiki | `DB_HOST` value |
+| authentik | `authentik.postgresql.host` → `postgres.databases.svc.cluster.local`; create its role and database first |
+| discourse | `externalDatabase.host`; `create: true` becomes `false`; create its role and database first |
+| firefly | `DB_HOST` value; create its role and database first |
+| guacamole | `POSTGRES_HOSTNAME` value; create its role and database first |
+| koillection | `DB_HOST` comes from its Secret — update the Secret, not the chart; create its role and database first |
+| wiki | `DB_HOST` value; create its role and database first |
 
 Also W3's, because they are what actually blocks those pods: the five `node-type` affinities, and
 the two deleted claims. Recording them here so the handover is explicit rather than discovered.
@@ -427,31 +466,37 @@ the two deleted claims. Recording them here so the handover is explicit rather t
    the repository being coherent. Nothing in the chart itself depends on W1.
 
 1. Chart and Application file; `databases` namespace created by the Application.
-2. Secrets: `postgres-superuser`, `pg-backup`, `pg-<app>` × 6, and the copies in each app's
-   namespace (the apps read their own; the init job reads the `databases` copies). Inventory first,
-   in `docs/secrets.md`.
-3. First sync: pod starts, init job creates roles and databases, `\l` shows six databases.
-4. Per database, a throwaway client pod in the consumer's namespace connects with that consumer's
-   role, creates a table, writes, reads and drops it. No consumer chart is touched (§7).
-5. `NetworkPolicy` enabled last, after every connection test passes, so a policy typo is diagnosed
+2. Secrets: `postgres-superuser`, `pg-backup`, `pgadmin`. Three, not fifteen. Inventory first, in
+   `docs/secrets.md`.
+3. First sync: pod starts, bootstrap job creates the `backup` role. `\l` shows `postgres`,
+   `template0`, `template1` and nothing else — that is the expected result, not a missing step.
+4. Write the two runbooks (`postgres-add-database`, `postgres-restore`) and walk the first one:
+   create `acceptance` exactly as an application's database would be created, with its two Secrets.
+5. Connect to it from a throwaway pod in a consumer namespace with its role, write, read, drop —
+   then leave the database in place for the dump and restore drill, and drop it at the end.
+6. `NetworkPolicy` enabled last, after the connection test passes, so a policy typo is diagnosed
    against a working baseline rather than a broken one.
-6. Dump CronJob, then a restore drill per database.
-7. Grafana alerts, including the dump-age alert W4 depends on.
-8. pgAdmin: wrapper chart, LAN-only ingress, read-only connection. Delete the old Application
-   wiring and the dead claim reference in the same pass.
+7. Dump CronJob. Confirm tonight's run dumps the `acceptance` database, then restore it into a
+   scratch instance, then drop it.
+8. Grafana alerts, including the dump-age alert W4 depends on.
+9. pgAdmin: wrapper chart, admin login, LAN-only ingress, the two pre-registered servers. Delete
+   the old Application wiring and the dead claim reference in the same pass.
 
 ## 9. Acceptance
 
-1. `kubectl -n databases get statefulset,job,pod` all healthy, and six databases exist.
-2. For each of the six, a throwaway pod in the consumer's namespace connects with that app's role,
-   writes and reads a row. `\du` shows six unprivileged roles plus `backup`, and no application
-   holding superuser.
+1. `kubectl -n databases get statefulset,job,pod` all healthy; exactly one non-template database
+   exists at the end of the workstream (the acceptance one, dropped in step 7), plus whatever the
+   operator has since created on purpose.
+2. `\du` shows `postgres` and `backup` only, until a database is added; every role created by the
+   runbook is `NOSUPERUSER NOCREATEROLE NOCREATEDB`, and no application ever connects as
+   `postgres`.
 3. A connection attempt from a namespace outside the allow-list (e.g. a test pod in `default`)
    fails to open 5432.
-4. From a workstation on the LAN, `pgadmin.kub.local` loads; from the public name or from outside
-   the LAN, it does not; and 5432 is not reachable from outside the cluster at all.
-5. The dump CronJob produced six files tonight, each `pg_restore --list`-clean.
-6. Each database restored into a scratch instance, dated in `docs/runbooks/postgres-restore.md`.
+4. From a workstation on the LAN, `pgadmin.kub.local` loads with the admin login; from outside the
+   LAN it does not; and 5432 is not reachable from outside the cluster at all.
+5. The dump CronJob dumped every existing database tonight, each file `pg_restore --list`-clean.
+6. That dump restored into a scratch instance, dated in `docs/runbooks/postgres-restore.md`, with
+   the row counts checked.
 7. No Bitnami artefact anywhere: no `postgresql` chart in any Application, no `postgres-secrets`
    Secret referenced.
 8. `helm template` renders the chart clean, and the two repo reference-integrity checks in
@@ -470,17 +515,21 @@ the two deleted claims. Recording them here so the handover is explicit rather t
 | `postgres:18.7` digest moves | pinned by digest, Renovate bumps it |
 | Postiz's real connection path is unverified | read that chart before treating it as a consumer; it is not in scope here |
 | pgAdmin is a UI that reaches every database | everyday connection is the read-only `backup` role; the superuser password is never saved in it; LAN-only IP allowlist; its config volume (with encrypted credentials) is part of the W4 backup set |
+| Databases created by hand drift from the intended shape (no owner, `PUBLIC` connect left on, a superuser role) | §6.5 is a written procedure with the four rules inline, and `\du`/`\l` are the check; the runbook keeps a dated log of what was created and why |
+| A database exists that nobody remembers creating | the dump job enumerates what exists, and its output is a de facto inventory; the runbook log says what each one is for |
 
 ## 11. Left to the builder
 
-- Exact chart file layout and helper templates; whether the init SQL lives in one file or one per
-  database (one file is fine at this size).
-- Whether `Job/postgres-init` is a Helm hook or a plain Job with the ConfigMap checksum in its
+- Exact chart file layout and helper templates.
+- Whether `Job/postgres-bootstrap` is a Helm hook or a plain Job with the ConfigMap checksum in its
   annotations. A plain Job with a checksum annotation is simpler under ArgoCD and is the
   recommendation.
+- How the bootstrap job gets the backup password: environment variable from `pg-backup`, read inside
+  `psql` with `:'backup_password'`, **never** interpolated into the SQL file.
 - `pg_hba.conf` rendering details and whether `POSTGRES_INITDB_ARGS` is needed for
   `--data-checksums` (recommended: yes, it is free and catches corruption).
 - Metrics exporter port, alert thresholds beyond the four named.
-- The pgAdmin wrapper chart: how the `runix` chart is wrapped, whether the `IPAllowList` middleware
-  lives in the chart or in `cluster/infrastructure/`, and the exact LAN CIDR to allow.
-- The runbook wording for the drill.
+- The pgAdmin wrapper chart: how the `runix` chart is wrapped, the exact `serverDefinitions`
+  payload, whether the `IPAllowList` middleware lives in the chart or in
+  `cluster/infrastructure/`, and the exact LAN CIDR to allow.
+- The wording of the two runbooks, and the log table shape they keep.
