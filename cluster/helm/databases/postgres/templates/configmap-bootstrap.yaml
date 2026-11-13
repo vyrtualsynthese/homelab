@@ -1,0 +1,27 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-bootstrap
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "postgres.labels" . | nindent 4 }}
+data:
+  bootstrap.sql: |
+    -- Idempotent role bootstrap, applied by Job/postgres-bootstrap.
+    --
+    -- The two passwords arrive as psql variables (-v backup_password=... and
+    -- -v exporter_password=...), never as text in this file: :'name' expands to a
+    -- properly quoted SQL literal, so a password containing a quote cannot break
+    -- out of the statement. Re-running the Job is safe, CREATE ROLE is guarded by
+    -- the pg_roles lookup.
+    \set ON_ERROR_STOP on
+    SELECT 'CREATE ROLE backup LOGIN PASSWORD ' || quote_literal(:'backup_password')
+     WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'backup')\gexec
+    GRANT pg_read_all_data TO backup;
+
+    SELECT 'CREATE ROLE postgres_exporter LOGIN PASSWORD ' || quote_literal(:'exporter_password')
+     WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'postgres_exporter')\gexec
+    GRANT pg_monitor TO postgres_exporter;
+    GRANT CONNECT ON DATABASE postgres TO postgres_exporter;
+
+    REVOKE CONNECT ON DATABASE postgres FROM PUBLIC;
