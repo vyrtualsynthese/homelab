@@ -11,6 +11,7 @@ disagrees with one of these, these win.
 | [`superpowers/specs/2026-11-10-homelab-stabilisation-design.md`](superpowers/specs/2026-11-10-homelab-stabilisation-design.md) | Why the rebuild looks the way it does: intent, constraints, conventions, the nine workstreams and the risks. |
 | [`superpowers/plans/2026-11-10-homelab-programme-index.md`](superpowers/plans/2026-11-10-homelab-programme-index.md) | The workstreams with estimates, dependencies and the operator's priority order. |
 | [`superpowers/plans/`](superpowers/plans/) | One implementation plan per workstream, written to the command. |
+| [`status.md`](status.md) | Which applications are repaired, which are working but not rebuilt, and which are broken — with the date it was checked. Start here before trusting any other page's "done". |
 | [`runbooks/`](runbooks/) | Procedures to execute, produced as workstreams land. |
 | [`observability-conventions.md`](observability-conventions.md) | The live monitoring stack: what runs, how to query it, the dashboards, the alert set and its known holes. Read before touching Grafana, Prometheus or Loki. |
 
@@ -23,7 +24,8 @@ disagrees with one of these, these win.
 | [`audit/ansible-hosts.md`](audit/ansible-hosts.md) | Playbooks, inventory, backups, runner templates, staleness, what a rebuild would not reproduce |
 
 These are dated on purpose. They describe the cluster at one moment and will drift; a later
-workstream supersedes them by producing a runbook, not by editing the audit.
+workstream supersedes them by producing a runbook, not by editing the audit. For the current state
+instead, read [`status.md`](status.md).
 
 ## Faults that are tracked, not fixed
 
