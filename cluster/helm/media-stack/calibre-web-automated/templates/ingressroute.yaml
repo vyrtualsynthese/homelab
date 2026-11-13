@@ -1,0 +1,56 @@
+{{- if .Values.ingressRoute.enabled }}
+{{- $fullname := include "app.fullname" . }}
+{{- /* The allow list comes first in the chain: a request from outside the ranges is
+rejected at the proxy instead of being passed on to an authentication middleware that
+would offer it a login page. Values-driven middlewares follow, in the reference
+chart's `{ name, namespace }` shape. */}}
+{{- $middlewares := list }}
+{{- if .Values.ingressRoute.sourceRanges }}
+{{- $middlewares = append $middlewares (printf "%s-allowlist" $fullname) }}
+{{- end }}
+{{- range .Values.ingressRoute.middlewares }}
+{{- $middlewares = append $middlewares (printf "%s-%s@kubernetescrd" .namespace .name) }}
+{{- end }}
+apiVersion: {{ .Values.ingressRoute.apiVersion }}
+kind: IngressRoute
+metadata:
+  name: {{ $fullname }}
+  labels:
+    {{- include "app.labels" . | nindent 4 }}
+    {{- with .Values.ingressRoute.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- with .Values.ingressRoute.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  entryPoints:
+    {{- toYaml .Values.ingressRoute.entryPoints | nindent 4 }}
+  routes:
+    - kind: Rule
+      match: Host(`{{ .Values.ingressRoute.host }}`) && PathPrefix(`{{ .Values.ingressRoute.pathPrefix }}`)
+      {{- with $middlewares }}
+      middlewares:
+        {{- range . }}
+        - name: {{ . }}
+        {{- end }}
+      {{- end }}
+      services:
+        - name: {{ $fullname }}
+          port: {{ .Values.service.port }}
+  {{- if .Values.ingressRoute.tls.enabled }}
+  tls:
+    {{- with .Values.ingressRoute.tls.secretName }}
+    secretName: {{ . }}
+    {{- end }}
+    {{- with .Values.ingressRoute.tls.certResolver }}
+    certResolver: {{ . }}
+    {{- end }}
+    {{- with .Values.ingressRoute.tls.options }}
+    options:
+      name: {{ . }}
+      namespace: {{ $.Release.Namespace }}
+    {{- end }}
+  {{- end }}
+{{- end }}
