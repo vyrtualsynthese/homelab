@@ -1,0 +1,43 @@
+{{/*
+The dump script, mounted into the CronJob from templates/cronjob-dump.yaml.
+
+Why it is shaped the way it is:
+
+- The host is the Service name "postgres", not 127.0.0.1: this pod is its own,
+  unlike the metrics exporter sidecar which shares the database pod's network
+  namespace.
+- The database list is queried, never hardcoded: a database added to the
+  instance is dumped the same night without touching this chart.
+- An empty list fails the run instead of exiting 0. A CronJob that reports
+  success while writing nothing is worse than a red one, because nobody looks.
+- Every dump is verified before the run is considered good: non-empty file and
+  a readable table of contents (pg_restore --list), so a truncated page or a
+  broken format shows up at 03:30, not on the day of a restore.
+- Retention deletes by age, so a failed dump never manages to delete the last
+  good copy of anything.
+*/}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "postgres.name" . }}-dump-script
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "postgres.labels" . | nindent 4 }}
+data:
+  dump-all.sh: |
+    #!/usr/bin/env bash
+    set -euo pipefail
+    export PGPASSWORD="${BACKUP_PASSWORD:?}"
+    mapfile -t dbs < <(psql -h postgres -U backup -d postgres -At -c \
+      "SELECT datname FROM pg_database WHERE datistemplate = false AND datname <> 'postgres' ORDER BY 1")
+    if [ "${#dbs[@]}" -eq 0 ]; then
+      echo "no application databases exist; refusing to report success" >&2
+      exit 1
+    fi
+    for db in "${dbs[@]}"; do
+      out="/dumps/${db}-$(date -u +%Y%m%dT%H%M%SZ).dump"
+      pg_dump -h postgres -U backup -d "$db" -Fc -Z6 -f "$out"
+      [ -s "$out" ] || { echo "empty dump: $out" >&2; exit 1; }
+      pg_restore --list "$out" > /dev/null
+    done
+    find /dumps -maxdepth 1 -name '*.dump' -type f -mtime +{{ .Values.dumps.retentionDays }} -delete
