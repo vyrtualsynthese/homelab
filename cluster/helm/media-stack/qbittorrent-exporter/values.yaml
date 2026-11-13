@@ -45,6 +45,14 @@ exporter:
   # -- Existing Secret holding the Web API credentials, keys `username` and
   # `password`.
   existingSecret: qbittorrent-exporter
+  # -- Tracker collection costs one Web API call per distinct tracker. This
+  # qBittorrent follows about 40, which turned a 50 ms collection into 8 s on
+  # 2026-11-13 and pushed the scrape past Prometheus's 10 s timeout, so the
+  # target flapped. No panel reads `qbittorrent_tracker_*`; leave it off.
+  enableTracker: false
+  # -- Per-request timeout in seconds. Prometheus gives the whole scrape 10 s,
+  # so a hung qBittorrent call must fail fast instead of eating the budget.
+  timeoutSeconds: 5
 
 # -- Extra pod annotations, on top of the four `prometheus.io/*` annotations the
 # template renders from `exporter.port`. Do not repeat them here.
