@@ -14,7 +14,7 @@ A single K3s homelab managed by ArgoCD (GitOps) plus Ansible for host prep.
 
 - GitOps branch: `develop` (every Application pins `targetRevision: develop`).
 - 58 ArgoCD `Application` objects in `cluster/argocd/projects/**/*.yaml`.
-- 49 Helm charts under `cluster/helm/`.
+- 51 Helm charts under `cluster/helm/`.
 - No CI. Renovate updates images/chart versions; nothing runs on PR.
 - Secrets are never committed. See §5.
 
@@ -62,20 +62,20 @@ The chart lives at `cluster/helm/<path>`; its version is `image.tag` in that cha
 spec:
   sources:
     - repoURL: "https://vyrtualsynthese.github.io/selfhosted-helmcharts/"
-      chart: bazarr
-      targetRevision: 0.1.3          # chart version lives here, not in values.yaml
+      chart: calibre
+      targetRevision: 0.1.2          # chart version lives here, not in values.yaml
       helm:
         valueFiles:
-          - $values/cluster/helm/media-stack/bazarr/values.yaml
+          - $values/cluster/helm/media-stack/calibre/values.yaml
     - repoURL: "https://github.com/vyrtualsynthese/homelab.git"
       targetRevision: develop
       ref: values
 ```
 
-The repo directory then holds only `values.yaml` (no `Chart.yaml`). Examples: bazarr, bazarr-anime,
-calibre, filebrowser, postgres, pgadmin, renovate, local-path, books-media, nfs-audio.
+The repo directory then holds only `values.yaml` (no `Chart.yaml`). Examples: calibre, filebrowser,
+postgres, pgadmin, renovate, local-path, books-media, nfs-audio.
 
-Not the way to add an external chart: new work uses pattern D, and these ten are converted
+Not the way to add an external chart: new work uses pattern D, and these eight are converted
 separately.
 
 ### C. Vendored upstream chart
@@ -130,6 +130,7 @@ Templates expect these Secrets to already exist; a missing one shows up as
 | Namespace | Secret | Keys / used by |
 |---|---|---|
 | media-stack | `sonarr`, `sonarr-anime`, `radarr`, `radarr-anime`, `lidarr`, `prowlarr` | `secret` → exportarr APIKEY |
+| media-stack | `bazarr`, `bazarr-anime` | `secret` → exportarr APIKEY (only when `exportarr.enabled`; off until exportarr v3) |
 | media-stack | `plex` | `plex_claim` |
 | media-stack | `qbittorrent-exporter` | `username`, `password` |
 | media-stack | `cross-seed` | mounted as a file (`conf.secretName`) |
