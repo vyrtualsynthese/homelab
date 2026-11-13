@@ -72,7 +72,7 @@ spec:
       ref: values
 ```
 
-The repo directory then holds only `values.yaml` (no `Chart.yaml`). Examples: calibre, filebrowser,
+The repo directory then holds only `values.yaml` (no `Chart.yaml`). Examples: filebrowser,
 postgres, pgadmin, renovate, local-path, books-media, nfs-audio.
 
 Not the way to add an external chart: new work uses pattern D, and these seven are converted
