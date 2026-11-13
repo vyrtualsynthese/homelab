@@ -1,9 +1,13 @@
 apiVersion: v2
 name: pgadmin
-description: pgadmin
+description: pgAdmin 4 for the shared PostgreSQL instance
 type: application
 version: 0.1.0
+appVersion: "9.8"
 dependencies:
-  - name: pgadmin
-    version: 1.50.0 # Version du chart open-source que tu veux utiliser
+  # Upstream chart is named pgadmin4; the alias keeps the values nested under
+  # `pgadmin:` and the rendered objects named after this chart.
+  - name: pgadmin4
+    alias: pgadmin
+    version: 1.50.0
     repository: https://helm.runix.net/

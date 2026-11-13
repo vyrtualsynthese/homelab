@@ -1,156 +1,50 @@
-pgadmin:
-  # Default values for pgAdmin4.
+# Traefik objects the wrapper renders itself. The subchart's own Ingress stays
+# off: the repo uses Traefik CRDs only (never networking.k8s.io).
+traefik:
+  apiVersion: traefik.containo.us/v1alpha1
+  # Home LAN, confirmed live 2026-11-13: the nodes are 192.168.1.27/.41/.46/.48.
+  lanCidr: 192.168.1.0/24
 
+ingress:
+  host: pgadmin.kub.local
+  # Rendered Service of the subchart (pinned by fullnameOverride above), port 80.
+  service: pgadmin
+  port: 80
+
+pgadmin:
+  # Freeze the rendered names; the IngressRoute points at this Service.
+  fullnameOverride: pgadmin
   replicaCount: 1
 
-  ## pgAdmin4 container image
-  ##
-  image:
-    repository: dpage/pgadmin4
-    # Overrides the image tag whose default is the chart appVersion.
-    tag: "8.14"
-    pullPolicy: IfNotPresent
-
-  ## Server definitions will be loaded at launch time. This allows connection
-  ## information to be pre-loaded into the instance of pgAdmin4 in the container.
-  ## Note that server definitions are only loaded on first launch,
-  ## i.e. when the configuration database is created, and not on subsequent launches using the same configuration database.
-  ## Ref: https://www.pgadmin.org/docs/pgadmin4/latest/import_export_servers.html
-  ##
-
-  networkPolicy:
-    enabled: false
-
-  ## Strategy used to replace old Pods by new ones
-  ## Ref: https://kubernetes.io/docs/concepts/workloads/controllers/deployment/#strategy
-  ##
   strategy:
     type: Recreate
-  # rollingUpdate:
-  #   maxSurge: 0
-  #   maxUnavailable: 1
-  ## Ingress
-  ## Ref: https://kubernetes.io/docs/concepts/services-networking/ingress/
-  ingress:
-    enabled: true
-    annotations:
-      traefik.ingress.kubernetes.io/router.entrypoints: "web,websecure"
-      traefik.ingress.kubernetes.io/router.middlewares: "kube-system-redirect-https@kubernetescrd"
-    hosts:
-      - host: pgadmin.kub.local
-        paths:
-          - path: /
-            pathType: Prefix
-    tls: []
 
-  ## @param existingSecret Name of existing secret to use for default pgadmin credentials. `env.password` will be ignored and picked up from this secret.
-  ##
-  existingSecret: "pgadmin"
+  # Chart 1.50.0 appVersion is 9.8. Pinned here so an upstream bump cannot move
+  # the image silently.
+  image:
+    repository: dpage/pgadmin4
+    tag: "9.8"
+    pullPolicy: IfNotPresent
 
-  ## pgAdmin4 startup configuration
-  ## Values in here get injected as environment variables
-  ## Needed chart reinstall for apply changes
+  # Web login. Only the password is read from the Secret (key below); the email
+  # is not a secret, so it lives here.
+  existingSecret: pgadmin
+  secretKeys:
+    pgadminPasswordKey: password
   env:
-    # pgpassfile: /var/lib/pgadmin/storage/pgadmin/file.pgpass
+    email: valentin.ronteix@ashudev.com
 
-    # set context path for application (e.g. /pgadmin4/*)
-    # contextPath: /pgadmin4
-
-    ## If True, allows pgAdmin4 to create session cookies based on IP address
-    ## Ref: https://www.pgadmin.org/docs/pgadmin4/latest/config_py.html
-    ##
-    enhanced_cookie_protection: "False"
-
-    ## Add custom environment variables that will be injected to deployment
-    ## Ref: https://www.pgadmin.org/docs/pgadmin4/latest/container_deployment.html
-    ##
-    variables: []
-    # - name: PGADMIN_LISTEN_ADDRESS
-    #   value: "0.0.0.0"
-    # - name: PGADMIN_LISTEN_PORT
-    #   value: "8080"
-
-  ## Additional environment variables from ConfigMaps
-  envVarsFromConfigMaps:
-    []
-    # - array-of
-  # - config-map-names
-
-  ## Additional environment variables from Secrets
-  envVarsFromSecrets:
-    []
-    # - array-of
-  # - secret-names
-
-  ## Additional environment variables
-  envVarsExtra:
-    []
-    # - name: POSTGRES_USERNAME
-    #   valueFrom:
-    #     secretKeyRef:
-    #       name: pgadmin.pgadmin-db.credentials.postgresql.acid.zalan.do
-    #       key: username
-    # - name: POSTGRES_PASSWORD
-    #   valueFrom:
-    #     secretKeyRef:
-    #       name: pgadmin.pgadmin-db.credentials.postgresql.acid.zalan.do
-  #       key: password
-
+  # The wrapper creates this claim in templates/pvc.yaml. The chart default name
+  # is pgadmin-pgadmin4, which still exists in the namespace as a Terminating
+  # Longhorn claim and cannot be created again.
   persistentVolume:
-    ## If true, pgAdmin4 will create/use a Persistent Volume Claim
-    ## If false, use emptyDir
-    ##
     enabled: true
-
-    ## pgAdmin4 Persistent Volume Claim annotations
-    ##
-    annotations: {}
-
-    ## pgAdmin4 Persistent Volume access modes
-    ## Must match those of existing PV or dynamic provisioner
-    ## Ref: http://kubernetes.io/docs/user-guide/persistent-volumes/
-    accessModes:
-      - ReadWriteOnce
-
-    ## pgAdmin4 Persistent Volume Size
-    ##
     size: 10Gi
+    storageClass: local-path
+    existingClaim: pgadmin-config
 
-    ## pgAdmin4 Persistent Volume Storage Class
-    ## If defined, storageClassName: <storageClass>
-    ## If set to "-", storageClassName: "", which disables dynamic provisioning
-    ## If undefined (the default) or set to null, no storageClassName spec is
-    ##   set, choosing the default provisioner.  (gp2 on AWS, standard on
-    ##   GKE, AWS & OpenStack)
-    ##
-    # storageClass: "-"
-    existingClaim: "pgadmin"
-    ## Sub-directory of the PV to mount
-    # subPath: ""
-
-  ## pgAdmin4 readiness and liveness probe initial delay and timeout
-  ## Ref: https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/
-  ##
-  livenessProbe:
-    initialDelaySeconds: 30
-    periodSeconds: 60
-    timeoutSeconds: 15
-    successThreshold: 1
-    failureThreshold: 3
-
-  readinessProbe:
-    initialDelaySeconds: 30
-    periodSeconds: 60
-    timeoutSeconds: 15
-    successThreshold: 1
-    failureThreshold: 3
-
-  ## Required to be enabled pre pgAdmin4 4.16 release, to set the ACL on /var/lib/pgadmin.
-  ## Ref: https://kubernetes.io/docs/concepts/workloads/pods/init-containers/
-  ##
-  ## Sized from Prometheus on 2026-11-13 over the 39h it holds: 220Mi average and
-  ## 220Mi peak. It had no request and no limit at all, so the scheduler
-  ## accounted for none of it.
+  # Sized from the measured peaks on develop (commit 5a5432a0), not guessed: an idle
+  # admin UI needs almost no CPU, and it is a browser session, not a batch job.
   resources:
     requests:
       cpu: 10m
@@ -158,19 +52,39 @@ pgadmin:
     limits:
       memory: 384Mi
 
-  ## Pod affinity
-  ##
-  affinity:
-    nodeAffinity:
-      requiredDuringSchedulingIgnoredDuringExecution:
-        nodeSelectorTerms:
-          - matchExpressions:
-              - key: node-type
-                operator: In
-                values:
-                  - general
+  # An admin tool, not storage-bound.
+  nodeSelector:
+    kubernetes.io/hostname: nuc0
 
-  init:
-    ## Init container resources
-    ##
-    resources: {}
+  # The PostgreSQL NetworkPolicy selects this label to let the pod reach 5432.
+  podLabels:
+    app: pgadmin
+
+  # Access control is the Traefik allowlist plus the PostgreSQL policy.
+  networkPolicy:
+    enabled: false
+
+  ingress:
+    enabled: false
+
+  # Imported only when the configuration database is first created.
+  serverDefinitions:
+    enabled: true
+    resourceType: ConfigMap
+    servers:
+      postgres-admin:
+        Name: "postgres (admin)"
+        Group: "Servers"
+        Username: "postgres"
+        Host: "postgres.databases.svc.cluster.local"
+        Port: "5432"
+        SSLMode: "prefer"
+        MaintenanceDB: "postgres"
+      postgres-readonly:
+        Name: "postgres (read-only)"
+        Group: "Servers"
+        Username: "backup"
+        Host: "postgres.databases.svc.cluster.local"
+        Port: "5432"
+        SSLMode: "prefer"
+        MaintenanceDB: "postgres"
