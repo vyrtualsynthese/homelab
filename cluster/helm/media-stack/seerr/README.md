@@ -57,22 +57,27 @@ Middleware. ArgoCD adopts the rest in place; the config claim is never deleted o
 | `runAsUser: 1100` | **`runAsUser: 1000`, caps dropped** | The image's `node` user is 1000; the explicit pin matches the UID it already uses |
 | `PUID`/`PGID` in the LinuxServer style | **Removed** | Seerr does not read them; the image runs unprivileged by design |
 | Exporter annotations | **None** | Seerr ships no Prometheus exporter, and there is no maintained sidecar for it |
-| No probe excuse | **Three probes on `/api/v1/status`** | Seerr has one unauthenticated health endpoint; see below |
+| No probe excuse | **Three probes on `/api/v1/status/appdata`** | Seerr has one unauthenticated endpoint that answers without an update check; see below |
 | `LOG_LEVEL` at the image default | **`warn`** | The default is `debug`, which fills Loki with a line per scheduled job every minute |
 
 ## Probes
 
 | Probe | Path | Budget |
 |---|---|---|
-| startup | `/api/v1/status` | 5s × 60 = five minutes for migrations after an upgrade |
-| liveness | `/api/v1/status` | 20s delay, 3 failures every 30s |
-| readiness | `/api/v1/status` | 10s delay, 3 failures every 15s |
+| startup | `/api/v1/status/appdata` | 5s × 60 = five minutes for migrations after an upgrade |
+| liveness | `/api/v1/status/appdata` | 20s delay, 3 failures every 30s |
+| readiness | `/api/v1/status/appdata` | 10s delay, 3 failures every 15s |
 
-This is a documented exception to the contract's "readiness must not share the liveness endpoint"
-rule. Seerr exposes `/api/v1/status` and `/api/v1/settings/public`; the settings endpoint reads an
-in-memory `Settings` object, not the database, so it does not report dependency health either.
-Pointing readiness at a guessed endpoint would turn a slow database into a restart loop. Readiness
-therefore answers the only honest question the app can answer: "is the process serving HTTP?".
+The probes deliberately use `/api/v1/status/appdata`, not `/api/v1/status`. The status route
+performs the GitHub update check when the `versionCheck` setting is on; a slow or unreachable GitHub
+can hold it past the probe's 5-second timeout, turning an update-service outage into a restart loop.
+The appdata route answers 200 while the process serves and reports whether `/app/config` is
+accessible. It also does no outbound call, so it is safe to hit on every probe.
+
+Readiness shares the liveness endpoint. Seerr exposes no endpoint that separates "the process is up"
+from "the database is usable" — the public settings endpoint reads an in-memory `Settings` object,
+not the database — so a second guessed endpoint would turn a slow database into a restart loop. This
+is a documented exception to the contract's "readiness must not share the liveness endpoint" rule.
 
 ## Config volume and the UID trap
 
