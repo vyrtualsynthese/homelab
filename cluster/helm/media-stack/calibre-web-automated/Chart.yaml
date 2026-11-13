@@ -1,0 +1,8 @@
+apiVersion: v2
+name: calibre-web-automated
+description: Calibre-Web Automated
+type: application
+# Chart version. Renovate bumps this when the image tag moves.
+version: 0.1.0
+# Must match image.tag in values.yaml.
+appVersion: "v4.0.8"
