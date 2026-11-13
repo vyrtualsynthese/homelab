@@ -102,7 +102,9 @@ env:
   LOG_LEVEL: "warn"
 
 # -- Variables sourced from a Secret, as `{ name, valueFrom }`. Kept separate so
-# a secret can never be pasted into the plain map above by accident.
+# a secret can never be pasted into the plain map above by accident. Do not set
+# `PORT` or `CONFIG_DIRECTORY` here: the Deployment derives them from
+# `container.port` and `storage.mountPath`, and the template rejects duplicates.
 extraEnv: []
 
 # -- Bulk `envFrom` sources, usually `secretRef`. Rarely needed: prefer
