@@ -68,8 +68,8 @@ future tenants: OpenMemory (needs `pgvector`) and Vikunja.
 
 1. A single PostgreSQL 18 primary in `databases`, serving one non-superuser role per application.
    **Databases are created on demand, one at a time, when an application is rebuilt — not in
-   advance and not by a batch job** (operator, 2026-11-13). The instance starts with its superuser
-   and the read-only backup role, and nothing else.
+   advance and not by a batch job** (operator, 2026-11-13). The instance starts with its superuser,
+   the read-only `backup` role and the `postgres_exporter` metrics role, and nothing else.
 2. Reaching it requires being in the cluster and in an allow-listed namespace.
 3. A nightly logical backup of every database that exists, verified, retained locally, and shipped
    offsite by the W4 restic job once that exists.
@@ -261,6 +261,10 @@ GRANT pg_monitor TO postgres_exporter;
 GRANT CONNECT ON DATABASE postgres TO postgres_exporter;
 
 REVOKE CONNECT ON DATABASE postgres FROM PUBLIC;
+
+-- after the revoke, deliberately: the dumping role reads and dumps even the
+-- postgres database, so it needs its own grant once PUBLIC has none
+GRANT CONNECT ON DATABASE postgres TO backup;
 ```
 
 Guarded with `WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = '…')\gexec` so a re-run is a

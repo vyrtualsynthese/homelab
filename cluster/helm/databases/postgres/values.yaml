@@ -8,6 +8,10 @@ nodeSelector:
 
 data:
   size: 20Gi
+  # local-path is hostPath-backed: the pod's fsGroup: 999 (kept for consistency) does
+  # not manage ownership here. Writability rests on the provisioner creating the
+  # volume directory 0777 and on PGDATA being the nested "pgdata" subdirectory that
+  # initdb owns at 0700; a tighter provisioner mode would break initdb.
   storageClassName: local-path
 
 dumps:
@@ -44,3 +48,6 @@ networkPolicy:
 exporter:
   repository: prometheuscommunity/postgres-exporter
   tag: "v0.17.1"
+  # Pinned like the postgres image: the tag is the readable version, the digest is
+  # the identity. Index digest of v0.17.1 (multi-arch, linux/amd64 on nas).
+  digest: "sha256:38606faa38c54787525fb0ff2fd6b41b4cfb75d455c1df294927c5f611699b17"
