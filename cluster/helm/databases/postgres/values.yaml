@@ -1,51 +1,46 @@
-global:
-  postgresql:
-    auth:
-      existingSecret: "postgres-secrets"
-
 image:
-  registry: docker.io
-  repository: bitnami/postgresql
-  tag: 16.4.0-debian-12-r2
+  repository: postgres
+  tag: "18.7"
+  digest: "sha256:9f4fd4aa918f52ae3d6f3b687f1de90d8f867cd4d520021545a9a50c120eae3b"
 
-primary:
-  resources:
-    requests:
-      cpu: 0.1
-      memory: 1Gi
-    limits:
-      memory: 4Gi
-  affinity:
-    nodeAffinity:
-      requiredDuringSchedulingIgnoredDuringExecution:
-        nodeSelectorTerms:
-          - matchExpressions:
-              - key: node-type
-                operator: In
-                values:
-                  - general
-  updateStrategy:
-    type: RollingUpdate
-  persistence:
-    existingClaim: "databases-postgres"
+nodeSelector:
+  kubernetes.io/hostname: nas
 
-backup:
-  enabled: true
-  resources: {}
-  cronjob:
-    command:
-      - /bin/bash
-      - -c
-      - PGPASSWORD="${PGPASSWORD:-$(< "$PGPASSWORD_FILE")}" pg_dumpall --clean --if-exists --load-via-partition-root --quote-all-identifiers --no-password --file="${PGDUMP_DIR}/pg_dumpall-$(date '+%Y-%m-%d-%H-%M').pgdump" && find "$PGDUMP_DIR" -maxdepth 1 -name "pg_dumpall-*.pgdump" -type f -printf "%T@ %p\n" | sort -nr | tail -n +31 | cut -d' ' -f2- | xargs -r rm --"
-    storage:
-      existingClaim: "databases-postgres-backup"
+data:
+  size: 20Gi
+  storageClassName: local-path
 
-metrics:
-  enabled: true
-  image:
-    registry: docker.io
-    repository: bitnami/postgres-exporter
-    tag: 0.15.0-debian-12-r44
-  resources: {}
-  serviceMonitor:
-    enabled: true
+dumps:
+  size: 20Gi
+  storageClassName: local-path
+  schedule: "30 3 * * *"
+  retentionDays: 14
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 512Mi
+  limits:
+    cpu: "1"
+    memory: 1Gi
+
+postgresql:
+  shared_buffers: 256MB
+  effective_cache_size: 768MB
+  max_connections: 60
+  work_mem: 8MB
+  maintenance_work_mem: 64MB
+  log_min_duration_statement: 1000
+
+networkPolicy:
+  consumerNamespaces:
+    - authentik
+    - discourse
+    - firefly
+    - guacamole
+    - koillection
+    - wiki
+
+exporter:
+  repository: prometheuscommunity/postgres-exporter
+  tag: "v0.17.1"

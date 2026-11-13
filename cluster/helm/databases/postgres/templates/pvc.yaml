@@ -1,0 +1,33 @@
+{{/*
+Two explicit claims rather than volumeClaimTemplates: the dump CronJob mounts
+postgres-dumps by name, which a claim template cannot provide.
+*/}}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "postgres.name" . }}-data
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "postgres.labels" . | nindent 4 }}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: {{ .Values.data.storageClassName }}
+  resources:
+    requests:
+      storage: {{ .Values.data.size }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "postgres.name" . }}-dumps
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "postgres.labels" . | nindent 4 }}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: {{ .Values.dumps.storageClassName }}
+  resources:
+    requests:
+      storage: {{ .Values.dumps.size }}
