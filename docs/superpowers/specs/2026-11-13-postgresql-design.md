@@ -142,6 +142,8 @@ exists today. Objects it renders:
 | Object | Purpose |
 |---|---|
 | `StatefulSet/postgres` | one pod, `Recreate` semantics, data claim on `local-path` |
+| `PersistentVolumeClaim/postgres-data` | 20 Gi, `local-path`, mounted by the StatefulSet |
+| `PersistentVolumeClaim/postgres-dumps` | 20 Gi, `local-path`, mounted by the dump job |
 | `Service/postgres` | ClusterIP, port 5432 — the only name applications use |
 | `Service/postgres-headless` | required by `StatefulSet.spec.serviceName`; no consumers |
 | `ConfigMap/postgres-bootstrap` | first-boot SQL: the read-only `backup` role, `REVOKE CONNECT` on `postgres` |
@@ -233,10 +235,10 @@ exporter; if that crosses ~2 GiB, raise the limit before the buffers.
 ### 6.5 Roles and databases, created on demand
 
 **Decision (operator, 2026-11-13): no database is created ahead of its application.** The instance
-comes up with two roles — the `postgres` superuser and the read-only `backup` role — and exactly
-the databases the official image creates (`postgres`, `template0`, `template1`). Everything else is
-added when an application needs it, through a documented procedure, so the operator sees each one
-appear and knows what it is for.
+comes up with three roles — the `postgres` superuser, the read-only `backup` role, and
+`postgres_exporter` for metrics — and exactly the databases the official image creates (`postgres`,
+`template0`, `template1`). Everything else is added when an application needs it, through a
+documented procedure, so the operator sees each one appear and knows what it is for.
 
 **Bootstrap (once, in the chart).** `Job/postgres-bootstrap` runs SQL from a ConfigMap:
 
@@ -244,11 +246,20 @@ appear and knows what it is for.
 -- read-only dumping role; password comes from the Secret, never from this file
 CREATE ROLE backup LOGIN PASSWORD :'backup_password';
 GRANT pg_read_all_data TO backup;
+
+-- metrics role: sees statistics, cannot read table data
+CREATE ROLE postgres_exporter LOGIN PASSWORD :'exporter_password';
+GRANT pg_monitor TO postgres_exporter;
+GRANT CONNECT ON DATABASE postgres TO postgres_exporter;
+
 REVOKE CONNECT ON DATABASE postgres FROM PUBLIC;
 ```
 
-Guarded with `WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'backup')\gexec` so a re-run
-is a no-op. The `REVOKE` is what stops an application that guesses `postgres` from connecting.
+Guarded with `WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = '…')\gexec` so a re-run is a
+no-op. The `REVOKE` is what stops an application that guesses `postgres` from connecting. The
+exporter role exists because scraping over the local socket would need `peer`/`trust` auth for a
+second operating-system user, which breaks the no-`trust` rule; it connects over TCP like everything
+else.
 
 **On demand — `docs/runbooks/postgres-add-database.md`.** One procedure, run when an application is
 rebuilt, producing the same shape every time:
@@ -291,6 +302,7 @@ Two levels, matching §8.5 of the stabilisation design (inventory plus encrypted
 |---|---|---|---|
 | `postgres-superuser` | `databases` | `postgres-password` | the pod; pgAdmin for admin work (password never saved) |
 | `pg-backup` | `databases` | `backup-password` | the bootstrap job and `CronJob/postgres-dump` |
+| `pg-exporter` | `databases` | `exporter-password` | the metrics exporter sidecar |
 | `pgadmin` | `databases` | `password` (email is a non-secret value) | pgAdmin's own web login |
 | `pg-<app>` | `databases` | `password` | created with the database, per §6.5 |
 | `<app>-db` / `authentik-env` / `discourse` / `koillection` / `wikijs` | the app's namespace | as today (see §2 table) | created with the database, per §6.5 |
@@ -372,10 +384,11 @@ not ready, data volume above 85 %, `postgres_exporter` `pg_up == 0`.
 
 ### 6.10 Observability
 
-Sidecar `prometheus-community/postgres-exporter` pinned, scraping the local socket, plus
-`prometheus.io/scrape: "true"` pod annotations — the mechanism Prometheus actually uses here, not
-`ServiceMonitor`. Two dashboards' worth of panels come free: connections, transactions, cache hit
-ratio, database sizes, replication lag (always zero, deliberately).
+Sidecar `prometheus-community/postgres-exporter` pinned, connecting as the `postgres_exporter` role
+over TCP (no socket auth), exposed on port 9187, with `prometheus.io/scrape: "true"` and
+`prometheus.io/port: "9187"` pod annotations — the mechanism Prometheus actually uses here, not
+`ServiceMonitor`. Panels that come free: connections, transactions, cache hit ratio, database sizes,
+replication lag (always zero, deliberately).
 
 ### 6.11 pgAdmin
 
@@ -466,10 +479,11 @@ the two deleted claims. Recording them here so the handover is explicit rather t
    the repository being coherent. Nothing in the chart itself depends on W1.
 
 1. Chart and Application file; `databases` namespace created by the Application.
-2. Secrets: `postgres-superuser`, `pg-backup`, `pgadmin`. Three, not fifteen. Inventory first, in
-   `docs/secrets.md`.
-3. First sync: pod starts, bootstrap job creates the `backup` role. `\l` shows `postgres`,
-   `template0`, `template1` and nothing else — that is the expected result, not a missing step.
+2. Secrets: `postgres-superuser`, `pg-backup`, `pg-exporter`, `pgadmin`. Four, not fifteen.
+   Inventory first, in `docs/secrets.md`.
+3. First sync: pod starts, bootstrap job creates the `backup` and `postgres_exporter` roles. `\l`
+   shows `postgres`, `template0`, `template1` and nothing else — that is the expected result, not a
+   missing step.
 4. Write the two runbooks (`postgres-add-database`, `postgres-restore`) and walk the first one:
    create `acceptance` exactly as an application's database would be created, with its two Secrets.
 5. Connect to it from a throwaway pod in a consumer namespace with its role, write, read, drop —
@@ -487,9 +501,9 @@ the two deleted claims. Recording them here so the handover is explicit rather t
 1. `kubectl -n databases get statefulset,job,pod` all healthy; exactly one non-template database
    exists at the end of the workstream (the acceptance one, dropped in step 7), plus whatever the
    operator has since created on purpose.
-2. `\du` shows `postgres` and `backup` only, until a database is added; every role created by the
-   runbook is `NOSUPERUSER NOCREATEROLE NOCREATEDB`, and no application ever connects as
-   `postgres`.
+2. `\du` shows `postgres`, `backup` and `postgres_exporter` only, until a database is added; every
+   role created by the runbook is `NOSUPERUSER NOCREATEROLE NOCREATEDB`, and no application ever
+   connects as `postgres`.
 3. A connection attempt from a namespace outside the allow-list (e.g. a test pod in `default`)
    fails to open 5432.
 4. From a workstation on the LAN, `pgadmin.kub.local` loads with the admin login; from outside the
