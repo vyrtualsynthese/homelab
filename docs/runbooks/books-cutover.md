@@ -105,6 +105,17 @@ is a claim that is already being deleted, which is why step 2 treats its backup 
 The database is the only thing whose loss costs work rather than downtime: the books stay on the
 share with their own metadata, but a broken `metadata.db` is a re-catalogue.
 
+**Nothing may be importing when the copy is taken.** Check Calibre's activity view in its UI and let
+it go quiet first: SQLite writes in place, so a file copied mid-write is torn, not merely stale — and
+this copy is what rollback case A restores. A torn copy is worse than none, because it looks valid.
+
+**The copy is not optional, and it needs the old pod running.** If the `exec` below fails, stop. The
+pod may be failing on its Longhorn mount, which is already in deletion; find out with
+`kubectl -n media-stack get pods -l app.kubernetes.io/name=calibre` and
+`kubectl -n media-stack describe pod -l app.kubernetes.io/name=calibre`. Take the copy from a
+throwaway pod instead — the same pattern as rollback case A, with the `cp` arguments swapped for a
+copy out of `/books` — and only continue once you have it.
+
 ```bash
 DB=/books/metadata.db        # the path step 1 printed
 kubectl -n media-stack exec deploy/calibre -- cp -v "$DB" "$DB.pre-cwa-2026-11-13"
@@ -143,7 +154,9 @@ Expected: `deployment.apps "calibre" deleted`, then one line each for `service "
 `ingress.networking.k8s.io "calibre"`, `configmap "calibre-env"` and `serviceaccount "calibre"`.
 Every one of those objects carries the `app.kubernetes.io/instance=calibre` label (checked against
 the live cluster on 2026-11-13), and nothing else in the namespace does. The claim
-`calibre-config` is **not** labelled and is **not** deleted: it is the week-long fallback.
+`calibre-config` is **not** labelled and is **not** deleted: it is the only surviving copy of
+Calibre's settings. It cannot serve a new pod — the claim is already `Terminating` — so treat it as a
+data artefact, not a rollback path.
 
 Verify, and expect both to say `No resources found`:
 
@@ -168,9 +181,11 @@ it.
 ## Step 4 — Make sure no old Kavita pod can claim the new volume
 
 A `local-path` claim binds to whichever node the first pod that uses it schedules on. The old Kavita
-pod is `Pending` and still carries the retired `node-type: general` affinity, which makes `nuc0`
-eligible; the rebuilt chart pins the pod to `streaming`. If `kavita-config` binds to `nuc0` it is
-welded there and the pod never runs — the `lidarr` trap.
+Deployment still carries a `node-type: general` nodeAffinity, and its one pod was scheduled on
+`nuc0` before the missing claim left it `Pending`. Whether any node still carries that label is not
+something this runbook asserts; what matters is that the old pod spec is not the rebuilt one and must
+not be a scheduling candidate while `kavita-config` is being bound. If the claim binds on `nuc0`, it
+is welded there and the new pod never runs — the `lidarr` trap.
 
 ```bash
 kubectl -n media-stack delete pod -l app.kubernetes.io/name=kavita
@@ -215,6 +230,11 @@ If the pod stays `Pending`, the reason is in
 `kubectl -n media-stack describe pod -l app.kubernetes.io/instance=calibre-web-automated`; if a claim
 stays `Pending`, in `kubectl -n media-stack describe pvc calibre-web-automated-config`. The common
 cause is a claim bound to the wrong node — rollback case C.
+
+> **Never delete `pvc-books-media-nfs-subdir-external-provisioner`** while chasing that, or anything
+> else. It holds the books and its provisioner deletes the export's contents with the claim. The only
+> claims this runbook may ever delete are `calibre-web-automated-config`,
+> `calibre-web-automated-ingest` and `kavita-config`.
 
 ## Step 6 — Prove the allow list is attached
 
@@ -449,14 +469,25 @@ kubectl -n media-stack patch pvc calibre-config -p '{"metadata":{"finalizers":nu
 kubectl get pv calibre-config   # expect: NotFound
 ```
 
-**Delete the tarball** if step 2 wrote one: `kubectl -n media-stack exec deploy/calibre-web-automated -- rm -v /calibre-library/calibre-config-*.tgz`.
+**Delete the tarball** if step 2 wrote one. The glob has to expand inside the container, so it runs
+under `sh -c`:
+
+```bash
+kubectl -n media-stack exec deploy/calibre-web-automated -- sh -c 'rm -v /calibre-library/calibre-config-*.tgz'
+```
+
 The `metadata.db.pre-cwa-2026-11-13` copy stays: it is the recovery point until the backup
 workstream covers this share.
 
 ## Rollback
 
 The library was never copied, moved, re-imported or bulk-converted, so there is nothing to restore;
-only the workflow changed hands. Four cases:
+only the workflow changed hands. Four cases.
+
+> **The books claim is never part of any recovery.** `pvc-books-media-nfs-subdir-external-provisioner`
+> holds the collection, and its provisioner deletes the export's contents together with the claim.
+> Delete only the three disposable claims: `calibre-web-automated-config`,
+> `calibre-web-automated-ingest`, `kavita-config`.
 
 **A. The database looks damaged after the first start.** Stop CWA and put the copy back. The copy is
 one file next to the original, on the share:
@@ -472,21 +503,30 @@ Then check the library in CWA before importing anything else. Books keep their o
 lost database is a re-catalogue, not a lost collection.
 
 **B. CWA starts but is unusable.** Its `/config` is disposable — fresh, and holding only what this
-session created. Delete the claim and the pod, then resync so the chart recreates both:
+session created. Take the pod out first, so the claim's `pvc-protection` finalizer can clear, then
+delete the claim, then resync to rebuild both:
 
 ```bash
+kubectl -n media-stack scale deploy calibre-web-automated --replicas=0
 kubectl -n media-stack delete pvc calibre-web-automated-config
-kubectl -n media-stack delete pod -l app.kubernetes.io/instance=calibre-web-automated
+# then sync calibre-web-automated in ArgoCD: the claim and the Deployment come back at replicas 1
 ```
 
-**C. A claim bound to the wrong node** (`Pending`, `node(s) didn't find available persistent volumes
-to bind`). Delete the claim, then the pod, then resync: deleting the claim alone leaves the pod queued
-against the old claim's UID.
+**C. A claim bound to the wrong node** (`Pending`, `node(s) didn't find available persistent volumes to
+bind`). The same order, for the same reason: scale the app to zero, delete *its* disposable claim,
+resync. Deleting a claim while a pod still references it leaves the pod queued on the old claim's UID
+and the claim stuck in `Terminating` under `pvc-protection`.
 
 ```bash
+# <app> is calibre-web-automated or kavita; <claim> is one of the three disposable claims above
+kubectl -n media-stack scale deploy <app> --replicas=0
 kubectl -n media-stack delete pvc <claim>
-kubectl -n media-stack delete pod -l app.kubernetes.io/instance=<app>
+# then sync <app> in ArgoCD
 ```
+
+If the app is `calibre-web-automated`, its claim names are `calibre-web-automated-config` and
+`calibre-web-automated-ingest`; if it is `kavita`, the claim is `kavita-config`. There is no case in
+which `pvc-books-media-nfs-subdir-external-provisioner` is the claim to delete.
 
 **D. Back to the Calibre desktop** is not a rollback path. Syncing the `calibre` Application would
 recreate the container, but `calibre-config` is a Longhorn claim in deletion and cannot serve a new
