@@ -1,0 +1,22 @@
+{{- /* The allow list is the access control for this app: the route itself is on the
+`web` entry point and answers anyone who can resolve the name. It renders only while
+both the route and the ranges exist, because an empty `sourceRange` list is not "no
+restriction" - Traefik reads it as a list that matches nobody and rejects every
+request.
+
+`ipWhiteList` is the Traefik v2 spelling, confirmed against the v2.9 docs; the live
+CRD field is confirmed once against the running cluster after the first sync. Traefik
+v3 renames it to `ipAllowList`, and the chart's `ingressRoute.apiVersion` moves with
+it. */ -}}
+{{- if and .Values.ingressRoute.enabled .Values.ingressRoute.sourceRanges }}
+apiVersion: {{ .Values.ingressRoute.apiVersion }}
+kind: Middleware
+metadata:
+  name: {{ include "app.fullname" . }}-allowlist
+  labels:
+    {{- include "app.labels" . | nindent 4 }}
+spec:
+  ipWhiteList:
+    sourceRange:
+      {{- toYaml .Values.ingressRoute.sourceRanges | nindent 6 }}
+{{- end }}

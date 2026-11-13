@@ -202,3 +202,43 @@ nodeSelector:
 tolerations: []
 
 affinity: {}
+
+# The route, in the reference chart's shape. It is deliberately LAN-only: CWA
+# administers the library, so it is reachable from the local network and from nowhere
+# else. The restriction is enforced by a Middleware at the proxy, not by the
+# `kub.local` name, which is only a DNS entry.
+ingressRoute:
+  # -- Render the IngressRoute and its allow list. Traefik CRDs only: this chart
+  # never renders a `networking.k8s.io/v1` Ingress.
+  enabled: true
+  # -- API group. `traefik.containo.us/v1alpha1` is what the cluster's Traefik 2.x
+  # watches today; flip this to `traefik.io/v1alpha1` when Traefik v3 lands (the
+  # allow-list field is renamed `ipAllowList` in the same move).
+  apiVersion: traefik.containo.us/v1alpha1
+  # -- Traefik entry points. `web` is plain HTTP on `kub.local`; nothing here is
+  # served over TLS.
+  entryPoints:
+    - web
+  # -- Single host. For a second host, copy the chart.
+  host: calibre.kub.local
+  # -- Path prefix. `/` matches everything.
+  pathPrefix: /
+  # -- Source networks allowed to reach the route, rendered as a Middleware named
+  # `<fullname>-allowlist`. An empty list renders no Middleware and no restriction —
+  # so it means "no access control", which is why it is never left empty by accident.
+  sourceRanges:
+    - 192.168.1.0/24
+  # -- Middlewares from values, rendered as `<namespace>-<name>@kubernetescrd` and
+  # chained after the allow list. Example: [{ name: authentik, namespace: kube-system }]
+  middlewares: []
+  labels: {}
+  annotations: {}
+  tls:
+    # -- Send the router over TLS. Off: this route exists on the LAN only.
+    enabled: false
+    # -- Use a pre-existing certificate instead of asking Traefik to issue one.
+    secretName: ""
+    # -- Traefik ACME resolver name, for example `myresolver`.
+    certResolver: ""
+    # -- TLSOption resource name in this namespace.
+    options: ""
