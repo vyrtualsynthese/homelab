@@ -155,6 +155,23 @@ own state — a pod that starts and then fails on a write is the failure this or
 provisioned claim starts at root. Either re-chown per volume, or set `userPattern`/`groupPattern` on
 the local-path provisioner and stop doing this by hand.
 
+**A fresh claim binds to the node the *old* pod made eligible.** `local-path` is
+`WaitForFirstConsumer`, so a claim binds to whichever node the scheduler picks for a pod that uses it —
+and during a chart rebuild the old pod is still a candidate. Lidarr, 2026-11-13: the sync created
+`lidarr-config` while the old pod still carried the retired `node-type: general` affinity, which made
+`nuc0` eligible; the claim bound there, the sync then replaced the pod with one pinned to `streaming`,
+and the claim was welded to a node the pod could never use. The pod stayed `Pending` with
+`1 node(s) didn't find available persistent volumes to bind`.
+
+Two habits follow:
+
+- Before the first sync of a chart that creates a new claim and moves the pod to a different node,
+  scale the old Deployment to zero or delete its pod, so the only candidate is the new pod.
+- Recovery, if the claim already bound to the wrong node: delete the PVC (it holds nothing on a fresh
+  install), let the Application recreate it, then **delete the pod**. Deleting the claim alone is not
+  enough — the pod sits in the scheduler's unschedulable queue keyed on the old claim's UID and never
+  gets a fresh pass. A PV with `Retain` policy stays behind as `Released`; delete it and its directory.
+
 | Chart | Probes | Hardening | Non-root UID |
 |---|---|---|---|
 | `autobrr` | yes | capabilities dropped, seccomp, no privilege escalation | **yes — 1100**, claim chowned first |
