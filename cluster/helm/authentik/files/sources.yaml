@@ -8,7 +8,7 @@ entries:
       name: discord-guild-membership
     attrs:
       expression: |
-        guild_id = "1006150632354361384"
+        guild_id = "0"  # TEMPORARY: negative test, revert before keeping
         guild_url = f"https://discord.com/api/v10/users/@me/guilds/{guild_id}/member"
         response = client.do_request("GET", guild_url, token=token)
         if response.status_code == 404:
