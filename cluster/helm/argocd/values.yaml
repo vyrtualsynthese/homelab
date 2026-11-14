@@ -12,6 +12,29 @@ global:
 configs:
   params:
     server.insecure: true
+  cm:
+    url: http://argocd.kub.local
+    # Dex trusts authentik as the only identity source. The client secret is
+    # not here: it comes from argocd-secret's dex.authentik.clientSecret, which
+    # carries the same value as ARGOCD_CLIENT_SECRET in the authentik-sso
+    # secret. `insecureEnableGroups` is required because Dex only forwards the
+    # groups claim for a non-TLS issuer otherwise.
+    dex.config: |
+      connectors:
+        - config:
+            issuer: https://authentik.kub.home.ashudev.com/application/o/argocd/
+            clientID: argocd
+            clientSecret: $dex.authentik.clientSecret
+            insecureEnableGroups: true
+            scopes: [openid, profile, email]
+          name: authentik
+          type: oidc
+          id: authentik
+  rbac:
+    # The admin level keeps the deployment control plane; the user level reads.
+    policy.csv: |
+      g, authentik Admins, role:admin
+      g, homelab-users, role:readonly
 ## Server
 server:
   metrics:
