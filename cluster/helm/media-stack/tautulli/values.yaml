@@ -90,10 +90,15 @@ ingressRoute:
   host: tautulli.kub.local
   # -- Path prefix. `/` matches everything.
   pathPrefix: /
-  # -- Middlewares, rendered as `<namespace>-<name>@kubernetescrd`. Tautulli's own
-  # login is the gate; no forward-auth is wired.
+  # -- Middlewares, rendered as `<namespace>-<name>@kubernetescrd`.
+  # Example: [{ name: lan-only, namespace: kube-system }]
+  # The LAN gate runs first: an outside request is rejected before the
+  # forward-auth round trip.
+  # No strip-authentik-header on purpose: Tautulli trusts no X-authentik-* header.
   middlewares:
     - name: lan-only
+      namespace: kube-system
+    - name: authentik-forwardauth
       namespace: kube-system
   labels: {}
   annotations: {}
