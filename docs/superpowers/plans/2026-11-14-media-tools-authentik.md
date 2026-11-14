@@ -371,16 +371,22 @@ Expected: `302` for all eight. `qbittorrent` is the one most likely to be wrong,
 
 - [ ] **Step 5: Turn off each tool's own login**
 
-Applied in the UI, then re-checked in a private window.
+Applied through each tool's REST API over a port-forward (the gate blocks the ingress path, and
+`kubectl` is not available to the agent). The port-forward is the same recovery route as Task 2 step
+7. Send the whole current object back with the one field changed; never a partial body.
 
-| Tool | Setting |
-|---|---|
-| radarr, lidarr, prowlarr | Settings → General → Authentication Required: `Disabled for Local Addresses`; Ignore Authentication for these networks: `0.0.0.0/0, ::/0` |
-| bazarr | Settings → General → Authentication Type: `None` |
-| tautulli | Settings → Web Interface → login off, no guest restrictions |
-| qbittorrent | Preferences → Web UI → bypass authentication for whitelisted IPs, whitelist `10.42.0.0/16` |
-| maintainerr | nothing to do: no login exists |
-| autobrr | disable if the UI allows it; if not, accept the second prompt and note it |
+| Tool | Change | Note |
+|---|---|---|
+| radarr, lidarr, prowlarr | `PUT /api/v3/config/host` (prowlarr: `/api/v1/config/host`) with `authenticationMethod: none` | was `forms` on the arrs; read it back afterwards and confirm it survived a restart |
+| bazarr | `POST /api/system/settings` with `general.authentication_type: None` | verify by a cookie-less request for the page |
+| tautulli | `PUT /api/v2/settings` with `general.authentication_method` cleared | keep `TAUTULLI_API_KEY` unchanged |
+| qbittorrent | `POST /api/v2/app/setPreferences` with `web_ui_auth_subnet_whitelist_enabled: true` and `web_ui_auth_subnet_whitelist: 10.42.0.0/16` | whitelists the pod network, which is where Traefik's requests come from |
+| maintainerr | nothing: no login exists | |
+| autobrr | disable in the UI if the software allows; otherwise accept the second prompt and note it | no API path confirmed |
+
+Verification per tool, in this order: the gated host still returns `302` to authentik, and the
+port-forward reaches the tool with no prompt.
+
 
 - [ ] **Step 6: Verify the integrations that cross these tools**
 
