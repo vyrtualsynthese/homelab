@@ -1,0 +1,110 @@
+version: 1
+metadata:
+  name: ashulab-sources
+entries:
+  - model: authentik_sources_oauth.oauthsourcepropertymapping
+    id: discord-guild-membership
+    identifiers:
+      name: discord-guild-membership
+    attrs:
+      expression: |
+        guild_id = "1006150632354361384"
+        guild_url = f"https://discord.com/api/v10/users/@me/guilds/{guild_id}/member"
+        response = client.do_request("GET", guild_url, token=token)
+        if response.status_code == 404:
+            is_member = False
+        else:
+            response.raise_for_status()
+            is_member = True
+
+        return {
+            "name": info.get("global_name") or info.get("username"),
+            "attributes": {
+                "discord": {
+                    "id": info.get("id"),
+                    "username": info.get("username"),
+                    "guild_id": guild_id,
+                    "is_member": is_member,
+                },
+            },
+        }
+
+  - model: authentik_sources_oauth.oauthsource
+    id: discord-source
+    identifiers:
+      slug: discord
+    attrs:
+      name: Discord
+      provider_type: discord
+      consumer_key: !Env DISCORD_CLIENT_ID
+      consumer_secret: !Env DISCORD_CLIENT_SECRET
+      additional_scopes: "guilds guilds.members.read"
+      promoted: true
+      enabled: true
+      authentication_flow: !Find [authentik_flows.flow, [slug, default-source-authentication]]
+      enrollment_flow: !Find [authentik_flows.flow, [slug, default-source-enrollment]]
+      user_matching_mode: identifier
+      user_property_mappings:
+        - !KeyOf discord-guild-membership
+
+  - model: authentik_sources_plex.plexsource
+    id: plex-source
+    identifiers:
+      slug: plex
+    attrs:
+      name: Plex
+      plex_token: !Env PLEX_TOKEN
+      allow_friends: true
+      allowed_servers: []
+      promoted: true
+      enabled: true
+      authentication_flow: !Find [authentik_flows.flow, [slug, default-source-authentication]]
+      enrollment_flow: !Find [authentik_flows.flow, [slug, default-source-enrollment]]
+      user_matching_mode: identifier
+
+  - model: authentik_policies_expression.expressionpolicy
+    id: discord-guild-policy
+    identifiers:
+      name: discord-guild-admission
+    attrs:
+      expression: |
+        from authentik.sources.oauth.models import OAuthSource
+
+        source = request.context.get("source")
+        if not isinstance(source, OAuthSource) or source.provider_type != "discord":
+            return True
+
+        discord = request.context.get("prompt_data", {}).get("attributes", {}).get("discord", {})
+        if not discord.get("is_member"):
+            ak_message("You are not a member of the homelab Discord server.")
+            return False
+        return True
+
+  - model: authentik_policies.policybinding
+    identifiers:
+      target: !Find [authentik_flows.flow, [slug, default-source-enrollment]]
+      order: 100
+    attrs:
+      policy: !KeyOf discord-guild-policy
+
+  - model: authentik_policies.policybinding
+    identifiers:
+      target: !Find [authentik_flows.flow, [slug, default-source-authentication]]
+      order: 100
+    attrs:
+      policy: !KeyOf discord-guild-policy
+
+  - model: authentik_stages_identification.identificationstage
+    identifiers:
+      name: default-authentication-identification
+    attrs:
+      show_source_labels: true
+      sources:
+        - !KeyOf discord-source
+        - !KeyOf plex-source
+
+  - model: authentik_stages_user_write.userwritestage
+    identifiers:
+      name: default-source-enrollment-write
+    attrs:
+      create_users_group: !Find [authentik_core.group, [name, users]]
