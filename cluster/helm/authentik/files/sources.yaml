@@ -54,8 +54,12 @@ entries:
     attrs:
       name: Plex
       plex_token: !Env PLEX_TOKEN
-      allow_friends: true
-      allowed_servers: []
+      # Plex retired /api/v2/friends, which authentik 2026.8.5 still calls when
+      # allow_friends is true; it answers 410 and the sign-in fails. Admission is
+      # by access to the homelab server instead: AshuFlex's machine identifier.
+      allow_friends: false
+      allowed_servers:
+        - "01dce088b69b15b1eb039832fdce3de885fd3370"
       promoted: true
       enabled: true
       authentication_flow: !Find [authentik_flows.flow, [slug, default-source-authentication]]
