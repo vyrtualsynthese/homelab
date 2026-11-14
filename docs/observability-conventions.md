@@ -428,6 +428,10 @@ runs (config shows `retention_enabled: true`,
   coarser grain.
 - **No backup-freshness metric.** Backups do not run today, so an alert would
   either never fire or lie.
+- **No vulnerability scanning.** Nothing reports which CVEs affect the running
+  images, so there is no metric to alert on. Design and cost are recorded in
+  [`superpowers/specs/2026-11-14-vulnerability-alerting-design.md`](superpowers/specs/2026-11-14-vulnerability-alerting-design.md);
+  it is deferred, not built.
 - **No blackbox probe, no certificate check outside Traefik.** A public hostname
   that resolves but serves nothing is not detected.
 - **No GPU XID/ECC alert.** The NVIDIA exporter on this cluster does not publish
