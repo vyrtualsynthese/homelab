@@ -1,0 +1,68 @@
+version: 1
+metadata:
+  name: ashulab-app-filebrowser
+entries:
+  # Level groups come from ashulab-groups; blueprint order is not guaranteed,
+  # so require that file first.
+  - model: authentik_blueprints.metaapplyblueprint
+    attrs:
+      identifiers:
+        name: ashulab-groups
+      required: true
+
+  # Capability group: admits to FileBrowser. Folder scope is per account inside
+  # FileBrowser, which authentik cannot describe.
+  - model: authentik_core.group
+    id: filebrowser-editors
+    identifiers:
+      name: filebrowser-editors
+    attrs:
+      name: filebrowser-editors
+      is_superuser: false
+
+  # Forward auth: no internal host and no client secret. The outpost checks the
+  # request and answers the proxy; FileBrowser authenticates on the header the
+  # middleware sets.
+  - model: authentik_providers_proxy.proxyprovider
+    id: filebrowser-provider
+    identifiers:
+      name: filebrowser
+    attrs:
+      name: filebrowser
+      mode: forward_single
+      external_host: https://filebrowser.kub.home.ashudev.com
+      authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
+      invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
+
+  - model: authentik_core.application
+    id: filebrowser-app
+    identifiers:
+      slug: filebrowser
+    attrs:
+      name: FileBrowser
+      slug: filebrowser
+      provider: !KeyOf filebrowser-provider
+      meta_launch_url: https://filebrowser.kub.home.ashudev.com/
+      policy_engine_mode: any
+
+  - model: authentik_policies.policybinding
+    identifiers:
+      target: !KeyOf filebrowser-app
+      order: 0
+    attrs:
+      group: !Find [authentik_core.group, [name, authentik Admins]]
+  - model: authentik_policies.policybinding
+    identifiers:
+      target: !KeyOf filebrowser-app
+      order: 10
+    attrs:
+      group: !KeyOf filebrowser-editors
+
+  # Without the provider attached, the embedded outpost answers 403 for every
+  # request to this host.
+  - model: authentik_outposts.outpost
+    identifiers:
+      name: authentik Embedded Outpost
+    attrs:
+      providers:
+        - !KeyOf filebrowser-provider
