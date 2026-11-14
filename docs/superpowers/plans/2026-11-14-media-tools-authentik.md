@@ -403,6 +403,7 @@ port-forward reaches the tool with no prompt.
 - Modify: `docs/runbooks/authentik-apps.md`
 - Modify: `docs/superpowers/specs/2026-11-14-sso-access-model-design.md`
 - Modify: `docs/charts/README.md`
+- Modify: `cluster/helm/media-stack/{sonarr,bazarr,lidarr,tautulli,maintainerr}/README.md`
 - Modify: `cluster/helm/authentik/files/app-filebrowser.yaml` (trailing comment only)
 
 - [ ] **Step 1: Runbook section**
@@ -416,6 +417,18 @@ Two statements are now false: that FileBrowser is the only forward-auth consumer
 - [ ] **Step 3: Correct the chart notes**
 
 `docs/charts/README.md`: the tautulli and maintainerr entries say the LAN boundary is the only access control. Both now have a gate.
+
+Then the per-chart READMEs that make the same claim, now false:
+
+| File | Line | Says |
+|---|---|---|
+| `cluster/helm/media-stack/sonarr/README.md` | 5 | "no authentication in front of it" |
+| `cluster/helm/media-stack/bazarr/README.md` | 5 | "no authentication in front of it" |
+| `cluster/helm/media-stack/lidarr/README.md` | 5 | "no authentication in front of it" |
+| `cluster/helm/media-stack/tautulli/README.md` | 57 | "no TLS and no middlewares" |
+| `cluster/helm/media-stack/maintainerr/README.md` | 73 | "no TLS and no middlewares" |
+
+Each becomes a sentence naming the authentik gate on the route and the fact that the tool's own login is off. TLS and the entry point are unchanged, so leave those clauses alone.
 
 - [ ] **Step 4: Commit and merge**
 
