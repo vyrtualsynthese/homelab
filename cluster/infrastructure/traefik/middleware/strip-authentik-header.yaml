@@ -1,0 +1,12 @@
+apiVersion: traefik.containo.us/v1alpha1
+kind: Middleware
+metadata:
+  name: strip-authentik-header
+spec:
+  headers:
+    # FileBrowser trusts X-authentik-username blindly. An empty value removes
+    # the header, so a client-supplied value never reaches the app; the outpost
+    # then sets it from the authenticated session. This middleware must run
+    # before authentik-forwardauth in the router chain.
+    customRequestHeaders:
+      X-authentik-username: ""
