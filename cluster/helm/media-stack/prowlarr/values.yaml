@@ -84,7 +84,9 @@ ingressRoute:
   pathPrefix: /
   # -- Middlewares, rendered as `<namespace>-<name>@kubernetescrd`.
   # Example: [{ name: authentik, namespace: kube-system }]
-  middlewares: []
+  middlewares:
+    - name: lan-only
+      namespace: kube-system
   labels: {}
   annotations: {}
   tls:

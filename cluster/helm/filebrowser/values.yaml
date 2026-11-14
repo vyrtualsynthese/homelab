@@ -104,4 +104,6 @@ traefik:
   port: 80
   middlewares:
     - namespace: kube-system
+      name: lan-only
+    - namespace: kube-system
       name: security

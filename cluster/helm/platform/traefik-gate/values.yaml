@@ -1,0 +1,10 @@
+traefik:
+  apiVersion: traefik.containo.us/v1alpha1
+
+lanOnly:
+  # -- LAN range. The nodes are 192.168.1.27/.41/.46/.48.
+  lanRange: 192.168.1.0/24
+  # -- WireGuard range, read from the wg-easy instance on rbp0:
+  # --   docker exec wg-easy grep -i address /etc/wireguard/wg0.conf
+  # -- An address of 10.8.0.1/24 means the range is 10.8.0.0/24.
+  wireguardRange: "10.8.0.0/24"

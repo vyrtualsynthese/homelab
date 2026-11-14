@@ -26,5 +26,6 @@ spec:
         - name: monitorss-web
           port: monitorss-web
       middlewares:
+        - name: kube-system-lan-only@kubernetescrd
         - name: {{ include "web.fullname" . }}-redirect-https
 {{- end }}

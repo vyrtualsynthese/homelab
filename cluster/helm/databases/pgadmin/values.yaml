@@ -2,8 +2,6 @@
 # off: the repo uses Traefik CRDs only (never networking.k8s.io).
 traefik:
   apiVersion: traefik.containo.us/v1alpha1
-  # Home LAN, confirmed live 2026-11-13: the nodes are 192.168.1.27/.41/.46/.48.
-  lanCidr: 192.168.1.0/24
 
 ingress:
   host: pgadmin.kub.local

@@ -26,5 +26,6 @@ spec:
         - name: guacamole
           port: guacamole
       middlewares:
+        - name: kube-system-lan-only@kubernetescrd
         - name: {{ include "guacamole.fullname" . }}-redirect-https
 {{- end }}

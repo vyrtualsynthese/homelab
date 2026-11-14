@@ -25,6 +25,7 @@ spec:
         - name: firefly-importer
           port: firefly-import
       middlewares:
+        - name: kube-system-lan-only@kubernetescrd
         - name: importer-auth
   tls:
     certResolver: myresolver

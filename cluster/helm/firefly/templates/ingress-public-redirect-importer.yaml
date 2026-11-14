@@ -25,5 +25,6 @@ spec:
         - name: firefly-importer
           port: firefly-import
       middlewares:
+        - name: kube-system-lan-only@kubernetescrd
         - name: firefly-importer-redirect-https
 {{- end }}

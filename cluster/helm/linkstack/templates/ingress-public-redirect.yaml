@@ -26,5 +26,6 @@ spec:
         - name: linkstack
           port: linkstack
       middlewares:
+        - name: kube-system-lan-only@kubernetescrd
         - name: {{ include "linkstack.fullname" . }}-redirect-https
 {{- end }}

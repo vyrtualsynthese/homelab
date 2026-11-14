@@ -12,6 +12,10 @@ spec:
   routes:
     - match: Host(`{{ .Values.ingress.host }}`)
       kind: Rule
+      # These routes serve metrics and logs with no application login, so the LAN gate
+      # is the only access control.
+      middlewares:
+        - name: kube-system-lan-only@kubernetescrd
       services:
         - name: {{ .Values.ingress.service }}
           port: {{ .Values.ingress.port }}
