@@ -25,6 +25,11 @@ grafana:
       # Signing out of Grafana also ends the authentik session, so the next
       # visit does not silently sign back in.
       signout_redirect_url: https://authentik.kub.home.ashudev.com/application/o/grafana/end-session/
+      # Grafana keeps its own cookie after authentik's session ends, and has no
+      # back-channel logout. These bound how long a Grafana session can outlive
+      # the SSO session: one hour idle, twelve hours absolute.
+      login_maximum_inactive_lifetime_duration: 1h
+      login_maximum_lifetime_duration: 12h
     auth.generic_oauth:
       enabled: true
       name: authentik
