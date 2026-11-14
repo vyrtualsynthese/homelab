@@ -107,30 +107,26 @@ One blueprint file per application, not one large file: a blueprint is applied a
 transaction, so one broken entry would otherwise roll back every application. Separate files
 also make a per-application rollback a matter of deleting one file.
 
-### 5.2 Two hostnames
+### 5.2 One hostname (revised)
 
 Alternatives considered:
 
 | Option | Trade-off |
 |---|---|
-| One public name (`authentik.ashudev.com`) | Simplest, but changes the address internal apps already point at. Rejected by the operator. |
-| Internal only | Public forum, wiki and dashy could not use it. Rejected by the operator. |
-| Two names: `authentik.kub.home.ashudev.com` for LAN-facing apps, `authentik.ashudev.com` for internet-facing ones | **Chosen.** Costs one DNS record and a second certificate; requires care that each application's provider lists the issuer hostname it actually uses. |
+| One public name (`authentik.ashudev.com`) | Simplest, but changes the address internal apps already point at. |
+| Internal only (`authentik.kub.home.ashudev.com`) | Chosen. Its wildcard DNS already answers with the public address, so it works from the internet as well as the LAN. |
+| Two names | Initially chosen, then dropped: the second name adds a DNS record and a certificate without adding reach, because `*.kub.home.ashudev.com` is already public. |
 
-Both names reach the same service. The session cookie is set to `.ashudev.com`
-(`AUTHENTIK_COOKIE_DOMAIN`) so a login on one name is recognised on the other. The cost is that
-the cookie is sent to every `ashudev.com` host; it is HttpOnly and only authentik can use it.
+`authentik.kub.home.ashudev.com` is the only address. LAN DNS answers `192.168.1.46` and the
+public wildcard answers `80.14.57.209`, so the same name works on both sides. The session cookie
+is scoped to that host; nothing else on `ashudev.com` receives it.
 
 **Issuer rule.** Every provider names `https://authentik.kub.home.ashudev.com` as its issuer,
-including applications reached from the internet. That name resolves to the LAN address from
-inside and to the public address from outside, so browsers and in-cluster backends both reach it
-without hairpinning through the public IP. The public name stays as a second front door for
-people who prefer it, not as the issuer. Phase 1 verifies that a pod resolves the name.
+including applications reached from the internet. Browsers and in-cluster backends both reach
+that name, so no request hairpins through the public IP. Phase 1 verifies that a pod resolves it.
 
-The two routers are separate objects with separate certificates, so a failure on one name cannot
-invalidate the other's certificate. The public DNS record is created **before** the sync that
-adds its router, so the certificate order validates on the first attempt and does not consume
-Let's Encrypt's failed-validation budget shared by every other certificate on `myresolver`.
+One router, one certificate. There is no public DNS record to create, so there is no ACME order
+that can fail on a name that does not resolve.
 
 ### 5.3 Builder calls
 
@@ -140,10 +136,10 @@ Let's Encrypt's failed-validation budget shared by every other certificate on `m
 - Placement `kubernetes.io/hostname: nuc0`; the retired `node-type` affinity is removed.
 - No Redis. 2026.8 moved the task broker onto PostgreSQL and the chart no longer ships a Redis
   subchart; the old StatefulSet is deleted after the sync. Sessions live in PostgreSQL.
-- The chart's Ingress is disabled and replaced by one `IngressRoute` per hostname
-  (`templates/ingressroute.yaml` renders both), with the existing `redirect-https` and `security`
-  middlewares, which are the ones confirmed live in `kube-system`. The chart ships two other
-  security middlewares in git that are not deployed; they are not referenced.
+- The chart's Ingress is disabled and replaced by one `IngressRoute` for the hostname, plus a
+  redirect router (`templates/ingressroute.yaml`), with the existing `redirect-https` and
+  `security` middlewares, which are the ones confirmed live in `kube-system`. The chart ships two
+  other security middlewares in git that are not deployed; they are not referenced.
 - The local `akadmin` password login remains as break-glass; sources are added beside it, not
   instead of it.
 - A fresh `AUTHENTIK_SECRET_KEY` and `AUTHENTIK_BOOTSTRAP_PASSWORD` are generated for the empty
@@ -237,7 +233,7 @@ Discord / Plex ◄── OAuth redirects ─────────────
 
 ### Phase 1 — Repave the instance
 
-Outcome: authentik is back on the current release, both names serve a valid certificate, the
+Outcome: authentik is back on the current release, the hostname serves a valid certificate, the
 admin can log in, blueprints are wired (initially just the `users` group), and nothing is
 clicked that a rebuild would lose.
 
@@ -250,22 +246,19 @@ Work:
 3. Bump the chart dependency to `2026.8.5`, the image to `2026.8.5`, and correct values:
    database host `postgres.databases.svc.cluster.local`, `nuc0` pin, memory requests and limits,
    probes, cookie domain, bootstrap admin.
-4. Disable the chart Ingress; add `templates/ingressroute.yaml` with one router per hostname, TLS
-   by `myresolver`, `redirect-https` and `security` middlewares, plus the PostSync hook that
-   restarts the worker after a sync.
-5. Add the public DNS record for `authentik.ashudev.com` (operator action at the registrar),
-   **before** the sync that adds its router, so the certificate validates on the first attempt.
-6. Add the blueprint plumbing: one ConfigMap from `files/`, the mount in values, and a first
+4. Disable the chart Ingress; add `templates/ingressroute.yaml` with the secure router and its
+   redirect, TLS by `myresolver`, `redirect-https` and `security` middlewares, plus the PostSync
+   hook that restarts the worker after a sync.
+5. Add the blueprint plumbing: one ConfigMap from `files/`, the mount in values, and a first
    blueprint creating the `users` group.
-7. Render, commit, PR to `develop`; after sync, confirm migrations, both login pages, the admin
+6. Render, commit, PR to `develop`; after sync, confirm migrations, the login page, the admin
    login, and that a pod resolves the issuer name.
-8. Update `docs/secrets.md` (new keys), `docs/status.md` (authentik leaves the parked list),
+7. Update `docs/secrets.md` (new keys), `docs/status.md` (authentik leaves the parked list),
    `renovate.json` (group chart and image), and the chart's README if it carries one.
 
-Acceptance: server and worker Running with no restart loop, migration job complete, valid
-certificates on both names, admin login works on both, `users` group exists, no blueprint errors
-in the worker log, no plain Ingress left in the namespace, and the Renovate rule tested with a
-dry run.
+Acceptance: server and worker Running with no restart loop, migration job complete, a valid
+certificate, admin login works, `users` group exists, no blueprint errors in the worker log, and
+no plain Ingress left in the namespace.
 
 ### Phase 2 — Identity sources
 
@@ -283,9 +276,9 @@ Work:
    mapping that records guild membership; the expression policy that reads it; the Plex source
    restricted to the server and its friends. Both sources attach to the default authentication
    and enrollment flows, and the membership policy is bound to both.
-4. Test both sign-ins in a private window, starting each from both hostnames; confirm the
-   created users join `users`; grant `authentik Admins` to the operator's own identity; confirm a
-   Discord account outside the server is refused at enrollment and at a later login.
+4. Test both sign-ins in a private window; confirm the created users join `users`; grant
+   `authentik Admins` to the operator's own identity; confirm a Discord account outside the
+   server is refused at enrollment and at a later login.
 5. Document the two provider consoles, the guild-membership rule and the recovery path in
    `docs/runbooks/`.
 
@@ -357,26 +350,23 @@ means the app keeps its local password, by decision.
 Everything below is checked on the real tree before a completion claim:
 
 - `helm dependency build` then `helm template` for the chart, with `--namespace authentik`.
-- The rendered output contains no `kind: Ingress`, one `IngressRoute` per hostname, the
+- The rendered output contains no `kind: Ingress`, one `IngressRoute` plus its redirect, the
   blueprint ConfigMap mounted into the worker, and the PostSync hook with its Role.
 - The ArgoCD reference check from `AGENTS.md` §6 still passes.
 - After sync: pods `Running` with no restarts, migration complete, `/-/health/ready/` returns 200,
-  both hostnames serve a valid certificate and a login page, worker log has no blueprint error.
+  the hostname serves a valid certificate and a login page, worker log has no blueprint error.
 - Phase 2 and 3 add their own login tests, always in a private window.
 
 ## 10. Risks
 
 - **Big version jump.** 2025.12 to 2026.8 crosses three releases, but the database is empty, so
   there is no data to migrate and no old schema to repair.
-- **Public login page.** Both names are reachable from the internet. authentik has built-in login
-  throttling; Traefik has no rate limiter here. Who may create an account is set by 5.4.
-- **Session cookie scope.** `.ashudev.com` is sent to every host under that domain. It is
-  HttpOnly and unusable outside authentik.
-- **One issuer.** Every provider names `authentik.kub.home.ashudev.com`, so one mistake there
-  breaks every app at once. The phase 1 pod-resolution check and the ArgoCD test catch it early.
-- **Certificate ordering.** A router whose public name has no DNS record fails validation and
-  spends the shared Let's Encrypt failure budget. The record is created before its router and
-  each name has its own router.
+- **Public login page.** The hostname is reachable from the internet through the wildcard.
+  authentik has built-in login throttling; Traefik has no rate limiter here. Who may create an
+  account is set by 5.4.
+- **One hostname.** Every provider names `authentik.kub.home.ashudev.com`, so one mistake there
+  breaks every app at once, and the wildcard DNS becomes a single dependency. The phase 1
+  pod-resolution check and the ArgoCD test catch name problems early.
 - **Plain-HTTP internal app.** An OIDC client on `*.kub.local` may be refused because the
   redirect is not HTTPS. Those apps are examined individually; if refused, they stay out or move
   to a TLS hostname.

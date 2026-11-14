@@ -20,8 +20,7 @@ authentik 2026.8.5.
 ## Global Constraints
 
 - Chart dependency and server image are both exactly `2026.8.5`; nothing floats.
-- Namespace `authentik`; hostnames `authentik.kub.home.ashudev.com` (internal) and
-  `authentik.ashudev.com` (public).
+- Namespace `authentik`; hostname `authentik.kub.home.ashudev.com` only.
 - Database host `postgres.databases.svc.cluster.local`, role and database `authentik`.
 - Workload pinned with `kubernetes.io/hostname: nuc0`; no `node-type` label anywhere.
 - Ingress is Traefik v2 CRDs only (`traefik.containo.us/v1alpha1`); no `networking.k8s.io`.
@@ -38,23 +37,21 @@ authentik 2026.8.5.
    chart's own Secret, so an old `AUTHENTIK_POSTGRESQL__HOST` in `authentik-env` silently wins
    over the host set in values, and the server logs a connection timeout. Task 2 inspects the
    secret's key names and sets or removes every `AUTHENTIK_POSTGRESQL__*` key.
-2. **Public router before its DNS record.** A router whose name does not resolve fails ACME
-   validation and spends Let's Encrypt's shared failure budget. Task 3 gates the sync on
-   `dig +short authentik.ashudev.com @1.1.1.1` returning `80.14.57.209`; the internal router has
-   its own certificate.
+2. **The hostname depends on the wildcard.** `authentik.kub.home.ashudev.com` is public only
+   because `*.kub.home.ashudev.com` resolves. Task 3 checks both the LAN and the public answer
+   before the sync; Task 4 checks the issued certificate.
 3. **Blueprint silently not applied.** A wrong ConfigMap name or mount path leaves no `users`
    group and no error the login cares about. Task 1 asserts the mount in the render; Task 4
    asserts the worker log shows the apply and the group exists.
 4. **Stale plain Ingress survives the sync.** Removing the chart's Ingress does not delete the
    live object while pruning is off, so the old object keeps routing. Task 3 deletes
    `ingress/authentik-server` explicitly and Task 4 asserts none remains.
-5. **Cookie domain wrong or missing.** Without `AUTHENTIK_COOKIE_DOMAIN=.ashudev.com` a sign-in
-   on one hostname is anonymous on the other and the two names loop. Task 4 signs in on the
-   internal name and opens the public name in the same browser.
+5. **Redis left behind.** 2026.8 dropped it and pruning is off, so the old StatefulSet can keep
+   running with nothing reading it. Task 3 deletes it and Task 4 confirms it is gone.
 
 ---
 
-### Task 1: Repave the chart, both hostnames, blueprints, worker hook
+### Task 1: Repave the chart, hostname, blueprints, worker hook
 
 **Files:**
 - Modify: `cluster/helm/authentik/Chart.yaml`
@@ -96,8 +93,6 @@ authentik:
     nodeSelector:
       kubernetes.io/hostname: nuc0
     env:
-      - name: AUTHENTIK_COOKIE_DOMAIN
-        value: ".ashudev.com"
       - name: AUTHENTIK_WEB__BASE_URL
         value: "https://authentik.kub.home.ashudev.com"
   server:
@@ -124,8 +119,8 @@ Leave the chart's default probes unchanged: they already probe `/-/health/live/`
 
 - [ ] **Step 3: Replace the chart Ingress with two IngressRoutes**
 
-`templates/ingressroute.yaml` renders four objects: for each hostname one `websecure` router and
-one `web` router that redirects to it. Exact shape:
+`templates/ingressroute.yaml` renders two objects: one `websecure` router and one `web` router
+that redirects to it. Exact shape:
 
 ```yaml
 apiVersion: traefik.containo.us/v1alpha1
@@ -149,8 +144,7 @@ spec:
       name: authentik-tlsoption
 ```
 
-The public object is identical with name `authentik-public` and host `authentik.ashudev.com`.
-Each redirect object uses `entryPoints: [web]`, the same host and service, and
+The redirect object uses `entryPoints: [web]`, the same host and service, and
 `middlewares: [{name: kube-system-redirect-https@kubernetescrd}]`.
 
 `templates/tls-option.yaml` copies `cluster/helm/syncthing/templates/tls-option.yaml` verbatim,
@@ -256,15 +250,15 @@ Expected: no output from the loop below; each `grep` succeeds.
 ```bash
 R=/tmp/opencode/authentik-render.yaml
 test "$(grep -c '^kind: Ingress$' $R)" -eq 0
-test "$(grep -c '^kind: IngressRoute$' $R)" -eq 4
+test "$(grep -c '^kind: IngressRoute$' $R)" -eq 2
 test "$(grep -c '^kind: TLSOption$' $R)" -eq 1
 test "$(grep -c 'node-type' $R)" -eq 0
 grep -q 'kubernetes.io/hostname: nuc0' $R
 grep -q 'image: ghcr.io/goauthentik/server:2026.8.5' $R
 grep -q 'AUTHENTIK_POSTGRESQL__HOST: "cG9zdGdyZXMuZGF0YWJhc2VzLnN2Yy5jbHVzdGVyLmxvY2Fs"' $R
-grep -q 'name: AUTHENTIK_COOKIE_DOMAIN' $R
+grep -q 'name: AUTHENTIK_WEB__BASE_URL' $R
 grep -q 'authentik.kub.home.ashudev.com' $R
-grep -q 'authentik.ashudev.com' $R
+test "$(grep -c 'authentik.ashudev.com' $R)" -eq 0
 grep -q 'name: authentik-blueprints' $R
 grep -q 'mountPath: /blueprints/mounted/cm-authentik-blueprints' $R
 grep -q 'argocd.argoproj.io/hook: PostSync' $R
@@ -401,15 +395,16 @@ git commit -m "🔐 feat(authentik): create the database, role and runtime secre
 - Consumes: Task 1's chart, Task 2's database and secrets.
 - Produces: a synced `authentik` Application with the new resources.
 
-- [ ] **Step 1: Gate on the public DNS record**
+- [ ] **Step 1: Confirm the hostname answers on both sides**
 
 ```bash
-dig +short authentik.ashudev.com @1.1.1.1
+dig +short authentik.kub.home.ashudev.com @1.1.1.1
+getent hosts authentik.kub.home.ashudev.com
 ```
 
-Expected: `80.14.57.209`. If empty, the operator adds the record at the registrar before this
-task continues; the internal router does not depend on it, but the public one will spend the
-shared ACME failure budget.
+Expected: `80.14.57.209` from the public resolver and `192.168.1.46` from the LAN resolver. The
+same name serves both; if the public answer disappears, the certificate renewal and every
+internet-facing app's login break together.
 
 - [ ] **Step 2: Rebase and push**
 
@@ -479,24 +474,22 @@ No git change in this task. Record the sync outcome in the session report.
 - Consumes: the running instance from Task 3.
 - Produces: evidence in the report and an updated status page.
 
-- [ ] **Step 1: Check both certificates**
+- [ ] **Step 1: Check the certificate**
 
 ```bash
-for h in authentik.kub.home.ashudev.com authentik.ashudev.com; do
-  echo | openssl s_client -connect 192.168.1.46:443 -servername "$h" 2>/dev/null \
-    | openssl x509 -noout -subject -issuer -dates
-done
+echo | openssl s_client -connect 192.168.1.46:443 \
+  -servername authentik.kub.home.ashudev.com 2>/dev/null \
+  | openssl x509 -noout -subject -issuer -dates
 ```
 
-Expected for each: `subject=CN = <host>`, `issuer ... Let's Encrypt`, dates in the future.
+Expected: `subject=CN = authentik.kub.home.ashudev.com`, `issuer ... Let's Encrypt`, dates in the
+future.
 
-- [ ] **Step 2: Check both login pages and the health endpoints**
+- [ ] **Step 2: Check the login page and the health endpoint**
 
 ```bash
-for h in authentik.kub.home.ashudev.com authentik.ashudev.com; do
-  curl -s -o /dev/null -w "$h %{http_code}\n" "https://$h/"
-  curl -s -o /dev/null -w "$h ready %{http_code}\n" "https://$h/-/health/ready/"
-done
+curl -s -o /dev/null -w '%{http_code}\n' https://authentik.kub.home.ashudev.com/
+curl -s -o /dev/null -w '%{http_code}\n' https://authentik.kub.home.ashudev.com/-/health/ready/
 ```
 
 Expected: `200` (or `302` to the flow) on `/`, `204` on the readiness path.
@@ -520,12 +513,10 @@ kubectl -n authentik logs deploy/authentik-worker --tail=200 | grep -iE 'bluepri
 Expected: a line showing `ashulab-users` was applied; no traceback. Then in the admin UI,
 **Directory → Groups** lists `users`.
 
-- [ ] **Step 5: Sign in on both names with one session**
+- [ ] **Step 5: Sign in**
 
-In one browser profile, sign in at `https://authentik.kub.home.ashudev.com` as `akadmin` with
-the recorded bootstrap password, then open `https://authentik.ashudev.com` in the same browser.
-Expected: already signed in, no second password prompt. Sign out and repeat starting from the
-public name.
+In a private window, sign in at `https://authentik.kub.home.ashudev.com` as `akadmin` with the
+bootstrap password, then change that password in the UI.
 
 - [ ] **Step 6: Update the status page**
 
@@ -548,9 +539,8 @@ Open a pull request against `develop`. The operator merges when they are satisfi
 - `helm template` renders two IngressRoutes per hostname pair, no Ingress, the blueprint
   ConfigMap mounted in the worker and the PostSync hook.
 - The authentik Application is `Synced`/`Healthy`; server and worker are `1/1`.
-- Both hostnames serve a valid Let's Encrypt certificate and the login page.
+- The hostname serves a valid Let's Encrypt certificate and the login page.
 - `users` exists because the blueprint applied, not because somebody clicked.
-- One sign-in covers both hostnames in one browser session.
 - The local `akadmin` password works and is recorded by the operator.
 - No plain Ingress and no `node-type` affinity remain.
 
@@ -558,11 +548,8 @@ Open a pull request against `develop`. The operator merges when they are satisfi
 
 - **Server logs a database connection timeout.** A stale `AUTHENTIK_POSTGRESQL__*` key survived
   in `authentik-env`. Re-read Task 2 Step 2 and rewrite that key; sync again.
-- **Certificate for one hostname fails.** Confirm its DNS record and that only that router is
-  unhealthy; the other hostname's certificate is independent. Do not re-add the failed router
-  until DNS answers.
+- **Certificate does not issue.** Confirm the hostname answers publicly; ACME validates over the
+  public address.
 - **Worker log shows a blueprint error.** Fix the file named in the log; a blueprint is applied
   as one transaction, so nothing from that file took effect.
 - **Old Ingress still answers.** It was not deleted; run Task 3 Step 4.
-- **Sign-in on the second hostname asks again.** The cookie domain is missing or has no leading
-  dot; check `AUTHENTIK_COOKIE_DOMAIN` in the rendered server Deployment.
