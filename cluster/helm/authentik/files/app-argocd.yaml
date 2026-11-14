@@ -2,17 +2,12 @@ version: 1
 metadata:
   name: ashulab-app-argocd
 entries:
-  # The app binds to the `apps` group, which ashulab-users creates. Blueprint
-  # order is not guaranteed, so require that file first.
+  # Level groups come from ashulab-groups; blueprint order is not guaranteed,
+  # so require that file first.
   - model: authentik_blueprints.metaapplyblueprint
     attrs:
       identifiers:
         name: ashulab-groups
-      required: true
-  - model: authentik_blueprints.metaapplyblueprint
-    attrs:
-      identifiers:
-        name: ashulab-app-access
       required: true
   - model: authentik_providers_oauth2.oauth2provider
     id: argocd-provider
@@ -57,6 +52,5 @@ entries:
       target: !KeyOf argocd-app
       order: 0
     attrs:
-      # Clear the earlier group binding: a binding holds exactly one subject.
-      group: null
-      policy: !Find [authentik_policies_expression.expressionpolicy, [name, app-access]]
+      # Admin level only: this application has no user surface.
+      group: !Find [authentik_core.group, [name, authentik Admins]]
