@@ -161,7 +161,7 @@ metrics:
   image:
     repository: ghcr.io/cplieger/plex-exporter
     # -- Pin the tag. Never `latest`. Renovate manages this.
-    tag: "v5.0.0"
+    tag: "v5.0.1"
     pullPolicy: IfNotPresent
   port: 9594
   path: /metrics
