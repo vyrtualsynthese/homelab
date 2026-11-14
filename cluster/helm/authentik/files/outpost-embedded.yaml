@@ -1,0 +1,30 @@
+version: 1
+metadata:
+  name: ashulab-outpost-embedded
+entries:
+  # Blueprint order is not guaranteed. FileBrowser's provider is already
+  # attached by hand today, and this file takes over that assignment: setting
+  # `providers` replaces the whole list, so every provider must be here or it is
+  # detached.
+  - model: authentik_blueprints.metaapplyblueprint
+    attrs:
+      identifiers:
+        name: ashulab-app-filebrowser
+      required: true
+  - model: authentik_blueprints.metaapplyblueprint
+    attrs:
+      identifiers:
+        name: ashulab-app-sonarr
+      required: true
+
+  # The embedded outpost is a managed object. Its identifiers are `managed`, not
+  # `name`: keying on the name creates a duplicate outpost and rolls back the
+  # whole file. MANAGED_OUTPOST is `goauthentik.io/outposts/embedded`
+  # (authentik/outposts/apps.py).
+  - model: authentik_outposts.outpost
+    identifiers:
+      managed: goauthentik.io/outposts/embedded
+    attrs:
+      providers:
+        - !Find [authentik_providers_proxy.proxyprovider, [name, filebrowser]]
+        - !Find [authentik_providers_proxy.proxyprovider, [name, sonarr]]
