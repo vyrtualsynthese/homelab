@@ -138,8 +138,8 @@ Let's Encrypt's failed-validation budget shared by every other certificate on `m
 - Database `authentik` and role `authentik` created with the existing PostgreSQL runbook; the
   instance starts empty.
 - Placement `kubernetes.io/hostname: nuc0`; the retired `node-type` affinity is removed.
-- Bundled Redis kept, without persistence: sessions are cheap to lose, and a persistent Redis
-  would add a claim for no benefit.
+- No Redis. 2026.8 moved the task broker onto PostgreSQL and the chart no longer ships a Redis
+  subchart; the old StatefulSet is deleted after the sync. Sessions live in PostgreSQL.
 - The chart's Ingress is disabled and replaced by one `IngressRoute` per hostname
   (`templates/ingressroute.yaml` renders both), with the existing `redirect-https` and `security`
   middlewares, which are the ones confirmed live in `kube-system`. The chart ships two other
@@ -203,12 +203,12 @@ Discord / Plex ◄── OAuth redirects ─────────────
                                                             │
                     ┌──────────── worker pod (applies blueprints)
                     │                │
-              ConfigMap blueprints   ├──► postgres.databases.svc:5432
-                                     └──► authentik-redis-master:6379
+              ConfigMap blueprints   └──► postgres.databases.svc:5432
 ```
 
 - **Server** answers logins and application handshakes; **worker** runs background tasks and
-  applies blueprints; **Redis** holds cache and sessions; **PostgreSQL** holds everything durable.
+  applies blueprints; **PostgreSQL** holds everything durable, including sessions and the task
+  queue.
 - **Blueprint source.** Chart templates render one ConfigMap from `files/*.yaml`; values mount it
   with `blueprints.configMaps`. The files are committed in the chart.
 - **Secrets.** `authentik-env` keeps `AUTHENTIK_SECRET_KEY`, the PostgreSQL password and the
@@ -387,7 +387,8 @@ Everything below is checked on the real tree before a completion claim:
 - **Removed member.** The membership policy is bound to authentication as well as enrollment, so
   removal from the server takes effect at the next login rather than leaving the old account
   usable.
-- **Redis has no persistence.** A Redis restart logs everyone out; acceptable.
+- **No Redis in 2026.8.** The old Redis StatefulSet is orphaned by the upgrade and is deleted by
+  hand because pruning is not guaranteed; nothing reads it afterwards.
 - **DNS.** The public record is an operator action and gates phase 1 acceptance for the public
   name only.
 
