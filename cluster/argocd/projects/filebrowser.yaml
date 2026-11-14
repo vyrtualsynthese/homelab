@@ -7,17 +7,11 @@ spec:
   project: default
   destination:
     server: 'https://kubernetes.default.svc'
-    namespace: media-stack
+    namespace: filebrowser
   syncPolicy:
     syncOptions:
       - CreateNamespace=true
-  sources:
-    - repoURL: 'https://vyrtualsynthese.github.io/selfhosted-helmcharts/'
-      chart: filebrowser
-      targetRevision: 0.1.2
-      helm:
-        valueFiles:
-          - $values/cluster/helm/media-stack/filebrowser/values.yaml
-    - repoURL: 'https://github.com/vyrtualsynthese/homelab.git'
-      targetRevision: develop
-      ref: values
+  source:
+    repoURL: 'https://github.com/vyrtualsynthese/homelab.git'
+    targetRevision: develop
+    path: cluster/helm/filebrowser
