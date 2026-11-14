@@ -223,7 +223,7 @@ Source: Prometheus on 2026-11-13, the 39 h of history it holds, `container_memor
 | `media-stack/unpackerr` | 460Mi burst | 64Mi (unchanged) | 512Mi → **1Gi** | the peak is extraction children, and 92 % of the limit risks killing a big archive |
 | `n8n` | 420Mi | 256Mi (unchanged) | 512Mi → **768Mi** | 85 % of the limit on a workflow run |
 | `monitoring/grafana` | 370Mi | 256Mi (unchanged) | 512Mi → **768Mi** | it evaluates and delivers every alert in the cluster; 74 % is not enough headroom |
-| `media-stack/filebrowser` | 20Mi | 512Mi → **64Mi** | 1Gi → **256Mi** | reserved 25× the app |
+| `filebrowser` | 20Mi | 512Mi → **64Mi** | 1Gi → **256Mi** | reserved 25× the app |
 | `media-stack/maintainerr` | 230Mi | 512Mi → **256Mi** | 1Gi (unchanged) | reserved 2× the app |
 | `media-stack/tautulli` | 120Mi | 256Mi → **128Mi** | 1Gi → **512Mi** | both numbers were aspirational |
 | `dashy` | 270Mi | 500m CPU → **10m**, 512Mi → **256Mi** | 4Gi → **1Gi** | upstream defaults, never visited |
