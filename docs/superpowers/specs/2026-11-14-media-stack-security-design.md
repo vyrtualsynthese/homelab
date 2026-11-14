@@ -127,8 +127,9 @@ the internet can reach, only how hard it can push.
 - **Nothing looks for vulnerabilities** — that design exists and is deferred
   ([`2026-11-14-vulnerability-alerting-design.md`](2026-11-14-vulnerability-alerting-design.md)).
 - **No Kubernetes audit log and no runtime detection.** A compromise leaves pod logs only.
-- `filebrowser` runs `2.28.0` (upstream archived 2026-09-01; the last line is 2.63.x). It is behind
-  forward auth, which is the only reason this is not urgent.
+- `filebrowser` runs `v2.63.23` in its own namespace and chart (moved there upstream on
+  2026-11-15) behind its own local login. Upstream archived the project on 2026-09-01; `2.63.x` is
+  the last line.
 
 ### 2.4 A contrary detail worth knowing
 
@@ -368,8 +369,8 @@ are untouched until step 5.
 2. Pin images by digest in `values.yaml`, and remove the `alpine:latest` init that downloads and
    unzips VueTorrent from GitHub on every pod start; bake it into a pinned image or a claim.
 3. Ensure Renovate covers every media-stack chart; close the `latest` tags that remain.
-4. Plan the FileBrowser exit: archived upstream, running `2.28.0`. Forward auth buys time, not a
-   future.
+4. Plan the FileBrowser exit: archived upstream, running `v2.63.23`. Its own login (not forward
+   auth) is the gate; the LAN allowlist is the network boundary.
 5. Traefik and K3s upgrades are W5, referenced not re-planned. The CRD rename is a prerequisite for
    `ipAllowList` in v3, so the gate's field name changes in that step, in one place per chart.
 
