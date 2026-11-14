@@ -187,8 +187,8 @@ Mechanics:
   the server's machine identifier in `allowed_servers`. The friend list is not used: Plex retired
   the `/api/v2/friends` endpoint and authentik 2026.8.5 still calls it when `allow_friends` is on,
   which fails with HTTP 410 and aborts the sign-in.
-- Both sources land admitted identities in `users`. Nobody reaches an application without
-  passing the gate first.
+- Both sources land admitted identities in `users`, which grants no application access on its
+  own. Nobody reaches an application without passing the gate *and* being placed in `apps`.
 
 The cost is a dependency: Discord's API is consulted at each Discord sign-in. If Discord is
 unreachable, that sign-in fails. Plex sign-in and the local break-glass admin are unaffected.
@@ -220,10 +220,13 @@ Discord / Plex ◄── OAuth redirects ─────────────
   a group named `users`. Application authorization uses
   `default-provider-authorization-implicit-consent`: once a person is signed in, opening an
   application does not ask again.
-- **Access model.** `users` may open every application wired in phase 3, with that app's
-  read-only or viewer role by default (ArgoCD read-only, Grafana Viewer); a higher role per app
-  is a separate decision. `authentik Admins` (built-in) may administer authentik. Fine-grained
-  per-application groups are deferred until a real need appears.
+- **Access model.** Two groups with different jobs: `users` is who may sign in at all, and `apps`
+  is who may open an application. Every application binds to `apps`, which starts empty, so a new
+  Discord or Plex user can sign in to authentik and reach nothing else until an operator adds them
+  to `apps`. Members get the app's read-only or viewer role by default (ArgoCD read-only, Grafana
+  Viewer); a higher role per app is a separate decision. `authentik Admins` (built-in) may
+  administer authentik. Fine-grained per-application groups are deferred until a real need
+  appears.
 - **Issuer rule.** Every provider names `https://authentik.kub.home.ashudev.com`; browsers and
   in-cluster backends both reach it, because the name answers with the LAN address from inside
   and the public address from outside. The provider's redirect address must match the

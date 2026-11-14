@@ -9,3 +9,12 @@ entries:
     attrs:
       name: users
       is_superuser: false
+      # `users` is who may sign in. It grants nothing: applications bind to
+      # `apps`, which starts empty and is granted one person at a time.
+  - model: authentik_core.group
+    id: apps
+    identifiers:
+      name: apps
+    attrs:
+      name: apps
+      is_superuser: false
