@@ -1,0 +1,19 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: filebrowser
+  namespace: media-stack
+  annotations:
+    traefik.ingress.kubernetes.io/router.middlewares: "kube-system-lan-only@kubernetescrd,kube-system-security@kubernetescrd"
+spec:
+  rules:
+    - host: filebrowser.kub.home.ashudev.com
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ghostfolio
+  namespace: ghostfolio
+spec:
+  rules:
+    - host: ghostfolio.kub.home.ashudev.com
