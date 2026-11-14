@@ -62,21 +62,21 @@ The chart lives at `cluster/helm/<path>`; its version is `image.tag` in that cha
 ```yaml
 spec:
   sources:
-    - repoURL: "https://vyrtualsynthese.github.io/selfhosted-helmcharts/"
-      chart: filebrowser
-      targetRevision: 0.1.2          # chart version lives here, not in values.yaml
+    - repoURL: "https://kubernetes-sigs.github.io/nfs-subdir-external-provisioner/"
+      chart: nfs-subdir-external-provisioner
+      targetRevision: 4.0.18          # chart version lives here, not in values.yaml
       helm:
         valueFiles:
-          - $values/cluster/helm/media-stack/filebrowser/values.yaml
+          - $values/cluster/helm/nfs/books-media/values.yaml
     - repoURL: "https://github.com/vyrtualsynthese/homelab.git"
       targetRevision: develop
       ref: values
 ```
 
-The repo directory then holds only `values.yaml` (no `Chart.yaml`). Examples: filebrowser,
-postgres, pgadmin, renovate, local-path, books-media, nfs-audio.
+The repo directory then holds only `values.yaml` (no `Chart.yaml`). Examples: postgres, pgadmin,
+renovate, local-path, books-media, nfs-audio.
 
-Not the way to add an external chart: new work uses pattern D, and these seven are converted
+Not the way to add an external chart: new work uses pattern D, and these six are converted
 separately.
 
 ### C. Vendored upstream chart
@@ -93,7 +93,8 @@ The way external charts are consumed: the repo owns a small chart in `cluster/he
 repository and tag of every container it renders. `charts/` and `Chart.lock` are gitignored for the
 monitoring wrappers (`.gitignore` scopes the rule there) — ArgoCD runs `helm dependency build` at
 sync time. Examples: `monitoring/prometheus`,
-`monitoring/grafana`, `monitoring/loki`, `monitoring/fluent-bit`, `authentik`, `dashy`.
+`monitoring/grafana`, `monitoring/loki`, `monitoring/fluent-bit`, `authentik`, `dashy`,
+`filebrowser`.
 
 ## 4. Conventions
 
@@ -137,6 +138,7 @@ Templates expect these Secrets to already exist; a missing one shows up as
 | media-stack | `qbittorrent-exporter` | `username`, `password` |
 | media-stack | `cross-seed` | mounted as a file (`conf.secretName`) |
 | media-stack | `recyclarr` | mounted as a file |
+| filebrowser | `filebrowser` | `FB_CONFIG`, `FB_DATABASE`, `FB_USERNAME`, `FB_PASSWORD` (bcrypt) — first admin |
 | firefly | `firefly-app` | `APP_KEY`, `STATIC_CRON_TOKEN` |
 | firefly | `firefly-db` | `DB_DATABASE`, `DB_USERNAME`, `DB_PASSWORD` |
 | guacamole | `guacamole-db` | `POSTGRES_USER`, `POSTGRES_PASSWORD` |
@@ -173,8 +175,8 @@ done
 ```
 
 Charts that need `helm dependency build`: `monitoring/prometheus`, `monitoring/grafana`,
-`monitoring/loki`, `monitoring/fluent-bit`, `authentik`, `dashy`, `ashuvidz-website`,
-`databases/pgadmin`, `discourse`, `postiz`.
+`monitoring/loki`, `monitoring/fluent-bit`, `authentik`, `dashy`, `filebrowser`,
+`ashuvidz-website`, `databases/pgadmin`, `discourse`, `postiz`.
 
 Check that ArgoCD references resolve (CRLF-safe):
 
