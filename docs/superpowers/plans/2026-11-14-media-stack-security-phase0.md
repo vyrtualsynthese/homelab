@@ -570,7 +570,7 @@ git commit -m "🔒 feat(edge): gate the legacy public hostnames to the LAN"
 - Modify: `cluster/helm/databases/pgadmin/templates/ingressroute.yaml`
 - Delete: `cluster/helm/databases/pgadmin/templates/middleware.yaml`
 - Modify: `cluster/helm/databases/pgadmin/values.yaml:4-7`
-- Modify: `cluster/helm/media-stack/filebrowser/values.yaml:61`
+- Modify: `cluster/helm/filebrowser/values.yaml` — the route moved out of `media-stack` and is now rendered by that chart's own `templates/ingressroute.yaml`
 - Modify: `cluster/helm/postiz/values.yaml:33`
 - Modify: `cluster/helm/firefly/values.yaml:49`
 - Modify: `cluster/helm/firefly/templates/ingress-public-importer.yaml`
@@ -639,13 +639,13 @@ the gate there, as for wiki. Do not touch the public route's annotations.
 Prepend the gate to each router.middlewares value, keeping the existing entries in their current
 order:
 
-- `filebrowser`: `"kube-system-lan-only@kubernetescrd,kube-system-strip-authentik-header@kubernetescrd,kube-system-authentik-forwardauth@kubernetescrd,kube-system-security@kubernetescrd"`
+- `filebrowser`: its chart's `traefik.middlewares` list, `lan-only` before `security`
 - `postiz`: `"kube-system-lan-only@kubernetescrd,kube-system-redirect-https@kubernetescrd"`
 
 - [ ] **Step 7: Render and run the checker per chart**
 
 ```bash
-for c in authentik discourse dashy databases/pgadmin media-stack/filebrowser postiz firefly; do
+for c in authentik discourse dashy databases/pgadmin filebrowser postiz firefly; do
   printf '%-24s ' "$c"; hack/check-exposure.sh --only cluster/helm/$c >/dev/null && echo pass || echo FAIL
 done
 ```
@@ -657,7 +657,7 @@ run is slow.
 
 ```bash
 git add cluster/helm/authentik cluster/helm/databases/pgadmin cluster/helm/dashy \
-  cluster/helm/postiz cluster/helm/firefly cluster/helm/discourse cluster/helm/media-stack/filebrowser
+  cluster/helm/postiz cluster/helm/firefly cluster/helm/discourse cluster/helm/filebrowser
 git commit -m "🔒 feat(edge): gate authentik, pgAdmin and the remaining internal hostnames"
 ```
 
