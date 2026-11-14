@@ -94,57 +94,93 @@ because a rebuild needs it again):
 
 ## 5. Argo CD
 
-Argo CD is not managed by this repo: `argocd-cm`, `argocd-secret` and `argocd-rbac-cm` are edited
-by hand. It uses its bundled Dex, so the redirect is `/api/dex/callback`.
+Argo CD is a hand-run Helm release, not an Application in this repo. Its Dex connector and RBAC
+live in `cluster/helm/argocd/values.yaml`, so a chart upgrade keeps them. It uses its bundled Dex,
+so the redirect is `/api/dex/callback`.
+
+The client secret is not in git: it lives in `argocd-secret` under
+`dex.authentik.clientSecret`, and must equal `ARGOCD_CLIENT_SECRET` in the `authentik-sso`
+secret.
 
 ```bash
-A='<argocd value>'
+A='<argocd value from authentik-sso>'
 kubectl -n argocd patch secret argocd-secret --type merge \
   -p "$(jq -n --arg a "$A" '{stringData:{"dex.authentik.clientSecret":$a}}')"
 ```
 
-Append to `argocd-cm` (patch `data`):
+Apply the release:
 
-```yaml
-url: http://argocd.kub.local
-dex.config: |
-  connectors:
-    - config:
-        issuer: https://authentik.kub.home.ashudev.com/application/o/argocd/
-        clientID: argocd
-        clientSecret: $dex.authentik.clientSecret
-        insecureEnableGroups: true
-        scopes: [openid, profile, email]
-      name: authentik
-      type: oidc
-      id: authentik
+```bash
+helm -n argocd upgrade argocd argo/argo-cd --version 10.4.1 \
+  -f cluster/helm/argocd/values.yaml
+kubectl -n argocd rollout status deploy/argocd-server --timeout=180s
 ```
 
-Append to `argocd-rbac-cm`:
-
-```yaml
-policy.csv: |
-  g, users, role:readonly
-```
-
-Restart `deploy/argocd-server` after the ConfigMap change. The local `admin` account stays
-enabled as break-glass.
+The values carry `g, authentik Admins, role:admin` and `g, homelab-users, role:readonly`. The
+local `admin` account stays enabled as break-glass.
 
 ## Granting access
 
-Applications are bound to one expression policy: a member of `apps` **or** of `authentik Admins`
-may open them. `users` only means "may sign in". A new Discord or Plex user therefore reaches
-nothing until added to `apps`; adding somebody to `authentik Admins` grants every wired app at
-once:
+Three levels, decided by group membership:
 
-In the admin interface: **Directory → Groups → apps → Users → Add existing user**. Removing
-somebody from `apps` takes their applications away at their next sign-in; it does not stop them
-signing in to authentik.
+| Level | Group | Effect |
+|---|---|---|
+| Admin | `authentik Admins` | Administers authentik; application administrator where the app maps groups |
+| User | `homelab-users` | Opens the user-safe applications in their plain user role |
+| Guest | `homelab-guests` | Default landing on enrolment; signs in, reaches nothing |
+
+Promote with **Directory → Groups → homelab-users → Add existing user**; demote by removing them
+from it. Enrolment always lands in `homelab-guests`. Each application binds the levels it admits
+in its own blueprint, in `any` mode, so an application can be admin-only while another is open to
+users. Removing somebody from a group takes their applications away at their next sign-in; it
+does not stop them signing in to authentik.
+
+Capability groups grant one extra thing on top of the level: `filebrowser-editors` admits to
+FileBrowser, whose folder scopes are set per account in FileBrowser.
+
+## FileBrowser (forward auth)
+
+FileBrowser has no OIDC. It authenticates on `X-authentik-username`, which the Traefik
+forward-auth middleware sets after the outpost approves the request; a second middleware removes
+any client-supplied value first, and must run before the forward-auth one.
+
+After a rebuild these two settings live only in FileBrowser's database:
+
+```bash
+kubectl -n media-stack exec deploy/filebrowser -- filebrowser config set \
+  --auth.method=proxy --auth.header=X-authentik-username
+```
+
+Accounts are created before the person joins `filebrowser-editors`: proxy auth auto-creates an
+account on first login with a per-user home, which is wider than intended if they sign in first.
+Usernames must match authentik's `username` exactly.
+
+```bash
+kubectl -n media-stack exec deploy/filebrowser -- filebrowser users add \
+  '<username>' "$(openssl rand -hex 24)" --perm.admin --lockPassword
+kubectl -n media-stack exec deploy/filebrowser -- filebrowser users add \
+  '<editor-username>' "$(openssl rand -hex 24)" --scope '<scope-path>' \
+  --lockPassword --perm.execute=false
+```
+
+Folder scopes can be changed later with `filebrowser users edit --scope` or in the admin UI.
+Upstream archived FileBrowser on 2026-09-01; never expose it except through this middleware chain.
+
+## MFA
+
+Optional. TOTP and WebAuthn (YubiKey) are offered from **MFA Devices** in the user's own
+settings. The validation stage asks when a device is enrolled and skips when none is, and it is
+bound to both `default-authentication-flow` and `default-source-authentication`; the second is
+what makes it apply to Discord and Plex logins rather than only the password form.
+
+Two YubiKeys is two WebAuthn devices on the same account; either satisfies the prompt.
+
+Recovery: delete the lost device in the admin interface and let the person enrol again. The local
+`akadmin` account is deliberately left without a device as break-glass for authentik itself.
 
 ## Verification
 
 - Each application's login page offers authentik, and signing in lands back in the app.
-- A person not in `users` sees the application refused by authentik (the dashboard hides it and
-  the provider rejects the authorisation).
-- Argo CD: the signed-in user can read applications but cannot sync or edit until added to a
-  higher role in `argocd-rbac-cm`.
+- A guest sees an empty application list; a bookmarked application URL is refused by authentik.
+- Argo CD: the admin can sync; a `homelab-users` member reads only.
+- FileBrowser: a forged `X-authentik-username` still redirects to authentik.
