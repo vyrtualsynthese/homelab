@@ -30,11 +30,6 @@ authentik:
       - secretRef:
           name: authentik-env
     env:
-      # Both hostnames live under ashudev.com, so one cookie covers both and a
-      # sign-in on one is recognised on the other. HttpOnly and unusable outside
-      # authentik.
-      - name: AUTHENTIK_COOKIE_DOMAIN
-        value: ".ashudev.com"
       # New in 2026.8 and required from 2026.11. Bootstrap only: copied into the
       # Base URL system setting on first start. Matches the issuer used by apps.
       - name: AUTHENTIK_WEB__BASE_URL
