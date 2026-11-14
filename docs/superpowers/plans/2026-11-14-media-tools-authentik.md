@@ -248,8 +248,8 @@ Eight blueprint files, then eight chart values. Each tool is its own commit so a
 - Create: `cluster/helm/authentik/files/app-{autobrr,bazarr,lidarr,radarr,qbittorrent,maintainerr,prowlarr,tautulli}.yaml`
 - Modify: `cluster/helm/authentik/files/outpost-embedded.yaml` (append eight providers)
 - Modify: `cluster/helm/authentik/Chart.yaml`
-- Modify: `cluster/helm/media-stack/{...}/values.yaml` for the seven with `ingressRoute.middlewares`
-- Modify: `cluster/helm/media-stack/qbittorrent/templates/ingress.yaml` and `values.yaml`
+
+No chart under `cluster/helm/media-stack/` is touched by this task: the middleware belongs to Task 4.
 
 **Interfaces:**
 - Consumes: Task 1's file shape, Task 2's values shape.
