@@ -135,4 +135,4 @@ entries:
     identifiers:
       name: default-source-enrollment-write
     attrs:
-      create_users_group: !Find [authentik_core.group, [name, users]]
+      create_users_group: !Find [authentik_core.group, [name, homelab-guests]]
