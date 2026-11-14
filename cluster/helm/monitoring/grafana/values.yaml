@@ -22,6 +22,9 @@ grafana:
       # visitor with an authentik session is sent there without a click.
       disable_login_form: true
       oauth_auto_login: true
+      # Signing out of Grafana also ends the authentik session, so the next
+      # visit does not silently sign back in.
+      signout_redirect_url: https://authentik.kub.home.ashudev.com/application/o/grafana/end-session/
     auth.generic_oauth:
       enabled: true
       name: authentik
