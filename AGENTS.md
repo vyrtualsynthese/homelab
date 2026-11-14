@@ -108,6 +108,11 @@ time. Examples:
     `tls.certResolver: myresolver` plus a per-app `TLSOption` copied from an existing chart.
   - Public: `ashuvidz.com`, `forum.ashuvidz.com`, `wiki.ashuvidz.com`.
   - Cross-namespace middleware refs use `kube-system-<name>@kubernetescrd`.
+- **Every non-public route carries `kube-system-lan-only@kubernetescrd`.** The router forwards 80/443 to
+  the cluster and Traefik routes on the `Host` header alone, so an ungated route answers the internet
+  whether or not its hostname resolves publicly. The public list is `plex`, `seerr`, `ashuvidz.com`,
+  `forum.ashuvidz.com`, `wiki.ashuvidz.com`; nothing else. `hack/check-exposure.sh` enforces it and
+  must pass before a PR.
 - Stateful apps: `strategy: Recreate`; one PVC per concern; `storageClassName: local-path` for config.
   Shared media/data volumes use the dedicated NFS provisioner classes (`nfs-*`). There is no
   replicated volume class: Longhorn was abandoned after the 2026 disk failure and is not coming back.
