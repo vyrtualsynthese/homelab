@@ -16,6 +16,46 @@ entries:
       identifiers:
         name: ashulab-app-sonarr
       required: true
+  - model: authentik_blueprints.metaapplyblueprint
+    attrs:
+      identifiers:
+        name: ashulab-app-autobrr
+      required: true
+  - model: authentik_blueprints.metaapplyblueprint
+    attrs:
+      identifiers:
+        name: ashulab-app-bazarr
+      required: true
+  - model: authentik_blueprints.metaapplyblueprint
+    attrs:
+      identifiers:
+        name: ashulab-app-lidarr
+      required: true
+  - model: authentik_blueprints.metaapplyblueprint
+    attrs:
+      identifiers:
+        name: ashulab-app-radarr
+      required: true
+  - model: authentik_blueprints.metaapplyblueprint
+    attrs:
+      identifiers:
+        name: ashulab-app-qbittorrent
+      required: true
+  - model: authentik_blueprints.metaapplyblueprint
+    attrs:
+      identifiers:
+        name: ashulab-app-maintainerr
+      required: true
+  - model: authentik_blueprints.metaapplyblueprint
+    attrs:
+      identifiers:
+        name: ashulab-app-prowlarr
+      required: true
+  - model: authentik_blueprints.metaapplyblueprint
+    attrs:
+      identifiers:
+        name: ashulab-app-tautulli
+      required: true
 
   # The embedded outpost is a managed object. Its identifiers are `managed`, not
   # `name`: keying on the name creates a duplicate outpost and rolls back the
@@ -28,3 +68,11 @@ entries:
       providers:
         - !Find [authentik_providers_proxy.proxyprovider, [name, filebrowser]]
         - !Find [authentik_providers_proxy.proxyprovider, [name, sonarr]]
+        - !Find [authentik_providers_proxy.proxyprovider, [name, autobrr]]
+        - !Find [authentik_providers_proxy.proxyprovider, [name, bazarr]]
+        - !Find [authentik_providers_proxy.proxyprovider, [name, lidarr]]
+        - !Find [authentik_providers_proxy.proxyprovider, [name, radarr]]
+        - !Find [authentik_providers_proxy.proxyprovider, [name, qbittorrent]]
+        - !Find [authentik_providers_proxy.proxyprovider, [name, maintainerr]]
+        - !Find [authentik_providers_proxy.proxyprovider, [name, prowlarr]]
+        - !Find [authentik_providers_proxy.proxyprovider, [name, tautulli]]
