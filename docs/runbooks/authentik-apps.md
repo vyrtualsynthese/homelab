@@ -57,10 +57,11 @@ OAUTH2_CONFIG = [{
     "OAUTH2_CLIENT_SECRET": "$P",
     "OAUTH2_SERVER_METADATA_URL": "https://authentik.kub.home.ashudev.com/application/o/pgadmin/.well-known/openid-configuration",
     "OAUTH2_SCOPE": "openid email profile",
+    # Must be inside the provider entry: pgAdmin reads this key from
+    # OAUTH2_CONFIG, not from the module. It substitutes {id_token} before
+    # sending the browser to authentik's end-session endpoint.
+    "OAUTH2_LOGOUT_URL": "https://authentik.kub.home.ashudev.com/application/o/pgadmin/end-session/?id_token_hint={id_token}",
 }]
-# pgAdmin substitutes {id_token}; without it the end-session call cannot identify
-# the session and the browser is not sent there at all.
-OAUTH2_LOGOUT_URL = "https://authentik.kub.home.ashudev.com/application/o/pgadmin/end-session/?id_token_hint={id_token}"
 # Saved server passwords are encrypted with pgAdmin's SECRET_KEY instead of a
 # master password nobody set under SSO.
 MASTER_PASSWORD_REQUIRED = False
