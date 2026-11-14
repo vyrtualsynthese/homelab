@@ -19,19 +19,3 @@ entries:
       name: homelab-guests
       is_superuser: false
       # Default landing for every new identity. Signs in, reaches nothing.
-  # Temporary: retired by the migration plan once memberships have moved. Kept
-  # until then so the application blueprints' !Find lookups still resolve.
-  - model: authentik_core.group
-    id: users
-    identifiers:
-      name: users
-    attrs:
-      name: users
-      is_superuser: false
-  - model: authentik_core.group
-    id: apps
-    identifiers:
-      name: apps
-    attrs:
-      name: apps
-      is_superuser: false
