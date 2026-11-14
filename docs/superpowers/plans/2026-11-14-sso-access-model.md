@@ -176,7 +176,7 @@ In `app-argocd.yaml`, `app-grafana.yaml`, `app-pgadmin.yaml`, replace the final 
       group: !Find [authentik_core.group, [name, authentik Admins]]
 ```
 
-Use the existing `!KeyOf` id (`argocd-app`, `grafana-app`, `pgadmin-app`). Replace the comment above it with `# Admin level only: this application has no user surface.`
+Use the existing `!KeyOf` id (`argocd-app`, `grafana-app`, `pgadmin-app`). Set that application's `policy_engine_mode` to `any` in the same edit — with one binding it behaves identically today, and it stops a future second binding from silently becoming AND. Replace the comment above the binding with `# Admin level only: this application has no user surface.`
 
 - [ ] **Step 4: Give Kavita both levels**
 
@@ -204,9 +204,10 @@ Set Kavita's application entry to `policy_engine_mode: any`, then replace the fi
 ```bash
 helm template t cluster/helm/authentik -f cluster/helm/authentik/values.yaml --namespace authentik > /tmp/after.yaml
 grep -c "app-access" /tmp/after.yaml              # expect 0
-grep -c "name: authentik Admins" /tmp/after.yaml  # expect 4
-grep -c "name: homelab-users" /tmp/after.yaml     # expect 3 (group entry x2 + kavita binding)
-grep -c "policy_engine_mode: any" /tmp/after.yaml # expect 1 (kavita)
+grep -c "name: authentik Admins" /tmp/after.yaml  # expect 0 (rendered refs use [name, ...])
+grep -c "\[name, authentik Admins\]" /tmp/after.yaml # expect 4
+grep -c "\[name, homelab-users\]" /tmp/after.yaml    # expect 1 (kavita)
+grep -c "policy_engine_mode: any" /tmp/after.yaml # expect 4 (kavita + three admin-only)
 ```
 
 - [ ] **Step 6: Commit**
@@ -530,13 +531,11 @@ entries:
     attrs:
       group: !KeyOf filebrowser-editors
 
-  # Without the provider attached the outpost answers 403 for every request.
-  - model: authentik_outposts.outpost
-    identifiers:
-      name: authentik Embedded Outpost
-    attrs:
-      providers:
-        - !KeyOf filebrowser-provider
+# The provider must also be attached to `authentik Embedded Outpost`, which is a
+# managed object keyed by `managed`, not by `name`. A blueprint entry matching
+# on `name` risks creating a duplicate and rolling back this whole file
+# atomically, so that one assignment stays a UI step (step 4). Until it is done
+# the outpost answers 403 for the host.
 ```
 
 - [ ] **Step 2: Render and assert**
@@ -545,7 +544,7 @@ entries:
 helm template t cluster/helm/authentik -f cluster/helm/authentik/values.yaml --namespace authentik > /tmp/after.yaml
 grep -c "filebrowser-editors" /tmp/after.yaml            # expect >= 2
 grep -c "forward_single" /tmp/after.yaml                 # expect 1
-grep -c "authentik Embedded Outpost" /tmp/after.yaml     # expect 1
+grep -c "authentik Embedded Outpost" /tmp/after.yaml     # expect 1 (comment only)
 ```
 
 - [ ] **Step 3: Commit, sync, read the worker log**
@@ -558,9 +557,10 @@ kubectl -n authentik logs deploy/authentik-worker --tail=200 | grep -i "blueprin
 
 Expected: no blueprint error naming `app-filebrowser.yaml`.
 
-- [ ] **Step 4: Confirm the outpost knows the provider**
+- [ ] **Step 4: Attach the provider to the embedded outpost (operator, UI)**
 
-**Applications → Outposts → authentik Embedded Outpost**: `FileBrowser` listed. If the blueprint could not update the managed outpost, add it here by hand and record it in Task 10.
+**Applications → Outposts → authentik Embedded Outpost → Edit → Providers → add FileBrowser → Save.**
+This is a UI step by decision: the outpost is managed and keyed differently, and a blueprint entry that fails would roll back this whole file. Until it is done, the outpost answers 403 for the host.
 
 - [ ] **Step 5: Verify refusal for a non-member**
 

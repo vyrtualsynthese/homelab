@@ -58,11 +58,8 @@ entries:
     attrs:
       group: !KeyOf filebrowser-editors
 
-  # Without the provider attached, the embedded outpost answers 403 for every
-  # request to this host.
-  - model: authentik_outposts.outpost
-    identifiers:
-      name: authentik Embedded Outpost
-    attrs:
-      providers:
-        - !KeyOf filebrowser-provider
+# The provider must also be attached to `authentik Embedded Outpost`, which is a
+# managed object keyed by `managed`, not by `name`. A blueprint entry matching
+# on `name` risks creating a duplicate and rolling back this whole file
+# atomically, so that one assignment stays a UI step; see the runbook's
+# FileBrowser section. Until it is done the outpost answers 403 for the host.

@@ -45,7 +45,7 @@ entries:
       slug: pgadmin
       provider: !KeyOf pgadmin-provider
       meta_launch_url: http://pgadmin.kub.local/
-      policy_engine_mode: all
+      policy_engine_mode: any
 
   - model: authentik_policies.policybinding
     identifiers:
