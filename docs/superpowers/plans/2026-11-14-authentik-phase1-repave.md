@@ -2,13 +2,13 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Authentik runs on chart `2026.8.5` with an empty, dedicated database, serves both
-hostnames with valid certificates, applies its configuration from blueprints in git, and the
+**Goal:** Authentik runs on chart `2026.8.5` with an empty, dedicated database, serves its
+hostname with a valid certificate, applies its configuration from blueprints in git, and the
 operator can sign in as the local administrator.
 
 **Architecture:** The existing wrapper chart (pattern D) is repaved: dependency and image both
-`2026.8.5`, placement on `nuc0`, the chart's plain Ingress replaced by two Traefik
-`IngressRoute`s (internal and public names), one ConfigMap of blueprints mounted into the
+`2026.8.5`, placement on `nuc0`, the chart's plain Ingress replaced by one Traefik
+`IngressRoute` plus its redirect, one ConfigMap of blueprints mounted into the
 worker, and a PostSync hook that restarts the worker so a committed blueprint applies during the
 sync. Secrets stay in `authentik-env`, created by hand.
 
@@ -245,7 +245,9 @@ helm template authentik cluster/helm/authentik -n authentik \
   -f cluster/helm/authentik/values.yaml > /tmp/opencode/authentik-render.yaml
 ```
 
-Expected: no output from the loop below; each `grep` succeeds.
+Expected: no output from the loop below; each `grep` succeeds. The `app.kubernetes.io/component=worker`
+line is the label the chart puts on the worker's pods; the hook deletes by it, so assert it here or
+a chart change can silently turn the hook into a no-op.
 
 ```bash
 R=/tmp/opencode/authentik-render.yaml
@@ -262,6 +264,7 @@ test "$(grep -c 'authentik.ashudev.com' $R)" -eq 0
 grep -q 'name: authentik-blueprints' $R
 grep -q 'mountPath: /blueprints/mounted/cm-authentik-blueprints' $R
 grep -q 'argocd.argoproj.io/hook: PostSync' $R
+grep -q -- '-l' $R && grep -q 'app.kubernetes.io/component=worker' $R
 test "$(grep -c '^kind: ClusterRole' $R)" -eq 0
 ```
 
@@ -269,7 +272,7 @@ test "$(grep -c '^kind: ClusterRole' $R)" -eq 0
 
 ```bash
 git add cluster/helm/authentik .gitignore .github/renovate.json
-git commit -m "✨ feat(authentik): repave on 2026.8.5 with two hostnames and blueprints"
+git commit -m "✨ feat(authentik): repave on 2026.8.5 with the hostname and blueprints"
 ```
 
 ### Task 2: Database, role and runtime secrets
@@ -521,7 +524,7 @@ bootstrap password, then change that password in the UI.
 - [ ] **Step 6: Update the status page**
 
 In `docs/status.md`, remove `authentik` from **Parked** and from the drift list, and add it to
-the healthy list with the chart version`2026.8.5`, the two hostnames and "blueprints in git".
+the healthy list with the chart version `2026.8.5`, the hostname and "blueprints in git".
 Keep the wording of the surrounding entries.
 
 - [ ] **Step 7: Commit and open a docs pull request**
@@ -536,7 +539,7 @@ Open a pull request against `develop`. The operator merges when they are satisfi
 
 ## Success, in one place
 
-- `helm template` renders two IngressRoutes per hostname pair, no Ingress, the blueprint
+- `helm template` renders one IngressRoute plus its redirect, no Ingress, the blueprint
   ConfigMap mounted in the worker and the PostSync hook.
 - The authentik Application is `Synced`/`Healthy`; server and worker are `1/1`.
 - The hostname serves a valid Let's Encrypt certificate and the login page.
