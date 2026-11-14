@@ -1,0 +1,6 @@
+apiVersion: v2
+name: traefik-gate
+description: Shared Traefik middlewares that keep non-public routes on the LAN.
+type: application
+version: 0.1.0
+appVersion: "2.9.4"

@@ -22,6 +22,8 @@ spec:
   routes:
     - match: Host(`monitorss.kub.home.ashudev.com`)
       kind: Rule
+      middlewares:
+        - name: kube-system-lan-only@kubernetescrd
       services:
         - name: monitorss-web
           port: monitorss-web

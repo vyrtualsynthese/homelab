@@ -23,6 +23,7 @@ spec:
     - match: Host(`wiki.kub.home.ashudev.com`)
       kind: Rule
       middlewares:
+        - name: kube-system-lan-only@kubernetescrd
         - name: {{ include "app.fullname" . }}-redirect-old
           namespace: wiki
       services:

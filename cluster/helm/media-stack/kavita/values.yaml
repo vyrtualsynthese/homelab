@@ -101,7 +101,9 @@ ingressRoute:
   # -- Middlewares on the HTTPS router, rendered as
   # `<namespace>-<name>@kubernetescrd`. The redirect router always carries the
   # redirect Middleware instead.
-  middlewares: []
+  middlewares:
+    - name: lan-only
+      namespace: kube-system
   labels: {}
   annotations: {}
   tls:

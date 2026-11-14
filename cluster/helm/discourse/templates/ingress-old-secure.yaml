@@ -11,6 +11,8 @@ spec:
     - match: Host(`discourse.kub.home.ashudev.com`)
       kind: Rule
       middlewares:
+        - name: lan-only
+          namespace: kube-system
         - name: redirect-to-discourse
           namespace: {{ .Release.Namespace | quote }}
       services:

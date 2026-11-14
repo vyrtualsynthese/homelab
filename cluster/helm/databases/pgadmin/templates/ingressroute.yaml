@@ -14,7 +14,7 @@ spec:
     - match: Host(`{{ .Values.ingress.host }}`)
       kind: Rule
       middlewares:
-        - name: {{ .Chart.Name }}-lan-only
+        - name: kube-system-lan-only@kubernetescrd
       services:
         - name: {{ .Values.ingress.service }}
           port: {{ .Values.ingress.port }}

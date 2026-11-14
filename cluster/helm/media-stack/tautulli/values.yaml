@@ -92,7 +92,9 @@ ingressRoute:
   pathPrefix: /
   # -- Middlewares, rendered as `<namespace>-<name>@kubernetescrd`. Tautulli's own
   # login is the gate; no forward-auth is wired.
-  middlewares: []
+  middlewares:
+    - name: lan-only
+      namespace: kube-system
   labels: {}
   annotations: {}
   tls:

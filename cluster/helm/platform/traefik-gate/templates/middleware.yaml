@@ -1,0 +1,17 @@
+{{- $wg := required "lanOnly.wireguardRange must be set from the wg-easy instance (design §8)" .Values.lanOnly.wireguardRange }}
+apiVersion: {{ .Values.traefik.apiVersion }}
+kind: Middleware
+metadata:
+  name: lan-only
+  namespace: kube-system
+  labels:
+    app.kubernetes.io/name: traefik-gate
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  # ipWhiteList, not ipAllowList: the installed CRD only declares the pre-2.5
+  # name and prunes the v3 one, which leaves this object empty and allows
+  # everyone. Rename both together with the CRDs in W5.
+  ipWhiteList:
+    sourceRange:
+      - {{ .Values.lanOnly.lanRange }}
+      - {{ $wg }}

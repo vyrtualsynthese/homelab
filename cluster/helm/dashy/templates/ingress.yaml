@@ -11,6 +11,8 @@ spec:
     - match: Host(`dashy.ashudev.com`) && PathPrefix(`/`)
       kind: Rule
       middlewares:
+        - name: lan-only
+          namespace: kube-system
         - name: authentik
           namespace: kube-system
         - name: security

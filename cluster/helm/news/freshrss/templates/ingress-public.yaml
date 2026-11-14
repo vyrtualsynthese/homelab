@@ -21,6 +21,8 @@ spec:
   routes:
     - match: Host(`freshrss.kub.home.ashudev.com`)
       kind: Rule
+      middlewares:
+        - name: kube-system-lan-only@kubernetescrd
       services:
         - name: {{ include "fullname" . }}
           port: webui

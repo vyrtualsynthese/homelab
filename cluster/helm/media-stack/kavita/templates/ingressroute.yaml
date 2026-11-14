@@ -68,6 +68,7 @@ spec:
     - kind: Rule
       match: {{ $match }}
       middlewares:
+        - name: kube-system-lan-only@kubernetescrd
         - name: {{ $fullName }}-redirect-https
       services:
         - name: {{ $fullName }}
