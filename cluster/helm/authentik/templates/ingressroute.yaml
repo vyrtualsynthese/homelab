@@ -1,0 +1,87 @@
+apiVersion: traefik.containo.us/v1alpha1
+kind: IngressRoute
+metadata:
+  name: authentik-kub-home
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: authentik
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`authentik.kub.home.ashudev.com`)
+      kind: Rule
+      services:
+        - name: authentik-server
+          port: http
+      middlewares:
+        - name: kube-system-security@kubernetescrd
+  tls:
+    certResolver: myresolver
+    options:
+      name: authentik-tlsoption
+---
+apiVersion: traefik.containo.us/v1alpha1
+kind: IngressRoute
+metadata:
+  name: authentik-kub-home-redirect
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: authentik
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  entryPoints:
+    - web
+  routes:
+    - match: Host(`authentik.kub.home.ashudev.com`)
+      kind: Rule
+      services:
+        - name: authentik-server
+          port: http
+      middlewares:
+        - name: kube-system-redirect-https@kubernetescrd
+---
+apiVersion: traefik.containo.us/v1alpha1
+kind: IngressRoute
+metadata:
+  name: authentik-public
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: authentik
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`authentik.ashudev.com`)
+      kind: Rule
+      services:
+        - name: authentik-server
+          port: http
+      middlewares:
+        - name: kube-system-security@kubernetescrd
+  tls:
+    certResolver: myresolver
+    options:
+      name: authentik-tlsoption
+---
+apiVersion: traefik.containo.us/v1alpha1
+kind: IngressRoute
+metadata:
+  name: authentik-public-redirect
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: authentik
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  entryPoints:
+    - web
+  routes:
+    - match: Host(`authentik.ashudev.com`)
+      kind: Rule
+      services:
+        - name: authentik-server
+          port: http
+      middlewares:
+        - name: kube-system-redirect-https@kubernetescrd

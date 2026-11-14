@@ -81,7 +81,7 @@ authentik 2026.8.5.
 - [ ] **Step 2: Correct the values**
 
 In `values.yaml`, keep the email block, `error_reporting`, `postgresql.enabled: false`,
-`redis.enabled: true` and `redis.master.persistence.enabled: false`. Change or add exactly:
+and no `redis` block at all: 2026.8 dropped Redis. Change or add exactly:
 
 ```yaml
 authentik:
@@ -98,6 +98,8 @@ authentik:
     env:
       - name: AUTHENTIK_COOKIE_DOMAIN
         value: ".ashudev.com"
+      - name: AUTHENTIK_WEB__BASE_URL
+        value: "https://authentik.kub.home.ashudev.com"
   server:
     ingress:
       enabled: false
@@ -108,14 +110,11 @@ authentik:
     resources:
       requests: {cpu: 10m, memory: 512Mi}
       limits: {memory: 1Gi}
-  redis:
-    master:
-      resources:
-        requests: {cpu: 10m, memory: 64Mi}
-        limits: {memory: 256Mi}
   blueprints:
     configMaps:
       - authentik-blueprints
+  serviceAccount:
+    create: false
 ```
 
 Delete the whole `global.affinity` block (it targets the retired `node-type` label and the
@@ -262,13 +261,14 @@ test "$(grep -c '^kind: TLSOption$' $R)" -eq 1
 test "$(grep -c 'node-type' $R)" -eq 0
 grep -q 'kubernetes.io/hostname: nuc0' $R
 grep -q 'image: ghcr.io/goauthentik/server:2026.8.5' $R
-grep -q 'postgres.databases.svc.cluster.local' $R
+grep -q 'AUTHENTIK_POSTGRESQL__HOST: "cG9zdGdyZXMuZGF0YWJhc2VzLnN2Yy5jbHVzdGVyLmxvY2Fs"' $R
 grep -q 'name: AUTHENTIK_COOKIE_DOMAIN' $R
 grep -q 'authentik.kub.home.ashudev.com' $R
 grep -q 'authentik.ashudev.com' $R
 grep -q 'name: authentik-blueprints' $R
 grep -q 'mountPath: /blueprints/mounted/cm-authentik-blueprints' $R
 grep -q 'argocd.argoproj.io/hook: PostSync' $R
+test "$(grep -c '^kind: ClusterRole' $R)" -eq 0
 ```
 
 - [ ] **Step 9: Commit**
@@ -350,6 +350,13 @@ kubectl -n authentik patch secret authentik-env --type merge -p "$(jq -n \
 
 Then clear the terminal scrollback. If Step 2 listed `AUTHENTIK_POSTGRESQL__NAME` or
 `AUTHENTIK_POSTGRESQL__USER` with another value, add them to the same patch with `authentik`.
+If it listed any `AUTHENTIK_REDIS__*` key, remove it: 2026.8 has no Redis and a stale host only
+confuses the next reader.
+
+```bash
+kubectl -n authentik patch secret authentik-env --type=json \
+  -p '[{"op":"remove","path":"/data/AUTHENTIK_REDIS__HOST"}]'   # repeat per stale key
+```
 
 - [ ] **Step 5: Prove the connection from the authentik namespace**
 
@@ -435,7 +442,19 @@ kubectl -n authentik delete ingress authentik-server --ignore-not-found
 kubectl -n authentik get ingress   # expected: No resources found
 ```
 
-- [ ] **Step 5: Confirm the rollouts and the hook**
+- [ ] **Step 5: Delete the orphaned Redis**
+
+2026.8 no longer ships Redis. If the sync did not prune it:
+
+```bash
+kubectl -n authentik get statefulset,svc | grep redis
+kubectl -n authentik delete statefulset authentik-redis-master --ignore-not-found
+kubectl -n authentik delete svc authentik-redis-master authentik-redis-headless --ignore-not-found
+```
+
+Expected: no `redis` object remains in the namespace.
+
+- [ ] **Step 6: Confirm the rollouts and the hook**
 
 ```bash
 kubectl -n authentik rollout status deploy/authentik-server --timeout=300s
@@ -444,10 +463,10 @@ kubectl -n authentik get pods
 kubectl -n authentik get jobs
 ```
 
-Expected: server and worker `1/1 Running`, Redis `1/1 Running`, the PostSync Job `Complete` (or
-already deleted by its policy), no `CreateContainerConfigError`.
+Expected: server and worker `1/1 Running`, the PostSync Job `Complete` (or already deleted by its
+policy), no `CreateContainerConfigError`.
 
-- [ ] **Step 6: Commit nothing; report**
+- [ ] **Step 7: Commit nothing; report**
 
 No git change in this task. Record the sync outcome in the session report.
 
@@ -528,7 +547,7 @@ Open a pull request against `develop`. The operator merges when they are satisfi
 
 - `helm template` renders two IngressRoutes per hostname pair, no Ingress, the blueprint
   ConfigMap mounted in the worker and the PostSync hook.
-- The authentik Application is `Synced`/`Healthy`; server, worker and Redis are `1/1`.
+- The authentik Application is `Synced`/`Healthy`; server and worker are `1/1`.
 - Both hostnames serve a valid Let's Encrypt certificate and the login page.
 - `users` exists because the blueprint applied, not because somebody clicked.
 - One sign-in covers both hostnames in one browser session.
