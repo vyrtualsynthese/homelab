@@ -38,13 +38,13 @@ is older than the last merge on `develop`, distrust it rather than argue with it
 
 | State | Count | Meaning |
 |---|---|---|
-| Repaired and working | 24 | Rebuilt against the chart contract, every replica ready |
-| Working, not yet rebuilt | 24 | Running, but on a chart that predates the contract |
+| Repaired and working | 25 | Rebuilt against the chart contract, every replica ready |
+| Working, not yet rebuilt | 23 | Running, but on a chart that predates the contract |
 | Broken | 8 | No working replica; cause recorded below |
 | ArgoCD cannot compare | 2 | The Application points at a path that does not exist |
 
-50 of the 58 Applications have at least one working replica: the 24 repaired and 24 not yet rebuilt,
-plus the two `ArgoCD cannot compare` provisioners, which still run. Six of the working ones are
+50 of the 58 Applications have at least one working replica: the 25 repaired and 23 not yet rebuilt,
+plus the two `ArgoCD cannot compare` provisioners, which still run. Five of the working ones are
 sitting on a volume whose claim is stuck `Terminating` — they work today and will not survive the
 Longhorn cleanup (see **Running on a borrowed volume**).
 
@@ -65,7 +65,7 @@ Two distinct causes, not eight: six apps lost a claim that nobody recreated, and
 the PostgreSQL Service that W2 retired. W2's "point the consuming apps at the new instance" step is
 unfinished for `ghostfolio` and `wiki`.
 
-## Repaired to the contract (24)
+## Repaired to the contract (25)
 
 Rebuilt against [`docs/charts/README.md`](charts/README.md) — pinned image tag, node pin,
 `Recreate` where a config claim exists, probes, memory limits, hardening. All of these were 1/1 at
@@ -94,6 +94,7 @@ the snapshot.
 | `postgres` | databases | 2026-11-13 | Own chart on the official image; Bitnami gone |
 | `pgadmin` | databases | 2026-11-13 | Wrapper with a login; was one of the eleven Longhorn casualties |
 | `authentik` | authentik | 2026-11-14 | Repaved on `2026.8.5` with one hostname, blueprints in `files/` and a PostSync worker reload; database and secrets rebuilt the same day. Sign-in sources: Discord (members of the homelab guild only — verified refused for a non-member) and Plex (accounts with access to AshuFlex), both landing on the same account. Access model: `authentik Admins` / `homelab-users` / `homelab-guests`, bound per application, with `filebrowser-editors` as a capability group; MFA optional (TOTP, WebAuthn) and applied to source logins. Applications actually wired to it: Grafana and pgAdmin; Argo CD, Kavita and FileBrowser have authentik objects in git but no application-side configuration yet |
+| `filebrowser` | filebrowser | 2026-11-14 | Wrapper chart on the official upstream image; local login on `v2.63.23`; own namespace; authentik deferred; upstream archived 2026-09-01 |
 | `prometheus` | monitoring | 2026-11-12 | Wrapper on the official chart, TSDB on `local-path` |
 | `grafana` | monitoring | 2026-11-12 | Wrapper; rules and dashboards still live only in its database |
 | `loki` | monitoring | 2026-11-12 | Wrapper, 90-day retention |
@@ -101,7 +102,7 @@ the snapshot.
 Two media-stack charts are documented but **not** rebuilt: `plex` (README plus recorded contract
 exceptions) and `qbittorrent` (a DNS fix only). Both run.
 
-## Running, not yet rebuilt (24)
+## Running, not yet rebuilt (23)
 
 Working, on the old chart shape. This is the queue for the chart work, not a defect list.
 
@@ -109,7 +110,6 @@ Working, on the old chart shape. This is the queue for the chart work, not a def
 |---|---|---|---|
 | `ashuvidz` | ashuvidz | 1/1 | |
 | `dashy` | dashy | 1/1 | `latest` tag; OutOfSync |
-| `filebrowser` | media-stack | 1/1 | **Borrowed volume**; OutOfSync. Forward auth defined in git and not cut over yet; per-user folder scopes planned; upstream archived 2026-09-01 |
 | `firefly` | firefly | 3/3 | **Borrowed volume**; OutOfSync |
 | `guacamole` | guacamole | 2/2 | OutOfSync |
 | `linkstack` | linkstack | 1/1 | **Borrowed volume**; `latest` tag |
@@ -132,17 +132,17 @@ Working, on the old chart shape. This is the queue for the chart work, not a def
 | `stash-nfs` | media-stack | 1/1 | ArgoCD still reports `Progressing` |
 | `traefik-nfs` | kube-system | 1/1 | ArgoCD still reports `Progressing` |
 
-## Running on a borrowed volume (6)
+## Running on a borrowed volume (5)
 
-`firefly`, `linkstack`, `n8n`, `syncthing`, `thelounge` and `filebrowser` mount claims that are
+`firefly`, `linkstack`, `n8n`, `syncthing` and `thelounge` mount claims that are
 already stuck `Terminating` — the Longhorn volumes the 2026 disk failure orphaned. Their pods keep
 running because the volume is still attached and the deletion is blocked by a finalizer no driver can
 remove any more.
 
-The consequence matters for W0: clearing those finalizers **stops these six apps and destroys their
+The consequence matters for W0: clearing those finalizers **stops these five apps and destroys their
 config**. Nine claims were stuck at the snapshot, not the eleven the plan recorded, because
 `prometheus-data` and the old `pgadmin` claim have since been replaced. Do not treat "1/1 ready" as
-"safe" for these six.
+"safe" for these five.
 
 ## ArgoCD cannot compare (2)
 
@@ -157,9 +157,9 @@ cannot render them any more, so a sync would fail:
 Their provisioners still run, so the storage they serve is in use. The charts are effectively
 unmanaged: fixing one defect at a time in the repo is the only way back.
 
-## Drift, not breakage (10)
+## Drift, not breakage (9)
 
-`dashy`, `discourse`, `filebrowser`, `firefly`, `guacamole`, `local-path`, `mktxp`, `n8n`,
+`dashy`, `discourse`, `firefly`, `guacamole`, `local-path`, `mktxp`, `n8n`,
 `renovate`, `syncthing` are `OutOfSync` while `Healthy`. That means git and the cluster
 disagree about something — often an image Renovate bumped, sometimes a UI edit. Not urgent; worth one
 look each when its chart is touched.
