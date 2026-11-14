@@ -29,6 +29,8 @@ authentik:
     envFrom:
       - secretRef:
           name: authentik-env
+      - secretRef:
+          name: authentik-sso
     env:
       # New in 2026.8 and required from 2026.11. Bootstrap only: copied into the
       # Base URL system setting on first start. Matches the issuer used by apps.
