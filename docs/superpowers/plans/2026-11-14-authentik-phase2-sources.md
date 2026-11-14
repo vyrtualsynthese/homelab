@@ -210,16 +210,28 @@ entries:
             return False
         return True
 
+  # Bind by !KeyOf, never by !Find: a policy binding's target is the flow's
+  # policy-binding UUID, while !Find returns the flow's own UUID.
+  - model: authentik_flows.flow
+    id: source-enrollment-flow
+    identifiers:
+      slug: default-source-enrollment
+
+  - model: authentik_flows.flow
+    id: source-authentication-flow
+    identifiers:
+      slug: default-source-authentication
+
   - model: authentik_policies.policybinding
     identifiers:
-      target: !Find [authentik_flows.flow, [slug, default-source-enrollment]]
+      target: !KeyOf source-enrollment-flow
       order: 100
     attrs:
       policy: !KeyOf discord-guild-policy
 
   - model: authentik_policies.policybinding
     identifiers:
-      target: !Find [authentik_flows.flow, [slug, default-source-authentication]]
+      target: !KeyOf source-authentication-flow
       order: 100
     attrs:
       policy: !KeyOf discord-guild-policy
