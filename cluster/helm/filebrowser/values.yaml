@@ -28,6 +28,8 @@ filebrowser:
 
   image:
     repository: filebrowser/filebrowser
+    # 2.63.23 is the last published 2.63.x; it also carries the fix that stopped
+    # auto-provisioned proxy-auth users receiving the server root.
     tag: v2.63.23
     pullPolicy: IfNotPresent
 

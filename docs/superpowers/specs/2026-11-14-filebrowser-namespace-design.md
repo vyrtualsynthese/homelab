@@ -1,7 +1,7 @@
 # FileBrowser in its own namespace — design
 
 - **Date:** 2026-11-14
-- **Status:** awaiting operator approval
+- **Status:** approved (operator, 2026-11-14)
 - **Owner:** operator. Decisions marked **(operator)** were taken in conversation; decisions marked
   **(design)** are this document's call and can be overruled.
 - **Relation to other work:** this is the FileBrowser rebuild scheduled as W7.1 in

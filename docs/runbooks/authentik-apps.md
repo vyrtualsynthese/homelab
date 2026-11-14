@@ -146,46 +146,29 @@ in its own blueprint, in `any` mode, so an application can be admin-only while a
 users. Removing somebody from a group takes their applications away at their next sign-in; it
 does not stop them signing in to authentik.
 
-Capability groups grant one extra thing on top of the level: `filebrowser-editors` admits to
-FileBrowser, whose folder scopes are set per account in FileBrowser.
+Capability groups grant one extra thing on top of the level: `filebrowser-editors` exists but is
+unused until FileBrowser is wired to authentik.
 
-## FileBrowser (forward auth)
+## FileBrowser (local login, authentik deferred)
 
-Not wired yet: the blueprint objects and the middlewares are in git, but the application is still
-on its local login and the provider is not attached to the outpost.
+FileBrowser is **not** behind authentik for now. It runs in namespace `filebrowser` with its own
+accounts; the forward-auth chain, the embedded-outpost attachment and `filebrowser-editors` are
+deferred. The provider is not attached to the outpost. The procedure to wire it later stays in
+`docs/superpowers/plans/2026-11-14-sso-access-model.md`.
 
-FileBrowser has no OIDC. It authenticates on `X-authentik-username`, which the Traefik
-forward-auth middleware sets after the outpost approves the request; a second middleware removes
-any client-supplied value first, and must run before the forward-auth one.
-
-**One assignment stays manual:** the blueprint creates the proxy provider, the application and the
-capability group, but the provider must be attached to the embedded outpost by hand, in
-**Applications → Outposts → authentik Embedded Outpost → Edit → Providers → add FileBrowser**. The
-outpost object is managed by authentik and keyed differently from a blueprint-created object, so a
-blueprint entry risks a duplicate-name rollback of the whole file. Until this is done the outpost
-answers 403 for the host.
-
-After a rebuild these two settings live only in FileBrowser's database:
+The first admin is created from the `filebrowser` Secret when the database is empty. Rotate it with:
 
 ```bash
-kubectl -n media-stack exec deploy/filebrowser -- filebrowser config set \
-  --auth.method=proxy --auth.header=X-authentik-username
+kubectl -n filebrowser exec deploy/filebrowser -- filebrowser users update admin --password '<new>'
 ```
 
-Accounts are created before the person joins `filebrowser-editors`: proxy auth auto-creates an
-account on first login with a per-user home, which is wider than intended if they sign in first.
-Usernames must match authentik's `username` exactly.
+Non-admin accounts keep the same shape as before, now in the new namespace:
 
 ```bash
-kubectl -n media-stack exec deploy/filebrowser -- filebrowser users add \
-  '<username>' "$(openssl rand -hex 24)" --perm.admin --lockPassword
-kubectl -n media-stack exec deploy/filebrowser -- filebrowser users add \
-  '<editor-username>' "$(openssl rand -hex 24)" --scope '<scope-path>' \
+kubectl -n filebrowser exec deploy/filebrowser -- filebrowser users add \
+  '<username>' "$(openssl rand -hex 24)" --scope '<scope-path>' \
   --lockPassword --perm.execute=false
 ```
-
-Folder scopes can be changed later with `filebrowser users edit --scope` or in the admin UI.
-Upstream archived FileBrowser on 2026-09-01; never expose it except through this middleware chain.
 
 ## MFA
 
@@ -204,4 +187,3 @@ Recovery: delete the lost device in the admin interface and let the person enrol
 - Each application's login page offers authentik, and signing in lands back in the app.
 - A guest sees an empty application list; a bookmarked application URL is refused by authentik.
 - Argo CD: the admin can sync; a `homelab-users` member reads only.
-- FileBrowser: a forged `X-authentik-username` still redirects to authentik.
