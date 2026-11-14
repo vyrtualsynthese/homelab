@@ -377,7 +377,7 @@ After the sync and a clean worker log, delete the empty `users` and `apps` group
 > **2026-11-14:** FileBrowser now runs in namespace `filebrowser` as a pattern-D wrapper at
 > `cluster/helm/filebrowser` (see
 > [`2026-11-14-filebrowser-namespace-design.md`](../specs/2026-11-14-filebrowser-namespace-design.md)).
-> The path `cluster/helm/media-stack/filebrowser` below no longer exists. To wire forward auth,
+> The old values file path below no longer exists. To wire forward auth,
 > add `strip-authentik-header`, `authentik-forwardauth` and `security` to `traefik.middlewares` in
 > `cluster/helm/filebrowser/values.yaml`, attach the provider to the embedded outpost, and run the
 > FileBrowser commands below with `-n filebrowser`.
@@ -387,7 +387,7 @@ After the sync and a clean worker log, delete the empty `users` and `apps` group
 **Files:**
 - Create: `cluster/infrastructure/traefik/middleware/authentik-forwardauth.yaml`
 - Create: `cluster/infrastructure/traefik/middleware/strip-authentik-header.yaml`
-- Modify: `cluster/helm/media-stack/filebrowser/values.yaml` (image tag and router middleware annotation)
+- Modify: `cluster/helm/filebrowser/values.yaml` (image tag and `traefik.middlewares`)
 
 **Interfaces:**
 - Produces: `kube-system/authentik-forwardauth`, `kube-system/strip-authentik-header`; FileBrowser `v2.63.23`; router chain strip → forwardauth → security.
@@ -441,14 +441,17 @@ kubectl -n kube-system get middleware authentik-forwardauth strip-authentik-head
 
 - [ ] **Step 4: Update FileBrowser values**
 
-```yaml
-  tag: "v2.63.23"
-```
-
-and:
+The wrapper chart renders a Traefik `IngressRoute`; its `traefik.middlewares` list is the router chain.
 
 ```yaml
-    traefik.ingress.kubernetes.io/router.middlewares: "kube-system-strip-authentik-header@kubernetescrd,kube-system-authentik-forwardauth@kubernetescrd,kube-system-security@kubernetescrd"
+traefik:
+  middlewares:
+    - namespace: kube-system
+      name: strip-authentik-header
+    - namespace: kube-system
+      name: authentik-forwardauth
+    - namespace: kube-system
+      name: security
 ```
 
 - [ ] **Step 5: Verify the chain before switching the app (GREEN)**
@@ -459,12 +462,12 @@ curl -sI https://filebrowser.kub.home.ashudev.com/ | head -5
 
 Expected: `302` with `Location:` containing `authentik.kub.home.ashudev.com`. A `200` means the chain is wrong; stop.
 
-The router stays a `networking.k8s.io` Ingress because the remote chart renders one; converting it is out of scope and is a pre-existing known issue.
+The router is the wrapper chart's `IngressRoute`; the chain above lives in `cluster/helm/filebrowser/values.yaml`.
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add cluster/helm/media-stack/filebrowser/values.yaml cluster/infrastructure/traefik/middleware
+git add cluster/helm/filebrowser/values.yaml cluster/infrastructure/traefik/middleware
 git commit -m "🚀 feat(filebrowser): protect the router with authentik forward auth"
 ```
 
@@ -597,7 +600,7 @@ kubectl -n authentik exec deploy/authentik-worker -- ak shell -c \
 - [ ] **Step 2: Create the FileBrowser admin account**
 
 ```bash
-kubectl -n media-stack exec deploy/filebrowser -- filebrowser users add \
+kubectl -n filebrowser exec deploy/filebrowser -- filebrowser users add \
   '<operator-username>' "$(openssl rand -hex 24)" --perm.admin --lockPassword
 ```
 
@@ -606,7 +609,7 @@ kubectl -n media-stack exec deploy/filebrowser -- filebrowser users add \
 Replace `<scope-path>` with the folder the editor may see, inside the FileBrowser root:
 
 ```bash
-kubectl -n media-stack exec deploy/filebrowser -- filebrowser users add \
+kubectl -n filebrowser exec deploy/filebrowser -- filebrowser users add \
   '<editor-username>' "$(openssl rand -hex 24)" --scope '<scope-path>' \
   --lockPassword --perm.execute=false
 ```
@@ -614,10 +617,10 @@ kubectl -n media-stack exec deploy/filebrowser -- filebrowser users add \
 - [ ] **Step 4: Switch the method and restart**
 
 ```bash
-kubectl -n media-stack exec deploy/filebrowser -- filebrowser config set \
+kubectl -n filebrowser exec deploy/filebrowser -- filebrowser config set \
   --auth.method=proxy --auth.header=X-authentik-username
-kubectl -n media-stack rollout restart deploy/filebrowser
-kubectl -n media-stack rollout status deploy/filebrowser --timeout=180s
+kubectl -n filebrowser rollout restart deploy/filebrowser
+kubectl -n filebrowser rollout status deploy/filebrowser --timeout=180s
 ```
 
 - [ ] **Step 5: Verify the operator and the runner**
@@ -625,7 +628,7 @@ kubectl -n media-stack rollout status deploy/filebrowser --timeout=180s
 Sign in through authentik: FileBrowser opens as admin with the full tree.
 
 ```bash
-kubectl -n media-stack exec deploy/filebrowser -- filebrowser config get | grep -i exec
+kubectl -n filebrowser exec deploy/filebrowser -- filebrowser config get | grep -i exec
 ```
 
 Expected: execution disabled.
@@ -768,9 +771,9 @@ any client-supplied value first.
 
 After a rebuild these settings live only in FileBrowser's database:
 
-    kubectl -n media-stack exec deploy/filebrowser -- filebrowser users add \
+    kubectl -n filebrowser exec deploy/filebrowser -- filebrowser users add \
       '<operator-username>' "$(openssl rand -hex 24)" --perm.admin --lockPassword
-    kubectl -n media-stack exec deploy/filebrowser -- filebrowser config set \
+    kubectl -n filebrowser exec deploy/filebrowser -- filebrowser config set \
       --auth.method=proxy --auth.header=X-authentik-username
 
 Usernames must match authentik's `username` exactly. Folder scopes are per account

@@ -91,7 +91,8 @@ wrappers now (pattern D).
 The way external charts are consumed: the repo owns a small chart in `cluster/helm/` whose
 `Chart.yaml` pins the upstream chart to an exact `version:`, and whose `values.yaml` pins the image
 repository and tag of every container it renders. `charts/` and `Chart.lock` are gitignored for the
-wrapper charts (see `.gitignore`) — ArgoCD runs `helm dependency build` at sync time. Examples:
+wrapper charts that need them (see `.gitignore`) — ArgoCD runs `helm dependency build` at sync
+time. Examples:
 `monitoring/prometheus`,
 `monitoring/grafana`, `monitoring/loki`, `monitoring/fluent-bit`, `authentik`, `dashy`,
 `filebrowser`.
