@@ -64,6 +64,10 @@ OAUTH2_LOGOUT_URL = "https://authentik.kub.home.ashudev.com/application/o/pgadmi
 # Saved server passwords are encrypted with pgAdmin's SECRET_KEY instead of a
 # master password nobody set under SSO.
 MASTER_PASSWORD_REQUIRED = False
+# Send the browser straight to authentik instead of showing pgAdmin's login
+# page with a single button. Suppressed right after a logout so the sign-out
+# sticks.
+OAUTH2_AUTO_LOGIN = True
 EOF
 kubectl -n databases create secret generic pgadmin-oidc --from-file=config_local.py=/tmp/pgadmin-oidc.py
 rm /tmp/pgadmin-oidc.py
