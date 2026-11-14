@@ -20,8 +20,9 @@ hand because this repo does not manage the Argo CD installation.
 - One blueprint per app, one client ID per app: `argocd`, `grafana`, `pgadmin`, `kavita`.
 - No secret in git: `client_secret` is `!Env <APP>_CLIENT_SECRET`, read from `authentik-sso`.
 - Every provider: confidential client, strict redirect URI, authentik's self-signed signing key,
-  the implicit-consent authorization flow, the default invalidation flow, and the openid/email/
-  profile scope mappings.
+  the implicit-consent authorization flow, the default invalidation flow, the openid/email/
+  profile scope mappings, and the two grant types `authorization_code` and `refresh_token`
+  (blueprint-created providers start with none, unlike the UI wizard).
 - Every application: `policy_engine_mode: all` and one group binding to `users`.
 - Redirect URIs are exact. HTTP is used where the app is served over HTTP; the issuer stays HTTPS.
 - Commit prefixes use an emoji; never commit to `main` or `develop`.
