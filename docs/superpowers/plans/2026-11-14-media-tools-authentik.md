@@ -397,6 +397,7 @@ Applied in the UI, then re-checked in a private window.
 - Modify: `docs/runbooks/authentik-apps.md`
 - Modify: `docs/superpowers/specs/2026-11-14-sso-access-model-design.md`
 - Modify: `docs/charts/README.md`
+- Modify: `cluster/helm/authentik/files/app-filebrowser.yaml` (trailing comment only)
 
 - [ ] **Step 1: Runbook section**
 
@@ -415,4 +416,17 @@ Two statements are now false: that FileBrowser is the only forward-auth consumer
 ```bash
 git add docs
 git commit -m "📝 docs: record the media tools' authentik gate and its recovery routes"
+```
+
+- [ ] **Step 5: Correct the stale comment in FileBrowser's blueprint**
+
+`cluster/helm/authentik/files/app-filebrowser.yaml` ends with a comment saying the provider must be
+attached to the embedded outpost by hand and that blueprints cannot do it. That is no longer true:
+`outpost-embedded.yaml` owns the assignment. Rewrite the comment to say the outpost file assigns it,
+and that deleting that file means attaching by hand again. Comment only — no field changes, so the
+application is untouched.
+
+```bash
+git add cluster/helm/authentik/files/app-filebrowser.yaml
+git commit -m "📝 docs(sso): point FileBrowser's blueprint at the outpost file"
 ```
