@@ -73,7 +73,7 @@ Orphans and dead weight:
 | `prometheus`, `grafana` | C | vendored, chart 14.8.0 / 6.52.5 | appVersions 2.26.0 / 9.4.3, years behind their images |
 | `postgres` | B | Bitnami `postgresql` 15.5.23 | **Bitnami is being exited** — this is the app that must become a plain StatefulSet |
 | `pgadmin` | B | `runix/pgadmin4` 1.50.0 | local chart unused |
-| `filebrowser` | D | selfhosted-helmcharts 0.1.2 | wrapper, local login, own namespace |
+| `filebrowser` | D | `vyrtualsynthese/selfhosted-helmcharts` 0.1.2 | wrapper, local login, own namespace |
 | `bazarr`, `bazarr-anime`, `calibre` | B | `vyrtualsynthese/selfhosted-helmcharts` 0.1.2–0.1.3 | own charts, tiny version numbers |
 | `nfs/books-media`, `nfs/nfs-audio` | B | `nfs-subdir-external-provisioner` 4.0.18 | image pinned `v4.0.2` |
 | `renovate` | B | 46.141.4 in the Application, `43.160.6` in values | mismatch |
