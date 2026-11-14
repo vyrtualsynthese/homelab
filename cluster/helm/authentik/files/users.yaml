@@ -1,0 +1,11 @@
+version: 1
+metadata:
+  name: ashulab-users
+entries:
+  - model: authentik_core.group
+    id: users
+    identifiers:
+      name: users
+    attrs:
+      name: users
+      is_superuser: false

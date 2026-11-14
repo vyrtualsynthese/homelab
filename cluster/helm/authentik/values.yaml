@@ -5,75 +5,75 @@ authentik:
     error_reporting:
       enabled: false
     postgresql:
-      # -- set the postgresql hostname to talk to
-      # if unset and .Values.postgresql.enabled == true, will generate the default
-      # @default -- `{{ .Release.Name }}-postgresql`
-      host: "postgres-postgresql.databases.svc.cluster.local"
-      # -- postgresql Database name
-      # @default -- `authentik`
+      # The dedicated instance in the databases namespace, not the retired
+      # Bitnami subchart.
+      host: "postgres.databases.svc.cluster.local"
       name: "authentik"
-      # -- postgresql Username
-      # @default -- `authentik`
       user: "authentik"
       port: 5432
     email:
-      # -- SMTP Server emails are sent from, fully optional
+      # SMTP Server emails are sent from, fully optional
       host: "smtp.gmail.com"
-      # -- SMTP server port
       port: 587
-      # -- SMTP credentials, when left empty, no authentication will be done
       username: "valentin.ronteix@ashudev.com"
-      # -- Enable either use_tls or use_ssl, they can't be enabled at the same time.
       use_tls: true
-      # -- Enable either use_tls or use_ssl, they can't be enabled at the same time.
       use_ssl: false
-      # -- Connection timeout
       timeout: 30
-      # -- Email from address, can either be in the format "foo@bar.baz" or "authentik <foo@bar.baz>"
       from: "ashulab@ashudev.com"
   global:
-    # Default image used by all authentik components. For GeoIP configuration, see the geoip values below.
     image:
-      # -- If defined, a repository applied to all authentik deployments
       repository: ghcr.io/goauthentik/server
-      # -- Overrides the global authentik whose default is the chart appVersion
-      tag: "2026.2.1"
-      # -- If defined, an imagePullPolicy applied to all authentik deployments
+      # Pinned with the chart version: both are 2026.8.5.
+      tag: "2026.8.5"
       pullPolicy: IfNotPresent
     envFrom:
       - secretRef:
           name: authentik-env
+    env:
+      # Both hostnames live under ashudev.com, so one cookie covers both and a
+      # sign-in on one is recognised on the other. HttpOnly and unusable outside
+      # authentik.
+      - name: AUTHENTIK_COOKIE_DOMAIN
+        value: ".ashudev.com"
+      # New in 2026.8 and required from 2026.11. Bootstrap only: copied into the
+      # Base URL system setting on first start. Matches the issuer used by apps.
+      - name: AUTHENTIK_WEB__BASE_URL
+        value: "https://authentik.kub.home.ashudev.com"
     addPrometheusAnnotations: false
-    affinity:
-      nodeAffinity:
-        matchExpressions:
-          - key: node-type
-            operator: In
-            values:
-              - general
+    nodeSelector:
+      kubernetes.io/hostname: nuc0
 
   server:
+    # Replaced by templates/ingressroute.yaml: the repo uses Traefik CRDs, not
+    # networking.k8s.io Ingress.
     ingress:
-      enabled: true
-      ingressClassName: ""
-      annotations:
-        traefik.ingress.kubernetes.io/router.entrypoints: "web,websecure"
-        traefik.ingress.kubernetes.io/router.middlewares: "kube-system-redirect-https@kubernetescrd,kube-system-discord@kubernetescrd"
-        #traefik.ingress.kubernetes.io/custom-response-headers: "Access-Control-Allow-Origin:*||Access-Control-Allow-Methods:GET,POST,OPTIONS||Access-Control-Allow-Headers:DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range||Access-Control-Expose-Headers:Content-Length,Content-Range"
-        traefik.ingress.kubernetes.io/router.tls: "true"
-        traefik.ingress.kubernetes.io/router.tls.certresolver: "myresolver"
-      hosts:
-        - authentik.kub.home.ashudev.com
-      paths:
-        - /
-      pathType: Prefix
-      tls: []
+      enabled: false
+    resources:
+      requests:
+        cpu: 10m
+        memory: 512Mi
+      limits:
+        memory: 1Gi
+
+  worker:
+    resources:
+      requests:
+        cpu: 10m
+        memory: 512Mi
+      limits:
+        memory: 1Gi
+
+  blueprints:
+    configMaps:
+      - authentik-blueprints
+
+  # No managed ("remote cluster") outposts: the embedded outpost is enough for
+  # OIDC-only applications, and this subchart would add cluster-scoped RBAC.
+  serviceAccount:
+    create: false
 
   postgresql:
     enabled: false
 
-  redis:
-    enabled: true
-    master:
-      persistence:
-        enabled: false
+# 2026.8 dropped Redis: the task broker runs on PostgreSQL and the chart no
+# longer ships a Redis subchart.
