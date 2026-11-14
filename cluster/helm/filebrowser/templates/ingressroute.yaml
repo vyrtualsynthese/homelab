@@ -1,0 +1,25 @@
+apiVersion: {{ .Values.traefik.apiVersion }}
+kind: IngressRoute
+metadata:
+  name: {{ .Chart.Name }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: {{ .Chart.Name }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - kind: Rule
+      match: Host(`{{ .Values.traefik.host }}`)
+      middlewares:
+        {{- range .Values.traefik.middlewares }}
+        - name: {{ .namespace }}-{{ .name }}@kubernetescrd
+        {{- end }}
+      services:
+        - name: {{ .Values.traefik.service }}
+          port: {{ .Values.traefik.port }}
+  tls:
+    certResolver: {{ .Values.traefik.certResolver }}
+    options:
+      name: {{ .Values.traefik.tlsOption }}
