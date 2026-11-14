@@ -9,6 +9,11 @@ entries:
       identifiers:
         name: ashulab-users
       required: true
+  - model: authentik_blueprints.metaapplyblueprint
+    attrs:
+      identifiers:
+        name: ashulab-app-access
+      required: true
   - model: authentik_providers_oauth2.oauth2provider
     id: argocd-provider
     identifiers:
@@ -52,4 +57,6 @@ entries:
       target: !KeyOf argocd-app
       order: 0
     attrs:
-      group: !Find [authentik_core.group, [name, apps]]
+      # Clear the earlier group binding: a binding holds exactly one subject.
+      group: null
+      policy: !Find [authentik_policies_expression.expressionpolicy, [name, app-access]]

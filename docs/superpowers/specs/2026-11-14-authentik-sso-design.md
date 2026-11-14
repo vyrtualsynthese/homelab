@@ -221,9 +221,10 @@ Discord / Plex ◄── OAuth redirects ─────────────
   `default-provider-authorization-implicit-consent`: once a person is signed in, opening an
   application does not ask again.
 - **Access model.** Two groups with different jobs: `users` is who may sign in at all, and `apps`
-  is who may open an application. Every application binds to `apps`, which starts empty, so a new
-  Discord or Plex user can sign in to authentik and reach nothing else until an operator adds them
-  to `apps`. Members get the app's read-only or viewer role by default (ArgoCD read-only, Grafana
+  is who may open an application. Every application binds one expression policy that admits a
+  member of `apps` or of `authentik Admins`, so an operator is not added twice and a new
+  administrator gets every wired app at once. `apps` starts empty, so a new Discord or Plex user
+  can sign in to authentik and reach nothing else until an operator adds them. Members get the app's read-only or viewer role by default (ArgoCD read-only, Grafana
   Viewer); a higher role per app is a separate decision. `authentik Admins` (built-in) may
   administer authentik. Fine-grained per-application groups are deferred until a real need
   appears.
