@@ -374,6 +374,14 @@ After the sync and a clean worker log, delete the empty `users` and `apps` group
 
 ### Task 6: Forward-auth middleware and FileBrowser image
 
+> **2026-11-14:** FileBrowser now runs in namespace `filebrowser` as a pattern-D wrapper at
+> `cluster/helm/filebrowser` (see
+> [`2026-11-14-filebrowser-namespace-design.md`](../specs/2026-11-14-filebrowser-namespace-design.md)).
+> The path `cluster/helm/media-stack/filebrowser` below no longer exists. To wire forward auth,
+> add `strip-authentik-header`, `authentik-forwardauth` and `security` to `traefik.middlewares` in
+> `cluster/helm/filebrowser/values.yaml`, attach the provider to the embedded outpost, and run the
+> FileBrowser commands below with `-n filebrowser`.
+
 `cluster/infrastructure/**` is not managed by any Application in this repo; it is applied by hand, as the existing middlewares already are.
 
 **Files:**
