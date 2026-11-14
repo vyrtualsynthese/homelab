@@ -88,15 +88,22 @@ entries:
   # binding's target is the flow's policy-binding UUID, not the flow's own UUID;
   # !KeyOf returns the former for PolicyBindingModel instances, !Find the latter,
   # and a mismatch makes every re-apply create a duplicate and fail validation.
+  # Both flows already carry an allow-all policy from authentik's defaults and
+  # evaluate bindings in "any" mode: one passing binding admits the flow. Set
+  # "all" so this deny actually counts.
   - model: authentik_flows.flow
     id: source-enrollment-flow
     identifiers:
       slug: default-source-enrollment
+    attrs:
+      policy_engine_mode: all
 
   - model: authentik_flows.flow
     id: source-authentication-flow
     identifiers:
       slug: default-source-authentication
+    attrs:
+      policy_engine_mode: all
 
   - model: authentik_policies.policybinding
     identifiers:

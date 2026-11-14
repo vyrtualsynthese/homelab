@@ -212,15 +212,22 @@ entries:
 
   # Bind by !KeyOf, never by !Find: a policy binding's target is the flow's
   # policy-binding UUID, while !Find returns the flow's own UUID.
+  # Flow policies default to "any": one passing binding admits the flow, and the
+  # default source flows already carry an allow-all SSO check. "all" is required
+  # or the admission policy below has no effect.
   - model: authentik_flows.flow
     id: source-enrollment-flow
     identifiers:
       slug: default-source-enrollment
+    attrs:
+      policy_engine_mode: all
 
   - model: authentik_flows.flow
     id: source-authentication-flow
     identifiers:
       slug: default-source-authentication
+    attrs:
+      policy_engine_mode: all
 
   - model: authentik_policies.policybinding
     identifiers:
