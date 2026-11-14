@@ -3,7 +3,7 @@ name: tautulli
 description: Tautulli is a Plex statistics dashboard. It reads the Plex server's history and shows who watched what, when, and from where.
 type: application
 # Chart version. Renovate bumps this when the image tag moves.
-version: 1.0.0
+version: 1.0.1
 # Must match image.tag in values.yaml.
 appVersion: "v2.19.1"
 icon: https://raw.githubusercontent.com/Tautulli/Tautulli/v2.19.1/data/interfaces/default/images/logo.png
