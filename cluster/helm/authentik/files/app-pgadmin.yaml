@@ -9,6 +9,12 @@ entries:
     attrs:
       name: pgadmin
       client_type: confidential
+      # Blueprint-created providers start with no grant types, unlike the UI
+      # wizard which preselects these two; without them the authorize endpoint
+      # answers "Invalid grant_type for provider".
+      grant_types:
+        - authorization_code
+        - refresh_token
       client_id: pgadmin
       client_secret: !Env PGADMIN_CLIENT_SECRET
       authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
