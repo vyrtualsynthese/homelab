@@ -113,6 +113,15 @@ policy.csv: |
 Restart `deploy/argocd-server` after the ConfigMap change. The local `admin` account stays
 enabled as break-glass.
 
+## Granting access
+
+Apps bind to the `apps` group; `users` only means "may sign in". A new Discord or Plex user
+therefore reaches nothing until added:
+
+In the admin interface: **Directory → Groups → apps → Users → Add existing user**. Removing
+somebody from `apps` takes their applications away at their next sign-in; it does not stop them
+signing in to authentik.
+
 ## Verification
 
 - Each application's login page offers authentik, and signing in lands back in the app.
