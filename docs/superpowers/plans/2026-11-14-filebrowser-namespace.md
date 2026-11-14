@@ -843,4 +843,4 @@ Open the PR against `develop` with the cutover evidence in the body.
 - The authentik deferral is recorded in the design, the runbook and the status task; no task wires
   the outpost.
 - The chart's `helm template` assertions are the test cycle because there is no unit-test harness in
-  this repo; every value the spec pins has a grep in Tasks 2–4.
+  this repo; the values that define storage, routing and the Secret are asserted in Tasks 2–4.
