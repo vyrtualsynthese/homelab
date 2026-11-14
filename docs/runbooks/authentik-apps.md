@@ -170,6 +170,8 @@ kubectl -n filebrowser exec deploy/filebrowser -- filebrowser users add \
   --lockPassword --perm.execute=false
 ```
 
+Upstream archived FileBrowser on 2026-09-01; treat it as unmaintained.
+
 ## MFA
 
 Optional. TOTP and WebAuthn (YubiKey) are offered from **MFA Devices** in the user's own
@@ -184,6 +186,9 @@ Recovery: delete the lost device in the admin interface and let the person enrol
 
 ## Verification
 
-- Each application's login page offers authentik, and signing in lands back in the app.
+- Each authentik-managed application's login page offers authentik, and signing in lands back in
+  the app.
+- FileBrowser signs in with the local admin created from the `filebrowser` Secret; it does not
+  redirect to authentik.
 - A guest sees an empty application list; a bookmarked application URL is refused by authentik.
 - Argo CD: the admin can sync; a `homelab-users` member reads only.
