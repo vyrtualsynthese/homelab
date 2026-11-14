@@ -45,7 +45,7 @@ entries:
       slug: grafana
       provider: !KeyOf grafana-provider
       meta_launch_url: http://grafana.kub.local/
-      policy_engine_mode: all
+      policy_engine_mode: any
 
   - model: authentik_policies.policybinding
     identifiers:

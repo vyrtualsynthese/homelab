@@ -45,7 +45,7 @@ entries:
       slug: argocd
       provider: !KeyOf argocd-provider
       meta_launch_url: http://argocd.kub.local/
-      policy_engine_mode: all
+      policy_engine_mode: any
 
   - model: authentik_policies.policybinding
     identifiers:

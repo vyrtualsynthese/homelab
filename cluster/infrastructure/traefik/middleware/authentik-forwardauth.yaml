@@ -2,6 +2,7 @@ apiVersion: traefik.containo.us/v1alpha1
 kind: Middleware
 metadata:
   name: authentik-forwardauth
+  namespace: kube-system
 spec:
   forwardAuth:
     # The embedded outpost is served by the authentik server pod: the Service's
