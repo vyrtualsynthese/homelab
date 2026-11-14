@@ -270,15 +270,15 @@ admin account can still use its local password.
 
 Work:
 
-1. Operator creates the Discord application (client ID, client secret) and registers **both**
-   callback addresses, `https://authentik.kub.home.ashudev.com/source/oauth/callback/discord/`
-   and the same path on the public name, because authentik builds the callback from the host the
-   login started on. Operator supplies the homelab guild ID. Values go into `authentik-sso`.
+1. Operator creates the Discord application (client ID, client secret) and registers the single
+   callback `https://authentik.kub.home.ashudev.com/source/oauth/callback/discord/`. Operator
+   supplies the homelab guild ID. Values go into `authentik-sso`.
 2. Operator obtains a Plex token and stores it in `authentik-sso`.
 3. Blueprints: the Discord source with `guilds guilds.members.read` scopes; a source property
    mapping that records guild membership; the expression policy that reads it; the Plex source
-   restricted to the server and its friends. Both sources attach to the default authentication
-   and enrollment flows, and the membership policy is bound to both.
+   restricted to access to the AshuFlex server (5.4). Both sources attach to the default
+   authentication and enrollment flows, both flows run in `all` policy mode, and the membership
+   policy is bound to both.
 4. Test both sign-ins in a private window; confirm the created users join `users`; grant
    `authentik Admins` to the operator's own identity; confirm a Discord account outside the
    server is refused at enrollment and at a later login.
@@ -377,6 +377,9 @@ Everything below is checked on the real tree before a completion claim:
   unwired; the worker log names the file.
 - **Discord dependency.** The guild check calls Discord's API at each Discord sign-in. If Discord
   is unreachable, that sign-in fails; Plex sign-in and the local break-glass admin do not.
+- **A future source must bring its own gate.** The shared source flows run in `all` mode, but the
+  admission policy passes any source that is not Discord. A new source sharing those flows is
+  admitted unless it has its own restriction, as Plex does with `allowed_servers`.
 - **Plex dependency and a retired endpoint.** Plex admission calls `plex.tv` to list the servers a
   token can see. The friend list is avoided because Plex retired it and authentik still calls it;
   see 5.4. If `plex.tv` is unreachable, Plex sign-in fails.

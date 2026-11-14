@@ -84,10 +84,13 @@ entries:
             return False
         return True
 
-  # Name the two flows so the bindings can reference them with !KeyOf. A policy
-  # binding's target is the flow's policy-binding UUID, not the flow's own UUID;
-  # !KeyOf returns the former for PolicyBindingModel instances, !Find the latter,
-  # and a mismatch makes every re-apply create a duplicate and fail validation.
+  # Name the two flows so the bindings can reference them with !KeyOf. Use
+  # !KeyOf for a binding's generic-FK target and keep !Find for plain foreign
+  # keys elsewhere in this file: with !Find in identifiers, a re-apply failed to
+  # match the existing binding, tried to create a duplicate, and rolled back the
+  # whole file. These entries update authentik's default flows, which always
+  # exist; they are not written to recreate them.
+  #
   # Both flows already carry an allow-all policy from authentik's defaults and
   # evaluate bindings in "any" mode: one passing binding admits the flow. Set
   # "all" so this deny actually counts.
