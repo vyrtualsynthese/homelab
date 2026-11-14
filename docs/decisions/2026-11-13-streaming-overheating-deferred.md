@@ -60,9 +60,10 @@ comment:  streaming runs at its thermal ceiling; hardware deferred
 endsAt:   2027-03-01
 ```
 
-**Not applied by this change** — the operator owns the alert configuration, and the earlier
-three-minute silence created from the UI has expired. Until a long silence is in place, the rule
-notifies normally, which is the correct failure mode: noisier, not blind.
+**Applied on 2026-11-14** as silence `9ef81a88-6419-4942-a9e5-b8c197ca53dc`, with the matchers
+above and `endsAt` 2027-03-01. The rule keeps evaluating and still reports `firing` on the Health
+dashboard whenever the node is above 80 °C; only the Discord message is muted. Recreate the silence
+from this section if it is ever deleted, and let it lapse only when the cooler is fixed.
 
 ## What it costs if it is wrong
 

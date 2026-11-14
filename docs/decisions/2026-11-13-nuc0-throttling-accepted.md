@@ -10,8 +10,9 @@ Status: active
 and cleaned — and the chassis is too small for the CPU it holds, so there is no remaining
 configuration or maintenance action. The operator accepts occasional overheating, and the real fix is
 to build a properly sized replacement node when money allows. Until then the condition is **tracked
-in this record only**: it gets no alert and no silence, because an alert would fire regularly and
-carry no action.
+in this record and on the Platform dashboard**: it carries no notification, because an alert would
+fire regularly and carry no action. The mechanism, added on 2026-11-14, is a silence over the shared
+temperature rule — described under "Why no alert" below.
 
 ## Why
 
@@ -35,6 +36,15 @@ The cluster's alerting is one Grafana rule group delivering to one Discord chann
 condition would fire for hours at a time on a node that is doing nothing wrong, and the only response
 it could ask for is "buy a new computer" — which is already the plan. Alert fatigue is the real cost
 of a rule nobody can act on.
+
+**How "no alert" is implemented, since 2026-11-14.** `NodeTemperatureHigh` is one host-agnostic rule
+(`max by (host)(... coretemp ...) > 80`), so it does cover this node and would notify whenever a load
+pushes it past 80 °C. Narrowing the expression would remove the measurement from the rule and hide
+the condition entirely, so the notification is muted instead: silence
+`a3e526aa-8833-45dd-b5c5-feb482e878f9`, matchers `host="nuc0"`, `severity="warning"`,
+`__alert_rule_uid__="cg433wfzcwiyob"`, `endsAt` 2027-03-01 — the same shape as `streaming`'s. The
+rule still evaluates and still shows `firing` on the Health dashboard, which is exactly the state
+this record exists to keep visible.
 
 The state is still visible without alerting: the Platform dashboard shows node temperature and
 frequency, and this record is the dated evidence. What must not happen is the opposite mistake —
