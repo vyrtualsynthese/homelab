@@ -8,7 +8,9 @@ image:
   repository: filebrowser/filebrowser
   pullPolicy: IfNotPresent
   # Overrides the image tag whose default is the chart appVersion.
-  tag: "v2.63.2"
+  # 2.63.23 is the last published 2.63.x; 2.63.19 fixed auto-provisioned
+  # proxy-auth users receiving the server root instead of a per-user home.
+  tag: "v2.63.23"
 
 # Choose deployment strategy type
 strategyType: Recreate
@@ -54,7 +56,9 @@ ingress:
   className: ""
   annotations:
     traefik.ingress.kubernetes.io/router.entrypoints: "websecure"
-    traefik.ingress.kubernetes.io/router.middlewares: "kube-system-authentik@kubernetescrd,kube-system-security@kubernetescrd"
+    # Order matters: strip any client-supplied username header first, let the
+    # outpost authenticate, then apply the house security headers.
+    traefik.ingress.kubernetes.io/router.middlewares: "kube-system-strip-authentik-header@kubernetescrd,kube-system-authentik-forwardauth@kubernetescrd,kube-system-security@kubernetescrd"
     traefik.ingress.kubernetes.io/router.tls.certresolver: "myresolver"
     traefik.ingress.kubernetes.io/router.tls: "true"
     traefik.ingress.kubernetes.io/router.tls.domains.0.main: "filebrowser.kub.home.ashudev.com"
