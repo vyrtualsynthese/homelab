@@ -17,6 +17,11 @@ grafana:
       domain: grafana.kub.local
     users:
       auto_assign_org: true
+    auth:
+      # Only authentik is offered; the local password form is hidden and a
+      # visitor with an authentik session is sent there without a click.
+      disable_login_form: true
+      oauth_auto_login: true
     auth.generic_oauth:
       enabled: true
       name: authentik
@@ -27,9 +32,9 @@ grafana:
       token_url: https://authentik.kub.home.ashudev.com/application/o/token/
       api_url: https://authentik.kub.home.ashudev.com/application/o/userinfo/
       allow_sign_up: true
-      # Everyone admitted by authentik is a Viewer; raise a role per user in
-      # Grafana itself until a real need for finer groups appears.
-      role_attribute_path: "'Viewer'"
+      # Members of authentik's admin group get Grafana's org Admin role;
+      # everyone else admitted through authentik is a Viewer.
+      role_attribute_path: "contains(groups[*], 'authentik Admins') && 'Admin' || 'Viewer'"
   deploymentStrategy:
     type: Recreate
   nodeSelector:
