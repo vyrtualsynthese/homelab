@@ -371,21 +371,37 @@ Expected: `302` for all eight. `qbittorrent` is the one most likely to be wrong,
 
 - [ ] **Step 5: Turn off each tool's own login**
 
-Applied through each tool's REST API over a port-forward (the gate blocks the ingress path, and
-`kubectl` is not available to the agent). The port-forward is the same recovery route as Task 2 step
-7. Send the whole current object back with the one field changed; never a partial body.
+**Recipe for the \*arr family (sonarr, radarr, lidarr, prowlarr), verified on radarr, lidarr and
+prowlarr on 2026-11-14.** These versions refuse `authenticationMethod: none` outright — the UI says
+"Sonarr now requires authentication to be enabled. You can optionally disable authentication from
+local addresses." The supported equivalent is:
+
+| Field | Value |
+|---|---|
+| `authenticationMethod` | leave as `forms` |
+| `authenticationRequired` | `disabledForLocalAddresses` |
+| `trustedNetworks` | `10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16` |
+| `allowedHosts` | `0.0.0.0` on sonarr/radarr/lidarr; on **prowlarr** it rejects `0.0.0.0` and `[::]`, so list names: `prowlarr.kub.local, prowlarr, localhost, 127.0.0.1` |
+
+Then **restart the app** (`POST /api/v{1,3}/system/restart`). Without the restart the settings are
+stored but the login still appears — that was the single most confusing step to diagnose.
+
+- `allowedHosts` and a non-empty `password` are both required by the validator once
+  `authenticationRequired` is not `enabled`; send the object read from `GET` back unchanged apart from
+  the fields above, so the existing password hash round-trips.
+- `0.0.0.0/0` is rejected by `trustedNetworks`; the three private ranges are the widest value that
+  validates.
+
+The other tools differ:
 
 | Tool | Change | Note |
 |---|---|---|
-| radarr, lidarr, prowlarr | `PUT /api/v3/config/host` (prowlarr: `/api/v1/config/host`) with `authenticationMethod: none` | was `forms` on the arrs; read it back afterwards and confirm it survived a restart |
-| bazarr | `POST /api/system/settings` with `general.authentication_type: None` | verify by a cookie-less request for the page |
-| tautulli | `PUT /api/v2/settings` with `general.authentication_method` cleared | keep `TAUTULLI_API_KEY` unchanged |
-| qbittorrent | `POST /api/v2/app/setPreferences` with `web_ui_auth_subnet_whitelist_enabled: true` and `web_ui_auth_subnet_whitelist: 10.42.0.0/16` | whitelists the pod network, which is where Traefik's requests come from |
-| maintainerr | nothing: no login exists | |
-| autobrr | disable in the UI if the software allows; otherwise accept the second prompt and note it | no API path confirmed |
+| bazarr | none | already serves without a login (page title answers, no `/login`) |
+| maintainerr | none | no login exists |
+| qbittorrent | check `web_ui_auth_subnet_whitelist` over `/api/v2/app/preferences` | its WebUI already answers `200`; if a login appears, whitelist the pod network |
+| tautulli | **UI only**: Settings → Web Interface, turn off the Tautulli login (`allow_tautulli_login`) | its API exposes no command to change web auth |
+| autobrr | inspect after gating | `GET /` answers `301`; whether its login can be disabled is unconfirmed |
 
-Verification per tool, in this order: the gated host still returns `302` to authentik, and the
-port-forward reaches the tool with no prompt.
 
 
 - [ ] **Step 6: Verify the integrations that cross these tools**
