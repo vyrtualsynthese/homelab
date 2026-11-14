@@ -67,6 +67,15 @@ pgadmin:
   ingress:
     enabled: false
 
+  # OIDC settings live in a Secret, mounted as pgAdmin's config_local.py: the
+  # file holds the client secret, so it cannot be a ConfigMap and cannot be in
+  # git. The Secret is created by the operator; see docs/runbooks/authentik-apps.md.
+  extraSecretMounts:
+    - name: oidc-config
+      secret: pgadmin-oidc
+      subPath: config_local.py
+      mountPath: /pgadmin4/config_local.py
+
   # Imported only when the configuration database is first created.
   serverDefinitions:
     enabled: true
