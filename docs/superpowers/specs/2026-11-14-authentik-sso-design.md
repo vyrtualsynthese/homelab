@@ -182,8 +182,10 @@ Mechanics:
   authentication flow, so a person removed from the server is refused at their next login rather
   than keeping access through an existing account. The guild ID is not a secret and lives in the
   blueprint.
-- **Plex.** The source restricts admission to the server owner, friends, and named servers; the
-  Plex friend list is the allowlist.
+- **Plex.** The source admits the owner and anyone with access to the AshuFlex server, matched by
+  the server's machine identifier in `allowed_servers`. The friend list is not used: Plex retired
+  the `/api/v2/friends` endpoint and authentik 2026.8.5 still calls it when `allow_friends` is on,
+  which fails with HTTP 410 and aborts the sign-in.
 - Both sources land admitted identities in `users`. Nobody reaches an application without
   passing the gate first.
 
@@ -374,6 +376,9 @@ Everything below is checked on the real tree before a completion claim:
   unwired; the worker log names the file.
 - **Discord dependency.** The guild check calls Discord's API at each Discord sign-in. If Discord
   is unreachable, that sign-in fails; Plex sign-in and the local break-glass admin do not.
+- **Plex dependency and a retired endpoint.** Plex admission calls `plex.tv` to list the servers a
+  token can see. The friend list is avoided because Plex retired it and authentik still calls it;
+  see 5.4. If `plex.tv` is unreachable, Plex sign-in fails.
 - **Removed member.** The membership policy is bound to authentication as well as enrollment, so
   removal from the server takes effect at the next login rather than leaving the old account
   usable.

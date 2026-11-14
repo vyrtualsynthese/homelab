@@ -3,7 +3,8 @@
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** A person can sign in to authentik with Discord or Plex. Discord admits only members of the
-homelab server; Plex admits the owner and the owner's Plex friends. Both land in `users`.
+homelab server; Plex admits the owner and anyone the AshuFlex server is shared with. Both land in
+`users`.
 
 **Architecture:** The two sources, the Discord guild-membership property mapping, the admission
 policy and the two flow updates live in one blueprint file mounted through the existing ConfigMap.
@@ -74,7 +75,8 @@ Discord → **User Settings → Advanced → Developer Mode** on; right-click th
 
 Sign in to <https://app.plex.tv> as the server owner. Open the browser developer tools → **Network**,
 filter for `plex.tv`, reload, open any request, and copy the `X-Plex-Token` value from its request
-headers. This token belongs to the owner account and is what lets authentik read the friend list.
+headers. This token belongs to the owner account; authentik keeps it to check that it stays valid.
+Plex admission does not use the friend list (see Step 2).
 
 - [ ] **Step 4: Create the secret**
 
@@ -181,8 +183,9 @@ entries:
     attrs:
       name: Plex
       plex_token: !Env PLEX_TOKEN
-      allow_friends: true
-      allowed_servers: []
+      allow_friends: false
+      allowed_servers:
+        - "<AshuFlex machine identifier>"
       promoted: true
       enabled: true
       authentication_flow: !Find [authentik_flows.flow, [slug, default-source-authentication]]
@@ -294,10 +297,11 @@ Use the owner's Discord account. Expected: the account is created, lands in `use
 authorisation succeeds. In **Directory → Users**, open it and confirm the attributes contain
 `discord.is_member: true`. That attribute is what the policy reads; without it the denial is silent.
 
-- [ ] **Step 5: Sign in with Plex as the owner or a friend**
+- [ ] **Step 5: Sign in with Plex as the owner or a server member**
 
-Expected: the account is created, lands in `users`. A Plex account that is neither the owner nor a
-friend is refused by the source itself (the Plex friend list is the allowlist).
+Expected: the account is created, lands in `users`. A Plex account with no access to AshuFlex is
+refused by the source itself (server access is the allowlist). Do not enable `allow_friends`: Plex
+retired the friends endpoint and authentik 2026.8.5 fails with HTTP 410 when it calls it.
 
 - [ ] **Step 6: Prove the guild gate refuses a non-member**
 
@@ -313,7 +317,7 @@ lists exactly one Discord and one Plex source. This proves the blueprint is idem
 - [ ] **Step 8: Update the status page**
 
 In `docs/status.md`, extend the `authentik` row's note: sources `discord` and `plex`, Discord gated by
-guild membership, Plex by the friend list.
+guild membership, Plex by access to the AshuFlex server.
 
 - [ ] **Step 9: Commit the status note**
 
@@ -327,7 +331,7 @@ git push
 
 - `authentik-sso` exists with the three keys; the rendered Deployment mounts it.
 - The login page offers Discord and Plex.
-- A Discord member and a Plex friend both reach authentik and appear in `users`.
+- A Discord member and a Plex user with access to AshuFlex both reach authentik and appear in `users`.
 - A Discord account outside the server is refused with the message from the policy.
 - The user's attributes carry `discord.is_member: true`.
 - A second sync changes nothing.
@@ -349,5 +353,6 @@ next sync. Delete the sources in the UI only if they must disappear entirely.
 - **Discord login refused for a member.** The property mapping did not run: check that
   `discord-guild-membership` is attached to the source's user property mappings and that the scopes
   include `guilds.members.read`.
-- **Plex refused for a friend.** The owner token belongs to the wrong Plex account; `allow_friends`
-  compares against that account's friend list.
+- **Plex refused for a server member.** The machine identifier in `allowed_servers` is wrong, or the
+  account has no library access to AshuFlex. Re-read it from
+  `https://plex.tv/api/v2/resources?X-Plex-Token=...&X-Plex-Client-Identifier=...`.
