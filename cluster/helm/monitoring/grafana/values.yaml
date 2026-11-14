@@ -8,10 +8,28 @@ ingress:
 
 grafana:
   fullnameOverride: grafana
+  # Client secret from a Secret in this namespace; the chart exports its keys as
+  # environment variables. The ini reads it with $__env{} so no secret is in git.
+  envFromSecret: grafana-oidc
   grafana.ini:
     server:
       root_url: http://grafana.kub.local/
       domain: grafana.kub.local
+    users:
+      auto_assign_org: true
+    auth.generic_oauth:
+      enabled: true
+      name: authentik
+      client_id: grafana
+      client_secret: $__env{GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET}
+      scopes: openid profile email
+      auth_url: https://authentik.kub.home.ashudev.com/application/o/authorize/
+      token_url: https://authentik.kub.home.ashudev.com/application/o/token/
+      api_url: https://authentik.kub.home.ashudev.com/application/o/userinfo/
+      allow_sign_up: true
+      # Everyone admitted by authentik is a Viewer; raise a role per user in
+      # Grafana itself until a real need for finer groups appears.
+      role_attribute_path: "'Viewer'"
   deploymentStrategy:
     type: Recreate
   nodeSelector:
