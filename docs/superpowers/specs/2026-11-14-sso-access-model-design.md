@@ -362,6 +362,4 @@ Before any completion claim, on the real tree:
 - Exact blueprint fields for the Dex connector and RBAC in the ArgoCD chart values.
 - The exact recovery command for a locked-out administrator.
 - Whether Kavita links an OIDC identity to an existing local admin account by email.
-- Whether the blueprint can attach the provider to the managed embedded outpost, or whether that
-  one assignment stays a UI step.
 - The order of applications within phase A after capability checks.

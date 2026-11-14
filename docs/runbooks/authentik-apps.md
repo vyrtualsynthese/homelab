@@ -144,6 +144,13 @@ FileBrowser has no OIDC. It authenticates on `X-authentik-username`, which the T
 forward-auth middleware sets after the outpost approves the request; a second middleware removes
 any client-supplied value first, and must run before the forward-auth one.
 
+**One assignment stays manual:** the blueprint creates the proxy provider, the application and the
+capability group, but the provider must be attached to the embedded outpost by hand, in
+**Applications → Outposts → authentik Embedded Outpost → Edit → Providers → add FileBrowser**. The
+outpost object is managed by authentik and keyed differently from a blueprint-created object, so a
+blueprint entry risks a duplicate-name rollback of the whole file. Until this is done the outpost
+answers 403 for the host.
+
 After a rebuild these two settings live only in FileBrowser's database:
 
 ```bash
