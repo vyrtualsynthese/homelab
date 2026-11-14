@@ -181,7 +181,8 @@ Mechanics:
   refuses anyone who is not a member. The policy is bound to **both** the enrollment and the
   authentication flow, so a person removed from the server is refused at their next login rather
   than keeping access through an existing account. The guild ID is not a secret and lives in the
-  blueprint.
+  blueprint. Both source flows run with `policy_engine_mode: all`: their built-in SSO check
+  already satisfies the default `any` mode, so without it the deny would never apply.
 - **Plex.** The source admits the owner and anyone with access to the AshuFlex server, matched by
   the server's machine identifier in `allowed_servers`. The friend list is not used: Plex retired
   the `/api/v2/friends` endpoint and authentik 2026.8.5 still calls it when `allow_friends` is on,

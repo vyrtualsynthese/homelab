@@ -93,7 +93,7 @@ the snapshot.
 | `kavita` | media-stack | 2026-11-13 | Rebuilt from scratch; library claim mounted read-only |
 | `postgres` | databases | 2026-11-13 | Own chart on the official image; Bitnami gone |
 | `pgadmin` | databases | 2026-11-13 | Wrapper with a login; was one of the eleven Longhorn casualties |
-| `authentik` | authentik | 2026-11-14 | Repaved on `2026.8.5` with one hostname, blueprints in `files/` and a PostSync worker reload; database and secrets rebuilt the same day |
+| `authentik` | authentik | 2026-11-14 | Repaved on `2026.8.5` with one hostname, blueprints in `files/` and a PostSync worker reload; database and secrets rebuilt the same day. Sign-in sources: Discord (members of the homelab guild only — verified refused for a non-member) and Plex (accounts with access to AshuFlex), both landing on the same account |
 | `prometheus` | monitoring | 2026-11-12 | Wrapper on the official chart, TSDB on `local-path` |
 | `grafana` | monitoring | 2026-11-12 | Wrapper; rules and dashboards still live only in its database |
 | `loki` | monitoring | 2026-11-12 | Wrapper, 90-day retention |
