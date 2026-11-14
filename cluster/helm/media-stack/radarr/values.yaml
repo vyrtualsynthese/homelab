@@ -66,8 +66,15 @@ ingressRoute:
     - web
   host: radarr.kub.local
   pathPrefix: /
+  # -- Middlewares, rendered as `<namespace>-<name>@kubernetescrd`.
+  # Example: [{ name: lan-only, namespace: kube-system }]
+  # The LAN gate runs first: an outside request is rejected before the
+  # forward-auth round trip.
+  # No strip-authentik-header on purpose: Radarr trusts no X-authentik-* header.
   middlewares:
     - name: lan-only
+      namespace: kube-system
+    - name: authentik-forwardauth
       namespace: kube-system
   labels: {}
   annotations: {}
