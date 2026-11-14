@@ -58,7 +58,12 @@ OAUTH2_CONFIG = [{
     "OAUTH2_SERVER_METADATA_URL": "https://authentik.kub.home.ashudev.com/application/o/pgadmin/.well-known/openid-configuration",
     "OAUTH2_SCOPE": "openid email profile",
 }]
-OAUTH2_LOGOUT_URL = "https://authentik.kub.home.ashudev.com/application/o/pgadmin/end-session/"
+# pgAdmin substitutes {id_token}; without it the end-session call cannot identify
+# the session and the browser is not sent there at all.
+OAUTH2_LOGOUT_URL = "https://authentik.kub.home.ashudev.com/application/o/pgadmin/end-session/?id_token_hint={id_token}"
+# Saved server passwords are encrypted with pgAdmin's SECRET_KEY instead of a
+# master password nobody set under SSO.
+MASTER_PASSWORD_REQUIRED = False
 EOF
 kubectl -n databases create secret generic pgadmin-oidc --from-file=config_local.py=/tmp/pgadmin-oidc.py
 rm /tmp/pgadmin-oidc.py
