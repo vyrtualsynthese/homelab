@@ -213,6 +213,7 @@ the input to a rebuild: nothing recreates these databases automatically.
 | Date (UTC) | Application | Role = database | App namespace | Secret pair | Operator | Notes |
 |---|---|---|---|---|---|---|
 | 2026-11-13 | `acceptance` (throwaway) | `acceptance` | `wiki` | `databases/pg-acceptance` + `wiki/acceptance-app` | operator | W2 acceptance drill; two rows written to a `drill` table, then dumped and the dump verified with `pg_restore --list`. The first role this procedure ever created, so the SQL, the two Secrets and the connection test are proved. The restore half is recorded in `postgres-restore.md`.
+| 2026-11-14 | `authentik` | `authentik` | `authentik` | `databases/pg-authentik` + `authentik/authentik-env` | operator | Instance rebuilt empty during the SSO programme; the check pod from the `authentik` namespace wrote and dropped a table. `authentik-env` also carries `AUTHENTIK_SECRET_KEY` and the `akadmin` bootstrap password, which are documented in `../secrets.md`. |
 
 ## Success, in one place
 
