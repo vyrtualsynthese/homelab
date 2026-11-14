@@ -92,3 +92,14 @@ filebrowser:
 
   tolerations: []
   affinity: {}
+
+traefik:
+  apiVersion: traefik.containo.us/v1alpha1
+  host: filebrowser.kub.home.ashudev.com
+  certResolver: myresolver
+  tlsOption: filebrowser-tlsoption
+  service: filebrowser
+  port: 80
+  middlewares:
+    - namespace: kube-system
+      name: security
