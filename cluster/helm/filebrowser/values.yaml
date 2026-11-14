@@ -1,0 +1,51 @@
+filebrowser:
+  fullnameOverride: filebrowser
+  replicaCount: 1
+
+  image:
+    repository: filebrowser/filebrowser
+    tag: v2.63.23
+    pullPolicy: IfNotPresent
+
+  strategyType: Recreate
+
+  podAnnotations:
+    setGateway: "true"
+
+  # The repo uses Traefik CRDs only; templates/ingressroute.yaml renders the route.
+  ingress:
+    enabled: false
+
+  service:
+    type: ClusterIP
+    port: 80
+
+  resources:
+    requests:
+      cpu: 1m
+      memory: 64Mi
+    limits:
+      memory: 256Mi
+
+  storage:
+    config:
+      class: ~
+      accessModes: ReadWriteOnce
+      dataSize: 1Gi
+      existingClaim: ""
+    database:
+      class: ~
+      accessModes: ReadWriteOnce
+      dataSize: 1Gi
+      subPath: ""
+      existingClaim: ""
+
+  # The Secret carries FB_CONFIG and FB_DATABASE too; the subchart renders no ConfigMap.
+  env:
+    existingSecret: filebrowser
+
+  nodeSelector:
+    kubernetes.io/hostname: nuc0
+
+  tolerations: []
+  affinity: {}
