@@ -232,7 +232,7 @@ dashboard JSON is not a backup either — the SQLite file is what would be lost.
 ## Alerting
 
 Grafana unified alerting, folder `Homelab`, rule group `homelab-core`,
-evaluation interval **60 s**. **28 rules**, one contact point, two routes by
+evaluation interval **60 s**. **29 rules**, one contact point, two routes by
 severity.
 
 **Delivery**: contact point `discord-homelab` (type `discord`).
@@ -271,7 +271,8 @@ secure field), so the contact point is never rewritten by automation.
 | `RecyclarrNotSucceeding` | no successful recyclarr run in 26 h | 5m | warning | inactive |
 | `CertificateExpiring` | newest Traefik cert per SAN <21 days | 1h | warning | inactive |
 | `PodCrashLooping` | CrashLoopBackOff | 15m | warning | **firing, silenced** ×3 |
-| `PodPending` | Pending, created <2 h ago | 15m | warning | inactive |
+| `PodPending` | Pending, created <2 h ago | 15m | warning | **firing** on `databases/pgadmin-67c5f5c85` (missing Secret, 2026-11-14) |
+| `PodNotStarting` | Scheduled, container still not started, older than 2 h | 5m | warning | **firing, silenced** (the abandoned `nfs-ssd` provisioner) |
 | `LokiSilent` | no Fluent Bit lines in 10 min (`noDataState: Alerting`) | 10m | warning | inactive |
 
 **`JobFailed`** is the batch-workload rule. Its expression is
@@ -286,6 +287,33 @@ never finishes leaves no failure to alert on. It fires when
 plus two hours of slack — and resolves on the next successful run. It is scoped
 to recyclarr because KSM 2.20 no longer publishes `kube_cronjob_spec_schedule`,
 so a generic rule cannot know how often each CronJob should succeed.
+
+**`PodPending` and `PodNotStarting` split one symptom by cause.** `Pending` covers
+two different faults: a pod that was never scheduled (unbound claim, node selector,
+resource request) and a pod that was scheduled but whose container never started
+(image pull, volume that will not mount, missing Secret). `kube_pod_status_phase`
+cannot tell them apart, and the first version of `PodPending` asserted the first
+cause in its message — which sent the investigation of `pgadmin` looking at claims
+and node selectors while the real fault was a missing `pgadmin-oidc` Secret.
+`PodPending` keeps the broad half: anything Pending in its first two hours,
+`for: 15m`, and a message that now names both causes. `PodNotStarting` takes over
+at the two-hour mark with no upper bound:
+
+```
+(kube_pod_status_phase{phase="Pending"} == 1)
+  and on(namespace, pod) (kube_pod_status_scheduled{condition="true"} == 1)
+  and on(namespace, pod) ((time() - kube_pod_created) > 7200)
+  unless on(namespace, pod) kube_pod_deletion_timestamp
+```
+
+`PodScheduled` is what separates "never placed" from "never started", and `unless
+kube_pod_deletion_timestamp` keeps a pod that is waiting on its own deletion out of
+the count. The two rules hand over at exactly 7200 s, so a pod stays covered without
+a gap and without two messages for one fault. A pod that is **unschedulable** is
+still only covered for its first two hours: the six pods left unschedulable by the
+Longhorn loss have sat that way for 72 days, and any rule without that ceiling would
+page for them continuously. Deleting those workloads is what closes that gap, not a
+wider expression.
 
 `ScrapeTargetDown` excludes the Prometheus self-scrape and kube-state-metrics
 targets; `MonitoringDown` and `KubeStateMetricsDown` own those two conditions, and
@@ -322,6 +350,12 @@ invalid PromQL and never evaluated.
 - Until 2026-12-12: `alertname="DriveNeedsReplacement"` with the `nas /dev/sdf`
   labels — the drive is known dead (`docs/audit/ansible-hosts.md`) and waiting on
   a replacement. Only the notification is suppressed; the rule still fires.
+- Until 2026-12-12: `pod=~"nfs-ssd-nfs-subdir-external-provisioner-.*"` — this pod
+  has been unable to mount `192.168.1.41:/mnt/ssd0/nfs` since 2026-09-03, because
+  that export does not exist on `nas`. It belongs to no chart and no ArgoCD
+  Application; it is hand-applied drift, and `PodNotStarting` would report it
+  every few hours forever. Fix the export or delete the workload, then remove the
+  silence.
 
 The `alertname="ScrapeTargetDown", namespace="media-stack"` silence was **removed
 on 2026-11-13**, together with its narrow `pod=~"qbittorrent-exporter-.*"`
@@ -394,7 +428,7 @@ runs (config shows `retention_enabled: true`,
   exclusion was retired on 2026-11-13 when the app got a real claim and a running
   pod, and a second was dropped when its abandoned app was deleted instead of
   rebuilt. A broken app in any other namespace shows up through
-  `PodCrashLooping`, `PodPending` or `RestartStorm`, not through a replica
+  `PodCrashLooping`, `PodPending`, `PodNotStarting` or `RestartStorm`, not through a replica
   check. `JobFailed` covers every Job, but only `recyclarr` has per-schedule
   staleness coverage; the other CronJobs fail loudly but a run that never starts
   is silent.
