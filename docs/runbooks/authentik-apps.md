@@ -43,10 +43,13 @@ in Grafana's own UI when needed.
 pgAdmin reads `config_local.py`; the chart mounts it from a Secret, so the client secret stays
 out of git.
 
+pgAdmin has exactly one login source, so it redirects straight to authentik: an existing
+authentik session means no prompt. Its sign-out ends the authentik session too.
+
 ```bash
 P='<pgadmin value>'
 cat > /tmp/pgadmin-oidc.py <<EOF
-AUTHENTICATION_SOURCES = ["oauth2", "internal"]
+AUTHENTICATION_SOURCES = ["oauth2"]
 OAUTH2_CONFIG = [{
     "OAUTH2_NAME": "authentik",
     "OAUTH2_DISPLAY_NAME": "authentik",
@@ -55,13 +58,17 @@ OAUTH2_CONFIG = [{
     "OAUTH2_SERVER_METADATA_URL": "https://authentik.kub.home.ashudev.com/application/o/pgadmin/.well-known/openid-configuration",
     "OAUTH2_SCOPE": "openid email profile",
 }]
+OAUTH2_LOGOUT_URL = "https://authentik.kub.home.ashudev.com/application/o/pgadmin/end-session/"
 EOF
 kubectl -n databases create secret generic pgadmin-oidc --from-file=config_local.py=/tmp/pgadmin-oidc.py
 rm /tmp/pgadmin-oidc.py
 ```
 
-Sync `pgadmin`. `internal` stays in the source list until an OIDC user has been promoted to the
-pgAdmin Administrator role; remove it only after that.
+Sync `pgadmin`. **Break-glass**: with `internal` removed there is no local login; to recover, recreate
+the Secret with `AUTHENTICATION_SOURCES = ["oauth2", "internal"]` and restart the pod.
+
+The OIDC user needs promotion to pgAdmin's Administrator role once (User Management), and the two
+imported servers must be marked **Shared?** so other users see them; both are pgAdmin-side actions.
 
 ## 4. Kavita
 
@@ -115,8 +122,10 @@ enabled as break-glass.
 
 ## Granting access
 
-Apps bind to the `apps` group; `users` only means "may sign in". A new Discord or Plex user
-therefore reaches nothing until added:
+Applications are bound to one expression policy: a member of `apps` **or** of `authentik Admins`
+may open them. `users` only means "may sign in". A new Discord or Plex user therefore reaches
+nothing until added to `apps`; adding somebody to `authentik Admins` grants every wired app at
+once:
 
 In the admin interface: **Directory → Groups → apps → Users → Add existing user**. Removing
 somebody from `apps` takes their applications away at their next sign-in; it does not stop them
