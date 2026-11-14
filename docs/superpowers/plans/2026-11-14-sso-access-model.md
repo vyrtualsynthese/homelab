@@ -27,7 +27,7 @@
 
 ## Review Focus
 
-- A user in `homelab-users` must be refused by ArgoCD, Grafana and pgAdmin, even though the same person reaches Kavita.
+- A user in `homelab-users` must be refused by Grafana and pgAdmin. No user-safe application is wired yet, so "refused everywhere" is the correct current outcome, not a failure.
 - A guest must finish enrolment and see an empty application list; a bookmarked admin-only app URL must be refused by authentik, not by the app.
 - Someone who enrolled TOTP or WebAuthn must be challenged when signing in with Discord or Plex; someone with no device must not be.
 - A request carrying a forged `X-authentik-username` must never be treated as that user by FileBrowser.
@@ -319,20 +319,21 @@ In authentik **Directory → Groups**: for each person in `apps`, add them to `h
 
 - [ ] **Step 2: Promote the administrator where groups cannot do it**
 
-1. pgAdmin: sign in through OIDC as the operator → **User management** → own account → Administrator.
-2. Kavita: sign in through OIDC as the operator → **Settings → Users** → own account → Role: Admin.
+pgAdmin: sign in through OIDC as the operator → **User management** → own account → Administrator.
+
+Kavita keeps its administrator as an account flag too, but Kavita is not wired yet (no OIDC settings in its database), so this waits until it is: sign in through OIDC, then **Settings → Users** → own account → Role: Admin.
 
 - [ ] **Step 3: Verify a guest**
 
-A private window with an account only in `homelab-guests`: login succeeds, application list empty, `https://kavita.kub.home.ashudev.com/` shows authentik's refusal.
+A private window with an account only in `homelab-guests`: login succeeds, application list empty, `https://pgadmin.kub.local/` refuses the sign-in through authentik.
 
 - [ ] **Step 4: Verify a user**
 
-An account in `homelab-users`: Kavita opens; `argocd.kub.local`, `grafana.kub.local`, `pgadmin.kub.local` are refused.
+An account in `homelab-users`: the application list is empty and Grafana and pgAdmin both refuse it. That is the expected state until a user-safe application (Kavita, Wiki.js) is wired.
 
 - [ ] **Step 5: Verify revocation**
 
-Add a test account to `homelab-users`, confirm Kavita opens, remove it, sign in again: Kavita refused, account intact.
+Add a test account to `homelab-users`, confirm Grafana still refuses it, remove it, sign in again: same refusal, account intact.
 
 ---
 
@@ -810,7 +811,7 @@ git commit -m "📝 docs: record the access model, ArgoCD SSO, FileBrowser and M
 - [ ] `helm template` renders with no error and contains `homelab-users`, `homelab-guests`, `filebrowser-editors`, `forward_single`, `ashulab-mfa`.
 - [ ] No binding in `cluster/helm/authentik/files/` names `apps` or `users`; `access-policy.yaml` is gone.
 - [ ] ArgoCD reference check from `AGENTS.md` §6 passes.
-- [ ] Live: guest sees an empty list; user reaches Kavita and is refused by ArgoCD/Grafana/pgAdmin; admin is Admin in Grafana and can Sync in ArgoCD.
+- [ ] Live: guest sees an empty list; a user is refused by Grafana and pgAdmin (no user-safe app is wired yet); admin is Admin in Grafana, can sign in to pgAdmin, and — once ArgoCD is wired — can Sync there.
 - [ ] Live: FileBrowser refuses a forged header, shows the editor only their scope, refuses a removed editor.
 - [ ] Live: enrolled TOTP is asked for on a Discord login; deleting the device stops the prompt; two WebAuthn keys both work.
 - [ ] Worker log has no blueprint failure after the last sync.

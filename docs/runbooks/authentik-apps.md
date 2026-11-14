@@ -1,9 +1,19 @@
 # Wire an application to authentik
 
-Four applications are wired in this phase: Argo CD, Grafana, pgAdmin and Kavita. The authentik
-side is blueprint files in the chart (`files/app-*.yaml`) and needs only the client secrets.
-The application side is different per app: two read it from a Secret, one is configured in its
-UI, one is configured in ConfigMaps created by hand.
+State, as of 2026-11-14:
+
+| Application | authentik objects in git | Application configured | How |
+|---|---|---|---|
+| Grafana | yes | **yes** | Secret + chart values |
+| pgAdmin | yes | **yes** | `config_local.py` in a Secret |
+| Argo CD | yes | no | `cluster/helm/argocd/values.yaml` + `helm upgrade` |
+| Kavita | yes | no | one pass in its own UI |
+| FileBrowser | yes | no | proxy auth, forward-auth middleware |
+
+Four applications have providers and application objects in the chart (`files/app-*.yaml`); only
+Grafana and pgAdmin have been configured on the application side. Argo CD and Kavita therefore do
+not sign anyone in yet, whatever their authentik objects say. The access matrix in the design
+treats them as targets until their section below has been run.
 
 Client IDs are fixed and public: `argocd`, `grafana`, `pgadmin`, `kavita`.
 
@@ -82,8 +92,8 @@ imported servers must be marked **Shared?** so other users see them; both are pg
 
 ## 4. Kavita
 
-Kavita stores OIDC settings in its database, so this is a one-time pass in its UI (recorded here
-because a rebuild needs it again):
+Not wired yet. Kavita stores OIDC settings in its database, so this is a one-time pass in its UI
+(recorded here because a rebuild needs it again):
 
 1. Sign in to Kavita as administrator.
 2. **Settings → OpenID Connect**.
@@ -94,9 +104,10 @@ because a rebuild needs it again):
 
 ## 5. Argo CD
 
-Argo CD is a hand-run Helm release, not an Application in this repo. Its Dex connector and RBAC
-live in `cluster/helm/argocd/values.yaml`, so a chart upgrade keeps them. It uses its bundled Dex,
-so the redirect is `/api/dex/callback`.
+Not wired yet: Argo CD has no Dex connector and an empty RBAC policy. It is a hand-run Helm
+release, not an Application in this repo. Its connector and RBAC live in
+`cluster/helm/argocd/values.yaml`, so a chart upgrade keeps them. It uses its bundled Dex, so the
+redirect is `/api/dex/callback`.
 
 The client secret is not in git: it lives in `argocd-secret` under
 `dex.authentik.clientSecret`, and must equal `ARGOCD_CLIENT_SECRET` in the `authentik-sso`
@@ -139,6 +150,9 @@ Capability groups grant one extra thing on top of the level: `filebrowser-editor
 FileBrowser, whose folder scopes are set per account in FileBrowser.
 
 ## FileBrowser (forward auth)
+
+Not wired yet: the blueprint objects and the middlewares are in git, but the application is still
+on its local login and the provider is not attached to the outpost.
 
 FileBrowser has no OIDC. It authenticates on `X-authentik-username`, which the Traefik
 forward-auth middleware sets after the outpost approves the request; a second middleware removes
