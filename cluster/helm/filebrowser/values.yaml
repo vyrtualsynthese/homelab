@@ -1,3 +1,27 @@
+# The NAS exports FileBrowser browses. Templates/nfs-volumes.yaml renders one PV +
+# one pre-bound claim per entry, and the filebrowser subchart mounts them.
+nfsServer: 192.168.1.41
+nfsMountOptions:
+  - nfsvers=4.2
+  - rsize=1048576
+  - wsize=1048576
+  - nolock
+  - async
+
+nfsVolumes:
+  - claim: filebrowser-stash
+    pv: pv-filebrowser-stash
+    path: /mnt/storage/nfs/stash
+    accessMode: ReadWriteOnce
+  - claim: filebrowser-audio
+    pv: pv-filebrowser-audio
+    path: /mnt/storage/nfs/audio
+    accessMode: ReadWriteMany
+  - claim: filebrowser-download
+    pv: pv-filebrowser-download
+    path: /mnt/ultrafaststorage/nfs
+    accessMode: ReadWriteOnce
+
 filebrowser:
   fullnameOverride: filebrowser
   replicaCount: 1
@@ -29,16 +53,35 @@ filebrowser:
 
   storage:
     config:
-      class: ~
+      class: local-path
       accessModes: ReadWriteOnce
       dataSize: 1Gi
       existingClaim: ""
     database:
-      class: ~
+      class: local-path
       accessModes: ReadWriteOnce
       dataSize: 1Gi
       subPath: ""
       existingClaim: ""
+
+  volumes:
+    - name: stash-volume
+      persistentVolumeClaim:
+        claimName: filebrowser-stash
+    - name: audio-volume
+      persistentVolumeClaim:
+        claimName: filebrowser-audio
+    - name: qbittorrent-download-volume
+      persistentVolumeClaim:
+        claimName: filebrowser-download
+
+  volumeMounts:
+    - name: stash-volume
+      mountPath: /srv/various
+    - name: audio-volume
+      mountPath: /srv/audio
+    - name: qbittorrent-download-volume
+      mountPath: /srv/torrent
 
   # The Secret carries FB_CONFIG and FB_DATABASE too; the subchart renders no ConfigMap.
   env:
