@@ -85,7 +85,10 @@ ingressRoute:
   pathPrefix: /
   # -- Middlewares, rendered as `<namespace>-<name>@kubernetescrd`.
   # Example: [{ name: authentik, namespace: kube-system }]
-  middlewares: []
+  # No strip-authentik-header on purpose: Sonarr trusts no X-authentik-* header.
+  middlewares:
+    - name: authentik-forwardauth
+      namespace: kube-system
   labels: {}
   annotations: {}
   tls:
