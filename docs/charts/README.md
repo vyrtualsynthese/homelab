@@ -63,6 +63,7 @@ that are not valid environment-variable names. If a rollout is only correct beca
 | 16 | Extra volumes with an explicit `mountPath` under `/srv/` or the app's own path | Keeps the NFS-media convention readable |
 | 17 | If the image ships a Prometheus exporter, it is enabled and scraped (see **Metrics**) | An exporter that is off is an observability hole nobody notices until the incident |
 | 18 | The app logs at `warning` or above, not at `info` (see **Logs**) | Fluent Bit ships every line to Loki with no filter; `info` is thousands of lines a day nobody reads |
+| 19 | A non-public route references `kube-system-lan-only@kubernetescrd`; a public one does not | The internet reaches every route by hostname, so the allowlist is the only thing that keeps internal apps internal |
 
 ### Metrics
 
@@ -267,6 +268,7 @@ recorded so the next audit does not repeat the exercise.
 cd cluster/helm/<area>/<app>
 helm lint . --namespace <ns>
 helm template <release> . --namespace <ns> | kubeconform -strict -summary
+hack/check-exposure.sh --only cluster/helm/<area>/<app>   # non-public routes carry the LAN gate
 
 # the checks that grep can still do
 grep -rnP '\t' templates/ || echo "no tabs"
