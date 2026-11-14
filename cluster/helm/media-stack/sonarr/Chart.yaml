@@ -3,7 +3,7 @@ name: sonarr
 description: Sonarr is a PVR for TV series. It watches indexers, grabs releases and files them into the library Plex reads.
 type: application
 # Chart version. Renovate bumps this when the image tag moves.
-version: 1.0.1
+version: 1.0.2
 # Must match image.tag in values.yaml.
 appVersion: "4.0.20.3014-ls4"
 icon: https://raw.githubusercontent.com/Sonarr/Sonarr/develop/Logo/1024.png
