@@ -77,7 +77,7 @@ loki:
     image:
       registry: docker.io
       repository: grafana/loki
-      tag: 3.7.9
+      tag: 3.7.10
     auth_enabled: false
     ui:
       enabled: true
