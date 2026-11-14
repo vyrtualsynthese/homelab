@@ -16,6 +16,8 @@ spec:
   routes:
     - match: Host(`qbittorrent.kub.local`)
       kind: Rule
+      middlewares:
+        - name: kube-system-lan-only@kubernetescrd
       services:
         - name: qbittorrent
           port: torrent-webui

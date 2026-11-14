@@ -11,6 +11,8 @@ spec:
     - match: Host(`kub.home.ashudev.com`)
       kind: Rule
       middlewares:
+        - name: lan-only
+          namespace: kube-system
         - name: redirect-to-dashy
           namespace: dashy
       services:

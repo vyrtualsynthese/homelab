@@ -21,6 +21,8 @@ spec:
   routes:
     - match: Host(`ghostfolio.kub.home.ashudev.com`)
       kind: Rule
+      middlewares:
+        - name: kube-system-lan-only@kubernetescrd
       services:
         - name: ghostfolio
           port: ghostfolio

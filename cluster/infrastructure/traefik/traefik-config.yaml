@@ -24,6 +24,8 @@ spec:
         entryPoints: ["web"]
         # Additional ingressRoute middlewares (e.g. for authentication)
         middlewares:
+          - name: lan-only
+            namespace: kube-system
           - name: traefik-dashboard
             namespace: kube-system
         # TLS options (e.g. secret containing certificate)

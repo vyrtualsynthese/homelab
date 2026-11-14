@@ -232,14 +232,12 @@ ingressRoute:
   host: calibre.kub.local
   # -- Path prefix. `/` matches everything.
   pathPrefix: /
-  # -- Source networks allowed to reach the route, rendered as a Middleware named
-  # `<fullname>-allowlist`. An empty list renders no Middleware and no restriction —
-  # so it means "no access control", which is why it is never left empty by accident.
-  sourceRanges:
-    - 192.168.1.0/24
-  # -- Middlewares from values, rendered as `<namespace>-<name>@kubernetescrd` and
-  # chained after the allow list. Example: [{ name: authentik, namespace: kube-system }]
-  middlewares: []
+  # -- Middlewares from values, rendered as `<namespace>-<name>@kubernetescrd`, in order.
+  # -- `lan-only` is first: it is the only access control on this route, which is plain
+  # -- HTTP on `kub.local`. An empty list leaves the route open to whoever reaches the proxy.
+  middlewares:
+    - name: lan-only
+      namespace: kube-system
   labels: {}
   annotations: {}
   tls:

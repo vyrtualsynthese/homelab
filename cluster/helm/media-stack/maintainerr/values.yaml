@@ -95,7 +95,9 @@ ingressRoute:
   pathPrefix: /
   # -- Middlewares, rendered as `<namespace>-<name>@kubernetescrd`. None is wired:
   # the LAN boundary is the access control, as upstream intends for this app.
-  middlewares: []
+  middlewares:
+    - name: lan-only
+      namespace: kube-system
   labels: {}
   annotations: {}
   tls:

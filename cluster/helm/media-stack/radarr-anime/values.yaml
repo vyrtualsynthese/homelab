@@ -66,7 +66,9 @@ ingressRoute:
     - web
   host: radarr-anime.kub.local
   pathPrefix: /
-  middlewares: []
+  middlewares:
+    - name: lan-only
+      namespace: kube-system
   labels: {}
   annotations: {}
   tls:

@@ -1,13 +1,9 @@
 {{- if .Values.ingressRoute.enabled }}
 {{- $fullname := include "app.fullname" . }}
-{{- /* The allow list comes first in the chain: a request from outside the ranges is
-rejected at the proxy instead of being passed on to an authentication middleware that
-would offer it a login page. Values-driven middlewares follow, in the reference
-chart's `{ name, namespace }` shape. */}}
+{{- /* Every middleware comes from values, in the reference chart's `{ name, namespace }`
+shape. The LAN gate is the first entry in that list, so a request from outside the ranges is
+rejected at the proxy before it reaches the app. */}}
 {{- $middlewares := list }}
-{{- if .Values.ingressRoute.sourceRanges }}
-{{- $middlewares = append $middlewares (printf "%s-allowlist" $fullname) }}
-{{- end }}
 {{- range .Values.ingressRoute.middlewares }}
 {{- $middlewares = append $middlewares (printf "%s-%s@kubernetescrd" .namespace .name) }}
 {{- end }}

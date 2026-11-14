@@ -46,7 +46,7 @@ app:
     className: ""
     annotations:
       traefik.ingress.kubernetes.io/router.entrypoints: "websecure"
-      traefik.ingress.kubernetes.io/router.middlewares: "kube-system-authentik@kubernetescrd,kube-system-security@kubernetescrd"
+      traefik.ingress.kubernetes.io/router.middlewares: "kube-system-lan-only@kubernetescrd,kube-system-authentik@kubernetescrd,kube-system-security@kubernetescrd"
       traefik.ingress.kubernetes.io/router.tls.certresolver: "myresolver"
       traefik.ingress.kubernetes.io/router.tls: "true"
       traefik.ingress.kubernetes.io/router.tls.domains.0.main: "kub.home.ashudev.com"
