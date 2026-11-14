@@ -38,13 +38,12 @@ is older than the last merge on `develop`, distrust it rather than argue with it
 
 | State | Count | Meaning |
 |---|---|---|
-| Repaired and working | 23 | Rebuilt against the chart contract, every replica ready |
+| Repaired and working | 24 | Rebuilt against the chart contract, every replica ready |
 | Working, not yet rebuilt | 24 | Running, but on a chart that predates the contract |
 | Broken | 8 | No working replica; cause recorded below |
 | ArgoCD cannot compare | 2 | The Application points at a path that does not exist |
-| Parked on purpose | 1 | Scaled to zero, nothing records why |
 
-49 of the 58 Applications have at least one working replica: the 23 repaired and 24 not yet rebuilt,
+50 of the 58 Applications have at least one working replica: the 24 repaired and 24 not yet rebuilt,
 plus the two `ArgoCD cannot compare` provisioners, which still run. Six of the working ones are
 sitting on a volume whose claim is stuck `Terminating` — they work today and will not survive the
 Longhorn cleanup (see **Running on a borrowed volume**).
@@ -66,7 +65,7 @@ Two distinct causes, not eight: six apps lost a claim that nobody recreated, and
 the PostgreSQL Service that W2 retired. W2's "point the consuming apps at the new instance" step is
 unfinished for `ghostfolio` and `wiki`.
 
-## Repaired to the contract (23)
+## Repaired to the contract (24)
 
 Rebuilt against [`docs/charts/README.md`](charts/README.md) — pinned image tag, node pin,
 `Recreate` where a config claim exists, probes, memory limits, hardening. All of these were 1/1 at
@@ -94,6 +93,7 @@ the snapshot.
 | `kavita` | media-stack | 2026-11-13 | Rebuilt from scratch; library claim mounted read-only |
 | `postgres` | databases | 2026-11-13 | Own chart on the official image; Bitnami gone |
 | `pgadmin` | databases | 2026-11-13 | Wrapper with a login; was one of the eleven Longhorn casualties |
+| `authentik` | authentik | 2026-11-14 | Repaved on `2026.8.5` with one hostname, blueprints in `files/` and a PostSync worker reload; database and secrets rebuilt the same day |
 | `prometheus` | monitoring | 2026-11-12 | Wrapper on the official chart, TSDB on `local-path` |
 | `grafana` | monitoring | 2026-11-12 | Wrapper; rules and dashboards still live only in its database |
 | `loki` | monitoring | 2026-11-12 | Wrapper, 90-day retention |
@@ -157,16 +157,10 @@ cannot render them any more, so a sync would fail:
 Their provisioners still run, so the storage they serve is in use. The charts are effectively
 unmanaged: fixing one defect at a time in the repo is the only way back.
 
-## Parked (1)
+## Drift, not breakage (10)
 
-`authentik` — both Deployments sit at 0 replicas, the Application is `OutOfSync`/`Healthy`, and
-nothing in `docs/` says it was stopped on purpose. Decide whether it is coming back; if it is not,
-delete the Application and the chart rather than leaving a dead namespace that looks healthy.
-
-## Drift, not breakage (11)
-
-`authentik`, `dashy`, `discourse`, `filebrowser`, `firefly`, `guacamole`, `local-path`, `mktxp`,
-`n8n`, `renovate`, `syncthing` are `OutOfSync` while `Healthy`. That means git and the cluster
+`dashy`, `discourse`, `filebrowser`, `firefly`, `guacamole`, `local-path`, `mktxp`, `n8n`,
+`renovate`, `syncthing` are `OutOfSync` while `Healthy`. That means git and the cluster
 disagree about something — often an image Renovate bumped, sometimes a UI edit. Not urgent; worth one
 look each when its chart is touched.
 
