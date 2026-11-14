@@ -347,6 +347,16 @@ invalid PromQL and never evaluated.
 - Until 2026-12-12: `pod=~"ghostfolio-.*|wiki-app-.*|monitorss-bot-.*"` — three
   apps crash-looping since the Longhorn loss. They still show `firing`; only the
   notification is suppressed.
+- Until 2027-03-01: `host="streaming"`, `severity="warning"`,
+  `__alert_rule_uid__="cg433wfzcwiyob"` — the node runs at its thermal ceiling and
+  the cooling fix is deferred
+  (`decisions/2026-11-13-streaming-overheating-deferred.md`). The rule still
+  evaluates, still reports `firing`, and still shows on the Health dashboard.
+- Until 2027-03-01: the same matchers with `host="nuc0"` — the chassis is too small
+  for its CPU, the condition is accepted
+  (`decisions/2026-11-13-nuc0-throttling-accepted.md`), and the action it would ask
+  for (a new node) is already the plan. `NodeTemperatureHigh` is one
+  host-agnostic rule, so a silence per host beats narrowing the expression.
 - Until 2026-12-12: `alertname="DriveNeedsReplacement"` with the `nas /dev/sdf`
   labels — the drive is known dead (`docs/audit/ansible-hosts.md`) and waiting on
   a replacement. Only the notification is suppressed; the rule still fires.
