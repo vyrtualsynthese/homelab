@@ -37,8 +37,10 @@ into a capability group, and removed the same way.
 Evidence as of 2026-11-14, from the repo and the previous design.
 
 - Two groups carry all the meaning: `users` means "may sign in", `apps` means "may open an
-  application". Every wired application (ArgoCD, Grafana, pgAdmin, Kavita) binds to `apps`, which
-  starts empty.
+  application". Four applications have providers in the blueprints (ArgoCD, Grafana, pgAdmin,
+  Kavita), but only **Grafana and pgAdmin are actually configured to trust authentik**. Argo CD has
+  no Dex connector, and Kavita has no OIDC settings in its database, so neither signs anyone in
+  today. FileBrowser is not wired at all.
 - Enrollment writes new identities into `users`. Discord guild membership and Plex server access
   are the admission gate.
 - Grafana already maps `authentik Admins` to its Admin role and everyone else to Viewer.
@@ -143,21 +145,29 @@ Alternatives considered:
 The chosen option also removes a live trap: in `all` mode, two bindings require both groups, so a
 user added to the user level without the admin level would be refused everywhere.
 
-Current applications, by level:
+Current applications, by level. "Wired" means the application itself has been configured to trust
+authentik; the others have authentik-side objects in git but no configuration in the application,
+so they cannot sign anyone in yet.
 
-| Application | Admin | User | Guest | User-level role |
-|---|---|---|---|---|
-| ArgoCD | yes | no | no | — |
-| Grafana | yes | no | no | — |
-| pgAdmin | yes | no | no | — |
-| Kavita | yes | yes | no | normal account |
-| Wiki.js | yes | yes | no | editor group rule |
-| Discourse | yes | yes | no | ordinary member |
-| Ghostfolio | yes | yes | no | ordinary account |
-| Firefly III | yes | yes | no | ordinary account |
-| Postiz | yes | yes | no | ordinary account |
-| FileBrowser | yes | capability | no | see 5.4 |
-| No native SSO (Plex, *arr, qBittorrent, Tautulli, Syncthing, Dashy, Calibre-Web, …) | local | local | local | out of the model |
+| Application | Admin | User | Guest | User-level role | Wired |
+|---|---|---|---|---|---|
+| ArgoCD | yes | no | no | — | no: no Dex connector yet |
+| Grafana | yes | no | no | — | yes |
+| pgAdmin | yes | no | no | — | yes |
+| Kavita | yes | yes | no | normal account | no: no OIDC settings yet |
+| Wiki.js | yes | yes | no | editor group rule | no |
+| Discourse | yes | yes | no | ordinary member | no |
+| Ghostfolio | yes | yes | no | ordinary account | no |
+| Firefly III | yes | yes | no | ordinary account | no |
+| Postiz | yes | yes | no | ordinary account | no |
+| FileBrowser | yes | capability | no | see 5.4 | no: cutover pending |
+| No native SSO (Plex, *arr, qBittorrent, Tautulli, Syncthing, Dashy, Calibre-Web, …) | local | local | local | out of the model | — |
+
+Consequence of that column: **the user level has no application to open today.** The only two
+applications actually wired, Grafana and pgAdmin, are admin-only by design. `homelab-users`
+therefore grants nothing until Kavita, Wiki.js or another user-safe application is wired. That is
+correct behaviour, not a gap in the model, but it means the user level can only be proven once
+one such application is wired; until then its test is "signed in, refused everywhere".
 
 Infrastructure applications stay admin-only. Users are community and household members; a
 metrics dashboard, a database console and the deployment control plane are not user surfaces.
@@ -176,7 +186,7 @@ route is a separate finding, not part of this model.
 | Grafana | `role_attribute_path` reads `authentik Admins` → Admin, else Viewer | automatic |
 | ArgoCD | Dex connector plus `policy.csv` in `cluster/helm/argocd/values.yaml`, applied with `helm upgrade` | GitOps-adjacent: the release is run by hand, but the settings live in the repo and survive chart upgrades |
 | pgAdmin | first OIDC login is promoted to Administrator inside pgAdmin | one manual promotion, recorded |
-| Kavita | admin flag per account inside Kavita | one manual promotion, recorded |
+| Kavita | admin flag per account inside Kavita | one manual promotion, recorded; not wired yet |
 | Discourse | admin flag inside Discourse | one manual promotion, recorded |
 | Wiki.js | group rules map an authentik group to wiki permissions | automatic once the group rule exists |
 | Ghostfolio, Firefly III, Postiz | no administrator distinction to map | nothing to do |
@@ -298,7 +308,8 @@ Phase A — levels and bindings.
    `admin` account stays as break-glass.
 4. Operator moves memberships; second commit removes `apps` and `users`.
 5. Verify: a guest signs in, sees no applications, is refused at a bookmarked app URL; a user
-   opens each user-safe app in the plain role and is refused on Grafana, pgAdmin, ArgoCD.
+   sees the same, because no user-safe application is wired yet; the admin opens Grafana as Admin
+   and pgAdmin as Administrator.
 
 Phase B — FileBrowser capability.
 
@@ -331,6 +342,9 @@ Before any completion claim, on the real tree:
   identity exists today, so the level and binding tests use a locally created test account (the
   local password login remains enabled as break-glass); the Discord/Plex source flow and MFA are
   tested with the operator's own identity, enrolling then removing a device.
+- Wired applications today are Grafana and pgAdmin, both admin-only: the admin establishes both,
+  and both refuse a user-level account. The user level is proven "refused everywhere" until a
+  user-safe application is wired.
 - FileBrowser: header spoof refused, scope correct after the manual step.
 - MFA: enrolment, challenge on both login paths, removal.
 

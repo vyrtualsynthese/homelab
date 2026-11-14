@@ -93,7 +93,7 @@ the snapshot.
 | `kavita` | media-stack | 2026-11-13 | Rebuilt from scratch; library claim mounted read-only |
 | `postgres` | databases | 2026-11-13 | Own chart on the official image; Bitnami gone |
 | `pgadmin` | databases | 2026-11-13 | Wrapper with a login; was one of the eleven Longhorn casualties |
-| `authentik` | authentik | 2026-11-14 | Repaved on `2026.8.5` with one hostname, blueprints in `files/` and a PostSync worker reload; database and secrets rebuilt the same day. Sign-in sources: Discord (members of the homelab guild only — verified refused for a non-member) and Plex (accounts with access to AshuFlex), both landing on the same account. Access model: `authentik Admins` / `homelab-users` / `homelab-guests`, bound per application, with `filebrowser-editors` as a capability group; MFA optional (TOTP, WebAuthn) and applied to source logins |
+| `authentik` | authentik | 2026-11-14 | Repaved on `2026.8.5` with one hostname, blueprints in `files/` and a PostSync worker reload; database and secrets rebuilt the same day. Sign-in sources: Discord (members of the homelab guild only — verified refused for a non-member) and Plex (accounts with access to AshuFlex), both landing on the same account. Access model: `authentik Admins` / `homelab-users` / `homelab-guests`, bound per application, with `filebrowser-editors` as a capability group; MFA optional (TOTP, WebAuthn) and applied to source logins. Applications actually wired to it: Grafana and pgAdmin; Argo CD, Kavita and FileBrowser have authentik objects in git but no application-side configuration yet |
 | `prometheus` | monitoring | 2026-11-12 | Wrapper on the official chart, TSDB on `local-path` |
 | `grafana` | monitoring | 2026-11-12 | Wrapper; rules and dashboards still live only in its database |
 | `loki` | monitoring | 2026-11-12 | Wrapper, 90-day retention |
@@ -109,7 +109,7 @@ Working, on the old chart shape. This is the queue for the chart work, not a def
 |---|---|---|---|
 | `ashuvidz` | ashuvidz | 1/1 | |
 | `dashy` | dashy | 1/1 | `latest` tag; OutOfSync |
-| `filebrowser` | media-stack | 1/1 | **Borrowed volume**; OutOfSync. Forward auth through authentik on `v2.63.23`; per-user folder scopes; upstream archived 2026-09-01 |
+| `filebrowser` | media-stack | 1/1 | **Borrowed volume**; OutOfSync. Forward auth defined in git and not cut over yet; per-user folder scopes planned; upstream archived 2026-09-01 |
 | `firefly` | firefly | 3/3 | **Borrowed volume**; OutOfSync |
 | `guacamole` | guacamole | 2/2 | OutOfSync |
 | `linkstack` | linkstack | 1/1 | **Borrowed volume**; `latest` tag |
