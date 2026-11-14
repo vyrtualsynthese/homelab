@@ -1,0 +1,26 @@
+version: 1
+metadata:
+  name: ashulab-mfa
+entries:
+  # The stage already exists and is bound to the password flow at order 30
+  # with not_configured_action=skip, so MFA stays optional: people who enrolled
+  # a device are asked, everyone else passes through. Restrict it to the two
+  # methods offered in the UI; SMS and email one-time codes are not enabled.
+  - model: authentik_stages_authenticator_validate.authenticatorvalidatestage
+    identifiers:
+      name: default-authentication-mfa-validation
+    attrs:
+      device_classes:
+        - totp
+        - webauthn
+
+  # Source logins (Discord, Plex) run default-source-authentication, which has
+  # no MFA stage of its own. Without this binding an enrolled device is never
+  # asked for on the login people actually use. Order -10 runs before the login
+  # stage at order 0, so a failed code never creates a session.
+  - model: authentik_flows.flowstagebinding
+    identifiers:
+      target: !Find [authentik_flows.flow, [slug, default-source-authentication]]
+      order: -10
+    attrs:
+      stage: !Find [authentik_stages_authenticator_validate.authenticatorvalidatestage, [name, default-authentication-mfa-validation]]
