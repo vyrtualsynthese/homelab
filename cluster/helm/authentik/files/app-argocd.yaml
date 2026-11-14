@@ -7,7 +7,7 @@ entries:
   - model: authentik_blueprints.metaapplyblueprint
     attrs:
       identifiers:
-        name: ashulab-users
+        name: ashulab-groups
       required: true
   - model: authentik_blueprints.metaapplyblueprint
     attrs:
