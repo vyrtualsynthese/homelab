@@ -2,6 +2,13 @@ version: 1
 metadata:
   name: ashulab-app-grafana
 entries:
+  # The app binds to the `apps` group, which ashulab-users creates. Blueprint
+  # order is not guaranteed, so require that file first.
+  - model: authentik_blueprints.metaapplyblueprint
+    attrs:
+      identifiers:
+        name: ashulab-users
+      required: true
   - model: authentik_providers_oauth2.oauth2provider
     id: grafana-provider
     identifiers:
@@ -45,4 +52,4 @@ entries:
       target: !KeyOf grafana-app
       order: 0
     attrs:
-      group: !Find [authentik_core.group, [name, users]]
+      group: !Find [authentik_core.group, [name, apps]]

@@ -23,7 +23,9 @@ hand because this repo does not manage the Argo CD installation.
   the implicit-consent authorization flow, the default invalidation flow, the openid/email/
   profile scope mappings, and the two grant types `authorization_code` and `refresh_token`
   (blueprint-created providers start with none, unlike the UI wizard).
-- Every application: `policy_engine_mode: all` and one group binding to `users`.
+- Every application: `policy_engine_mode: all` and one group binding to `apps`, which starts
+  empty. `users` is the right to sign in, not the right to open anything.
+- The operator (user 4) is added to `apps` by hand after the first sync, so the apps stay usable.
 - Redirect URIs are exact. HTTP is used where the app is served over HTTP; the issuer stays HTTPS.
 - Commit prefixes use an emoji; never commit to `main` or `develop`.
 
@@ -147,7 +149,8 @@ break-glass.
 
 ## Success, in one place
 
-- Four applications in authentik, each bound to `users` with `policy_engine_mode: all`.
+- Four applications in authentik, each bound to `apps` with `policy_engine_mode: all`.
+- A newly enrolled Discord or Plex user can sign in to authentik and reaches no application.
 - Grafana, pgAdmin, Kavita and Argo CD all sign in through authentik.
 - A person outside `users` is refused by authentik before reaching the app.
 - No client secret exists anywhere in git.
