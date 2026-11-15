@@ -233,10 +233,19 @@ ingressRoute:
   # -- Path prefix. `/` matches everything.
   pathPrefix: /
   # -- Middlewares from values, rendered as `<namespace>-<name>@kubernetescrd`, in order.
-  # -- `lan-only` is first: it is the only access control on this route, which is plain
-  # -- HTTP on `kub.local`. An empty list leaves the route open to whoever reaches the proxy.
+  # -- Three, in this order:
+  # --   lan-only                 reject outside traffic before anything else
+  # --   strip-authentik-header   Calibre-Web trusts the username header blindly, so a
+  # --                            client-supplied copy is removed before the outpost runs
+  # --   authentik-forwardauth    ask authentik, then set the header from the session
+  # -- Calibre-Web only reads that header when "Allow Reverse Proxy Authentication" is on
+  # -- in its own admin settings, and the account it names must already exist there.
   middlewares:
     - name: lan-only
+      namespace: kube-system
+    - name: strip-authentik-header
+      namespace: kube-system
+    - name: authentik-forwardauth
       namespace: kube-system
   labels: {}
   annotations: {}
