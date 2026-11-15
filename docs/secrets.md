@@ -42,10 +42,11 @@ the right name and a different key still fails to start its pod.
 
 ## Application databases, created on demand
 
-No application database exists yet (2026-11-13), and none is created in advance. Each one is
-created when its application is rebuilt, by
+Until the board (2026-11-15) there was no application database, and none is created in advance. Each
+one is created when its application is rebuilt, by
 [`runbooks/postgres-add-database.md`](runbooks/postgres-add-database.md), which also records the
-date and the application in that runbook's log.
+date and the application in that runbook's log. The `vikunja` row at the end of the table below is
+the first one created that way.
 
 A Kubernetes Secret belongs to one namespace, so a database password necessarily exists twice: once
 beside the instance that creates the role, once beside the application that consumes it.
