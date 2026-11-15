@@ -27,6 +27,26 @@ spec:
       services:
         - name: {{ include "app.fullname" . }}
           port: {{ .Values.service.port }}
+    {{- with .Values.ingressRoute.apiBypassMiddlewares }}
+    # API path, deliberately without the forward-auth middleware: an API client
+    # sends a header, not a browser session, and cannot complete a sign-in
+    # redirect. Higher priority so it wins over the route above; keep `lan-only`
+    # here or the API becomes reachable from outside the LAN.
+    #
+    # Upstream 3.32.0 checks no credential on inbound requests, so this rule makes
+    # the whole API reachable by anything on the LAN, WireGuard or the pod network.
+    # See the README section "The API exemption" before enabling it.
+    - kind: Rule
+      match: Host(`{{ $.Values.ingressRoute.host }}`) && PathPrefix(`/api`)
+      priority: 100
+      middlewares:
+        {{- range . }}
+        - name: {{ printf "%s-%s@kubernetescrd" .namespace .name }}
+        {{- end }}
+      services:
+        - name: {{ include "app.fullname" $ }}
+          port: {{ $.Values.service.port }}
+    {{- end }}
   {{- if .Values.ingressRoute.tls.enabled }}
   tls:
     {{- with .Values.ingressRoute.tls.secretName }}
