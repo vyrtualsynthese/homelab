@@ -2,7 +2,7 @@ apiVersion: v2
 name: authentik
 description: Ashuvidz
 type: application
-version: 0.8.0
+version: 0.8.1
 dependencies:
   - name: authentik
     version: 2026.8.5
