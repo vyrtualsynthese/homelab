@@ -43,6 +43,9 @@ entries:
       slug: filebrowser
       provider: !KeyOf filebrowser-provider
       meta_launch_url: https://filebrowser.kub.home.ashudev.com/
+      # Icon drawn from the Font Awesome set bundled with authentik, so no
+      # external URL has to resolve for the application grid.
+      meta_icon: fa://fa-folder
       policy_engine_mode: any
 
   - model: authentik_policies.policybinding
