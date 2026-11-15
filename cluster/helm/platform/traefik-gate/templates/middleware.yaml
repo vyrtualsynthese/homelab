@@ -1,4 +1,5 @@
 {{- $wg := required "lanOnly.wireguardRange must be set from the wg-easy instance (design §8)" .Values.lanOnly.wireguardRange }}
+{{- $pods := required "lanOnly.podRange must be the cluster pod network" .Values.lanOnly.podRange }}
 apiVersion: {{ .Values.traefik.apiVersion }}
 kind: Middleware
 metadata:
@@ -15,3 +16,10 @@ spec:
     sourceRange:
       - {{ .Values.lanOnly.lanRange }}
       - {{ $wg }}
+      # Workloads in the cluster are not on the LAN, so a pod calling another
+      # service through its public hostname was answered 403. That breaks every
+      # native OIDC client: the server side fetches the discovery document and
+      # exchanges the code at the provider's public URL, and it does so from the
+      # pod network. This range adds no reachability the pods did not already
+      # have through Service DNS; it only lets them use the front door.
+      - {{ $pods }}
