@@ -35,7 +35,7 @@ helm template maintainerr cluster/helm/media-stack/maintainerr --namespace media
 | `strategy` | Deployment strategy. Must stay `Recreate` with a data volume. | `Recreate` |
 | `service.port` | Port the Service exposes, and what the IngressRoute points at. | `6246` |
 | `container.port` | Only set when the app listens on a different port than the Service. | `null` (falls back to `service.port`) |
-| `ingressRoute.*` | Traefik CRD routing: host, entry points, middlewares, TLS. | `maintainerr.kub.local`, `websecure`, TLS from the cluster default certificate; `web` redirects |
+| `ingressRoute.*` | Traefik CRD routing: host, entry points, middlewares, TLS. `apiBypassMiddlewares` renders the `/api` rule and is **set** here — see "The API exemption" below. | `maintainerr.kub.local`, `websecure`, TLS from the cluster default certificate; `web` redirects; `/api` on `lan-only` alone |
 | `storage.*` | The data claim: class, size, mount path, or reuse an existing claim. | `local-path`, `256Mi`, `/opt/data` |
 | `env` | Non-secret variables, rendered **inline** into the container. Changing one rolls the pod. | `TZ`, `LOG_LEVEL`, `TELEMETRY` |
 | `extraEnv` | Variables sourced from a Secret, as `{ name, valueFrom }`. | `[]` |
@@ -66,13 +66,47 @@ was a Longhorn volume that disappeared in the 2026 disk failure.
 
 Maintainerr has **no authentication, by design**. Upstream treats it as an appliance on a network you
 control: anyone who can reach the port can read every stored credential, change rules, and download
-the whole SQLite database (`GET /api/settings/database/download`). The "API key" on its Settings page
-is not checked on inbound requests; it exists for the app's own internal calls.
+the whole SQLite database (`GET /api/settings/database/download`).
 
-So the boundary is the network, not the app. The one route is at `maintainerr.kub.local`, over TLS since 2026-11-15. Since 2026-11-15 it carries `lan-only` and the authentik forward-auth gate — the only access control this app has, since it ships no login of its own. `kub.local` resolves through the Pi-hole
-wildcard record; it is not in a public zone. Do not attach a public host, a TLS block or a cert
-resolver to this chart. If it ever needs to leave the LAN, put an authenticating reverse proxy in
-front first — upstream documents the options at https://docs.maintainerr.info/security/.
+The "API key" on its Settings page is **not checked on inbound requests**. That is not a guess: in
+`apps/server` at tag `3.32.0` the key is only ever *sent*, by
+`modules/api/internal-api/helpers/internal-api.helper.ts`, which builds an axios client pointing at
+`http://localhost:<UI_PORT>/api/` with `X-Api-Key: <settings.apikey>`. Nothing on the receiving side
+reads that header — there is no auth guard in the tree, `@UseGuards` appears only as
+`MediaServerSetupGuard` (a setup check), and the OpenAPI document declares no security scheme. The
+`InternalApiController` is an empty `@Controller('api/maintainerr')` with no routes. So the key
+authenticates the app to itself and nothing else.
+
+So the boundary is the network, not the app. Two routes on `maintainerr.kub.local`, both over TLS
+since 2026-11-15:
+
+| Route | Middlewares | What it protects |
+|---|---|---|
+| `/` (everything not under `/api`) | `lan-only`, `authentik-forwardauth` | the UI, and the sign-in round trip |
+| `/api` (`priority: 100`) | `lan-only` only | nothing beyond the LAN boundary |
+
+`lan-only` admits `192.168.1.0/24`, WireGuard (`10.8.0.0/24`) and the pod network (`10.42.0.0/16`).
+`kub.local` resolves through the Pi-hole wildcard record; it is not in a public zone. Do not attach a
+public host, a TLS block or a cert resolver to this chart. If it ever needs to leave the LAN, put an
+authenticating reverse proxy in front first — upstream documents the options at
+https://docs.maintainerr.info/security/.
+
+### The API exemption, and what it costs
+
+`ingressRoute.apiBypassMiddlewares` renders the `/api` rule. It exists so a script can call the API
+without a browser session, the same shape as `bazarr` and `bazarr-anime`.
+
+**Those two charts can do this because their API has a key that the server checks.** Maintainerr's
+does not, so the exemption is not an authentication shortcut, it is the removal of the gate: the UI
+is a shell over the same API, so anything the UI can do, an unauthenticated client on the LAN can do
+— including `GET /api/settings/database/download`, which hands out every integration credential in
+clear text.
+
+Keep it in mind before widening the LAN range, and prefer closing it (`apiBypassMiddlewares: []`)
+once the API is not needed. A basic-auth middleware on the `/api` rule would give scripts a real
+credential while keeping the path closed; it needs a `htpasswd` Secret in `media-stack`, which is why
+it is not the default here.
+
 
 ## Storage and the UID
 
@@ -174,7 +208,7 @@ metrics endpoint nobody maintains.
 | `templates/service.yaml` | the ClusterIP Service |
 | `templates/serviceaccount.yaml` | the ServiceAccount, with no mounted token |
 | `templates/persistentvolumeclaim.yaml` | the data claim, only when `storage.enabled` and no `existingClaim` |
-| `templates/ingressroute.yaml` | the Traefik IngressRoute |
+| `templates/ingressroute.yaml` | the Traefik IngressRoute, its higher-priority `/api` rule, and the `web` redirect twin |
 | `templates/NOTES.txt` | the install notes, including the LAN-only warning |
 
 There is deliberately no ConfigMap: every setting lives in the SQLite database, and the app owns it.
