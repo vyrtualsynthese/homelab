@@ -222,6 +222,10 @@ affinity: {}
 # gate, the same arrangement autobrr has. A gate on top would mean two logins for one
 # app and would put a redirect in front of `/opds` and the Kobo sync endpoints, which
 # authenticate with basic auth and cannot follow one.
+#
+# The route is served over TLS, unlike the rest of the media stack, because that sign-in
+# needs a `Secure` session cookie. It is the one app here whose login cannot work on
+# plain HTTP.
 ingressRoute:
   # -- Render the IngressRoute and its allow list. Traefik CRDs only: this chart
   # never renders a `networking.k8s.io/v1` Ingress.
@@ -230,14 +234,19 @@ ingressRoute:
   # watches today; flip this to `traefik.io/v1alpha1` when Traefik v3 lands (the
   # allow-list field is renamed `ipAllowList` in the same move).
   apiVersion: traefik.containo.us/v1alpha1
-  # -- Traefik entry points. `web` is plain HTTP on `kub.local`; nothing here is
-  # served over TLS.
+  # -- Traefik entry points. `websecure` only: the app holds its OIDC session in a
+  # `Secure` cookie and refuses to sign in over plain HTTP (see `tls` below). The
+  # `web` mirror router exists only to redirect.
   entryPoints:
-    - web
+    - websecure
   # -- Single host. For a second host, copy the chart.
   host: calibre.kub.local
   # -- Path prefix. `/` matches everything.
   pathPrefix: /
+  # -- Render the plain-HTTP router that redirects to this one. It carries the same
+  # middlewares, so a request from outside the LAN is refused with `403` rather than
+  # redirected anywhere.
+  redirectToHttps: true
   # -- Middlewares from values, rendered as `<namespace>-<name>@kubernetescrd`, in order.
   # -- One entry: `lan-only` rejects traffic from outside the LAN and WireGuard before
   # -- it reaches Traefik's router. The sign-in check is CWA's own OIDC client, not a
@@ -249,11 +258,20 @@ ingressRoute:
   labels: {}
   annotations: {}
   tls:
-    # -- Send the router over TLS. Off: this route exists on the LAN only.
-    enabled: false
-    # -- Use a pre-existing certificate instead of asking Traefik to issue one.
+    # -- Send the router over TLS. **On, and not optional.** Calibre-Web's OIDC
+    # sign-in only appears when its login type is `OAuth`, and that setting forces
+    # `SESSION_COOKIE_SECURE=True` (`cps/__init__.py`): a browser on plain HTTP
+    # throws that cookie away, so the callback arrives without the session it started
+    # with. Its own settings page states it as "Use OAuth (requires HTTPS)".
+    enabled: true
+    # -- Use a pre-existing certificate instead of the cluster default. Empty here on
+    # purpose: the certificate comes from the default TLSStore, `kube-system/local-cert`
+    # (a mkcert certificate with `*.kub.local` in its subject alternative names).
+    # Clients that do not have the mkcert root installed show a warning, which is
+    # accepted: the alternative is no sign-in at all.
     secretName: ""
-    # -- Traefik ACME resolver name, for example `myresolver`.
+    # -- Traefik ACME resolver name. Empty: ACME cannot issue for a `.kub.local`
+    # name, which is not publicly resolvable.
     certResolver: ""
-    # -- TLSOption resource name in this namespace.
-    options: ""
+    # -- TLSOption resource name in this namespace, rendered by `templates/tls-option.yaml`.
+    options: calibre-web-automated-tlsoption

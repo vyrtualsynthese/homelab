@@ -49,4 +49,37 @@ spec:
       namespace: {{ $.Release.Namespace }}
     {{- end }}
   {{- end }}
+{{- if .Values.ingressRoute.redirectToHttps }}
+---
+{{- /* The plain-HTTP router exists only to send the browser to the TLS one. It carries the
+same middlewares as the TLS router, then the redirect, so traffic from outside the LAN is
+dropped before it is redirected anywhere. */}}
+apiVersion: {{ .Values.ingressRoute.apiVersion }}
+kind: IngressRoute
+metadata:
+  name: {{ $fullname }}-redirect
+  labels:
+    {{- include "app.labels" . | nindent 4 }}
+    {{- with .Values.ingressRoute.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- with .Values.ingressRoute.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  entryPoints:
+    - web
+  routes:
+    - kind: Rule
+      match: Host(`{{ .Values.ingressRoute.host }}`) && PathPrefix(`{{ .Values.ingressRoute.pathPrefix }}`)
+      middlewares:
+        {{- range $middlewares }}
+        - name: {{ . }}
+        {{- end }}
+        - name: {{ $fullname }}-redirect-https
+      services:
+        - name: {{ $fullname }}
+          port: {{ .Values.service.port }}
+{{- end }}
 {{- end }}
