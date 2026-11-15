@@ -27,10 +27,20 @@ Traefik v2 CRDs, PostgreSQL 18 in `databases`, Vikunja's built-in MCP endpoint.
   `Doing` after a refusal.
 - Chart shape: wrapper chart in `cluster/helm/vikunja/`, upstream chart pinned by exact `version:`,
   image pinned by tag. `charts/` and `Chart.lock` are never committed.
-- Ingress: Traefik v2 CRDs only, `apiVersion: traefik.containo.us/v1alpha1`, `entryPoints: [web]`,
-  host `vikunja.kub.local`, middlewares `kube-system-lan-only@kubernetescrd` then
-  `kube-system-authentik-forwardauth@kubernetescrd`, no TLS. Never `networking.k8s.io/v1`.
+- Ingress: Traefik v2 CRDs only, `apiVersion: traefik.containo.us/v1alpha1`. Host
+  `vikunja.kub.local` over TLS on `websecure` with `tls.options.name: internal-tls` in `kube-system`
+  and **no** `secretName`/`certResolver`, so the cluster's default internal certificate serves it
+  (`docs/runbooks/internal-ca.md`). A second `IngressRoute` on `web` redirects to HTTPS with
+  `kube-system-lan-only` then `kube-system-redirect-to-https`. The TLS router carries two rules:
+  `/` with `kube-system-lan-only` + `kube-system-authentik-forwardauth`, and `/api` at `priority: 100`
+  with `kube-system-lan-only` only. Never `networking.k8s.io/v1`.
 - The upstream chart's own ingress is disabled — it renders an `Ingress`.
+- Monitoring: `metrics.enabled: true` in `config.yml`; pod annotations
+  `prometheus.io/scrape: "true"`, `prometheus.io/port: "3456"`,
+  `prometheus.io/path: /api/v1/metrics`.
+- Logging: `log.level: INFO`, `log.format: text`, `log.http: stdout`, `log.database: off`,
+  `log.events: off`.
+- `service.publicurl` is `https://vikunja.kub.local` — HTTPS, or Vikunja hands out HTTP links.
 - Stateful: `strategy: Recreate`, one `local-path` claim of 5 GiB at `/app/vikunja/files`,
   `nodeSelector: kubernetes.io/hostname: nuc0`.
 - Every container sets a memory request and limit. No image uses a floating tag.
@@ -42,6 +52,10 @@ Traefik v2 CRDs, PostgreSQL 18 in `databases`, Vikunja's built-in MCP endpoint.
 
 ## Review Focus
 
+- **The API route shipping without its gate.** `/api` deliberately skips Authentik, so `lan-only` is
+  the only thing between the internet and a token endpoint. If the API rule is rendered without
+  `kube-system-lan-only`, the board answers the internet. Task 2 greps the rendered route for the
+  middleware and the priority, and Task 3 verifies from off-LAN.
 - **A ticket that says done when it is not.** The `Done` bucket marks a task done through the view's
   done-bucket setting. If the bucket is created without that flag, tasks in it stay open and the
   board lies. Task 4 verifies the bucket id is the view's `done_bucket_id`.
@@ -168,9 +182,20 @@ base; all of it is standard bjw-s `common` schema. Set:
 - `vikunja.configMaps.config.data['config.yml']`:
   ```yaml
   service:
-    publicurl: "http://vikunja.kub.local"
+    publicurl: "https://vikunja.kub.local"
     enableregistration: false
+  metrics:
+    enabled: true
+  log:
+    level: INFO
+    format: text
+    http: stdout
+    database: off
+    events: off
   ```
+- Pod annotations, so Prometheus picks it up the way it picks up every other app in this repo:
+  `vikunja.controllers.main.pod.annotations` = `prometheus.io/scrape: "true"`,
+  `prometheus.io/port: "3456"`, `prometheus.io/path: /api/v1/metrics`.
 - `vikunja.env`:
   ```yaml
   VIKUNJA_DATABASE_TYPE: postgres
@@ -182,30 +207,46 @@ base; all of it is standard bjw-s `common` schema. Set:
       name: vikunja-db
       key: VIKUNJA_DATABASE_PASSWORD
   ```
-- `traefik:` block for our own template:
+- `ingressRoute:` block for our own template:
   ```yaml
-  traefik:
+  ingressRoute:
     apiVersion: traefik.containo.us/v1alpha1
+    enabled: true
     host: vikunja.kub.local
-    entryPoints: [web]
-    middlewares:
-      - namespace: kube-system
-        name: lan-only
-      - namespace: kube-system
-        name: authentik-forwardauth
     service: vikunja
     port: 3456
+    apiPathPrefix: /api
+    uiMiddlewares:
+      - {name: lan-only, namespace: kube-system}
+      - {name: authentik-forwardauth, namespace: kube-system}
+    apiMiddlewares:
+      - {name: lan-only, namespace: kube-system}
+    tls:
+      enabled: true
+      options: internal-tls
+      optionsNamespace: kube-system
+    redirectToHttps: true
   ```
 
 - [ ] **Step 3: Write `templates/ingressroute.yaml`**
 
-Follow `cluster/helm/filebrowser/templates/ingressroute.yaml`: `metadata.name: {{ .Chart.Name }}`,
-`metadata.namespace: {{ .Release.Namespace }}`, the two `app.kubernetes.io/*` labels, `spec.entryPoints`
-from values, one `Rule` whose `match` is ``Host(`{{ .Values.traefik.host }}`)``, middlewares rendered
-as `{{ .namespace }}-{{ .name }}@kubernetescrd`, one service, and **no `tls:` block** (the `web`
-entrypoint is plain HTTP on `kub.local`).
+Two `IngressRoute` objects in one file, modelled on
+`cluster/helm/media-stack/tautulli/templates/ingressroute.yaml` (TLS, default certificate, redirect
+router) and the `/api` rule in `cluster/helm/media-stack/bazarr/templates/ingressroute.yaml`:
 
-- [ ] **Step 4: Render it and prove the four things that matter**
+1. `{{ include "vikunja.fullname" . }}` on `websecure`, `tls.options.name` and
+   `tls.options.namespace` from values, **no** `secretName`, **no** `certResolver`. Two routes:
+   - `Host(...)` with the UI middlewares,
+   - `Host(...) && PathPrefix(...apiPathPrefix)` with `priority: 100` and the API middlewares. Keep the
+     comment that explains why the forward-auth is absent here and why `lan-only` is not.
+2. `{{ include "vikunja.fullname" . }}-redirect` on `web`, same host, middlewares
+   `kube-system-lan-only@kubernetescrd` then `kube-system-redirect-to-https@kubernetescrd` only —
+   redirecting must not send the browser through Authentik first.
+
+Both use `metadata.namespace: {{ .Release.Namespace }}`, the two `app.kubernetes.io/*` labels, and the
+Service name and port from values.
+
+- [ ] **Step 4: Render it and prove the six things that matter**
 
 ```bash
 helm dependency build cluster/helm/vikunja
@@ -216,26 +257,36 @@ kubeconform -strict -summary /tmp/vikunja.yaml
 Then check each of these, and fix the chart if any fails:
 
 ```bash
-grep -c 'kind: Ingress$' /tmp/vikunja.yaml            # expect 0
-grep -A3 'VIKUNJA_DATABASE_PASSWORD' /tmp/vikunja.yaml # expect a secretKeyRef, never a literal
+grep -c 'kind: Ingress$' /tmp/vikunja.yaml              # expect 0
+grep -c 'kind: IngressRoute$' /tmp/vikunja.yaml         # expect 2
+grep -A3 'VIKUNJA_DATABASE_PASSWORD' /tmp/vikunja.yaml  # secretKeyRef, never a literal
 grep -n 'kubernetes.io/hostname: nuc0' /tmp/vikunja.yaml
 grep -n 'strategy: Recreate' /tmp/vikunja.yaml
-grep -n 'authentik-forwardauth' /tmp/vikunja.yaml
+grep -n 'name: internal-tls' /tmp/vikunja.yaml
+grep -n 'redirect-to-https' /tmp/vikunja.yaml
+grep -n 'priority: 100' /tmp/vikunja.yaml
+grep -n 'prometheus.io/path: /api/v1/metrics' /tmp/vikunja.yaml
 grep -n 'tag: "2.8.0"' /tmp/vikunja.yaml
 ```
 
-`helm template` needs the secret to exist only at runtime, so it renders without a cluster.
+Then read the two routes back out of the rendered file and confirm with your eyes that the `priority:
+100` route lists `kube-system-lan-only@kubernetescrd` and **not** `kube-system-authentik-forwardauth`,
+and that the `/` route lists both. `helm template` needs the secret to exist only at runtime, so it
+renders without a cluster.
 
 If `helm dependency build` pulls `vikunja` but not its own bjw-s `common` dependency, `helm template`
 fails with `common … found in Chart.yaml, but missing in charts/ directory`. That means the published
 OCI artifact was packaged without its subcharts: add `common` to *our* `Chart.yaml` as a second
 dependency, pinned to `1.5.1` from `https://bjw-s-labs.github.io/helm-charts`, and re-render.
 
+
 - [ ] **Step 5: Write `README.md`**
 
 One page: what the board is for, that state lives in PostgreSQL and not in the claim, why the
-upstream ingress is disabled, that the route is LAN-only plus the Authentik gate, and that the MCP
-endpoint requires app 2.7.0+.
+upstream ingress is disabled, that the route is TLS on the internal certificate with HTTP redirecting
+to it, that `/` carries `lan-only` **and** the Authentik gate while `/api` carries `lan-only` only (so
+a token client works and the internet still cannot reach it), that metrics are scraped from
+`/api/v1/metrics`, and that the MCP endpoint requires app 2.7.0+.
 
 - [ ] **Step 6: Write `cluster/argocd/projects/vikunja.yaml`**
 
@@ -273,15 +324,41 @@ Steps for the operator, each with the output that means success:
 1. Commit lands on `develop`; wait for the Application to report `Synced`/`Healthy` in the ArgoCD UI.
 2. `kubectl -n vikunja get pods` → the single pod `Running`, `1/1`.
 3. `kubectl -n vikunja logs deploy/vikunja | grep -i 'connected\|migrat'` → the migration output and
-   the database connection line, with no `connection refused`.
-4. Open `http://vikunja.kub.local`; the Authentik gate asks for a login; sign in as the operator.
-5. Complete Vikunja's first-run form: username, email, password. This account is the board's owner.
-6. `curl -s http://vikunja.kub.local/api/v1/info` → JSON including `"version"` ≥ `2.8.0`. This is the
-   line that proves the MCP endpoint exists.
-7. Confirm registration is closed: `curl -s -o /dev/null -w '%{http_code}' http://vikunja.kub.local/api/v1/register`
+   the database connection line, with no `connection refused`. Log lines are text at `INFO`.
+4. Plain HTTP redirects, without stopping at Authentik first:
+   ```bash
+   curl -sI http://vikunja.kub.local/ | grep -i '^location\|^HTTP'
+   # expect: HTTP/1.1 301 and Location: https://vikunja.kub.local/
+   ```
+5. The certificate is the cluster's own:
+   ```bash
+   openssl s_client -connect vikunja.kub.local:443 -servername vikunja.kub.local </dev/null 2>/dev/null \
+     | openssl x509 -noout -subject -issuer
+   # expect: subject CN=kub.local, issuer CN=ashulab internal CA
+   ```
+6. The API answers a machine without a session, and the UI does not:
+   ```bash
+   curl -sk https://vikunja.kub.local/api/v1/info | head -c 120
+   # expect: JSON with a "version" of 2.8.0 or later
+   curl -sk -o /dev/null -w '%{http_code} %{redirect_url}\n' https://vikunja.kub.local/
+   # expect: a redirect to the Authentik sign-in, not 200
+   ```
+   The first call is the proof that `/api` skips the gate; the second is the proof that `/` does not.
+7. Metrics are exposed and scraped:
+   ```bash
+   curl -sk https://vikunja.kub.local/api/v1/metrics | head -5
+   # expect: HELP / TYPE lines, not an auth prompt
+   ```
+   Then in Prometheus: `up{job=~".*vikunja.*"}` → `1`.
+8. Open `https://vikunja.kub.local`, sign in through Authentik, and complete Vikunja's first-run form:
+   username, email, password. This account is the board's owner.
+9. Confirm registration is closed: `curl -sk -o /dev/null -w '%{http_code}' https://vikunja.kub.local/api/v1/register`
    → `404`.
-8. Rollback, if the board is ever abandoned: delete the Application, then the namespace, then drop the
-   database and the role. The dump in the PostgreSQL nightly backup holds the board until then.
+10. Off-LAN refusal: from a network without the LAN gate (or with the WireGuard tunnel down), confirm
+    both `https://vikunja.kub.local/` and `https://vikunja.kub.local/api/v1/info` are refused with
+    `403`. The API bypasses Authentik, not the LAN gate.
+11. Rollback, if the board is ever abandoned: delete the Application, then the namespace, then drop the
+    database and the role. The dump in the PostgreSQL nightly backup holds the board until then.
 
 - [ ] **Step 2: Operator executes it and pastes outputs 2, 3, 6 and 7 back**
 
@@ -302,7 +379,7 @@ git commit -m "📝 docs: first-start runbook for the board"
 
 **Interfaces:**
 - Consumes: `VIKUNJA_API_TOKEN` in the environment (an operator API token, not the agent's MCP one),
-  `VIKUNJA_URL` (default `http://vikunja.kub.local`).
+  `VIKUNJA_URL` (default `https://vikunja.kub.local`).
 - Produces: for each of `homelab`, `config`, `scripts`, `ashuvidz-website`, `ashudev-website`,
   `selfhosted-helmcharts`: one project with one kanban view whose buckets are `Ready`, `Doing`,
   `Waiting for validation`, `Done`; plus saved filter `Awaiting my review`.
@@ -331,7 +408,7 @@ operator's real screen is the `Waiting for validation` column of each board, and
 - [ ] **Step 2: Run it against the instance**
 
 ```bash
-export VIKUNJA_URL=http://vikunja.kub.local
+export VIKUNJA_URL=https://vikunja.kub.local
 export VIKUNJA_API_TOKEN=<operator token from Settings → API Tokens>
 ./hack/vikunja-seed.sh
 ```
@@ -381,15 +458,14 @@ access). Copy it — it is shown once.
 
 - [ ] **Step 2: Store it and register the server**
 
-Add `VIKUNJA_MCP_TOKEN=<token>` to `keys.env` (the file the `opencode` wrapper already loads). Add to
-`opencode.jsonc`:
+Add `VIKUNJA_MCP_TOKEN=<token>` to `~/.config/secrets/homelab.env`. Add to `opencode.jsonc`:
 
 ```jsonc
 "mcp": {
   "servers": {
     "vikunja": {
       "type": "remote",
-      "url": "http://vikunja.kub.local/api/v2/mcp",
+      "url": "https://vikunja.kub.local/api/v2/mcp",
       "oauth": false,
       "headers": { "Authorization": "Bearer {env:VIKUNJA_MCP_TOKEN}" }
     }
@@ -397,7 +473,9 @@ Add `VIKUNJA_MCP_TOKEN=<token>` to `keys.env` (the file the `opencode` wrapper a
 }
 ```
 
-Merge into the existing `mcp` block; do not replace other servers.
+Merge into the existing `mcp` block; do not replace other servers. The URL is `https` and under
+`/api`, which is why it must not go through the Authentik gate — a bearer token cannot complete a
+sign-in redirect.
 
 - [ ] **Step 3: Deny the server to `explore`**
 
