@@ -74,12 +74,14 @@ to Step 3. A pod stuck in `CreateContainerConfigError` is a missing Secret — s
 
 ```bash
 kubectl -n vikunja logs deploy/vikunja | grep -i 'connected\|migrat'
-# expect: the migration text, then a line saying the board connected to the database
+# expect: the migration text and a line saying the board connected to the database
 ```
 
-Read it in order: the board runs its schema migrations first, then opens the database. Success looks
-like migration lines followed by a connection line, with no `connection refused`, no
-`password authentication failed` and no `database "vikunja" does not exist` anywhere in between.
+Two things have to be in there: migration lines, and a line saying the board opened its database. Do
+not read their order as a verdict — which one comes first is Vikunja's business, and a startup that
+connects before it migrates prints them the other way round. What matters is that both appear and
+that no error sits between or after them: no `connection refused`, no
+`password authentication failed`, no `database "vikunja" does not exist`.
 
 These lines are plain text at `INFO`. If the grep prints nothing at all, drop the grep and read the
 log whole:
@@ -106,9 +108,9 @@ The plain-HTTP address answers with **301**, a permanent redirect, to the HTTPS 
 comes from the `vikunja-redirect` route, which runs the `lan-only` gate and then `redirect-to-https`:
 a request from outside the LAN is refused here, before it is redirected anywhere.
 
-On a newer Traefik the same middleware answers **308** instead of 301. Both are permanent redirects
-and both preserve the method and body; 308 is simply the stricter of the two. Either number means
-the step passed.
+That number is what this cluster's shared `redirect-to-https` middleware returns — the same code
+[`authentik-apps.md`](authentik-apps.md) records for every `-redirect` route. Anything else means
+that shared middleware has changed, so check it before reading anything into the board's route.
 
 What must **not** appear is a redirect to authentik here. The sign-in gate applies after the scheme
 changes, so a `Location` pointing at the authentik host means the redirect route is missing or
@@ -116,10 +118,11 @@ ordered wrongly.
 
 ## Step 5 — the certificate
 
-`-k` appears in every `curl` below. It tells curl to accept the certificate without checking it, and
-that is deliberate for these checks: they are about what the board answers, not about who signed it.
-Skipping verification means curl proves nothing about the certificate, so the chain is checked
-separately, once, here.
+`-k` appears in every `curl` below that does not pass `--cacert`. It tells curl to accept the
+certificate without checking it, and that is deliberate for those checks: they are about what the
+board answers, not about who signed it. Skipping verification means curl proves nothing about the
+certificate, so the chain is checked separately, once, here — by the one command below that
+deliberately omits `-k`.
 
 ```bash
 curl -s -o /dev/null -w '%{http_code}\n' \
@@ -140,9 +143,9 @@ openssl s_client -connect vikunja.kub.local:443 -servername vikunja.kub.local </
 
 `subject` is who the certificate claims to be — `kub.local`, the cluster's internal name, which
 covers `vikunja.kub.local` as a subdomain. `issuer` is who signed it: `ashulab internal CA`, minted
-by [`internal-ca.md`](internal-ca.md). A browser warning on a public name such as `ashuvidz.com`
-would be expected here; on `kub.local` the internal CA is in each workstation's trust store, so
-there is none.
+by [`internal-ca.md`](internal-ca.md). Because that CA is in each workstation's trust store, a
+browser shows no warning on `kub.local`; a warning there means the certificate being served is not
+the cluster's own, and the route's `TLSOption` is the first thing to check.
 
 ## Step 6 — the API answers, the interface does not
 
@@ -163,6 +166,11 @@ is the proof that `/api` skips authentik. The version string carries a leading `
 or a later number, not `2.8.0`. The second call is redirected to authentik's sign-in page — that is
 the proof that `/` does not skip it. A `200` on the second call means the gate is missing from the
 route, and the board is reachable by anybody who can reach the cluster.
+
+If the second call comes back with something other than `200` or `302`, the status is the fastest
+diagnostic — the same table [`authentik-apps.md`](authentik-apps.md) gives: **404** means authentik
+has no provider for this host (the blueprint is missing, or was never applied), **403** means the
+provider exists but its policy refused this account.
 
 ## Step 7 — metrics
 
@@ -213,10 +221,10 @@ curl -sk -X POST -o /dev/null -w '%{http_code}\n' https://vikunja.kub.local/api/
 # expect: 404
 ```
 
-The registration route accepts `POST` only, so a bare `curl` gets **405**, "method not allowed" — that
-is the route existing and refusing the method, not proof that registration is off. The second command
-sends the right method and gets **404**: the endpoint is not there at all, which is what a board with
-registration switched off reports. Expect both numbers in that order.
+The registration route accepts `POST` only, so a bare `curl` gets **405**, method not allowed — that
+proves the route is there and says nothing about registration. The second command sends the right
+method and gets **404**: the route exists, but its handler answers 404 while registration is
+switched off. Expect both numbers in that order.
 
 A `200` on the second command means registration is open and anybody who reaches the address can
 make an account. Close it in the chart: `service.enableregistration: false` in the `config.yml`
@@ -253,7 +261,7 @@ pastes the outputs back.
 ## Success, in one place
 
 - `Synced Healthy` on the Application, one pod `1/1` with no restarts.
-- The log shows migrations, then a connection, with no error between them.
+- The log shows the migration text and a database connection line, with no error either side of them.
 - `http://` answers 301 with `Location: https://vikunja.kub.local/`.
 - The certificate validates against `local-ca.pem`, `subject CN=kub.local`, `issuer CN=ashulab internal CA`.
 - `/api/v1/info` answers without a session and reports `v2.8.0` or later; `/` redirects to authentik.
@@ -268,12 +276,34 @@ no export in this procedure: the nightly dump in [`postgres-add-database.md`](po
 holds them until its retention ends.
 
 ```bash
-kubectl -n argocd delete application vikunja
+git switch -c chore/retire-vikunja
+git rm cluster/argocd/projects/vikunja.yaml
+git rm -r cluster/helm/vikunja
+git commit -m "🔥 remove the board"
+git push origin chore/retire-vikunja
+# then open a pull request against develop and merge it (AGENTS.md §Git workflow)
+```
+
+Retire it in git **first**, as the Calibre cutover did
+([`books-cutover.md`](books-cutover.md#rollback)). Deleting the Application with `kubectl` does not
+retire anything: the files stay on `develop`, and the root Application recreates the Application on
+its next sync — with `CreateNamespace=true`, which recreates the namespace too. The object has to
+leave git before any cluster state is touched.
+
+Confirm nothing will put it back:
+
+```bash
+kubectl -n argocd get application vikunja
+# expect: Error from server (NotFound): applications.argoproj.io "vikunja" not found
+```
+
+Only then the namespace, which removes the pod, the board's Secret and its volume:
+
+```bash
 kubectl delete namespace vikunja
 ```
 
-Then drop the database and the role, as in the rollback of
-[`vikunja-database.md`](vikunja-database.md):
+And last the database, as in the rollback of [`vikunja-database.md`](vikunja-database.md):
 
 ```bash
 kubectl -n databases exec -i statefulset/postgres -c postgres -- psql -U postgres -d postgres -v ON_ERROR_STOP=1 <<'SQL'
@@ -282,10 +312,12 @@ DROP ROLE vikunja;
 SQL
 ```
 
-Order matters. Deleting the Application stops ArgoCD from recreating what the next two commands
-remove; deleting the namespace removes the pod, the board's Secret and its volume, which is what lets
-`DROP DATABASE` take the lock it needs. Deleting the namespace first would leave the board running
-until ArgoCD noticed — it does notice, and that is a fight with a controller you do not need.
+The order is what makes the last two work. After the Application is gone from git and from the
+cluster, nothing recreates the namespace or the board's pod; deleting the namespace removes that pod,
+which is what lets `DROP DATABASE` run, because it refuses while a session is connected — the same
+rule [`vikunja-database.md`](vikunja-database.md) records for scaling the board down. Do it the other
+way round and the board comes back mid-drop, its session holds the database open, and `DROP DATABASE`
+fails with "database is being accessed by other users".
 
 The last dump is on the `postgres-dumps` claim. It is the way back, and it keeps only the 14 days of
 retention.
