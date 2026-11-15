@@ -2,8 +2,8 @@
 
 How a unit of work travels from a plan file to a ticket on the board, and back. It binds every agent
 that works in these repositories: the short form is five lines in `~/.config/opencode/AGENTS.md`, which
-every session reads; this page is the long form, with the transitions, the fields, and two worked
-examples.
+every session reads; this page is the long form, with the transitions, the fields, and two specimens —
+a handover and a refusal — made to be copied in shape, not in wording.
 
 The board is Vikunja at <https://vikunja.kub.local>, reachable from the LAN only. It exists because a
 plan file cannot answer "is this done, and did anyone check?". A ticked checkbox says an agent ran out
@@ -59,36 +59,42 @@ Two habits that keep the fields honest:
 - The description is edited in place as the work lands. A PR link appended to a ticket in
   `Waiting for validation` is expected; a second ticket describing the same task is not.
 
-## A worked handover
+## A handover, as a shape
 
-Task: `AGENTS.md` §7 item 8 — the exportarr URL in the sonarr chart points at port 7878, and Sonarr
-listens on 8989. The session found the ticket in `Ready` in the `homelab` project, moved it to `Doing`,
-assigned it to its own account, did the work, and parks it like this.
+What follows is **a shape to copy, not a transcript.** Every identifying value is a stand-in, and the
+command and its output are invented to show where they go. A real ticket replaces each one with what
+its own session did, and pastes the output its own command actually printed — which is the whole
+point of the rule that the description is the evidence. No value below is quoted from a real ticket,
+and nothing below is a claim about the state of the cluster.
+
+The situation it shows: a one-line defect in a chart. The session finds the ticket in `Ready` in the
+repository's project, moves it to `Doing`, assigns it to the account its token acts as, does the work,
+and parks it like this.
 
 Bucket: `Waiting for validation`.
 
 Description, as written on the ticket:
 
 ```text
-repo: homelab
-plan: docs/superpowers/plans/2026-11-10-homelab-programme-index.md, W2 task 3
-branch: fix/sonarr-exportarr-port
-PR: https://github.com/vyrtualsynthese/homelab/pull/123
+repo: <repository>
+branch: <branch>
+PR: <pull request URL>
 
 What changed
-- cluster/helm/media-stack/sonarr/templates/deployment.yaml: the exportarr URL now uses the
-  service port 8989 instead of 7878. sonarr-anime already had this right; the two charts now match.
-- Nothing else in the chart was touched.
+- <path>: <the change, in a line or two>. Nothing else in the chart was touched.
 
 Verification
-$ helm template test cluster/helm/media-stack/sonarr -f cluster/helm/media-stack/sonarr/values.yaml \
-    | grep -A1 'name: URL'
+$ helm template test <chart path> -f <chart path>/values.yaml | grep -A1 'name: URL'
             - name: URL
-              value: "http://127.0.0.1:8989"
+              value: "http://<service name>:<port>"
 
-Expected 8989 (the port Sonarr listens on, from the same chart's Service); the render above shows
-8989. helm template exits 0.
+Expected the port that chart's Service exposes, since the two must agree; the render above shows
+that same port. helm template exits 0.
 ```
+
+The `plan:` line is left out of this sketch on purpose: the field table above says the description
+carries the plan path and the task number, and there is no plan task standing behind this shape to
+name. A real ticket carries it, pointing at the plan file the task actually came from.
 
 What the agent did, in order: moved the ticket `Doing` → `Waiting for validation`, added the label
 `implementer`, and stopped. It also ticked that step's box in the plan, in the same commit as the chart
@@ -99,17 +105,17 @@ What the operator does next, and the agent does not: read the description, run t
 evidence looks thin, then either accept — move to `Done`, which marks the task done — or refuse, which
 is the next section.
 
-## A refusal, worked
+## A refusal, as a shape
 
-The operator opens the same ticket, runs the check from outside the chart, and refuses. The comment
-they leave:
+The operator opens the same ticket — still the illustrative one — runs the check from outside the
+chart, and refuses. The comment they leave:
 
 ```text
-Refused. The render shows 8989, but the exportarr container is not reading that URL in the live
-pod: `kubectl -n media-stack exec deploy/sonarr -- env | grep -i url` still prints 7878, and the
-exporter's /health answers 502. Either the env var is set twice (check the exportarr block in
-values.yaml, not only the template) or the change needs the pod restarted, which is a step this PR
-does not do. Please close whichever it is and paste the exec output here.
+Refused. The render shows the port you set, but the exporter container is not reading that URL in
+the live pod: `kubectl -n <namespace> exec deploy/<app> -- env | grep -i URL` still prints the old
+value, and the exporter's /health answers 502. Either the env var is set twice (check the sidecar
+block in values.yaml, not only the template) or the change needs the pod restarted, which is a step
+this PR does not do. Please close whichever it is and paste the exec output here.
 ```
 
 They then move the ticket `Waiting for validation` → `Doing`. That is the whole refusal: one comment
