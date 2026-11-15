@@ -171,6 +171,19 @@ mkcert certificate whose subject alternative names include `*.kub.local`. The ch
 installed shows a certificate warning, which is accepted here; installing the root on the phone or laptop
 removes it.
 
+**That certificate expired on 2026-05-06** — issued 2024-02-06, mkcert's two-year-plus lifetime — so until
+it is reissued the browser reports a *date* error, not only the trust warning. Reissue it on the machine
+that holds the CA (`mkcert -CAROOT`, which is where the original came from) with `*.kub.local` in the SAN
+list, then replace the Secret:
+
+```bash
+kubectl -n kube-system create secret tls local-cert \
+  --cert=kub.local.pem --key=kub.local-key.pem --dry-run=client -o yaml | kubectl apply -f -
+```
+
+Traefik serves the new certificate as soon as the Secret changes, without a restart, and every route that
+falls back to the default store benefits — this route is currently the only one that does.
+
 ### Sign-in
 
 There is **no forward-auth gate** in front of this route. CWA signs users in over **OIDC** itself — the

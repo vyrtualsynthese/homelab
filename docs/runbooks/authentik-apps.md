@@ -305,6 +305,15 @@ plain-HTTP browser discards, so the callback would return without its session. I
 (`kube-system/local-cert`, a mkcert certificate with `*.kub.local`). Clients without that root show a
 warning; that is expected and accepted.
 
+**That default certificate expired on 2026-05-06**, so the browser will report a date error rather than a
+plain trust warning until it is reissued. Reissue it on the machine holding the CA (`mkcert -CAROOT`),
+keeping `*.kub.local` in the SAN list, and replace the Secret — Traefik serves it immediately:
+
+```bash
+kubectl -n kube-system create secret tls local-cert \
+  --cert=kub.local.pem --key=kub.local-key.pem --dry-run=client -o yaml | kubectl apply -f -
+```
+
 Setup, in this order — step 1 must happen **before** the blueprint merges, or the file rolls back and
 creates nothing:
 
