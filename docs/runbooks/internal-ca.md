@@ -77,11 +77,17 @@ Do it before 2028-11-14. The root stays; every client keeps working.
 
 ```bash
 hack/internal-cert.sh          # reuses local-ca.pem, signs a new leaf
-kubectl -n kube-system create secret tls local-cert \
+
+kubectl -n kube-system delete secret local-cert --ignore-not-found
+kubectl -n kube-system create secret tls local-cert --save-config \
   --cert=$HOME/.config/secrets/kub-local/kub.local.pem \
-  --key=$HOME/.config/secrets/kub-local/kub.local-key.pem \
-  --dry-run=client -o yaml | kubectl apply -f -
+  --key=$HOME/.config/secrets/kub-local/kub.local-key.pem
 ```
+
+**Delete then create, not `apply`.** The Secret in place is `Opaque` (it was made with
+`--from-file`), and a Secret's `type` field is immutable, so `kubectl apply` with `type: kubernetes.io/tls`
+is rejected with `field is immutable`. `--save-config` records the last-applied annotation so a later
+`apply` does not warn about it.
 
 Traefik picks the new Secret up without a restart. Confirm:
 
