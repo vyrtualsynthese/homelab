@@ -60,32 +60,31 @@ service:
   port: 8080
 
 ingress:
+  # -- Render the two IngressRoutes. Traefik CRDs only: this chart never renders a
+  # networking.k8s.io/v1 Ingress, and the host is not templated because the route
+  # has always had exactly one.
   enabled: true
-  className: no
+  host: qbittorrent.kub.local
+  # -- Traefik entry points. `websecure` carries the route; `web` only redirects.
+  entryPoints:
+    - websecure
+  # -- Render the plain-HTTP mirror router.
+  redirectToHttps: true
+  # -- Middlewares, rendered as `<namespace>-<name>@kubernetescrd`, in order.
+  # -- No authentik gate: qBittorrent keeps its own login, cross-seed drives its API
+  # -- with credentials, and adding the gate would need an `/api` exemption anyway.
+  # -- `lan-only` is the network floor, shared with every non-public route.
+  middlewares:
+    - name: lan-only
+      namespace: kube-system
   annotations: {}
-  # kubernetes.io/ingress.class: nginx
-  # kubernetes.io/tls-acme: "true"
-  hosts:
-    - host: chart-example.local
-      paths:
-        - path: /
-          pathType: ImplementationSpecific
-  tls: []
-  #  - secretName: chart-example-tls
-  #    hosts:
-  #      - chart-example.local
-
-# Memory measured with Prometheus (2.5h window, 197 seeding torrents):
-# working set peaked at 15.99GiB against the old 16GiB limit, of which
-# 13.93GiB was page cache from mmap disk I/O and only 0.07GiB was RSS.
-# Disk I/O is now POSIX (disk_io_type=2) and memory_working_set_limit=6144,
-# so the process footprint is bounded by a ~6GiB libtorrent cache plus
-# small anonymous memory. 12GiB keeps ~5GiB of headroom over that target.
-# CPU peaked at 601m with five concurrent race torrents. The request follows the
-# repo convention (1m-100m) because a request only reserves scheduling; what
-# protects a race burst is that there is deliberately no CPU limit, so the
-# single libtorrent network thread can use idle capacity instead of being
-# throttled the moment a race starts.
+  tls:
+    # -- Send the router over TLS, from the cluster default certificate
+    # -- (`kube-system/local-cert`). See docs/runbooks/internal-ca.md.
+    enabled: true
+    # -- TLSOption from the `traefik-gate` chart.
+    options: internal-tls
+    optionsNamespace: kube-system
 resources:
   requests:
     cpu: 100m

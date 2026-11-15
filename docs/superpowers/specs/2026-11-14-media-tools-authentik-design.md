@@ -324,6 +324,37 @@ The local password survives as break-glass and is what `/opds` uses. Because the
 `Secure` everywhere, that break-glass login works only on `http://localhost:8083` after a port-forward;
 browsers exempt `localhost` from the https rule.
 
+### 12.6 The whole media stack moved to TLS (2026-11-15)
+
+§3 declared TLS out of scope: the tools are on `web` over plain HTTP and `lan-only` is the only
+restriction. Calibre-Web broke that assumption — its OIDC needs a `Secure` session cookie — and the
+operator then asked for the same treatment everywhere in the namespace. So every media-stack `kub.local`
+route is now served on `websecure`, with a `web` twin that redirects.
+
+Three mechanisms, deliberately shared rather than copied per chart:
+
+| Object | Where | Why |
+|---|---|---|
+| `kube-system/redirect-to-https` | `traefik-gate` chart | one `redirectScheme` for all 13 redirect routers |
+| `kube-system/internal-tls` | `traefik-gate` chart | one TLSOption; a copy per chart would only let them drift |
+| `kube-system/local-cert` | Secret, signed by `hack/internal-cert.sh` | the default certificate, `*.kub.local`, see `docs/runbooks/internal-ca.md` |
+
+What changed in the charts: `entryPoints: [websecure]`, `tls.enabled: true` with `options: internal-tls`,
+`redirectToHttps: true`, and a `-redirect` IngressRoute rendered from `ingressroute.yaml`. qBittorrent's
+hand-written `ingress.yaml` got the same shape, since it never had a values-driven route.
+
+What changed in authentik: the nine proxy providers now say `https://<tool>.kub.local` in `external_host`,
+and autobrr's registered callback became `https://autobrr.kub.local/api/auth/oidc/callback`. Both matter
+mechanically — the outpost takes its cookie's `Secure` flag from the provider scheme, and autobrr builds
+its callback from `X-Forwarded-Proto` — and neither is visible from the chart side.
+
+The `-redirect` routers carry `lan-only` and nothing else. Putting the gate there sent a plain-HTTP visitor
+through authentik first and then back to `http`, which is a redirect loop waiting to happen; the gate runs
+on the TLS router, once.
+
+Consequence to accept: every client needs the private root installed, and anything calling
+`http://<tool>.kub.local` from a script now gets a `301`. Both are recorded in the runbook.
+
 ### 12.5 What is finished and what is not
 
 Finished and verified live: sonarr, radarr, lidarr, prowlarr, bazarr, bazarr-anime, tautulli,

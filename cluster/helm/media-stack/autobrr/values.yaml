@@ -83,11 +83,13 @@ ingressRoute:
   apiVersion: traefik.containo.us/v1alpha1
   # -- Traefik entry points. `web` is plain HTTP on kub.local; `websecure` is TLS.
   entryPoints:
-    - web
+    - websecure
   # -- Single host. For a second host, copy the chart.
   host: autobrr.kub.local
   # -- Path prefix. `/` matches everything.
   pathPrefix: /
+  # -- Render the plain-HTTP mirror router that redirects to this one.
+  redirectToHttps: true
   # -- Middlewares, rendered as `<namespace>-<name>@kubernetescrd`.
   # Example: [{ name: lan-only, namespace: kube-system }]
   # No authentik-forwardauth here on purpose: autobrr speaks OIDC natively, so
@@ -99,14 +101,18 @@ ingressRoute:
   labels: {}
   annotations: {}
   tls:
-    # -- Send the router over TLS. Requires the tls block below to mean anything.
-    enabled: false
+    # -- Send the router over TLS. On: the cluster serves `*.kub.local` from the
+    # -- default certificate (`kube-system/local-cert`), and the `web` router only
+    # -- redirects here. See docs/runbooks/internal-ca.md.
+    enabled: true
     # -- Use a pre-existing certificate instead of asking Traefik to issue one.
     secretName: ""
     # -- Traefik ACME resolver name, for example `myresolver`.
     certResolver: ""
-    # -- TLSOption resource name in this namespace.
-    options: ""
+    # -- TLSOption resource name, from the `traefik-gate` chart.
+    options: internal-tls
+    # -- Namespace of that TLSOption.
+    optionsNamespace: kube-system
 
 storage:
   # -- Render the config PersistentVolumeClaim. Set to false only when the app
@@ -150,8 +156,8 @@ env:
   AUTOBRR__OIDC_ISSUER: "https://authentik.kub.home.ashudev.com/application/o/autobrr/"
   AUTOBRR__OIDC_CLIENT_ID: "autobrr"
   # Must match the provider's registered redirect exactly, scheme included: the
-  # route is plain HTTP, and autobrr builds this from X-Forwarded-Proto.
-  AUTOBRR__OIDC_REDIRECT_URL: "http://autobrr.kub.local/api/auth/oidc/callback"
+  # route is TLS on `websecure`, and autobrr builds this from X-Forwarded-Proto.
+  AUTOBRR__OIDC_REDIRECT_URL: "https://autobrr.kub.local/api/auth/oidc/callback"
   # autobrr keeps the password form whenever a user exists in its database, so
   # it has to be switched off explicitly to get one login.
   AUTOBRR__OIDC_DISABLE_BUILT_IN_LOGIN: "true"
