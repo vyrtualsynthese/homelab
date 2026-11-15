@@ -129,6 +129,12 @@ env:
   # They match the rest of the media stack.
   PUID: "1100"
   PGID: "1100"
+  # ASP.NET Core's own switch for reverse proxies: honour `X-Forwarded-Proto`, which
+  # is what makes the app build `https://` URLs. Without it the login redirect and any
+  # absolute link point at plain HTTP, and the browser takes a pointless hop through
+  # the 301 that the `web` router answers. Harmless where the app never emits an
+  # absolute URL.
+  ASPNETCORE_FORWARDEDHEADERS_ENABLED: "true"
   # Warnings and errors only. Fluent Bit ships every container line to Loki
   # unfiltered, and Sonarr's default is `info`: one line per request, search and
   # import. `SONARR__LOG__LEVEL` is the file level, `CONSOLELEVEL` is stdout (the

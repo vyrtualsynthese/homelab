@@ -249,6 +249,10 @@ The certificate is the cluster default, `kube-system/local-cert`, from the priva
   mismatch shows up as a redirect loop or a refused callback.
 - **Anything calling `http://<tool>.kub.local` from a script now gets a `301`.** That includes API clients
   that do not follow redirects; switch them to `https://` and give them the root.
+- **The Servarr apps need `ASPNETCORE_FORWARDEDHEADERS_ENABLED=true`** to trust `X-Forwarded-Proto`. ASP.NET
+  builds absolute URLs from the scheme it believes in, so without it the login redirect and any absolute
+  link say `http://`, and the browser takes needless hops through the 301. It is set in sonarr, radarr,
+  lidarr, prowlarr and both anime twins. The other tools emit relative redirects and do not care.
 
 ### Adding another tool to the gate
 
