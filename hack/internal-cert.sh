@@ -21,9 +21,14 @@
 #     --dry-run=client -o yaml | kubectl apply -f -
 #
 # Why this script exists: `kube-system/local-cert` was last signed by hand with
-# mkcert and expired on 2026-05-06, which went unnoticed for ten months. Run this
+# mkcert and expired on 2026-05-06, which went unnoticed for ten months, and the
+# CA that could have renewed it is gone (only its certificate survived). Run this
 # again before the date it prints; the `local-cert` expiry is a candidate for a
 # Prometheus rule.
+#
+# **Back up `local-ca-key.pem`.** It is the one file here whose loss costs real
+# work: without it no renewal is possible, and a new root has to be installed on
+# every client again. A password manager entry is the right place.
 set -euo pipefail
 
 OUT="${HOME}/.config/secrets/kub-local"

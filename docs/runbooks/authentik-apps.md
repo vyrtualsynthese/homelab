@@ -318,6 +318,9 @@ kubectl -n kube-system create secret tls local-cert \
 ```
 
 The root to install once on each client is `~/.config/secrets/kub-local/local-ca.pem`.
+**Back up `local-ca-key.pem` from that directory to the password manager.** Its loss is what forced a new
+root this time: the previous CA's certificate was still in `C:\Users\ashuv\Documents\Scans\rootCA.pem` and
+in Bitwarden, but its private key was nowhere, so the trusted root could not issue anything again.
 
 Setup, in this order — step 1 must happen **before** the blueprint merges, or the file rolls back and
 creates nothing:
