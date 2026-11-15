@@ -3,7 +3,8 @@
 # This chart follows the contract in docs/charts/README.md and the shape of the
 # reference chart, media-stack/autobrr. The differences are the ones this app needs:
 # an image that already runs as a non-root UID, a data directory at /opt/data, a
-# real pair of health endpoints, and a LAN-only route for an app with no login.
+# real pair of health endpoints, and a route that is LAN-only at the edge and gated
+# by authentik in front of an app that ships no login.
 
 # -- Override the chart name.
 nameOverride: ""
@@ -85,8 +86,9 @@ ingressRoute:
   # -- API group. `traefik.containo.us/v1alpha1` is what the cluster's Traefik
   # 2.x watches today; flip this to `traefik.io/v1alpha1` when Traefik v3 lands.
   apiVersion: traefik.containo.us/v1alpha1
-  # -- Traefik entry points. `web` is plain HTTP on kub.local; `websecure` is TLS.
-  # This app has no login of its own, so it stays on `web`, inside the LAN.
+  # -- Traefik entry points. `web` is plain HTTP on kub.local and only redirects;
+  # `websecure` is TLS, where the real route lives. The app has no login of its own,
+  # so it is served over TLS and gated by authentik rather than left on `web`.
   entryPoints:
     - websecure
   # -- Single host. For a second host, copy the chart.
@@ -104,6 +106,21 @@ ingressRoute:
     - name: lan-only
       namespace: kube-system
     - name: authentik-forwardauth
+      namespace: kube-system
+  # -- Middlewares for the `/api` rule, rendered as a second, higher-priority route
+  # on the same host. Empty means `/api` is gated like the rest of the app; here it is
+  # set to `lan-only` alone so scripts can call the API without a browser session.
+  #
+  # Read this before changing it. Maintainerr 3.32.0 has no login and checks no
+  # credential on inbound requests: the key on its Settings page is only sent by the
+  # app to itself (apps/server/src/modules/api/internal-api/). So this exemption does
+  # not trade a key for a session, it removes the only access control the app has.
+  # Anything on the LAN, on WireGuard, or in the pod network can read every stored
+  # credential and download the SQLite database at `/api/settings/database/download`.
+  # The UI keeps its gate, but the UI is a shell over the same API, so the gate stops
+  # protecting anything. Decided 2026-11-15; revert to `[]` to close it again.
+  apiBypassMiddlewares:
+    - name: lan-only
       namespace: kube-system
   labels: {}
   annotations: {}
