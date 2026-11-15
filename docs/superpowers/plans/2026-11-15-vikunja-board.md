@@ -107,11 +107,11 @@ Contents, in this order:
    ```
 6. Verification, with the exact expected output:
    ```bash
-   kubectl -n databases exec postgres-postgresql-0 -- \
+   kubectl -n databases exec statefulset/postgres -- \
      psql -U postgres -tAc "select datname from pg_database where datname='vikunja'"
    # expect: vikunja
-   kubectl -n vikunja get secret vikunja-db -o jsonpath='{.data.VIKUNJA_DATABASE_PASSWORD}' | wc -c
-   # expect: a number greater than 0
+   kubectl -n vikunja get secret vikunja-db -o jsonpath='{.data.VIKUNJA_DATABASE_PASSWORD}' | base64 -d | wc -c
+   # expect: 32 (24 bytes of randomness, base64-encoded and decoded back)
    ```
 7. Rollback: drop the database and delete the Secret. The board has no data yet.
 
@@ -372,7 +372,8 @@ Steps for the operator, each with the output that means success:
 11. Rollback, if the board is ever abandoned: delete the Application, then the namespace, then drop the
     database and the role. The dump in the PostgreSQL nightly backup holds the board until then.
 12. Add a row for each of the three Vikunja runbooks to the table in `docs/runbooks/README.md`:
-    `vikunja-database.md`, `vikunja-first-start.md`, `vikunja-board-seed.md`.
+    `vikunja-database.md`, `vikunja-first-start.md`, `vikunja-board-seed.md`. Also add the `vikunja` /
+    `vikunja-db` row to the inventory table in `docs/secrets.md` (keys, consumer, never the value).
 
 - [ ] **Step 2: Operator executes it and pastes outputs 2, 3, 4, 6, 7, 8 and 10 back**
 
