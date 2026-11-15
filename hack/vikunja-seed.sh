@@ -282,10 +282,12 @@ seed_project() {
   # "none", and a re-run has to repair it — the create body never reaches it
   # again.
   #
-  # Both fields travel in ONE POST. Whether this endpoint patches the view or
-  # replaces it is unproven, and a second call is unsafe on either answer: if it
-  # replaces, the second body clears whatever the first set, and every run would
-  # repair one setting while breaking the other.
+  # Both fields travel in ONE POST, and both travel EVERY time — not only when
+  # both need repair. This endpoint replaces the view rather than patching it,
+  # so a body carrying one field clears the other: a run that repaired only the
+  # done bucket would reset the mode to "none", and the next run would repair
+  # the mode while resetting the done bucket, for ever. Sending the current value
+  # of the field that needs nothing is what makes one repair safe.
   if [ -n "$done_id" ] && [ "$done_current" != "$done_id" ]; then
     need_done=1
   fi
@@ -299,16 +301,12 @@ seed_project() {
 
   if [ "$need_done" = 1 ] || [ "$need_mode" = 1 ]; then
     body='{}'
-    if [ "$need_done" = 1 ]; then
-      if [[ "$done_id" =~ ^[0-9]+$ ]]; then
-        body="$(jq -c --argjson id "$done_id" '. + {done_bucket_id: $id}' <<<"$body")"
-      else
-        body="$(jq -c --arg id "$done_id" '. + {done_bucket_id: $id}' <<<"$body")"
-      fi
+    if [[ "$done_id" =~ ^[0-9]+$ ]]; then
+      body="$(jq -c --argjson id "$done_id" '. + {done_bucket_id: $id}' <<<"$body")"
+    else
+      body="$(jq -c --arg id "$done_id" '. + {done_bucket_id: $id}' <<<"$body")"
     fi
-    if [ "$need_mode" = 1 ]; then
-      body="$(jq -c --arg m "$BUCKET_MODE" '. + {bucket_configuration_mode: $m}' <<<"$body")"
-    fi
+    body="$(jq -c --arg m "$BUCKET_MODE" '. + {bucket_configuration_mode: $m}' <<<"$body")"
     write_or_plan POST "/projects/$project_id/views/$view_id" "$body"
   fi
 
