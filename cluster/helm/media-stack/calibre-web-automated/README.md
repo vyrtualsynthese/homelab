@@ -186,6 +186,11 @@ kubectl -n kube-system create secret tls local-cert \
 Traefik serves the new certificate as soon as that Secret changes, without a restart. This route is
 currently the only one that falls back to the default store, so it is the only one affected.
 
+The root is `~/.config/secrets/kub-local/local-ca.pem`, installed once per client. Backup rules, the
+restore drill and the per-client trust install are in
+[`docs/runbooks/internal-ca.md`](../../../docs/runbooks/internal-ca.md) — read it before touching that
+directory, because losing `local-ca-key.pem` is what forced a new root the last time.
+
 ### Sign-in
 
 There is **no forward-auth gate** in front of this route. CWA signs users in over **OIDC** itself — the
