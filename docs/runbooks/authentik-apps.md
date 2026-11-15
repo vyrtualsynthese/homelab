@@ -324,6 +324,16 @@ in Bitwarden, but its private key was nowhere, so the trusted root could not iss
 [`internal-ca.md`](internal-ca.md) holds the backup rules, the restore drill, the renewal command and the
 per-client trust install.
 
+Replacing the Secret is a **delete then create**, not an `apply`: the object in place is `Opaque` and a
+Secret's `type` is immutable.
+
+```bash
+kubectl -n kube-system delete secret local-cert --ignore-not-found
+kubectl -n kube-system create secret tls local-cert --save-config \
+  --cert=$HOME/.config/secrets/kub-local/kub.local.pem \
+  --key=$HOME/.config/secrets/kub-local/kub.local-key.pem
+```
+
 Setup, in this order — step 1 must happen **before** the blueprint merges, or the file rolls back and
 creates nothing:
 

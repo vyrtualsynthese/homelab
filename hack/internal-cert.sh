@@ -14,11 +14,13 @@
 #   hack/internal-cert.sh --out DIR      where to write (default: below)
 #
 # Nothing here is committed: keys never enter the repository. Replacing the Secret
-# takes effect at once, without a Traefik restart:
+# takes effect at once, without a Traefik restart — but it has to be deleted and
+# recreated, not applied in place: the existing object is `Opaque` and a Secret's
+# `type` field is immutable, so `kubectl apply` fails with "field is immutable".
 #
-#   kubectl -n kube-system create secret tls local-cert \
-#     --cert=DIR/kub.local.pem --key=DIR/kub.local-key.pem \
-#     --dry-run=client -o yaml | kubectl apply -f -
+#   kubectl -n kube-system delete secret local-cert --ignore-not-found
+#   kubectl -n kube-system create secret tls local-cert --save-config \
+#     --cert=DIR/kub.local.pem --key=DIR/kub.local-key.pem
 #
 # Why this script exists: `kube-system/local-cert` was last signed by hand with
 # mkcert and expired on 2026-05-06, which went unnoticed for ten months, and the
@@ -102,8 +104,9 @@ openssl x509 -in "$LEAF_CRT" -noout -subject -dates -ext subjectAltName | sed 's
 echo "root   : $OUT/$CA_CRT   (install this once on every client)"
 echo
 echo "==> replace the Secret (Traefik reloads it without a restart):"
-printf '    kubectl -n kube-system create secret tls local-cert \\\n      --cert=%s/%s --key=%s/%s \\\n      --dry-run=client -o yaml | kubectl apply -f -\n' \
+printf '    kubectl -n kube-system delete secret local-cert --ignore-not-found\n    kubectl -n kube-system create secret tls local-cert --save-config \\\n      --cert=%s/%s --key=%s/%s\n' \
   "$OUT" "$LEAF_CRT" "$OUT" "$LEAF_KEY"
+echo "    (delete then create: the existing Secret is Opaque, and a Secret's type is immutable)"
 echo
 echo "==> verify what the cluster now offers:"
 printf '    openssl s_client -connect 192.168.1.46:443 -servername calibre.kub.local \\\n      </dev/null 2>/dev/null | openssl x509 -noout -issuer -dates\n'
