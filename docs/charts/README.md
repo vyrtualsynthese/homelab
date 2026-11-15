@@ -400,7 +400,9 @@ operational record. Its access control is the LAN allow list plus a sign-in: the
 rewrite files, and `calibre.kub.local` is only a DNS entry, so the shared `kube-system-lan-only`
 Middleware is what stops an outside request with `403` before the app sees it, and Calibre-Web asks
 authentik for a sign-in itself over OIDC (v4.0.8's generic provider, 2026-11-15). There is no proxy gate
-in front of it: `/opds` and Kobo sync use basic auth and cannot follow a redirect.
+in front of it: `/opds` and Kobo sync use basic auth and cannot follow a redirect. It is the one media
+tool on HTTPS — `https://calibre.kub.local`, `web` redirecting, the cluster default certificate — because
+its OAuth login forces a `Secure` session cookie and cannot complete a sign-in over plain HTTP.
 
 `kavita` as of 2026-11-13: a rebuild, not a touch-up. The old pod sat `Pending` for months on a
 Longhorn claim that vanished in the 2026 disk failure, so the chart now creates `kavita-config` on
