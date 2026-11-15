@@ -309,7 +309,7 @@ Copy `cluster/argocd/projects/filebrowser.yaml` and change the name to `vikunja`
 - [ ] **Step 8: Sanity-check the Application reference (CRLF-safe)**
 
 ```bash
-grep -h '^    path:' cluster/argocd/projects/vikunja.yaml | tr -d "\"' \r" | while read -r p; do [ -d "$p" ] || echo "BROKEN PATH $p"; done
+grep -h '^    path:' cluster/argocd/projects/vikunja.yaml | sed 's/^    path: *//' | tr -d "\"' \r" | while read -r p; do [ -d "$p" ] || echo "BROKEN PATH $p"; done
 ```
 
 - [ ] **Step 9: Commit**
