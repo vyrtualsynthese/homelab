@@ -5,8 +5,10 @@ Date: 2026-11-15
 ## What it is
 
 `kube-system/local-cert` is the cluster's **default** certificate. Traefik serves it on the `websecure`
-entry point to any TLS router that sets neither `secretName` nor `certResolver`; today that is
-`https://calibre.kub.local` alone.
+entry point to any TLS router that sets neither `secretName` nor `certResolver`. Since 2026-11-15 that is
+every `kub.local` route in the `media-stack` namespace — sonarr, radarr, lidarr, prowlarr, bazarr,
+bazarr-anime, sonarr-anime, radarr-anime, tautulli, maintainerr, autobrr, qbittorrent and calibre — with
+each `web` router redirecting to its `websecure` twin.
 
 It is a **private** certificate, and it has to be: public certificate authorities have been barred from
 issuing for internal names (`.local`, `.internal`, `.localhost`) since 2015, so a `.local` name can never

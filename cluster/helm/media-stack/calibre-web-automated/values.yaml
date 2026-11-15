@@ -273,5 +273,7 @@ ingressRoute:
     # -- Traefik ACME resolver name. Empty: ACME cannot issue for a `.kub.local`
     # name, which is not publicly resolvable.
     certResolver: ""
-    # -- TLSOption resource name in this namespace, rendered by `templates/tls-option.yaml`.
-    options: calibre-web-automated-tlsoption
+    # -- TLSOption resource name, from the `traefik-gate` chart.
+    options: internal-tls
+    # -- Namespace of that TLSOption.
+    optionsNamespace: kube-system

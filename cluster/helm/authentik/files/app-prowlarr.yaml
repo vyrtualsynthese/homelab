@@ -21,10 +21,10 @@ entries:
     attrs:
       name: prowlarr
       mode: forward_single
-      # Scheme must match the browser: these hosts are served on `web`, plain
-      # HTTP. The outpost takes the session cookie's Secure flag from this
-      # scheme, so `https` here would break the cookie on an http host.
-      external_host: http://prowlarr.kub.local
+      # Scheme must match the browser. These hosts are served over TLS on
+      # `websecure` since 2026-11-15, and the outpost takes the session cookie's
+      # Secure flag from this scheme, so it has to stay in step with the router.
+      external_host: https://prowlarr.kub.local
       authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
       invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
 
@@ -36,7 +36,7 @@ entries:
       name: Prowlarr
       slug: prowlarr
       provider: !KeyOf prowlarr-provider
-      meta_launch_url: http://prowlarr.kub.local/
+      meta_launch_url: https://prowlarr.kub.local/
       # Official logo, served from the dashboard-icons set. The browser
       # loads it, so the grid needs internet; swap to `fa://fa-<name>`
       # if it ever has to work offline.

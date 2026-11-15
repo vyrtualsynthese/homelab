@@ -48,7 +48,7 @@ helm template radarr cluster/helm/media-stack/radarr --namespace media-stack
 | `storage.*` | The config claim: class, size, mount path, or reuse an existing claim. | `local-path`, `128Mi`, `/config` |
 | `downloads.existingClaim`, `downloads.mountPath` | qBittorrent's completed-downloads claim, and where it is mounted. | `pvc-nfs-qbittorrent-download-nfs-subdir-external-provisioner`, `/downloads` |
 | `media.existingClaim`, `media.mountPath` | The Plex movie library claim and its mount. | `pvc-plex-media`, `/movies` |
-| `ingressRoute.*` | Traefik CRD routing: host, entry points, middlewares, TLS. | `radarr.kub.local`, `web`, no TLS |
+| `ingressRoute.*` | Traefik CRD routing: host, entry points, middlewares, TLS. | `radarr.kub.local`, `websecure`, TLS from the cluster default certificate; `web` redirects |
 | `env` | Non-secret variables, rendered inline into the container. Changing one rolls the pod. | `TZ`, `PUID`, `PGID`, log level |
 | `exportarr.*` | The metrics sidecar. See **Metrics**. | enabled on port 9707 |
 | `probes.{startup,liveness,readiness}` | HTTP probes on `/ping`. | enabled; startup 5s × 60, liveness 20s delay, readiness 10s delay |

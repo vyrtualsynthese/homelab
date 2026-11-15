@@ -1,0 +1,56 @@
+{{- /*
+Redirect every plain-HTTP request to the TLS router. Shared by every media-stack
+chart that serves a `kub.local` host, so the redirect lives in one place instead
+of one copy per chart.
+
+Order matters: the middleware that consumes it always lists `lan-only` first, so
+an off-LAN request is refused with 403 before it is redirected anywhere.
+*/ -}}
+apiVersion: {{ .Values.traefik.apiVersion }}
+kind: Middleware
+metadata:
+  name: redirect-to-https
+  namespace: kube-system
+  labels:
+    app.kubernetes.io/name: traefik-gate
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  redirectScheme:
+    scheme: https
+    # Permanent: browsers cache it and stop asking over HTTP. Traefik builds the
+    # Location from the request's own host, so every `*.kub.local` name lands on
+    # the TLS router of the same name.
+    permanent: true
+---
+{{- /*
+The TLS policy for the cluster's internal names. One object, referenced from
+each router as `kube-system-internal-tls`. It is deliberately not a per-app
+object: there is one certificate and one policy for `*.kub.local`, and a copy per
+chart would only let them drift.
+*/ -}}
+apiVersion: {{ .Values.traefik.apiVersion }}
+kind: TLSOption
+metadata:
+  name: internal-tls
+  namespace: kube-system
+  labels:
+    app.kubernetes.io/name: traefik-gate
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  minVersion: VersionTLS12
+  cipherSuites:
+    - TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256
+    - TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256
+    - TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384
+    - TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305
+    - TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384
+    - TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305
+    - TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305
+    - TLS_AES_256_GCM_SHA384
+    - TLS_AES_128_GCM_SHA256
+    - TLS_CHACHA20_POLY1305_SHA256
+    - TLS_FALLBACK_SCSV
+  curvePreferences:
+    - CurveP521
+    - CurveP384
+  sniStrict: false

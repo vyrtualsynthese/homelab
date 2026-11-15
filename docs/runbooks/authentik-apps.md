@@ -208,20 +208,47 @@ session.
 
 | Tool | Route | Protection | The tool's own login |
 |---|---|---|---|
-| calibre | `https://calibre.kub.local` | **OIDC, no gate; the only TLS route here** — verified live 2026-11-15 | renamed to the authentik username; the password stays as break-glass |
-| sonarr | `sonarr.kub.local` | forward-auth | off |
-| radarr | `radarr.kub.local` | forward-auth | off |
-| lidarr | `lidarr.kub.local` | forward-auth | off |
-| prowlarr | `prowlarr.kub.local` | forward-auth | off, probes fixed |
-| bazarr | `bazarr.kub.local` | forward-auth; `/api` exempt | none (always was) |
-| bazarr-anime | `bazarr-anime.kub.local` | forward-auth; `/api` exempt | none (always was) |
-| tautulli | `tautulli.kub.local` | forward-auth | **still on — needs a UI toggle** |
-| maintainerr | `maintainerr.kub.local` | forward-auth | none exists |
-| autobrr | `autobrr.kub.local` | **OIDC, no gate** | replaced by OIDC |
-| qbittorrent | `qbittorrent.kub.local` | **not gated yet** | — |
+| calibre | `https://calibre.kub.local` | **OIDC, no gate** — verified live 2026-11-15 | renamed to the authentik username; the password stays as break-glass |
+| sonarr | `https://sonarr.kub.local` | forward-auth | off |
+| radarr | `https://radarr.kub.local` | forward-auth | off |
+| lidarr | `https://lidarr.kub.local` | forward-auth | off |
+| prowlarr | `https://prowlarr.kub.local` | forward-auth | off, probes fixed |
+| bazarr | `https://bazarr.kub.local` | forward-auth; `/api` exempt | none (always was) |
+| bazarr-anime | `https://bazarr-anime.kub.local` | forward-auth; `/api` exempt | none (always was) |
+| tautulli | `https://tautulli.kub.local` | forward-auth | **still on — needs a UI toggle** |
+| maintainerr | `https://maintainerr.kub.local` | forward-auth | none exists |
+| autobrr | `https://autobrr.kub.local` | **OIDC, no gate** | replaced by OIDC |
+| qbittorrent | `https://qbittorrent.kub.local` | `lan-only` only — **no authentik gate yet** | its own login |
+| sonarr-anime | `https://sonarr-anime.kub.local` | `lan-only` only — no authentik gate by decision | its own login |
+| radarr-anime | `https://radarr-anime.kub.local` | `lan-only` only — no authentik gate by decision | its own login |
 
 Every route also carries `lan-only`. That middleware allows `192.168.1.0/24` (LAN), `10.8.0.0/24`
 (WireGuard) and `10.42.0.0/16` (pods — see the first trap below).
+
+### Every media-stack route is HTTPS since 2026-11-15
+
+The whole namespace moved to TLS, not just Calibre-Web. Each chart now renders two IngressRoutes: the real
+one on `websecure`, and a `-redirect` twin on `web` that answers with a permanent redirect. Two objects
+are shared rather than copied per chart, both in `cluster/helm/platform/traefik-gate`:
+
+| Object | What it does |
+|---|---|
+| `kube-system/redirect-to-https` | `redirectScheme: https`, on every `-redirect` router |
+| `kube-system/internal-tls` | the TLSOption every TLS router selects (TLS 1.2 minimum, ECDHE suites) |
+
+The certificate is the cluster default, `kube-system/local-cert`, from the private CA in
+[`internal-ca.md`](internal-ca.md). Consequences worth knowing:
+
+- **Every client needs the root installed.** A browser without it gets a warning, not an outage. The
+  per-client commands are in `internal-ca.md`.
+- **The `-redirect` routers carry `lan-only` and nothing else.** Putting the gate there would send a
+  plain-HTTP visitor through authentik before the redirect, and authentik would send them back to `http`.
+- **The authentik proxy providers say `https://<tool>.kub.local` in `external_host`**, and autobrr's
+  registered callback is `https://autobrr.kub.local/api/auth/oidc/callback`. The outpost takes its session
+  cookie's `Secure` flag from that scheme, and autobrr builds its callback from `X-Forwarded-Proto`; a
+  mismatch shows up as a redirect loop or a refused callback.
+- **Anything calling `http://<tool>.kub.local` from a script now gets a `301`.** That includes API clients
+  that do not follow redirects; switch them to `https://` and give them the root.
 
 ### Adding another tool to the gate
 

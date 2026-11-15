@@ -38,7 +38,38 @@ spec:
     {{- with .Values.ingressRoute.tls.options }}
     options:
       name: {{ . }}
-      namespace: {{ $.Release.Namespace }}
+      namespace: {{ $.Values.ingressRoute.tls.optionsNamespace | default $.Release.Namespace }}
     {{- end }}
   {{- end }}
+{{- if .Values.ingressRoute.redirectToHttps }}
+---
+{{- /* Plain-HTTP mirror of the route above: same rule and the same middlewares, then
+a permanent redirect to the TLS router. `lan-only` comes first, so a request from
+outside the LAN is refused with `403` rather than redirected. */}}
+apiVersion: {{ .Values.ingressRoute.apiVersion }}
+kind: IngressRoute
+metadata:
+  name: {{ include "app.fullname" . }}-redirect
+  labels:
+    {{- include "app.labels" . | nindent 4 }}
+    {{- with .Values.ingressRoute.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  entryPoints:
+    - web
+  routes:
+    - kind: Rule
+      match: Host(`{{ .Values.ingressRoute.host }}`){{- if ne .Values.ingressRoute.pathPrefix "/" }} && PathPrefix(`{{ .Values.ingressRoute.pathPrefix }}`){{- end }}
+      middlewares:
+        {{- /* `lan-only` and nothing else on purpose: redirecting must not send the
+        browser through authentik first. An off-LAN request is refused here rather
+        than redirected, and the TLS router runs the gate once the browser is on
+        https. */}}
+        - name: kube-system-lan-only@kubernetescrd
+        - name: kube-system-redirect-to-https@kubernetescrd
+      services:
+        - name: {{ include "app.fullname" . }}
+          port: {{ .Values.service.port }}
+{{- end }}
 {{- end }}

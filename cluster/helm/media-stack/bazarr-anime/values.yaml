@@ -79,11 +79,13 @@ ingressRoute:
   # -- Traefik entry points. `web` is plain HTTP on kub.local; this host is
   # internal-only, so there is no TLS and no redirect.
   entryPoints:
-    - web
+    - websecure
   # -- Single host. For a second host, copy the chart.
   host: bazarr-anime.kub.local
   # -- Path prefix. `/` matches everything.
   pathPrefix: /
+  # -- Render the plain-HTTP mirror router that redirects to this one.
+  redirectToHttps: true
   # -- Middlewares, rendered as `<namespace>-<name>@kubernetescrd`.
   # Example: [{ name: authentik, namespace: kube-system }]
   # No strip-authentik-header: Bazarr reads no X-authentik-* header, so there is
@@ -101,14 +103,18 @@ ingressRoute:
   labels: {}
   annotations: {}
   tls:
-    # -- Send the router over TLS. Requires the tls block below to mean anything.
-    enabled: false
+    # -- Send the router over TLS. On: the cluster serves `*.kub.local` from the
+    # -- default certificate (`kube-system/local-cert`), and the `web` router only
+    # -- redirects here. See docs/runbooks/internal-ca.md.
+    enabled: true
     # -- Use a pre-existing certificate instead of asking Traefik to issue one.
     secretName: ""
     # -- Traefik ACME resolver name, for example `myresolver`.
     certResolver: ""
-    # -- TLSOption resource name in this namespace.
-    options: ""
+    # -- TLSOption resource name, from the `traefik-gate` chart.
+    options: internal-tls
+    # -- Namespace of that TLSOption.
+    optionsNamespace: kube-system
 
 storage:
   # -- Render the config PersistentVolumeClaim. Set to false only when the app
