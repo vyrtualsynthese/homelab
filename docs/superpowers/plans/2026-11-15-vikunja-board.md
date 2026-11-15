@@ -130,6 +130,7 @@ git commit -m "📝 docs: runbook to create the board's database"
 
 **Files:**
 - Create: `cluster/helm/vikunja/Chart.yaml`
+- Modify: `.gitignore`
 - Create: `cluster/helm/vikunja/values.yaml`
 - Create: `cluster/helm/vikunja/templates/ingressroute.yaml`
 - Create: `cluster/helm/vikunja/README.md`
@@ -140,7 +141,18 @@ git commit -m "📝 docs: runbook to create the board's database"
 - Produces: Service `vikunja` port `3456` in namespace `vikunja`; `IngressRoute` `vikunja` at
   `vikunja.kub.local`.
 
-- [ ] **Step 1: Write `Chart.yaml`**
+- [ ] **Step 1: Ignore the built dependency before it appears**
+
+`helm dependency build` writes `cluster/helm/vikunja/charts/` and `Chart.lock`, which must never be
+committed. Add to `.gitignore`, following the existing per-chart blocks:
+
+```
+# Built by ArgoCD at sync time
+cluster/helm/vikunja/charts/
+cluster/helm/vikunja/Chart.lock
+```
+
+- [ ] **Step 2: Write `Chart.yaml`**
 
 ```yaml
 apiVersion: v2
@@ -159,7 +171,7 @@ dependencies:
 `oci://` dependencies are already used in this repo (`discourse`, `ashuvidz-website`). Do not commit
 `charts/` or `Chart.lock`.
 
-- [ ] **Step 2: Write `values.yaml`**
+- [ ] **Step 3: Write `values.yaml`**
 
 The upstream chart merges its values under the key `vikunja:` onto the bjw-s `common` schema, and its
 hardcoded values already set the Service on port `3456`, the config at `/etc/vikunja/config.yml`,
@@ -228,7 +240,7 @@ base; all of it is standard bjw-s `common` schema. Set:
     redirectToHttps: true
   ```
 
-- [ ] **Step 3: Write `templates/ingressroute.yaml`**
+- [ ] **Step 4: Write `templates/ingressroute.yaml`**
 
 Two `IngressRoute` objects in one file, modelled on
 `cluster/helm/media-stack/tautulli/templates/ingressroute.yaml` (TLS, default certificate, redirect
@@ -246,7 +258,7 @@ router) and the `/api` rule in `cluster/helm/media-stack/bazarr/templates/ingres
 Both use `metadata.namespace: {{ .Release.Namespace }}`, the two `app.kubernetes.io/*` labels, and the
 Service name and port from values.
 
-- [ ] **Step 4: Render it and prove the six things that matter**
+- [ ] **Step 5: Render it and prove the six things that matter**
 
 ```bash
 helm dependency build cluster/helm/vikunja
@@ -280,7 +292,7 @@ OCI artifact was packaged without its subcharts: add `common` to *our* `Chart.ya
 dependency, pinned to `1.5.1` from `https://bjw-s-labs.github.io/helm-charts`, and re-render.
 
 
-- [ ] **Step 5: Write `README.md`**
+- [ ] **Step 6: Write `README.md`**
 
 One page: what the board is for, that state lives in PostgreSQL and not in the claim, why the
 upstream ingress is disabled, that the route is TLS on the internal certificate with HTTP redirecting
@@ -288,19 +300,19 @@ to it, that `/` carries `lan-only` **and** the Authentik gate while `/api` carri
 a token client works and the internet still cannot reach it), that metrics are scraped from
 `/api/v1/metrics`, and that the MCP endpoint requires app 2.7.0+.
 
-- [ ] **Step 6: Write `cluster/argocd/projects/vikunja.yaml`**
+- [ ] **Step 7: Write `cluster/argocd/projects/vikunja.yaml`**
 
 Copy `cluster/argocd/projects/filebrowser.yaml` and change the name to `vikunja`, the namespace to
 `vikunja`, and the path to `cluster/helm/vikunja`. Keep `CreateNamespace=true`, keep
 `targetRevision: develop`, add no `syncPolicy.automated`. Write the file with CRLF endings.
 
-- [ ] **Step 7: Sanity-check the Application reference (CRLF-safe)**
+- [ ] **Step 8: Sanity-check the Application reference (CRLF-safe)**
 
 ```bash
 grep -h '^    path:' cluster/argocd/projects/vikunja.yaml | tr -d "\"' \r" | while read -r p; do [ -d "$p" ] || echo "BROKEN PATH $p"; done
 ```
 
-- [ ] **Step 8: Commit**
+- [ ] **Step 9: Commit**
 
 ```bash
 git add cluster/helm/vikunja cluster/argocd/projects/vikunja.yaml
@@ -360,7 +372,7 @@ Steps for the operator, each with the output that means success:
 11. Rollback, if the board is ever abandoned: delete the Application, then the namespace, then drop the
     database and the role. The dump in the PostgreSQL nightly backup holds the board until then.
 
-- [ ] **Step 2: Operator executes it and pastes outputs 2, 3, 6 and 7 back**
+- [ ] **Step 2: Operator executes it and pastes outputs 2, 3, 4, 6, 7, 8 and 10 back**
 
 - [ ] **Step 3: Commit**
 
