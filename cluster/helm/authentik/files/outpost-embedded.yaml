@@ -29,6 +29,11 @@ entries:
   - model: authentik_blueprints.metaapplyblueprint
     attrs:
       identifiers:
+        name: ashulab-app-bazarr-anime
+      required: true
+  - model: authentik_blueprints.metaapplyblueprint
+    attrs:
+      identifiers:
         name: ashulab-app-lidarr
       required: true
   - model: authentik_blueprints.metaapplyblueprint
@@ -69,6 +74,7 @@ entries:
         - !Find [authentik_providers_proxy.proxyprovider, [name, filebrowser]]
         - !Find [authentik_providers_proxy.proxyprovider, [name, sonarr]]
         - !Find [authentik_providers_proxy.proxyprovider, [name, bazarr]]
+        - !Find [authentik_providers_proxy.proxyprovider, [name, bazarr-anime]]
         - !Find [authentik_providers_proxy.proxyprovider, [name, lidarr]]
         - !Find [authentik_providers_proxy.proxyprovider, [name, radarr]]
         - !Find [authentik_providers_proxy.proxyprovider, [name, qbittorrent]]
