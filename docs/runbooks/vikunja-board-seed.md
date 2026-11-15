@@ -49,7 +49,9 @@ export VIKUNJA_API_TOKEN='<the token>'
 ```
 
 `VIKUNJA_URL` is optional and defaults to that address. The token is read from the environment and
-never printed by the script; do not put it on the command line, where the shell records it.
+never printed by the script; do not put it on the command line, where the shell records it. One
+caveat: `curl` receives the token as an argument, so on this machine another local user can see it in
+`ps` while a request is in flight.
 
 One sentence about the certificate, because it applies to every call below: without `-k` curl would
 reject the cluster's internal certificate, so the script passes `-k`, which accepts the certificate
@@ -93,36 +95,53 @@ does not know yet because it has not written anything.
 card to the column it was created in, and `manual` is what allows a person to drag a card from
 `Doing` to `Waiting for validation`.
 
+On a board where the view does not exist yet, the dry run cannot know which default columns that view
+will bring, so it plans all four. The real run reads them back and matches by title — see Step 3.
+
 ## Step 3 — the real run
 
 ```bash
 ./hack/vikunja-seed.sh
 ```
 
-Expected: six blocks, one per repository, each with seven lines — the project, the view, the four
-columns, and the done bucket — then the saved filter.
+Expected: six blocks, one per repository — the project, the view, the four columns, the done bucket,
+and the bucket mode — then the saved filter.
 
 ```text
 project  homelab                                      created       id=1001
 view     homelab / Board                              created       id=1002
-bucket   homelab / Board / Ready                      created       id=1003
-bucket   homelab / Board / Doing                      created       id=1004
-bucket   homelab / Board / Waiting for validation     created       id=1005
-bucket   homelab / Board / Done                       created       id=1006
-done     homelab / Board                              created       bucket 1006 (Done)
+bucket   homelab / Board / Ready                      created       id=1006
+bucket   homelab / Board / Doing                      existing      id=1004
+bucket   homelab / Board / Waiting for validation     created       id=1007
+bucket   homelab / Board / Done                       existing      id=1005
+bucket   homelab / Board / To-Do                      kept          id=1003
+done     homelab / Board                              created       bucket 1005 (Done)
+mode     homelab / Board                              existing      manual
 ...
 filter   Awaiting my review                           created       id=1037
 
-seeded: 43 created, 0 already present, 0 kept (not created here)
+seeded: 31 created, 18 already present, 0 updated, 6 kept (not created here)
 ```
 
-43 is 6 × 7 plus the filter. Run it a second time and every line says `existing`, with
-`seeded: 0 created, 43 already present`. That second run is the proof of idempotency, not a repeat
-of the first.
+The block above is from a stand-in for the API whose new kanban views arrive with `To-Do`, `Doing`
+and `Done`. That is the case worth reading carefully: the two columns the script manages are matched
+by title and reported `existing`, `To-Do` is reported `kept` and left alone, and only `Ready` and
+`Waiting for validation` are created. A second `Done` would break the done bucket, which is why the
+view's columns are read back on the same run that creates it.
 
-A line that says `kept` is a column the script did not create and will not touch — a new kanban view
-may arrive with default columns of its own. Nothing is deleted because an empty column and a column
-holding work look the same from the API.
+A board whose new views arrive empty instead shows all four columns `created`, and the totals are
+`43 created, 0 already present, 0 updated, 0 kept` — 6 × 7 plus the filter. Whatever the totals, a
+`kept` line is a column the script did not create and will not touch; nothing is deleted, because an
+empty column and a column holding work look the same from the API.
+
+Run it a second time and every line says `existing`: `seeded: 0 created, 49 already present, 0
+updated, 6 kept (not created here)` on the board above, or `seeded: 0 created, 43 already present, 0
+updated, 0 kept (not created here)` on an empty-view board. That second run is the proof of
+idempotency, not a repeat of the first.
+
+`updated` is the fourth counter and it should be `0` on every run after the first: it counts a view
+whose bucket mode was repaired. A view made before this script set the mode, or made by hand, carries
+`none` and prints `mode … updated none -> manual`; that one write is the repair.
 
 ## Step 4 — verify
 
@@ -136,21 +155,28 @@ is wrong.
 ```text
 Verifying 6 boards against https://vikunja.kub.local
 
-PASS homelab                view 1002, 4 buckets, done bucket 1006
-PASS config                 view 1008, 4 buckets, done bucket 1012
-PASS scripts                view 1014, 4 buckets, done bucket 1018
-PASS ashuvidz-website       view 1020, 4 buckets, done bucket 1024
-PASS ashudev-website        view 1026, 4 buckets, done bucket 1030
-PASS selfhosted-helmcharts  view 1032, 4 buckets, done bucket 1036
+PASS homelab                view 1002, 5 buckets, done bucket 1005, mode manual
+PASS config                 view 1009, 5 buckets, done bucket 1012, mode manual
+PASS scripts                view 1016, 5 buckets, done bucket 1019, mode manual
+PASS ashuvidz-website       view 1023, 5 buckets, done bucket 1026, mode manual
+PASS ashudev-website        view 1030, 5 buckets, done bucket 1033, mode manual
+PASS selfhosted-helmcharts  view 1037, 5 buckets, done bucket 1040, mode manual
 PASS saved filter "Awaiting my review"
 
 verify: all 6 boards hold the shape the protocol expects
 ```
 
-Each `PASS` says the view is kanban, all four columns exist, and `done_bucket_id` names the column
-titled `Done`. The last one is the check that matters: without it a card sits in `Done` while the
-board still reports it as open, and every filter lists it as work outstanding. A `FAIL` names the
-repository and the problem, in the same words as the troubleshooting table below.
+Each `PASS` says the view is kanban, the four columns exist, `done_bucket_id` names the column titled
+`Done`, and the bucket mode is `manual`. The bucket count is what the API returned, so `5` means one
+column was kept. The done bucket is the check that matters most: without it a card sits in `Done`
+while the board still reports it as open, and every filter lists it as work outstanding. A `FAIL`
+names the repository and the problem, in the same words as the troubleshooting table below.
+
+The mode check depends on the API returning the field. If a `PASS` line has no `mode manual` next to
+it and a `NOTE` follows it, the instance did not return `bucket_configuration_mode`, so the mode could
+not be checked — the line would otherwise read as "the cards can be dragged" when nothing proved it.
+The verification still succeeds, and the summary says how many boards went unchecked. In that case a
+re-run cannot detect a view stuck on `none` either; moving a card by hand is the only test left.
 
 ## Step 5 — a seventh repository
 
@@ -217,6 +243,15 @@ Read the body before the status: Vikunja says which field it objected to.
 `done_bucket_id is 0, expected <id>`: the view exists and its `Done` column exists, but the view was
 never told that the column means done. Running the script again sets it. If it comes back after
 that, the column titled `Done` was renamed or duplicated, so match the title.
+
+`bucket_configuration_mode is "none", expected "manual"`: the view exists but its cards are pinned to
+the column they were created in. Running the script again repairs it and prints that line as
+`updated`; a dry run first shows `would-update none -> manual`. If the API does not return the field
+at all, `--verify` prints `NOTE … the mode was not checked` instead and the summary counts the
+boards it could not check — then the only proof is dragging a card by hand.
+
+A `kept` line naming a column you did not expect is not a fault: it is a column the view already had.
+Rename or delete it in the browser if it is noise, and the next run will report it gone.
 
 ## Rollback
 
