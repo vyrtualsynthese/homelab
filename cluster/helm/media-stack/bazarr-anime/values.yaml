@@ -86,7 +86,16 @@ ingressRoute:
   pathPrefix: /
   # -- Middlewares, rendered as `<namespace>-<name>@kubernetescrd`.
   # Example: [{ name: authentik, namespace: kube-system }]
+  # No strip-authentik-header: Bazarr reads no X-authentik-* header, so there is
+  # nothing to forge. The gate is the only prompt on this route.
   middlewares:
+    - name: lan-only
+      namespace: kube-system
+    - name: authentik-forwardauth
+      namespace: kube-system
+  # -- Middlewares for a second rule matching `PathPrefix(/api)`, without the gate.
+  # -- API clients send the API key, not a browser session.
+  apiBypassMiddlewares:
     - name: lan-only
       namespace: kube-system
   labels: {}
