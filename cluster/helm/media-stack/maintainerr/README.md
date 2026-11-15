@@ -70,7 +70,7 @@ the whole SQLite database (`GET /api/settings/database/download`). The "API key"
 is not checked on inbound requests; it exists for the app's own internal calls.
 
 So the boundary is the network, not the app. The one route is on the `web` entry point at
-`maintainerr.kub.local`, with no TLS and no middlewares. `kub.local` resolves through the Pi-hole
+`maintainerr.kub.local`, with no TLS. Since 2026-11-15 it carries `lan-only` and the authentik forward-auth gate — the only access control this app has, since it ships no login of its own. `kub.local` resolves through the Pi-hole
 wildcard record; it is not in a public zone. Do not attach a public host, a TLS block or a cert
 resolver to this chart. If it ever needs to leave the LAN, put an authenticating reverse proxy in
 front first — upstream documents the options at https://docs.maintainerr.info/security/.

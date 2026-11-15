@@ -2,7 +2,7 @@
 
 Lidarr is the music manager of the media stack. It watches indexers, grabs releases through
 qBittorrent and files them into the audio library Plex reads. It is internal-only:
-`lidarr.kub.local` on the `web` entry point, no TLS, no authentication in front of it.
+`lidarr.kub.local` on the `web` entry point, no TLS, authentik stands in front of it since 2026-11-15 (forward-auth gate); its own login is off.
 
 The chart is built from its sibling `../sonarr` — the same LinuxServer-plus-exportarr shape — and the
 contract in [`docs/charts/README.md`](../../../../docs/charts/README.md). The differences are listed

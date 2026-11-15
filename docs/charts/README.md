@@ -333,7 +333,9 @@ IngressRoute on the `web` entry point at `tautulli.kub.local`, no TLS, no redire
 is LAN-only. It also carries the second deliberate readiness exception: Tautulli reports Plex
 reachability and SQLite integrity only in a JSON body with HTTP 200, which the kubelet cannot read,
 so readiness is disabled rather than pointed at liveness. Its image starts as root and drops to
-`PUID`/`PGID`, so the capability set is `ALL` dropped plus the three calls that init makes. The chart
+`PUID`/`PGID`, so the capability set is `ALL` dropped plus the three calls that init makes. Since
+2026-11-15 the route carries the authentik forward-auth gate, and Tautulli's own login is the one
+thing still on — its web auth has no API, so it is a UI toggle. The chart
 creates the config claim: the previous one was a Longhorn volume that vanished in 2026, which is why
 the app had not run for 71 days.
 
@@ -379,9 +381,10 @@ runs `SELECT 1` and returns `503` when the SQLite file is missing, locked or cor
 so no exception is needed. The image already runs as UID 1000 and never as root, and the chart keeps
 it there: `ALL` capabilities dropped, no root phase, and a fresh claim the `local-path` provisioner
 creates `0777` and chowns to 1100. It is the one chart where the process UID and the claim owner
-differ, which works only because of the directory mode. It is also the first app with **no
-authentication at all**: upstream's model is an appliance on a network you control, so the LAN
-boundary is the only access control and the route stays on `web` at `maintainerr.kub.local`. The app
+differ, which works only because of the directory mode. Upstream gives it **no
+authentication at all**: its model is an appliance on a network you control. The LAN boundary is no
+longer the only control — since 2026-11-15 the route carries the authentik forward-auth gate, which
+is also why its API must stay gated: with no login and no API key, the gate is all it has. The app
 had been `Pending` for 76 days on a claim the old chart named and never created.
 
 `calibre-web-automated` as of 2026-11-13: a config claim sized in GiB rather than `128Mi` — 10Gi,

@@ -192,3 +192,143 @@ Recovery: delete the lost device in the admin interface and let the person enrol
   redirect to authentik.
 - A guest sees an empty application list; a bookmarked application URL is refused by authentik.
 - Argo CD: the admin can sync; a `homelab-users` member reads only.
+
+## Media tools behind the gate
+
+Nine media tools plus Calibre-Web were added on 2026-11-15. The design and the plan that produced
+this are `docs/superpowers/specs/2026-11-14-media-tools-authentik-design.md` and
+`docs/superpowers/plans/2026-11-14-media-tools-authentik.md`.
+
+**The vocabulary matters here.** A *forward-auth gate* is a Traefik middleware that asks authentik
+about every request before letting it through; the tool behind it never learns who you are unless
+it is told via a header. *OIDC* is the other way: the tool itself talks to authentik and holds the
+session.
+
+### What is protected how
+
+| Tool | Route | Protection | The tool's own login |
+|---|---|---|---|
+| calibre | `calibre.kub.local` | forward-auth + header strip | reverse-proxy header, off |
+| sonarr | `sonarr.kub.local` | forward-auth | off |
+| radarr | `radarr.kub.local` | forward-auth | off |
+| lidarr | `lidarr.kub.local` | forward-auth | off |
+| prowlarr | `prowlarr.kub.local` | forward-auth | off, probes fixed |
+| bazarr | `bazarr.kub.local` | forward-auth; `/api` exempt | none (always was) |
+| bazarr-anime | `bazarr-anime.kub.local` | forward-auth; `/api` exempt | none (always was) |
+| tautulli | `tautulli.kub.local` | forward-auth | **still on — needs a UI toggle** |
+| maintainerr | `maintainerr.kub.local` | forward-auth | none exists |
+| autobrr | `autobrr.kub.local` | **OIDC, no gate** | replaced by OIDC |
+| qbittorrent | `qbittorrent.kub.local` | **not gated yet** | — |
+
+Every route also carries `lan-only`. That middleware allows `192.168.1.0/24` (LAN), `10.8.0.0/24`
+(WireGuard) and `10.42.0.0/16` (pods — see the first trap below).
+
+### Adding another tool to the gate
+
+1. Copy `cluster/helm/authentik/files/app-bazarr.yaml`, change the slug, the display name and
+   `external_host`. It is a **proxy** provider in `forward_single` mode, no client secret.
+2. Add the file's name to the `metaapplyblueprint` list in `outpost-embedded.yaml`, and add a
+   `!Find` line for the provider to that file's `providers` list. Missing either one is a silent
+   404 from the outpost at the browser.
+3. In the tool's chart values, put `authentik-forwardauth` after `lan-only` in the middleware list.
+4. Bump both chart versions, open one PR, sync `authentik` and the tool.
+
+Adding the middleware without step 2 is the mistake made once already: the route asks authentik
+about a host authentik has never heard of, and authentik answers its own 404 page. The status code
+is the fastest diagnostic — `404` means no provider for that host, `403` means the provider exists
+but its policy refuses, `302` to authentik means it works.
+
+### Turning off the tool's own login (the \*arr family)
+
+These builds **refuse authentication fully off** and revert it. The supported setting is "disabled
+for local addresses" plus a trusted-network list, and it is inert until the app restarts:
+
+```bash
+# for sonarr, radarr, lidarr: api/v3; prowlarr: api/v1
+curl -s -H "X-Api-Key: $KEY" "http://localhost:8989/api/v3/config/host" -o /tmp/host.json
+jq '.authenticationRequired="disabledForLocalAddresses"
+  | .trustedNetworks="10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16"
+  | .allowedHosts="0.0.0.0"' /tmp/host.json > /tmp/new.json
+curl -s -X PUT -H "X-Api-Key: $KEY" -H "Content-Type: application/json" \
+  --data @/tmp/new.json "http://localhost:8989/api/v3/config/host"
+curl -s -X POST -H "X-Api-Key: $KEY" -H "Content-Length: 0" \
+  "http://localhost:8989/api/v3/system/restart"
+```
+
+- `0.0.0.0/0` is **rejected** by `trustedNetworks`; the three private ranges are the widest value
+  that validates.
+- `allowedHosts` and a non-empty password are required once `authenticationRequired` is not
+  `enabled`. Send the object read from `GET` back unchanged apart from those fields, so the
+  existing password hash survives.
+- **Prowlarr is different**: it rejects `0.0.0.0` in `allowedHosts` and wants host names, which
+  makes ASP.NET reject the kubelet's probe (pod IP is not a name) and the pod crash-loops. Fix by
+  giving the probes `Host: prowlarr.kub.local` — see `prowlarr/templates/deployment.yaml`.
+- Tautulli has **no API command** for its web auth; it is a UI toggle under Settings → Web
+  Interface. That is why it is the one tool still asking for a login.
+- The service route is behind the gate, so this needs `kubectl -n media-stack port-forward
+  svc/<tool> <port>:<port>` from a terminal; the agent's shell cannot run `kubectl`.
+
+### Keeping an API reachable
+
+API clients send an API key, not a browser session, so they cannot complete a sign-in redirect.
+The pattern, in place on `bazarr` and `bazarr-anime`, is a second rule on the same IngressRoute:
+
+```yaml
+ingressRoute:
+  apiBypassMiddlewares:
+    - name: lan-only
+      namespace: kube-system
+```
+
+It renders `Host(...) && PathPrefix(/api)` with `priority: 100`. `lan-only` stays, so the API is
+reachable from the LAN, not the internet, and the tool's own key is the credential. **Only do this
+for a tool whose API is authenticated**: maintainerr has no login and no key, so exempting its API
+would undo its gate entirely.
+
+### Recovery
+
+- **Read access while authentik is down:** `kubectl -n media-stack port-forward svc/<tool> <port>`
+  reaches the tool without Traefik, and therefore without the gate.
+- **Remove the gate from one route:** revert its `middlewares` entry to `lan-only` and merge;
+  ArgoCD applies it. This is the tested path, not an emergency `kubectl edit`.
+- **Calibre-Web** keeps its local admin login on purpose; it is the way back in if the header name
+  is wrong or authentik is unreachable.
+
+### Traps found the hard way
+
+1. **`lan-only` blocked the cluster's own pods.** Its ranges did not include `10.42.0.0/16`, so any
+   *server-side* OIDC call to a public hostname got `403`. That broke autobrr's discovery and
+   would have broken Grafana's token call, Argo CD's Dex issuer and pgAdmin's metadata fetch. The
+   pod range is now allowed; it adds no reachability pods did not already have over Service DNS.
+2. **A legacy `Ingress` can shadow an `IngressRoute`.** autobrr had a 2024 `Ingress` with
+   `redirect-https` on the same host; every request got a `301` and the gate never ran. Check
+   `kubectl get ingress -n media-stack` before believing a route is broken.
+3. **The embedded outpost reloads its application map on a delay** of about two minutes. A `404`
+   right after a blueprint apply is not a failure. Those requests are logged by Django
+   (`authentik.asgi`), while the outpost binary logs them with `ak-axum`; the API is the reliable
+   source of truth, not the log tail.
+4. **A proxy provider is an OAuth2 provider underneath.** Naming a new OIDC provider the same as an
+   existing proxy provider updates that object and keeps its forward-auth redirect URIs. Give the
+   OIDC provider its own name (`autobrr-oidc`).
+5. **`!Env` secrets are read at apply time.** Changing the Secret does not re-apply a blueprint;
+   restart the worker (so `envFrom` is re-read) and force the apply with
+   `POST /api/v3/managed/blueprints/{pk}/apply/`.
+6. **`kubectl create secret ... --from-literal=k="$VAR"` can silently store the literal `"$VAR"`.**
+   Copy the value out of the source Secret instead:
+   `--from-literal=k="$(kubectl -n authentik get secret authentik-sso -o jsonpath='{.data.KEY}' | base64 -d)"`.
+7. **autobrr cannot log you out of authentik.** Its logout destroys its own session and returns
+   `204`; it has no OIDC logout URL (v1.90.0 and `main`), though the provider advertises
+   `…/application/o/autobrr/end-session/`. Logging out and back in can also fail with
+   "no state found in session" until a hard reload, because the browser may replay a cached
+   `/api/auth/oidc/config` response. Neither is fixable from git; both are worth an upstream issue.
+
+### Still open
+
+- **qbittorrent** has no gate. Its `templates/ingress.yaml` is hand-written rather than the shared
+  `ingressroute.yaml`, so it needs a middleware list added before the values can carry one.
+- **tautulli** still shows its own login (UI toggle, above).
+- The other tools' APIs (sonarr, radarr, lidarr, prowlarr, tautulli, maintainerr) are still gated.
+  Only bazarr and bazarr-anime have the `/api` rule and the `apiBypassMiddlewares` template block;
+  the other charts need the same block copied in.
+- autobrr's cached-config failure (trap 7) would go away with a `Cache-Control: no-store` header on
+  `/api/auth/oidc/config`.
