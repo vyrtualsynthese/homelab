@@ -136,6 +136,11 @@ Inherited from `2026-11-10-homelab-stabilisation-design.md` §6 and `AGENTS.md`:
 6. The site is internal only, on `kub.local`, for now.
 7. Phase 2, not built here: a public presentation of the homelab, and a user guide reachable only by
    the operator's users.
+8. Vikunja is served over TLS at `https://vikunja.kub.local` with the internal certificate, HTTP
+   redirects to HTTPS, the API path skips the Authentik gate, and it exposes Prometheus metrics and
+   INFO-level logs **(operator, 2026-11-15)**.
+9. Only the Vikunja part is built now; the documentation site plan stands unexecuted
+   **(operator, 2026-11-15)**.
 
 ## 9. Part A — the board
 
@@ -151,10 +156,24 @@ Inherited from `2026-11-10-homelab-stabilisation-design.md` §6 and `AGENTS.md`:
 - Node: `nuc0`, per the placement map in §8.1 of the parent design. **This is the one placement risk
   in this document** — `nuc0` was at ~28.5 GB of 32 GB before this work. Measure before adding, and
   if there is no headroom, move Vikunja to `nas` (see §13).
-- Ingress: `vikunja.kub.local`, `entryPoints: [web]`, middleware `kube-system-lan-only@kubernetescrd`
-  plus `kube-system-authentik-forwardauth@kubernetescrd`. The Traefik gate is the only login in phase
-  1; wiring Vikunja's own OpenID against Authentik is deferred to phase 2, when there are users other
-  than the operator.
+- Ingress: `vikunja.kub.local` over TLS, the way every `kub.local` app works since 2026-11-15. One
+  `IngressRoute` on `websecure` with `tls.options.name: internal-tls` (namespace `kube-system`, from
+  the `traefik-gate` chart) and neither `secretName` nor `certResolver`, so Traefik serves the
+  cluster's default internal certificate `kube-system/local-cert` (`*.kub.local`, see
+  `docs/runbooks/internal-ca.md`). A second `IngressRoute` on `web` carries `kube-system-lan-only` then
+  `kube-system-redirect-to-https`, so plain HTTP becomes HTTPS without ever reaching Authentik.
+  Two rules on the TLS router, because they must not share a gate:
+  - `/` with `kube-system-lan-only` then `kube-system-authentik-forwardauth` — the browser UI.
+  - `/api` at `priority: 100` with `kube-system-lan-only` only — API clients (the MCP endpoint is
+    `/api/v2/mcp`) send a token, not a session, and cannot complete a sign-in redirect. This is the
+    pattern `bazarr` and `prowlarr` already use.
+- Monitoring: `metrics.enabled: true` in `config.yml`, scraped from
+  `prometheus.io/scrape: "true"`, `prometheus.io/port: "3456"`, `prometheus.io/path: /api/v1/metrics`
+  pod annotations. No metrics credentials: the endpoint stays inside the cluster and the router's
+  `/api` rule is LAN-only.
+- Logging: `log.level: INFO`, `log.format: text`, `log.http: stdout`, `log.database: off`,
+  `log.events: off` — verbose enough to explain a failed request, quiet enough that Fluent Bit is not
+  ingesting HTTP noise on every poll.
 - Resources: 100m / 256Mi requests, 512Mi limit for the app. The chart's own bundled PostgreSQL is
   disabled in favour of §6.
 
