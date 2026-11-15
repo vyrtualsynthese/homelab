@@ -45,6 +45,9 @@ entries:
       slug: argocd
       provider: !KeyOf argocd-provider
       meta_launch_url: http://argocd.kub.local/
+      # Icon drawn from the Font Awesome set bundled with authentik, so no
+      # external URL has to resolve for the application grid.
+      meta_icon: fa://fa-cubes
       policy_engine_mode: any
 
   - model: authentik_policies.policybinding

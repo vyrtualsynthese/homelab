@@ -37,6 +37,9 @@ entries:
       slug: qbittorrent
       provider: !KeyOf qbittorrent-provider
       meta_launch_url: http://qbittorrent.kub.local/
+      # Icon drawn from the Font Awesome set bundled with authentik, so no
+      # external URL has to resolve for the application grid.
+      meta_icon: fa://fa-download
       policy_engine_mode: any
 
   - model: authentik_policies.policybinding

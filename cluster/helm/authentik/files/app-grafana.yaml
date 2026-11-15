@@ -45,6 +45,9 @@ entries:
       slug: grafana
       provider: !KeyOf grafana-provider
       meta_launch_url: http://grafana.kub.local/
+      # Icon drawn from the Font Awesome set bundled with authentik, so no
+      # external URL has to resolve for the application grid.
+      meta_icon: fa://fa-chart-line
       policy_engine_mode: any
 
   - model: authentik_policies.policybinding

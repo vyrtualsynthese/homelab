@@ -59,6 +59,9 @@ entries:
       slug: autobrr
       provider: !KeyOf autobrr-provider
       meta_launch_url: http://autobrr.kub.local/
+      # Icon drawn from the Font Awesome set bundled with authentik, so no
+      # external URL has to resolve for the application grid.
+      meta_icon: fa://fa-bolt
       policy_engine_mode: any
 
   - model: authentik_policies.policybinding
