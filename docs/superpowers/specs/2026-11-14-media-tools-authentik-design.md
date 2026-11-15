@@ -256,3 +256,66 @@ Per tool, from evidence rather than assumption:
 - Where the outpost file goes if the blueprint rejects a `managed` identifier: the UI fallback, with
   the runbook updated to match.
 - Wording of the runbook section.
+
+## 12. Implementation record (2026-11-15)
+
+The design above was followed, with four changes made during the work. Each is recorded with the
+reason, because they change what a later reader should expect.
+
+### 12.1 autobrr uses native OIDC instead of the gate
+
+autobrr supports OIDC as a first-party feature, documented at
+`autobrr.com/configuration/authentication` and present in the pinned `v1.90.0`. Stacking the gate
+on top would have meant two authentik applications for one tool and a second redirect. The route
+keeps `lan-only` and nothing else; the app is its own gate. Side effect, and the reason the
+operator chose it: `/api` stays reachable from the LAN with the API key, with no exemption rule.
+
+Consequence: autobrr cannot log the user out of authentik. Its logout destroys its own session and
+returns `204`, and it has no OIDC logout URL in `v1.90.0` or `main`. Accepted rather than reverting
+to header trust, which would have required `authAllowedPeerCIDRs` over the pod network.
+
+### 12.2 The pod network joined the `lan-only` allowlist
+
+`lan-only` allowed the LAN and WireGuard only, so any **server-side** OIDC call to a public
+hostname was answered `403`. That is every native-OIDC client: Grafana's token call, Argo CD's Dex
+issuer, pgAdmin's metadata fetch, autobrr's discovery. `10.42.0.0/16` was added to the middleware
+(`traefik-gate` chart). It grants nothing new — pods could already reach every Service over Service
+DNS — and no public address falls in that range.
+
+### 12.3 A selective `/api` exemption instead of gating or not gating
+
+API clients send an API key, not a browser session. Rather than choose between breaking scripts and
+leaving a tool ungated, bazarr and bazarr-anime carry a second rule on the same IngressRoute:
+
+```yaml
+Host(<tool>.kub.local) && PathPrefix(/api)   priority: 100   middlewares: [lan-only]
+```
+
+Applied only where the API has its own credential. Maintainerr has neither login nor key, so its
+API stays gated; exempting it would remove the only control it has.
+
+### 12.4 Calibre-Web was added, beyond the original nine
+
+It has no OIDC, but supports reverse-proxy authentication and its own wiki names authentik's header.
+Route order matters: `lan-only`, then `strip-authentik-header`, then `authentik-forwardauth` — the
+strip step is what stops a client forging `X-authentik-username`. Calibre-Web does **not** create
+the account from the header; the account has to exist locally with the authentik username.
+
+### 12.5 What is finished and what is not
+
+Finished and verified live: sonarr, radarr, lidarr, prowlarr, bazarr, bazarr-anime, tautulli,
+maintainerr, autobrr (OIDC) and calibre — with the two bazarrs exempting `/api`.
+
+Not finished:
+
+- **qbittorrent** is not gated. Its `templates/ingress.yaml` is hand-written rather than the shared
+  `ingressroute.yaml`, so a middleware list must be added there before the values can carry one.
+- **tautulli** still asks for its own login. Its web auth has no API command; it is a UI toggle
+  under Settings → Web Interface.
+- The other six tools' APIs are still gated. Only bazarr and bazarr-anime have the
+  `apiBypassMiddlewares` template block; the rest need it copied in.
+- autobrr's post-logout "no state found in session" is a browser-cache symptom, worked around by a
+  hard reload. A `Cache-Control: no-store` on `/api/auth/oidc/config` is the targeted fix.
+
+The operational detail — recipes, recovery, and the seven traps that cost the most time — is in
+`docs/runbooks/authentik-apps.md`, section "Media tools behind the gate".

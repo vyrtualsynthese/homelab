@@ -54,7 +54,7 @@ must move with it.
 ## Local-only
 
 Tautulli is on the LAN, not the internet. The one route is on the `web` entry point at
-`tautulli.kub.local`, with no TLS and no middlewares — the same shape as `sonarr` and `prowlarr`.
+`tautulli.kub.local`, with no TLS. Since 2026-11-15 it carries `lan-only` and the authentik forward-auth gate; Tautulli's own login is still on because its web auth has no API.
 `kub.local` resolves through the Pi-hole wildcard record; it is not in a public zone.
 
 The chart used to publish `tautulli.kub.home.ashudev.com` over TLS with a redirect from HTTP. Those

@@ -2,7 +2,7 @@
 
 Bazarr is the subtitle manager for Sonarr and Radarr. It watches both libraries, searches its
 subtitle providers and writes the files next to the videos. It is internal-only: `bazarr.kub.local`
-on the `web` entry point, no TLS, no authentication in front of it.
+on the `web` entry point, no TLS, authentik stands in front of it since 2026-11-15, except on `/api`, which keeps `lan-only` for key-based clients.
 
 The chart is built from the contract in [`docs/charts/README.md`](../../../../docs/charts/README.md)
 and the shape of the `sonarr` chart. The differences are listed below; each one follows from what
