@@ -265,10 +265,10 @@ ingressRoute:
     # with. Its own settings page states it as "Use OAuth (requires HTTPS)".
     enabled: true
     # -- Use a pre-existing certificate instead of the cluster default. Empty here on
-    # purpose: the certificate comes from the default TLSStore, `kube-system/local-cert`
-    # (a mkcert certificate with `*.kub.local` in its subject alternative names).
-    # Clients that do not have the mkcert root installed show a warning, which is
-    # accepted: the alternative is no sign-in at all.
+    # purpose: the certificate comes from the default TLSStore, `kube-system/local-cert`,
+    # which `hack/internal-cert.sh` signs as a private `*.kub.local` certificate. Clients
+    # that do not have that root installed show a warning, which is accepted: the
+    # alternative is no sign-in at all.
     secretName: ""
     # -- Traefik ACME resolver name. Empty: ACME cannot issue for a `.kub.local`
     # name, which is not publicly resolvable.
