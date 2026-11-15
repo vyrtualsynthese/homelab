@@ -30,7 +30,7 @@ helm template autobrr cluster/helm/media-stack/autobrr --namespace media-stack
 | `strategy` | Deployment strategy. Must stay `Recreate` with a config volume. | `Recreate` |
 | `service.port` | Port the Service exposes, and what the IngressRoute points at. | `7474` |
 | `container.port` | Only set when the app listens on a different port than the Service. | `null` (falls back to `service.port`) |
-| `ingressRoute.*` | Traefik CRD routing: host, entry points, middlewares, TLS. | `autobrr.kub.local`, `web`, no TLS |
+| `ingressRoute.*` | Traefik CRD routing: host, entry points, middlewares, TLS. | `autobrr.kub.local`, `websecure`, TLS from the cluster default certificate; `web` redirects |
 | `storage.*` | The config claim: class, size, mount path, or reuse an existing claim. | `local-path`, `128Mi`, `/config` |
 | `env` | Non-secret variables, rendered **inline** into the container. Changing one rolls the pod. | `TZ`, `AUTOBRR__HOST`, `AUTOBRR__PORT` |
 | `extraEnv` | Variables sourced from a Secret, as `{ name, valueFrom }`. | `[]` |
@@ -133,7 +133,7 @@ Always a Traefik `IngressRoute`, never `networking.k8s.io/v1` Ingress. The API g
 (`ingressRoute.apiVersion`) so the Traefik v3 migration becomes a values edit rather than a template
 edit. It must stay `traefik.containo.us/v1alpha1` while the cluster runs Traefik 2.x.
 
-`kub.local` hosts use the `web` entry point and no TLS; they resolve through the Pi-hole wildcard
+`kub.local` hosts are served over TLS since 2026-11-15, from the cluster default certificate, with `web` redirecting; they resolve through the Pi-hole wildcard
 record. Hosts under `kub.home.ashudev.com` use `websecure` with `certResolver: myresolver`.
 
 ## Using this chart as a reference

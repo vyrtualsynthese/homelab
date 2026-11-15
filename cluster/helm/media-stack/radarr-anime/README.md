@@ -54,7 +54,7 @@ helm template radarr-anime cluster/helm/media-stack/radarr-anime --namespace med
 | `storage.*` | The config claim: class, size, mount path, or reuse an existing claim. | `local-path`, `128Mi`, `/config` |
 | `downloads.existingClaim`, `downloads.mountPath` | qBittorrent's completed-downloads claim, and where it is mounted. | `pvc-nfs-qbittorrent-download-nfs-subdir-external-provisioner`, `/downloads` |
 | `media.existingClaim`, `media.mountPath` | The Plex media library claim and its mount. This chart only mounts the shared library; the anime root folder inside it is the live app's setting to confirm in the Radarr UI. | `pvc-plex-media`, `/movies` |
-| `ingressRoute.*` | Traefik CRD routing: host, entry points, middlewares, TLS. | `radarr-anime.kub.local`, `web`, no TLS |
+| `ingressRoute.*` | Traefik CRD routing: host, entry points, middlewares, TLS. | `radarr-anime.kub.local`, `websecure`, TLS from the cluster default certificate; `web` redirects |
 | `env` | Non-secret variables, rendered inline into the container. Changing one rolls the pod. | `TZ`, `PUID`, `PGID`, log level |
 | `exportarr.*` | The metrics sidecar. See **Metrics**. | enabled on port 9707 |
 | `probes.{startup,liveness,readiness}` | HTTP probes on `/ping`. | enabled; startup 5s × 60, liveness 20s delay, readiness 10s delay |

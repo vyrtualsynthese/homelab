@@ -46,7 +46,7 @@ spec:
     {{- with .Values.ingressRoute.tls.options }}
     options:
       name: {{ . }}
-      namespace: {{ $.Release.Namespace }}
+      namespace: {{ $.Values.ingressRoute.tls.optionsNamespace | default $.Release.Namespace }}
     {{- end }}
   {{- end }}
 {{- if .Values.ingressRoute.redirectToHttps }}
@@ -74,10 +74,9 @@ spec:
     - kind: Rule
       match: Host(`{{ .Values.ingressRoute.host }}`) && PathPrefix(`{{ .Values.ingressRoute.pathPrefix }}`)
       middlewares:
-        {{- range $middlewares }}
-        - name: {{ . }}
-        {{- end }}
-        - name: {{ $fullname }}-redirect-https
+        {{- /* `lan-only` and nothing else: the redirect must not offer a login page. */}}
+        - name: kube-system-lan-only@kubernetescrd
+        - name: kube-system-redirect-to-https@kubernetescrd
       services:
         - name: {{ $fullname }}
           port: {{ .Values.service.port }}

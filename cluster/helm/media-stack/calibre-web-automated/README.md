@@ -40,11 +40,10 @@ helm template calibre-web-automated cluster/helm/media-stack/calibre-web-automat
 | ServiceAccount | `calibre-web-automated`, with no API token mounted |
 | PersistentVolumeClaim | `calibre-web-automated-config`, 10Gi, `local-path` |
 | PersistentVolumeClaim | `calibre-web-automated-ingest`, 1Gi, `local-path` |
-| Middleware | none of its own; the IngressRoute uses `kube-system-lan-only` from the `traefik-gate` chart |
-| Middleware | `calibre-web-automated-redirect-https`, `redirectScheme` to `https`, used only by the redirect router |
+| Middleware | none of its own; the routes use `kube-system-lan-only` and `kube-system-redirect-to-https` from the `traefik-gate` chart |
 | IngressRoute | `calibre-web-automated`, `websecure` entry point, `Host(calibre.kub.local) && PathPrefix(/)`, TLS from the cluster default certificate |
 | IngressRoute | `calibre-web-automated-redirect`, `web` entry point, same host, sends the browser to HTTPS |
-| TLSOption | `calibre-web-automated-tlsoption`, TLS 1.2 minimum |
+| TLSOption | none of its own; `kube-system/internal-tls` from the `traefik-gate` chart |
 
 The two claims are created by this chart only while `storage.<name>.enabled` is true and
 `existingClaim` is empty. There is no ConfigMap and no Secret: everything the app needs from the
@@ -159,8 +158,8 @@ Reading a `.kub.local` name as a boundary is how an internal app ends up reachab
 
 ### Why this one is HTTPS
 
-Every other media tool is plain HTTP on `kub.local`. Calibre-Web is the exception because its sign-in
-demands it: the OIDC button only appears when *Login type* is `OAuth`, and that setting forces
+Calibre-Web was the first app here to need TLS, because its sign-in demands it (the whole namespace
+followed on 2026-11-15): the OIDC button only appears when *Login type* is `OAuth`, and that setting forces
 `SESSION_COOKIE_SECURE=True` (`cps/__init__.py`). A browser given a `Secure` cookie over plain HTTP throws
 it away, so the callback would arrive without the session it started with, and even the password login
 would stop sticking. Its own settings page says it in the dropdown: *Use OAuth (requires HTTPS)*.
@@ -186,8 +185,9 @@ kubectl -n kube-system create secret tls local-cert --save-config \
 Delete then create, not `apply`: the Secret in place is `Opaque`, and a Secret's `type` is immutable — an
 `apply` that adds `type: kubernetes.io/tls` is refused with `field is immutable`.
 
-Traefik serves the new certificate as soon as that Secret changes, without a restart. This route is
-currently the only one that falls back to the default store, so it is the only one affected.
+Traefik serves the new certificate as soon as that Secret changes, without a restart, and every
+`kub.local` route in the namespace uses it — the TLS selector is the shared `kube-system/internal-tls`
+TLSOption from the `traefik-gate` chart, not an object of this chart's own.
 
 The root is `~/.config/secrets/kub-local/local-ca.pem`, installed once per client. Backup rules, the
 restore drill and the per-client trust install are in

@@ -42,9 +42,10 @@ entries:
       redirect_uris:
         - matching_mode: strict
           redirect_uri_type: authorization
-          # Exact string autobrr builds from X-Forwarded-Proto. The route is
-          # plain HTTP, so this must be `http://` or the callback is refused.
-          url: http://autobrr.kub.local/api/auth/oidc/callback
+          # Exact string autobrr builds from X-Forwarded-Proto. The route is TLS
+          # on `websecure` since 2026-11-15, so this must be `https://` or the
+          # callback is refused.
+          url: https://autobrr.kub.local/api/auth/oidc/callback
       property_mappings:
         - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-openid]]
         - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-email]]
@@ -58,7 +59,7 @@ entries:
       name: Autobrr
       slug: autobrr
       provider: !KeyOf autobrr-provider
-      meta_launch_url: http://autobrr.kub.local/
+      meta_launch_url: https://autobrr.kub.local/
       # Official logo, served from the dashboard-icons set. The browser
       # loads it, so the grid needs internet; swap to `fa://fa-<name>`
       # if it ever has to work offline.

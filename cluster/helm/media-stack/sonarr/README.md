@@ -2,7 +2,7 @@
 
 Sonarr is the PVR for TV series. It watches indexers, grabs releases through qBittorrent and files
 them into the library tree Plex reads. It is internal-only: `sonarr.kub.local` on the `web` entry
-point, no TLS, authentik stands in front of it since 2026-11-15 (forward-auth gate); its own login is off.
+point over TLS since 2026-11-15, authentik stands in front of it (forward-auth gate); its own login is off.
 
 The chart is built from the reference chart `../prowlarr` and the contract in
 [`docs/charts/README.md`](../../../../docs/charts/README.md). The differences are listed below; each

@@ -32,7 +32,7 @@ helm template tautulli cluster/helm/media-stack/tautulli --namespace media-stack
 | `strategy` | Deployment strategy. Must stay `Recreate` with a config volume. | `Recreate` |
 | `service.port` | Port the Service exposes, and what the IngressRoute points at. | `8181` |
 | `container.port` | Only set when the app listens on a different port than the Service. | `null` (falls back to `service.port`) |
-| `ingressRoute.*` | Traefik CRD routing: host, entry points, middlewares, TLS. | `tautulli.kub.local`, `web`, no TLS |
+| `ingressRoute.*` | Traefik CRD routing: host, entry points, middlewares, TLS. | `tautulli.kub.local`, `websecure`, TLS from the cluster default certificate; `web` redirects |
 | `storage.*` | The config claim: class, size, mount path, or reuse an existing claim. | `local-path`, `128Mi`, `/config` |
 | `env` | Non-secret variables, rendered **inline** into the container. Changing one rolls the pod. | `TZ`, `PUID`, `PGID` |
 | `extraEnv` | Variables sourced from a Secret, as `{ name, valueFrom }`. | `[]` |
@@ -53,8 +53,7 @@ must move with it.
 
 ## Local-only
 
-Tautulli is on the LAN, not the internet. The one route is on the `web` entry point at
-`tautulli.kub.local`, with no TLS. Since 2026-11-15 it carries `lan-only` and the authentik forward-auth gate; Tautulli's own login is still on because its web auth has no API.
+Tautulli is on the LAN, not the internet. The one route is at `tautulli.kub.local`, over TLS since 2026-11-15. Since 2026-11-15 it carries `lan-only` and the authentik forward-auth gate; Tautulli's own login is still on because its web auth has no API.
 `kub.local` resolves through the Pi-hole wildcard record; it is not in a public zone.
 
 The chart used to publish `tautulli.kub.home.ashudev.com` over TLS with a redirect from HTTP. Those

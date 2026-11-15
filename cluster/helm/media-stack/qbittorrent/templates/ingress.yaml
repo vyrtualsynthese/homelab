@@ -1,5 +1,5 @@
-{{- if .Values.ingress.enabled -}}
-{{- $fullName := include "fullname" . -}}
+{{- if .Values.ingress.enabled }}
+{{- $fullName := include "fullname" . }}
 apiVersion: traefik.containo.us/v1alpha1
 kind: IngressRoute
 metadata:
@@ -12,13 +12,48 @@ metadata:
   {{- end }}
 spec:
   entryPoints:
-    - web
+    {{- toYaml .Values.ingress.entryPoints | nindent 4 }}
   routes:
-    - match: Host(`qbittorrent.kub.local`)
+    - match: Host(`{{ .Values.ingress.host }}`) && PathPrefix(`/`)
       kind: Rule
+      {{- with .Values.ingress.middlewares }}
       middlewares:
-        - name: kube-system-lan-only@kubernetescrd
+        {{- range . }}
+        - name: {{ printf "%s-%s@kubernetescrd" .namespace .name }}
+        {{- end }}
+      {{- end }}
       services:
         - name: qbittorrent
           port: torrent-webui
+  {{- if .Values.ingress.tls.enabled }}
+  tls:
+    {{- with .Values.ingress.tls.options }}
+    options:
+      name: {{ . }}
+      namespace: {{ $.Values.ingress.tls.optionsNamespace | default $.Release.Namespace }}
+    {{- end }}
+  {{- end }}
+{{- if .Values.ingress.redirectToHttps }}
+---
+{{- /* Plain-HTTP mirror: `lan-only` then a permanent redirect. The gate — if one is
+ever added to this route — belongs on the TLS router, not here. */}}
+apiVersion: traefik.containo.us/v1alpha1
+kind: IngressRoute
+metadata:
+  name: {{ $fullName }}-redirect
+  labels:
+    {{- include "labels" . | nindent 4 }}
+spec:
+  entryPoints:
+    - web
+  routes:
+    - match: Host(`{{ .Values.ingress.host }}`) && PathPrefix(`/`)
+      kind: Rule
+      middlewares:
+        - name: kube-system-lan-only@kubernetescrd
+        - name: kube-system-redirect-to-https@kubernetescrd
+      services:
+        - name: qbittorrent
+          port: torrent-webui
+{{- end }}
 {{- end }}

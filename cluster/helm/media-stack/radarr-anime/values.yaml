@@ -63,19 +63,29 @@ ingressRoute:
   # -- API group. Flip to `traefik.io/v1alpha1` when Traefik v3 lands.
   apiVersion: traefik.containo.us/v1alpha1
   entryPoints:
-    - web
+    - websecure
   host: radarr-anime.kub.local
   pathPrefix: /
+  # -- Render the plain-HTTP mirror router that redirects to this one.
+  redirectToHttps: true
   middlewares:
     - name: lan-only
       namespace: kube-system
   labels: {}
   annotations: {}
   tls:
-    enabled: false
+    # -- Send the router over TLS. On: the cluster serves `*.kub.local` from the
+    # -- default certificate (`kube-system/local-cert`), and the `web` router only
+    # -- redirects here. See docs/runbooks/internal-ca.md.
+    enabled: true
+    # -- Use a pre-existing certificate instead of asking Traefik to issue one.
     secretName: ""
+    # -- Traefik ACME resolver name, for example `myresolver`.
     certResolver: ""
-    options: ""
+    # -- TLSOption resource name, from the `traefik-gate` chart.
+    options: internal-tls
+    # -- Namespace of that TLSOption.
+    optionsNamespace: kube-system
 
 storage:
   # -- Render the config claim. Radarr keeps its SQLite database there.

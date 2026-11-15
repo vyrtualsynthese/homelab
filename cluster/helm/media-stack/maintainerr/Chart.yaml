@@ -3,7 +3,7 @@ name: maintainerr
 description: Maintainerr builds collections from rules and removes the matching media once a collection's rule says to.
 type: application
 # Chart version. Bumps are manual: image.tag, appVersion and this version move together.
-version: 1.0.2
+version: 1.1.0
 # Must match image.tag in values.yaml.
 appVersion: "3.32.0"
 icon: https://raw.githubusercontent.com/Maintainerr/Maintainerr/v3.32.0/apps/ui/public/logo.png

@@ -329,8 +329,8 @@ It runs as UID 1000, the image's own default and the claim's existing owner, so 
 no node-side `chown` and needs no runbook.
 
 `tautulli` as of 2026-11-13: the first chart in the media stack with **no public route at all**. One
-IngressRoute on the `web` entry point at `tautulli.kub.local`, no TLS, no redirect, because the app
-is LAN-only. It also carries the second deliberate readiness exception: Tautulli reports Plex
+IngressRoute at `tautulli.kub.local`, LAN-only — and since 2026-11-15 that means two of them, a
+`websecure` route and a `web` redirect, like every other `kub.local` route in the namespace. It also carries the second deliberate readiness exception: Tautulli reports Plex
 reachability and SQLite integrity only in a JSON body with HTTP 200, which the kubelet cannot read,
 so readiness is disabled rather than pointed at liveness. Its image starts as root and drops to
 `PUID`/`PGID`, so the capability set is `ALL` dropped plus the three calls that init makes. Since
@@ -400,9 +400,10 @@ operational record. Its access control is the LAN allow list plus a sign-in: the
 rewrite files, and `calibre.kub.local` is only a DNS entry, so the shared `kube-system-lan-only`
 Middleware is what stops an outside request with `403` before the app sees it, and Calibre-Web asks
 authentik for a sign-in itself over OIDC (v4.0.8's generic provider, 2026-11-15). There is no proxy gate
-in front of it: `/opds` and Kobo sync use basic auth and cannot follow a redirect. It is the one media
-tool on HTTPS — `https://calibre.kub.local`, `web` redirecting, the cluster default certificate — because
-its OAuth login forces a `Secure` session cookie and cannot complete a sign-in over plain HTTP.
+in front of it: `/opds` and Kobo sync use basic auth and cannot follow a redirect. It was the first media
+tool on HTTPS — `https://calibre.kub.local`, because its OAuth login forces a `Secure` session cookie and
+cannot complete a sign-in over plain HTTP — and on 2026-11-15 the whole namespace followed it, one shared
+`redirect-to-https` Middleware and one shared `internal-tls` TLSOption from the `traefik-gate` chart.
 
 `kavita` as of 2026-11-13: a rebuild, not a touch-up. The old pod sat `Pending` for months on a
 Longhorn claim that vanished in the 2026 disk failure, so the chart now creates `kavita-config` on

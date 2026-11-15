@@ -35,7 +35,7 @@ helm template maintainerr cluster/helm/media-stack/maintainerr --namespace media
 | `strategy` | Deployment strategy. Must stay `Recreate` with a data volume. | `Recreate` |
 | `service.port` | Port the Service exposes, and what the IngressRoute points at. | `6246` |
 | `container.port` | Only set when the app listens on a different port than the Service. | `null` (falls back to `service.port`) |
-| `ingressRoute.*` | Traefik CRD routing: host, entry points, middlewares, TLS. | `maintainerr.kub.local`, `web`, no TLS |
+| `ingressRoute.*` | Traefik CRD routing: host, entry points, middlewares, TLS. | `maintainerr.kub.local`, `websecure`, TLS from the cluster default certificate; `web` redirects |
 | `storage.*` | The data claim: class, size, mount path, or reuse an existing claim. | `local-path`, `256Mi`, `/opt/data` |
 | `env` | Non-secret variables, rendered **inline** into the container. Changing one rolls the pod. | `TZ`, `LOG_LEVEL`, `TELEMETRY` |
 | `extraEnv` | Variables sourced from a Secret, as `{ name, valueFrom }`. | `[]` |
@@ -69,8 +69,7 @@ control: anyone who can reach the port can read every stored credential, change 
 the whole SQLite database (`GET /api/settings/database/download`). The "API key" on its Settings page
 is not checked on inbound requests; it exists for the app's own internal calls.
 
-So the boundary is the network, not the app. The one route is on the `web` entry point at
-`maintainerr.kub.local`, with no TLS. Since 2026-11-15 it carries `lan-only` and the authentik forward-auth gate — the only access control this app has, since it ships no login of its own. `kub.local` resolves through the Pi-hole
+So the boundary is the network, not the app. The one route is at `maintainerr.kub.local`, over TLS since 2026-11-15. Since 2026-11-15 it carries `lan-only` and the authentik forward-auth gate — the only access control this app has, since it ships no login of its own. `kub.local` resolves through the Pi-hole
 wildcard record; it is not in a public zone. Do not attach a public host, a TLS block or a cert
 resolver to this chart. If it ever needs to leave the LAN, put an authenticating reverse proxy in
 front first — upstream documents the options at https://docs.maintainerr.info/security/.
