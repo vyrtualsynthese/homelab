@@ -150,7 +150,7 @@ seed_project() {
   local p_new=0 v_new=0
   local views_json="" view_json="" buckets_json="" known_json=""
   local bid="" btitle="" title="" bucket_id=""
-  local mode_current=""
+  local mode_current="" need_done=0 need_mode=0
 
   printf '\n'
 
@@ -273,48 +273,72 @@ seed_project() {
   done < <(jq -r --argjson known "$known_json" \
     '.[] | select(.title as $t | $known | index($t) | not) | "\(.id)\t\(.title)"' <<<"$buckets_json")
 
-  # ---- the done bucket ---------------------------------------------------
-  # This is the one setting that makes the board honest: without it, a card in
-  # "Done" stays open as far as Vikunja and every filter are concerned.
-  if [ -n "$done_id" ] && [ "$done_current" = "$done_id" ]; then
-    say done "$repo / $VIEW_TITLE" existing "bucket $done_id ($DONE_TITLE)"
-    C_EXISTING=$((C_EXISTING + 1))
-  elif [ "$DRY_RUN" = 1 ]; then
-    if [[ "$done_id" =~ ^[0-9]+$ ]]; then
-      body="$(jq -cn --argjson id "$done_id" '{done_bucket_id: $id}')"
-    else
-      body="$(jq -cn --arg id "$done_id" '{done_bucket_id: $id}')"
-    fi
-    write_or_plan POST "/projects/$project_id/views/$view_id" "$body"
-    say done "$repo / $VIEW_TITLE" would-create "bucket $done_id ($DONE_TITLE)"
-  else
-    write_or_plan POST "/projects/$project_id/views/$view_id" \
-      "$(jq -cn --argjson id "$done_id" '{done_bucket_id: $id}')"
-    say done "$repo / $VIEW_TITLE" created "bucket $done_id ($DONE_TITLE)"
-    C_CREATED=$((C_CREATED + 1))
+  # ---- the done bucket and the bucket mode, in one write ------------------
+  # The done bucket is the one setting that makes the board honest: without it,
+  # a card in "Done" stays open as far as Vikunja and every filter are
+  # concerned. "manual" is what lets a person drag a card between columns; the
+  # default, "none", pins every card to the column it was created in. A view
+  # made by an earlier version of this script, or in the browser, carries
+  # "none", and a re-run has to repair it — the create body never reaches it
+  # again.
+  #
+  # Both fields travel in ONE POST. Whether this endpoint patches the view or
+  # replaces it is unproven, and a second call is unsafe on either answer: if it
+  # replaces, the second body clears whatever the first set, and every run would
+  # repair one setting while breaking the other.
+  if [ -n "$done_id" ] && [ "$done_current" != "$done_id" ]; then
+    need_done=1
+  fi
+  # A view this run creates already carries the mode when the create is only
+  # planned; on a real run the mode comes from the create's answer.
+  if [ "$v_new" = 1 ] && [ "$DRY_RUN" = 1 ]; then
+    :
+  elif [ -n "$mode_current" ] && [ "$mode_current" != "$BUCKET_MODE" ]; then
+    need_mode=1
   fi
 
-  # ---- the bucket mode ---------------------------------------------------
-  # "manual" is what lets a person drag a card between columns; the default,
-  # "none", pins every card to the column it was created in. A view created by
-  # an earlier version of this script, or in the browser, carries "none", and a
-  # re-run has to repair it — the create body never reaches it again.
-  if [ "$v_new" = 1 ] && [ "$DRY_RUN" = 1 ]; then
+  if [ "$need_done" = 1 ] || [ "$need_mode" = 1 ]; then
+    body='{}'
+    if [ "$need_done" = 1 ]; then
+      if [[ "$done_id" =~ ^[0-9]+$ ]]; then
+        body="$(jq -c --argjson id "$done_id" '. + {done_bucket_id: $id}' <<<"$body")"
+      else
+        body="$(jq -c --arg id "$done_id" '. + {done_bucket_id: $id}' <<<"$body")"
+      fi
+    fi
+    if [ "$need_mode" = 1 ]; then
+      body="$(jq -c --arg m "$BUCKET_MODE" '. + {bucket_configuration_mode: $m}' <<<"$body")"
+    fi
+    write_or_plan POST "/projects/$project_id/views/$view_id" "$body"
+  fi
+
+  # Each line below names the field it is about; the write above is shared.
+  if [ "$need_done" = 1 ]; then
+    if [ "$DRY_RUN" = 1 ]; then
+      say done "$repo / $VIEW_TITLE" would-create "bucket $done_id ($DONE_TITLE)"
+    else
+      say done "$repo / $VIEW_TITLE" created "bucket $done_id ($DONE_TITLE)"
+      C_CREATED=$((C_CREATED + 1))
+    fi
+  else
+    say done "$repo / $VIEW_TITLE" existing "bucket $done_id ($DONE_TITLE)"
+    C_EXISTING=$((C_EXISTING + 1))
+  fi
+
+  if [ "$need_mode" = 1 ]; then
+    if [ "$DRY_RUN" = 1 ]; then
+      say mode "$repo / $VIEW_TITLE" would-update "$mode_current -> $BUCKET_MODE"
+    else
+      say mode "$repo / $VIEW_TITLE" updated "$mode_current -> $BUCKET_MODE"
+      C_UPDATED=$((C_UPDATED + 1))
+    fi
+  elif [ "$v_new" = 1 ] && [ "$DRY_RUN" = 1 ]; then
     :                        # the planned create above already carries the mode
   elif [ -z "$mode_current" ]; then
     note "bucket_configuration_mode is not returned for $repo / $VIEW_TITLE — cannot check it"
-  elif [ "$mode_current" = "$BUCKET_MODE" ]; then
+  else
     say mode "$repo / $VIEW_TITLE" existing "$BUCKET_MODE"
     C_EXISTING=$((C_EXISTING + 1))
-  elif [ "$DRY_RUN" = 1 ]; then
-    write_or_plan POST "/projects/$project_id/views/$view_id" \
-      "$(jq -cn --arg m "$BUCKET_MODE" '{bucket_configuration_mode: $m}')"
-    say mode "$repo / $VIEW_TITLE" would-update "$mode_current -> $BUCKET_MODE"
-  else
-    write_or_plan POST "/projects/$project_id/views/$view_id" \
-      "$(jq -cn --arg m "$BUCKET_MODE" '{bucket_configuration_mode: $m}')"
-    say mode "$repo / $VIEW_TITLE" updated "$mode_current -> $BUCKET_MODE"
-    C_UPDATED=$((C_UPDATED + 1))
   fi
 }
 
@@ -410,11 +434,7 @@ verify() {
     elif [ "$current" != "$done_id" ]; then
       problems="${problems:+$problems; }done_bucket_id is ${current:-unset}, expected $done_id (\"$DONE_TITLE\")"
     fi
-    if [ -z "$mode" ]; then
-      # A field the API does not return cannot be checked. Saying so is the
-      # point: silence here would read as "the cards can be dragged".
-      unchecked=$((unchecked + 1))
-    elif [ "$mode" != "$BUCKET_MODE" ]; then
+    if [ -n "$mode" ] && [ "$mode" != "$BUCKET_MODE" ]; then
       problems="${problems:+$problems; }bucket_configuration_mode is \"$mode\", expected \"$BUCKET_MODE\""
     fi
 
@@ -422,6 +442,10 @@ verify() {
       printf 'FAIL %-22s %s\n' "$repo" "$problems"
       failures=$((failures + 1))
     elif [ -z "$mode" ]; then
+      # A field the API does not return cannot be checked. Saying so is the
+      # point: silence here would read as "the cards can be dragged". Counted
+      # here, and only here, so this sentence and a FAIL never name one board.
+      unchecked=$((unchecked + 1))
       printf 'PASS %-22s view %s, %d buckets, done bucket %s\n' \
         "$repo" "$view_id" "$bucket_count" "$done_id"
       printf 'NOTE %-22s bucket_configuration_mode is not returned by this API, so the mode was not checked\n' \
