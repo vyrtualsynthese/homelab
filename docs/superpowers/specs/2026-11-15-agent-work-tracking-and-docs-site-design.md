@@ -189,11 +189,11 @@ Inherited from `2026-11-10-homelab-stabilisation-design.md` §6 and `AGENTS.md`:
 - Each project has one kanban view whose buckets are, in order: `Ready`, `Doing`,
   `Waiting for validation`, `Done`. `Done` is the view's done-bucket, so a task in it is marked done
   by Vikunja itself.
-- **One saved filter, favourited, is the operator's screen:** every task whose bucket is
-  `Waiting for validation`, across all projects, oldest first. The filter API takes queries without a
-  project constraint, so this is one query, not six.
-- A second saved filter, not favourited: every non-done task per repo, for the "what is in flight"
-  question.
+- **One saved filter, favourited, is the backstop:** every open task across all projects, oldest
+  first. Vikunja's filter language cannot express bucket membership, so a filter cannot be "the
+  `Waiting for validation` column"; the operator's real queue is that column on each board, and the
+  filter exists so nothing is forgotten. Wiring the filter this way was corrected on 2026-11-15 after
+  checking the filter API reference.
 
 ### 9.3 What a ticket is
 
@@ -209,7 +209,7 @@ A ticket carries:
 | Title | The plan task's title |
 | Description | `repo` · `plan path` · task number · what was done · the verification evidence (the command and its output, or the runbook step) · the PR link once one exists |
 | Bucket | The state (§9.4) |
-| Assignee | The agent role that did the work (`implementer`, `reviewer`), never the operator |
+| Assignee | The account the agent's token acts as. Vikunja assignees are users, and one token is one account, so the role the agent played goes in a label instead — never the operator |
 | Label | `agent` for agent-created, `operator` for the operator's own; plus the workstream ID (`W2`) where the plan has one |
 | Priority | Copies the plan's ordering, and nothing else — it is not a second judgement |
 
