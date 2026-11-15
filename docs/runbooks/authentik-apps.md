@@ -209,13 +209,13 @@ session.
 | Tool | Route | Protection | The tool's own login |
 |---|---|---|---|
 | calibre | `https://calibre.kub.local` | **OIDC, no gate** — verified live 2026-11-15 | renamed to the authentik username; the password stays as break-glass |
-| sonarr | `https://sonarr.kub.local` | forward-auth | off |
-| radarr | `https://radarr.kub.local` | forward-auth | off |
-| lidarr | `https://lidarr.kub.local` | forward-auth | off |
-| prowlarr | `https://prowlarr.kub.local` | forward-auth | off, probes fixed |
+| sonarr | `https://sonarr.kub.local` | forward-auth; **`/api` exempt** since 2026-11-15 | off |
+| radarr | `https://radarr.kub.local` | forward-auth; **`/api` exempt** since 2026-11-15 | off |
+| lidarr | `https://lidarr.kub.local` | forward-auth; **`/api` exempt** since 2026-11-15 | off |
+| prowlarr | `https://prowlarr.kub.local` | forward-auth; **`/api` exempt** since 2026-11-15 | off, probes fixed |
 | bazarr | `https://bazarr.kub.local` | forward-auth; `/api` exempt | none (always was) |
 | bazarr-anime | `https://bazarr-anime.kub.local` | forward-auth; `/api` exempt | none (always was) |
-| tautulli | `https://tautulli.kub.local` | forward-auth | **still on — needs a UI toggle** |
+| tautulli | `https://tautulli.kub.local` | forward-auth; **`/api` exempt** since 2026-11-15 | **still on — needs a UI toggle** |
 | maintainerr | `https://maintainerr.kub.local` | forward-auth; **`/api` exempt** (`lan-only` only) since 2026-11-15 | none exists |
 | autobrr | `https://autobrr.kub.local` | **OIDC, no gate** | replaced by OIDC |
 | qbittorrent | `https://qbittorrent.kub.local` | `lan-only` only — **no authentik gate yet** | its own login |
@@ -302,7 +302,8 @@ curl -s -X POST -H "X-Api-Key: $KEY" -H "Content-Length: 0" \
 ### Keeping an API reachable
 
 API clients send an API key, not a browser session, so they cannot complete a sign-in redirect.
-The pattern, in place on `bazarr` and `bazarr-anime`, is a second rule on the same IngressRoute:
+The pattern, in place on `bazarr`, `bazarr-anime`, `sonarr`, `radarr`, `lidarr`, `prowlarr`,
+`tautulli` and `maintainerr`, is a second rule on the same IngressRoute:
 
 ```yaml
 ingressRoute:
@@ -312,8 +313,14 @@ ingressRoute:
 ```
 
 It renders `Host(...) && PathPrefix(/api)` with `priority: 100`. `lan-only` stays, so the API is
-reachable from the LAN, not the internet, and the tool's own key is the credential. **Only do this
-for a tool whose API is authenticated.**
+reachable from the LAN, WireGuard and the pod network that middleware already allows — never the
+internet — and the tool's own key is the credential. **Only do this for a tool whose API is
+authenticated.** The Servarr apps and Tautulli qualify: `X-Api-Key` on every `/api` request for
+sonarr, radarr, lidarr and prowlarr, `apikey` in the query string for Tautulli. The UI route keeps
+the gate in every case, so the exemption is one path, not the whole host.
+
+`apiBypassMiddlewares: []` turns the exemption off: the template's `with` then renders no second
+rule, and `/api` falls back under the gated route above.
 
 `maintainerr` carries the exemption too, since 2026-11-15, and it is the exception that proves the
 rule: upstream 3.32.0 checks **no** credential on inbound requests — the key on its Settings page is
@@ -489,10 +496,12 @@ table of `/config/app.db` on the config claim; `0` is standard, `2` is OAuth.
 - **qbittorrent** has no gate. Its `templates/ingress.yaml` is hand-written rather than the shared
   `ingressroute.yaml`, so it needs a middleware list added before the values can carry one.
 - **tautulli** still shows its own login (UI toggle, above).
-- The other tools' APIs (sonarr, radarr, lidarr, prowlarr, tautulli) are still gated. `bazarr`,
-  `bazarr-anime` and now `maintainerr` have the `/api` rule and the `apiBypassMiddlewares` template
-  block; the remaining charts need the same block copied in — but only where the tool checks its own
-  key, which maintainerr does not.
+- **No media-stack API is behind the gate any more** (2026-11-15). Every chart built on the shared
+  `ingressroute.yaml` has the `apiBypassMiddlewares` block, and the six gated tools that check their
+  own key — sonarr, radarr, lidarr, prowlarr, tautulli — set it to `lan-only`, joining `bazarr`,
+  `bazarr-anime` and `maintainerr`. Charts without an authentik gate (autobrr, sonarr-anime,
+  radarr-anime, qbittorrent, calibre, kavita, plex, seerr) never had one on `/api` either, so they
+  need nothing. Any new chart that copies the template must decide this explicitly.
 - **maintainerr's `/api` is open to the LAN** (since 2026-11-15, by decision). The UI keeps the
   authentik gate; the API does not, and upstream checks no key on inbound requests. Close it with
   `apiBypassMiddlewares: []`, or put a `basicauth` middleware on the `/api` rule.

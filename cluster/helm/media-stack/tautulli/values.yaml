@@ -102,6 +102,20 @@ ingressRoute:
       namespace: kube-system
     - name: authentik-forwardauth
       namespace: kube-system
+  # -- Middlewares for the `/api` rule, rendered as a second, higher-priority route
+  # on the same host. Empty means `/api` is gated like the rest of the app; here it
+  # is set to `lan-only` alone so scripts can call the API without a browser session.
+  #
+  # Tautulli's API authenticates each request with `apikey` in the query string, not
+  # with the UI login, so the gate was the only thing standing between a keyed script
+  # and the API. `lan-only` stays, so the API answers the LAN, WireGuard and the pod
+  # network that middleware already allows, never the internet. The UI route above
+  # keeps its gate, and the UI login stays on: its web
+  # auth cannot be driven through the API, so it is still a Settings → Web Interface
+  # toggle for the operator to flip by hand.
+  apiBypassMiddlewares:
+    - name: lan-only
+      namespace: kube-system
   labels: {}
   annotations: {}
   tls:

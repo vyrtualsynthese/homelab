@@ -367,8 +367,10 @@ Not finished:
   `ingressroute.yaml`, so a middleware list must be added there before the values can carry one.
 - **tautulli** still asks for its own login. Its web auth has no API command; it is a UI toggle
   under Settings → Web Interface.
-- The other six tools' APIs are still gated. Only bazarr and bazarr-anime have the
-  `apiBypassMiddlewares` template block; the rest need it copied in.
+- ~~The other six tools' APIs are still gated.~~ **Done on 2026-11-15**: every chart on the shared
+  `ingressroute.yaml` now has the `apiBypassMiddlewares` block, and sonarr, radarr, lidarr, prowlarr,
+  tautulli and maintainerr carry the `/api` rule. No media-stack API is behind the gate; see
+  [`docs/runbooks/authentik-apps.md`](../../runbooks/authentik-apps.md), "Still open".
 - autobrr's post-logout "no state found in session" is a browser-cache symptom, worked around by a
   hard reload. A `Cache-Control: no-store` on `/api/auth/oidc/config` is the targeted fix.
 
