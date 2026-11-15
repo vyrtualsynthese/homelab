@@ -41,10 +41,11 @@ set -euo pipefail
 REPOS=(
   homelab
   config
-  scripts
   ashuvidz-website
   ashudev-website
   selfhosted-helmcharts
+  ashuworld
+  ashuvidz-creator
 )
 
 VIEW_TITLE="Board"
@@ -72,7 +73,7 @@ trap 'rm -f "$BODY_FILE"' EXIT
 trap 'rc=$?; printf "vikunja-seed: internal error at line %s (exit %s): %s\n" "$LINENO" "$rc" "$BASH_COMMAND" >&2; exit "$rc"' ERR
 
 usage() {
-  sed -n '2,33p' "${BASH_SOURCE[0]}"
+  sed -n '2,34p' "${BASH_SOURCE[0]}"
 }
 
 die() {
