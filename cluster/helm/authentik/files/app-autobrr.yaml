@@ -2,31 +2,48 @@ version: 1
 metadata:
   name: ashulab-app-autobrr
 entries:
+  # Level groups come from ashulab-groups; blueprint order is not guaranteed,
+  # so require that file first.
   - model: authentik_blueprints.metaapplyblueprint
     attrs:
       identifiers:
         name: ashulab-groups
       required: true
 
-  # Forward auth: no internal host and no client secret. The outpost checks the
-  # request and answers Traefik, which does pass the X-authentik-* headers on,
-  # since its middleware lists them in `authResponseHeaders`. There is no
-  # strip-authentik-header step because it would buy nothing: Autobrr does not
-  # trust those headers. It keeps its own login until that is switched off, and
-  # from then on trusts nothing arriving from the network.
-  - model: authentik_providers_proxy.proxyprovider
+  # autobrr speaks OIDC natively, so this is a plain OAuth2 provider — not a
+  # proxy provider like the tools that have no login protocol of their own.
+  # Native OIDC means the app asks authentik directly, and its API keeps
+  # working with API keys because no proxy sits in front of it.
+  - model: authentik_providers_oauth2.oauth2provider
     id: autobrr-provider
     identifiers:
       name: autobrr
     attrs:
       name: autobrr
-      mode: forward_single
-      # Scheme must match the browser: these hosts are served on `web`, plain
-      # HTTP. The outpost takes the session cookie's Secure flag from this
-      # scheme, so `https` here would break the cookie on an http host.
-      external_host: http://autobrr.kub.local
+      client_type: confidential
+      # Blueprint-created providers start with no grant types, unlike the UI
+      # wizard which preselects these two; without them the authorize endpoint
+      # answers "Invalid grant_type for provider".
+      grant_types:
+        - authorization_code
+        - refresh_token
+      client_id: autobrr
+      client_secret: !Env AUTOBRR_CLIENT_SECRET
       authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
       invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
+      # autobrr's own documentation asks for RS256 and an RSA signing key, and
+      # names this certificate as the authentik default that works.
+      signing_key: !Find [authentik_crypto.certificatekeypair, [name, authentik Self-signed Certificate]]
+      redirect_uris:
+        - matching_mode: strict
+          redirect_uri_type: authorization
+          # Exact string autobrr builds from X-Forwarded-Proto. The route is
+          # plain HTTP, so this must be `http://` or the callback is refused.
+          url: http://autobrr.kub.local/api/auth/oidc/callback
+      property_mappings:
+        - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-openid]]
+        - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-email]]
+        - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-profile]]
 
   - model: authentik_core.application
     id: autobrr-app
@@ -44,4 +61,5 @@ entries:
       target: !KeyOf autobrr-app
       order: 0
     attrs:
+      # Administrator only: the operator is the sole user of this tool.
       group: !Find [authentik_core.group, [name, authentik Admins]]
