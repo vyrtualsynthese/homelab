@@ -142,6 +142,21 @@ edit. It must stay `traefik.containo.us/v1alpha1` while the cluster runs Traefik
 `kub.local` hosts are served over TLS since 2026-11-15, from the cluster default certificate, with `web` redirecting; they resolve through the Pi-hole wildcard
 record. Hosts under `kub.home.ashudev.com` use `websecure` with `certResolver: myresolver`.
 
+### The `/api` exemption
+
+The `prowlarr` IngressRoute carries a second rule on the same host, `PathPrefix(/api)` with
+`priority: 100`, whose middleware list is `lan-only` alone (`ingressRoute.apiBypassMiddlewares`).
+A script cannot complete an authentik sign-in redirect, so `/api` was unusable from a shell while the
+gate covered the whole host — the same problem the two bazarr charts solved first. It matters more
+here than elsewhere: Prowlarr's API is how the other applications talk to it.
+
+Prowlarr's API is not part of the browser session anyway: every `/api/v1` request must carry
+`X-Api-Key`, and a request without one is refused by Prowlarr itself with `401`. The gate and the key
+check were stacked on top of each other, not alternatives, so dropping the gate on this path leaves
+the key as the control. `lan-only` stays, so the API answers the LAN, WireGuard and the pod
+network that middleware already allows — never the internet. The UI route keeps its gate. Set `ingressRoute.apiBypassMiddlewares: []` to close the
+exemption again; the second rule then stops rendering.
+
 ## Files
 
 | File | Renders |

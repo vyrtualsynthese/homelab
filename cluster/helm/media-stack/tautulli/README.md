@@ -56,6 +56,19 @@ must move with it.
 Tautulli is on the LAN, not the internet. The one route is at `tautulli.kub.local`, over TLS since 2026-11-15. Since 2026-11-15 it carries `lan-only` and the authentik forward-auth gate; Tautulli's own login is still on because its web auth has no API.
 `kub.local` resolves through the Pi-hole wildcard record; it is not in a public zone.
 
+### The `/api` exemption
+
+The `tautulli` IngressRoute carries a second rule on the same host, `PathPrefix(/api)` with
+`priority: 100`, whose middleware list is `lan-only` alone (`ingressRoute.apiBypassMiddlewares`).
+A script cannot complete an authentik sign-in redirect, so `/api/v2?apikey=…` was unreachable from a
+shell while the gate covered the whole host. Tautulli authenticates the API per request with `apikey`
+in the query string, not with the UI login, so the gate was the only thing standing in the way of a
+keyed script — the same problem the two bazarr charts solved first.
+
+`lan-only` stays, so the API answers the LAN, WireGuard and the pod network that middleware already
+allows — never the internet — and the UI route above keeps its gate. Set `ingressRoute.apiBypassMiddlewares: []` to close the exemption again; the second
+rule then stops rendering.
+
 The chart used to publish `tautulli.kub.home.ashudev.com` over TLS with a redirect from HTTP. Those
 templates are gone, but the live objects are **not** deleted by the sync: the Application has no
 automated sync and no prune policy. Delete them by hand after the first sync:

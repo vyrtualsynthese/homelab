@@ -3,7 +3,7 @@ name: lidarr
 description: Lidarr is a music collection manager for Usenet and BitTorrent users. It watches indexers, grabs releases and files them into the audio library Plex reads.
 type: application
 # Chart version. Renovate bumps this when the image tag moves.
-version: 1.2.0
+version: 1.3.0
 # Must match image.tag in values.yaml.
 appVersion: "3.1.6.5079-ls48"
 icon: https://raw.githubusercontent.com/Lidarr/Lidarr/develop/Logo/1024.png
