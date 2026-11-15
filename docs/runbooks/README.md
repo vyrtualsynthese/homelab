@@ -18,7 +18,7 @@ performed at least once — a procedure nobody has run is a guess with a title.
 | `internal-ca.md` | media-tools SSO | proved 2026-11-15 — root minted, leaf signed; the restore drill is still pending |
 | `vikunja-database.md` | vikunja board | pending — run before the board's first start |
 | `vikunja-first-start.md` | vikunja board | pending — the first run is its own proof |
-| `vikunja-board-seed.md` | vikunja board | pending — the board seeding runbook; not written yet |
+| `vikunja-board-seed.md` | vikunja board | pending — written; the first run against the live board is the proof |
 
 Conventions: each runbook states its preconditions, the exact commands, the output that means
 success, and the rollback. Anything destructive says so in the first line.
