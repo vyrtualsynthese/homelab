@@ -35,8 +35,13 @@ attachments; it does not lose a single task. That is the point of the split, and
 `persistence.database` is off — a SQLite file inside the claim would put the state back on a node's
 disk, where the 2026 Longhorn failure already proved it does not belong.
 
-Restoring from a backup is therefore two operations: restore the database, and optionally copy
-`/app/vikunja/files` back.
+Restoring is therefore two operations: the nightly PostgreSQL dump brings the database back, and a
+copy of `/app/vikunja/files` brings the attachments back. **Neither leaves the house today.** The
+dump CronJob (`postgres-dump` in namespace `databases`, 03:30, 14-day retention) writes to the
+`postgres-dumps` claim, which is `local-path` on `nas`, so it dies with that node or with the cluster,
+and the offsite copy is W4, which is unbuilt — see `AGENTS.md` §7.3. Until W4 lands there is no
+recovery path for the board beyond what the live cluster itself holds. This README does not promise
+one.
 
 ## Why the upstream ingress is disabled
 
@@ -68,8 +73,9 @@ Traefik pick the API route over the catch-all one.
 
 `metrics.enabled: true` in `config.yml` turns on Prometheus output at `/api/v1/metrics` on port
 3456. The pod carries `prometheus.io/scrape: "true"`, `prometheus.io/port: "3456"` and
-`prometheus.io/path: /api/v1/metrics`, which is how Prometheus finds every app in this repo. The
-path sits under `/api`, so scraping passes `lan-only` and needs no token.
+`prometheus.io/path: /api/v1/metrics`, which is how Prometheus finds every app in this repo.
+Prometheus scrapes the pod **directly, pod to pod**; the request never goes through Traefik, so no
+middleware applies to it at all — that is also why the endpoint needs no credentials.
 
 ## Logs
 
