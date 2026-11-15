@@ -24,7 +24,7 @@ token below belongs to.
 |---|---|
 | Address | `https://vikunja.kub.local` |
 | Script | `hack/vikunja-seed.sh` |
-| Projects | `homelab`, `config`, `scripts`, `ashuvidz-website`, `ashudev-website`, `selfhosted-helmcharts` |
+| Projects | `homelab`, `config`, `ashuvidz-website`, `ashudev-website`, `selfhosted-helmcharts`, `ashuworld`, `ashuvidz-creator` |
 | View | `Board`, kanban, manual bucket order |
 | Columns | `Ready`, `Doing`, `Waiting for validation`, `Done` |
 | Saved filter | `Awaiting my review` |
@@ -69,7 +69,7 @@ Always first. It reads the board and prints every call it would make, sending no
 ```
 
 ```text
-Board https://vikunja.kub.local, 6 repositories: homelab config scripts ashuvidz-website ashudev-website selfhosted-helmcharts
+Board https://vikunja.kub.local, 7 repositories: homelab config ashuvidz-website ashudev-website selfhosted-helmcharts ashuworld ashuvidz-creator
 Dry run: reading the board, sending no write.
 
          -> GET /api/v1/projects
@@ -83,11 +83,11 @@ bucket   homelab / Board / Ready                      would-create
          -> PUT /api/v1/filters {"title":"Awaiting my review","filters":{"sort_by":["created"],"order_by":["asc"],"filter":"done = false"}}
 filter   Awaiting my review                           would-create
 
-dry run: 43 write(s) planned, none sent; 0 object(s) already exist
+dry run: 50 write(s) planned, none sent; 0 object(s) already exist
 ```
 
 The shape above is what the script printed against a stand-in for the API before the board existed,
-so the ids and the URL differ on the real run; the lines, the order and the `43` are what to expect
+so the ids and the URL differ on the real run; the lines, the order and the `50` are what to expect
 from an empty board. A placeholder in angle brackets (`<new project homelab>`) is an id the script
 does not know yet because it has not written anything.
 
@@ -104,7 +104,7 @@ will bring, so it plans all four. The real run reads them back and matches by ti
 ./hack/vikunja-seed.sh
 ```
 
-Expected: six blocks, one per repository — the project, the view, the four columns, the done bucket,
+Expected: seven blocks, one per repository — the project, the view, the four columns, the done bucket,
 and the bucket mode — then the saved filter. On an instance that does not return
 `bucket_configuration_mode`, the `mode` line is absent and an indented note stands in its place; the
 note is described below the sample.
@@ -122,7 +122,7 @@ mode     homelab / Board                              existing      manual
 ...
 filter   Awaiting my review                           created       id=1037
 
-seeded: 31 created, 18 already present, 0 updated, 6 kept (not created here)
+seeded: 36 created, 21 already present, 0 updated, 7 kept (not created here)
 ```
 
 The block above is from a stand-in for the API whose new kanban views arrive with `To-Do`, `Doing`
@@ -132,12 +132,12 @@ by title and reported `existing`, `To-Do` is reported `kept` and left alone, and
 view's columns are read back on the same run that creates it.
 
 A board whose new views arrive empty instead shows all four columns `created`, and the totals are
-`43 created, 0 already present, 0 updated, 0 kept` — 6 × 7 plus the filter. Whatever the totals, a
+`50 created, 0 already present, 0 updated, 0 kept` — 7 × 7 plus the filter. Whatever the totals, a
 `kept` line is a column the script did not create and will not touch; nothing is deleted, because an
 empty column and a column holding work look the same from the API.
 
-Run it a second time and every line says `existing`: `seeded: 0 created, 49 already present, 0
-updated, 6 kept (not created here)` on the board above, or `seeded: 0 created, 43 already present, 0
+Run it a second time and every line says `existing`: `seeded: 0 created, 57 already present, 0
+updated, 7 kept (not created here)` on the board above, or `seeded: 0 created, 50 already present, 0
 updated, 0 kept (not created here)` on an empty-view board. That second run is the proof of
 idempotency, not a repeat of the first.
 
@@ -171,17 +171,18 @@ is wrong.
 ```
 
 ```text
-Verifying 6 boards against https://vikunja.kub.local
+Verifying 7 boards against https://vikunja.kub.local
 
 PASS homelab                view 1002, 5 buckets, done bucket 1005, mode manual
 PASS config                 view 1009, 5 buckets, done bucket 1012, mode manual
-PASS scripts                view 1016, 5 buckets, done bucket 1019, mode manual
-PASS ashuvidz-website       view 1023, 5 buckets, done bucket 1026, mode manual
-PASS ashudev-website        view 1030, 5 buckets, done bucket 1033, mode manual
-PASS selfhosted-helmcharts  view 1037, 5 buckets, done bucket 1040, mode manual
+PASS ashuvidz-website       view 1016, 5 buckets, done bucket 1019, mode manual
+PASS ashudev-website        view 1023, 5 buckets, done bucket 1026, mode manual
+PASS selfhosted-helmcharts  view 1030, 5 buckets, done bucket 1033, mode manual
+PASS ashuworld              view 1037, 5 buckets, done bucket 1040, mode manual
+PASS ashuvidz-creator       view 1044, 5 buckets, done bucket 1047, mode manual
 PASS saved filter "Awaiting my review"
 
-verify: all 6 boards hold the shape the protocol expects
+verify: all 7 boards hold the shape the protocol expects
 ```
 
 Each `PASS` says the view is kanban, the four columns exist, `done_bucket_id` names the column titled
@@ -196,7 +197,7 @@ not be checked — the line would otherwise read as "the cards can be dragged" w
 The verification still succeeds, and the summary says how many boards went unchecked. In that case a
 re-run cannot detect a view stuck on `none` either; moving a card by hand is the only test left.
 
-## Step 5 — a seventh repository
+## Step 5 — one more repository
 
 Add one line to `REPOS` at the top of `hack/vikunja-seed.sh`:
 
@@ -204,15 +205,16 @@ Add one line to `REPOS` at the top of `hack/vikunja-seed.sh`:
 REPOS=(
   homelab
   config
-  scripts
   ashuvidz-website
   ashudev-website
   selfhosted-helmcharts
+  ashuworld
+  ashuvidz-creator
   the-new-one
 )
 ```
 
-Commit it, run `--dry-run`, then the real run. Every line for the six existing repositories says
+Commit it, run `--dry-run`, then the real run. Every line for the seven existing repositories says
 `existing` and only the new project is created — the matching is per object, not per run.
 
 ## What the saved filter covers, and what it does not
