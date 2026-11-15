@@ -327,7 +327,8 @@ browsers exempt `localhost` from the https rule.
 ### 12.5 What is finished and what is not
 
 Finished and verified live: sonarr, radarr, lidarr, prowlarr, bazarr, bazarr-anime, tautulli,
-maintainerr, autobrr (OIDC), calibre (OIDC) and kavita (OIDC) — with the two bazarrs exempting `/api`.
+maintainerr, autobrr (OIDC), calibre (OIDC over TLS, signed in from the button on 2026-11-15) and kavita
+(OIDC) — with the two bazarrs exempting `/api`.
 
 Not finished:
 
