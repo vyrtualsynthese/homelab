@@ -177,11 +177,14 @@ client action) and signs a leaf from it.
 
 ```bash
 hack/internal-cert.sh                       # reuse the CA, sign a fresh leaf
-kubectl -n kube-system create secret tls local-cert \
+kubectl -n kube-system delete secret local-cert --ignore-not-found
+kubectl -n kube-system create secret tls local-cert --save-config \
   --cert=$HOME/.config/secrets/kub-local/kub.local.pem \
-  --key=$HOME/.config/secrets/kub-local/kub.local-key.pem \
-  --dry-run=client -o yaml | kubectl apply -f -
+  --key=$HOME/.config/secrets/kub-local/kub.local-key.pem
 ```
+
+Delete then create, not `apply`: the Secret in place is `Opaque`, and a Secret's `type` is immutable — an
+`apply` that adds `type: kubernetes.io/tls` is refused with `field is immutable`.
 
 Traefik serves the new certificate as soon as that Secret changes, without a restart. This route is
 currently the only one that falls back to the default store, so it is the only one affected.
