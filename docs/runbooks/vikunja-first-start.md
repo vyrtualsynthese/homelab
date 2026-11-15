@@ -45,8 +45,17 @@ database, so a pod that never becomes ready is more likely a missing database th
 ## Step 1 — wait for ArgoCD
 
 The commit that adds the chart and the Application reaches the cluster through the root Application
-(see [`../../AGENTS.md`](../../AGENTS.md) §2). In the ArgoCD UI, the `vikunja` Application goes
-`OutOfSync` → `Syncing` → `Synced`, and its health goes `Progressing` → `Healthy`.
+(see [`../../AGENTS.md`](../../AGENTS.md) §2). This Application carries no `syncPolicy.automated` —
+that lives in the ArgoCD UI, and a PR that adds it to the file is reverted on the next root sync — so
+nothing starts it by itself: enable auto-sync in the UI once, or click **Sync**. In the ArgoCD UI, the
+`vikunja` Application then goes `OutOfSync` → `Syncing` → `Synced`, and its health goes `Progressing`
+→ `Healthy`.
+
+Before that first sync, check that the node has room for it. The chart pins the board to `nuc0`,
+which was at roughly 28.5 GB of 32 GB before this work: `kubectl top node nuc0`, or the node's memory
+panel in Grafana. If there is no headroom for the pod's 512Mi limit, point `nodeSelector` in
+`cluster/helm/vikunja/values.yaml` at `nas` **before** syncing — that is the fallback the design names,
+and it is also where the database and the disks already are. Deciding afterwards costs a second deploy.
 
 ```bash
 kubectl -n argocd get application vikunja \
@@ -145,7 +154,10 @@ openssl s_client -connect vikunja.kub.local:443 -servername vikunja.kub.local </
 covers `vikunja.kub.local` as a subdomain. `issuer` is who signed it: `ashulab internal CA`, minted
 by [`internal-ca.md`](internal-ca.md). Because that CA is in each workstation's trust store, a
 browser shows no warning on `kub.local`; a warning there means the certificate being served is not
-the cluster's own, and the route's `TLSOption` is the first thing to check.
+the cluster's own. `internal-tls` selects no certificate — it sets only minVersion, cipher suites and
+curve preferences — so check the default `TLSStore` certificate `kube-system/local-cert` first, then
+whether the router matches this host at all: a request whose `Host` no router claims falls back to the
+default certificate too, and that is the other way here to get a name mismatch.
 
 ## Step 6 — the API answers, the interface does not
 
@@ -276,13 +288,18 @@ no export in this procedure: the nightly dump in [`postgres-add-database.md`](po
 holds them until its retention ends.
 
 ```bash
-git switch -c chore/retire-vikunja
+git fetch origin
+git switch -c chore/retire-vikunja origin/develop
 git rm cluster/argocd/projects/vikunja.yaml
 git rm -r cluster/helm/vikunja
 git commit -m "🔥 remove the board"
 git push origin chore/retire-vikunja
 # then open a pull request against develop and merge it (AGENTS.md §Git workflow)
 ```
+
+Branch from `origin/develop` explicitly, as above, not from whatever happens to be checked out: the
+PR targets `develop`, and a branch cut from `main` carries commits `develop` does not have, so the
+rebase onto `develop` that handover requires is no longer a clean fast-forward.
 
 Retire it in git **first**, as the Calibre cutover did
 ([`books-cutover.md`](books-cutover.md#rollback)). Deleting the Application with `kubectl` does not
