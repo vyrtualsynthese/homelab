@@ -54,7 +54,10 @@ Evidence as of 2026-11-14, from the repo and the previous design.
   no Application in this repo manages it.
 - No MFA is configured: the default validation stage is bound to the password flow with its
   "not configured" action left at *skip*, and it is not bound to the Discord/Plex source flows.
-- No outpost runs beyond the embedded one, and nothing uses forward auth. FileBrowser is fronted
+- No outpost runs beyond the embedded one. (Superseded: the nine media tools now use the
+  forward-auth gate, and FileBrowser was already fronted by it. The current picture lives in
+  `2026-11-14-media-tools-authentik-design.md` and `docs/runbooks/authentik-apps.md`.)
+- (Historical) FileBrowser is fronted
   by a Traefik middleware named `authentik` that only sets CORS headers and enforces nothing,
   on a hostname that the public wildcard DNS exposes.
 - FileBrowser is pinned at `v2.63.2`. Upstream archived the project on 2026-09-01; the last
@@ -80,8 +83,10 @@ Non-goals:
   accounts and is outside this model.
 - No per-folder, per-file policy in authentik. Folder scope lives in FileBrowser.
 - No invitation system, no self-service access requests.
-- No proxy gate in front of applications that would break their phone apps or APIs. FileBrowser
-  is the one exception and it uses its own native proxy auth, not a gate around it.
+- ~~No proxy gate in front of applications that would break their phone apps or APIs.~~ **Overridden
+  on 2026-11-15 by the operator, knowingly.** The media tools are behind the gate; the ones whose
+  APIs matter (bazarr, bazarr-anime) exempt `/api` on a `lan-only` rule, and autobrr uses native
+  OIDC instead of a gate. See `2026-11-14-media-tools-authentik-design.md`.
 
 Anti-goals (failures even if the system works):
 
@@ -291,7 +296,10 @@ announced, not done during a release.
   list is empty without any extra work.
 - Roles: applications that read groups map the admin level themselves; the rest keep a local
   role.
-- Capability: FileBrowser is the only forward-auth consumer. Everything else speaks OIDC natively.
+- Capability: ~~FileBrowser is the only forward-auth consumer.~~ Nine media tools and Calibre-Web
+  use the forward-auth gate; autobrr, Argo CD, Grafana, pgAdmin and Kavita speak OIDC natively.
+  FileBrowser remains the only consumer that also relies on the header-stripping rule for its own
+  proxy auth.
 - Git: groups, enrollment default, bindings, MFA stage bindings and FileBrowser's provider live in
   `cluster/helm/authentik/files/`. Folder scopes and group membership live in the two UIs.
 
