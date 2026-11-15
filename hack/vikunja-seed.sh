@@ -12,7 +12,9 @@
 # Every object is matched by title, so a second run creates nothing and prints
 # "existing" for each line. Nothing is ever deleted. A bucket the script did not
 # create is printed as "kept" and left untouched, because a default column that
-# happens to be empty is indistinguishable from one holding work.
+# happens to be empty is indistinguishable from one holding work. A view whose
+# bucket mode is not "manual" — cards pinned to their column — is repaired on
+# the run that finds it and printed as "updated".
 #
 #   hack/vikunja-seed.sh --dry-run   # read the board, print every call, write nothing
 #   hack/vikunja-seed.sh             # create what is missing
@@ -48,6 +50,7 @@ REPOS=(
 VIEW_TITLE="Board"
 BUCKETS=(Ready Doing "Waiting for validation" Done)
 DONE_TITLE="Done"
+BUCKET_MODE="manual"
 FILTER_TITLE="Awaiting my review"
 
 VIKUNJA_URL="${VIKUNJA_URL:-https://vikunja.kub.local}"
@@ -61,6 +64,7 @@ VERIFY=0
 W_PLANNED=0
 C_CREATED=0
 C_EXISTING=0
+C_UPDATED=0
 C_KEPT=0
 
 BODY_FILE="$(mktemp)"
@@ -68,7 +72,7 @@ trap 'rm -f "$BODY_FILE"' EXIT
 trap 'rc=$?; printf "vikunja-seed: internal error at line %s (exit %s): %s\n" "$LINENO" "$rc" "$BASH_COMMAND" >&2; exit "$rc"' ERR
 
 usage() {
-  sed -n '2,31p' "${BASH_SOURCE[0]}"
+  sed -n '2,33p' "${BASH_SOURCE[0]}"
 }
 
 die() {
@@ -146,6 +150,7 @@ seed_project() {
   local p_new=0 v_new=0
   local views_json="" view_json="" buckets_json="" known_json=""
   local bid="" btitle="" title="" bucket_id=""
+  local mode_current=""
 
   printf '\n'
 
@@ -187,15 +192,18 @@ seed_project() {
     fi
     view_id="$(jq -r '.id // empty' <<<"$view_json")"
     done_current="$(jq -r '.done_bucket_id // empty' <<<"$view_json")"
+    mode_current="$(jq -r '.bucket_configuration_mode // empty' <<<"$view_json")"
     say view "$repo / $VIEW_TITLE" existing "id=$view_id"
     C_EXISTING=$((C_EXISTING + 1))
   else
     v_new=1
     # bucket_configuration_mode defaults to "none", which fixes each card to the
     # bucket it was created in. "manual" is what lets a person drag a card from
-    # "Doing" to "Waiting for validation".
-    body="$(jq -cn --arg t "$VIEW_TITLE" \
-      '{title: $t, view_kind: "kanban", bucket_configuration_mode: "manual"}')"
+    # "Doing" to "Waiting for validation". The mode is sent again below when the
+    # view already exists, because a view made before this line existed carries
+    # the default, and a create body cannot repair it.
+    body="$(jq -cn --arg t "$VIEW_TITLE" --arg m "$BUCKET_MODE" \
+      '{title: $t, view_kind: "kanban", bucket_configuration_mode: $m}')"
     write_or_plan PUT "/projects/$project_id/views" "$body"
     if [ "$DRY_RUN" = 1 ]; then
       view_id="<new view $VIEW_TITLE>"
@@ -205,18 +213,28 @@ seed_project() {
       if [ -z "$view_id" ]; then
         die "the board accepted view \"$VIEW_TITLE\" in \"$repo\" but returned no id — body: $API_BODY"
       fi
+      # What the create answered is the only reading of the mode available on
+      # this run; if the board leaves the field out, the mode is reported as
+      # unchecked rather than assumed.
+      mode_current="$(jq -r '.bucket_configuration_mode // empty' <<<"$API_BODY")"
       say view "$repo / $VIEW_TITLE" created "id=$view_id"
       C_CREATED=$((C_CREATED + 1))
     fi
   fi
 
   # ---- the buckets -------------------------------------------------------
-  if [ "$v_new" = 1 ] || [ "$p_new" = 1 ]; then
-    buckets_json='[]'        # a view created a second ago may still have defaults
-    done_current=""          # ...and its done bucket is unset by definition
+  # A view created a second ago may already carry default columns, so its
+  # buckets are read back on that same run and matched by title like any other.
+  # Skipping that read is how a default "Done" becomes a second "Done", and how
+  # a board the script has just built fails its own --verify.
+  if [ "$v_new" = 1 ] && [ "$DRY_RUN" = 1 ]; then
+    buckets_json='[]'        # the view does not exist yet, so there is nothing to read
   else
     read_endpoint "/projects/$project_id/views/$view_id/buckets"
     buckets_json="$API_BODY"
+  fi
+  if [ "$v_new" = 1 ]; then
+    done_current=""          # a view created a second ago has no done bucket yet
   fi
 
   known_json="$(jq -cn --args '$ARGS.positional' "${BUCKETS[@]}")"
@@ -262,14 +280,41 @@ seed_project() {
     say done "$repo / $VIEW_TITLE" existing "bucket $done_id ($DONE_TITLE)"
     C_EXISTING=$((C_EXISTING + 1))
   elif [ "$DRY_RUN" = 1 ]; then
-    write_or_plan POST "/projects/$project_id/views/$view_id" \
-      "$(jq -cn --arg id "$done_id" '{done_bucket_id: $id}')"
+    if [[ "$done_id" =~ ^[0-9]+$ ]]; then
+      body="$(jq -cn --argjson id "$done_id" '{done_bucket_id: $id}')"
+    else
+      body="$(jq -cn --arg id "$done_id" '{done_bucket_id: $id}')"
+    fi
+    write_or_plan POST "/projects/$project_id/views/$view_id" "$body"
     say done "$repo / $VIEW_TITLE" would-create "bucket $done_id ($DONE_TITLE)"
   else
     write_or_plan POST "/projects/$project_id/views/$view_id" \
       "$(jq -cn --argjson id "$done_id" '{done_bucket_id: $id}')"
     say done "$repo / $VIEW_TITLE" created "bucket $done_id ($DONE_TITLE)"
     C_CREATED=$((C_CREATED + 1))
+  fi
+
+  # ---- the bucket mode ---------------------------------------------------
+  # "manual" is what lets a person drag a card between columns; the default,
+  # "none", pins every card to the column it was created in. A view created by
+  # an earlier version of this script, or in the browser, carries "none", and a
+  # re-run has to repair it — the create body never reaches it again.
+  if [ "$v_new" = 1 ] && [ "$DRY_RUN" = 1 ]; then
+    :                        # the planned create above already carries the mode
+  elif [ -z "$mode_current" ]; then
+    note "bucket_configuration_mode is not returned for $repo / $VIEW_TITLE — cannot check it"
+  elif [ "$mode_current" = "$BUCKET_MODE" ]; then
+    say mode "$repo / $VIEW_TITLE" existing "$BUCKET_MODE"
+    C_EXISTING=$((C_EXISTING + 1))
+  elif [ "$DRY_RUN" = 1 ]; then
+    write_or_plan POST "/projects/$project_id/views/$view_id" \
+      "$(jq -cn --arg m "$BUCKET_MODE" '{bucket_configuration_mode: $m}')"
+    say mode "$repo / $VIEW_TITLE" would-update "$mode_current -> $BUCKET_MODE"
+  else
+    write_or_plan POST "/projects/$project_id/views/$view_id" \
+      "$(jq -cn --arg m "$BUCKET_MODE" '{bucket_configuration_mode: $m}')"
+    say mode "$repo / $VIEW_TITLE" updated "$mode_current -> $BUCKET_MODE"
+    C_UPDATED=$((C_UPDATED + 1))
   fi
 }
 
@@ -310,7 +355,7 @@ seed_filter() {
 verify() {
   local failures=0 repo="" projects_json="" pid="" views_json="" vjson=""
   local view_id="" kind="" buckets_json="" title="" missing="" done_id=""
-  local current="" problems="" present=""
+  local current="" mode="" problems="" present="" bucket_count=0 unchecked=0
 
   printf 'Verifying %d boards against %s\n\n' "${#REPOS[@]}" "$VIKUNJA_URL"
 
@@ -339,9 +384,11 @@ verify() {
     view_id="$(jq -r '.id // empty' <<<"$vjson")"
     kind="$(jq -r '.view_kind // empty' <<<"$vjson")"
     current="$(jq -r '.done_bucket_id // empty' <<<"$vjson")"
+    mode="$(jq -r '.bucket_configuration_mode // empty' <<<"$vjson")"
 
     http GET "/projects/$pid/views/$view_id/buckets"
     buckets_json="$API_BODY"
+    bucket_count="$(jq 'length' <<<"$buckets_json")"
 
     missing=""
     for title in "${BUCKETS[@]}"; do
@@ -363,13 +410,25 @@ verify() {
     elif [ "$current" != "$done_id" ]; then
       problems="${problems:+$problems; }done_bucket_id is ${current:-unset}, expected $done_id (\"$DONE_TITLE\")"
     fi
+    if [ -z "$mode" ]; then
+      # A field the API does not return cannot be checked. Saying so is the
+      # point: silence here would read as "the cards can be dragged".
+      unchecked=$((unchecked + 1))
+    elif [ "$mode" != "$BUCKET_MODE" ]; then
+      problems="${problems:+$problems; }bucket_configuration_mode is \"$mode\", expected \"$BUCKET_MODE\""
+    fi
 
     if [ -n "$problems" ]; then
       printf 'FAIL %-22s %s\n' "$repo" "$problems"
       failures=$((failures + 1))
-    else
+    elif [ -z "$mode" ]; then
       printf 'PASS %-22s view %s, %d buckets, done bucket %s\n' \
-        "$repo" "$view_id" "${#BUCKETS[@]}" "$done_id"
+        "$repo" "$view_id" "$bucket_count" "$done_id"
+      printf 'NOTE %-22s bucket_configuration_mode is not returned by this API, so the mode was not checked\n' \
+        "$repo"
+    else
+      printf 'PASS %-22s view %s, %d buckets, done bucket %s, mode %s\n' \
+        "$repo" "$view_id" "$bucket_count" "$done_id" "$mode"
     fi
   done
 
@@ -382,6 +441,10 @@ verify() {
   fi
 
   printf '\n'
+  if [ "$unchecked" -ne 0 ]; then
+    printf 'verify: %d board(s) could not be checked for bucket_configuration_mode — the API does not return the field\n' \
+      "$unchecked"
+  fi
   if [ "$failures" -ne 0 ]; then
     printf 'verify: %d problem(s) found\n' "$failures"
     exit 1
@@ -448,5 +511,5 @@ if [ "$DRY_RUN" = 1 ]; then
     "$W_PLANNED" "$C_EXISTING"
   exit 0
 fi
-printf 'seeded: %d created, %d already present, %d kept (not created here)\n' \
-  "$C_CREATED" "$C_EXISTING" "$C_KEPT"
+printf 'seeded: %d created, %d already present, %d updated, %d kept (not created here)\n' \
+  "$C_CREATED" "$C_EXISTING" "$C_UPDATED" "$C_KEPT"
