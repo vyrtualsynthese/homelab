@@ -1,19 +1,19 @@
 # Wire an application to authentik
 
-State, as of 2026-11-14:
+State, as of 2026-11-15:
 
 | Application | authentik objects in git | Application configured | How |
 |---|---|---|---|
 | Grafana | yes | **yes** | Secret + chart values |
 | pgAdmin | yes | **yes** | `config_local.py` in a Secret |
 | Argo CD | yes | no | `cluster/helm/argocd/values.yaml` + `helm upgrade` |
-| Kavita | yes | no | one pass in its own UI |
+| Kavita | yes | **yes** | `POST /api/settings`, stored in its database |
 | FileBrowser | yes | no | proxy auth, forward-auth middleware |
 
-Four applications have providers and application objects in the chart (`files/app-*.yaml`); only
-Grafana and pgAdmin have been configured on the application side. Argo CD and Kavita therefore do
-not sign anyone in yet, whatever their authentik objects say. The access matrix in the design
-treats them as targets until their section below has been run.
+Four applications have providers and application objects in the chart (`files/app-*.yaml`); Grafana,
+pgAdmin and Kavita are configured on the application side. Argo CD does not sign anyone in yet,
+whatever its authentik objects say. The access matrix in the design treats it as a target until its
+section below has been run.
 
 Client IDs are fixed and public: `argocd`, `grafana`, `pgadmin`, `kavita`.
 
@@ -92,15 +92,63 @@ imported servers must be marked **Shared?** so other users see them; both are pg
 
 ## 4. Kavita
 
-Not wired yet. Kavita stores OIDC settings in its database, so this is a one-time pass in its UI
-(recorded here because a rebuild needs it again):
+**Configured on 2026-11-15.** Kavita keeps its OIDC settings in its own SQLite database, so there is
+no chart value and no manifest to change: the settings are written through its API with the admin key
+from `KAVITA_API_KEY` in `~/.config/secrets/homelab.env`. The client secret is the
+`KAVITA_CLIENT_SECRET` already in `authentik-sso`; the provider in `files/app-kavita.yaml` is
+confidential, `client_id: kavita`, with redirects `/signin-oidc` and `/signout-callback-oidc`.
 
-1. Sign in to Kavita as administrator.
-2. **Settings → OpenID Connect**.
-3. **Authority**: `https://authentik.kub.home.ashudev.com/application/o/kavita/`
-4. **Client Id**: `kavita`; **Secret**: the kavita value.
-5. **Provision Accounts**: on. **Require Verified Emails**: off.
-6. Save, then restart the Kavita pod (`kubectl -n media-stack rollout restart deploy/kavita`).
+The settings object is read and written whole: a partial `POST` resets every field it omits.
+
+```bash
+set -a; . ~/.config/secrets/homelab.env; set +a
+curl -sS -H "x-api-key: $KAVITA_API_KEY" \
+     https://kavita.kub.home.ashudev.com/api/settings \
+  | jq --arg s "$KAVITA_CLIENT_SECRET" '.oidcConfig += {
+      enabled: true,
+      authority: "https://authentik.kub.home.ashudev.com/application/o/kavita/",
+      clientId: "kavita",
+      secret: $s,
+      provisionAccounts: true,
+      requireVerifiedEmail: false,
+      syncUserSettings: false,
+      autoLogin: true,
+      disablePasswordAuthentication: true
+    }' \
+  | curl -sS -X POST -H "x-api-key: $KAVITA_API_KEY" -H 'Content-Type: application/json' \
+         --data @- https://kavita.kub.home.ashudev.com/api/settings
+```
+
+`enabled`, `authority`, `clientId` and `secret` are read when the process starts, so restart after
+changing them: `kubectl -n media-stack rollout restart deploy/kavita`. `autoLogin` and
+`disablePasswordAuthentication` take effect immediately.
+
+Why each flag is what it is:
+
+- `provisionAccounts: true` — a user in the `homelab-users` group gets a Kavita account on first
+  login. `defaultRoles` stays empty on purpose: the account is created but cannot log in until a
+  role is granted, which is the least-privilege rule for new users.
+- `requireVerifiedEmail: false` — authentik does not return `email_verified` by default, and Kavita
+  refuses to link the account when it is missing.
+- `syncUserSettings: false` — roles stay managed in Kavita, not in authentik.
+- `autoLogin: true`, `disablePasswordAuthentication: true` — the login page goes straight to
+  authentik and the password form is gone.
+
+**Break-glass.** Disabling password authentication applies to admins too — the check in
+`AccountController` has no role exemption, whatever the setting's tooltip says — so the API key is
+the only local credential left. Kavita always honours it:
+
+- browser: `https://kavita.kub.home.ashudev.com/login?skipAutoLogin=true&apiKey=<KAVITA_API_KEY>`
+  (`skipAutoLogin` is required, or `autoLogin` redirects to authentik first);
+- scripts: the `x-api-key` header.
+
+To bring the password form back, `POST` the settings again with
+`disablePasswordAuthentication: false` and `autoLogin: false`, using that key.
+
+Verified on 2026-11-15: `GET /oidc/login` answers `302` to
+`.../application/o/authorize/?client_id=kavita&redirect_uri=https%3A%2F%2Fkavita.kub.home.ashudev.com%2Fsignin-oidc&…`,
+and `POST /api/account/login` with a password answers
+`401 Password authentication has been disabled, login via OpenID Connect`.
 
 ## 5. Argo CD
 
