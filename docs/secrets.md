@@ -62,6 +62,7 @@ beside the instance that creates the role, once beside the application that cons
 | `guacamole-db` | `guacamole` | `POSTGRES_USER`, `POSTGRES_PASSWORD` | The application pod's `env` | Existing Secret, same caveat about the non-secret user key. |
 | `koillection` | `koillection` | `DB_NAME`, `DB_HOST`, `DB_USER`, `DB_PASSWORD` | The application pod's `env` | Existing Secret. `DB_HOST` is where the hostname moves; the file is also the documented rotation point for the password. |
 | `wikijs` | `wiki` | `password` | The application pod's `DB_PASS` | Existing Secret, key `password`, consumed as the wiki's database password. |
+| `vikunja-db` | `vikunja` | `VIKUNJA_DATABASE_PASSWORD` | The board pod's environment; the key name is Vikunja's own variable, so the chart needs no mapping | Created by [`runbooks/vikunja-database.md`](runbooks/vikunja-database.md) with `openssl rand -base64 24`, so the value is 32 characters. Deliberately **no** `databases/pg-vikunja` copy: this Secret is the only one, and losing it is repaired with `ALTER ROLE` plus a new Secret. |
 
 Only the password keys hold secrets; `DB_NAME`, `DB_HOST`, `DB_USER` and `POSTGRES_USER` live in
 the Secret because the chart reads them there, not because they are sensitive.
