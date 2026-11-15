@@ -227,6 +227,12 @@ probes:
     periodSeconds: 5
     timeoutSeconds: 5
     failureThreshold: 30
+    httpHeaders:
+      # The kubelet probes the pod IP, which Prowlarr's Allowed Hosts rejects
+      # once authentication is not `enabled` (see the probes comment above).
+      # Presenting the route's own name keeps `/ping` reachable.
+      - name: Host
+        value: prowlarr.kub.local
   liveness:
     enabled: true
     path: /ping
@@ -234,6 +240,12 @@ probes:
     periodSeconds: 30
     timeoutSeconds: 5
     failureThreshold: 3
+    httpHeaders:
+      # The kubelet probes the pod IP, which Prowlarr's Allowed Hosts rejects
+      # once authentication is not `enabled` (see the probes comment above).
+      # Presenting the route's own name keeps `/ping` reachable.
+      - name: Host
+        value: prowlarr.kub.local
   readiness:
     enabled: true
     path: /ping
@@ -241,3 +253,9 @@ probes:
     periodSeconds: 15
     timeoutSeconds: 5
     failureThreshold: 3
+    httpHeaders:
+      # The kubelet probes the pod IP, which Prowlarr's Allowed Hosts rejects
+      # once authentication is not `enabled` (see the probes comment above).
+      # Presenting the route's own name keeps `/ping` reachable.
+      - name: Host
+        value: prowlarr.kub.local
