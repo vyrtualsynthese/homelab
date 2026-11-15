@@ -106,8 +106,9 @@ so every current and future `kub.local` host is covered at once. Rejected becaus
 all-or-nothing, collapses nine tiles into one, and bets all nine tools on how browsers treat cookies
 for `.local`, a reserved name. If that misbehaves, it is discovered at cutover with nine apps down.
 
-**C. Native OIDC per tool.** Not available. Only autobrr has any OIDC support, and the rest do not,
-so this cannot cover the set.
+**C. Native OIDC per tool.** Not available for most of them. Only autobrr has any OIDC support among the
+nine, and the rest do not, so this cannot cover the set. Calibre-Web, added later, turned out to have it
+too — see §12.4 — so the claim is accurate for the nine and was wrong for the tenth.
 
 ## 8. What gets built
 
@@ -294,17 +295,27 @@ Host(<tool>.kub.local) && PathPrefix(/api)   priority: 100   middlewares: [lan-o
 Applied only where the API has its own credential. Maintainerr has neither login nor key, so its
 API stays gated; exempting it would remove the only control it has.
 
-### 12.4 Calibre-Web was added, beyond the original nine
+### 12.4 Calibre-Web was added, beyond the original nine — first with the gate, then over OIDC
 
-It has no OIDC, but supports reverse-proxy authentication and its own wiki names authentik's header.
-Route order matters: `lan-only`, then `strip-authentik-header`, then `authentik-forwardauth` — the
-strip step is what stops a client forging `X-authentik-username`. Calibre-Web does **not** create
-the account from the header; the account has to exist locally with the authentik username.
+It was first put behind `lan-only` + `strip-authentik-header` + `authentik-forwardauth`, on the strength
+of §7's claim that none of these tools speaks OIDC and that Calibre-Web only supports reverse-proxy
+header authentication. The claim was wrong for the pinned image: **Calibre-Web Automated v4.0.8 has a
+generic OIDC client** (`cps/oauth_bb.py`, whose module docstring names authentik), so it is now an OAuth2
+provider in authentik with no gate in front of it, exactly as autobrr is. Two reasons the gate was the
+wrong shape rather than merely unnecessary:
+
+- `/opds` and the Kobo sync endpoints authenticate with basic auth and cannot follow a redirect to
+  authentik, so a gate would have needed an exemption there anyway;
+- the header path needs the local account to be renamed to the authentik username, and its own
+  header-trust setting switched on; OIDC registers the account through the normal sign-in.
+
+The route now carries `lan-only` alone. The local password survives as break-glass and is what `/opds`
+uses.
 
 ### 12.5 What is finished and what is not
 
 Finished and verified live: sonarr, radarr, lidarr, prowlarr, bazarr, bazarr-anime, tautulli,
-maintainerr, autobrr (OIDC) and calibre — with the two bazarrs exempting `/api`.
+maintainerr, autobrr (OIDC), calibre (OIDC) and kavita (OIDC) — with the two bazarrs exempting `/api`.
 
 Not finished:
 

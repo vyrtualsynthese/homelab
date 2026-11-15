@@ -40,7 +40,7 @@ helm template calibre-web-automated cluster/helm/media-stack/calibre-web-automat
 | ServiceAccount | `calibre-web-automated`, with no API token mounted |
 | PersistentVolumeClaim | `calibre-web-automated-config`, 10Gi, `local-path` |
 | PersistentVolumeClaim | `calibre-web-automated-ingest`, 1Gi, `local-path` |
-| Middleware | `calibre-web-automated-allowlist`, `ipWhiteList` over `192.168.1.0/24` |
+| Middleware | none of its own; the IngressRoute uses `kube-system-lan-only` from the `traefik-gate` chart |
 | IngressRoute | `calibre-web-automated`, `web` entry point, `Host(calibre.kub.local) && PathPrefix(/)` |
 
 The two claims are created by this chart only while `storage.<name>.enabled` is true and
@@ -139,63 +139,74 @@ behaviour.
 
 ## Route and access control
 
-The chart renders one `IngressRoute` on the `web` entry point for **`calibre.kub.local`**, and one
-`Middleware` — a small Traefik object that runs before a request reaches the app — named
-`calibre-web-automated-allowlist`. That Middleware holds a list of allowed source networks
-(`ingressRoute.sourceRanges`, `192.168.1.0/24` by default) and rejects every request that did not come
-from one of them.
+The chart renders one `IngressRoute` on the `web` entry point for **`calibre.kub.local`**, carrying one
+`Middleware`: `kube-system-lan-only@kubernetescrd`. That middleware is shared by every non-public route in
+the cluster and allows the LAN (`192.168.1.0/24`), WireGuard (`10.8.0.0/24`) and the pod network
+(`10.42.0.0/16`); everything else gets `403 Forbidden`. It is defined in the `traefik-gate` chart, not in
+this one.
 
-**The allow list is the access control, not the name.** `calibre.kub.local` is only a DNS entry: anyone
-who can resolve that name reaches Traefik, and the proxy then answers only if the client address sits
-inside a listed range — anything else gets `403 Forbidden`. Reading a `.kub.local` name as a boundary is
-how an internal app ends up reachable from outside the LAN.
+**The name is not a boundary; the allow list is.** `calibre.kub.local` is only a DNS entry: anyone who can
+resolve it reaches Traefik, and the proxy answers only if the client address sits inside a listed range.
+Reading a `.kub.local` name as a boundary is how an internal app ends up reachable from outside the LAN.
 
-Two consequences worth stating plainly:
+### Sign-in
 
-- **An empty `sourceRanges` list is not a safe default.** It renders no Middleware at all, leaving the
-  route with no restriction for whoever can reach the proxy. It is a deliberate setting, never a
-  fallback.
-- **The allow list runs first in the middleware chain**, before anything listed under
-  `ingressRoute.middlewares`. A request from outside the ranges is dropped at the proxy instead of being
-  handed to an authentication middleware that would offer it a login page.
+There is **no forward-auth gate** in front of this route. CWA signs users in over **OIDC** itself — the
+same protocol authentik uses natively — configured in its own admin interface under Settings → Basic
+Configuration → OAuth, provider `generic`:
 
-To read from outside the LAN, add the VPN's address range next to the existing one and commit. If
-something between the client and the proxy rewrites addresses before Traefik sees the request, the range
-to add is the one the **proxy** sees, not the one the client has — turn on Traefik's access log for a
-minute if the range is not obvious; it records the address the request arrived from.
+| Setting | Value |
+|---|---|
+| OAuth Metadata URL | `https://authentik.kub.home.ashudev.com/application/o/calibre/.well-known/openid-configuration` |
+| OAuth Redirect Host | `http://calibre.kub.local` |
+| OAuth Client Id | `calibre` |
+| OAuth Client Secret | the value of `CALIBRE_CLIENT_SECRET` in the `authentik-sso` Secret |
+| OAuth Scopes | `openid profile email` |
+| Username Field | `preferred_username` |
+| OAuth group for Admin | `authentik Admins` |
 
-The field is `ipWhiteList` on the Traefik **2.9.4** this cluster runs; Traefik v3 renames it to
-`ipAllowList`, together with the CRD group in `ingressRoute.apiVersion`. The field name comes from the
-Traefik 2.9 documentation, because the CRD schema is not readable through the read-only account used for
-automation — **confirm the live object once after the first sync**:
+The callback authentik has to allow is `http://calibre.kub.local/login/generic/authorized`; it is
+declared in the `authentik` chart's `files/app-calibre.yaml`.
 
-```bash
-kubectl -n media-stack get middleware calibre-web-automated-allowlist -o yaml
-# expect spec.ipWhiteList.sourceRange: [192.168.1.0/24]
-```
+Why not a proxy gate, when most of the media stack has one: a gate would put a login page in front of
+**`/opds`** and the Kobo sync endpoints, which authenticate with basic auth (the Calibre-Web username and
+password) and cannot follow a redirect to authentik. Native OIDC leaves both untouched, and the app's own
+session is the only thing the browser needs.
 
-### If the list locks you out
+Two consequences of the group mapping:
 
-A wrong range denies the browser you are using, and there is no way back in through the name. The
-Service does not care about the route, so a port-forward bypasses Traefik entirely:
+- an account in `authentik Admins` becomes a Calibre-Web administrator on login, and an account that is
+  not in it loses the role — that is the point of "Enable OAuth Group-Based Admin Role Management";
+- anyone the authentik application's policy refuses cannot sign in through OIDC at all.
+
+### If the sign-in locks you out
+
+The Service does not care about the route, so a port-forward bypasses Traefik and the OIDC client both:
 
 ```bash
 kubectl -n media-stack port-forward svc/calibre-web-automated 8083:8083
-# then open http://localhost:8083
+# then open http://localhost:8083 and use the local password
 ```
 
-Fix `ingressRoute.sourceRanges`, commit, and let ArgoCD sync. That escape hatch is why a bad range is an
-inconvenience rather than an outage — and why the list is worth one thought before the first sync, not
-after.
+That is the way back in when authentik is down or the client secret is wrong. The local account keeps its
+password on purpose; it is never removed.
 
 ## Credentials
 
-The image starts with the upstream default login, **`admin` / `admin123`**.
+Two ways in, one account.
 
-Change that password on the first login, before anything else is imported. The app is an
-administration interface: it can delete books and rewrite files in the library. The route in front of
-it is LAN-only ([why](#route-and-access-control)), which is why the default is tolerable for the few
-minutes between the first start and the first login — not beyond that.
+**The local account is named after the authentik username**, `vyrtualsynthese` since 2026-11-15 (it was
+`admin`). Renaming it is what makes OIDC land in it: Calibre-Web matches the name from the identity
+provider against its own users and creates a second account when it finds none, which would leave the
+administrator role and every shelf behind on the old one.
+
+That account keeps its password. Typing it at `http://localhost:8083` after a port-forward is the
+break-glass route when authentik is unreachable or the client secret is wrong. Nothing else in the app
+uses that password: the `/opds` catalog and Kobo sync accept it as basic auth, which is the reason the
+route carries no proxy gate ([why](#sign-in)).
+
+The upstream default is `admin` / `admin123`; it was changed on the first login, before anything was
+imported. The app is an administration interface: it can delete books and rewrite files in the library.
 
 ## Probes and readiness
 

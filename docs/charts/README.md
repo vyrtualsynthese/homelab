@@ -396,9 +396,11 @@ so the single-writer rule is enforced by the pod specs. Readiness is disabled, t
 that reports its health, so readiness on `/` would duplicate liveness and turn a share blip into a
 restart loop. The log level is debt of `bazarr`'s kind — no documented variable selects it, so the
 chart sets none, accepts default `INFO`, and leaves the activity view and the app database as the
-operational record. Its access control is a proxy allow list, not the hostname: the UI can delete
-books and rewrite files, and `calibre.kub.local` is only a DNS entry, so an `ipWhiteList` Middleware
-restricted to `192.168.1.0/24` is what stops a request, with `403`, before the app sees it.
+operational record. Its access control is the LAN allow list plus a sign-in: the UI can delete books and
+rewrite files, and `calibre.kub.local` is only a DNS entry, so the shared `kube-system-lan-only`
+Middleware is what stops an outside request with `403` before the app sees it, and Calibre-Web asks
+authentik for a sign-in itself over OIDC (v4.0.8's generic provider, 2026-11-15). There is no proxy gate
+in front of it: `/opds` and Kobo sync use basic auth and cannot follow a redirect.
 
 `kavita` as of 2026-11-13: a rebuild, not a touch-up. The old pod sat `Pending` for months on a
 Longhorn claim that vanished in the 2026 disk failure, so the chart now creates `kavita-config` on

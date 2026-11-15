@@ -208,7 +208,7 @@ session.
 
 | Tool | Route | Protection | The tool's own login |
 |---|---|---|---|
-| calibre | `calibre.kub.local` | forward-auth + header strip | reverse-proxy header, off |
+| calibre | `calibre.kub.local` | **OIDC, no gate** | renamed to the authentik username; the password stays as break-glass |
 | sonarr | `sonarr.kub.local` | forward-auth | off |
 | radarr | `radarr.kub.local` | forward-auth | off |
 | lidarr | `lidarr.kub.local` | forward-auth | off |
@@ -285,14 +285,65 @@ reachable from the LAN, not the internet, and the tool's own key is the credenti
 for a tool whose API is authenticated**: maintainerr has no login and no key, so exempting its API
 would undo its gate entirely.
 
+### Calibre-Web: native OIDC instead of the gate
+
+Calibre-Web Automated **v4.0.8 speaks generic OIDC** — `cps/oauth_bb.py` calls authentik out by name — so
+it uses autobrr's shape, not the gate's: an `authentik_providers_oauth2.oauth2provider` named `calibre` in
+`cluster/helm/authentik/files/app-calibre.yaml`, and a route carrying `lan-only` and nothing else. An
+earlier pass put `strip-authentik-header` and `authentik-forwardauth` on this route on the belief that it
+had no OIDC; that belief was wrong for this build.
+
+The gate is the wrong shape here for a second reason: **`/opds` and the Kobo sync endpoints authenticate
+with basic auth** (the Calibre-Web username and password) and cannot follow a redirect to authentik. A
+gate would need an exemption for them; native OIDC needs none, and the app's own session is all the
+browser needs.
+
+Setup, in this order — step 1 must happen **before** the blueprint merges, or the file rolls back and
+creates nothing:
+
+1. Client secret into the authentik Secret, **before** the PR merges. No restart command is needed: the
+   chart's `PostSync` hook deletes the worker pod on every sync, and the worker reads the Secret through
+   `envFrom` when it starts.
+
+   ```bash
+   S=$(openssl rand -hex 32)
+   kubectl -n authentik patch secret authentik-sso --type=merge \
+     -p "$(jq -nc --arg s "$S" '{stringData:{CALIBRE_CLIENT_SECRET:$s}}')"
+   ```
+
+   Keep `$S` for step 3: it is typed into Calibre-Web by hand, because Secrets do not cross namespaces.
+   autobrr keeps its copy in its own Secret, `autobrr-oidc`; Calibre-Web has nowhere but `app.db`.
+
+2. **Rename the local account** so the sign-in lands in it. Calibre-Web matches the provider's
+   `preferred_username` against its own user names and, on no match, creates a second account — which
+   loses the administrator role and every shelf. Do it in Admin → Users: the account is `admin` until
+   then, and `vyrtualsynthese` afterwards. Its password is not changed by the rename, so the break-glass
+   route survives.
+
+3. In Calibre-Web, Settings → Basic Configuration → OAuth, generic provider: activate it, then fill in
+   the metadata URL `https://authentik.kub.home.ashudev.com/application/o/calibre/.well-known/openid-configuration`,
+   OAuth Redirect Host `http://calibre.kub.local`, client id `calibre`, the secret from step 1, scopes
+   `openid profile email`, username field `preferred_username`, admin group `authentik Admins`, and tick
+   **Enable OAuth Group-Based Admin Role Management**. Saving restarts Calibre-Web on its own; if the
+   "OpenID Connect" button is still missing afterwards, delete the pod.
+
+The `groups` claim comes from authentik's own `profile` scope mapping, which already lists the user's
+group names. So every account in `authentik Admins` becomes a Calibre-Web administrator on login, without
+anyone touching Calibre-Web's user list — and an account removed from the group loses the role again.
+That only reaches people the application's policy already lets in, which is `authentik Admins` alone.
+
+Calibre-Web cannot log the user out of authentik: its OIDC logout clears its own session and nothing
+more, and it has no end-session call. Same limitation as autobrr.
+
 ### Recovery
 
 - **Read access while authentik is down:** `kubectl -n media-stack port-forward svc/<tool> <port>`
   reaches the tool without Traefik, and therefore without the gate.
 - **Remove the gate from one route:** revert its `middlewares` entry to `lan-only` and merge;
   ArgoCD applies it. This is the tested path, not an emergency `kubectl edit`.
-- **Calibre-Web** keeps its local admin login on purpose; it is the way back in if the header name
-  is wrong or authentik is unreachable.
+- **Calibre-Web** keeps a local password on purpose; it is the way back in when the OIDC client secret
+  is wrong or authentik is unreachable. Sign in at `http://localhost:8083` after a port-forward, with the
+  account named after the authentik username and its original password.
 
 ### Traps found the hard way
 

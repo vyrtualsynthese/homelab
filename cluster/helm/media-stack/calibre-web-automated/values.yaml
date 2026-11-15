@@ -216,6 +216,12 @@ affinity: {}
 # administers the library, so it is reachable from the local network and from nowhere
 # else. The restriction is enforced by a Middleware at the proxy, not by the
 # `kub.local` name, which is only a DNS entry.
+#
+# There is no forward-auth gate here on purpose. CWA v4.0.8 signs users in over OIDC
+# itself (Settings → Basic Configuration → OAuth, provider "generic"), so it is its own
+# gate, the same arrangement autobrr has. A gate on top would mean two logins for one
+# app and would put a redirect in front of `/opds` and the Kobo sync endpoints, which
+# authenticate with basic auth and cannot follow one.
 ingressRoute:
   # -- Render the IngressRoute and its allow list. Traefik CRDs only: this chart
   # never renders a `networking.k8s.io/v1` Ingress.
@@ -233,19 +239,12 @@ ingressRoute:
   # -- Path prefix. `/` matches everything.
   pathPrefix: /
   # -- Middlewares from values, rendered as `<namespace>-<name>@kubernetescrd`, in order.
-  # -- Three, in this order:
-  # --   lan-only                 reject outside traffic before anything else
-  # --   strip-authentik-header   Calibre-Web trusts the username header blindly, so a
-  # --                            client-supplied copy is removed before the outpost runs
-  # --   authentik-forwardauth    ask authentik, then set the header from the session
-  # -- Calibre-Web only reads that header when "Allow Reverse Proxy Authentication" is on
-  # -- in its own admin settings, and the account it names must already exist there.
+  # -- One entry: `lan-only` rejects traffic from outside the LAN and WireGuard before
+  # -- it reaches Traefik's router. The sign-in check is CWA's own OIDC client, not a
+  # -- middleware, so nothing else belongs in this list. Adding `authentik-forwardauth`
+  # -- here asks authentik about a host it has no provider for and returns its 404.
   middlewares:
     - name: lan-only
-      namespace: kube-system
-    - name: strip-authentik-header
-      namespace: kube-system
-    - name: authentik-forwardauth
       namespace: kube-system
   labels: {}
   annotations: {}
