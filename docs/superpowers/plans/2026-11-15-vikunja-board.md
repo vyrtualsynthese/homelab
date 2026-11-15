@@ -211,7 +211,7 @@ base; all of it is standard bjw-s `common` schema. Set:
 - `vikunja.env`:
   ```yaml
   VIKUNJA_DATABASE_TYPE: postgres
-  VIKUNJA_DATABASE_HOST: postgres-postgresql.databases.svc.cluster.local
+  VIKUNJA_DATABASE_HOST: postgres.databases.svc.cluster.local
   VIKUNJA_DATABASE_DATABASE: vikunja
   VIKUNJA_DATABASE_USER: vikunja
   VIKUNJA_DATABASE_PASSWORD:
@@ -371,6 +371,8 @@ Steps for the operator, each with the output that means success:
     `403`. The API bypasses Authentik, not the LAN gate.
 11. Rollback, if the board is ever abandoned: delete the Application, then the namespace, then drop the
     database and the role. The dump in the PostgreSQL nightly backup holds the board until then.
+12. Add a row for each of the three Vikunja runbooks to the table in `docs/runbooks/README.md`:
+    `vikunja-database.md`, `vikunja-first-start.md`, `vikunja-board-seed.md`.
 
 - [ ] **Step 2: Operator executes it and pastes outputs 2, 3, 4, 6, 7, 8 and 10 back**
 
