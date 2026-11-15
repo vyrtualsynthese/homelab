@@ -37,9 +37,10 @@ entries:
       slug: radarr
       provider: !KeyOf radarr-provider
       meta_launch_url: http://radarr.kub.local/
-      # Icon drawn from the Font Awesome set bundled with authentik, so no
-      # external URL has to resolve for the application grid.
-      meta_icon: fa://fa-film
+      # Official logo, served from the dashboard-icons set. The browser
+      # loads it, so the grid needs internet; swap to `fa://fa-<name>`
+      # if it ever has to work offline.
+      meta_icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/radarr.png
       policy_engine_mode: any
 
   - model: authentik_policies.policybinding
