@@ -208,7 +208,7 @@ session.
 
 | Tool | Route | Protection | The tool's own login |
 |---|---|---|---|
-| calibre | `https://calibre.kub.local` | **OIDC, no gate; the only TLS route here** | renamed to the authentik username; the password stays as break-glass |
+| calibre | `https://calibre.kub.local` | **OIDC, no gate; the only TLS route here** — verified live 2026-11-15 | renamed to the authentik username; the password stays as break-glass |
 | sonarr | `sonarr.kub.local` | forward-auth | off |
 | radarr | `radarr.kub.local` | forward-auth | off |
 | lidarr | `lidarr.kub.local` | forward-auth | off |
@@ -376,6 +376,12 @@ That only reaches people the application's policy already lets in, which is `aut
 Calibre-Web cannot log the user out of authentik: its OIDC logout clears its own session and nothing
 more, and it has no end-session call. Same limitation as autobrr.
 
+**Verified live 2026-11-15.** `/login` serves the SSO button next to the password form; `/login/generic`
+answers `302` to `https://authentik.kub.home.ashudev.com/application/o/authorize/` carrying
+`client_id=calibre`, `redirect_uri=https://calibre.kub.local/login/generic/authorized` and
+`scope=email openid profile`; authentik's provider points back at that same redirect URI; and signing in
+from the button lands in Calibre-Web as `vyrtualsynthese`.
+
 **Break-glass over HTTP only works on `localhost`.** With `OAuth` as the login type the session cookie is
 `Secure` everywhere, and browsers accept a `Secure` cookie only on an https origin or on
 `http://localhost`. So:
@@ -425,6 +431,19 @@ table of `/config/app.db` on the config claim; `0` is standard, `2` is OAuth.
    `…/application/o/autobrr/end-session/`. Logging out and back in can also fail with
    "no state found in session" until a hard reload, because the browser may replay a cached
    `/api/auth/oidc/config` response. Neither is fixable from git; both are worth an upstream issue.
+8. **`kube-system/local-cert` cannot be replaced with `kubectl apply`.** The Secret in place was made
+   with `--from-file`, so its type is `Opaque`, and a Secret's type is immutable: adding
+   `type: kubernetes.io/tls` is refused with `field is immutable`. Delete and create instead — see
+   [`internal-ca.md`](internal-ca.md).
+9. **Firefox does not read the Windows certificate store.** `certutil.exe -addstore -user Root` covers
+   Chrome and Edge and does nothing for Firefox, which keeps its own NSS store; the CA has to be
+   imported there too, with *Trust this CA to identify websites* ticked. Setting
+   `security.enterprise_roots.enabled` to `true` makes Firefox follow Windows and removes the
+   duplicate step.
+10. **Calibre-Web's OIDC needs HTTPS, and its login type gates the button.** The button only renders
+    when *Login type* is `OAuth`, and that setting forces `SESSION_COOKIE_SECURE`, which a plain-HTTP
+    browser discards. Hence the TLS route. Leave *disable standard login* off so the password stays
+    as break-glass on `http://localhost:8083`.
 
 ### Still open
 
