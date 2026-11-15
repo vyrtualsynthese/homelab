@@ -36,6 +36,7 @@ templates where the image demands it; it is not allowed to diverge from the cont
 | 9 | Labels from `app.labels` on every object | Selectors and dashboards depend on them |
 | 10 | No tabs, and no tab indentation in any template | Invisible in review, fatal in YAML |
 | 11 | `helm lint` and `helm template <release> . --namespace <ns>` both pass | The only local test these charts have |
+| 12 | A chart whose route carries the authentik gate sets `apiBypassMiddlewares` when the app authenticates `/api` itself | An API client sends a key, not a browser session, and cannot complete a sign-in redirect. `lan-only` is a boundary, not a credential |
 
 ### How configuration reaches the app
 
@@ -312,7 +313,9 @@ capabilities are not options. Only `allowPrivilegeEscalation: false` and the run
 are safe. Its exportarr sidecar is wired from one `exportarr` block that carries the listener, the
 scrape annotations and the API-key Secret reference together. The key was rotated to the app's
 current value on 2026-11-12, and the Prometheus target is verified `up`; `APIKEY` is exportarr v1's
-spelling, still accepted by v2.3.0, the newest published release.
+spelling, still accepted by v2.3.0, the newest published release. Since 2026-11-15 its `/api` is
+exempt from the authentik gate (a `priority: 100` rule with `lan-only` alone): `/api/v1` requires
+`X-Api-Key`, so the key check replaces the gate rather than disappearing with it.
 
 `sonarr` and `sonarr-anime` as of 2026-11-12: the LinuxServer-plus-exporter pair, two charts because a
 shared chart is not allowed. Five objects each, two named NFS media mounts next to the config claim,
@@ -320,6 +323,11 @@ probes on `/ping`, and both Sonarr log-level variables at `warn`. The exporter t
 the release name and `service.port` instead of being typed in twice; the previous `sonarr` chart had
 `7878` in the target and `8989` in the Service, and the target never came up. The scrape annotations
 render from the same `exportarr` block, so the announced port cannot disagree with the listener.
+
+Since 2026-11-15 `sonarr`'s `/api` is exempt from the authentik gate: a second rule, `PathPrefix(/api)`
+at `priority: 100`, carries `lan-only` alone, because every `/api/v3` request must carry `X-Api-Key`
+and an API client cannot complete a sign-in redirect. `sonarr-anime` has no gate at all, so its chart
+sets neither the gate nor the exemption.
 
 `recyclarr` as of 2026-11-13: the batch-job case. Three objects, no listener, no probes, no metrics.
 The CronJob's schedule, timezone, concurrency policy and deadlines are values; the Secret holding
@@ -335,7 +343,9 @@ reachability and SQLite integrity only in a JSON body with HTTP 200, which the k
 so readiness is disabled rather than pointed at liveness. Its image starts as root and drops to
 `PUID`/`PGID`, so the capability set is `ALL` dropped plus the three calls that init makes. Since
 2026-11-15 the route carries the authentik forward-auth gate, and Tautulli's own login is the one
-thing still on — its web auth has no API, so it is a UI toggle. The chart
+thing still on — its web auth has no API, so it is a UI toggle. Since the same day `/api` is exempt
+from the gate (a `priority: 100` rule with `lan-only` alone): Tautulli keys each API request with
+`apikey` in the query string rather than with the UI session. The chart
 creates the config claim: the previous one was a Longhorn volume that vanished in 2026, which is why
 the app had not run for 71 days.
 
@@ -346,7 +356,9 @@ for the database migration; `RADARR__LOG__LEVEL` and `RADARR__LOG__CONSOLELEVEL`
 Claim names already matched the derived `<fullname>-config`, so no data moved. The `radarr-anime`
 instance also moved off `PUID 0`, which is the chown runbook the contract's UID section describes.
 Both exporter sidecars still answer 401 until the operator patches the stale keys in Secrets
-`radarr` and `radarr-anime`.
+`radarr` and `radarr-anime`. Since 2026-11-15 `radarr`'s `/api` is exempt from the gate (a
+`priority: 100` rule carrying `lan-only` alone), because `/api/v3` requires `X-Api-Key` on every
+request; `radarr-anime` has no gate, so it carries no exemption either.
 
 `lidarr` as of 2026-11-13: the sonarr pair's shape with a second media claim. Five objects, the
 config claim created by the chart because the previous one was Longhorn and vanished with the 2026
@@ -356,7 +368,9 @@ cannot be opened, and readiness shares it rather than inventing a second endpoin
 level is `debug`, the noisiest in the stack, so both `LIDARR__LOG__LEVEL` and
 `LIDARR__LOG__CONSOLELEVEL` are at `warn`. The config claim is new, so the first start mints a new API
 key: the exporter stays down until the operator pastes it into `homelab.env` and the `lidarr` Secret,
-and the chart README says so instead of leaving it to be discovered.
+and the chart README says so instead of leaving it to be discovered. Since 2026-11-15 its `/api` is
+exempt from the authentik gate (a `priority: 100` rule with `lan-only` alone): `/api/v1` requires
+`X-Api-Key`, so the key check replaces the gate rather than disappearing with it.
 
 `bazarr` and `bazarr-anime` as of 2026-11-13: five objects each, one config claim and the shared
 `pvc-plex-media` at `/media`, probes on `/` with a 300 s startup budget for a first start on a fresh
