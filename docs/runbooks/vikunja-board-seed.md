@@ -105,7 +105,9 @@ will bring, so it plans all four. The real run reads them back and matches by ti
 ```
 
 Expected: six blocks, one per repository — the project, the view, the four columns, the done bucket,
-and the bucket mode — then the saved filter.
+and the bucket mode — then the saved filter. On an instance that does not return
+`bucket_configuration_mode`, the `mode` line is absent and an indented note stands in its place; the
+note is described below the sample.
 
 ```text
 project  homelab                                      created       id=1001
@@ -141,7 +143,22 @@ idempotency, not a repeat of the first.
 
 `updated` is the fourth counter and it should be `0` on every run after the first: it counts a view
 whose bucket mode was repaired. A view made before this script set the mode, or made by hand, carries
-`none` and prints `mode … updated none -> manual`; that one write is the repair.
+`none` and prints `mode … updated none -> manual`; that one write is the repair. If the same view also
+lacks its done bucket, both fields travel in that one request — the script never sends a second POST to
+the same view in a run, because a partial body would clear whichever setting it left out — and the
+block prints the `done` and `mode` lines together.
+
+On an instance that does not return `bucket_configuration_mode`, the `mode` line is missing from every
+block and this indented line stands where it would be:
+
+```text
+         bucket_configuration_mode is not returned for homelab / Board — cannot check it
+```
+
+That is the seed run's counterpart of the `NOTE` in Step 4: the field the API withheld cannot be
+checked, so the script says that instead of printing a mode it never read. No `updated` is counted for
+those boards, because nothing about the mode was proved; a view stuck on `none` therefore cannot be
+detected by a re-run either.
 
 ## Step 4 — verify
 
