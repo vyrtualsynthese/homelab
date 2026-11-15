@@ -90,13 +90,11 @@ ingressRoute:
   pathPrefix: /
   # -- Middlewares, rendered as `<namespace>-<name>@kubernetescrd`.
   # Example: [{ name: lan-only, namespace: kube-system }]
-  # The LAN gate runs first: an outside request is rejected before the
-  # forward-auth round trip.
-  # No strip-authentik-header on purpose: autobrr trusts no X-authentik-* header.
+  # No authentik-forwardauth here on purpose: autobrr speaks OIDC natively, so
+  # the app is its own gate. Putting the proxy gate in front as well would mean
+  # two authentik applications for one tool and a second redirect for nothing.
   middlewares:
     - name: lan-only
-      namespace: kube-system
-    - name: authentik-forwardauth
       namespace: kube-system
   labels: {}
   annotations: {}
@@ -146,10 +144,28 @@ env:
   AUTOBRR__METRICS_PORT: "9074"
   # AUTOBRR__BASE_URL: ""
   # AUTOBRR__SESSION_SECRET: ""
+  # OIDC, using authentik directly. The client secret comes from the
+  # `autobrr-oidc` Secret through extraEnv below, never from this file.
+  AUTOBRR__OIDC_ENABLED: "true"
+  AUTOBRR__OIDC_ISSUER: "https://authentik.kub.home.ashudev.com/application/o/autobrr/"
+  AUTOBRR__OIDC_CLIENT_ID: "autobrr"
+  # Must match the provider's registered redirect exactly, scheme included: the
+  # route is plain HTTP, and autobrr builds this from X-Forwarded-Proto.
+  AUTOBRR__OIDC_REDIRECT_URL: "http://autobrr.kub.local/api/auth/oidc/callback"
+  # autobrr keeps the password form whenever a user exists in its database, so
+  # it has to be switched off explicitly to get one login.
+  AUTOBRR__OIDC_DISABLE_BUILT_IN_LOGIN: "true"
+  # Send unauthenticated visitors straight to authentik, so no button press.
+  AUTOBRR__OIDC_AUTO_REDIRECT: "true"
 
 # -- Variables sourced from a Secret, as `{ name, valueFrom }`. Kept separate so
 # a secret can never be pasted into the plain map above by accident.
-extraEnv: []
+extraEnv:
+  - name: AUTOBRR__OIDC_CLIENT_SECRET
+    valueFrom:
+      secretKeyRef:
+        name: autobrr-oidc
+        key: client-secret
 
 # -- Bulk `envFrom` sources, usually `secretRef`. Rarely needed: prefer
 # `extraEnv` so each secret key is explicit in the manifest.
