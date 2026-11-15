@@ -28,7 +28,8 @@
 #
 # **Back up `local-ca-key.pem`.** It is the one file here whose loss costs real
 # work: without it no renewal is possible, and a new root has to be installed on
-# every client again. A password manager entry is the right place.
+# every client again. A password manager entry is the right place; the full
+# procedure, including the restore drill, is docs/runbooks/internal-ca.md.
 set -euo pipefail
 
 OUT="${HOME}/.config/secrets/kub-local"
