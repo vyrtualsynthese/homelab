@@ -464,7 +464,7 @@ git commit -m "🚀 feat(vikunja): idempotent board seeding"
 - Modify: `~/.config/secrets/homelab.env` (outside the repo, not committed)
 
 **Interfaces:**
-- Produces: MCP server `vikunja` reachable from OpenCode at `http://vikunja.kub.local/api/v2/mcp`,
+- Produces: MCP server `vikunja` reachable from OpenCode at `https://vikunja.kub.local/api/v2/mcp`,
   denied to `explore`, allowed to the primary agent, `implementer` and `reviewer`.
 
 - [ ] **Step 1: Create the token in Vikunja**

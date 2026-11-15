@@ -235,7 +235,7 @@ what blocks it — that comment is the "blocked" signal, so no fifth state is in
     "servers": {
       "vikunja": {
         "type": "remote",
-        "url": "http://vikunja.kub.local/api/v2/mcp",
+        "url": "https://vikunja.kub.local/api/v2/mcp",
         "oauth": false,
         "headers": { "Authorization": "Bearer {env:VIKUNJA_MCP_TOKEN}" }
       }
