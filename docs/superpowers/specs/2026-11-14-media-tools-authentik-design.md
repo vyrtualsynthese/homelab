@@ -309,8 +309,17 @@ wrong shape rather than merely unnecessary:
 - the header path needs the local account to be renamed to the authentik username, and its own
   header-trust setting switched on; OIDC registers the account through the normal sign-in.
 
-The route now carries `lan-only` alone. The local password survives as break-glass and is what `/opds`
-uses.
+**It also forced TLS, which no other media tool has.** The OIDC button only renders when Calibre-Web's
+login type is `OAuth`, and that setting forces `SESSION_COOKIE_SECURE=True` (`cps/__init__.py:134`); a
+browser drops a `Secure` cookie on a plain-HTTP origin, so the callback would come back without its
+session and the password login would stop sticking too. The route therefore moved to `websecure` on
+`https://calibre.kub.local`, with the `web` router redirecting, and the cluster's default certificate
+(`kube-system/local-cert`, mkcert, `*.kub.local`) rather than an ACME one — a `.local` name cannot be
+issued for. Clients without the mkcert root see a certificate warning; that is accepted.
+
+The local password survives as break-glass and is what `/opds` uses. Because the session cookie is now
+`Secure` everywhere, that break-glass login works only on `http://localhost:8083` after a port-forward;
+browsers exempt `localhost` from the https rule.
 
 ### 12.5 What is finished and what is not
 

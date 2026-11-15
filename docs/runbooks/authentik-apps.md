@@ -208,7 +208,7 @@ session.
 
 | Tool | Route | Protection | The tool's own login |
 |---|---|---|---|
-| calibre | `calibre.kub.local` | **OIDC, no gate** | renamed to the authentik username; the password stays as break-glass |
+| calibre | `https://calibre.kub.local` | **OIDC, no gate; the only TLS route here** | renamed to the authentik username; the password stays as break-glass |
 | sonarr | `sonarr.kub.local` | forward-auth | off |
 | radarr | `radarr.kub.local` | forward-auth | off |
 | lidarr | `lidarr.kub.local` | forward-auth | off |
@@ -289,14 +289,21 @@ would undo its gate entirely.
 
 Calibre-Web Automated **v4.0.8 speaks generic OIDC** — `cps/oauth_bb.py` calls authentik out by name — so
 it uses autobrr's shape, not the gate's: an `authentik_providers_oauth2.oauth2provider` named `calibre` in
-`cluster/helm/authentik/files/app-calibre.yaml`, and a route carrying `lan-only` and nothing else. An
-earlier pass put `strip-authentik-header` and `authentik-forwardauth` on this route on the belief that it
-had no OIDC; that belief was wrong for this build.
+`cluster/helm/authentik/files/app-calibre.yaml`, and a route with no auth middleware on it. An earlier pass
+put `strip-authentik-header` and `authentik-forwardauth` on this route on the belief that it had no OIDC;
+that belief was wrong for this build.
 
 The gate is the wrong shape here for a second reason: **`/opds` and the Kobo sync endpoints authenticate
 with basic auth** (the Calibre-Web username and password) and cannot follow a redirect to authentik. A
-gate would need an exemption for them; native OIDC needs none, and the app's own session is all the
-browser needs.
+gate would need an exemption for them; native OIDC needs none.
+
+**It is the one app here that needs HTTPS.** The OIDC button only renders when *Login type* is `OAuth`, and
+that setting forces `SESSION_COOKIE_SECURE=True` (`cps/__init__.py:134`) — a `Secure` cookie that a
+plain-HTTP browser discards, so the callback would return without its session. Its own dropdown says
+"Use OAuth (requires HTTPS)". So the chart serves `https://calibre.kub.local` on `websecure`, with the
+`web` router only redirecting, and the certificate is the cluster default from the `TLSStore`
+(`kube-system/local-cert`, a mkcert certificate with `*.kub.local`). Clients without that root show a
+warning; that is expected and accepted.
 
 Setup, in this order — step 1 must happen **before** the blueprint merges, or the file rolls back and
 creates nothing:
@@ -322,10 +329,15 @@ creates nothing:
 
 3. In Calibre-Web, Settings → Basic Configuration → OAuth, generic provider: activate it, then fill in
    the metadata URL `https://authentik.kub.home.ashudev.com/application/o/calibre/.well-known/openid-configuration`,
-   OAuth Redirect Host `http://calibre.kub.local`, client id `calibre`, the secret from step 1, scopes
-   `openid profile email`, username field `preferred_username`, admin group `authentik Admins`, and tick
-   **Enable OAuth Group-Based Admin Role Management**. Saving restarts Calibre-Web on its own; if the
-   "OpenID Connect" button is still missing afterwards, delete the pod.
+   OAuth Redirect Host `https://calibre.kub.local`, client id `calibre`, the secret from step 1, scopes
+   `openid profile email`, username field `preferred_username`, admin group `authentik Admins`. Then in
+   Login Settings set *Login type* to **Use OAuth (requires HTTPS)**, and tick **Enable OAuth Group-Based
+   Admin Role Management**. Saving restarts Calibre-Web on its own; if the "OpenID Connect" button is
+   still missing afterwards, delete the pod.
+
+   The password fields stay on the login page: the login type gates which *extra* buttons appear, it does
+   not remove the local login unless "disable standard login" is ticked. Leave that tickbox alone — it is
+   the break-glass route.
 
 The `groups` claim comes from authentik's own `profile` scope mapping, which already lists the user's
 group names. So every account in `authentik Admins` becomes a Calibre-Web administrator on login, without
@@ -334,6 +346,18 @@ That only reaches people the application's policy already lets in, which is `aut
 
 Calibre-Web cannot log the user out of authentik: its OIDC logout clears its own session and nothing
 more, and it has no end-session call. Same limitation as autobrr.
+
+**Break-glass over HTTP only works on `localhost`.** With `OAuth` as the login type the session cookie is
+`Secure` everywhere, and browsers accept a `Secure` cookie only on an https origin or on
+`http://localhost`. So:
+
+```bash
+kubectl -n media-stack port-forward svc/calibre-web-automated 8083:8083
+# http://localhost:8083 → password → in. Another host name over http would not work.
+```
+
+If the login type has to be reverted without the UI: it is the `config_login_type` row in the `settings`
+table of `/config/app.db` on the config claim; `0` is standard, `2` is OAuth.
 
 ### Recovery
 
