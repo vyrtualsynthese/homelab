@@ -302,17 +302,22 @@ that setting forces `SESSION_COOKIE_SECURE=True` (`cps/__init__.py:134`) — a `
 plain-HTTP browser discards, so the callback would return without its session. Its own dropdown says
 "Use OAuth (requires HTTPS)". So the chart serves `https://calibre.kub.local` on `websecure`, with the
 `web` router only redirecting, and the certificate is the cluster default from the `TLSStore`
-(`kube-system/local-cert`, a mkcert certificate with `*.kub.local`). Clients without that root show a
-warning; that is expected and accepted.
+(`kube-system/local-cert`, private, SAN `*.kub.local`). Clients without that root show a warning; that is
+expected and accepted.
 
-**That default certificate expired on 2026-05-06**, so the browser will report a date error rather than a
-plain trust warning until it is reissued. Reissue it on the machine holding the CA (`mkcert -CAROOT`),
-keeping `*.kub.local` in the SAN list, and replace the Secret — Traefik serves it immediately:
+**The default certificate had expired on 2026-05-06** and nobody noticed for ten months, because nothing
+could reissue it. `hack/internal-cert.sh` now signs a new leaf from a private CA kept in
+`~/.config/secrets/kub-local`, and reuses that CA on later runs so clients keep working. Replace the Secret
+afterwards — Traefik serves it immediately:
 
 ```bash
 kubectl -n kube-system create secret tls local-cert \
-  --cert=kub.local.pem --key=kub.local-key.pem --dry-run=client -o yaml | kubectl apply -f -
+  --cert=$HOME/.config/secrets/kub-local/kub.local.pem \
+  --key=$HOME/.config/secrets/kub-local/kub.local-key.pem \
+  --dry-run=client -o yaml | kubectl apply -f -
 ```
+
+The root to install once on each client is `~/.config/secrets/kub-local/local-ca.pem`.
 
 Setup, in this order — step 1 must happen **before** the blueprint merges, or the file rolls back and
 creates nothing:

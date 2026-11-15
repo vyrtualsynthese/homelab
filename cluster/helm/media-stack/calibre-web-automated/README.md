@@ -166,23 +166,25 @@ it away, so the callback would arrive without the session it started with, and e
 would stop sticking. Its own settings page says it in the dropdown: *Use OAuth (requires HTTPS)*.
 
 The certificate is **the cluster's default one**, `kube-system/local-cert` via the default `TLSStore` — a
-mkcert certificate whose subject alternative names include `*.kub.local`. The chart sets neither
-`secretName` nor `certResolver`: ACME cannot issue for a `.local` name. A client without the mkcert root
-installed shows a certificate warning, which is accepted here; installing the root on the phone or laptop
-removes it.
+private certificate whose subject alternative names are `*.kub.local`, `*.app.local`, `localhost` and
+`127.0.0.1`. The chart sets neither `secretName` nor `certResolver`: ACME cannot issue for a `.local` name,
+because public CAs have been barred from internal names since 2015. A client without the root installed
+shows a certificate warning, which is accepted here; installing the root on the phone or laptop removes it.
 
-**That certificate expired on 2026-05-06** — issued 2024-02-06, mkcert's two-year-plus lifetime — so until
-it is reissued the browser reports a *date* error, not only the trust warning. Reissue it on the machine
-that holds the CA (`mkcert -CAROOT`, which is where the original came from) with `*.kub.local` in the SAN
-list, then replace the Secret:
+**The certificate that was there expired on 2026-05-06** and went unnoticed for ten months, because nothing
+in the repo could reissue it. `hack/internal-cert.sh` now does: it keeps a private CA (so renewals need no
+client action) and signs a leaf from it.
 
 ```bash
+hack/internal-cert.sh                       # reuse the CA, sign a fresh leaf
 kubectl -n kube-system create secret tls local-cert \
-  --cert=kub.local.pem --key=kub.local-key.pem --dry-run=client -o yaml | kubectl apply -f -
+  --cert=$HOME/.config/secrets/kub-local/kub.local.pem \
+  --key=$HOME/.config/secrets/kub-local/kub.local-key.pem \
+  --dry-run=client -o yaml | kubectl apply -f -
 ```
 
-Traefik serves the new certificate as soon as the Secret changes, without a restart, and every route that
-falls back to the default store benefits — this route is currently the only one that does.
+Traefik serves the new certificate as soon as that Secret changes, without a restart. This route is
+currently the only one that falls back to the default store, so it is the only one affected.
 
 ### Sign-in
 
