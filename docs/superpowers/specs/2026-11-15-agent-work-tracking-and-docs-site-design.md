@@ -179,9 +179,13 @@ Inherited from `2026-11-10-homelab-stabilisation-design.md` §6 and `AGENTS.md`:
 
 ### 9.2 Board shape
 
-- **One Vikunja project per GitHub repository:** `homelab`, `config`, `scripts`,
-  `ashuvidz-website`, `ashudev-website`, `selfhosted-helmcharts`. A project is added when a repo
-  first needs a ticket; nothing enumerates repos automatically here (unlike §10.2).
+- **One Vikunja project per GitHub repository, and only for repos that are real and active:**
+  `homelab`, `config`, `ashuvidz-website`, `ashudev-website`, `selfhosted-helmcharts`, `ashuworld`,
+  `ashuvidz-creator`. `scripts` is **not** a GitHub repository — it has no remote at all — so it gets
+  no board, and its active sub-projects appear under the repository they belong to (`ashuworld` for
+  the bank, `ashuvidz-creator` for the creator pipeline). Verified against `GET /user/repos`.
+  A project is added when a repo first needs a ticket; nothing enumerates repos automatically here
+  (unlike §10.2).
 - Each project has one kanban view whose buckets are, in order: `Ready`, `Doing`,
   `Waiting for validation`, `Done`. `Done` is the view's done-bucket, so a task in it is marked done
   by Vikunja itself.
@@ -214,7 +218,7 @@ A ticket carries:
 | From | To | Who | When |
 |---|---|---|---|
 | — | `Ready` | operator or agent | The task exists in a plan and nobody has started it |
-| `Ready` | `Doing` | agent | The session starts that task, and sets itself as assignee |
+| `Ready` | `Doing` | agent | The session starts that task and assigns it to the account its token acts as |
 | `Doing` | `Waiting for validation` | agent | The branch is pushed, the PR is open, the verification has been run and pasted into the description |
 | `Waiting for validation` | `Done` | **operator only** | The operator accepts the work |
 | `Waiting for validation` | `Doing` | operator | The operator refuses it; the comment says why, and the agent's next session reads it |
@@ -240,7 +244,7 @@ what blocks it — that comment is the "blocked" signal, so no fifth state is in
   ```
 
 - The token is a Vikunja API token on the **Typed tools read + write** preset, not Full access, held
-  in `keys.env` as `VIKUNJA_MCP_TOKEN` and loaded by the `opencode` wrapper — the same mechanism as
+  in `~/.config/secrets/homelab.env` as `VIKUNJA_MCP_TOKEN` and loaded by the `opencode` wrapper — the same mechanism as
   `GITHUB_PERSONAL_ACCESS_TOKEN`.
 - Scoping: a `vikunja_*` deny rule for `explore` (it is a read-only search agent and has no business
   writing tickets), allowed for the primary agent, `implementer` and `reviewer`. OpenCode drops a
@@ -359,7 +363,8 @@ have no cluster writes — which is intended: the site is not an agent's output.
 | `vikunja` | `vikunja-db` | `VIKUNJA_DATABASE_PASSWORD` |
 | `docs` | `github-docs-ro` | `token` |
 
-The MCP token is not a cluster Secret: it lives in `keys.env` on the operator's machine.
+The MCP token is not a cluster Secret: it lives in `~/.config/secrets/homelab.env` on the operator's
+machine, and the `opencode` wrapper sources that file so MCP servers see it.
 
 ### 11.2 Image policy additions
 
