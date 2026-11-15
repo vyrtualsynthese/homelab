@@ -17,9 +17,14 @@ entries:
   - model: authentik_providers_oauth2.oauth2provider
     id: autobrr-provider
     identifiers:
-      name: autobrr
+      # Named apart from the proxy provider this tool used to have: a proxy
+      # provider is an OAuth2 provider underneath, so reusing the name updated
+      # that object instead of creating a plain client, and it kept the
+      # forward-auth redirect URIs. A distinct name forces a real OAuth2
+      # provider with the callback autobrr actually calls.
+      name: autobrr-oidc
     attrs:
-      name: autobrr
+      name: autobrr-oidc
       client_type: confidential
       # Blueprint-created providers start with no grant types, unlike the UI
       # wizard which preselects these two; without them the authorize endpoint
