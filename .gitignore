@@ -35,6 +35,10 @@ cluster/helm/authentik/Chart.lock
 cluster/helm/filebrowser/charts/
 cluster/helm/filebrowser/Chart.lock
 
+# Built by ArgoCD at sync time
+cluster/helm/vikunja/charts/
+cluster/helm/vikunja/Chart.lock
+
 # Python bytecode from the hack/ checkers
 __pycache__/
 *.pyc

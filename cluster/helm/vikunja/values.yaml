@@ -1,0 +1,105 @@
+# Wrapper values for the upstream vikunja chart (2.6.0), which renders through the
+# bjw-s `common` library chart it ships (1.5.1).
+#
+# Why the double `vikunja: vikunja:` nesting: the outer key is the parent→subchart
+# scope, as for any dependency. The upstream chart's own templates/vikunja.yaml
+# then copies its `.Values.vikunja` default block *over* the top-level values
+# (`mergeOverwrite`), so anything written at the outer level only is silently
+# reset to the chart defaults. Values under the inner key are promoted to the
+# top-level common schema and win. Keep every override in the inner block.
+#
+# The chart's hardcoded base (not ours to set) already provides the Service on
+# port 3456, the config mounted at /etc/vikunja/config.yml, probes on
+# /api/v1/info and podSecurityContext.fsGroup 1000. `ingressRoute:` is our own
+# template, so it stays outside `vikunja:`.
+vikunja:
+  vikunja:
+    image:
+      repository: vikunja/vikunja
+      tag: "2.8.0" # the MCP endpoint needs >= 2.7.0; never pin below it
+      pullPolicy: IfNotPresent
+
+    env:
+      VIKUNJA_DATABASE_TYPE: postgres
+      VIKUNJA_DATABASE_HOST: postgres.databases.svc.cluster.local
+      VIKUNJA_DATABASE_DATABASE: vikunja
+      VIKUNJA_DATABASE_USER: vikunja
+      VIKUNJA_DATABASE_PASSWORD:
+        secretKeyRef:
+          name: vikunja-db
+          key: VIKUNJA_DATABASE_PASSWORD
+
+    controller:
+      strategy: Recreate
+
+    nodeSelector:
+      kubernetes.io/hostname: nuc0
+
+    resources:
+      requests:
+        cpu: 50m
+        memory: 128Mi
+      limits:
+        memory: 512Mi
+
+    securityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+          - ALL
+      readOnlyRootFilesystem: false # the image writes a cache under /tmp
+
+    podAnnotations:
+      prometheus.io/scrape: "true"
+      prometheus.io/port: "3456"
+      prometheus.io/path: /api/v1/metrics
+
+    # The upstream ingress is a networking.k8s.io/v1 Ingress; this cluster only
+    # speaks Traefik CRDs, so the route lives in templates/ingressroute.yaml.
+    ingress:
+      main:
+        enabled: false
+
+    persistence:
+      data:
+        enabled: true
+        storageClass: local-path
+        size: 5Gi
+        accessMode: ReadWriteOnce
+        # mountPath stays at the upstream default, /app/vikunja/files
+      database:
+        enabled: false # no SQLite: state lives in PostgreSQL
+
+    configMaps:
+      config:
+        data:
+          config.yml: |
+            service:
+              publicurl: "https://vikunja.kub.local"
+              enableregistration: false
+            metrics:
+              enabled: true
+            log:
+              level: INFO
+              format: text
+              http: stdout
+              database: off
+              events: off
+
+ingressRoute:
+  apiVersion: traefik.containo.us/v1alpha1
+  enabled: true
+  host: vikunja.kub.local
+  service: vikunja
+  port: 3456
+  apiPathPrefix: /api
+  uiMiddlewares:
+    - {name: lan-only, namespace: kube-system}
+    - {name: authentik-forwardauth, namespace: kube-system}
+  apiMiddlewares:
+    - {name: lan-only, namespace: kube-system}
+  tls:
+    enabled: true
+    options: internal-tls
+    optionsNamespace: kube-system
+  redirectToHttps: true
