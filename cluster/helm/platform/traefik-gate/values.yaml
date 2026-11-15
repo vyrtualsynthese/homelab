@@ -8,3 +8,7 @@ lanOnly:
   # --   docker exec wg-easy grep -i address /etc/wireguard/wg0.conf
   # -- An address of 10.8.0.1/24 means the range is 10.8.0.0/24.
   wireguardRange: "10.8.0.0/24"
+  # -- Cluster pod network. Needed because in-cluster OIDC clients reach the
+  # provider over its public URL, and their source address is a pod address,
+  # not a LAN one.
+  podRange: "10.42.0.0/16"
