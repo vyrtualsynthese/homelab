@@ -46,11 +46,15 @@ Set out in the design at §8.8, and worth repeating because it is the rule that 
 |---|---|
 | Decisions and designs | `docs/superpowers/specs/`, `docs/decisions/` |
 | Evergreen knowledge: architecture, runbooks, secret inventory | `docs/` |
-| Work state: what is being done, by whom, blocked, done | Vikunja only, once it exists |
+| Work state: what is being done, by whom, blocked, done | Vikunja (`vikunja.kub.local`) only |
 | Agent recall: facts learned, preferences, past mistakes | OpenMemory |
 
 No second todo list, anywhere. A task links to a decision; it does not contain one. Documentation is
 files in git, never a wiki as the source of truth.
+
+Plan checkboxes record what was planned and what was executed; they are never consulted to answer
+whether a task is done. The board is the state, and when the two disagree the board wins. See
+[`agent-protocol.md`](agent-protocol.md).
 
 ## Reading it comfortably
 
