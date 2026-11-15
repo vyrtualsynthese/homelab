@@ -395,9 +395,10 @@ git commit -m "📝 docs: first-start runbook for the board"
 **Interfaces:**
 - Consumes: `VIKUNJA_API_TOKEN` in the environment (an operator API token, not the agent's MCP one),
   `VIKUNJA_URL` (default `https://vikunja.kub.local`).
-- Produces: for each of `homelab`, `config`, `scripts`, `ashuvidz-website`, `ashudev-website`,
-  `selfhosted-helmcharts`: one project with one kanban view whose buckets are `Ready`, `Doing`,
-  `Waiting for validation`, `Done`; plus saved filter `Awaiting my review`.
+- Produces: for each of `homelab`, `config`, `ashuvidz-website`, `ashudev-website`,
+  `selfhosted-helmcharts`, `ashuworld`, `ashuvidz-creator`: one project with one kanban view whose
+  buckets are `Ready`, `Doing`, `Waiting for validation`, `Done`; plus saved filter
+  `Awaiting my review`. `scripts` is not a GitHub repository and gets no board.
 
 - [ ] **Step 1: Write the script against the live instance**
 
@@ -460,7 +461,7 @@ git commit -m "🚀 feat(vikunja): idempotent board seeding"
 - Modify: `~/.config/opencode/opencode.jsonc` (outside the repo, not committed)
 - Modify: `~/.config/opencode/agents/explore.md` if it exists, otherwise the `agents` block of
   `opencode.jsonc` (outside the repo, not committed)
-- Modify: `keys.env` (outside the repo, not committed)
+- Modify: `~/.config/secrets/homelab.env` (outside the repo, not committed)
 
 **Interfaces:**
 - Produces: MCP server `vikunja` reachable from OpenCode at `http://vikunja.kub.local/api/v2/mcp`,
@@ -582,7 +583,7 @@ Task 1, and give it to a session as its work.
 - [ ] **Step 2: Watch the agent side**
 
 Expected: a ticket appears in the `homelab` project titled with the task name, moves to `Doing`,
-carries the agent role as assignee, and lands in `Waiting for validation` with a branch name, a PR
+carries the role it played in a label, is assigned to the account the token acts as, and lands in `Waiting for validation` with a branch name, a PR
 link and pasted verification output.
 
 - [ ] **Step 3: Refuse it once, on purpose**
