@@ -314,8 +314,11 @@ login type is `OAuth`, and that setting forces `SESSION_COOKIE_SECURE=True` (`cp
 browser drops a `Secure` cookie on a plain-HTTP origin, so the callback would come back without its
 session and the password login would stop sticking too. The route therefore moved to `websecure` on
 `https://calibre.kub.local`, with the `web` router redirecting, and the cluster's default certificate
-(`kube-system/local-cert`, mkcert, `*.kub.local`) rather than an ACME one — a `.local` name cannot be
-issued for. Clients without the mkcert root see a certificate warning; that is accepted.
+(`kube-system/local-cert`) rather than an ACME one — a `.local` name cannot be issued for, since public
+CAs have been barred from internal names since 2015. That certificate turned out to have expired on
+2026-05-06; `hack/internal-cert.sh` now signs it from a private CA kept outside the repo, so the next
+renewal is a documented command rather than a lost artefact. Clients without the root see a warning; that
+is accepted.
 
 The local password survives as break-glass and is what `/opds` uses. Because the session cookie is now
 `Secure` everywhere, that break-glass login works only on `http://localhost:8083` after a port-forward;
