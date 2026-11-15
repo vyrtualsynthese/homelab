@@ -94,6 +94,12 @@ ingressRoute:
       namespace: kube-system
     - name: authentik-forwardauth
       namespace: kube-system
+  # -- Middlewares for a second rule that matches `PathPrefix(/api)` and skips the
+  # -- gate above. API clients authenticate with the API key; they cannot complete
+  # -- an authentik redirect. Keep `lan-only` in this list.
+  apiBypassMiddlewares:
+    - name: lan-only
+      namespace: kube-system
   labels: {}
   annotations: {}
   tls:
