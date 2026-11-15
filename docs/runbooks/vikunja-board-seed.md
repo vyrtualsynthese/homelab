@@ -143,10 +143,11 @@ idempotency, not a repeat of the first.
 
 `updated` is the fourth counter and it should be `0` on every run after the first: it counts a view
 whose bucket mode was repaired. A view made before this script set the mode, or made by hand, carries
-`none` and prints `mode … updated none -> manual`; that one write is the repair. If the same view also
-lacks its done bucket, both fields travel in that one request — the script never sends a second POST to
-the same view in a run, because a partial body would clear whichever setting it left out — and the
-block prints the `done` and `mode` lines together.
+`none` and prints `mode … updated none -> manual`; that one write is the repair. Whenever that write
+happens it carries both `bucket_configuration_mode` and `done_bucket_id`, with the done bucket's
+current value when that field needs nothing — this endpoint replaces the record, so a body carrying
+only one field clears the other. The script still sends at most one POST per view per run, and prints
+only the lines for what it repaired; a run that fixes just one of the two prints just that line.
 
 On an instance that does not return `bucket_configuration_mode`, the `mode` line is missing from every
 block and this indented line stands where it would be:
