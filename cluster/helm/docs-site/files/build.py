@@ -724,10 +724,16 @@ def _run_mkdocs(config: Path, staging: Path, src: Path) -> None:
     command = ["mkdocs", "build", "-f", str(config), "-d", str(staging), "--quiet"]
     identity = build_identity()
     if identity is not None:
+        # The child has to be able to create its site directory inside the
+        # staging parent. `chown` would be the obvious way to hand it over, and
+        # it is the one that does not work here: the container drops every
+        # capability, `CAP_CHOWN` included, so `chown` answers EPERM however
+        # root the process is. Making the directory writable needs no capability
+        # at all, and the child owns everything it writes inside it.
         try:
-            os.chown(staging.parent, identity[0], identity[1])
+            os.chmod(staging.parent, 0o777)
         except OSError as exc:
-            raise BuildError(f"cannot hand {staging.parent} to uid {identity[0]}: {exc}") from None
+            raise BuildError(f"cannot open {staging.parent} to the build user: {exc}") from None
     env = build_env()
     if identity is not None:
         # `nobody` has no home of its own, and MkDocs (and a hook that writes a
@@ -1013,8 +1019,30 @@ def entry_digest(sha: str | None, etag: str | None) -> str:
     return hashlib.sha256(material).hexdigest()[:16]
 
 
+def _builder_source() -> Path:
+    return Path(__file__).resolve()
+
+
+def builder_stamp() -> str:
+    """A short fingerprint of this builder, recorded in the state it writes.
+
+    The failure counter bounds retries *per builder*: five failing runs say the
+    repository is broken, but they say nothing about the next version of this
+    script, and a deployment defect is exactly the kind of failure that looks
+    like a repository's. When the stamp in the state differs, every `failed`
+    pair is retried once — the deploy is the change that could fix it, and no
+    head has moved.
+    """
+    try:
+        material = _builder_source().read_bytes()
+    except OSError:
+        return "unknown"
+    return hashlib.sha256(material).hexdigest()[:12]
+
+
 def empty_state() -> dict[str, Any]:
-    return {"refs": {}, "last_full": None, "invisible": []}
+    return {"refs": {}, "last_full": None, "invisible": [], "builder": None}
+
 
 
 def failure_count(entry: dict[str, Any]) -> int:
@@ -1062,6 +1090,9 @@ def clean_state(raw: Any) -> dict[str, Any]:
 
     if isinstance(raw.get("last_full"), str):
         state["last_full"] = raw["last_full"]
+
+    if isinstance(raw.get("builder"), str):
+        state["builder"] = raw["builder"]
 
     invisible = raw.get("invisible")
     if isinstance(invisible, list):
@@ -1251,7 +1282,7 @@ def published_missing(repo: str, ref: str) -> bool:
 
 
 def decide(
-    repo: str, ref: str, stored: dict[str, Any], full: bool
+    repo: str, ref: str, stored: dict[str, Any], full: bool, retry_failed: bool = False
 ) -> Decision:
     """One conditional head check, turned into one action."""
     # `If-None-Match` is only worth sending for an entry whose sha and etag were
@@ -1284,8 +1315,14 @@ def decide(
     # `failed` is retried at once — a network blip heals on the next run — but
     # only for the first `FAILURE_LIMIT` attempts. Past that the failure is the
     # repository's (a config MkDocs cannot parse, a docs_dir that was refused),
-    # and nothing but the head moving can change the answer.
-    stuck = stored.get("status") == "failed" and failure_count(stored) >= FAILURE_LIMIT
+    # and nothing but the head moving can change the answer. `retry_failed` is
+    # the exception: a new build of this script retries them once, because the
+    # failure may have been the script's (see `builder_stamp`).
+    stuck = (
+        stored.get("status") == "failed"
+        and failure_count(stored) >= FAILURE_LIMIT
+        and not retry_failed
+    )
     lost = stored.get("status") == "ok" and published_missing(repo, ref)
     rebuild = (
         full
@@ -1298,12 +1335,18 @@ def decide(
     return Decision(repo, ref, "build" if rebuild else "skip", sha=sha, etag=etag)
 
 
-def collect_plan(repos: list[str], refs: tuple[str, ...], state: dict[str, Any], full: bool) -> list[Decision]:
+def collect_plan(
+    repos: list[str],
+    refs: tuple[str, ...],
+    state: dict[str, Any],
+    full: bool,
+    retry_failed: bool = False,
+) -> list[Decision]:
     decisions: list[Decision] = []
     for repo in repos:
         for ref in refs:
             stored = state["refs"].get(f"{repo}/{ref}") or {}
-            decisions.append(decide(repo, ref, stored, full))
+            decisions.append(decide(repo, ref, stored, full, retry_failed))
     return decisions
 
 
@@ -1618,12 +1661,16 @@ def main(argv: list[str] | None = None) -> int:
 
     forced = args.full
     full = full_rebuild_due(state, settings.full_rebuild_age, forced)
+    stamp = builder_stamp()
+    retry_failed = state.get("builder") != stamp
 
     if full:
         reason = "--full" if forced else "FULL_REBUILD_AGE elapsed or no previous full run"
         print(f"# full rebuild: {reason}")
+    if retry_failed:
+        print(f"# new builder ({stamp}): failed pairs are retried once")
 
-    decisions = collect_plan(repos, settings.refs, state, full)
+    decisions = collect_plan(repos, settings.refs, state, full, retry_failed)
     for decision in decisions:
         print(decision.line())
 
@@ -1639,6 +1686,13 @@ def main(argv: list[str] | None = None) -> int:
             state["last_full"] = now_iso()
 
     code = execute(decisions, state, settings)
+
+    if whole_catalogue and code == 0 and retry_failed:
+        # Recorded only once the run that used it finished cleanly: a run killed
+        # before this point leaves the old stamp, so the retry is not spent.
+        state["builder"] = stamp
+        save_state(settings.state_path, state)
+
     write_index(settings.site_root, state)
 
     counts: dict[str, int] = {}
