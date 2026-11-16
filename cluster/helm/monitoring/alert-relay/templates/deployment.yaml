@@ -15,6 +15,12 @@ spec:
     metadata:
       labels:
         app.kubernetes.io/name: {{ .Release.Name }}
+      annotations:
+        # The code is a ConfigMap mounted as a volume: Kubernetes refreshes the
+        # file inside the running pod, but Python read it once at start-up. Without
+        # this checksum a code change updates the file and changes nothing until
+        # someone restarts the pod by hand — which happened twice on 2026-11-16.
+        checksum/config: {{ .Files.Get "files/relay.py" | sha256sum }}
     spec:
       securityContext:
         runAsNonRoot: true
