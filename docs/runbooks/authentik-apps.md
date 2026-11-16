@@ -42,6 +42,17 @@ The migration is four steps, in this order, and the order is the safety:
    `https://authentik.kub.home.ashudev.com/application/o/vikunja-oidc/.well-known/openid-configuration`.
    The provider is cloned from `autobrr-oidc`: `sub_mode: hashed_user_id`, claims in the ID token,
    strict redirect to `https://vikunja.kub.local/auth/openid/authentik`.
+
+   **A provider created over the API has `grant_types: []`**, and an empty list means no grant is
+   ever allowed: every authorize request comes back `invalid_request — The request is otherwise
+   malformed`, in authentik and in the application, with nothing in the event log. Set it explicitly,
+   or the login can never work:
+
+   ```bash
+   PATCH /api/v3/providers/oauth2/<pk>/  {"grant_types": ["authorization_code", "refresh_token"]}
+   ```
+
+   That cost a debugging round on 2026-11-16; a provider cloned in the UI does not have it.
 2. **Done 2026-11-16, except the Secret.** `cluster/helm/vikunja/values.yaml` carries the OIDC env
    block; the client secret is read from Secret `vikunja-oidc`, key `CLIENTSECRET`, which the operator
    creates:
