@@ -61,11 +61,14 @@ REPOS=(
 # The view Vikunja gives every project. The script adopts it and renames it; it
 # never creates a second kanban view, because two would hold two answers to
 # "where is this task".
+# Projects that are boards without being a repository. The alert board is one:
+# it is a queue of things to investigate, not the state of a codebase.
+EXTRA_PROJECTS=(alerts)
 VIEW_TITLE="Board"
 VIEW_KIND="kanban"
 # A bucket renamed from an earlier shape is adopted in place, so its id — which
 # the saved filters store — survives. Only buckets holding no cards are renamed.
-BUCKET_RENAMES=("Ideas:Idea" "Revision:Validation")
+BUCKET_RENAMES=("Ideas:Idea" "Revision:Validation" "To-Do:Shaping")
 # Reading order. Positions are written explicitly so the order is the design's,
 # not whatever the UI last dragged.
 BUCKETS=(Idea Shaping Backlog Doing Validation Done)
@@ -295,6 +298,17 @@ seed_project() {
   # The description is what a stranger reads first: where the code is, which
   # branch is the integration branch, where the documentation lives, and what the
   # three labels mean.
+  if [ "$repo" = "alerts" ]; then
+    body="$(jq -cn --arg t "$repo" --arg d "Grafana alerts, one card per incident.
+
+Written by \`bot-alertmanager\`; investigated in a session, never closed by the relay.
+A repeat of the same alert is a comment on the same card. A critical alert arrives in
+\`Backlog\` with the payload and a \`Next step:\` line, and nothing moves until somebody looks.
+
+Kind: label \`task\`, plus \`alert\` and — when the rule itself is the problem — \`noise\`.
+Order is priority: the card highest in a column is the most urgent." \
+      '{title: $t, description: $d}')"
+  else
   body="$(jq -cn --arg t "$repo" --arg d "Repository: https://github.com/vyrtualsynthese/$repo
 Branches: \`develop\` (integration), \`main\` (production)
 Docs: https://github.com/vyrtualsynthese/$repo/tree/develop/docs
@@ -302,6 +316,7 @@ Protocol: https://github.com/vyrtualsynthese/$repo/blob/develop/docs/agent-proto
 
 Kind: label \`feature\` / \`story\` / \`task\`. A subtask is a checklist line inside a task." \
     '{title: $t, description: $d}')"
+  fi
   if [ "$(jq -r --arg t "$repo" '[.[] | select(.title == $t)][0].description // ""' <<<"$projects_json")" = "$(jq -r '.description' <<<"$body")" ]; then
     say project "$repo" existing "description already set"
     C_EXISTING=$((C_EXISTING + 1))
@@ -615,7 +630,7 @@ verify() {
   local kinds_json="" bad_kind="" kinds_map="" column_ids="" bad_column=""
   local v2_json="" filters_json="" query="" filter_id=""
 
-  printf 'Verifying %d board(s) against %s\n\n' "${#REPOS[@]}" "$VIKUNJA_URL"
+  printf 'Verifying %d board(s) against %s\n\n' "${#REPOS_ALL[@]}" "$VIKUNJA_URL"
 
   expected_order="$(printf '%s, ' "${BUCKETS[@]}")"
   expected_order="${expected_order%, }"
@@ -638,7 +653,7 @@ verify() {
   http GET /projects
   projects_json="$API_BODY"
 
-  for repo in "${REPOS[@]}"; do
+  for repo in "${REPOS_ALL[@]}"; do
     pid="$(jq -r --arg t "$repo" '[.[] | select(.title == $t)][0].id // empty' <<<"$projects_json")"
     if [ -z "$pid" ]; then
       printf 'FAIL %-12s no project titled "%s"\n' "$repo" "$repo"
@@ -785,7 +800,7 @@ verify() {
     printf 'verify: %d problem(s) found\n' "$failures"
     exit 1
   fi
-  printf 'verify: all %d board(s) hold the shape the protocol expects\n' "${#REPOS[@]}"
+  printf 'verify: all %d board(s) hold the shape the protocol expects\n' "${#REPOS_ALL[@]}"
 }
 
 # ---------------------------------------------------------------------------
@@ -819,7 +834,7 @@ if [ "$RUN_ALL" = 1 ] && [ -n "$REPO_SCOPE" ]; then
   exit 2
 fi
 
-REPOS_ALL=("${REPOS[@]}")
+REPOS_ALL=("${REPOS[@]}" "${EXTRA_PROJECTS[@]}")
 
 if [ -n "$REPO_SCOPE" ]; then
   scope_found=0
@@ -871,7 +886,7 @@ if [ "$DRY_RUN" = 1 ]; then
 fi
 
 seed_labels
-for repo in "${REPOS[@]}"; do
+for repo in "${REPOS[@]}" "${EXTRA_PROJECTS[@]}"; do
   seed_project "$repo"
 done
 
