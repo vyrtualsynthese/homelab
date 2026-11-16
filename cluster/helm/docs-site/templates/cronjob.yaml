@@ -24,6 +24,10 @@ spec:
             {{- include "docs-site.selectorLabels" . | nindent 12 }}
         spec:
           restartPolicy: Never
+          # The builder never talks to the cluster, and the pod runs repository
+          # code (`hooks:` in a checkout's mkdocs.yml). No service-account token,
+          # so that code has nothing to reach the API server with.
+          automountServiceAccountToken: false
           nodeSelector:
             kubernetes.io/hostname: {{ .Values.node }}
           containers:
