@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "docs-site.fullname" . }}-builder
+  labels:
+    {{- include "docs-site.labels" . | nindent 4 }}
+data:
+  # The builder is a ConfigMap rather than a baked image: there is no registry
+  # build in this repo, and a change to the script should reach the cluster by
+  # the same commit that changes the chart.
+  build.py: |
+{{ .Files.Get "files/build.py" | indent 4 }}
+  mkdocs.yml.tpl: |
+{{ .Files.Get "files/mkdocs.yml.tpl" | indent 4 }}
