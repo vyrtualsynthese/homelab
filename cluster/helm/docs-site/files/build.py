@@ -126,6 +126,7 @@ ENV_DEFAULTS = {
     "WORK_ROOT": "",
     "STATE": "/data/state.json",
     "FULL_REBUILD_AGE": "86400",
+    "SCHEDULE": "* * * * *",
 }
 
 # Filled in from response headers so a run can report what it spent.
@@ -150,6 +151,7 @@ class Settings:
     work_root: Path
     state_path: Path
     full_rebuild_age: int
+    schedule: str
 
 
 _SETTINGS: Settings | None = None
@@ -231,6 +233,7 @@ def load_settings() -> Settings:
         work_root=work_root,
         state_path=state_path,
         full_rebuild_age=age,
+        schedule=env["SCHEDULE"].strip() or "* * * * *",
     )
     return _SETTINGS
 
@@ -1292,6 +1295,114 @@ def resolve_invisible(state: dict[str, Any], listed: list[str]) -> list[str]:
 
 
 # --------------------------------------------------------------------------- #
+# The catalogue page
+# --------------------------------------------------------------------------- #
+
+INDEX_PAGE = """<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Documentation</title>
+<style>
+body {{ font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; max-width: 60rem;
+       margin: 2rem auto; padding: 0 1rem; background: #1e2129; color: #e6e6e6; }}
+h1 {{ font-weight: 600; }}
+a {{ color: #7cb8ff; }}
+table {{ border-collapse: collapse; width: 100%; }}
+th, td {{ text-align: left; padding: .4rem .6rem; border-bottom: 1px solid #3a3f4b;
+          vertical-align: top; }}
+th {{ color: #9aa0ad; font-weight: 500; }}
+code {{ background: #2b303b; padding: 0 .25rem; border-radius: 3px; }}
+.muted {{ color: #9aa0ad; }}
+</style>
+</head>
+<body>
+<h1>Documentation</h1>
+<p class="muted">Generated {generated}. Rebuilt by a Kubernetes CronJob on the schedule
+<code>{schedule}</code>; only <code>main</code> and <code>develop</code> are built, so a page older
+than its branch is a run that has not happened yet.</p>
+{body}
+</body>
+</html>
+"""
+
+
+def _index_rows(state: dict[str, Any]) -> list[str]:
+    """One table row per published pair, then one per unreadable repository."""
+    rows: list[str] = []
+    for key in sorted(state["refs"]):
+        repo, _, ref = key.partition("/")
+        entry = state["refs"][key]
+        section = html.escape(key)
+        status = entry.get("status")
+        built_at = html.escape(entry.get("built_at") or "never")
+        if status == "ok":
+            body = f'<a href="/{html.escape(repo)}/{html.escape(ref)}/">{section}</a>'
+            verdict = "built"
+        elif status == "absent":
+            body = section
+            verdict = "no docs on this ref"
+        elif status == "failed":
+            body = section
+            detail = entry.get("detail") or "no detail recorded"
+            verdict = f"build failed: {html.escape(detail)}"
+        else:
+            body = section
+            verdict = html.escape(str(status))
+        rows.append(f"<tr><td>{body}</td><td>{built_at}</td><td>{verdict}</td></tr>")
+
+    for name in sorted(state.get("invisible") or []):
+        rows.append(
+            f"<tr><td>{html.escape(name)}</td><td>&mdash;</td>"
+            "<td>not readable by the token</td></tr>"
+        )
+    return rows
+
+
+def write_index(site_root: Path, state: dict[str, Any]) -> None:
+    """Regenerate `<site_root>/index.html`, the page every repository appears on.
+
+    The page is the only place a reader learns that a repository exists but has
+    no documentation, that its last build failed, or that the token cannot see
+    it — the three cases where nothing else on the site would say anything. It
+    carries no JavaScript and no asset from the site, because it must render
+    even when no build has ever succeeded.
+
+    It is written through a temporary and `os.replace`, so a reader never gets
+    half a page, and it is written at the end of a run only: a run that dies
+    mid-build leaves the previous index standing, which is a true statement
+    about the sites that are actually there.
+    """
+    try:
+        schedule = load_settings().schedule
+    except ConfigError:
+        schedule = ENV_DEFAULTS["SCHEDULE"]
+
+    rows = _index_rows(state)
+    if rows:
+        body = (
+            "<table>\n<thead><tr><th>Section</th><th>Last built</th><th>Status</th></tr>"
+            "</thead>\n<tbody>\n" + "\n".join(rows) + "\n</tbody>\n</table>"
+        )
+    else:
+        body = "<p>No site has been built yet. The next run fills this page.</p>"
+
+    page = INDEX_PAGE.format(generated=now_iso(), schedule=html.escape(schedule), body=body)
+
+    target = site_root / "index.html"
+    temporary = target.with_name(f"{target.name}.{run_id()}.tmp")
+    try:
+        site_root.mkdir(parents=True, exist_ok=True)
+        temporary.write_text(page, encoding="utf-8")
+        os.replace(temporary, target)
+    except OSError as exc:
+        print(f"warning: could not write the index page ({scrub(str(exc))})", file=sys.stderr)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+# --------------------------------------------------------------------------- #
 # Running
 # --------------------------------------------------------------------------- #
 
@@ -1479,6 +1590,7 @@ def main(argv: list[str] | None = None) -> int:
             state["last_full"] = now_iso()
 
     code = execute(decisions, state, settings)
+    write_index(settings.site_root, state)
 
     counts: dict[str, int] = {}
     for decision in decisions:
