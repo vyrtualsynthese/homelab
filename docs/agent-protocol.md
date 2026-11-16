@@ -77,14 +77,11 @@ Rules that keep the columns honest:
 | Title | A plain sentence in the imperative: *"Rebuild the cross-seed chart"*. No plan prefix — the feature above it carries the context. |
 | Description | The fixed block below, then what changed and the verification evidence. |
 | Column | The state above. |
-| Label | Exactly one kind (`feature`, `story`, `task`), plus `implementer` or `reviewer` for the role the session played. Who wrote the card is not a label: it is the account, below. |
+| Label | Exactly one kind (`feature`, `story`, `task`), plus `implementer` or `reviewer` for the role the session played. Who wrote the card is not a label: it is the account. |
 | Parent | A feature or a story, never a task for a task that has one. Subtasks live in the description. |
 | Priority | Unused. The reading order is the card's position in `Backlog`. |
 
-**Who wrote a card** is the account that wrote it, and there are two: the operator's, and
-`bot-opencode` (`opencode`, owned by the operator), whose token the agents act through. Vikunja stamps
-`created_by` on every card and comment, so the name on the work is read from the record rather than
-from a label anyone could set. The bot sees only the projects shared with it — today, `homelab`.
+Every description opens with the same block, so the same facts sit in the same place:
 
 ```text
 repo: vyrtualsynthese/homelab
