@@ -116,14 +116,18 @@ def plan_actions(map_doc: dict[str, Any], state: dict[str, Any],
             "labels": [task.get("kind", "task")],
         }
         changes = {k: v for k, v in wanted.items() if v is not None and current.get(k) != v}
-        if not description_ok:
-            changes["description"] = render_description(
-                task.get("docs", "none"), task.get("branch", "none"),
-                task.get("pr", "none"), task.get("body", ""), task.get("commit", "none"))
+        wanted_description = render_description(
+            task.get("docs", "none"), task.get("branch", "none"),
+            task.get("pr", "none"), task.get("body", ""), task.get("commit", "none"))
+        if not description_ok and current.get("description") != wanted_description:
+            changes["description"] = wanted_description
         if changes:
             actions.append({"op": "update_task", "id": task["id"], "changes": changes})
 
+    existing_titles = {t.get("title") for t in known_tasks.values()}
     for entry in map_doc.get("backfill", []):
+        if entry["title"] in existing_titles:
+            continue
         actions.append({"op": "create_backfill", "title": entry["title"],
                         "feature": entry.get("feature"),
                         "description": render_description(
@@ -175,11 +179,26 @@ def read_state(board: Board, project: int, view: int) -> dict[str, Any]:
 
     buckets = {b["id"]: b["title"] for b in
                board.call("GET", f"/api/v1/projects/{project}/views/{view}/buckets")}
+    # The v2 buckets/tasks read stops at 100 cards per column, and the flat task
+    # list reports bucket_id 0, so each column is asked for by filter instead.
+    bucket_of: dict[int, str] = {}
+    for bucket_id, title in buckets.items():
+        page = 1
+        while True:
+            found = board.call(
+                "GET", f"/api/v1/projects/{project}/views/{view}/tasks"
+                       f"?per_page=100&page={page}&filter=bucket_id%20%3D%20{bucket_id}")
+            found = found if isinstance(found, list) else []
+            for task in found:
+                bucket_of[task["id"]] = title
+            if len(found) < 100:
+                break
+            page += 1
     features: dict[str, int] = {}
     known: dict[int, dict[str, Any]] = {}
     for task in tasks:
         titles = [l["title"] for l in (task.get("labels") or [])]
-        bucket = buckets.get(task.get("bucket_id", 0), "")
+        bucket = bucket_of.get(task["id"], buckets.get(task.get("bucket_id", 0), ""))
         known[task["id"]] = {
             "title": task["title"],
             "bucket": bucket,
@@ -189,6 +208,16 @@ def read_state(board: Board, project: int, view: int) -> dict[str, Any]:
         if "feature" in titles:
             features[task["title"]] = task["id"]
     return {"features": features, "tasks": known, "labels": labels}
+
+
+def relate(board: Board, child: int, parent: int) -> None:
+    """Parent a task under its feature; an existing relation is success, not a failure."""
+    try:
+        board.call("PUT", f"/api/v1/tasks/{child}/relations",
+                   {"other_task_id": parent, "relation_kind": "parenttask"})
+    except SystemExit as error:
+        if "HTTP 409" not in str(error):
+            raise
 
 
 def apply_actions(board: Board, map_doc: dict[str, Any], state: dict[str, Any],
@@ -246,8 +275,7 @@ def apply_actions(board: Board, map_doc: dict[str, Any], state: dict[str, Any],
                 wanted = next((f["title"] for f in map_doc["features"] if f["key"] == parent_key), None)
                 parent_id = feature_ids.get(wanted or "")
             if parent_id:
-                board.call("PUT", f"/api/v1/tasks/{action['id']}/relations",
-                           {"other_task_id": parent_id, "relation_kind": "parenttask"})
+                relate(board, action["id"], parent_id)
         elif action["op"] == "create_backfill":
             print(f"create backfill {action['title']}  ->  {action['feature']}")
             done += 1
@@ -261,8 +289,7 @@ def apply_actions(board: Board, map_doc: dict[str, Any], state: dict[str, Any],
                 parent_id = feature_ids.get(
                     next((f["title"] for f in map_doc["features"] if f["key"] == action["feature"]), ""))
                 if parent_id:
-                    board.call("PUT", f"/api/v1/tasks/{made['id']}/relations",
-                               {"other_task_id": parent_id, "relation_kind": "parenttask"})
+                    relate(board, made["id"], parent_id)
             if "Done" in buckets:
                 board.call("POST", f"/api/v1/projects/{project}/views/{view}/buckets/"
                            f"{buckets['Done']}/tasks", {"task_id": made["id"]})
