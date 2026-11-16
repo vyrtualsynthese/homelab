@@ -248,39 +248,6 @@ put_bucket() {
   write_or_plan POST "/projects/$project/views/$view/buckets/$id" "$body"
 }
 
-# What a card must carry to be ready, and what proves it done. One baseline for
-# every board, plus one line this repository adds for itself: the rules that only
-# its own checks can state.
-board_rules() {
-  local repo="$1" extra=""
-  case "$repo" in
-    homelab)
-      extra="\`helm template\` renders every chart the branch touches, and \`hack/check-exposure.sh\` passes."
-      ;;
-    *)
-      extra="the repository's own checks have run, and their output is in the description."
-      ;;
-  esac
-  cat <<RULES
-## Definition of Ready
-
-A card may leave \`Shaping\` only when its description carries:
-
-- one sentence saying what it is and why;
-- a \`docs:\` line linking the plan or decision that justifies it;
-- a \`Done when:\` line saying what will prove it;
-- its dependencies as relations (\`blocking\` / \`blocked\`), never described in prose.
-
-## Definition of Done
-
-A card may reach \`Validation\` only when:
-
-- the branch is pushed and the pull request is open, or a commit is recorded;
-- the command that verifies it, and what it printed, are in the description;
-- $extra
-RULES
-}
-
 seed_project() {
   local repo="$1"
   local project_id="" view_id="" done_id="" default_id="" body="" projects_json=""
@@ -333,10 +300,7 @@ Branches: \`develop\` (integration), \`main\` (production)
 Docs: https://github.com/vyrtualsynthese/$repo/tree/develop/docs
 Protocol: https://github.com/vyrtualsynthese/$repo/blob/develop/docs/agent-protocol.md
 
-Kind: label \`feature\` / \`story\` / \`task\`. A subtask is a checklist line inside a task.
-Order is priority: the card highest in a column is the most urgent.
-
-$(board_rules "$repo")" \
+Kind: label \`feature\` / \`story\` / \`task\`. A subtask is a checklist line inside a task." \
     '{title: $t, description: $d}')"
   if [ "$(jq -r --arg t "$repo" '[.[] | select(.title == $t)][0].description // ""' <<<"$projects_json")" = "$(jq -r '.description' <<<"$body")" ]; then
     say project "$repo" existing "description already set"
