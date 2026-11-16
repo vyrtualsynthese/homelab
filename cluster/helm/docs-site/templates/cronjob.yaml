@@ -34,7 +34,9 @@ spec:
             - name: builder
               image: {{ .Values.builder.image }}
               imagePullPolicy: IfNotPresent
-              command: ["python3", "/opt/builder/build.py"]
+              # `-u`: stdout is block-buffered when it is a pipe, which made
+              # `kubectl logs -f` look dead for the length of a build.
+              command: ["python3", "-u", "/opt/builder/build.py"]
               # The image's own working directory is read-only in spirit; every
               # temporary lives under /tmp, which the container can write.
               workingDir: /tmp
