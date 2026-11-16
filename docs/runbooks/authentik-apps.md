@@ -1,19 +1,18 @@
 # Wire an application to authentik
 
-State, as of 2026-11-15:
+State, as of 2026-11-16:
 
 | Application | authentik objects in git | Application configured | How |
 |---|---|---|---|
 | Grafana | yes | **yes** | Secret + chart values |
 | pgAdmin | yes | **yes** | `config_local.py` in a Secret |
-| Argo CD | yes | no | `cluster/helm/argocd/values.yaml` + `helm upgrade` |
+| Argo CD | yes | **yes** | `cluster/helm/argocd/values.yaml` + `helm upgrade` |
 | Kavita | yes | **yes** | `POST /api/settings`, stored in its database |
 | FileBrowser | yes | no | proxy auth, forward-auth middleware |
 
 Four applications have providers and application objects in the chart (`files/app-*.yaml`); Grafana,
-pgAdmin and Kavita are configured on the application side. Argo CD does not sign anyone in yet,
-whatever its authentik objects say. The access matrix in the design treats it as a target until its
-section below has been run.
+pgAdmin, Kavita and Argo CD are configured on the application side. FileBrowser is the one still
+waiting.
 
 Client IDs are fixed and public: `argocd`, `grafana`, `pgadmin`, `kavita`.
 
@@ -152,20 +151,36 @@ and `POST /api/account/login` with a password answers
 
 ## 5. Argo CD
 
-Not wired yet: Argo CD has no Dex connector and an empty RBAC policy. It is a hand-run Helm
-release, not an Application in this repo. Its connector and RBAC live in
-`cluster/helm/argocd/values.yaml`, so a chart upgrade keeps them. It uses its bundled Dex, so the
-redirect is `/api/dex/callback`.
+Argo CD runs its bundled Dex, so the redirect address is `/api/dex/callback`. It is a hand-run Helm
+release, not an Application in this repo. Its connector, RBAC and ingress live in
+`cluster/helm/argocd/values.yaml`, so a chart upgrade keeps them.
+
+**The scheme is part of the address.** Argo CD compares the SSO return URL against its own
+`configs.cm.url` and answers `Invalid redirect URL: the protocol and host (including port) must
+match …` on any difference, before authentik is contacted. The browser reaches this host over TLS,
+so `url` is `https://argocd.kub.local`, and the provider in `files/app-argocd.yaml` lists
+`https://argocd.kub.local/api/dex/callback`. A plain-HTTP value here breaks every sign-in, SSO and
+local form alike, while the page itself still loads.
+
+Traefik terminates that TLS: the chart's core Ingress is disabled (`server.ingress.enabled: false`)
+and two IngressRoutes in `extraObjects` replace it, because one Ingress cannot carry the LAN gate,
+the default internal certificate and a redirect-only plain-HTTP router at once. The TLS router sets
+no secret, so it is served `kube-system/local-cert` (see [`internal-ca.md`](internal-ca.md)).
 
 The client secret is not in git: it lives in `argocd-secret` under
 `dex.authentik.clientSecret`, and must equal `ARGOCD_CLIENT_SECRET` in the `authentik-sso`
-secret.
+secret. If they differ, the browser completes the authentik login and Dex then fails the token
+exchange with `invalid_client`; the fix is the patch below.
 
 ```bash
 A='<argocd value from authentik-sso>'
 kubectl -n argocd patch secret argocd-secret --type merge \
   -p "$(jq -n --arg a "$A" '{stringData:{"dex.authentik.clientSecret":$a}}')"
 ```
+
+Order matters on the first cut-over to TLS: sync `authentik` first, so the provider lists the
+`https` redirect address, then apply the release. The reverse order leaves a window where the
+provider still knows only `http` and refuses the new redirect.
 
 Apply the release:
 
@@ -176,7 +191,8 @@ kubectl -n argocd rollout status deploy/argocd-server --timeout=180s
 ```
 
 The values carry `g, authentik Admins, role:admin` and `g, homelab-users, role:readonly`. The
-local `admin` account stays enabled as break-glass.
+local `admin` account stays enabled as break-glass; it is the only local account, so an authentik
+e-mail typed into that form is always refused, whatever the password.
 
 ## Granting access
 
