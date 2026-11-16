@@ -27,11 +27,11 @@ token below belongs to.
 |---|---|
 | Address | `https://vikunja.kub.local` |
 | Script | `hack/vikunja-seed.sh` |
-| Projects | `homelab` (boarded), then `config`, `ashuvidz-website`, `ashudev-website`, `selfhosted-helmcharts`, `ashuworld`, `ashuvidz-creator` (empty) |
+| Projects | all seven GitHub repositories — `homelab`, `config`, `ashuvidz-website`, `ashudev-website`, `selfhosted-helmcharts`, `ashuworld`, `ashuvidz-creator` — each with the same six columns |
 | View | one kanban view per project, titled `Board` at position 1 |
 | Columns | `Idea`, `Shaping`, `Backlog`, `Doing`, `Validation`, `Done`, left to right |
 | Labels | `feature`, `story`, `task`; `implementer`, `reviewer` — authorship is the account, not a label |
-| Saved filters | `Needs my validation`, `Agent work in flight` |
+| Saved filters | `Needs my validation`, `Agent work in flight` — both naming **every** board's column ids |
 
 ## Preconditions
 
@@ -120,9 +120,14 @@ With no argument the script shapes `homelab` and nothing else, because that is t
 operator decided to change. `--repo <name>` shapes one other board; `--all` shapes every board in the
 script's list, which is a deliberate act, not a default. The two flags cannot be combined.
 
-The two saved filters are account-wide but point at one board's columns, so their ids are taken from
-`homelab` only — in a run that touches several boards, every other board would otherwise overwrite
-them with its own ids and silently empty the operator's queue.
+The two saved filters are account-wide and point at column ids, and every board has its own. So the
+script reads **all seven** boards before writing them: `bucket_id in 14, 86, 88, 90, 92, 94, 96` for
+the validation queue, and the same shape for the doing queue. Naming one board's ids would make the
+operator's queue skip the other six without saying so.
+
+Each board's description carries the same `Definition of Ready` and `Definition of Done`, plus one
+line the repository adds for itself — for `homelab`, that `helm template` renders the touched charts
+and `hack/check-exposure.sh` passes.
 
 The view write carries **five fields**: title, position, column mode, default column and done column.
 The endpoint replaces the record rather than patching it, so a body missing `view_kind` turns the board
