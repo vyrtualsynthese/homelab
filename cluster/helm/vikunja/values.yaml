@@ -38,6 +38,13 @@ vikunja:
       VIKUNJA_AUTH_OPENID_PROVIDERS_AUTHENTIK_CLIENTID: "eqfj9awPPBaZSDan6HikbXBYSJgh1nok8ahhVKG4"
       VIKUNJA_AUTH_OPENID_PROVIDERS_AUTHENTIK_AUTHURL: "https://authentik.kub.home.ashudev.com/application/o/vikunja-oidc/"
       VIKUNJA_AUTH_OPENID_PROVIDERS_AUTHENTIK_SCOPES: "openid profile email"
+      # The board already had an account before OIDC existed, and that account owns
+      # nine projects, every card, both bots and the saved filters. Without this,
+      # OIDC creates a second, empty account and the operator lands on it. With it,
+      # a login whose verified email matches an existing user links that user
+      # instead. The authentik provider sends email_verified: true from a mapping
+      # scoped to this provider alone, so no other application changes behaviour.
+      VIKUNJA_AUTH_OPENID_PROVIDERS_AUTHENTIK_EMAILFALLBACK: "true"
       VIKUNJA_AUTH_OPENID_PROVIDERS_AUTHENTIK_CLIENTSECRET:
         secretKeyRef:
           name: vikunja-oidc
