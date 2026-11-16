@@ -80,6 +80,23 @@ vikunja:
               publicurl: "https://vikunja.kub.local"
               enableregistration: false
               interface: ":3456"
+              # Paris time, so due dates and reminders read the way the operator does.
+              timezone: "Europe/Paris"
+              maxitemsperpage: 100
+              # Off on purpose:
+              #  - caldav: no calendar client uses it, and it is another LAN-reachable surface;
+              #  - linksharing: a share link is an unauthenticated way into a private board;
+              #  - emailreminders: there is no mailer, so the setting can only fail silently.
+              enablecaldav: false
+              enablelinksharing: false
+              enableemailreminders: false
+              motd: "Board of record. Rules: homelab docs/agent-protocol.md"
+            defaultsettings:
+              timezone: "Europe/Paris"
+            webhooks:
+              # Nothing outbound is wanted from the board; webhooks would make it a client of
+              # arbitrary endpoints.
+              enabled: false
             files:
               basepath: /app/vikunja/files
             metrics:
