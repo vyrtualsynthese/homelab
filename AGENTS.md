@@ -104,7 +104,12 @@ time. Examples:
   (`... | tr -d '\r'`) and preserve CRLF when editing those files.
 - Ingress is Traefik v2 CRDs only (`traefik.containo.us/v1alpha1`), never `networking.k8s.io/v1`.
   - Internal, no TLS: `entryPoints: [web]`, host `app.kub.local`.
-  - TLS: `entryPoints: [websecure]`, host `app.kub.home.ashudev.com`,
+  - Internal TLS: `entryPoints: [websecure]` on the same `app.kub.local` host, with neither
+    `secretName` nor `certResolver` (Traefik serves the default `kube-system/local-cert`, the
+    `*.kub.local` leaf of the ashulab internal CA), `tls.options: internal-tls` from the
+    `traefik-gate` chart, and a `web` router that only redirects. See
+    `docs/runbooks/internal-ca.md`.
+  - TLS on a resolvable name: `entryPoints: [websecure]`, host `app.kub.home.ashudev.com`,
     `tls.certResolver: myresolver` plus a per-app `TLSOption` copied from an existing chart.
   - Public: `ashuvidz.com`, `forum.ashuvidz.com`, `wiki.ashuvidz.com`.
   - Cross-namespace middleware refs use `kube-system-<name>@kubernetescrd`.

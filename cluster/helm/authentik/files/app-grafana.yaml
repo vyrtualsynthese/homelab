@@ -30,7 +30,7 @@ entries:
       redirect_uris:
         - matching_mode: strict
           redirect_uri_type: authorization
-          url: http://grafana.kub.local/login/generic_oauth
+          url: https://grafana.kub.local/login/generic_oauth
       property_mappings:
         - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-openid]]
         - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-email]]
@@ -44,7 +44,7 @@ entries:
       name: Grafana
       slug: grafana
       provider: !KeyOf grafana-provider
-      meta_launch_url: http://grafana.kub.local/
+      meta_launch_url: https://grafana.kub.local/
       # Official logo, served from the dashboard-icons set. The browser
       # loads it, so the grid needs internet; swap to `fa://fa-<name>`
       # if it ever has to work offline.

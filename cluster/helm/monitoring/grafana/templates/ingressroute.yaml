@@ -1,3 +1,15 @@
+{{- /*
+Two routers for one host: the TLS one serves Grafana, the plain-HTTP one only
+redirects to it. Neither sets `secretName` nor `certResolver`, so Traefik falls
+back to the cluster default certificate `kube-system/local-cert` — the
+`*.kub.local` leaf signed by the ashulab internal CA. See
+docs/runbooks/internal-ca.md.
+
+`lan-only` stays on both. Grafana authenticates through authentik itself (native
+OIDC), so there is no forward-auth gate here; the LAN gate plus that login are
+the two controls. On the redirect router the gate runs first, so an off-LAN
+request is refused with `403` rather than redirected.
+*/ -}}
 apiVersion: {{ .Values.traefik.apiVersion }}
 kind: IngressRoute
 metadata:
@@ -8,14 +20,37 @@ metadata:
     app.kubernetes.io/instance: {{ .Release.Name }}
 spec:
   entryPoints:
+    - websecure
+  routes:
+    - match: Host(`{{ .Values.ingress.host }}`)
+      kind: Rule
+      middlewares:
+        - name: kube-system-lan-only@kubernetescrd
+      services:
+        - name: {{ .Values.ingress.service }}
+          port: {{ .Values.ingress.port }}
+  tls:
+    options:
+      name: internal-tls
+      namespace: kube-system
+---
+apiVersion: {{ .Values.traefik.apiVersion }}
+kind: IngressRoute
+metadata:
+  name: {{ .Chart.Name }}-redirect
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: {{ .Chart.Name }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  entryPoints:
     - web
   routes:
     - match: Host(`{{ .Values.ingress.host }}`)
       kind: Rule
-      # These routes serve metrics and logs with no application login, so the LAN gate
-      # is the only access control.
       middlewares:
         - name: kube-system-lan-only@kubernetescrd
+        - name: kube-system-redirect-to-https@kubernetescrd
       services:
         - name: {{ .Values.ingress.service }}
           port: {{ .Values.ingress.port }}
