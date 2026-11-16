@@ -33,20 +33,35 @@ come before any sync.
 - `curl` and `openssl` on the workstation; `kubectl` against the cluster.
 - `~/.config/secrets/kub-local/local-ca.pem` present (the cluster's internal CA, minted by
   [`internal-ca.md`](internal-ca.md)).
+- `~/.config/secrets/keys.env` holds `GITHUB_PERSONAL_ACCESS_TOKEN` on this workstation; Step 1 reads
+  it from there.
 - `nuc0` has room for a 1Gi builder pod and a 64Mi nginx pod: `kubectl top node nuc0`.
 
 ## Step 1 — the token
 
-On GitHub: **Settings → Developer settings → Fine-grained tokens → New token**.
+There is no GitHub UI step and no token to paste. The Secret is seeded from the machine's own token,
+so the whole of Step 2 is one command:
 
-- Resource owner `vyrtualsynthese`.
-- Repository access: **All repositories**. A narrower selection is silent about what it cannot see,
-  and the site would simply lack those repositories.
-- Permissions: **Contents: Read-only** and **Metadata: Read-only**. Nothing else.
-- Expiration: record the date here — **expires:** `<date>`.
+```bash
+set -a; . ~/.config/secrets/keys.env; set +a
+printf '%s' "$GITHUB_PERSONAL_ACCESS_TOKEN" \
+  | kubectl -n docs create secret generic github-docs-ro --from-file=token=/dev/stdin
+```
 
-One token covers discovery, the head checks and the tarball download. It is read-only on purpose:
-the builder never writes to a repository, and the token is the only credential in the whole job.
+The value never reaches the command line (so not `/proc/*/cmdline`, not shell history), and the same
+command rotates it with `--dry-run=client -o yaml | kubectl apply -f -`.
+
+**What that token can do.** It is the operator's machine token: it can push. The builder only reads
+with it, and three things bound the risk rather than the token's rights:
+
+- the build runs as uid 65534, so a repository's `hooks:` code cannot read the token out of the
+  builder's `/proc/1/environ`;
+- the pod mounts no service-account token, so that code cannot reach the API server either;
+- the token is never written to the state file, a log line, or the served tree.
+
+A dedicated fine-grained token (`Contents: read`, `Metadata: read`, all repositories) is still the
+better end state when this one is rotated by hand anyway; nothing in the chart changes, only this
+command.
 
 ## Step 2 — the namespace and the Secret
 
@@ -54,9 +69,13 @@ The Secret must exist before the CronJob's first pod starts, so the namespace co
 
 ```bash
 kubectl create namespace docs
-kubectl -n docs create secret generic github-docs-ro --from-literal=token=<token>
+```
+
+Then the command from Step 1, and a check that the key holds what was read:
+
+```bash
 kubectl -n docs get secret github-docs-ro -o jsonpath='{.data.token}' | base64 -d | head -c 8
-# expect: the first characters of the token, then no error
+# expect: the first characters of the token (github_pat_…), then no error
 ```
 
 The builder reads `GITHUB_TOKEN` from that key and never writes it anywhere: not to the state file,
@@ -184,22 +203,24 @@ kube-system TLSOption every internal app uses.
 
 ## Step 8 — rotation
 
-1. Create the new token in GitHub with the same permissions, and note the new expiry in Step 1.
-2. Replace the Secret:
+The token is the machine's, so rotation is the same command as Step 1, replacing the Secret in place:
 
-   ```bash
-   kubectl -n docs create secret generic github-docs-ro \
-     --from-literal=token=<new-token> --dry-run=client -o yaml | kubectl apply -f -
-   ```
+```bash
+set -a; . ~/.config/secrets/keys.env; set +a
+printf '%s' "$GITHUB_PERSONAL_ACCESS_TOKEN" \
+  | kubectl -n docs create secret generic github-docs-ro \
+      --from-file=token=/dev/stdin --dry-run=client -o yaml | kubectl apply -f -
+```
 
-3. The next scheduled run reads the new value. A pod that is already running keeps the old one, so if
-   a job is in flight, either wait for it or delete it:
+The next scheduled run reads the new value. A pod that is already running keeps the old one, so if a
+job is in flight, either wait for it or delete it:
 
-   ```bash
-   kubectl -n docs delete job -l batch.kubernetes.io/cronjob-name=docs-site-build
-   ```
+```bash
+kubectl -n docs delete job -l batch.kubernetes.io/cronjob-name=docs-site-build
+```
 
-The old token is revoked on GitHub after the first green run.
+If the machine token is ever replaced by a dedicated read-only one, this is the only place that
+changes.
 
 ## Success, in one place
 
