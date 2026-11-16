@@ -1,0 +1,64 @@
+# The docs site: one CronJob builds every repository's `docs/` folder on `main`
+# and `develop`, one nginx serves the result. Nothing here is per-repository —
+# a repository opts in by carrying a `docs/` folder with at least one Markdown
+# file, and the builder discovers it from the GitHub API.
+
+repoOwner: vyrtualsynthese
+refs:
+  - main
+  - develop
+fullRebuildAge: 86400 # seconds; a daily rebuild catches a changed template
+schedule: "* * * * *" # also printed on the index page, so it cannot drift
+
+builder:
+  # Docker Hub. The project publishes no other registry, so this is the §8.7
+  # exception recorded in the design document. Pinned by tag, never `latest`.
+  image: squidfunk/mkdocs-material:9.8.1
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 1Gi
+
+server:
+  # Docker Hub as well, and unprivileged: port 8080, no root in the container.
+  image: nginxinc/nginx-unprivileged:1.31-alpine
+  resources:
+    requests:
+      cpu: 10m
+      memory: 32Mi
+    limits:
+      memory: 64Mi
+
+storage:
+  size: 2Gi
+  storageClassName: local-path
+
+# The claim is `local-path`, so it lives on one node and both workloads must be
+# pinned to it. nuc0 is the general catalogue node; nothing here needs the GPU.
+node: nuc0
+
+secret:
+  # Created by hand, see docs/runbooks/docs-site-first-run.md. Fine-grained
+  # token, Contents: read and Metadata: read only.
+  name: github-docs-ro
+  key: token
+
+traefik:
+  apiVersion: traefik.containo.us/v1alpha1
+  host: docs.kub.local
+  entryPoints:
+    - websecure
+  tls:
+    # No secretName and no certResolver: the cluster's default certificate
+    # (`kube-system/local-cert`, set by the TLSStore) serves this route, and
+    # `internal-tls` is the kube-system TLSOption every internal app uses.
+    options: internal-tls
+    optionsNamespace: kube-system
+  redirectToHttps: true
+  middlewares:
+    - namespace: kube-system
+      name: lan-only
+  service: docs-site
+  port: 8080

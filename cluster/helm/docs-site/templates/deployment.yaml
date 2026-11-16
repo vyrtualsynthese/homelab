@@ -1,0 +1,94 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "docs-site.fullname" . }}
+  labels:
+    {{- include "docs-site.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate # one writer of the claim, and no second pod on the same RWO volume
+  selector:
+    matchLabels:
+      {{- include "docs-site.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "docs-site.selectorLabels" . | nindent 8 }}
+    spec:
+      nodeSelector:
+        kubernetes.io/hostname: {{ .Values.node }}
+      initContainers:
+        # The CronJob may not have run yet, and the readiness probe would then
+        # fail on a document root that does not exist. Create it, and leave a
+        # placeholder only when there is no index page at all.
+        #
+        # It runs as root because the claim is created by the root builder (a
+        # `local-path` volume is root-owned and nothing chowns it); the nginx
+        # container below is the one that must never be root.
+        - name: prepare-site
+          image: {{ .Values.server.image }}
+          imagePullPolicy: IfNotPresent
+          command:
+            - sh
+            - -c
+            - |
+              mkdir -p /data/site
+              if [ ! -e /data/site/index.html ]; then
+                printf '%s\n' '<!doctype html><title>Documentation</title><p>The first build has not run yet.' > /data/site/index.html
+              fi
+          volumeMounts:
+            - name: site
+              mountPath: /data
+          securityContext:
+            runAsUser: 0
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+      containers:
+        - name: nginx
+          image: {{ .Values.server.image }}
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+          volumeMounts:
+            - name: site
+              mountPath: /data
+              readOnly: true
+            - name: nginx-conf
+              mountPath: /etc/nginx/conf.d
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          resources:
+            {{- toYaml .Values.server.resources | nindent 12 }}
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 101 # nginx user in the unprivileged image
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+      volumes:
+        - name: site
+          persistentVolumeClaim:
+            claimName: {{ include "docs-site.fullname" . }}-site
+        - name: nginx-conf
+          configMap:
+            name: {{ include "docs-site.fullname" . }}-nginx
+        - name: tmp
+          emptyDir: {}
