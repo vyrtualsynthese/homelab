@@ -100,6 +100,21 @@ class ThrottleTests(unittest.TestCase):
         self.assertTrue(relay.should_comment(300.0, 1000.0, 600))
 
 
+class ResolveBypassTests(unittest.TestCase):
+    def test_a_resolve_is_never_throttled(self):
+        """An incident ending right after a repeat must leave a trace."""
+        board = FakeBoard(card={"id": 7}, last=1500.0)
+        now = datetime.fromtimestamp(1600.0, tz=timezone.utc)
+        self.assertEqual(relay.handle(payload(status="resolved"), board, 600, now=now),
+                         "resolved on #7")
+        self.assertEqual([c[0] for c in board.calls], ["comment"])
+
+    def test_a_repeat_is_still_throttled(self):
+        board = FakeBoard(card={"id": 7}, last=1500.0)
+        now = datetime.fromtimestamp(1600.0, tz=timezone.utc)
+        self.assertEqual(relay.handle(payload(), board, 600, now=now), "throttled on #7")
+
+
 class ParseTests(unittest.TestCase):
     def test_non_json_is_refused_with_a_reason(self):
         with self.assertRaises(ValueError) as caught:
