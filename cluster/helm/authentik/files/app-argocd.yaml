@@ -30,7 +30,12 @@ entries:
       redirect_uris:
         - matching_mode: strict
           redirect_uri_type: authorization
-          url: http://argocd.kub.local/api/dex/callback
+          # Must match the server's `url` setting scheme and host exactly; Argo CD
+          # answers "Invalid redirect URL" on a scheme mismatch, and authentik
+          # refuses a redirect URI it does not list. Argo CD reads this hostname
+          # over TLS, so the entry is https even though Dex is reached through
+          # Traefik, which terminates it.
+          url: https://argocd.kub.local/api/dex/callback
       property_mappings:
         - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-openid]]
         - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-email]]
@@ -44,7 +49,7 @@ entries:
       name: Argo CD
       slug: argocd
       provider: !KeyOf argocd-provider
-      meta_launch_url: http://argocd.kub.local/
+      meta_launch_url: https://argocd.kub.local/
       # Official logo, served from the dashboard-icons set. The browser
       # loads it, so the grid needs internet; swap to `fa://fa-<name>`
       # if it ever has to work offline.
