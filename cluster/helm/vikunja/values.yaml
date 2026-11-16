@@ -129,9 +129,11 @@ ingressRoute:
   service: vikunja
   port: 3456
   apiPathPrefix: /api
+  # No forward-auth on the UI any more: the board authenticates with OIDC, so the
+  # gate would be a second redirect and a second identity. `lan-only` stays as the
+  # network floor, and `/api` was always outside the gate so tokens keep working.
   uiMiddlewares:
     - {name: lan-only, namespace: kube-system}
-    - {name: authentik-forwardauth, namespace: kube-system}
   apiMiddlewares:
     - {name: lan-only, namespace: kube-system}
   tls:
