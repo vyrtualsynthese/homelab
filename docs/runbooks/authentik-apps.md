@@ -12,7 +12,7 @@ browser that passes it arrives as the same identity.
 | Kavita | OIDC | OIDC, settings in its database | configured |
 | Calibre-Web Automated | OIDC | OIDC inside the app | configured |
 | autobrr | OIDC | OIDC inside the app | configured |
-| **Vikunja** | OIDC | `authentik-forwardauth` today | **to migrate** — see below |
+| **Vikunja** | OIDC | OIDC configured; the gate is still in front | **step 3 of the migration** — see below |
 | FileBrowser | proxy only | proxy auth, forward-auth middleware | not configured |
 | Sonarr, Radarr, Lidarr, Prowlarr, Bazarr, Bazarr-anime | none | `authentik-forwardauth` | configured |
 | Tautulli | none | `authentik-forwardauth` | configured |
@@ -36,10 +36,24 @@ every card an agent writes need labels or bots to be told apart.
 
 The migration is four steps, in this order, and the order is the safety:
 
-1. Create an **OAuth2 provider** in authentik (not the existing proxy one), confidential client,
-   redirect `https://vikunja.kub.local/auth/openid/authentik`, scopes `openid profile email`.
-2. Put the client secret in a Secret, set `auth.openid` in the chart, and **keep local login enabled**
-   as break-glass — with its password in the password manager.
+1. **Done 2026-11-16.** OAuth2 provider `vikunja-oidc` (pk 62, client id
+   `eqfj9awPPBaZSDan6HikbXBYSJgh1nok8ahhVKG4`) and application `vikunja-oidc`, whose slug is what
+   makes the discovery document exist:
+   `https://authentik.kub.home.ashudev.com/application/o/vikunja-oidc/.well-known/openid-configuration`.
+   The provider is cloned from `autobrr-oidc`: `sub_mode: hashed_user_id`, claims in the ID token,
+   strict redirect to `https://vikunja.kub.local/auth/openid/authentik`.
+2. **Done 2026-11-16, except the Secret.** `cluster/helm/vikunja/values.yaml` carries the OIDC env
+   block; the client secret is read from Secret `vikunja-oidc`, key `CLIENTSECRET`, which the operator
+   creates:
+
+   ```bash
+   read -rsp "vikunja-oidc client secret: " S; echo
+   kubectl -n vikunja create secret generic vikunja-oidc \
+     --from-literal=CLIENTSECRET="$S" --dry-run=client -o yaml | kubectl apply -f -
+   unset S
+   ```
+
+   Local login stays enabled on purpose: it is the break-glass path if OIDC is ever misconfigured.
 3. Sign in through OIDC and prove a ticket is stamped with the real account.
 4. Only then remove `authentik-forwardauth` from the route, keeping `lan-only`. Never the reverse:
    removing the gate before the app authenticates itself is a lockout.

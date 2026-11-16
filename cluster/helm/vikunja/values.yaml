@@ -28,6 +28,20 @@ vikunja:
         secretKeyRef:
           name: vikunja-db
           key: VIKUNJA_DATABASE_PASSWORD
+      # OIDC, so the board knows who is writing. forward-auth hands every browser
+      # the same identity, which is why attribution needed bots before this.
+      # The client secret is the only part that is not public: it comes from a
+      # Secret the operator creates (docs/runbooks/authentik-apps.md).
+      VIKUNJA_AUTH_OPENID_ENABLED: "true"
+      VIKUNJA_AUTH_OPENID_REDIRECTURL: "https://vikunja.kub.local/auth/openid/"
+      VIKUNJA_AUTH_OPENID_PROVIDERS_AUTHENTIK_NAME: "authentik"
+      VIKUNJA_AUTH_OPENID_PROVIDERS_AUTHENTIK_CLIENTID: "eqfj9awPPBaZSDan6HikbXBYSJgh1nok8ahhVKG4"
+      VIKUNJA_AUTH_OPENID_PROVIDERS_AUTHENTIK_AUTHURL: "https://authentik.kub.home.ashudev.com/application/o/vikunja-oidc/"
+      VIKUNJA_AUTH_OPENID_PROVIDERS_AUTHENTIK_SCOPES: "openid profile email"
+      VIKUNJA_AUTH_OPENID_PROVIDERS_AUTHENTIK_CLIENTSECRET:
+        secretKeyRef:
+          name: vikunja-oidc
+          key: CLIENTSECRET
 
     controller:
       strategy: Recreate
