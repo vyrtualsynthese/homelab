@@ -7,8 +7,10 @@ image:
 replicaCount: 1
 
 # Where the board lives, inside the cluster, and which project the cards go to.
+# Vikunja listens on 3456 — its Service publishes that port. A URL without it
+# reaches nothing and hangs until the socket timeout.
 vikunja:
-  base: http://vikunja.vikunja.svc.cluster.local
+  base: http://vikunja.vikunja.svc.cluster.local:3456
   project: 9
   # Name of the Secret holding bot-alertmanager's token, created by hand.
   secretName: alert-relay

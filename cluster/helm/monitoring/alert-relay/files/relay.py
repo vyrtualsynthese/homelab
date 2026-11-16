@@ -28,9 +28,13 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
-from http.server import BaseHTTPRequestHandler, HTTPServer
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 BOARD_NOTE = "Opened by the alert relay from Grafana. `bot-alertmanager` wrote it."
+
+# Vikunja listens on 3456. A base without that port reaches nothing and hangs
+# until the socket timeout, which is how the first deployment failed.
+DEFAULT_BASE = "http://vikunja.vikunja.svc.cluster.local:3456"
 
 
 # ---------------------------------------------------------------------------
@@ -153,7 +157,7 @@ class Board:
         request = urllib.request.Request(self.base + path, data=data, method=method)
         request.add_header("Authorization", f"Bearer {self.token}")
         request.add_header("Content-Type", "application/json")
-        with urllib.request.urlopen(request, timeout=15) as answer:
+        with urllib.request.urlopen(request, timeout=5) as answer:
             raw = answer.read()
         return json.loads(raw) if raw else None
 
@@ -211,8 +215,13 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):  # noqa: N802 — the name is the HTTP method
         if self.path == "/healthz":
             self.send_response(200)
+            self.send_header("Content-Length", "2")
             self.end_headers()
-            self.wfile.write(b"ok")
+            try:
+                self.wfile.write(b"ok")
+            except BrokenPipeError:
+                # A probe that gave up early is not worth a traceback in the log.
+                pass
             return
         self.send_response(404)
         self.end_headers()
@@ -247,14 +256,17 @@ class Handler(BaseHTTPRequestHandler):
 
 def main() -> int:
     board = Board(
-        base=os.environ.get("VIKUNJA_BASE", "http://vikunja.vikunja.svc.cluster.local"),
+        base=os.environ.get("VIKUNJA_BASE", DEFAULT_BASE),
         token=os.environ["VIKUNJA_TOKEN"],
         project=int(os.environ.get("ALERTS_PROJECT", "9")),
     )
     Handler.board = board
     Handler.cooldown = float(os.environ.get("COMMENT_COOLDOWN_SECONDS", "600"))
     port = int(os.environ.get("PORT", "8080"))
-    HTTPServer(("", port), Handler).serve_forever()
+    # Threaded on purpose: one slow board call must not stall the probes. A wrong
+    # port once made every request hang for fifteen seconds and the health checks
+    # timed out behind it.
+    ThreadingHTTPServer(("", port), Handler).serve_forever()
     return 0
 
 
