@@ -180,6 +180,14 @@ class Board:
         return self.call("PUT", f"/api/v1/projects/{self.project}/tasks",
                          {"title": title, "description": description})
 
+    def label(self, task: int, name: str) -> None:
+        """Every ticket carries a kind; an unlabelled card fails the board's check."""
+        labels = self.call("GET", "/api/v1/labels") or []
+        found = next((l["id"] for l in labels if l.get("title") == name), None)
+        if found is None:
+            raise RuntimeError(f"label {name!r} does not exist on the board")
+        self.call("PUT", f"/api/v1/tasks/{task}/labels", {"label_id": found})
+
     def comment(self, task: int, text: str) -> None:
         self.call("PUT", f"/api/v1/tasks/{task}/comments", {"comment": text})
 
@@ -208,6 +216,8 @@ def handle(payload: dict, board: Board, cooldown: float, now: datetime | None = 
     card = board.find_open_card(key)
     if card is None:
         created = board.open_card(render_title(payload), render_body(payload, key))
+        for name in ("task", "alert"):
+            board.label(created["id"], name)
         return f"opened #{created.get('id')}"
 
     resolved = (payload.get("status") or "").lower() == "resolved"

@@ -140,6 +140,9 @@ class FakeBoard:
     def comment(self, task, text):
         self.calls.append(("comment", task, text))
 
+    def label(self, task, name):
+        self.calls.append(("label", task, name))
+
     def last_comment_epoch(self, task):
         return self.last
 
@@ -154,6 +157,13 @@ class HandleTests(unittest.TestCase):
         board = FakeBoard()
         self.assertEqual(relay.handle(payload(), board, 600), "opened #42")
         self.assertEqual(board.calls[0][0], "open")
+
+    def test_a_new_card_carries_its_labels(self):
+        """An unlabelled card fails the board's own check: every ticket needs a kind."""
+        board = FakeBoard()
+        relay.handle(payload(), board, 600)
+        labels = [c[2] for c in board.calls if c[0] == "label"]
+        self.assertEqual(labels, ["task", "alert"])
 
     def test_a_repeat_comments_instead_of_opening(self):
         board = FakeBoard(card={"id": 7}, last=1000.0)

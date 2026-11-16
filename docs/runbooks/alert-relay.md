@@ -18,7 +18,7 @@ closes it.
 | Grafana sends | The relay does |
 |---|---|
 | `firing`, severity not `critical` | logs `ignored: not critical`, writes nothing |
-| `firing`, no open card for this incident | creates one card: the rule and where, with labels, annotations, the Grafana link and a `Next step:` |
+| `firing`, no open card for this incident | creates one card: the rule and where, with labels, annotations, the Grafana link and a `Next step:`. The card is labelled `task` and `alert` as it is created, because an unlabelled card fails the board's own `--verify` |
 | `firing`, a card is already open | comments `Fired again …`, at most once per `commentCooldownSeconds` |
 | `resolved` | comments `Resolved …`, and **never moves or closes the card** |
 | a body that is not JSON, or has no alerts | answers 400 and logs why — it is never dropped in silence |
