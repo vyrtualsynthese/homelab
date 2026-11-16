@@ -125,10 +125,6 @@ script reads **all seven** boards before writing them: `bucket_id in 14, 86, 88,
 the validation queue, and the same shape for the doing queue. Naming one board's ids would make the
 operator's queue skip the other six without saying so.
 
-Each board's description carries the same `Definition of Ready` and `Definition of Done`, plus one
-line the repository adds for itself — for `homelab`, that `helm template` renders the touched charts
-and `hack/check-exposure.sh` passes.
-
 The view write carries **five fields**: title, position, column mode, default column and done column.
 The endpoint replaces the record rather than patching it, so a body missing `view_kind` turns the board
 into a list view with columns nobody can drag. That happened once, on 2026-11-16; the script now sends
