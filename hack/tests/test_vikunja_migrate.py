@@ -38,7 +38,8 @@ class DescriptionTests(unittest.TestCase):
 
     def test_commit_stands_in_when_there_is_no_pull_request(self):
         got = m.render_description("docs/x.md", "none", "none", "", commit="0c83219c")
-        self.assertTrue(got.endswith("pr: none\ncommit: 0c83219c"))
+        self.assertTrue(got.endswith(
+            "pr: none\ncommit: https://github.com/vyrtualsynthese/homelab/commit/0c83219c"))
 
 
 class ValidateTests(unittest.TestCase):
@@ -88,8 +89,30 @@ class PlanTests(unittest.TestCase):
     def test_a_matching_board_produces_no_actions(self):
         state = {"features": {"A": 9},
                  "tasks": {1: {"title": "T", "bucket": "Backlog", "labels": ["task"],
-                               "parent": 9, "description": None}}}
+                               "parent": 9, "description": None}},
+                 "labels_by_id": {9: ["feature"]}}
         self.assertEqual(m.plan_actions(self._map(), state, description_ok=True), [])
+
+    def test_a_feature_card_without_its_label_is_relabelled_not_recreated(self):
+        state = {"features": {"A": 9}, "labels_by_id": {9: []},
+                 "tasks": {1: {"title": "T", "bucket": "Backlog", "labels": ["task"],
+                               "parent": 9}}}
+        ops = m.plan_actions(self._map(), state, description_ok=True)
+        self.assertEqual([o["op"] for o in ops], ["ensure_label"])
+
+    def test_a_card_with_extra_labels_is_not_relabelled_again(self):
+        state = {"features": {"A": 9}, "labels_by_id": {9: ["feature"]},
+                 "tasks": {1: {"title": "T", "bucket": "Backlog",
+                               "labels": ["task", "agent", "implementer"], "parent": 9}}}
+        self.assertEqual(m.plan_actions(self._map(), state, description_ok=True), [])
+
+    def test_a_title_that_still_carries_its_plan_prefix_is_stripped(self):
+        doc = self._map()
+        doc["tasks"][0]["title"] = "a: T"
+        state = {"features": {"A": 9}, "labels_by_id": {9: ["feature"]},
+                 "tasks": {1: {"title": "T", "bucket": "Backlog", "labels": ["task"],
+                               "parent": 9}}}
+        self.assertEqual(m.plan_actions(doc, state, description_ok=True), [])
 
     def test_a_missing_feature_is_created_and_a_missing_ticket_is_reported(self):
         state = {"features": {}, "tasks": {}}

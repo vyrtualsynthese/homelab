@@ -57,7 +57,7 @@ def render_description(docs: str, branch: str, pr: str, body: str,
         f"pr: {pr or 'none'}",
     ]
     if commit and commit != "none":
-        lines.append(f"commit: {commit}")
+        lines.append(f"commit: https://github.com/{REPO}/commit/{commit}")
     block = "\n".join(lines)
     if body:
         return f"{block}\n\n{body}"
@@ -97,8 +97,16 @@ def plan_actions(map_doc: dict[str, Any], state: dict[str, Any],
     known_features: dict[str, int] = state.get("features", {})
     known_tasks: dict[int, dict[str, Any]] = state.get("tasks", {})
 
+    labels_by_id = state.get("labels_by_id", {})
+    placed: list[tuple[float, int]] = []
     for feature in map_doc.get("features", []):
         if feature["title"] in known_features:
+            feature_id = known_features[feature["title"]]
+            if "feature" not in (labels_by_id.get(feature_id) or []):
+                actions.append({"op": "ensure_label", "id": feature_id, "label": "feature"})
+            position = state.get("positions", {}).get(feature_id)
+            if position is not None:
+                placed.append((position, feature_id))
             continue
         actions.append({"op": "create_feature", "key": feature["key"],
                         "title": feature["title"], "position": feature.get("position", 0),
@@ -110,12 +118,12 @@ def plan_actions(map_doc: dict[str, Any], state: dict[str, Any],
         if current is None:
             actions.append({"op": "missing_task", "id": task["id"], "title": task.get("title")})
             continue
-        wanted = {
-            "title": task.get("title"),
-            "bucket": task.get("column"),
-            "labels": [task.get("kind", "task")],
-        }
+        kind = task.get("kind", "task")
+        wanted = {"title": clean_title(task.get("title") or "", task.get("feature") or ""),
+                  "bucket": task.get("column")}
         changes = {k: v for k, v in wanted.items() if v is not None and current.get(k) != v}
+        if kind not in (current.get("labels") or []):
+            changes["labels"] = [kind]
         wanted_description = render_description(
             task.get("docs", "none"), task.get("branch", "none"),
             task.get("pr", "none"), task.get("body", ""), task.get("commit", "none"))
@@ -123,6 +131,15 @@ def plan_actions(map_doc: dict[str, Any], state: dict[str, Any],
             changes["description"] = wanted_description
         if changes:
             actions.append({"op": "update_task", "id": task["id"], "changes": changes})
+
+    # Reading order is a sequence, not a number: the server recalculates positions
+    # whenever it likes, so the board is reordered only when the observed sequence
+    # differs from the map's. Values are spaced 1000 apart for the same reason.
+    wanted_order = [known_features[f["title"]] for f in map_doc.get("features", [])
+                    if f["title"] in known_features]
+    observed_order = [feature_id for _position, feature_id in sorted(placed)]
+    if observed_order and observed_order != wanted_order:
+        actions.append({"op": "reorder", "order": wanted_order})
 
     existing_titles = {t.get("title") for t in known_tasks.values()}
     for entry in map_doc.get("backfill", []):
@@ -164,7 +181,8 @@ class Board:
             return raw.decode()
 
 
-def read_state(board: Board, project: int, view: int) -> dict[str, Any]:
+def read_state(board: Board, project: int, view: int,
+               self_features: tuple[dict[str, Any], ...] = ()) -> dict[str, Any]:
     """The board as the map compares itself against."""
     labels = {l["title"]: l["id"] for l in board.call("GET", "/api/v1/labels")}
     tasks = []
@@ -182,6 +200,7 @@ def read_state(board: Board, project: int, view: int) -> dict[str, Any]:
     # The v2 buckets/tasks read stops at 100 cards per column, and the flat task
     # list reports bucket_id 0, so each column is asked for by filter instead.
     bucket_of: dict[int, str] = {}
+    position_of: dict[int, float] = {}
     for bucket_id, title in buckets.items():
         page = 1
         while True:
@@ -191,6 +210,7 @@ def read_state(board: Board, project: int, view: int) -> dict[str, Any]:
             found = found if isinstance(found, list) else []
             for task in found:
                 bucket_of[task["id"]] = title
+                position_of[task["id"]] = task.get("position", 0)
             if len(found) < 100:
                 break
             page += 1
@@ -205,9 +225,14 @@ def read_state(board: Board, project: int, view: int) -> dict[str, Any]:
             "labels": titles,
             "description": task.get("description"),
         }
-        if "feature" in titles:
+        # A feature is known by its title, not by its label: a run that died
+        # between creating the card and labelling it must not create it again.
+        if "feature" in titles or task["title"] in {
+                f["title"] for f in self_features}:
             features[task["title"]] = task["id"]
-    return {"features": features, "tasks": known, "labels": labels}
+    return {"features": features, "tasks": known, "labels": labels,
+            "positions": position_of,
+            "labels_by_id": {task_id: card["labels"] for task_id, card in known.items()}}
 
 
 def relate(board: Board, child: int, parent: int) -> None:
@@ -237,7 +262,19 @@ def apply_actions(board: Board, map_doc: dict[str, Any], state: dict[str, Any],
         board.call("PUT", f"/api/v1/tasks/{task}/labels", {"label_id": labels[kind]})
 
     for action in actions:
-        if action["op"] == "create_feature":
+        if action["op"] == "reorder":
+            print(f"reorder         {len(action['order'])} feature cards into the map's reading order")
+            done += 1
+            if not dry_run:
+                for index, feature_id in enumerate(action["order"]):
+                    board.call("PUT", f"/api/v2/tasks/{feature_id}/position",
+                               {"project_view_id": view, "position": 1000 * (index + 1)})
+        elif action["op"] == "ensure_label":
+            print(f"label task      #{action['id']}  {action['label']}")
+            done += 1
+            if not dry_run:
+                label(action["id"], action["label"])
+        elif action["op"] == "create_feature":
             print(f"create feature  {action['title']}")
             done += 1
             if dry_run:
@@ -247,6 +284,9 @@ def apply_actions(board: Board, map_doc: dict[str, Any], state: dict[str, Any],
                                "description": action["description"]})
             feature_ids[action["title"]] = made["id"]
             label(made["id"], "feature")
+            if action.get("position"):
+                board.call("PUT", f"/api/v2/tasks/{made['id']}/position",
+                           {"project_view_id": view, "position": action["position"]})
         elif action["op"] == "update_task":
             changes = action["changes"]
             print(f"update task     #{action['id']}  {sorted(changes)}")
@@ -325,7 +365,7 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     board = Board(args.base_url, token)
-    state = read_state(board, args.project, args.view)
+    state = read_state(board, args.project, args.view, tuple(map_doc.get("features", [])))
     actions = plan_actions(map_doc, state, description_ok=args.description_ok)
     counts: dict[str, int] = {}
     for action in actions:
