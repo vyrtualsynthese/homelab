@@ -108,6 +108,15 @@ time. Examples:
     `tls.certResolver: myresolver` plus a per-app `TLSOption` copied from an existing chart.
   - Public: `ashuvidz.com`, `forum.ashuvidz.com`, `wiki.ashuvidz.com`.
   - Cross-namespace middleware refs use `kube-system-<name>@kubernetescrd`.
+- **SSO: native first.** When an application supports OIDC (or SAML, or any session-based SSO) itself,
+  use that, not `authentik-forwardauth`. The middleware cannot carry an identity into the app — every
+  browser that passes the gate is the same user — so it is the fallback for applications that only
+  know a local login. The order is: native OIDC, then proxy auth where the app is built for it
+  (FileBrowser), then `authentik-forwardauth`, then `lan-only` alone with the reason written down.
+  - `kube-system-authentik` is **headers**, not authentication. Naming an app's route with it gates
+    nothing; the middleware that authenticates is `kube-system-authentik-forwardauth`.
+  - A route that keeps `lan-only` and no gate must say why in the chart, next to the middleware list,
+    the way `qbittorrent` and `autobrr` do.
 - **Every non-public route carries `kube-system-lan-only@kubernetescrd`.** The router forwards 80/443 to
   the cluster and Traefik routes on the `Host` header alone, so an ungated route answers the internet
   whether or not its hostname resolves publicly. The public list is `plex`, `seerr`, `ashuvidz.com`,

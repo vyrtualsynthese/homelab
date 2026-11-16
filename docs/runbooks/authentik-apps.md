@@ -1,18 +1,48 @@
 # Wire an application to authentik
 
-State, as of 2026-11-16:
+State, as of 2026-11-16. **Native SSO wins over the middleware**: an application that speaks OIDC is
+configured to speak it, because the forward-auth gate cannot tell the app who the person is — every
+browser that passes it arrives as the same identity.
 
-| Application | authentik objects in git | Application configured | How |
+| Application | Native SSO? | Mechanism | State |
 |---|---|---|---|
-| Grafana | yes | **yes** | Secret + chart values |
-| pgAdmin | yes | **yes** | `config_local.py` in a Secret |
-| Argo CD | yes | **yes** | `cluster/helm/argocd/values.yaml` + `helm upgrade` |
-| Kavita | yes | **yes** | `POST /api/settings`, stored in its database |
-| FileBrowser | yes | no | proxy auth, forward-auth middleware |
+| Grafana | OIDC | OIDC inside the app | configured |
+| pgAdmin | OIDC | OIDC, `config_local.py` in a Secret | configured |
+| Argo CD | OIDC | OIDC in chart values | configured |
+| Kavita | OIDC | OIDC, settings in its database | configured |
+| Calibre-Web Automated | OIDC | OIDC inside the app | configured |
+| autobrr | OIDC | OIDC inside the app | configured |
+| **Vikunja** | OIDC | `authentik-forwardauth` today | **to migrate** — see below |
+| FileBrowser | proxy only | proxy auth, forward-auth middleware | not configured |
+| Sonarr, Radarr, Lidarr, Prowlarr, Bazarr, Bazarr-anime | none | `authentik-forwardauth` | configured |
+| Tautulli | none | `authentik-forwardauth` | configured |
+| Maintainerr | to verify | `authentik-forwardauth` | verify before the next touch |
+| qBittorrent | none | `lan-only`, own login | by decision, in its values |
+| dashy | none | `lan-only` | **fix** — it names `kube-system-authentik`, which is headers, not a gate |
 
-Four applications have providers and application objects in the chart (`files/app-*.yaml`); Grafana,
-pgAdmin, Kavita and Argo CD are configured on the application side. FileBrowser is the one still
-waiting.
+Two traps this table exists to prevent:
+
+- **`kube-system-authentik` is not authentication.** It is a headers middleware. The gate is
+  `kube-system-authentik-forwardauth`, and a route carrying only the former is protected by `lan-only`
+  and nothing else.
+- **A missing gate must say why.** A chart that keeps `lan-only` alone carries the reason next to its
+  middleware list, as `qbittorrent` and `autobrr` do.
+
+### Migrating Vikunja to OIDC
+
+It is the only application here that supports OIDC and does not use it, and the board is where the
+loss is visible: forward-auth hands Vikunja one shared identity, so every card the operator writes and
+every card an agent writes need labels or bots to be told apart.
+
+The migration is four steps, in this order, and the order is the safety:
+
+1. Create an **OAuth2 provider** in authentik (not the existing proxy one), confidential client,
+   redirect `https://vikunja.kub.local/auth/openid/authentik`, scopes `openid profile email`.
+2. Put the client secret in a Secret, set `auth.openid` in the chart, and **keep local login enabled**
+   as break-glass — with its password in the password manager.
+3. Sign in through OIDC and prove a ticket is stamped with the real account.
+4. Only then remove `authentik-forwardauth` from the route, keeping `lan-only`. Never the reverse:
+   removing the gate before the app authenticates itself is a lockout.
 
 Client IDs are fixed and public: `argocd`, `grafana`, `pgadmin`, `kavita`.
 
