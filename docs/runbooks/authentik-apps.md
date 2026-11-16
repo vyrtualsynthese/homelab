@@ -12,7 +12,7 @@ browser that passes it arrives as the same identity.
 | Kavita | OIDC | OIDC, settings in its database | configured |
 | Calibre-Web Automated | OIDC | OIDC inside the app | configured |
 | autobrr | OIDC | OIDC inside the app | configured |
-| **Vikunja** | OIDC | OIDC configured; the gate is still in front | **step 3 of the migration** — see below |
+| **Vikunja** | OIDC | OIDC inside the app | done 2026-11-16 — gate removed, subject linked to the original account |
 | FileBrowser | proxy only | proxy auth, forward-auth middleware | not configured |
 | Sonarr, Radarr, Lidarr, Prowlarr, Bazarr, Bazarr-anime | none | `authentik-forwardauth` | configured |
 | Tautulli | none | `authentik-forwardauth` | configured |
@@ -66,8 +66,17 @@ The migration is four steps, in this order, and the order is the safety:
 
    Local login stays enabled on purpose: it is the break-glass path if OIDC is ever misconfigured.
 3. Sign in through OIDC and prove a ticket is stamped with the real account.
-4. Only then remove `authentik-forwardauth` from the route, keeping `lan-only`. Never the reverse:
-   removing the gate before the app authenticates itself is a lockout.
+4. **Done 2026-11-16.** `authentik-forwardauth` is gone from `uiMiddlewares`; `lan-only` stays, and
+   `/api` was outside the gate all along, so bot tokens and the MCP keep working.
+
+   The account is linked by `issuer` + `subject` in the `users` table, which is what the "link from
+   account settings" button would have written. Two consequences worth remembering:
+
+   - **Password login is refused** once `issuer != 'local'` (`ErrAccountIsNotLocal`). The break-glass
+     is `UPDATE users SET issuer='local', subject=NULL WHERE username='ashuv';` plus a password reset,
+     or any API token, which are local users and unaffected.
+   - **A failed OIDC login creates a second account** with the same subject, and then two rows match
+     one subject. Retire the newer one by clearing its subject and renaming it; never leave two.
 
 Client IDs are fixed and public: `argocd`, `grafana`, `pgadmin`, `kavita`.
 
