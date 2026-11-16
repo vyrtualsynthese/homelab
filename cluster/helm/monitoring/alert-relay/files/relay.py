@@ -132,6 +132,16 @@ def should_comment(last_comment_epoch: float | None, now_epoch: float, cooldown:
     return (now_epoch - last_comment_epoch) >= cooldown
 
 
+def find_query(key: str) -> str:
+    """The search that finds an open card for this incident.
+
+    Vikunja's filter language quotes values with single quotes; double quotes make
+    the API answer 400, which is how this cost a round. A quote inside the key is
+    dropped rather than escaped, because the language has no escape.
+    """
+    return f"description like '{key.replace(chr(39), '')}' && done = false"
+
+
 def parse_payload(raw: bytes) -> dict:
     """Grafana's body, or a clean refusal — never a silent drop."""
     try:
@@ -162,7 +172,7 @@ class Board:
         return json.loads(raw) if raw else None
 
     def find_open_card(self, key: str) -> dict | None:
-        query = urllib.parse.quote(f'description like "{key}" && done = false')
+        query = urllib.parse.quote(find_query(key), safe="")
         found = self.call("GET", f"/api/v1/projects/{self.project}/tasks?per_page=20&filter={query}")
         return found[0] if found else None
 
