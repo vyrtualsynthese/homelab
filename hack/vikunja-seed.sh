@@ -1,24 +1,33 @@
 #!/usr/bin/env bash
-# Seed the repository boards on the task board (Vikunja), idempotently.
+# Shape the repository boards on the task board (Vikunja), idempotently.
 #
-# For every repository in REPOS below, this creates — only when it is missing:
-#   the project       PUT  /api/v1/projects
-#   one kanban view   PUT  /api/v1/projects/{project}/views
-#   four buckets      PUT  /api/v1/projects/{project}/views/{view}/buckets
-#   the done bucket   POST /api/v1/projects/{project}/views/{view}
+# For every repository in REPOS below — or for the one named by --repo:
+#   the project        PUT  /api/v1/projects          when it is missing
+#   its kanban view    POST /api/v1/projects/{project}/views/{view}
+#                      adopted, never created: renamed "Board" and wired in one
+#                      full record (position, bucket mode, default and done column)
+#   the six columns    PUT  /api/v1/projects/{project}/views/{view}/buckets
+#                      a missing one is created, an old one is renamed in place
+#   the labels         PUT  /api/v1/labels
 # and once for the whole board:
-#   the saved filter  PUT  /api/v1/filters
+#   two saved filters  PUT  /api/v1/filters
+#   the retired filter DELETE /api/v1/filters/{id}
+#
+# The columns are Idea, Shaping, Backlog, Doing, Validation, Done. The six live
+# repositories were built when that list was four long: "Ideas" becomes "Idea"
+# and "Revision" becomes "Validation" by rename, so the column ids — which the
+# saved filters store — survive. A column holding cards is never renamed; the
+# run stops and says which column and how many.
 #
 # Every object is matched by title, so a second run creates nothing and prints
-# "existing" for each line. Nothing is ever deleted. A bucket the script did not
-# create is printed as "kept" and left untouched, because a default column that
-# happens to be empty is indistinguishable from one holding work. A view whose
-# bucket mode is not "manual" — cards pinned to their column — is repaired on
-# the run that finds it and printed as "updated".
+# "existing" for each line. No view and no column is ever deleted. A column the
+# script does not name is printed as "kept" and left untouched, because a column
+# that happens to be empty is indistinguishable from one holding work.
 #
-#   hack/vikunja-seed.sh --dry-run   # read the board, print every call, write nothing
-#   hack/vikunja-seed.sh             # create what is missing
-#   hack/vikunja-seed.sh --verify    # read back and fail unless the boards are shaped right
+#   hack/vikunja-seed.sh --dry-run            # read the board, print every call, write nothing
+#   hack/vikunja-seed.sh --repo homelab       # shape one project, leave the other six alone
+#   hack/vikunja-seed.sh                      # create what is missing, everywhere
+#   hack/vikunja-seed.sh --verify             # read back and fail unless the boards are shaped right
 #
 # Environment:
 #   VIKUNJA_API_TOKEN  required. An operator API token, made in the board under
@@ -48,9 +57,18 @@ REPOS=(
   ashuvidz-creator
 )
 
+# The view Vikunja gives every project. The script adopts it and renames it; it
+# never creates a second kanban view, because two would hold two answers to
+# "where is this task".
 VIEW_TITLE="Board"
-BUCKETS=(Ideas Backlog Doing Revision Done)
+# A bucket renamed from an earlier shape is adopted in place, so its id — which
+# the saved filters store — survives. Only buckets holding no cards are renamed.
+BUCKET_RENAMES=("Ideas:Idea" "Revision:Validation")
+# Reading order. Positions are written explicitly so the order is the design's,
+# not whatever the UI last dragged.
+BUCKETS=(Idea Shaping Backlog Doing Validation Done)
 DONE_TITLE="Done"
+DEFAULT_BUCKET_TITLE="Backlog"
 BUCKET_MODE="manual"
 FILTER_TITLE="Awaiting my review"
 
@@ -59,9 +77,14 @@ VIKUNJA_URL="${VIKUNJA_URL%/}"
 VIKUNJA_API_TOKEN="${VIKUNJA_API_TOKEN:-}"
 VIKUNJA_CACERT="${VIKUNJA_CACERT:-}"
 API_PATH="/api/v1"
+# The bucketed-task view lives under v2 on this instance. The v1 bucket listing
+# always answers a count of 0, which would make every rename guard pass; this one
+# path is read from v2 for that reason and nothing else is.
+API_V2_PATH="/api/v2"
 
 DRY_RUN=0
 VERIFY=0
+REPO_SCOPE=""
 W_PLANNED=0
 C_CREATED=0
 C_EXISTING=0
@@ -73,7 +96,7 @@ trap 'rm -f "$BODY_FILE"' EXIT
 trap 'rc=$?; printf "vikunja-seed: internal error at line %s (exit %s): %s\n" "$LINENO" "$rc" "$BASH_COMMAND" >&2; exit "$rc"' ERR
 
 usage() {
-  sed -n '2,34p' "${BASH_SOURCE[0]}"
+  sed -n '2,/^set -euo pipefail$/{/^set -euo pipefail$/d;p}' "${BASH_SOURCE[0]}"
 }
 
 die() {
@@ -129,6 +152,35 @@ read_endpoint() {
   http GET "$1"
 }
 
+# Saved filters have no list endpoint on this API version: GET /filters answers
+# 405. They do appear in GET /projects as pseudo-projects with negative ids, so
+# that listing is where one is found — by title, and never by a positive id, so a
+# real project of the same name cannot be mistaken for a filter.
+list_saved_filters() {
+  read_endpoint /projects
+  API_BODY="$(jq -c '[.[] | select(.id < 0)]' <<<"$API_BODY")"
+}
+
+# One read against the v2 API, leaving API_PATH as it was.
+read_endpoint_v2() {
+  local saved="$API_PATH"
+  if [ "$DRY_RUN" = 1 ]; then
+    note "-> GET $API_V2_PATH$1"
+  fi
+  API_PATH="$API_V2_PATH"
+  http GET "$1"
+  API_PATH="$saved"
+}
+
+# How many cards each column holds, as "id<TAB>count" lines. The plain v1 bucket
+# listing reports 0 for every column, so a rename guard reading it would never
+# fire; this read is the one that tells the truth.
+bucket_counts() {
+  local project="$1" view="$2"
+  read_endpoint_v2 "/projects/$project/views/$view/buckets/tasks"
+  jq -r '.items[] | "\(.id)\t\(.count)"' <<<"$API_BODY"
+}
+
 # A write sends in a real run, and only prints in a dry run. API_BODY is left
 # empty after a planned write, so a caller must not read an id from it.
 write_or_plan() {
@@ -145,13 +197,36 @@ write_or_plan() {
 # ---------------------------------------------------------------------------
 # One repository.
 # ---------------------------------------------------------------------------
+# The position a column has in the reading order, 100 apart so a column added
+# later can be slotted between two without a rewrite.
+bucket_position() {
+  local want="$1" index=0 title=""
+  for title in "${BUCKETS[@]}"; do
+    index=$((index + 1))
+    if [ "$title" = "$want" ]; then
+      printf '%d\n' $((100 * index))
+      return 0
+    fi
+  done
+  return 1
+}
+
+# Every bucket write goes through here: the endpoint replaces the record, so a
+# body carrying only the title would clear the column's limit and its position.
+put_bucket() {
+  local project="$1" view="$2" id="$3" title="$4" position="$5" body=""
+  body="$(jq -cn --arg t "$title" --argjson p "$position" '{title: $t, position: $p, limit: 0}')"
+  write_or_plan POST "/projects/$project/views/$view/buckets/$id" "$body"
+}
+
 seed_project() {
   local repo="$1"
-  local project_id="" view_id="" done_id="" done_current="" kind="" body=""
-  local p_new=0 v_new=0
+  local project_id="" view_id="" done_id="" default_id="" body=""
+  local view_title_current="" view_position_current="" default_current=""
   local views_json="" view_json="" buckets_json="" known_json=""
-  local bid="" btitle="" title="" bucket_id=""
-  local mode_current="" need_done=0 need_mode=0
+  local bid="" btitle="" title="" bucket_id="" position="" current_position="" cards="" counts=""
+  local mode_current="" done_current="" pair old new renamed=0
+  local desired="" current=""
 
   printf '\n'
 
@@ -178,89 +253,112 @@ seed_project() {
     fi
   fi
 
-  # ---- the kanban view ---------------------------------------------------
-  if [ "$p_new" = 1 ]; then
-    views_json='[]'          # a project created a second ago has no views
-  else
-    read_endpoint "/projects/$project_id/views"
-    views_json="$API_BODY"
-  fi
-  view_json="$(jq -c --arg t "$VIEW_TITLE" '[.[] | select(.title == $t)][0] // empty' <<<"$views_json")"
-  if [ -n "$view_json" ] && [ "$view_json" != "null" ]; then
-    kind="$(jq -r '.view_kind // empty' <<<"$view_json")"
-    if [ "$kind" != "kanban" ]; then
-      die "project \"$repo\" already has a view titled \"$VIEW_TITLE\", but it is a \"${kind:-unknown}\" view. Rename or delete it in the board UI and re-run; this script will not convert an existing view."
-    fi
-    view_id="$(jq -r '.id // empty' <<<"$view_json")"
-    done_current="$(jq -r '.done_bucket_id // empty' <<<"$view_json")"
-    mode_current="$(jq -r '.bucket_configuration_mode // empty' <<<"$view_json")"
-    say view "$repo / $VIEW_TITLE" existing "id=$view_id"
-    C_EXISTING=$((C_EXISTING + 1))
-  else
-    v_new=1
-    # bucket_configuration_mode defaults to "none", which fixes each card to the
-    # bucket it was created in. "manual" is what lets a person drag a card from
-    # "Doing" to "Waiting for validation". The mode is sent again below when the
-    # view already exists, because a view made before this line existed carries
-    # the default, and a create body cannot repair it.
-    body="$(jq -cn --arg t "$VIEW_TITLE" --arg m "$BUCKET_MODE" \
-      '{title: $t, view_kind: "kanban", bucket_configuration_mode: $m}')"
-    write_or_plan PUT "/projects/$project_id/views" "$body"
-    if [ "$DRY_RUN" = 1 ]; then
-      view_id="<new view $VIEW_TITLE>"
-      say view "$repo / $VIEW_TITLE" would-create
-    else
-      view_id="$(jq -r '.id // empty' <<<"$API_BODY")"
-      if [ -z "$view_id" ]; then
-        die "the board accepted view \"$VIEW_TITLE\" in \"$repo\" but returned no id — body: $API_BODY"
-      fi
-      # What the create answered is the only reading of the mode available on
-      # this run; if the board leaves the field out, the mode is reported as
-      # unchecked rather than assumed.
-      mode_current="$(jq -r '.bucket_configuration_mode // empty' <<<"$API_BODY")"
-      say view "$repo / $VIEW_TITLE" created "id=$view_id"
-      C_CREATED=$((C_CREATED + 1))
-    fi
+  # A project created on a planned run has no id to read a view from, and a
+  # project created for real only carries the views Vikunja gives it. Shaping
+  # that board is the next run's job.
+  if ! [[ "$project_id" =~ ^[0-9]+$ ]]; then
+    note "project \"$repo\" would be created here; its board is shaped on the next run"
+    return 0
   fi
 
-  # ---- the buckets -------------------------------------------------------
-  # A view created a second ago may already carry default columns, so its
-  # buckets are read back on that same run and matched by title like any other.
-  # Skipping that read is how a default "Done" becomes a second "Done", and how
-  # a board the script has just built fails its own --verify.
-  if [ "$v_new" = 1 ] && [ "$DRY_RUN" = 1 ]; then
-    buckets_json='[]'        # the view does not exist yet, so there is nothing to read
+  # ---- the kanban view ---------------------------------------------------
+  # Adopted, never created: Vikunja gives every project a kanban view, and a
+  # second one would hold a second answer to "where is this task". The stock
+  # view is renamed and wired here; its settings are written in one full record
+  # after the columns exist, because two of them are column ids.
+  read_endpoint "/projects/$project_id/views"
+  views_json="$API_BODY"
+  view_json="$(jq -c '[.[] | select(.view_kind == "kanban")][0] // empty' <<<"$views_json")"
+  if [ -z "$view_json" ] || [ "$view_json" = "null" ]; then
+    die "project \"$repo\" has no kanban view. Vikunja gives every project one; add it in the board UI and re-run. This script never creates a view."
+  fi
+  view_id="$(jq -r '.id' <<<"$view_json")"
+  view_title_current="$(jq -r '.title // ""' <<<"$view_json")"
+  view_position_current="$(jq -r '.position // 0' <<<"$view_json")"
+  mode_current="$(jq -r '.bucket_configuration_mode // ""' <<<"$view_json")"
+  done_current="$(jq -r '.done_bucket_id // 0' <<<"$view_json")"
+  default_current="$(jq -r '.default_bucket_id // 0' <<<"$view_json")"
+  if [ "$view_title_current" = "$VIEW_TITLE" ]; then
+    say view "$repo / $VIEW_TITLE" existing "id=$view_id"
   else
-    read_endpoint "/projects/$project_id/views/$view_id/buckets"
-    buckets_json="$API_BODY"
+    say view "$repo / $view_title_current" adopted "id=$view_id -> $VIEW_TITLE"
   fi
-  if [ "$v_new" = 1 ]; then
-    done_current=""          # a view created a second ago has no done bucket yet
+  C_EXISTING=$((C_EXISTING + 1))
+  if [ "$(jq -r '[.[] | select(.view_kind == "kanban")] | length' <<<"$views_json")" != "1" ]; then
+    note "$repo carries more than one kanban view; this script drives the first and leaves the rest alone"
   fi
+
+  # ---- the columns -------------------------------------------------------
+  read_endpoint "/projects/$project_id/views/$view_id/buckets"
+  buckets_json="$API_BODY"
+
+  # A column from an earlier shape is renamed in place, so its id — which the
+  # saved filters store — survives the rename. A rename moves the column and not
+  # the cards, so a column holding any is refused rather than silently relabelled.
+  counts="$(bucket_counts "$project_id" "$view_id")"
+  for pair in "${BUCKET_RENAMES[@]}"; do
+    old="${pair%%:*}"; new="${pair##*:}"
+    if jq -e --arg t "$new" 'any(.[]; .title == $t)' >/dev/null <<<"$buckets_json"; then
+      continue
+    fi
+    bid="$(jq -r --arg t "$old" '[.[] | select(.title == $t)][0].id // empty' <<<"$buckets_json")"
+    if [ -z "$bid" ]; then
+      continue
+    fi
+    cards="$(awk -F'\t' -v id="$bid" '$1 == id {print $2; found=1} END {if (!found) print 0}' <<<"$counts")"
+    if [ "${cards:-0}" != "0" ]; then
+      die "bucket \"$old\" in \"$repo\" holds $cards cards; move them before renaming"
+    fi
+    position="$(bucket_position "$new")"
+    put_bucket "$project_id" "$view_id" "$bid" "$new" "$position"
+    if [ "$DRY_RUN" = 1 ]; then
+      say bucket "$repo / $VIEW_TITLE / $old" would-rename "id=$bid -> $new"
+    else
+      say bucket "$repo / $VIEW_TITLE / $old" renamed "id=$bid -> $new"
+      C_UPDATED=$((C_UPDATED + 1))
+    fi
+    buckets_json="$(jq -c --argjson id "$bid" --arg t "$new" --argjson p "$position" \
+      'map(if .id == $id then .title = $t | .position = $p else . end)' <<<"$buckets_json")"
+  done
 
   known_json="$(jq -cn --args '$ARGS.positional' "${BUCKETS[@]}")"
   for title in "${BUCKETS[@]}"; do
+    position="$(bucket_position "$title")"
     bucket_id="$(jq -r --arg t "$title" '[.[] | select(.title == $t)][0].id // empty' <<<"$buckets_json")"
+    current_position="$(jq -r --arg t "$title" '[.[] | select(.title == $t)][0].position // 0' <<<"$buckets_json")"
     if [ -n "$bucket_id" ]; then
-      say bucket "$repo / $VIEW_TITLE / $title" existing "id=$bucket_id"
-      C_EXISTING=$((C_EXISTING + 1))
+      if [ "$current_position" = "$position" ]; then
+        say bucket "$repo / $VIEW_TITLE / $title" existing "id=$bucket_id position=$position"
+        C_EXISTING=$((C_EXISTING + 1))
+      else
+        put_bucket "$project_id" "$view_id" "$bucket_id" "$title" "$position"
+        if [ "$DRY_RUN" = 1 ]; then
+          say bucket "$repo / $VIEW_TITLE / $title" would-position "$current_position -> $position"
+        else
+          say bucket "$repo / $VIEW_TITLE / $title" positioned "$current_position -> $position"
+          C_UPDATED=$((C_UPDATED + 1))
+        fi
+      fi
     else
-      body="$(jq -cn --arg t "$title" '{title: $t}')"
+      body="$(jq -cn --arg t "$title" --argjson p "$position" '{title: $t, position: $p}')"
       write_or_plan PUT "/projects/$project_id/views/$view_id/buckets" "$body"
       if [ "$DRY_RUN" = 1 ]; then
         bucket_id="<new bucket $title>"
-        say bucket "$repo / $VIEW_TITLE / $title" would-create
+        say bucket "$repo / $VIEW_TITLE / $title" would-create "position=$position"
       else
         bucket_id="$(jq -r '.id // empty' <<<"$API_BODY")"
         if [ -z "$bucket_id" ]; then
           die "the board accepted bucket \"$title\" in \"$repo\" but returned no id — body: $API_BODY"
         fi
-        say bucket "$repo / $VIEW_TITLE / $title" created "id=$bucket_id"
+        say bucket "$repo / $VIEW_TITLE / $title" created "id=$bucket_id position=$position"
         C_CREATED=$((C_CREATED + 1))
       fi
     fi
     if [ "$title" = "$DONE_TITLE" ]; then
       done_id="$bucket_id"
+    fi
+    if [ "$title" = "$DEFAULT_BUCKET_TITLE" ]; then
+      default_id="$bucket_id"
     fi
   done
 
@@ -274,70 +372,43 @@ seed_project() {
   done < <(jq -r --argjson known "$known_json" \
     '.[] | select(.title as $t | $known | index($t) | not) | "\(.id)\t\(.title)"' <<<"$buckets_json")
 
-  # ---- the done bucket and the bucket mode, in one write ------------------
-  # The done bucket is the one setting that makes the board honest: without it,
-  # a card in "Done" stays open as far as Vikunja and every filter are
-  # concerned. "manual" is what lets a person drag a card between columns; the
-  # default, "none", pins every card to the column it was created in. A view
-  # made by an earlier version of this script, or in the browser, carries
-  # "none", and a re-run has to repair it — the create body never reaches it
-  # again.
+  # ---- the view's settings, in one full record ----------------------------
+  # The endpoint replaces the view rather than patching it: every field left out
+  # of the body is zeroed. So the body always carries all five — title, reading
+  # position, bucket mode, default column and done column — and it is written
+  # only when at least one of them differs from the live view.
   #
-  # Both fields travel in ONE POST, and both travel EVERY time — not only when
-  # both need repair. This endpoint replaces the view rather than patching it,
-  # so a body carrying one field clears the other: a run that repaired only the
-  # done bucket would reset the mode to "none", and the next run would repair
-  # the mode while resetting the done bucket, for ever. Sending the current value
-  # of the field that needs nothing is what makes one repair safe.
-  if [ -n "$done_id" ] && [ "$done_current" != "$done_id" ]; then
-    need_done=1
-  fi
-  # A view this run creates already carries the mode when the create is only
-  # planned; on a real run the mode comes from the create's answer.
-  if [ "$v_new" = 1 ] && [ "$DRY_RUN" = 1 ]; then
-    :
-  elif [ -n "$mode_current" ] && [ "$mode_current" != "$BUCKET_MODE" ]; then
-    need_mode=1
-  fi
-
-  if [ "$need_done" = 1 ] || [ "$need_mode" = 1 ]; then
-    body='{}'
-    if [[ "$done_id" =~ ^[0-9]+$ ]]; then
-      body="$(jq -c --argjson id "$done_id" '. + {done_bucket_id: $id}' <<<"$body")"
-    else
-      body="$(jq -c --arg id "$done_id" '. + {done_bucket_id: $id}' <<<"$body")"
-    fi
-    body="$(jq -c --arg m "$BUCKET_MODE" '. + {bucket_configuration_mode: $m}' <<<"$body")"
-    write_or_plan POST "/projects/$project_id/views/$view_id" "$body"
-  fi
-
-  # Each line below names the field it is about; the write above is shared.
-  if [ "$need_done" = 1 ]; then
+  # The done column is what makes the board honest: without it, a card in "Done"
+  # stays open as far as Vikunja and every filter are concerned. "manual" is what
+  # lets a person drag a card between columns; the default, "none", pins every
+  # card to the column it was created in.
+  if ! [[ "$done_id" =~ ^[0-9]+$ ]] || ! [[ "$default_id" =~ ^[0-9]+$ ]]; then
     if [ "$DRY_RUN" = 1 ]; then
-      say done "$repo / $VIEW_TITLE" would-create "bucket $done_id ($DONE_TITLE)"
-    else
-      say done "$repo / $VIEW_TITLE" created "bucket $done_id ($DONE_TITLE)"
-      C_CREATED=$((C_CREATED + 1))
+      note "$repo: the done and default columns do not both exist yet; a real run wires them"
+      return 0
     fi
-  else
-    say done "$repo / $VIEW_TITLE" existing "bucket $done_id ($DONE_TITLE)"
-    C_EXISTING=$((C_EXISTING + 1))
+    die "project \"$repo\" has no \"$DONE_TITLE\" or no \"$DEFAULT_BUCKET_TITLE\" column after the bucket pass — cannot wire the view"
   fi
 
-  if [ "$need_mode" = 1 ]; then
-    if [ "$DRY_RUN" = 1 ]; then
-      say mode "$repo / $VIEW_TITLE" would-update "$mode_current -> $BUCKET_MODE"
-    else
-      say mode "$repo / $VIEW_TITLE" updated "$mode_current -> $BUCKET_MODE"
-      C_UPDATED=$((C_UPDATED + 1))
-    fi
-  elif [ "$v_new" = 1 ] && [ "$DRY_RUN" = 1 ]; then
-    :                        # the planned create above already carries the mode
-  elif [ -z "$mode_current" ]; then
-    note "bucket_configuration_mode is not returned for $repo / $VIEW_TITLE — cannot check it"
-  else
-    say mode "$repo / $VIEW_TITLE" existing "$BUCKET_MODE"
+  desired="$(jq -cn --arg t "$VIEW_TITLE" --arg m "$BUCKET_MODE" \
+    --argjson d "$done_id" --argjson b "$default_id" \
+    '{title: $t, position: 1, bucket_configuration_mode: $m, done_bucket_id: $d, default_bucket_id: $b}')"
+  current="$(jq -cn --arg t "$view_title_current" --arg m "$mode_current" \
+    --argjson pos "$view_position_current" --argjson d "$done_current" --argjson b "$default_current" \
+    '{title: $t, position: $pos, bucket_configuration_mode: $m, done_bucket_id: $d, default_bucket_id: $b}')"
+
+  if [ "$desired" = "$current" ]; then
+    say view "$repo / $VIEW_TITLE" existing "$desired"
     C_EXISTING=$((C_EXISTING + 1))
+    return 0
+  fi
+
+  write_or_plan POST "/projects/$project_id/views/$view_id" "$desired"
+  if [ "$DRY_RUN" = 1 ]; then
+    say view "$repo / $VIEW_TITLE" would-update "title, position, mode, default column and done column in one write"
+  else
+    say view "$repo / $VIEW_TITLE" updated "title, position, mode, default column and done column in one write"
+    C_UPDATED=$((C_UPDATED + 1))
   fi
 }
 
@@ -349,7 +420,7 @@ seed_filter() {
   local filter_id="" body=""
 
   printf '\n'
-  read_endpoint /filters
+  list_saved_filters
   filter_id="$(jq -r --arg t "$FILTER_TITLE" '[.[] | select(.title == $t)][0].id // empty' <<<"$API_BODY")"
   if [ -n "$filter_id" ]; then
     say filter "$FILTER_TITLE" existing "id=$filter_id"
@@ -482,11 +553,33 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --dry-run) DRY_RUN=1 ;;
     --verify) VERIFY=1 ;;
+    --repo)
+      shift
+      [ $# -gt 0 ] || { printf 'vikunja-seed: --repo needs a project name\n' >&2; exit 2; }
+      REPO_SCOPE="$1"
+      ;;
     -h|--help) usage; exit 0 ;;
     *) printf 'vikunja-seed: unknown argument: %s\n' "$1" >&2; usage >&2; exit 2 ;;
   esac
   shift
 done
+
+# One project, or all seven. The scope exists because a board is now shaped
+# repository by repository: the six repositories without work keep the shape
+# they already have until someone boards them.
+if [ -n "$REPO_SCOPE" ]; then
+  scope_found=0
+  for scope_repo in "${REPOS[@]}"; do
+    if [ "$scope_repo" = "$REPO_SCOPE" ]; then
+      scope_found=1
+    fi
+  done
+  if [ "$scope_found" != 1 ]; then
+    printf 'vikunja-seed: no repository named "%s" in this script'"'"'s list\n' "$REPO_SCOPE" >&2
+    exit 2
+  fi
+  REPOS=("$REPO_SCOPE")
+fi
 
 if [ "$DRY_RUN" = 1 ] && [ "$VERIFY" = 1 ]; then
   printf 'vikunja-seed: --dry-run and --verify cannot be combined\n' >&2
