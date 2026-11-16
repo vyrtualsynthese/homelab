@@ -68,8 +68,8 @@ redirects to it after the LAN check.
 
 ## First run and the token
 
-The builder needs a fine-grained GitHub token with `Contents: read` and `Metadata: read`, in Secret
-`github-docs-ro` key `token`. Creating it, the first job, rotation and rollback are in
+The builder reads the token from Secret `github-docs-ro` key `token`, seeded from the machine token in
+`~/.config/secrets/keys.env` — no GitHub UI step. First run, rotation and rollback are in
 `docs/runbooks/docs-site-first-run.md`.
 
 ## Rendering locally
