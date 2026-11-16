@@ -59,6 +59,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import html
 import json
 import os
 import re
@@ -704,6 +705,82 @@ def _run_mkdocs(config: Path, staging: Path, src: Path) -> None:
         raise BuildError(f"could not run mkdocs: {exc}") from None
 
 
+LANDING_MARKER = "docs-site-landing"
+
+
+def _page_links(staging: Path) -> list[str]:
+    """Every page MkDocs produced, as a link relative to the site root.
+
+    MkDocs writes `use_directory_urls: true` by default (`notes.md` becomes
+    `notes/index.html`, linked as `notes/`) and a repository's own config may
+    turn that off (`notes.html`). Both are read here so the generated landing
+    page works either way. The 404 page is MkDocs' own furniture and is not a
+    document.
+    """
+    links: list[str] = []
+    for page in staging.rglob("*.html"):
+        relative = page.relative_to(staging)
+        if relative.name == "404.html":
+            continue
+        if relative.name == "index.html":
+            if relative.parent == Path("."):
+                continue  # the landing page itself, if one exists
+            links.append(f"{relative.parent.as_posix()}/")
+        else:
+            links.append(relative.as_posix())
+    return sorted(links)
+
+
+def _ensure_index(staging: Path, repo: str, ref: str) -> None:
+    """Give a finished site a root `index.html`, generating one if MkDocs did not.
+
+    MkDocs only writes `index.html` when the documentation root holds
+    `index.md` or `README.md`. Most repositories here have neither: their
+    `docs/` opens on `README.md` at best and often on nothing, so the site root
+    has no page. Two things then break at once. The served route `/<repo>/<ref>/`
+    answers 403 instead of a page, and `published_missing` — which asks whether
+    that same file exists — reads a perfectly good site as lost and rebuilds it
+    on every run.
+
+    So the builder guarantees the file rather than assuming it. A repository
+    that ships its own index keeps it untouched; the generated page only stands
+    in, and says so.
+    """
+    index = staging / "index.html"
+    if index.is_file():
+        return
+
+    title = html.escape(f"{repo} {ref}")
+    links = _page_links(staging)
+    if links:
+        body = "\n".join(
+            f'<li><a href="{html.escape(link)}">{html.escape(link)}</a></li>' for link in links
+        )
+        content = f"<ul>\n{body}\n</ul>"
+    else:
+        content = "<p>This site has no pages.</p>"
+    page = (
+        "<!doctype html>\n"
+        '<html lang="en">\n'
+        "<head>\n"
+        '<meta charset="utf-8">\n'
+        f'<meta name="{LANDING_MARKER}" content="no index page in this documentation">\n'
+        f"<title>{title} — documentation</title>\n"
+        "</head>\n"
+        "<body>\n"
+        f"<h1>{title}</h1>\n"
+        "<p>This set of pages has no <code>index.md</code> of its own, so this is the list of "
+        "what it contains.</p>\n"
+        f"{content}\n"
+        "</body>\n"
+        "</html>\n"
+    )
+    try:
+        index.write_text(page, encoding="utf-8")
+    except OSError as exc:
+        raise BuildError(f"cannot write the landing page {index}: {exc}") from None
+
+
 def _prune_empty_dir(path: Path) -> None:
     """Remove `path` when nothing is left in it.
 
@@ -852,6 +929,7 @@ def build_site(repo: str, ref: str, src: Path, site_root: Path, work_root: Path)
             config = rendered
 
         _run_mkdocs(config, staging, src)
+        _ensure_index(staging, repo, ref)
         _publish(repo, ref, staging, site_root, work_root)
     except BuildError as exc:
         _park_failure(work_root, pair, staging, config, rendered)
@@ -1105,6 +1183,11 @@ def published_missing(repo: str, ref: str) -> bool:
     pair on the second pass. The served index is therefore the fact the state is
     checked against at the start of every run, which also heals a site somebody
     deleted by hand and costs one `stat` per pair.
+
+    `index.html` is the marker because `build_site` guarantees one: a site whose
+    documentation has no index page of its own gets a generated one before it is
+    published. Looking for any other file would make the answer depend on the
+    repository's documentation layout.
     """
     try:
         settings = load_settings()
