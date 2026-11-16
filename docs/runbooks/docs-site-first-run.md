@@ -131,9 +131,11 @@ curl -sk -o /dev/null -w '%{http_code} %{redirect_url}\n' https://docs.kub.local
 ```
 
 A **404** here is not a missing route: it is authentik saying it has no provider for this host, which
-means the blueprint `cluster/helm/authentik/files/app-docs.yaml` has not been applied yet. Sync the
-`authentik` Application (or wait for its next blueprint scan) and repeat. A **200** means the gate is
-missing from the route — the site is then protected by `lan-only` alone.
+means the blueprint `cluster/helm/authentik/files/app-docs.yaml` has not been applied yet, **or** that
+the `docs` provider exists but is not attached to the embedded outpost — an unattached provider
+answers the same 404. Sync the `authentik` Application (or wait for its next blueprint scan) and
+repeat. A **200** means the gate is missing from the route — the site is then protected by `lan-only`
+alone.
 
 Then sign in. Open `https://docs.kub.local/` in a browser; authentik asks for the operator account,
 returns you to the index, and the site renders:

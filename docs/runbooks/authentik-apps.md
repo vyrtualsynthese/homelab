@@ -26,13 +26,18 @@ Where the application offers no other way in, the password form is closed as wel
 `auth.local.enabled: false`. Both leave one route — authentik — so the break-glass for each is a
 configmap or env flip plus a rollout, written next to the setting in the chart.
 
-Two traps this table exists to prevent:
+Three traps this table exists to prevent:
 
 - **`kube-system-authentik` is not authentication.** It is a headers middleware. The gate is
   `kube-system-authentik-forwardauth`, and a route carrying only the former is protected by `lan-only`
   and nothing else.
 - **A missing gate must say why.** A chart that keeps `lan-only` alone carries the reason next to its
   middleware list, as `qbittorrent` and `autobrr` do.
+- **A provider answers only once the embedded outpost lists it.** Blueprints create the provider and
+  the application, but the outpost is a separate object: `outpost-embedded.yaml` sets its provider
+  list whole, so a provider added there and not listed is created and then ignored — its host answers
+  **404**, exactly like a missing blueprint. `docs.kub.local` did that on 2026-11-17 until `docs` was
+  added; the same file had kept `vikunja`, whose proxy provider went with the OIDC migration.
 
 ### Migrating Vikunja to OIDC
 

@@ -6,6 +6,14 @@ entries:
   # attached by hand today, and this file takes over that assignment: setting
   # `providers` replaces the whole list, so every provider must be here or it is
   # detached.
+  #
+  # A name that no longer exists is worse than a missing one: `!Find` fails, the
+  # whole file rolls back, and every provider it lists keeps the stale list. A
+  # provider that is absent here answers 404 on its host — that is what
+  # `docs.kub.local` did until `docs` was added on 2026-11-17. When a proxy
+  # provider is retired (vikunja's went with the OIDC migration), delete its
+  # line in the same commit that retires it.
+
   - model: authentik_blueprints.metaapplyblueprint
     attrs:
       identifiers:
@@ -64,7 +72,7 @@ entries:
   - model: authentik_blueprints.metaapplyblueprint
     attrs:
       identifiers:
-        name: ashulab-app-vikunja
+        name: ashulab-app-docs
       required: true
 
   # The embedded outpost is a managed object. Its identifiers are `managed`, not
@@ -86,4 +94,4 @@ entries:
         - !Find [authentik_providers_proxy.proxyprovider, [name, maintainerr]]
         - !Find [authentik_providers_proxy.proxyprovider, [name, prowlarr]]
         - !Find [authentik_providers_proxy.proxyprovider, [name, tautulli]]
-        - !Find [authentik_providers_proxy.proxyprovider, [name, vikunja]]
+        - !Find [authentik_providers_proxy.proxyprovider, [name, docs]]
