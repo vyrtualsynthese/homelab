@@ -79,6 +79,16 @@ class RenderTests(unittest.TestCase):
         self.assertIn("1 alert(s)", relay.render_comment(payload()))
 
 
+class QueryTests(unittest.TestCase):
+    def test_the_filter_quotes_with_single_quotes(self):
+        """Vikunja's filter language rejects double quotes: 400 Bad Request."""
+        self.assertEqual(relay.find_query("grafana/disk/nas"),
+                         "description like 'grafana/disk/nas' && done = false")
+
+    def test_a_quote_in_the_key_cannot_break_the_filter(self):
+        self.assertEqual(relay.find_query("a'b"), "description like 'ab' && done = false")
+
+
 class ThrottleTests(unittest.TestCase):
     def test_first_comment_always_passes(self):
         self.assertTrue(relay.should_comment(None, 1000.0, 600))
