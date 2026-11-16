@@ -25,9 +25,10 @@
 # that happens to be empty is indistinguishable from one holding work.
 #
 #   hack/vikunja-seed.sh --dry-run            # read the board, print every call, write nothing
-#   hack/vikunja-seed.sh --repo homelab       # shape one project, leave the other six alone
-#   hack/vikunja-seed.sh                      # create what is missing, everywhere
-#   hack/vikunja-seed.sh --verify             # read back and fail unless the boards are shaped right
+#   hack/vikunja-seed.sh                      # shape the homelab board, and nothing else
+#   hack/vikunja-seed.sh --repo config        # shape one named board
+#   hack/vikunja-seed.sh --all                # shape every board in REPOS (deliberate, rare)
+#   hack/vikunja-seed.sh --verify             # read back and fail unless the board is shaped right
 #
 # Environment:
 #   VIKUNJA_API_TOKEN  required. An operator API token, made in the board under
@@ -106,7 +107,11 @@ API_V2_PATH="/api/v2"
 
 DRY_RUN=0
 VERIFY=0
+# The one repository the board is for. Everything else stays as it is unless the
+# operator asks for it by name or passes --all.
+BOARDED_REPO="homelab"
 REPO_SCOPE=""
+RUN_ALL=0
 # Set while a project is shaped, read by the filter pass: filters are global to
 # the account, so they can only point at one board's columns.
 VALIDATION_BUCKET_ID=""
@@ -408,11 +413,16 @@ Kind: label \`feature\` / \`story\` / \`task\`. A subtask is a checklist line in
     if [ "$title" = "$DEFAULT_BUCKET_TITLE" ]; then
       default_id="$bucket_id"
     fi
-    if [ "$title" = "$VALIDATION_TITLE" ]; then
-      VALIDATION_BUCKET_ID="$bucket_id"
-    fi
-    if [ "$title" = "$DOING_TITLE" ]; then
-      DOING_BUCKET_ID="$bucket_id"
+    # Filters are account-wide but point at one board's columns, so only
+    # homelab's ids may reach them: in an unscoped run every other repository
+    # would otherwise overwrite them with its own last-read ids.
+    if [ "$repo" = "$BOARDED_REPO" ]; then
+      if [ "$title" = "$VALIDATION_TITLE" ]; then
+        VALIDATION_BUCKET_ID="$bucket_id"
+      fi
+      if [ "$title" = "$DOING_TITLE" ]; then
+        DOING_BUCKET_ID="$bucket_id"
+      fi
     fi
   done
 
@@ -653,8 +663,10 @@ verify() {
     default_id="$(jq -r --arg t "$DEFAULT_BUCKET_TITLE" '[.[] | select(.title == $t)][0].id // 0' <<<"$buckets_json")"
     # The filter check at the end needs the two column ids, and this is the only
     # place they are read from the board.
-    VALIDATION_BUCKET_ID="$(jq -r --arg t "$VALIDATION_TITLE" '[.[] | select(.title == $t)][0].id // empty' <<<"$buckets_json")"
-    DOING_BUCKET_ID="$(jq -r --arg t "$DOING_TITLE" '[.[] | select(.title == $t)][0].id // empty' <<<"$buckets_json")"
+    if [ "$repo" = "$BOARDED_REPO" ]; then
+      VALIDATION_BUCKET_ID="$(jq -r --arg t "$VALIDATION_TITLE" '[.[] | select(.title == $t)][0].id // empty' <<<"$buckets_json")"
+      DOING_BUCKET_ID="$(jq -r --arg t "$DOING_TITLE" '[.[] | select(.title == $t)][0].id // empty' <<<"$buckets_json")"
+    fi
 
     if [ "$order" = "$expected_order" ]; then
       printf 'PASS %-12s columns %s\n' "$repo" "$order"
@@ -707,6 +719,14 @@ verify() {
       <<<"$tasks_json")"
     column_ids="$(jq -c --arg d "$DOING_TITLE" --arg v "$VALIDATION_TITLE" \
       '[.items[] | select(.title == $d or .title == $v) | (.tasks // [])[].id]' <<<"$v2_json")"
+    # A column with cards that yields no ids would make the next check pass by
+    # being empty, which is exactly how a vacuous check looks.
+    unread="$(jq -r --arg d "$DOING_TITLE" --arg v "$VALIDATION_TITLE" \
+      '[.items[] | select(.title == $d or .title == $v) | select((.count // 0) > ((.tasks // []) | length)) | .title] | join(", ")' <<<"$v2_json")"
+    if [ -n "$unread" ]; then
+      printf 'FAIL %-12s cannot read the cards of %s, so their kind was not checked\n' "$repo" "$unread"
+      failures=$((failures + 1))
+    fi
     bad_column="$(jq -n --argjson map "$kinds_map" --argjson ids "$column_ids" '
       (reduce $map[] as $e ({}; .[($e.id | tostring)] = $e.kinds)) as $byid
       | [ $ids[] | select(((($byid[. | tostring]) // ["task"]) | any(. != "task"))) ] | length')"
@@ -720,6 +740,9 @@ verify() {
   done
 
   # ---- the two filters, once for the account -----------------------------
+  if [ -z "$VALIDATION_BUCKET_ID" ]; then
+    printf 'NOTE %-12s filters not checked: %s was not in scope\n' filters "$BOARDED_REPO"
+  else
   list_saved_filters
   filters_json="$API_BODY"
   for pair in "$FILTER_VALIDATION_TITLE:$VALIDATION_BUCKET_ID" "$FILTER_DOING_TITLE:$DOING_BUCKET_ID"; do
@@ -737,6 +760,7 @@ verify() {
       failures=$((failures + 1))
     fi
   done
+  fi
 
   printf '\n'
   if [ "$failures" -ne 0 ]; then
@@ -758,6 +782,7 @@ while [ $# -gt 0 ]; do
       [ $# -gt 0 ] || { printf 'vikunja-seed: --repo needs a project name\n' >&2; exit 2; }
       REPO_SCOPE="$1"
       ;;
+    --all) RUN_ALL=1 ;;
     -h|--help) usage; exit 0 ;;
     *) printf 'vikunja-seed: unknown argument: %s\n' "$1" >&2; usage >&2; exit 2 ;;
   esac
@@ -767,6 +792,15 @@ done
 # One project, or all seven. The scope exists because a board is now shaped
 # repository by repository: the six repositories without work keep the shape
 # they already have until someone boards them.
+if [ "$RUN_ALL" = 0 ] && [ -z "$REPO_SCOPE" ]; then
+  REPO_SCOPE="$BOARDED_REPO"
+fi
+
+if [ "$RUN_ALL" = 1 ] && [ -n "$REPO_SCOPE" ]; then
+  printf 'vikunja-seed: --all and --repo cannot be combined\n' >&2
+  exit 2
+fi
+
 if [ -n "$REPO_SCOPE" ]; then
   scope_found=0
   for scope_repo in "${REPOS[@]}"; do

@@ -116,9 +116,13 @@ filter   Awaiting my review                           retired       id=2
 seeded: 0 created, 17 already present, 3 updated, 0 kept (not created here)
 ```
 
-Without `--repo`, the script walks all seven projects and shapes every board. That is deliberate and
-harmless — a board with no cards is shaped anyway — but today only `homelab` has work, and `--repo`
-is how a run stays inside it.
+With no argument the script shapes `homelab` and nothing else, because that is the only board the
+operator decided to change. `--repo <name>` shapes one other board; `--all` shapes every board in the
+script's list, which is a deliberate act, not a default. The two flags cannot be combined.
+
+The two saved filters are account-wide but point at one board's columns, so their ids are taken from
+`homelab` only — in a run that touches several boards, every other board would otherwise overwrite
+them with its own ids and silently empty the operator's queue.
 
 The view write carries **five fields**: title, position, column mode, default column and done column.
 The endpoint replaces the record rather than patching it, so a body missing `view_kind` turns the board
@@ -179,6 +183,8 @@ What it does not do: it never decides that a task is finished. The mapping says 
 | `FAIL saved filter ... does not read` | The filter points at a column id that changed | Re-run the seed; it rewrites both filters from the live ids |
 | `FAIL ... without exactly one kind label` | A card was made by hand without `feature`/`story`/`task` | Label it, or delete it |
 | `HTTP 405 GET /api/v1/filters` | An older script read the filter list directly; this API version has no such endpoint | Filters are listed through `GET /projects`, where they appear as projects with negative ids |
+| `NOTE filters not checked` | The run did not include `homelab`, so there were no column ids to compare against | Expected: run `--repo homelab` to check them |
+| `cannot read the cards of Doing` | The column reports cards the read could not enumerate | Nothing was verified for that column; investigate before trusting a PASS |
 
 ## Rollback
 
