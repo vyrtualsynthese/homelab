@@ -92,7 +92,23 @@ NAME_PATTERN = re.compile(r"^[A-Za-z0-9._-]+$")
 JSON_TIMEOUT = 30  # seconds, one small API answer
 DOWNLOAD_TIMEOUT = 300  # seconds, a whole tarball
 MAX_LIST_PAGES = 50  # 50 pages of 100 repositories; more than this owner has
-DETAIL_LIMIT = 400  # characters kept from an error, so the index stays readable
+DETAIL_LIMIT = 400  # characters kept in the state and the index, so they stay readable
+LOG_DETAIL_LIMIT = 4000  # characters kept in the pod log, where a reader can act on them
+
+# MkDocs-Material prints an end-of-life notice on every run, boxed, coloured and
+# longer than `DETAIL_LIMIT`. Keeping the *end* of the output and dropping those
+# lines is what lets the real error line survive; keeping the first 400
+# characters recorded the banner and nothing else (2026-11-17).
+ANSI_ESCAPE = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
+NOTICE_TEXT = (
+    "Material for MkDocs reaches end of life",
+    "Critical fixes and security updates",
+    "Zensical is its maintained successor",
+    "Try it alongside MkDocs",
+    "zensical.org/docs/compatibility",
+    "To disable this notice",
+    "NO_MKDOCS_MATERIAL_UPDATES",
+)
 
 WORK_DIR_DEFAULT_NAME = "work"  # sibling of the served tree, never inside it
 # The pre-fix layout put checkouts under `SITE_ROOT/.work`, where nginx served
@@ -704,6 +720,37 @@ def missing_docs(src: Path) -> str | None:
     return None
 
 
+def summarize_failure(output: str) -> str:
+    """What MkDocs said, in one readable line for the state file and the index.
+
+    The output is captured whole but stored short, and the interesting part is
+    at the end: a traceback's last line is the error, while the box-drawn
+    end-of-life notice MkDocs-Material prints on every run is at the start and
+    longer than the limit. So the notice is dropped and the end is kept — with
+    colour escapes removed, because they cost characters and read as noise in a
+    table cell.
+
+    A failure whose whole output is the notice is real (an exit code is an exit
+    code) but says nothing, so it says that instead of quoting the banner.
+    """
+    clean = ANSI_ESCAPE.sub("", output)
+    lines = [line.strip() for line in clean.splitlines() if line.strip()]
+    kept = [line for line in lines if not _is_notice(line)]
+    if not kept:
+        return "the build failed and printed only the tool's own notices"
+    message = " ".join(" ".join(kept).split())
+    if len(message) > DETAIL_LIMIT:
+        message = "\u2026 " + message[-(DETAIL_LIMIT - 2):]
+    return message
+
+
+def _is_notice(line: str) -> bool:
+    """True for the box-drawn end-of-life banner MkDocs-Material prints."""
+    return line.startswith(("\u2502", "\u256d", "\u2570", "\u2500")) or any(
+        notice in line for notice in NOTICE_TEXT
+    )
+
+
 def _run_mkdocs(config: Path, staging: Path, src: Path) -> None:
     """Build `config` into `staging`, or raise `BuildError` with what MkDocs said.
 
@@ -759,8 +806,16 @@ def _run_mkdocs(config: Path, staging: Path, src: Path) -> None:
         raise BuildError("mkdocs is not on PATH") from None
     except subprocess.CalledProcessError as exc:
         text = f"{exc.stderr or ''}\n{exc.stdout or ''}"
-        detail = " ".join(text.split()) or f"mkdocs build exited {exc.returncode}"
-        raise BuildError(detail[:DETAIL_LIMIT]) from None
+        # The state and the index keep one line; the pod log keeps the rest, up
+        # to a bound. Without this, diagnosing a build meant guessing, because
+        # the one-line summary is a summary of the tool's own notice more often
+        # than of its error (2026-11-17).
+        print(
+            f"# mkdocs exit {exc.returncode}: {scrub(text)[:LOG_DETAIL_LIMIT]}",
+            file=sys.stderr,
+        )
+        detail = summarize_failure(text) or f"mkdocs build exited {exc.returncode}"
+        raise BuildError(detail) from None
     except OSError as exc:
         raise BuildError(f"could not run mkdocs: {exc}") from None
 
