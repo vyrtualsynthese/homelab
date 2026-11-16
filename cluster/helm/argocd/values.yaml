@@ -20,6 +20,12 @@ configs:
     # sign-in before authentik is even contacted. Traefik terminates the TLS;
     # the server itself stays plain HTTP behind it (`server.insecure`).
     url: https://argocd.kub.local
+    # No local account: the built-in `admin` user is the only password login Argo
+    # CD offers, and authentik is the only identity source. Break-glass, if SSO is
+    # ever broken: kubectl -n argocd patch configmap argocd-cm --type merge -p
+    #   '{"data":{"admin.enabled":"true"}}' && kubectl -n argocd rollout restart
+    #   deploy/argocd-server, then sign in with the password in argocd-secret.
+    admin.enabled: "false"
     # Dex trusts authentik as the only identity source. The client secret is
     # not here: it comes from argocd-secret's dex.authentik.clientSecret, which
     # carries the same value as ARGOCD_CLIENT_SECRET in the authentik-sso
