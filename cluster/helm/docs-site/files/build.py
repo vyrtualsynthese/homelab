@@ -46,6 +46,7 @@ import shutil
 import sys
 import tarfile
 import tempfile
+import time
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
@@ -67,6 +68,11 @@ JSON_TIMEOUT = 30  # seconds, one small API answer
 DOWNLOAD_TIMEOUT = 300  # seconds, a whole tarball
 MAX_LIST_PAGES = 50  # 50 pages of 100 repositories; more than this owner has
 DETAIL_LIMIT = 400  # characters kept from an error, so the index stays readable
+
+WORK_DIR_NAME = ".work"  # scratch under the site root, one subdirectory per run
+# Leftovers younger than this belong to a run that may still be working. The
+# CronJob's own deadline is 900s, so anything older than that is a corpse.
+WORK_SWEEP_SECONDS = 900
 
 ENV_DEFAULTS = {
     "REPO_OWNER": "vyrtualsynthese",
@@ -100,6 +106,7 @@ class Settings:
 
 
 _SETTINGS: Settings | None = None
+_RUN_ID: str | None = None
 
 
 def check_name(kind: str, value: str) -> str:
@@ -148,7 +155,10 @@ def load_settings() -> Settings:
 
 def scrub(text: str) -> str:
     """Remove the token from anything about to be printed or stored."""
-    token = os.environ.get("GITHUB_TOKEN", "")
+    # The token is stripped where it is read (`load_settings`), so the guard
+    # must strip too: otherwise a token with surrounding whitespace in the
+    # environment passes through every message untouched.
+    token = os.environ.get("GITHUB_TOKEN", "").strip()
     if token:
         return text.replace(token, "***")
     return text
@@ -200,15 +210,23 @@ def _remember_rate_limit(headers: Any) -> None:
 def http_get(
     url: str, headers: dict[str, str], timeout: int = JSON_TIMEOUT
 ) -> tuple[int, Any, bytes]:
-    """GET a URL and return (status, headers, body) instead of raising on 4xx."""
+    """GET a URL and return (status, headers, body) instead of raising on 4xx.
+
+    A transport failure (DNS, timeout, connection reset — all `OSError`) is
+    raised as `GithubError(None, …)` rather than escaping: one unreachable
+    moment must cost one (repo, ref) pair, not the whole run.
+    """
     request = urllib.request.Request(url, headers=headers, method="GET")
     try:
         with urllib.request.urlopen(request, timeout=timeout) as response:
             _remember_rate_limit(response.headers)
             return response.status, response.headers, response.read()
     except urllib.error.HTTPError as exc:
+        # HTTPError is an OSError, so it is caught before the broad clause.
         _remember_rate_limit(exc.headers)
         return exc.code, exc.headers, exc.read()
+    except OSError as exc:
+        raise GithubError(None, f"{url}: {type(exc).__name__}: {exc}") from None
 
 
 def api_message(body: bytes, status: int) -> str:
@@ -253,7 +271,10 @@ def list_repos(owner: str) -> list[str]:
     names: list[str] = []
     seen: set[str] = set()
 
-    if authenticated_login(settings.token) == owner:
+    login = authenticated_login(settings.token)
+    # GitHub logins are case-insensitive, so `REPO_OWNER=VyrtualSynthèse`-style
+    # spelling must not fall back to the public-only catalogue.
+    if login is not None and login.casefold() == owner.casefold():
         catalogue = f"{API_ROOT}/user/repos?per_page=100&affiliation=owner&visibility=all"
     else:
         catalogue = f"{API_ROOT}/users/{owner}/repos?per_page=100&type=owner"
@@ -455,7 +476,14 @@ def empty_state() -> dict[str, Any]:
 
 
 def clean_state(raw: Any) -> dict[str, Any]:
-    """Accept an old or partly written state file without trusting its shape."""
+    """Accept an old or partly written state file without trusting its shape.
+
+    Names are checked here, not only where they are used. A hand-edited key such
+    as `/main`, or a bogus string in `invisible`, would otherwise raise
+    `ConfigError` while the plan is built — before `save_state` runs — so the
+    offending entry would never be rewritten and every future run would die the
+    same way. One bad entry costs that entry.
+    """
     state = empty_state()
     if not isinstance(raw, dict):
         return state
@@ -463,7 +491,14 @@ def clean_state(raw: Any) -> dict[str, Any]:
     refs = raw.get("refs")
     if isinstance(refs, dict):
         for key, entry in refs.items():
-            if not isinstance(key, str) or "/" not in key or not isinstance(entry, dict):
+            if not isinstance(key, str) or not isinstance(entry, dict):
+                continue
+            repo, _, ref = key.partition("/")
+            try:
+                check_name("repository", repo)
+                check_name("ref", ref)
+            except ConfigError as exc:
+                print(f"warning: dropping state entry {key!r} ({exc})", file=sys.stderr)
                 continue
             state["refs"][key] = {
                 "sha": entry.get("sha") if isinstance(entry.get("sha"), str) else None,
@@ -479,7 +514,17 @@ def clean_state(raw: Any) -> dict[str, Any]:
 
     invisible = raw.get("invisible")
     if isinstance(invisible, list):
-        state["invisible"] = sorted({name for name in invisible if isinstance(name, str)})
+        kept: set[str] = set()
+        for name in invisible:
+            if not isinstance(name, str):
+                continue
+            try:
+                check_name("repository", name)
+            except ConfigError as exc:
+                print(f"warning: dropping invisible entry {name!r} ({exc})", file=sys.stderr)
+                continue
+            kept.add(name)
+        state["invisible"] = sorted(kept)
 
     return state
 
@@ -494,16 +539,70 @@ def load_state(path: Path) -> dict[str, Any]:
         return empty_state()
 
 
+def run_id() -> str:
+    """A per-process namespace: two runs never share a work or temp path."""
+    global _RUN_ID
+    if _RUN_ID is None:
+        _RUN_ID = f"{os.getpid()}-{os.urandom(4).hex()}"
+    return _RUN_ID
+
+
 def save_state(path: Path, state: dict[str, Any]) -> None:
-    """Write through a temporary file so a half-written state never exists."""
+    """Write through a temporary file so a half-written state never exists.
+
+    The temporary is named after the run, so two runs writing at the same moment
+    each finish a complete JSON document and the last `os.replace` wins; neither
+    can observe or truncate the other's half-written file.
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_name(path.name + ".tmp")
-    with temporary.open("w", encoding="utf-8") as handle:
-        json.dump(state, handle, indent=2, sort_keys=True)
-        handle.write("\n")
-        handle.flush()
-        os.fsync(handle.fileno())
-    os.replace(temporary, path)
+    temporary = path.with_name(f"{path.name}.{run_id()}.tmp")
+    try:
+        with temporary.open("w", encoding="utf-8") as handle:
+            json.dump(state, handle, indent=2, sort_keys=True)
+            handle.write("\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, path)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+def sweep_stale(settings: Settings, max_age: int = WORK_SWEEP_SECONDS) -> None:
+    """Delete work trees and state temporaries left by runs that are gone.
+
+    A run killed mid-download would otherwise leave a full checkout of a private
+    repository on the volume for good. Only entries older than `max_age` are
+    removed, so a concurrent run — which is younger than any run's deadline — is
+    never touched.
+    """
+    cutoff = time.time() - max_age
+
+    work_root = settings.site_root / WORK_DIR_NAME
+    try:
+        entries = list(work_root.iterdir())
+    except OSError:
+        entries = []
+    for entry in entries:
+        try:
+            if entry.lstat().st_mtime >= cutoff:
+                continue
+            if entry.is_dir() and not entry.is_symlink():
+                shutil.rmtree(entry, ignore_errors=True)
+            else:
+                entry.unlink(missing_ok=True)
+        except OSError:
+            continue
+
+    try:
+        temporaries = list(settings.state_path.parent.glob(f"{settings.state_path.name}.*.tmp"))
+    except OSError:
+        temporaries = []
+    for entry in temporaries:
+        try:
+            if entry.lstat().st_mtime < cutoff:
+                entry.unlink(missing_ok=True)
+        except OSError:
+            continue
 
 
 def repo_of(key: str) -> str:
@@ -611,10 +710,13 @@ def resolve_invisible(state: dict[str, Any], listed: list[str]) -> list[str]:
     for name in vanished:
         try:
             usable = probe_repo(name)
-        except GithubError as exc:
+        except (GithubError, ConfigError) as exc:
             # A rate limit or an outage says nothing about the token's visibility,
-            # so the previous classification is kept.
-            print(f"warning: could not probe {name} ({scrub(exc.message)})", file=sys.stderr)
+            # so the previous classification is kept. An unusable name should
+            # already have been dropped by `clean_state`; this is the second line
+            # of defence, so it cannot end the run either.
+            detail = getattr(exc, "message", None) or str(exc)
+            print(f"warning: could not probe {name} ({scrub(detail)})", file=sys.stderr)
             if name in (state.get("invisible") or []):
                 invisible.append(name)
             continue
@@ -639,6 +741,10 @@ def execute(decisions: list[Decision], state: dict[str, Any], settings: Settings
     is recorded as `ok`. Part two replaces the fetch with a build and keeps the
     same state shape.
     """
+    # Every run unpacks under its own directory, so a run that overruns cannot
+    # have its tree removed by the run that follows it.
+    work_root = settings.site_root / WORK_DIR_NAME / run_id()
+
     for decision in decisions:
         key = decision.key
         stored = state["refs"].get(key) or {}
@@ -658,7 +764,7 @@ def execute(decisions: list[Decision], state: dict[str, Any], settings: Settings
             # A skip leaves the entry untouched: nothing was asked of it.
             continue
 
-        pair_work = settings.site_root / ".work" / f"{decision.repo}__{decision.ref}"
+        pair_work = work_root / f"{decision.repo}__{decision.ref}"
         try:
             fetched = fetch_tarball(decision.repo, decision.ref, pair_work)
             detail = f"fetched {fetched.name}"
@@ -688,6 +794,10 @@ def execute(decisions: list[Decision], state: dict[str, Any], settings: Settings
                 state["invisible"] = sorted(set(state.get("invisible") or []) | {decision.repo})
         finally:
             shutil.rmtree(pair_work, ignore_errors=True)
+            try:
+                work_root.rmdir()
+            except OSError:
+                pass  # another pair in this same run still has work under it
 
     try:
         save_state(settings.state_path, state)
@@ -728,6 +838,11 @@ def main(argv: list[str] | None = None) -> int:
             print(f"error: repository listing failed: {scrub(exc.message)}", file=sys.stderr)
             return 1
         whole_catalogue = True
+
+    if not args.dry_run:
+        # A dry run writes nothing, so it does not sweep either. A real run
+        # clears what a killed predecessor left behind before unpacking anything.
+        sweep_stale(settings)
 
     state = load_state(settings.state_path)
 
