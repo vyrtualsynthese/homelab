@@ -27,6 +27,12 @@ def payload(status="firing", severity="critical", alerts=None, group="g1"):
     }
 
 
+class DefaultsTests(unittest.TestCase):
+    def test_the_default_board_url_carries_vikunja_s_port(self):
+        """Without 3456 the call hangs on port 80 — that was a live outage."""
+        self.assertEqual(relay.DEFAULT_BASE, "http://vikunja.vikunja.svc.cluster.local:3456")
+
+
 class SeverityTests(unittest.TestCase):
     def test_critical_is_wanted(self):
         self.assertTrue(relay.is_critical(payload()["alerts"][0]))
