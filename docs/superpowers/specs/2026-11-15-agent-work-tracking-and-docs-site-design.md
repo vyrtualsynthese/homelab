@@ -296,12 +296,14 @@ one repo cannot take the whole site down.
 A CronJob on a one-minute schedule — a **(design)** call over a longer interval, because it now costs
 almost nothing: each run only asks whether a branch moved, and rebuilds only what moved. Each run:
 
-1. `GET https://api.github.com/user/repos?affiliation=owner&visibility=all&per_page=100` with a
-   fine-grained, read-only token (`Contents: read`, `Metadata: read`) from Secret `github-docs-ro` in
-   namespace `docs`. The `/user/repos` form is not a stylistic choice: `/users/{owner}/repos` returns
-   **public repositories only**, even authenticated as the owner, so private repositories would vanish
-   from the site silently (measured on 2026-11-16). New repositories appear here with no commit
-   anywhere, which is the requirement.
+1. `GET https://api.github.com/user/repos?affiliation=owner&visibility=all&per_page=100` with the
+   token in Secret `github-docs-ro` (namespace `docs`). It is seeded from the operator's machine
+   token, not a dedicated fine-grained one (decision, 2026-11-17): the builder only ever reads with
+   it, runs the build as an unprivileged uid and mounts no service-account token, so a repository's
+   `hooks:` code can neither use it nor read it. The `/user/repos` form is not a stylistic choice:
+   `/users/{owner}/repos` returns **public repositories only**, even authenticated as the owner, so
+   private repositories would vanish from the site silently (measured on 2026-11-16). New
+   repositories appear here with no commit anywhere, which is the requirement.
 2. For each repo, for each ref in `main`, `develop`: `GET /repos/vyrtualsynthese/<repo>/commits/<ref>`
    as a conditional request, and compare the returned head SHA with the SHA the last successful build
    recorded for that (repo, ref). Unchanged pairs stop here — a `304 Not Modified` costs no rate-limit
