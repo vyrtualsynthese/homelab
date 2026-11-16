@@ -30,7 +30,7 @@ token below belongs to.
 | Projects | `homelab` (boarded), then `config`, `ashuvidz-website`, `ashudev-website`, `selfhosted-helmcharts`, `ashuworld`, `ashuvidz-creator` (empty) |
 | View | one kanban view per project, titled `Board` at position 1 |
 | Columns | `Idea`, `Shaping`, `Backlog`, `Doing`, `Validation`, `Done`, left to right |
-| Labels | `feature`, `story`, `task`; `agent`, `operator`; `implementer`, `reviewer` |
+| Labels | `feature`, `story`, `task`; `implementer`, `reviewer` — authorship is the account, not a label |
 | Saved filters | `Needs my validation`, `Agent work in flight` |
 
 ## Preconditions
@@ -138,7 +138,7 @@ the kind too, and `--verify` checks it.
 Expected, eight lines, one per check:
 
 ```text
-PASS labels       7 labels present
+PASS labels       5 labels present
 PASS homelab      view "Board" at position 1
 PASS homelab      view kind kanban
 PASS homelab      columns Idea, Shaping, Backlog, Doing, Validation, Done
