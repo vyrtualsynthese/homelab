@@ -186,12 +186,11 @@ Inherited from `2026-11-10-homelab-stabilisation-design.md` §6 and `AGENTS.md`:
   the bank, `ashuvidz-creator` for the creator pipeline). Verified against `GET /user/repos`.
   A project is added when a repo first needs a ticket; nothing enumerates repos automatically here
   (unlike §10.2).
-- Each project has one kanban view whose buckets are, in order: `Ready`, `Doing`,
-  `Waiting for validation`, `Done`. `Done` is the view's done-bucket, so a task in it is marked done
+- Each project has one kanban view whose buckets are, in order: `Ideas`, `Backlog`, `Doing`, `Revision`, `Done`. `Done` is the view's done-bucket, so a task in it is marked done
   by Vikunja itself.
 - **One saved filter, favourited, is the backstop:** every open task across all projects, oldest
   first. Vikunja's filter language cannot express bucket membership, so a filter cannot be "the
-  `Waiting for validation` column"; the operator's real queue is that column on each board, and the
+  `Revision` column"; the operator's real queue is that column on each board, and the
   filter exists so nothing is forgotten. Wiring the filter this way was corrected on 2026-11-15 after
   checking the filter API reference.
 
@@ -217,11 +216,11 @@ A ticket carries:
 
 | From | To | Who | When |
 |---|---|---|---|
-| — | `Ready` | operator or agent | The task exists in a plan and nobody has started it |
-| `Ready` | `Doing` | agent | The session starts that task and assigns it to the account its token acts as |
-| `Doing` | `Waiting for validation` | agent | The branch is pushed, the PR is open, the verification has been run and pasted into the description |
-| `Waiting for validation` | `Done` | **operator only** | The operator accepts the work |
-| `Waiting for validation` | `Doing` | operator | The operator refuses it; the comment says why, and the agent's next session reads it |
+| — | `Backlog` | operator or agent | The task exists in a plan and nobody has started it |
+| `Backlog` | `Doing` | agent | The session starts that task and assigns it to the account its token acts as |
+| `Doing` | `Revision` | agent | The branch is pushed, the PR is open, the verification has been run and pasted into the description |
+| `Revision` | `Done` | **operator only** | The operator accepts the work |
+| `Revision` | `Doing` | operator | The operator refuses it; the comment says why, and the agent's next session reads it |
 
 Nothing else moves a ticket. An agent that cannot finish leaves it in `Doing` with a comment saying
 what blocks it — that comment is the "blocked" signal, so no fifth state is invented.
@@ -385,7 +384,7 @@ matters (§13).
 |---|---|
 | Vikunja chart | `helm lint`, `helm template -n vikunja`, `kubeconform -strict` |
 | Vikunja running | `Synced`/`Healthy`, a kanban card moves between all four buckets, and `GET /api/v2/mcp` answers a tool call with the agent token |
-| Agent protocol | one real plan task taken from `Ready` to `Waiting for validation` by an agent, and refused once by the operator, with the comment read back by the next session |
+| Agent protocol | one real plan task taken from `Backlog` to `Revision` by an agent, and refused once by the operator, with the comment read back by the next session |
 | Docs builder | a run produces `/homelab/develop/`; a repo with no `docs/` on `develop` produces no section; a deliberately broken `--strict` build leaves the last good build serving |
 | Change detection | a merge to `develop` appears on the site within two runs; a second run with no merge rebuilds nothing and logs the unchanged head SHAs; the daily full rebuild still runs |
 | Auto-discovery | a throwaway private repo containing only `docs/index.md` appears on the index within two runs, and disappears when the token loses access |

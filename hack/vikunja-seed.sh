@@ -49,7 +49,7 @@ REPOS=(
 )
 
 VIEW_TITLE="Board"
-BUCKETS=(Ready Doing "Waiting for validation" Done)
+BUCKETS=(Ideas Backlog Doing Revision Done)
 DONE_TITLE="Done"
 BUCKET_MODE="manual"
 FILTER_TITLE="Awaiting my review"
