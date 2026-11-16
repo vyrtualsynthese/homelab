@@ -20,6 +20,7 @@ performed at least once — a procedure nobody has run is a guess with a title.
 | `vikunja-first-start.md` | vikunja board | pending — the first run is its own proof |
 | `vikunja-board-seed.md` | vikunja board | proved 2026-11-16 — eight boards shaped, `--verify` all PASS |
 | `alert-relay.md` | alerts to board | pending — the synthetic alert through Grafana is its proof |
+| `docs-site-first-run.md` | docs site | pending — written; the first run is its own proof |
 
 Conventions: each runbook states its preconditions, the exact commands, the output that means
 success, and the rollback. Anything destructive says so in the first line.

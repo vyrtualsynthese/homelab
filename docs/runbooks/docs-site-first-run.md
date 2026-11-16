@@ -1,0 +1,228 @@
+# First run of the docs site
+
+Date: 2026-11-16
+
+**Changes the cluster:** creates the `docs` namespace, one Secret, one claim and two workloads. See
+[Rollback](#rollback) for how all of it is removed again.
+
+The docs site renders every repository's `docs/` folder as a MkDocs Material site and serves it at
+`https://docs.kub.local`. This procedure is the first start: it creates the GitHub token the builder
+reads with, deploys the chart, runs the builder by hand once, and proves the result over the route.
+
+Run it once, from the LAN. The builder needs a token before its first pod can start, so Steps 1 to 3
+come before any sync.
+
+## Names
+
+| Thing | Value |
+|---|---|
+| Namespace | `docs` |
+| Application (ArgoCD) | `docs-site`, in namespace `argocd` |
+| Chart | `cluster/helm/docs-site` |
+| CronJob, manual Job | `docs-site-build`; `docs-first-1` below |
+| Deployment, Service | `docs-site`, `docs-site` on port `8080` |
+| Claim | `docs-site-site`, 2Gi, `local-path`, on `nuc0` |
+| Address | `https://docs.kub.local` |
+| Certificate | the default `kube-system/local-cert` (identity `CN=kub.local`) |
+| Gate | `lan-only`, and nothing else — no authentik, no public hostname |
+| Secret | `github-docs-ro`, key `token` |
+
+## Preconditions
+
+- The workstation resolves `docs.kub.local` to the cluster.
+- `curl` and `openssl` on the workstation; `kubectl` against the cluster.
+- `~/.config/secrets/kub-local/local-ca.pem` present (the cluster's internal CA, minted by
+  [`internal-ca.md`](internal-ca.md)).
+- `nuc0` has room for a 1Gi builder pod and a 64Mi nginx pod: `kubectl top node nuc0`.
+
+## Step 1 — the token
+
+On GitHub: **Settings → Developer settings → Fine-grained tokens → New token**.
+
+- Resource owner `vyrtualsynthese`.
+- Repository access: **All repositories**. A narrower selection is silent about what it cannot see,
+  and the site would simply lack those repositories.
+- Permissions: **Contents: Read-only** and **Metadata: Read-only**. Nothing else.
+- Expiration: record the date here — **expires:** `<date>`.
+
+One token covers discovery, the head checks and the tarball download. It is read-only on purpose:
+the builder never writes to a repository, and the token is the only credential in the whole job.
+
+## Step 2 — the namespace and the Secret
+
+The Secret must exist before the CronJob's first pod starts, so the namespace comes first:
+
+```bash
+kubectl create namespace docs
+kubectl -n docs create secret generic github-docs-ro --from-literal=token=<token>
+kubectl -n docs get secret github-docs-ro -o jsonpath='{.data.token}' | base64 -d | head -c 8
+# expect: the first characters of the token, then no error
+```
+
+The builder reads `GITHUB_TOKEN` from that key and never writes it anywhere: not to the state file,
+not to a log line, not into the served tree.
+
+## Step 3 — sync the Application
+
+The commit adding the chart and the Application reaches the cluster through the root Application
+(see [`../../AGENTS.md`](../../AGENTS.md) §2). This Application carries no `syncPolicy.automated` —
+that lives in the ArgoCD UI, and a PR that adds it to the file is reverted on the next root sync — so
+enable auto-sync once in the UI, or click **Sync**.
+
+```bash
+kubectl -n argocd get application docs-site \
+  -o jsonpath='{.status.sync.status} {.status.health.status}{"\n"}'
+# expect: Synced Healthy
+```
+
+## Step 4 — the nginx pod is up
+
+```bash
+kubectl -n docs get pods
+# expect: docs-site-… , READY 1/1, STATUS Running
+```
+
+The init container creates `/data/site` and leaves a placeholder page only when there is none, so the
+pod is ready before the first build. A pod stuck in `CreateContainerConfigError` is the missing
+Secret from Step 2.
+
+```bash
+curl -sk -o /dev/null -w '%{http_code}\n' https://docs.kub.local/
+# expect: 200
+```
+
+At this point the page says the first build has not run yet. That is the whole point of the
+placeholder: the route answers before the builder has done anything.
+
+## Step 5 — the first build
+
+```bash
+kubectl -n docs create job --from=cronjob/docs-site-build docs-first-1
+kubectl -n docs logs job/docs-first-1 -f
+# expect: one line per (repository, ref) — build, skip or absent — and a closing summary
+```
+
+Expected shape, not a fixed list: the repositories are discovered, not listed anywhere.
+
+```
+# full rebuild: FULL_REBUILD_AGE elapsed or no previous full run
+build homelab/develop <sha>
+absent homelab/main no docs/ directory
+…
+# build 21, absent 7, API calls left 4936/5000
+```
+
+What must **not** appear: a traceback, or a `GITHUB_TOKEN` in any line. A `403` or `404` on every
+repository is the token's permissions (Step 1), not the builder.
+
+The first run takes about a minute for the current catalogue; the job's own deadline is 900s.
+
+## Step 6 — the site answers
+
+```bash
+curl -sk -o /dev/null -w '%{http_code}\n' https://docs.kub.local/
+# expect: 200
+```
+
+```bash
+curl -sk https://docs.kub.local/ | sed -n '1,60p'
+# expect: the index table — one row per (repository, ref), the build time, and a status
+```
+
+```bash
+curl -sk https://docs.kub.local/homelab/develop/ | head -20
+# expect: the Material page for this repository's docs
+```
+
+A repository whose documentation has no `index.md` of its own gets a generated landing page that
+lists its pages, so `/<repo>/<ref>/` always answers a page and never a directory listing.
+
+## Step 7 — the certificate
+
+`-k` in the commands above accepts any certificate; that is deliberate, because those checks are
+about what the site answers, not who signed it. The chain is checked once, here.
+
+```bash
+curl -s -o /dev/null -w '%{http_code}\n' \
+  --cacert ~/.config/secrets/kub-local/local-ca.pem https://docs.kub.local/
+# expect: 200
+
+openssl s_client -connect docs.kub.local:443 -servername docs.kub.local </dev/null 2>/dev/null \
+  | openssl x509 -noout -subject -issuer
+# expect: subject=CN = kub.local
+#         issuer=CN = ashulab internal CA
+```
+
+The TLS router sets `tls.options.name: internal-tls` and deliberately no `secretName` and no
+`certResolver`: `kube-system/local-cert` is the default certificate, and `internal-tls` is the
+kube-system TLSOption every internal app uses.
+
+## Step 8 — rotation
+
+1. Create the new token in GitHub with the same permissions, and note the new expiry in Step 1.
+2. Replace the Secret:
+
+   ```bash
+   kubectl -n docs create secret generic github-docs-ro \
+     --from-literal=token=<new-token> --dry-run=client -o yaml | kubectl apply -f -
+   ```
+
+3. The next scheduled run reads the new value. A pod that is already running keeps the old one, so if
+   a job is in flight, either wait for it or delete it:
+
+   ```bash
+   kubectl -n docs delete job -l batch.kubernetes.io/cronjob-name=docs-site-build
+   ```
+
+The old token is revoked on GitHub after the first green run.
+
+## Success, in one place
+
+- `Synced Healthy`, one nginx pod `1/1`, and `https://docs.kub.local/` answers `200`.
+- The index lists every repository with docs, and names the ones without, with the last build time.
+- `https://docs.kub.local/homelab/develop/` shows the Material site.
+- The certificate validates against `local-ca.pem`, `subject CN=kub.local`, `issuer CN=ashulab internal CA`.
+- The first job's log has one line per pair, a closing summary, and no traceback and no token.
+- `./hack/check-exposure.sh` passes.
+
+## Rollback
+
+The claim holds output only: every page on it can be rebuilt by the next run, so nothing is lost
+except one build cycle.
+
+Retire it in git **first**, as [`vikunja-first-start.md`](vikunja-first-start.md#rollback) explains —
+deleting the Application with `kubectl` does not retire anything, because the root Application
+recreates it on the next sync:
+
+```bash
+git fetch origin
+git switch -c chore/retire-docs-site origin/develop
+git rm cluster/argocd/projects/platform/docs-site.yaml
+git rm -r cluster/helm/docs-site
+git commit -m "🔥 remove the docs site"
+git push origin chore/retire-docs-site
+# then open a pull request against develop and merge it (AGENTS.md §Git workflow)
+```
+
+Then the namespace, which removes the workloads, the Secret and the claim:
+
+```bash
+kubectl delete namespace docs
+```
+
+And last the token in GitHub (Step 1), which is the credential this whole procedure creates.
+
+## What this procedure does not cover
+
+- Which repositories appear: discovery is the GitHub API, and a repository opts in with a `docs/`
+  folder holding at least one Markdown file. There is no list to edit.
+- The content of a site: a repository owns its own documentation, and its own `mkdocs.yml` if it has
+  one.
+- The daily full rebuild: `fullRebuildAge` in the chart's values, 86400s, no procedure needed.
+- The gate and the certificate themselves: shared with every other internal application, see
+  [`internal-ca.md`](internal-ca.md).
+
+## Measured
+
+Pending — filled in after the operator runs Steps 1 to 7 and pastes 4, 5 and 7 back, and again after
+the acceptance checks in the plan's Task 6 (discovery latency, merge latency).
