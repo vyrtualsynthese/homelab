@@ -82,13 +82,10 @@ LABELS=(
   "feature:1f6feb"
   "story:8250df"
   "task:1a7f37"
-  "agent:57606a"
-  "operator:bf8700"
   "implementer:0e8a16"
   "reviewer:6e7781"
 )
 KIND_LABELS=(feature story task)
-AUTHOR_LABELS=(agent operator)
 ROLE_LABELS=(implementer reviewer)
 
 # The two filters the operator reads, and the one they replace.
@@ -598,7 +595,7 @@ verify() {
   http GET /labels
   labels_json="$API_BODY"
   missing=""
-  for title in "${KIND_LABELS[@]}" "${AUTHOR_LABELS[@]}" "${ROLE_LABELS[@]}"; do
+  for title in "${KIND_LABELS[@]}" "${ROLE_LABELS[@]}"; do
     jq -e --arg t "$title" 'any(.[]; .title == $t)' >/dev/null <<<"$labels_json" \
       || missing="${missing:+$missing, }$title"
   done
