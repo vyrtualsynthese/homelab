@@ -84,15 +84,22 @@ Rules that keep the columns honest:
 Every description opens with the same block, so the same facts sit in the same place:
 
 ```text
-repo: vyrtualsynthese/homelab
-docs: https://github.com/vyrtualsynthese/homelab/blob/develop/docs/superpowers/plans/<plan>.md
+repo: [vyrtualsynthese/homelab](https://github.com/vyrtualsynthese/homelab)
+docs: [Plan — <title>](https://github.com/vyrtualsynthese/homelab/blob/develop/docs/superpowers/plans/<plan>.md)
 branch: feature/<branch>
-pr: #<number>
+pr: [#<number>](https://github.com/vyrtualsynthese/homelab/pull/<number>)
 ```
 
 `docs:` points at the file the task came from. `branch:` and `pr:` say `none` when they do not exist
 yet, so a reader can tell "no PR" from "not filled in". Where a change landed without a pull request,
-`commit: <short sha>` replaces the `pr:` line.
+`commit: [<short sha>](https://github.com/vyrtualsynthese/homelab/commit/<sha>)` replaces the `pr:` line.
+
+**Every URL is a label, never bare text.** Write the block as markdown and send the description with
+`format=markdown`, which the board converts to HTML; end each of the four lines with two spaces so they
+stay on their own lines. Name the target, not the path: *Plan — media dashboard*, *Design — SSO access
+model*, *#1111*. Repo files named in the body get a link to the file on `develop` when the reader would
+want to open it. A bare URL, or a URL inside backticks, renders as inert text in the board; that is a
+defect in the card, not a display quirk.
 
 Two habits that keep the fields honest:
 
@@ -109,10 +116,10 @@ command and its output are invented to show where they go.
 Column: `Validation`.
 
 ```text
-repo: vyrtualsynthese/homelab
-docs: https://github.com/vyrtualsynthese/homelab/blob/develop/docs/superpowers/plans/<plan>.md
+repo: [vyrtualsynthese/homelab](https://github.com/vyrtualsynthese/homelab)
+docs: [Plan — <title>](https://github.com/vyrtualsynthese/homelab/blob/develop/docs/superpowers/plans/<plan>.md)
 branch: feature/<branch>
-pr: #<number>
+pr: [#<number>](https://github.com/vyrtualsynthese/homelab/pull/<number>)
 
 What changed
 - <path>: <the change, in a line or two>. Nothing else in the chart was touched.
