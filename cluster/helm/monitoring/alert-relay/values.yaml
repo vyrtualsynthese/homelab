@@ -1,0 +1,32 @@
+# The relay is one small Python process on a stock image: the code ships in a
+# ConfigMap, so there is no image to build and no registry to trust.
+image:
+  repository: python
+  tag: "3.12.7-alpine"
+
+replicaCount: 1
+
+# Where the board lives, inside the cluster, and which project the cards go to.
+vikunja:
+  base: http://vikunja.vikunja.svc.cluster.local
+  project: 9
+  # Name of the Secret holding bot-alertmanager's token, created by hand.
+  secretName: alert-relay
+  secretKey: TOKEN
+
+# One comment per incident per window, so a flapping rule cannot write a
+# hundred. Ten minutes matches how often Grafana repeats a critical.
+commentCooldownSeconds: 600
+
+service:
+  port: 8080
+
+resources:
+  requests:
+    cpu: 10m
+    memory: 32Mi
+  limits:
+    memory: 96Mi
+
+nodeSelector:
+  kubernetes.io/hostname: nas

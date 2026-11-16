@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-relay
+  labels:
+    app.kubernetes.io/name: {{ .Release.Name }}
+data:
+  # The code lives in the repository under files/, not in an image: a stock
+  # python image plus this ConfigMap is the whole build.
+  relay.py: |
+{{ .Files.Get "files/relay.py" | indent 4 }}
