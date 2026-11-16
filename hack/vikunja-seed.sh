@@ -634,6 +634,17 @@ verify() {
       failures=$((failures + 1))
     fi
 
+    # A repair that leaves view_kind out of the body turns the board into a list
+    # view: the columns still exist, and nobody can drag a card.
+    view_kind_current="$(jq -r '.view_kind // ""' <<<"$vjson")"
+    if [ "$view_kind_current" = "$VIEW_KIND" ]; then
+      printf 'PASS %-12s view kind %s\n' "$repo" "$view_kind_current"
+    else
+      printf 'FAIL %-12s view kind is "%s", expected "%s"\n' \
+        "$repo" "${view_kind_current:-unset}" "$VIEW_KIND"
+      failures=$((failures + 1))
+    fi
+
     # ---- the columns ----------------------------------------------------
     http GET "/projects/$pid/views/$view_id/buckets"
     buckets_json="$API_BODY"
