@@ -210,12 +210,16 @@ def handle(payload: dict, board: Board, cooldown: float, now: datetime | None = 
         created = board.open_card(render_title(payload), render_body(payload, key))
         return f"opened #{created.get('id')}"
 
+    resolved = (payload.get("status") or "").lower() == "resolved"
     stamp = (now or datetime.now(timezone.utc)).timestamp()
     last = board.last_comment_epoch(card["id"])
-    if not should_comment(last, stamp, cooldown):
+    # The cooldown exists to keep a flapping alert from writing a hundred comments.
+    # A resolve is an ending, not a flap: it is written even right after a repeat,
+    # or the card would claim the incident is still running.
+    if not resolved and not should_comment(last, stamp, cooldown):
         return f"throttled on #{card['id']}"
     board.comment(card["id"], render_comment(payload, now))
-    return f"commented on #{card['id']}"
+    return f"{'resolved' if resolved else 'commented'} on #{card['id']}"
 
 
 class Handler(BaseHTTPRequestHandler):
