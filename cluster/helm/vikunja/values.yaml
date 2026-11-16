@@ -32,6 +32,11 @@ vikunja:
       # the same identity, which is why attribution needed bots before this.
       # The client secret is the only part that is not public: it comes from a
       # Secret the operator creates (docs/runbooks/authentik-apps.md).
+      # No password form: the only way in is authentik. The operator's account is
+      # already an SSO account (users.issuer != local), so this closes the page
+      # rather than removing an identity that was still in use. Bots and the MCP
+      # are API tokens, not logins, and are checked after any change to this key.
+      VIKUNJA_AUTH_LOCAL_ENABLED: "false"
       VIKUNJA_AUTH_OPENID_ENABLED: "true"
       VIKUNJA_AUTH_OPENID_REDIRECTURL: "https://vikunja.kub.local/auth/openid/"
       VIKUNJA_AUTH_OPENID_PROVIDERS_AUTHENTIK_NAME: "authentik"
