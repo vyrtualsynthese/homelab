@@ -69,8 +69,29 @@ BUCKET_RENAMES=("Ideas:Idea" "Revision:Validation")
 BUCKETS=(Idea Shaping Backlog Doing Validation Done)
 DONE_TITLE="Done"
 DEFAULT_BUCKET_TITLE="Backlog"
+VALIDATION_TITLE="Validation"
+DOING_TITLE="Doing"
 BUCKET_MODE="manual"
 FILTER_TITLE="Awaiting my review"
+
+# Labels are global to the account: three kinds, then who wrote the ticket and
+# what the session that did the work played. Colours are the design's.
+LABELS=(
+  "feature:1f6feb"
+  "story:8250df"
+  "task:1a7f37"
+  "agent:57606a"
+  "operator:bf8700"
+  "implementer:0e8a16"
+  "reviewer:6e7781"
+)
+KIND_LABELS=(feature story task)
+AUTHOR_LABELS=(agent operator)
+ROLE_LABELS=(implementer reviewer)
+
+# The two filters the operator reads, and the one they replace.
+FILTER_VALIDATION_TITLE="Needs my validation"
+FILTER_DOING_TITLE="Agent work in flight"
 
 VIKUNJA_URL="${VIKUNJA_URL:-https://vikunja.kub.local}"
 VIKUNJA_URL="${VIKUNJA_URL%/}"
@@ -85,6 +106,10 @@ API_V2_PATH="/api/v2"
 DRY_RUN=0
 VERIFY=0
 REPO_SCOPE=""
+# Set while a project is shaped, read by the filter pass: filters are global to
+# the account, so they can only point at one board's columns.
+VALIDATION_BUCKET_ID=""
+DOING_BUCKET_ID=""
 W_PLANNED=0
 C_CREATED=0
 C_EXISTING=0
@@ -221,7 +246,7 @@ put_bucket() {
 
 seed_project() {
   local repo="$1"
-  local project_id="" view_id="" done_id="" default_id="" body=""
+  local project_id="" view_id="" done_id="" default_id="" body="" projects_json=""
   local view_title_current="" view_position_current="" default_current=""
   local views_json="" view_json="" buckets_json="" known_json=""
   local bid="" btitle="" title="" bucket_id="" position="" current_position="" cards="" counts=""
@@ -232,6 +257,7 @@ seed_project() {
 
   # ---- the project -------------------------------------------------------
   read_endpoint /projects
+  projects_json="$API_BODY"
   project_id="$(jq -r --arg t "$repo" '[.[] | select(.title == $t)][0].id // empty' <<<"$API_BODY")"
   if [ -n "$project_id" ]; then
     say project "$repo" existing "id=$project_id"
@@ -259,6 +285,26 @@ seed_project() {
   if ! [[ "$project_id" =~ ^[0-9]+$ ]]; then
     note "project \"$repo\" would be created here; its board is shaped on the next run"
     return 0
+  fi
+
+  # ---- the front page ----------------------------------------------------
+  # The description is what a stranger reads first: where the code is, which
+  # branch is the integration branch, where the documentation lives, and what the
+  # three labels mean.
+  body="$(jq -cn --arg t "$repo" --arg d "Repository: https://github.com/vyrtualsynthese/$repo
+Branches: \`develop\` (integration), \`main\` (production)
+Docs: https://github.com/vyrtualsynthese/$repo/tree/develop/docs
+Protocol: https://github.com/vyrtualsynthese/$repo/blob/develop/docs/agent-protocol.md
+
+Kind: label \`feature\` / \`story\` / \`task\`. A subtask is a checklist line inside a task." \
+    '{title: $t, description: $d}')"
+  if [ "$(jq -r --arg t "$repo" '[.[] | select(.title == $t)][0].description // ""' <<<"$projects_json")" = "$(jq -r '.description' <<<"$body")" ]; then
+    say project "$repo" existing "description already set"
+    C_EXISTING=$((C_EXISTING + 1))
+  else
+    write_or_plan POST "/projects/$project_id" "$body"
+    say project "$repo" described "repository, branches, docs, and the three kinds"
+    C_UPDATED=$((C_UPDATED + 1))
   fi
 
   # ---- the kanban view ---------------------------------------------------
@@ -360,6 +406,12 @@ seed_project() {
     if [ "$title" = "$DEFAULT_BUCKET_TITLE" ]; then
       default_id="$bucket_id"
     fi
+    if [ "$title" = "$VALIDATION_TITLE" ]; then
+      VALIDATION_BUCKET_ID="$bucket_id"
+    fi
+    if [ "$title" = "$DOING_TITLE" ]; then
+      DOING_BUCKET_ID="$bucket_id"
+    fi
   done
 
   # Columns this script did not create. Named, never moved, never deleted.
@@ -413,45 +465,135 @@ seed_project() {
 }
 
 # ---------------------------------------------------------------------------
-# The saved filter. Created once, never updated: if it exists, the operator's
-# own edits win, and a filter is not part of the board's shape.
+# The labels. One lookup for the whole account, before any project is shaped.
 # ---------------------------------------------------------------------------
-seed_filter() {
-  local filter_id="" body=""
+seed_labels() {
+  local read_json="" pair title colour id body=""
 
   printf '\n'
-  list_saved_filters
-  filter_id="$(jq -r --arg t "$FILTER_TITLE" '[.[] | select(.title == $t)][0].id // empty' <<<"$API_BODY")"
-  if [ -n "$filter_id" ]; then
-    say filter "$FILTER_TITLE" existing "id=$filter_id"
-    C_EXISTING=$((C_EXISTING + 1))
-    return 0
-  fi
+  read_endpoint /labels
+  read_json="$API_BODY"
+  for pair in "${LABELS[@]}"; do
+    title="${pair%%:*}"
+    colour="#${pair##*:}"
+    id="$(jq -r --arg t "$title" '[.[] | select(.title == $t)][0].id // empty' <<<"$read_json")"
+    if [ -n "$id" ]; then
+      say label "$title" existing "id=$id"
+      C_EXISTING=$((C_EXISTING + 1))
+      continue
+    fi
+    body="$(jq -cn --arg t "$title" --arg c "$colour" '{title: $t, hex_color: $c}')"
+    write_or_plan PUT /labels "$body"
+    if [ "$DRY_RUN" = 1 ]; then
+      say label "$title" would-create "$colour"
+    else
+      say label "$title" created "$colour"
+      C_CREATED=$((C_CREATED + 1))
+    fi
+  done
+}
 
-  body="$(jq -cn --arg t "$FILTER_TITLE" \
-    '{title: $t, filters: {sort_by: ["created"], order_by: ["asc"], filter: "done = false"}}')"
-  write_or_plan PUT /filters "$body"
-  if [ "$DRY_RUN" = 1 ]; then
-    say filter "$FILTER_TITLE" would-create
+# ---------------------------------------------------------------------------
+# The two saved filters, and the retired one.
+#
+# A filter stores column ids, so it is written after the columns are read back,
+# and rewritten on every run: a filter pointing at a column that no longer holds
+# that id matches nothing, and an empty queue looks like a finished day.
+# ---------------------------------------------------------------------------
+seed_filters() {
+  local validation_id="$1" doing_id="$2" title="" query="" id="" body="" filters_json=""
+
+  printf '\n'
+  for pair in "$FILTER_VALIDATION_TITLE:$validation_id" "$FILTER_DOING_TITLE:$doing_id"; do
+    title="${pair%:*}"
+    query="bucket_id = ${pair##*:} && done = false"
+    list_saved_filters
+    filters_json="$API_BODY"
+    id="$(jq -r --arg t "$title" '[.[] | select(.title == $t)][0].id // empty' <<<"$filters_json")"
+    body="$(jq -cn --arg t "$title" --arg q "$query" \
+      '{title: $t, is_favorite: ($t == "Needs my validation"),
+        filters: {filter: $q, sort_by: ["created"], order_by: ["asc"]}}')"
+    if [ -n "$id" ]; then
+      write_or_plan POST "/filters/$id" "$body"
+      say filter "$title" updated "$query"
+      C_UPDATED=$((C_UPDATED + 1))
+    else
+      write_or_plan PUT /filters "$body"
+      if [ "$DRY_RUN" = 1 ]; then
+        say filter "$title" would-create "$query"
+      else
+        say filter "$title" created "$query"
+        C_CREATED=$((C_CREATED + 1))
+      fi
+    fi
+  done
+}
+
+retire_old_filter() {
+  local id=""
+
+  list_saved_filters
+  id="$(jq -r --arg t "$FILTER_TITLE" '[.[] | select(.title == $t)][0].id // empty' <<<"$API_BODY")"
+  if [ -z "$id" ]; then
+    say filter "$FILTER_TITLE" absent
     return 0
   fi
-  filter_id="$(jq -r '.id // empty' <<<"$API_BODY")"
-  if [ -z "$filter_id" ]; then
-    die "the board accepted the saved filter but returned no id — body: $API_BODY"
-  fi
-  say filter "$FILTER_TITLE" created "id=$filter_id"
-  C_CREATED=$((C_CREATED + 1))
+  write_or_plan DELETE "/filters/$id" ""
+  say filter "$FILTER_TITLE" retired "id=$id"
+  C_UPDATED=$((C_UPDATED + 1))
 }
 
 # ---------------------------------------------------------------------------
 # Read the boards back. Never writes. Exits 1 with the offending project named.
 # ---------------------------------------------------------------------------
+# Every ticket of a project, across pages, as one JSON array.
+fetch_project_tasks() {
+  local pid="$1" page=1 tmp size=0 out=""
+
+  tmp="$(mktemp)"
+  while :; do
+    http GET "/projects/$pid/tasks?per_page=100&page=$page"
+    size="$(jq 'length' <<<"$API_BODY")"
+    jq -c '.' <<<"$API_BODY" >>"$tmp"
+    if [ "$size" -lt 100 ]; then
+      break
+    fi
+    page=$((page + 1))
+    if [ "$page" -gt 20 ]; then
+      break
+    fi
+  done
+  out="$(jq -sc 'add // []' "$tmp")"
+  rm -f "$tmp"
+  printf '%s\n' "$out"
+}
 verify() {
   local failures=0 repo="" projects_json="" pid="" views_json="" vjson=""
-  local view_id="" kind="" buckets_json="" title="" missing="" done_id=""
-  local current="" mode="" problems="" present="" bucket_count=0 unchecked=0
+  local view_id="" view_title="" view_position="" buckets_json="" order=""
+  local expected_order="" done_id="" default_id="" done_current="" default_current=""
+  local mode="" missing="" labels_json="" title="" tasks_json="" total=0
+  local kinds_json="" bad_kind="" kinds_map="" column_ids="" bad_column=""
+  local v2_json="" filters_json="" query="" filter_id=""
 
-  printf 'Verifying %d boards against %s\n\n' "${#REPOS[@]}" "$VIKUNJA_URL"
+  printf 'Verifying %d board(s) against %s\n\n' "${#REPOS[@]}" "$VIKUNJA_URL"
+
+  expected_order="$(printf '%s, ' "${BUCKETS[@]}")"
+  expected_order="${expected_order%, }"
+
+  # ---- the labels, once for the account --------------------------------
+  http GET /labels
+  labels_json="$API_BODY"
+  missing=""
+  for title in "${KIND_LABELS[@]}" "${AUTHOR_LABELS[@]}" "${ROLE_LABELS[@]}"; do
+    jq -e --arg t "$title" 'any(.[]; .title == $t)' >/dev/null <<<"$labels_json" \
+      || missing="${missing:+$missing, }$title"
+  done
+  if [ -n "$missing" ]; then
+    printf 'FAIL %-12s labels missing: %s\n' labels "$missing"
+    failures=$((failures + 1))
+  else
+    printf 'PASS %-12s %d labels present\n' labels "${#LABELS[@]}"
+  fi
 
   http GET /projects
   projects_json="$API_BODY"
@@ -459,91 +601,130 @@ verify() {
   for repo in "${REPOS[@]}"; do
     pid="$(jq -r --arg t "$repo" '[.[] | select(.title == $t)][0].id // empty' <<<"$projects_json")"
     if [ -z "$pid" ]; then
-      printf 'FAIL %-22s no project titled "%s"\n' "$repo" "$repo"
+      printf 'FAIL %-12s no project titled "%s"\n' "$repo" "$repo"
       failures=$((failures + 1))
       continue
     fi
 
+    # ---- the view -------------------------------------------------------
     http GET "/projects/$pid/views"
     views_json="$API_BODY"
-    vjson="$(jq -c --arg t "$VIEW_TITLE" '[.[] | select(.title == $t)][0] // empty' <<<"$views_json")"
+    vjson="$(jq -c '[.[] | select(.view_kind == "kanban")][0] // empty' <<<"$views_json")"
     if [ -z "$vjson" ] || [ "$vjson" = "null" ]; then
-      present="$(jq -r '[.[].title] | join(", ")' <<<"$views_json")"
-      printf 'FAIL %-22s no view titled "%s" (views present: %s)\n' \
-        "$repo" "$VIEW_TITLE" "${present:-none}"
+      printf 'FAIL %-12s no kanban view\n' "$repo"
       failures=$((failures + 1))
       continue
     fi
+    view_id="$(jq -r '.id' <<<"$vjson")"
+    view_title="$(jq -r '.title // ""' <<<"$vjson")"
+    view_position="$(jq -r '.position // 0' <<<"$vjson")"
+    mode="$(jq -r '.bucket_configuration_mode // ""' <<<"$vjson")"
+    done_current="$(jq -r '.done_bucket_id // 0' <<<"$vjson")"
+    default_current="$(jq -r '.default_bucket_id // 0' <<<"$vjson")"
 
-    view_id="$(jq -r '.id // empty' <<<"$vjson")"
-    kind="$(jq -r '.view_kind // empty' <<<"$vjson")"
-    current="$(jq -r '.done_bucket_id // empty' <<<"$vjson")"
-    mode="$(jq -r '.bucket_configuration_mode // empty' <<<"$vjson")"
+    if [ "$view_title" = "$VIEW_TITLE" ] && [ "$view_position" = "1" ]; then
+      printf 'PASS %-12s view "%s" at position 1\n' "$repo" "$view_title"
+    else
+      printf 'FAIL %-12s view is "%s" at position %s, expected "%s" at 1\n' \
+        "$repo" "$view_title" "$view_position" "$VIEW_TITLE"
+      failures=$((failures + 1))
+    fi
 
+    # ---- the columns ----------------------------------------------------
     http GET "/projects/$pid/views/$view_id/buckets"
     buckets_json="$API_BODY"
-    bucket_count="$(jq 'length' <<<"$buckets_json")"
+    order="$(jq -r 'sort_by(.position) | [.[].title] | join(", ")' <<<"$buckets_json")"
+    done_id="$(jq -r --arg t "$DONE_TITLE" '[.[] | select(.title == $t)][0].id // 0' <<<"$buckets_json")"
+    default_id="$(jq -r --arg t "$DEFAULT_BUCKET_TITLE" '[.[] | select(.title == $t)][0].id // 0' <<<"$buckets_json")"
 
-    missing=""
-    for title in "${BUCKETS[@]}"; do
-      if ! jq -e --arg t "$title" 'any(.[]; .title == $t)' >/dev/null <<<"$buckets_json"; then
-        missing="${missing:+$missing, }$title"
-      fi
-    done
-    done_id="$(jq -r --arg t "$DONE_TITLE" '[.[] | select(.title == $t)][0].id // empty' <<<"$buckets_json")"
-
-    problems=""
-    if [ "$kind" != "kanban" ]; then
-      problems="view is \"${kind:-unknown}\", expected \"kanban\""
-    fi
-    if [ -n "$missing" ]; then
-      problems="${problems:+$problems; }missing buckets: $missing"
-    fi
-    if [ -z "$done_id" ]; then
-      problems="${problems:+$problems; }no bucket titled \"$DONE_TITLE\", so no done bucket can be set"
-    elif [ "$current" != "$done_id" ]; then
-      problems="${problems:+$problems; }done_bucket_id is ${current:-unset}, expected $done_id (\"$DONE_TITLE\")"
-    fi
-    if [ -n "$mode" ] && [ "$mode" != "$BUCKET_MODE" ]; then
-      problems="${problems:+$problems; }bucket_configuration_mode is \"$mode\", expected \"$BUCKET_MODE\""
-    fi
-
-    if [ -n "$problems" ]; then
-      printf 'FAIL %-22s %s\n' "$repo" "$problems"
-      failures=$((failures + 1))
-    elif [ -z "$mode" ]; then
-      # A field the API does not return cannot be checked. Saying so is the
-      # point: silence here would read as "the cards can be dragged". Counted
-      # here, and only here, so this sentence and a FAIL never name one board.
-      unchecked=$((unchecked + 1))
-      printf 'PASS %-22s view %s, %d buckets, done bucket %s\n' \
-        "$repo" "$view_id" "$bucket_count" "$done_id"
-      printf 'NOTE %-22s bucket_configuration_mode is not returned by this API, so the mode was not checked\n' \
-        "$repo"
+    if [ "$order" = "$expected_order" ]; then
+      printf 'PASS %-12s columns %s\n' "$repo" "$order"
     else
-      printf 'PASS %-22s view %s, %d buckets, done bucket %s, mode %s\n' \
-        "$repo" "$view_id" "$bucket_count" "$done_id" "$mode"
+      printf 'FAIL %-12s columns are %s, expected %s\n' "$repo" "$order" "$expected_order"
+      failures=$((failures + 1))
+    fi
+
+    if [ "$done_current" = "$done_id" ] && [ "$done_id" != "0" ]; then
+      printf 'PASS %-12s done column %s\n' "$repo" "$done_id"
+    else
+      printf 'FAIL %-12s done column is %s, expected %s\n' "$repo" "$done_current" "$done_id"
+      failures=$((failures + 1))
+    fi
+
+    if [ "$default_current" = "$default_id" ] && [ "$default_id" != "0" ]; then
+      printf 'PASS %-12s default column %s\n' "$repo" "$default_id"
+    else
+      printf 'FAIL %-12s default column is %s, expected %s\n' "$repo" "$default_current" "$default_id"
+      failures=$((failures + 1))
+    fi
+
+    if [ "$mode" = "$BUCKET_MODE" ]; then
+      printf 'PASS %-12s columns are dragged by hand (mode %s)\n' "$repo" "$mode"
+    else
+      printf 'FAIL %-12s column mode is "%s", expected "%s"\n' "$repo" "${mode:-unset}" "$BUCKET_MODE"
+      failures=$((failures + 1))
+    fi
+
+    # ---- every ticket carries exactly one kind --------------------------
+    tasks_json="$(fetch_project_tasks "$pid")"
+    total="$(jq 'length' <<<"$tasks_json")"
+    kinds_json="$(jq -cn --args '$ARGS.positional' "${KIND_LABELS[@]}")"
+    bad_kind="$(jq --argjson kinds "$kinds_json" '
+      [ .[] | ([ (.labels // [])[].title ] | map(select(. as $x | $kinds | index($x) != null)) | length)
+        | select(. != 1) ] | length' <<<"$tasks_json")"
+    if [ "$bad_kind" = "0" ]; then
+      printf 'PASS %-12s %s tickets, each with exactly one kind label\n' "$repo" "$total"
+    else
+      printf 'FAIL %-12s %s ticket(s) without exactly one kind label (of %s)\n' \
+        "$repo" "$bad_kind" "$total"
+      failures=$((failures + 1))
+    fi
+
+    # ---- Doing and Validation hold tasks only ---------------------------
+    read_endpoint_v2 "/projects/$pid/views/$view_id/buckets/tasks"
+    v2_json="$API_BODY"
+    kinds_map="$(jq -c --argjson kinds "$kinds_json" \
+      '[.[] | {id: .id, kinds: [((.labels // [])[].title) | select(. as $x | $kinds | index($x) != null)]}]' \
+      <<<"$tasks_json")"
+    column_ids="$(jq -c --arg d "$DOING_TITLE" --arg v "$VALIDATION_TITLE" \
+      '[.items[] | select(.title == $d or .title == $v) | (.tasks // [])[].id]' <<<"$v2_json")"
+    bad_column="$(jq -n --argjson map "$kinds_map" --argjson ids "$column_ids" '
+      (reduce $map[] as $e ({}; .[($e.id | tostring)] = $e.kinds)) as $byid
+      | [ $ids[] | select(((($byid[. | tostring]) // ["task"]) | any(. != "task"))) ] | length')"
+    if [ "$bad_column" = "0" ]; then
+      printf 'PASS %-12s %s and %s hold task cards only\n' "$repo" "$DOING_TITLE" "$VALIDATION_TITLE"
+    else
+      printf 'FAIL %-12s %s card(s) in %s or %s are a feature or a story\n' \
+        "$repo" "$bad_column" "$DOING_TITLE" "$VALIDATION_TITLE"
+      failures=$((failures + 1))
     fi
   done
 
-  http GET /filters
-  if jq -e --arg t "$FILTER_TITLE" 'any(.[]; .title == $t)' >/dev/null <<<"$API_BODY"; then
-    printf 'PASS saved filter "%s"\n' "$FILTER_TITLE"
-  else
-    printf 'FAIL saved filter "%s" is missing\n' "$FILTER_TITLE"
-    failures=$((failures + 1))
-  fi
+  # ---- the two filters, once for the account -----------------------------
+  list_saved_filters
+  filters_json="$API_BODY"
+  for pair in "$FILTER_VALIDATION_TITLE:$VALIDATION_BUCKET_ID" "$FILTER_DOING_TITLE:$DOING_BUCKET_ID"; do
+    title="${pair%:*}"
+    query="bucket_id = ${pair##*:} && done = false"
+    filter_id="$(jq -r --arg t "$title" '[.[] | select(.title == $t)][0].id // empty' <<<"$filters_json")"
+    if [ -z "$filter_id" ]; then
+      printf 'FAIL %-12s saved filter "%s" is missing\n' filters "$title"
+      failures=$((failures + 1))
+    elif jq -e --arg t "$title" --arg q "$query" \
+      'any(.[]; .title == $t and ((.filters.filter // .filter // "") | contains($q)))' >/dev/null <<<"$filters_json"; then
+      printf 'PASS %-12s saved filter "%s" reads %s\n' filters "$title" "$query"
+    else
+      printf 'FAIL %-12s saved filter "%s" does not read "%s"\n' filters "$title" "$query"
+      failures=$((failures + 1))
+    fi
+  done
 
   printf '\n'
-  if [ "$unchecked" -ne 0 ]; then
-    printf 'verify: %d board(s) could not be checked for bucket_configuration_mode — the API does not return the field\n' \
-      "$unchecked"
-  fi
   if [ "$failures" -ne 0 ]; then
     printf 'verify: %d problem(s) found\n' "$failures"
     exit 1
   fi
-  printf 'verify: all %d boards hold the shape the protocol expects\n' "${#REPOS[@]}"
+  printf 'verify: all %d board(s) hold the shape the protocol expects\n' "${#REPOS[@]}"
 }
 
 # ---------------------------------------------------------------------------
@@ -616,10 +797,22 @@ if [ "$DRY_RUN" = 1 ]; then
   printf 'Dry run: reading the board, sending no write.\n'
 fi
 
+seed_labels
 for repo in "${REPOS[@]}"; do
   seed_project "$repo"
 done
-seed_filter
+
+# The filters are global to the account but point at columns, and those belong to
+# one board: they are written when homelab is in scope, and skipped otherwise.
+case " ${REPOS[*]} " in
+  *" homelab "*)
+    seed_filters "$VALIDATION_BUCKET_ID" "$DOING_BUCKET_ID"
+    retire_old_filter
+    ;;
+  *)
+    note "no saved filter written: they point at the homelab board's columns, and homelab was not in scope"
+    ;;
+esac
 
 printf '\n'
 if [ "$DRY_RUN" = 1 ]; then
