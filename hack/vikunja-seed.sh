@@ -109,10 +109,11 @@ VERIFY=0
 BOARDED_REPO="homelab"
 REPO_SCOPE=""
 RUN_ALL=0
-# Set while a project is shaped, read by the filter pass: filters are global to
-# the account, so they can only point at one board's columns.
-VALIDATION_BUCKET_ID=""
-DOING_BUCKET_ID=""
+# Filled by collect_filter_ids for every boarded board. The filters are global to
+# the account, so they must name every board's columns; naming one board's ids
+# makes the operator's queue skip the others without saying so.
+VALIDATION_IDS=()
+DOING_IDS=()
 W_PLANNED=0
 C_CREATED=0
 C_EXISTING=0
@@ -247,6 +248,39 @@ put_bucket() {
   write_or_plan POST "/projects/$project/views/$view/buckets/$id" "$body"
 }
 
+# What a card must carry to be ready, and what proves it done. One baseline for
+# every board, plus one line this repository adds for itself: the rules that only
+# its own checks can state.
+board_rules() {
+  local repo="$1" extra=""
+  case "$repo" in
+    homelab)
+      extra="\`helm template\` renders every chart the branch touches, and \`hack/check-exposure.sh\` passes."
+      ;;
+    *)
+      extra="the repository's own checks have run, and their output is in the description."
+      ;;
+  esac
+  cat <<RULES
+## Definition of Ready
+
+A card may leave \`Shaping\` only when its description carries:
+
+- one sentence saying what it is and why;
+- a \`docs:\` line linking the plan or decision that justifies it;
+- a \`Done when:\` line saying what will prove it;
+- its dependencies as relations (\`blocking\` / \`blocked\`), never described in prose.
+
+## Definition of Done
+
+A card may reach \`Validation\` only when:
+
+- the branch is pushed and the pull request is open, or a commit is recorded;
+- the command that verifies it, and what it printed, are in the description;
+- $extra
+RULES
+}
+
 seed_project() {
   local repo="$1"
   local project_id="" view_id="" done_id="" default_id="" body="" projects_json=""
@@ -299,7 +333,10 @@ Branches: \`develop\` (integration), \`main\` (production)
 Docs: https://github.com/vyrtualsynthese/$repo/tree/develop/docs
 Protocol: https://github.com/vyrtualsynthese/$repo/blob/develop/docs/agent-protocol.md
 
-Kind: label \`feature\` / \`story\` / \`task\`. A subtask is a checklist line inside a task." \
+Kind: label \`feature\` / \`story\` / \`task\`. A subtask is a checklist line inside a task.
+Order is priority: the card highest in a column is the most urgent.
+
+$(board_rules "$repo")" \
     '{title: $t, description: $d}')"
   if [ "$(jq -r --arg t "$repo" '[.[] | select(.title == $t)][0].description // ""' <<<"$projects_json")" = "$(jq -r '.description' <<<"$body")" ]; then
     say project "$repo" existing "description already set"
@@ -410,17 +447,6 @@ Kind: label \`feature\` / \`story\` / \`task\`. A subtask is a checklist line in
     if [ "$title" = "$DEFAULT_BUCKET_TITLE" ]; then
       default_id="$bucket_id"
     fi
-    # Filters are account-wide but point at one board's columns, so only
-    # homelab's ids may reach them: in an unscoped run every other repository
-    # would otherwise overwrite them with its own last-read ids.
-    if [ "$repo" = "$BOARDED_REPO" ]; then
-      if [ "$title" = "$VALIDATION_TITLE" ]; then
-        VALIDATION_BUCKET_ID="$bucket_id"
-      fi
-      if [ "$title" = "$DOING_TITLE" ]; then
-        DOING_BUCKET_ID="$bucket_id"
-      fi
-    fi
   done
 
   # Columns this script did not create. Named, never moved, never deleted.
@@ -511,13 +537,52 @@ seed_labels() {
 # and rewritten on every run: a filter pointing at a column that no longer holds
 # that id matches nothing, and an empty queue looks like a finished day.
 # ---------------------------------------------------------------------------
+# "1, 2, 3" from a list, which is the shape the filter language wants.
+join_ids() {
+  local out="" id=""
+  for id in "$@"; do
+    out="${out:+$out, }$id"
+  done
+  printf '%s' "$out"
+}
+
+# Every boarded board's Validation and Doing column ids. Reads only.
+collect_filter_ids() {
+  local repo="" pid="" view="" vjson="" buckets="" id=""
+  VALIDATION_IDS=()
+  DOING_IDS=()
+  for repo in "${REPOS_ALL[@]}"; do
+    http GET /projects
+    pid="$(jq -r --arg t "$repo" '[.[] | select(.title == $t)][0].id // empty' <<<"$API_BODY")"
+    if [ -z "$pid" ]; then
+      continue
+    fi
+    http GET "/projects/$pid/views"
+    vjson="$(jq -c '[.[] | select(.view_kind == "kanban")][0] // empty' <<<"$API_BODY")"
+    if [ -z "$vjson" ]; then
+      continue
+    fi
+    view="$(jq -r '.id' <<<"$vjson")"
+    http GET "/projects/$pid/views/$view/buckets"
+    buckets="$API_BODY"
+    id="$(jq -r --arg t "$VALIDATION_TITLE" '[.[] | select(.title == $t)][0].id // empty' <<<"$buckets")"
+    if [ -n "$id" ]; then
+      VALIDATION_IDS+=("$id")
+    fi
+    id="$(jq -r --arg t "$DOING_TITLE" '[.[] | select(.title == $t)][0].id // empty' <<<"$buckets")"
+    if [ -n "$id" ]; then
+      DOING_IDS+=("$id")
+    fi
+  done
+}
+
 seed_filters() {
   local validation_id="$1" doing_id="$2" title="" query="" id="" body="" filters_json=""
 
   printf '\n'
   for pair in "$FILTER_VALIDATION_TITLE:$validation_id" "$FILTER_DOING_TITLE:$doing_id"; do
     title="${pair%:*}"
-    query="bucket_id = ${pair##*:} && done = false"
+    query="bucket_id in ${pair##*:} && done = false"
     list_saved_filters
     filters_json="$API_BODY"
     id="$(jq -r --arg t "$title" '[.[] | select(.title == $t)][0].id // empty' <<<"$filters_json")"
@@ -658,12 +723,6 @@ verify() {
     order="$(jq -r 'sort_by(.position) | [.[].title] | join(", ")' <<<"$buckets_json")"
     done_id="$(jq -r --arg t "$DONE_TITLE" '[.[] | select(.title == $t)][0].id // 0' <<<"$buckets_json")"
     default_id="$(jq -r --arg t "$DEFAULT_BUCKET_TITLE" '[.[] | select(.title == $t)][0].id // 0' <<<"$buckets_json")"
-    # The filter check at the end needs the two column ids, and this is the only
-    # place they are read from the board.
-    if [ "$repo" = "$BOARDED_REPO" ]; then
-      VALIDATION_BUCKET_ID="$(jq -r --arg t "$VALIDATION_TITLE" '[.[] | select(.title == $t)][0].id // empty' <<<"$buckets_json")"
-      DOING_BUCKET_ID="$(jq -r --arg t "$DOING_TITLE" '[.[] | select(.title == $t)][0].id // empty' <<<"$buckets_json")"
-    fi
 
     if [ "$order" = "$expected_order" ]; then
       printf 'PASS %-12s columns %s\n' "$repo" "$order"
@@ -737,14 +796,13 @@ verify() {
   done
 
   # ---- the two filters, once for the account -----------------------------
-  if [ -z "$VALIDATION_BUCKET_ID" ]; then
-    printf 'NOTE %-12s filters not checked: %s was not in scope\n' filters "$BOARDED_REPO"
-  else
+  collect_filter_ids
   list_saved_filters
   filters_json="$API_BODY"
-  for pair in "$FILTER_VALIDATION_TITLE:$VALIDATION_BUCKET_ID" "$FILTER_DOING_TITLE:$DOING_BUCKET_ID"; do
+  for pair in "$FILTER_VALIDATION_TITLE:$(join_ids "${VALIDATION_IDS[@]}")" \
+              "$FILTER_DOING_TITLE:$(join_ids "${DOING_IDS[@]}")"; do
     title="${pair%:*}"
-    query="bucket_id = ${pair##*:} && done = false"
+    query="bucket_id in ${pair##*:} && done = false"
     filter_id="$(jq -r --arg t "$title" '[.[] | select(.title == $t)][0].id // empty' <<<"$filters_json")"
     if [ -z "$filter_id" ]; then
       printf 'FAIL %-12s saved filter "%s" is missing\n' filters "$title"
@@ -757,7 +815,6 @@ verify() {
       failures=$((failures + 1))
     fi
   done
-  fi
 
   printf '\n'
   if [ "$failures" -ne 0 ]; then
@@ -797,6 +854,8 @@ if [ "$RUN_ALL" = 1 ] && [ -n "$REPO_SCOPE" ]; then
   printf 'vikunja-seed: --all and --repo cannot be combined\n' >&2
   exit 2
 fi
+
+REPOS_ALL=("${REPOS[@]}")
 
 if [ -n "$REPO_SCOPE" ]; then
   scope_found=0
@@ -852,17 +911,11 @@ for repo in "${REPOS[@]}"; do
   seed_project "$repo"
 done
 
-# The filters are global to the account but point at columns, and those belong to
-# one board: they are written when homelab is in scope, and skipped otherwise.
-case " ${REPOS[*]} " in
-  *" homelab "*)
-    seed_filters "$VALIDATION_BUCKET_ID" "$DOING_BUCKET_ID"
-    retire_old_filter
-    ;;
-  *)
-    note "no saved filter written: they point at the homelab board's columns, and homelab was not in scope"
-    ;;
-esac
+# The filters name every boarded board's columns, so they are rebuilt from the
+# whole list, not only from the boards this run happened to touch.
+collect_filter_ids
+seed_filters "$(join_ids "${VALIDATION_IDS[@]}")" "$(join_ids "${DOING_IDS[@]}")"
+retire_old_filter
 
 printf '\n'
 if [ "$DRY_RUN" = 1 ]; then
