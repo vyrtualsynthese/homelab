@@ -13,8 +13,7 @@ of steps; it does not say the result was accepted.
 
 One project per GitHub repository, seven of them: `homelab`, `config`, `ashuvidz-website`,
 `ashudev-website`, `selfhosted-helmcharts`, `ashuworld`, `ashuvidz-creator`. Each project has one kanban
-view titled `Board` whose buckets — the board's word for a kanban column — are `Ready`, `Doing`,
-`Waiting for validation` and `Done`. `Done` is the view's **done bucket**: a task moved there is marked
+view titled `Board` whose buckets — the board's word for a kanban column — are `Ideas`, `Backlog`, `Doing`, `Revision` and `Done`, in that order. `Done` is the view's **done bucket**: a task moved there is marked
 done by Vikunja itself, and a task marked done elsewhere appears there. One saved filter, `Awaiting my
 review`, lists every open task across all projects, oldest first; it is the operator's backstop, not a
 column.
@@ -23,22 +22,25 @@ column.
 
 | State | What it means |
 |---|---|
-| `Ready` | The task exists in a plan and nobody has started it. |
+| `Ideas` | An unformed thought. Nothing has been sized, specified or promised. |
+| `Backlog` | The task exists in a plan and nobody has started it. |
 | `Doing` | A session is working on it, or is blocked on it. |
-| `Waiting for validation` | The work is finished as far as the agent can tell, and the operator has not looked yet. |
+| `Revision` | The work is finished as far as the agent can tell, and the operator has not looked yet. |
 | `Done` | The operator accepted the work. Nothing else. |
 
 | From | To | Who may make the move | When |
 |---|---|---|---|
-| — | `Ready` | operator or agent | The task exists in a plan and has not been started. |
-| `Ready` | `Doing` | agent | The session starts the task. Assign the ticket to your own account in the same move. |
-| `Doing` | `Waiting for validation` | agent | The branch is pushed, the PR is open, the verification has been run and its output is in the description. |
-| `Waiting for validation` | `Doing` | **operator only** | The operator refuses the work. The comment says why. |
-| `Waiting for validation` | `Done` | **operator only** | The operator accepts the work. |
+| — | `Ideas` | operator or agent | Something worth doing someday, with nothing behind it yet. |
+| `Ideas` | `Backlog` | operator | The thought is now a sized task, usually a plan step. |
+| — | `Backlog` | operator or agent | The task exists in a plan and has not been started. |
+| `Backlog` | `Doing` | agent | The session starts the task. Assign the ticket to your own account in the same move. |
+| `Doing` | `Revision` | agent | The branch is pushed, the PR is open, the verification has been run and its output is in the description. |
+| `Revision` | `Doing` | **operator only** | The operator refuses the work. The comment says why. |
+| `Revision` | `Done` | **operator only** | The operator accepts the work. |
 
 Nothing else moves a ticket. In particular an agent never moves a ticket to `Done`, never moves one out
-of `Done`, never empties `Waiting for validation` on its own behalf, and never moves a ticket that it is
-not assigned to. There is no transition from `Ready` straight to `Waiting for validation`: if you did
+of `Done`, never empties `Revision` on its own behalf, and never moves a ticket that it is
+not assigned to. There is no transition from `Ready` straight to `Revision`: if you did
 the work, the ticket passed through `Doing`, and the board should be able to show that it did.
 
 ## What a ticket carries
@@ -57,7 +59,7 @@ Two habits that keep the fields honest:
 - The description is the evidence, not the claim. "The check passes" is not evidence; the command and
   what it printed are.
 - The description is edited in place as the work lands. A PR link appended to a ticket in
-  `Waiting for validation` is expected; a second ticket describing the same task is not.
+  `Revision` is expected; a second ticket describing the same task is not.
 
 ## A handover, as a shape
 
@@ -71,7 +73,7 @@ The situation it shows: a one-line defect in a chart. The session finds the tick
 repository's project, moves it to `Doing`, assigns it to the account its token acts as, does the work,
 and parks it like this.
 
-Bucket: `Waiting for validation`.
+Bucket: `Revision`.
 
 Description, as written on the ticket:
 
@@ -96,7 +98,7 @@ The `plan:` line is left out of this sketch on purpose: the field table above sa
 carries the plan path and the task number, and there is no plan task standing behind this shape to
 name. A real ticket carries it, pointing at the plan file the task actually came from.
 
-What the agent did, in order: moved the ticket `Doing` → `Waiting for validation`, added the label
+What the agent did, in order: moved the ticket `Doing` → `Revision`, added the label
 `implementer`, and stopped. It also ticked that step's box in the plan, in the same commit as the chart
 change, because the step was executed — that tick says "ran", not "accepted", and the ticket is what
 says the work is finished. It did not touch `Done`.
@@ -118,7 +120,7 @@ block in values.yaml, not only the template) or the change needs the pod restart
 this PR does not do. Please close whichever it is and paste the exec output here.
 ```
 
-They then move the ticket `Waiting for validation` → `Doing`. That is the whole refusal: one comment
+They then move the ticket `Revision` → `Doing`. That is the whole refusal: one comment
 and one move, both the operator's.
 
 When the same agent — or another session — picks the ticket up again, it reads, in this order:
@@ -131,7 +133,7 @@ When the same agent — or another session — picks the ticket up again, it rea
 
 It does not re-read the plan first and start again from the top. The refusal names the gap; the work is
 to close that gap and paste the evidence the operator asked for, in a new comment on the ticket, and to
-move it back to `Waiting for validation` only when that evidence exists.
+move it back to `Revision` only when that evidence exists.
 
 ## When a task cannot be finished
 
@@ -175,7 +177,7 @@ one thing, and this page corrects it.
 - W7's acceptance criterion says an agent *"can create and close a Vikunja task"*.
 
 **This document supersedes both, for agents.** An agent may create a ticket, claim one, and move it to
-`Waiting for validation`. Only the operator moves it to `Done`. The reason is the one the board exists
+`Revision`. Only the operator moves it to `Done`. The reason is the one the board exists
 for: an agent that grades its own work is the failure mode this whole arrangement is meant to catch.
 Closing through the API is cheap to build and produces a board that always agrees with whoever last
 wrote to it — a second todo list with better colours. The board is worth its overhead only because the
