@@ -24,6 +24,8 @@ Environment:
     WORK_ROOT          default <SITE_ROOT>/../work; checkouts and staging, never served
     STATE              default /data/state.json
     FULL_REBUILD_AGE   default 86400, in seconds
+    BUILDER_REVISION   optional; part of the stamp that decides whether a
+                       deploy retries the pairs the previous one failed
 
 Usage:
 
@@ -1024,20 +1026,26 @@ def _builder_source() -> Path:
 
 
 def builder_stamp() -> str:
-    """A short fingerprint of this builder, recorded in the state it writes.
+    """A short fingerprint of the builder that produced a state file.
 
     The failure counter bounds retries *per builder*: five failing runs say the
     repository is broken, but they say nothing about the next version of this
-    script, and a deployment defect is exactly the kind of failure that looks
+    deployment, and a deployment defect is exactly the kind of failure that looks
     like a repository's. When the stamp in the state differs, every `failed`
     pair is retried once — the deploy is the change that could fix it, and no
     head has moved.
+
+    The fingerprint covers the script and `BUILDER_REVISION`, which the chart
+    bumps when the build *environment* changes (capabilities, mounts, image).
+    Both matter: on 2026-11-17 the script was right and the pod's capabilities
+    were not, and only a manifest change could fix it.
     """
     try:
         material = _builder_source().read_bytes()
     except OSError:
-        return "unknown"
-    return hashlib.sha256(material).hexdigest()[:12]
+        material = b""
+    revision = os.environ.get("BUILDER_REVISION", "").strip()
+    return hashlib.sha256(material + b"\0" + revision.encode("utf-8")).hexdigest()[:12]
 
 
 def empty_state() -> dict[str, Any]:

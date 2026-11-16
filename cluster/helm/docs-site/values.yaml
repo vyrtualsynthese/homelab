@@ -14,6 +14,12 @@ builder:
   # Docker Hub. The project publishes no other registry, so this is the §8.7
   # exception recorded in the design document. Pinned by tag, never `latest`.
   image: squidfunk/mkdocs-material:9.8.1
+  # Bump when anything about the build *environment* changes — the pod's
+  # capabilities, the mount layout, the image — not only the script. The
+  # builder records this in its state so a deploy retries the pairs the
+  # previous build failed; without it, a manifest-only fix would leave them
+  # parked until each branch head moved.
+  revision: "2"
   resources:
     requests:
       cpu: 100m

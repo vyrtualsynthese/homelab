@@ -54,6 +54,11 @@ spec:
                 # the CronJob does not run at.
                 - name: SCHEDULE
                   value: {{ .Values.schedule | quote }}
+                # Part of the builder's identity in its state: a manifest-only
+                # change (capabilities, mounts, image) has to retry the pairs the
+                # previous pod failed, exactly like a change to the script.
+                - name: BUILDER_REVISION
+                  value: {{ .Values.builder.revision | quote }}
                 - name: SITE_ROOT
                   value: /data/site
                 - name: STATE
@@ -74,6 +79,15 @@ spec:
                 capabilities:
                   drop:
                     - ALL
+                  # The build runs as `nobody` so a repository's `hooks:` code
+                  # cannot read the token out of this process's /proc/1/environ,
+                  # and dropping to another uid needs exactly these two — a root
+                  # process without them cannot call setuid/setgid at all. They
+                  # grant nothing the build uses: `nobody` gets no capability
+                  # back, and the binary it runs is MkDocs, not a shell tool.
+                  add:
+                    - SETUID
+                    - SETGID
           volumes:
             - name: site
               persistentVolumeClaim:
