@@ -61,6 +61,11 @@ entries:
       identifiers:
         name: ashulab-app-tautulli
       required: true
+  - model: authentik_blueprints.metaapplyblueprint
+    attrs:
+      identifiers:
+        name: ashulab-app-vikunja
+      required: true
 
   # The embedded outpost is a managed object. Its identifiers are `managed`, not
   # `name`: keying on the name creates a duplicate outpost and rolls back the
@@ -81,3 +86,4 @@ entries:
         - !Find [authentik_providers_proxy.proxyprovider, [name, maintainerr]]
         - !Find [authentik_providers_proxy.proxyprovider, [name, prowlarr]]
         - !Find [authentik_providers_proxy.proxyprovider, [name, tautulli]]
+        - !Find [authentik_providers_proxy.proxyprovider, [name, vikunja]]

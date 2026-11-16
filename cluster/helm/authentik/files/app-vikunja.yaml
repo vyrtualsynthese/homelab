@@ -1,0 +1,55 @@
+version: 1
+metadata:
+  name: ashulab-app-vikunja
+entries:
+  - model: authentik_blueprints.metaapplyblueprint
+    attrs:
+      identifiers:
+        name: ashulab-groups
+      required: true
+
+  # Forward auth for the board's interface only. `/api` on the same host is
+  # deliberately NOT behind this provider: Traefik matches that path on a
+  # higher-priority rule that carries `lan-only` and nothing else, because a
+  # bearer token (the MCP endpoint at /api/v2/mcp) cannot complete a sign-in
+  # redirect. See `cluster/helm/vikunja/templates/ingressroute.yaml`.
+  #
+  # No client secret and no internal host: this is a forward-auth provider, so
+  # the outpost validates the session and answers Traefik, which passes the
+  # X-authentik-* headers on.
+  - model: authentik_providers_proxy.proxyprovider
+    id: vikunja-provider
+    identifiers:
+      name: vikunja
+    attrs:
+      name: vikunja
+      mode: forward_single
+      # Scheme must match the browser. `vikunja.kub.local` is served over TLS on
+      # `websecure` with the cluster's internal certificate, and the outpost
+      # takes the session cookie's Secure flag from this scheme, so it has to
+      # stay in step with the router.
+      external_host: https://vikunja.kub.local
+      authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
+      invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
+
+  - model: authentik_core.application
+    id: vikunja-app
+    identifiers:
+      slug: vikunja
+    attrs:
+      name: Vikunja
+      slug: vikunja
+      provider: !KeyOf vikunja-provider
+      meta_launch_url: https://vikunja.kub.local/
+      meta_icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/vikunja.png
+      policy_engine_mode: any
+
+  # Operator-only in phase 1. Vikunja keeps its own login behind the gate, so
+  # the account created in its first-run form is what actually owns the boards;
+  # this binding decides who may reach that form at all.
+  - model: authentik_policies.policybinding
+    identifiers:
+      target: !KeyOf vikunja-app
+      order: 0
+    attrs:
+      group: !Find [authentik_core.group, [name, authentik Admins]]
