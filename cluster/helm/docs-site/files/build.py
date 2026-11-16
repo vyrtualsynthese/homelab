@@ -46,8 +46,9 @@ trusted to run code in this process**: MkDocs executes `hooks:` as Python, and
 a config can point `docs_dir` at any directory it likes. The trust boundary is
 "repositories under the operator's account" — `REPO_OWNER` and `REFS` decide
 what runs here, and nothing else does. Within that boundary the builder still
-gives the build no network identity: `mkdocs` runs with every credential-shaped
-variable removed from its environment (`GITHUB_TOKEN` included), and a
+gives the build no network identity: `mkdocs` runs as an unprivileged uid
+(`nobody`) with every credential-shaped variable removed from its environment,
+so a hook cannot read the token out of this process's `/proc/1/environ`; and a
 `docs_dir` that resolves outside the checkout fails the pair before MkDocs
 starts.
 
@@ -611,6 +612,30 @@ def build_env() -> dict[str, str]:
     return {name: value for name, value in os.environ.items() if not CREDENTIAL_ENV.search(name)}
 
 
+# The uid and gid MkDocs runs as when the builder is root (`nobody`, 65534 in
+# every image that matters). Stripping the token from the child's environment is
+# not enough on its own: a `hooks:` module is arbitrary Python in the same
+# container, and a process of the same uid can read `/proc/1/environ` — the
+# builder's own environment, token included — no matter what the child was
+# given. A different uid cannot open that file, so the token is out of reach
+# from the code the checkout supplies.
+BUILD_UID = 65534
+BUILD_GID = 65534
+
+
+def build_identity() -> tuple[int, int] | None:
+    """The uid/gid to drop to for the MkDocs child, or None when already unprivileged.
+
+    Only root can change uid, and only root needs to: a builder that is already
+    running unprivileged has no token worth protecting from a sibling of the
+    same uid.
+    """
+    if os.geteuid() != 0:
+        return None
+    return BUILD_UID, BUILD_GID
+
+
+
 def _unquote(value: str) -> str:
     """The scalar inside a YAML `key: value` line, comment and quotes removed."""
     if value[:1] in {'"', "'"}:
@@ -685,18 +710,42 @@ def _run_mkdocs(config: Path, staging: Path, src: Path) -> None:
     let one broken link in one repository stop that repository from publishing
     for good, with no way to opt out.
 
-    The environment is `build_env()`, never the inherited one: the config may
-    run hooks, and the token is not part of a site build.
+    Two things happen to the child, because the config may run `hooks:` — Python
+    from the checkout, in this container:
+
+    - its environment is `build_env()`, never the inherited one, so no credential
+      is handed to it;
+    - when the builder is root, it runs as `nobody` (see `build_identity`),
+      because a sibling of the same uid would read the token straight out of
+      `/proc/1/environ` whatever its environment says. The staging directory is
+      handed to that uid for the duration of the build, which is the only thing
+      the build writes.
     """
     command = ["mkdocs", "build", "-f", str(config), "-d", str(staging), "--quiet"]
+    identity = build_identity()
+    if identity is not None:
+        try:
+            os.chown(staging.parent, identity[0], identity[1])
+        except OSError as exc:
+            raise BuildError(f"cannot hand {staging.parent} to uid {identity[0]}: {exc}") from None
+    env = build_env()
+    if identity is not None:
+        # `nobody` has no home of its own, and MkDocs (and a hook that writes a
+        # cache) must land somewhere it can write: the staging tree.
+        env["HOME"] = str(staging.parent)
+        env["XDG_CACHE_HOME"] = str(staging.parent / ".cache")
+    switch: dict[str, object] = {}
+    if identity is not None:
+        switch = {"user": identity[0], "group": identity[1], "extra_groups": []}
     try:
         subprocess.run(
             command,
             cwd=str(src),  # hooks and extra assets resolve as the repository expects
-            env=build_env(),
+            env=env,
             capture_output=True,
             text=True,
             check=True,
+            **switch,
         )
     except FileNotFoundError:
         raise BuildError("mkdocs is not on PATH") from None

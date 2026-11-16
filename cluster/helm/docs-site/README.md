@@ -26,6 +26,16 @@ minute. A second workload is an unprivileged nginx that serves the resulting dir
 strict build would fail on them forever; a repository that wants warnings to fail sets `strict: true`
 in its own `mkdocs.yml`.
 
+## The build runs repository code
+
+A repository's own `mkdocs.yml` is trusted code: MkDocs executes its `hooks:` as Python in the builder
+container. The trust boundary is therefore "repositories under the operator's account", and the
+builder keeps the blast radius inside it: `mkdocs` runs as an unprivileged uid with every
+credential-shaped variable stripped from its environment, so a hook cannot read the GitHub token out
+of the builder's `/proc/1/environ`, and the pod mounts no service-account token, so a hook cannot
+reach the API server either. `docs_dir` is also checked against the checkout before the build, but
+that check is shallow — the real boundary is which repositories are in scope.
+
 ## Change detection
 
 Each run asks GitHub for the head of every (repository, ref) with a conditional request, so an
