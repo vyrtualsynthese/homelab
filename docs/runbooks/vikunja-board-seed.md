@@ -1,19 +1,22 @@
-# Seeding the board
+# Shaping the board
 
-Date: 2026-11-15
+Date: 2026-11-16
 
-**Changes the cluster:** no. This writes to the task board — projects, views, columns and one saved
-filter — and touches no Kubernetes object. The script lives in `hack/vikunja-seed.sh`; this file is
-how to run it, what its output means, and what it deliberately does not do.
+**Changes the cluster:** no. This writes to the task board — projects, one view, six columns, seven
+labels, two saved filters — and touches no Kubernetes object. Two scripts do it: `hack/vikunja-seed.sh`,
+which shapes a board and is safe to run forever, and `hack/vikunja_migrate.py`, which was the one-shot
+migration of the 152 tickets that existed on 2026-11-16 and is kept for the record.
 
-The board (Vikunja) holds one project per GitHub repository, each with a kanban view titled `Board`
-whose columns are `Ready`, `Doing`, `Waiting for validation` and `Done`. `Done` is the view's done
-bucket: a card dragged there is marked done, and a card marked done is moved there. That is what
-keeps the board and every filter honest, and it is the one setting `--verify` exists to check.
+The board (Vikunja) holds one project per GitHub repository. Only `homelab` is boarded today; the other
+six exist and are empty. Its kanban view is `Board`, and its columns are `Idea`, `Shaping`, `Backlog`,
+`Doing`, `Validation` and `Done`. `Done` is the view's done column: a card dragged there is marked done,
+and a card marked done is moved there. That is what keeps the board and every filter honest, and it is
+the one setting the `--verify` run exists to check.
 
-The script is idempotent. It matches every object by title, creates only what is missing, and prints
-`existing` for the rest, so running it twice creates nothing the second time. It never deletes or
-renames anything.
+The seed script is idempotent: it matches every object by title, creates only what is missing, and
+prints `existing` for the rest. It never deletes a view and never deletes a column holding cards.
+A column from the old shape is **renamed in place**, so its id survives — the saved filters store those
+ids, and a new id would silently point the operator's queue at nothing.
 
 Run it after [`vikunja-first-start.md`](vikunja-first-start.md), which creates the owner account the
 token below belongs to.
@@ -24,18 +27,19 @@ token below belongs to.
 |---|---|
 | Address | `https://vikunja.kub.local` |
 | Script | `hack/vikunja-seed.sh` |
-| Projects | `homelab`, `config`, `ashuvidz-website`, `ashudev-website`, `selfhosted-helmcharts`, `ashuworld`, `ashuvidz-creator` |
-| View | `Board`, kanban, manual bucket order |
-| Columns | `Ready`, `Doing`, `Waiting for validation`, `Done` |
-| Saved filter | `Awaiting my review` |
+| Projects | `homelab` (boarded), then `config`, `ashuvidz-website`, `ashudev-website`, `selfhosted-helmcharts`, `ashuworld`, `ashuvidz-creator` (empty) |
+| View | one kanban view per project, titled `Board` at position 1 |
+| Columns | `Idea`, `Shaping`, `Backlog`, `Doing`, `Validation`, `Done`, left to right |
+| Labels | `feature`, `story`, `task`; `agent`, `operator`; `implementer`, `reviewer` |
+| Saved filters | `Needs my validation`, `Agent work in flight` |
 
 ## Preconditions
 
 - The first start is done: the owner account exists, and `https://vikunja.kub.local` answers.
-- `curl` and `jq` are installed on the workstation.
-- The workstation resolves `vikunja.kub.local` to the cluster. Everything here runs from the LAN;
-  the board's route carries the `lan-only` gate, so a request from outside the house is refused
-  before it reaches the API.
+- `curl`, `jq` and `python3` are installed on the workstation.
+- The workstation resolves `vikunja.kub.local` to the cluster. Everything here runs from the LAN; the
+  board's route carries the `lan-only` gate, so a request from outside the house is refused before it
+  reaches the API.
 - An operator API token, made in Step 1.
 
 ## Step 1 — the token
@@ -56,227 +60,129 @@ caveat: `curl` receives the token as an argument, so on this machine another loc
 One sentence about the certificate, because it applies to every call below: without `-k` curl would
 reject the cluster's internal certificate, so the script passes `-k`, which accepts the certificate
 **without checking it**; setting `VIKUNJA_CACERT=~/.config/secrets/kub-local/local-ca.pem` makes it
-check the chain against the cluster's own authority instead. The chain itself is proved once, in
-[`vikunja-first-start.md`](vikunja-first-start.md) Step 5 — this procedure is about the board's
-contents, not about who signed its certificate.
+check the chain against the cluster's own authority instead.
 
 ## Step 2 — the dry run
 
 Always first. It reads the board and prints every call it would make, sending no write.
 
 ```bash
-./hack/vikunja-seed.sh --dry-run
+./hack/vikunja-seed.sh --repo homelab --dry-run
 ```
 
 ```text
-Board https://vikunja.kub.local, 7 repositories: homelab config ashuvidz-website ashudev-website selfhosted-helmcharts ashuworld ashuvidz-creator
+Board https://vikunja.kub.local, 1 repositories: homelab
 Dry run: reading the board, sending no write.
 
-         -> GET /api/v1/projects
-         -> PUT /api/v1/projects {"title":"homelab"}
-project  homelab                                      would-create
-         -> PUT /api/v1/projects/<new project homelab>/views {"title":"Board","view_kind":"kanban","bucket_configuration_mode":"manual"}
-view     homelab / Board                              would-create
-         -> PUT /api/v1/projects/<new project homelab>/views/<new view Board>/buckets {"title":"Ready"}
-bucket   homelab / Board / Ready                      would-create
+         -> GET /api/v1/labels
+         -> PUT /api/v1/labels {"title":"feature","hex_color":"#1f6feb"}
+label    feature                                      would-create  #1f6feb
 ...
-         -> PUT /api/v1/filters {"title":"Awaiting my review","filters":{"sort_by":["created"],"order_by":["asc"],"filter":"done = false"}}
-filter   Awaiting my review                           would-create
+project  homelab                                      existing      id=2
+view     homelab / Kanban                             adopted       id=13 -> Board
+         -> GET /api/v1/projects/2/views/13/buckets
+bucket   homelab / Board / Ideas                      would-rename  id=10 -> Idea
+...
+view     homelab / Board                              would-update  title, position, mode, default column and done column in one write
 
-dry run: 50 write(s) planned, none sent; 0 object(s) already exist
+         -> GET /api/v1/projects
+         -> PUT /api/v1/filters {"title":"Needs my validation",...}
+filter   Needs my validation                          would-create  bucket_id = 14 && done = false
 ```
 
-The shape above is what the script printed against a stand-in for the API before the board existed,
-so the ids and the URL differ on the real run; the lines, the order and the `50` are what to expect
-from an empty board. A placeholder in angle brackets (`<new project homelab>`) is an id the script
-does not know yet because it has not written anything.
-
-`bucket_configuration_mode: "manual"` is in the view body on purpose: its default, `none`, fixes each
-card to the column it was created in, and `manual` is what allows a person to drag a card from
-`Doing` to `Waiting for validation`.
-
-On a board where the view does not exist yet, the dry run cannot know which default columns that view
-will bring, so it plans all four. The real run reads them back and matches by title — see Step 3.
+Read it for three things: every project line says `existing`, every column lands `existing` or
+`would-rename` rather than a fresh `would-create`, and the closing count is small. A `would-create`
+for a column that already exists means a title changed in the script and the board kept the old one.
 
 ## Step 3 — the real run
 
 ```bash
-./hack/vikunja-seed.sh
+./hack/vikunja-seed.sh --repo homelab
 ```
 
-Expected: seven blocks, one per repository — the project, the view, the four columns, the done bucket,
-and the bucket mode — then the saved filter. On an instance that does not return
-`bucket_configuration_mode`, the `mode` line is absent and an indented note stands in its place; the
-note is described below the sample.
+Expected: the labels, the project, the adopted view, six columns, one view write, and two filters.
 
 ```text
-project  homelab                                      created       id=1001
-view     homelab / Board                              created       id=1002
-bucket   homelab / Board / Ready                      created       id=1006
-bucket   homelab / Board / Doing                      existing      id=1004
-bucket   homelab / Board / Waiting for validation     created       id=1007
-bucket   homelab / Board / Done                       existing      id=1005
-bucket   homelab / Board / To-Do                      kept          id=1003
-done     homelab / Board                              created       bucket 1005 (Done)
-mode     homelab / Board                              existing      manual
-...
-filter   Awaiting my review                           created       id=1037
+label    feature                                      existing      id=1
+project  homelab                                      existing      description already set
+view     homelab / Kanban                             adopted       id=13 -> Board
+bucket   homelab / Board / Ideas                      renamed       id=10 -> Idea
+bucket   homelab / Board / Shaping                    created       id=97 position=200
+bucket   homelab / Board / Backlog                    positioned    200 -> 300
+view     homelab / Board                              updated       title, position, mode, default column and done column in one write
+filter   Needs my validation                          updated       bucket_id = 14 && done = false
+filter   Awaiting my review                           retired       id=2
 
-seeded: 36 created, 21 already present, 0 updated, 7 kept (not created here)
+seeded: 0 created, 17 already present, 3 updated, 0 kept (not created here)
 ```
 
-The block above is from a stand-in for the API whose new kanban views arrive with `To-Do`, `Doing`
-and `Done`. That is the case worth reading carefully: the two columns the script manages are matched
-by title and reported `existing`, `To-Do` is reported `kept` and left alone, and only `Ready` and
-`Waiting for validation` are created. A second `Done` would break the done bucket, which is why the
-view's columns are read back on the same run that creates it.
+Without `--repo`, the script walks all seven projects and shapes every board. That is deliberate and
+harmless — a board with no cards is shaped anyway — but today only `homelab` has work, and `--repo`
+is how a run stays inside it.
 
-A board whose new views arrive empty instead shows all four columns `created`, and the totals are
-`50 created, 0 already present, 0 updated, 0 kept` — 7 × 7 plus the filter. Whatever the totals, a
-`kept` line is a column the script did not create and will not touch; nothing is deleted, because an
-empty column and a column holding work look the same from the API.
-
-Run it a second time and every line says `existing`: `seeded: 0 created, 57 already present, 0
-updated, 7 kept (not created here)` on the board above, or `seeded: 0 created, 50 already present, 0
-updated, 0 kept (not created here)` on an empty-view board. That second run is the proof of
-idempotency, not a repeat of the first.
-
-`updated` is the fourth counter and it should be `0` on every run after the first: it counts a view
-whose bucket mode was repaired. A view made before this script set the mode, or made by hand, carries
-`none` and prints `mode … updated none -> manual`; that one write is the repair. Whenever that write
-happens it carries both `bucket_configuration_mode` and `done_bucket_id`, with the done bucket's
-current value when that field needs nothing — this endpoint replaces the record, so a body carrying
-only one field clears the other. The script still sends at most one POST per view per run, and prints
-only the lines for what it repaired; a run that fixes just one of the two prints just that line.
-
-On an instance that does not return `bucket_configuration_mode`, the `mode` line is missing from every
-block and this indented line stands where it would be:
-
-```text
-         bucket_configuration_mode is not returned for homelab / Board — cannot check it
-```
-
-That is the seed run's counterpart of the `NOTE` in Step 4: the field the API withheld cannot be
-checked, so the script says that instead of printing a mode it never read. No `updated` is counted for
-those boards, because nothing about the mode was proved; a view stuck on `none` therefore cannot be
-detected by a re-run either.
+The view write carries **five fields**: title, position, column mode, default column and done column.
+The endpoint replaces the record rather than patching it, so a body missing `view_kind` turns the board
+into a list view with columns nobody can drag. That happened once, on 2026-11-16; the script now sends
+the kind too, and `--verify` checks it.
 
 ## Step 4 — verify
 
-`--verify` reads every board back and checks its shape. It never writes, and it exits 1 if anything
-is wrong.
-
 ```bash
-./hack/vikunja-seed.sh --verify
+./hack/vikunja-seed.sh --repo homelab --verify
 ```
+
+Expected, eight lines, one per check:
 
 ```text
-Verifying 7 boards against https://vikunja.kub.local
-
-PASS homelab                view 1002, 5 buckets, done bucket 1005, mode manual
-PASS config                 view 1009, 5 buckets, done bucket 1012, mode manual
-PASS ashuvidz-website       view 1016, 5 buckets, done bucket 1019, mode manual
-PASS ashudev-website        view 1023, 5 buckets, done bucket 1026, mode manual
-PASS selfhosted-helmcharts  view 1030, 5 buckets, done bucket 1033, mode manual
-PASS ashuworld              view 1037, 5 buckets, done bucket 1040, mode manual
-PASS ashuvidz-creator       view 1044, 5 buckets, done bucket 1047, mode manual
-PASS saved filter "Awaiting my review"
-
-verify: all 7 boards hold the shape the protocol expects
+PASS labels       7 labels present
+PASS homelab      view "Board" at position 1
+PASS homelab      view kind kanban
+PASS homelab      columns Idea, Shaping, Backlog, Doing, Validation, Done
+PASS homelab      done column 12
+PASS homelab      default column 13
+PASS homelab      columns are dragged by hand (mode manual)
+PASS homelab      206 tickets, each with exactly one kind label
+PASS homelab      Doing and Validation hold task cards only
+PASS filters      saved filter "Needs my validation" reads bucket_id = 14 && done = false
+PASS filters      saved filter "Agent work in flight" reads bucket_id = 11 && done = false
 ```
 
-Each `PASS` says the view is kanban, the four columns exist, `done_bucket_id` names the column titled
-`Done`, and the bucket mode is `manual`. The bucket count is what the API returned, so `5` means one
-column was kept. The done bucket is the check that matters most: without it a card sits in `Done`
-while the board still reports it as open, and every filter lists it as work outstanding. A `FAIL`
-names the repository and the problem, in the same words as the troubleshooting table below.
+Exit code 1 with the failing check named is the whole point of the run. Read the failure as the
+instruction it is: `columns` means a rename did not happen, `done column` means a view write dropped a
+field, `kind labels` means a migration or a hand-made card skipped a label.
 
-The mode check depends on the API returning the field. If a `PASS` line has no `mode manual` next to
-it and a `NOTE` follows it, the instance did not return `bucket_configuration_mode`, so the mode could
-not be checked — the line would otherwise read as "the cards can be dragged" when nothing proved it.
-The verification still succeeds, and the summary says how many boards went unchecked. In that case a
-re-run cannot detect a view stuck on `none` either; moving a card by hand is the only test left.
+## The migration, for the record
 
-## Step 5 — one more repository
-
-Add one line to `REPOS` at the top of `hack/vikunja-seed.sh`:
+`hack/vikunja_migrate.py` reads `hack/vikunja-migrate-2026-11.json` — the reviewed mapping of 27
+features, 152 tasks and the merged work — and writes it onto the board. It ran once, on 2026-11-16.
 
 ```bash
-REPOS=(
-  homelab
-  config
-  ashuvidz-website
-  ashudev-website
-  selfhosted-helmcharts
-  ashuworld
-  ashuvidz-creator
-  the-new-one
-)
+python3 hack/vikunja_migrate.py --dry-run    # print the actions, write nothing
+python3 hack/vikunja_migrate.py --apply      # create features, relabel, reparent, place
 ```
 
-Commit it, run `--dry-run`, then the real run. Every line for the seven existing repositories says
-`existing` and only the new project is created — the matching is per object, not per run.
+A second run prints `existing: the board already matches the map`. If it prints actions instead, the
+board was edited by hand somewhere the map does not know about; decide which side is right before
+applying again.
 
-## What the saved filter covers, and what it does not
-
-`Awaiting my review` selects every open task in every project, oldest first: `done = false`, sorted
-by creation date, ascending. It is not restricted by column and not restricted by assignee, despite
-its title.
-
-Column membership cannot be expressed in a saved filter. So the operator's actual queue is the
-`Waiting for validation` column of each board — that is where a task lands when an agent says it is
-ready — and the filter is the backstop that answers "did anything fall out of a board and get
-forgotten?". A task that appears in the filter and in no column's first screen has been dropped
-somewhere; a task in `Waiting for validation` is work to look at now.
-
-## Column order is not enforced
-
-The script creates the four columns in the order `Ready`, `Doing`, `Waiting for validation`, `Done`,
-but it does not set their position. A new kanban view can therefore come up with its own default
-columns first, leaving `Ready` and `Waiting for validation` to the right of them. Nothing is wrong
-with the board when that happens: drag the columns into place once, in the browser, and the order is
-saved with the view. The script will not move a column on a later run, and `--verify` does not check
-order.
-
-## Titles are the key
-
-Every object is found again by its title. Renaming something in the browser — the project, the
-`Board` view, a column, the filter — makes the next run create a second object with the original
-title, and the board then holds both. Rename deliberately, and if a rename is intended, change the
-name in the script in the same move.
-
-The one rename with teeth is a column: a renamed `Done` means the view's done bucket points at a
-column that no longer exists, which `--verify` reports as `done_bucket_id is <id>, expected <id>`.
+What it does not do: it never decides that a task is finished. The mapping says which tickets are
+`Done`; the script applies the map.
 
 ## Troubleshooting
 
-Every failure prints the method, the path, the HTTP status and the API's response body, and exits 1.
-Read the body before the status: Vikunja says which field it objected to.
-
-| Status | Likely cause | What to do |
+| Line | What it means | What to do |
 |---|---|---|
-| 401 | The token is wrong, expired, or was not exported into this shell | Make a new token, `export` it, retry. Check `echo ${VIKUNJA_API_TOKEN:+set}` before blaming the board. |
-| 403 | The token is valid but lacks the permission for that call | Recreate it with write access; if it still fails, the owner account is not the one that made the token. |
-| 404 | Wrong address, or the API group is not the one the script expects | `curl -sk "$VIKUNJA_URL/api/v1/info"` — if that is 404 the instance answers under another prefix, and `API_PATH` is what to change. |
-| Any non-2xx on the very first call | TLS or DNS, not the board | The script prints that curl could not complete; check the name resolves and the certificate story in Step 1. |
-
-`done_bucket_id is 0, expected <id>`: the view exists and its `Done` column exists, but the view was
-never told that the column means done. Running the script again sets it. If it comes back after
-that, the column titled `Done` was renamed or duplicated, so match the title.
-
-`bucket_configuration_mode is "none", expected "manual"`: the view exists but its cards are pinned to
-the column they were created in. Running the script again repairs it and prints that line as
-`updated`; a dry run first shows `would-update none -> manual`. If the API does not return the field
-at all, `--verify` prints `NOTE … the mode was not checked` instead and the summary counts the
-boards it could not check — then the only proof is dragging a card by hand.
-
-A `kept` line naming a column you did not expect is not a fault: it is a column the view already had.
-Rename or delete it in the browser if it is noise, and the next run will report it gone.
+| `bucket "Ideas" holds 3 cards` | A column with cards cannot be renamed: the rename would relabel live work | Move the cards first, then re-run |
+| `has no kanban view` | The project has no kanban view at all — someone deleted it, or converted it | Add a kanban view in the board UI, then re-run. The script never creates one |
+| `FAIL done column` | The view write dropped `done_bucket_id` | Re-run the seed; it repairs the whole record in one write |
+| `FAIL view kind` | The view is not a kanban any more | The seed repairs it; if it recurs, something else is writing to `/projects/{p}/views/{v}` |
+| `FAIL saved filter ... does not read` | The filter points at a column id that changed | Re-run the seed; it rewrites both filters from the live ids |
+| `FAIL ... without exactly one kind label` | A card was made by hand without `feature`/`story`/`task` | Label it, or delete it |
+| `HTTP 405 GET /api/v1/filters` | An older script read the filter list directly; this API version has no such endpoint | Filters are listed through `GET /projects`, where they appear as projects with negative ids |
 
 ## Rollback
 
-The script never deletes anything, so there is nothing to undo in the other direction: delete what
-you no longer want in the browser — a project, a view, a column, the filter — or drop the board's
-database if the whole board is being abandoned
-([`vikunja-database.md`](vikunja-database.md)). Both are hand operations; neither is scripted here,
-because deleting a project takes its tasks with it.
+There is none, and none is needed: the script only ever creates what is missing, renames empty columns,
+and rewrites the same two filters. To undo a column rename, rename it back with `--repo` and the old
+name in `BUCKET_RENAMES`; to drop the board entirely, delete the project in the UI, which destroys its
+cards and leaves the labels and filters behind.

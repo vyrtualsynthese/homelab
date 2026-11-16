@@ -46,7 +46,7 @@ Set out in the design at §8.8, and worth repeating because it is the rule that 
 |---|---|
 | Decisions and designs | `docs/superpowers/specs/`, `docs/decisions/` |
 | Evergreen knowledge: architecture, runbooks, secret inventory | `docs/` |
-| Work state: what is being done, by whom, blocked, done | Vikunja (`vikunja.kub.local`) only |
+| Work state: what is being thought about, planned, being done, awaiting validation, done | Vikunja (`vikunja.kub.local`) only, in six columns: `Idea`, `Shaping`, `Backlog`, `Doing`, `Validation`, `Done` |
 | Agent recall: facts learned, preferences, past mistakes | OpenMemory |
 
 No second todo list, anywhere. A task links to a decision; it does not contain one. Documentation is
