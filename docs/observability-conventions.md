@@ -70,16 +70,21 @@ It holds **no alert rules and no Alertmanager** (`alertmanager.enabled: false`,
 **Loki** — `http://loki.kub.local`, no authentication. Every line is a Fluent Bit
 JSON envelope; unwrap it in the query (see below). The UI is at `/ui`.
 
-**Grafana** — `http://grafana.kub.local`. `server.root_url` is set to that host
-in the wrapper chart, because Grafana builds the Source and Silence links of
-every Discord alert from it; leaving it unset produced
-`http://localhost:3000/`. The API needs a bearer token from `$GRAFANA_TOKEN`,
+**Grafana** — `https://grafana.kub.local`, served over the cluster's internal
+certificate (`*.kub.local` from the ashulab internal CA,
+[`runbooks/internal-ca.md`](runbooks/internal-ca.md)); the plain-HTTP router only
+redirects, so scripts must use `https` and a client without the root installed
+shows a certificate warning. `server.root_url` is set to that host in the wrapper
+chart, because Grafana builds the Source and Silence links of every Discord alert
+from it; leaving it unset produced `http://localhost:3000/`. The OAuth redirect
+URI in the authentik blueprint carries the same scheme, so the sign-in flow does
+not disagree with it. The API needs a bearer token from `$GRAFANA_TOKEN`,
 exported by `~/.config/secrets/homelab.env`:
 
 ```bash
 source ~/.config/secrets/homelab.env
 curl -s -H "Authorization: Bearer $GRAFANA_TOKEN" \
-  http://grafana.kub.local/api/search?type=dash-db
+  https://grafana.kub.local/api/search?type=dash-db
 ```
 
 The token belongs to a service account with the Admin role; the only interactive

@@ -10,7 +10,9 @@ every `kub.local` route in the `media-stack` namespace — sonarr, radarr, lidar
 bazarr-anime, sonarr-anime, radarr-anime, tautulli, maintainerr, autobrr, qbittorrent and calibre — with
 each `web` router redirecting to its `websecure` twin. Argo CD joined them on 2026-11-16: its server
 router serves no certificate of its own either, and its `argocd.kub.local` address must be the TLS one,
-because the server compares the SSO return URL against it scheme included.
+because the server compares the SSO return URL against it scheme included. Grafana followed on
+2026-11-17 for the same reason: its `root_url` and the authentik redirect URI must carry the scheme the
+browser uses, and the plain-HTTP router now only redirects.
 
 It is a **private** certificate, and it has to be: public certificate authorities have been barred from
 issuing for internal names (`.local`, `.internal`, `.localhost`) since 2015, so a `.local` name can never

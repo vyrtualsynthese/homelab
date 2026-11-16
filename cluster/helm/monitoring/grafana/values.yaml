@@ -13,8 +13,16 @@ grafana:
   envFromSecret: grafana-oidc
   grafana.ini:
     server:
-      root_url: http://grafana.kub.local/
+      # Must carry the scheme the browser uses. Grafana builds the Source and
+      # Silence links of every Discord alert from `root_url`; an `http` value
+      # also makes the OAuth redirect disagree with the authentik provider.
+      root_url: https://grafana.kub.local/
       domain: grafana.kub.local
+    security:
+      # Traefik terminates TLS, so Grafana sees plain HTTP on the pod network and
+      # marks its session cookie non-secure by default. The browser only ever
+      # speaks https here, so the cookie can stay off the plain-HTTP route.
+      cookie_secure: true
     users:
       auto_assign_org: true
     auth:
