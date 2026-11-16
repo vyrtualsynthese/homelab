@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Discover repositories, notice which branch heads moved, and fetch what moved.
+"""Discover repositories, notice which branch heads moved, and publish their docs.
 
 The builder runs in a CronJob every minute inside the `squidfunk/mkdocs-material`
 image: Python and MkDocs, but no `git`, no `jq`, no `curl`. Everything below is
@@ -10,26 +10,46 @@ of the last answer and sends it back as `If-None-Match`. A `304 Not Modified`
 means "nothing moved" and is not counted against the GitHub rate limit; that is
 the whole reason this can run once a minute.
 
-This is part one of the builder: discovery, the conditional head check and the
-tarball fetch. A pair selected for a build is downloaded and unpacked, then
-discarded. Part two replaces that step with an MkDocs build into a staging
-directory.
+This is the whole builder: discovery, the conditional head check, the tarball
+fetch, and the MkDocs build that turns one checkout into one site. A pair is
+downloaded, built into a staging directory outside the served tree, and only a
+finished site is moved into `SITE_ROOT`.
 
 Environment:
 
     GITHUB_TOKEN       required; fine-grained token with Contents: read
     REPO_OWNER         default vyrtualsynthese
     REFS               default main,develop
-    SITE_ROOT          default /data/site
+    SITE_ROOT          default /data/site; served by nginx, holds finished sites only
+    WORK_ROOT          default <SITE_ROOT>/../work; checkouts and staging, never served
     STATE              default /data/state.json
     FULL_REBUILD_AGE   default 86400, in seconds
 
 Usage:
 
     build.py --dry-run          print the plan, write nothing
-    build.py                    run for real: fetch what moved, persist the state
+    build.py                    run for real: fetch what moved, build it, persist the state
     build.py --full             ignore the age check
     build.py --repo homelab     restrict the run to one repository
+
+Nothing transient is written under `SITE_ROOT`: nginx serves that directory as
+its document root with no authentication and no index filtering, so a checkout
+left there — a private repository's `keys.json` and all — is downloadable by
+anyone who can reach the route. `SITE_ROOT` and `WORK_ROOT` must therefore be
+disjoint in *either* direction, and the state file must live outside the served
+tree as well: a state file under it is downloadable, and it names repositories,
+shas and the text of their build errors. All three are refused at startup.
+
+A repository owns its own documentation, so a checkout that carries
+`mkdocs.yml` at its root is built with that file verbatim. **That file is
+trusted to run code in this process**: MkDocs executes `hooks:` as Python, and
+a config can point `docs_dir` at any directory it likes. The trust boundary is
+"repositories under the operator's account" — `REPO_OWNER` and `REFS` decide
+what runs here, and nothing else does. Within that boundary the builder still
+gives the build no network identity: `mkdocs` runs with every credential-shaped
+variable removed from its environment (`GITHUB_TOKEN` included), and a
+`docs_dir` that resolves outside the checkout fails the pair before MkDocs
+starts.
 
 The token is never printed and never written to a file. Any message that could
 carry it is scrubbed before it reaches a log line or the state file.
@@ -43,6 +63,7 @@ import json
 import os
 import re
 import shutil
+import subprocess
 import sys
 import tarfile
 import tempfile
@@ -69,15 +90,39 @@ DOWNLOAD_TIMEOUT = 300  # seconds, a whole tarball
 MAX_LIST_PAGES = 50  # 50 pages of 100 repositories; more than this owner has
 DETAIL_LIMIT = 400  # characters kept from an error, so the index stays readable
 
-WORK_DIR_NAME = ".work"  # scratch under the site root, one subdirectory per run
+WORK_DIR_DEFAULT_NAME = "work"  # sibling of the served tree, never inside it
+# The pre-fix layout put checkouts under `SITE_ROOT/.work`, where nginx served
+# them. A run never writes there again; a tree left by an older run is removed
+# on sight rather than after the age check, because it is a live disclosure.
+LEGACY_WORK_DIR_NAME = ".work"
+STAGING_DIR_NAME = ".staging"  # under WORK_ROOT: a site while it is being built
+FAILED_DIR_NAME = ".failed"  # under WORK_ROOT: what a failed build produced
+REPLACED_DIR_NAME = ".replaced"  # under WORK_ROOT: the site being swapped out
+
 # Leftovers younger than this belong to a run that may still be working. The
 # CronJob's own deadline is 900s, so anything older than that is a corpse.
 WORK_SWEEP_SECONDS = 900
+
+# A pair that has failed this many times in a row is retried only when its head
+# moves. A broken `mkdocs.yml` fails identically every minute, and retrying it
+# forever costs a fetch and a build each time; the head moving is the only thing
+# that can change the answer without a human. No schedule, just a counter.
+FAILURE_LIMIT = 5
+
+# Variables a build has no use for and must never inherit. `hooks:` is Python
+# running with this process's environment, so `GITHUB_TOKEN` in reach means a
+# repository can push with the builder's identity. The names are matched, not
+# an allowlist, because an allowlist breaks the image on its next update.
+CREDENTIAL_ENV = re.compile(
+    r"(?:TOKEN|SECRET|PASSWORD|PASSWD|CREDENTIAL|APIKEY|API_KEY|PRIVATE_KEY|ACCESS_KEY|AUTH|_KEY$)",
+    re.IGNORECASE,
+)
 
 ENV_DEFAULTS = {
     "REPO_OWNER": "vyrtualsynthese",
     "REFS": "main,develop",
     "SITE_ROOT": "/data/site",
+    "WORK_ROOT": "",
     "STATE": "/data/state.json",
     "FULL_REBUILD_AGE": "86400",
 }
@@ -101,6 +146,7 @@ class Settings:
     owner: str
     refs: tuple[str, ...]
     site_root: Path
+    work_root: Path
     state_path: Path
     full_rebuild_age: int
 
@@ -142,12 +188,47 @@ def load_settings() -> Settings:
     if age < 0:
         raise ConfigError("FULL_REBUILD_AGE is negative")
 
+    site_root = Path(env["SITE_ROOT"])
+    work_setting = env["WORK_ROOT"].strip()
+    work_root = Path(work_setting) if work_setting else site_root.parent / WORK_DIR_DEFAULT_NAME
+    state_path = Path(env["STATE"])
+
+    # A work root inside the served tree is the exposure this layout exists to
+    # prevent, and it is one environment edit away from coming back. Refuse it
+    # at startup: a run that cannot keep its scratch private is not a usable run.
+    served = site_root.resolve()
+    scratch = work_root.resolve()
+    if scratch == served or scratch.is_relative_to(served):
+        raise ConfigError(
+            f"WORK_ROOT {work_root} is inside SITE_ROOT {site_root}; "
+            "nginx would serve every checkout and staging tree"
+        )
+    # The other direction is just as destructive: a work root that *contains*
+    # the served tree (`WORK_ROOT=/data`, `SITE_ROOT=/data/site`) passes the
+    # check above, and then the sweep sees `site/` as one old entry under the
+    # work root and deletes the whole published tree, state file and all.
+    if served == scratch or served.is_relative_to(scratch):
+        raise ConfigError(
+            f"SITE_ROOT {site_root} is inside WORK_ROOT {work_root}; "
+            "the stale sweep would delete the published tree"
+        )
+    # The state file names every repository, its sha and its build errors, and
+    # the served tree is answered without authentication, so a state file under
+    # it is a publication, not housekeeping.
+    state_resolved = state_path.resolve()
+    if state_resolved == served or state_resolved.is_relative_to(served):
+        raise ConfigError(
+            f"STATE {state_path} is inside SITE_ROOT {site_root}; "
+            "it names repositories, shas and build errors, and nginx would serve it"
+        )
+
     _SETTINGS = Settings(
         token=token,
         owner=owner,
         refs=refs,
-        site_root=Path(env["SITE_ROOT"]),
-        state_path=Path(env["STATE"]),
+        site_root=site_root,
+        work_root=work_root,
+        state_path=state_path,
         full_rebuild_age=age,
     )
     return _SETTINGS
@@ -454,6 +535,337 @@ def fetch_tarball(repo: str, ref: str, workdir: Path) -> Path:
 
 
 # --------------------------------------------------------------------------- #
+# Building one site
+# --------------------------------------------------------------------------- #
+
+
+class BuildError(Exception):
+    """One (repository, ref) could not be turned into a site.
+
+    `detail` is already short enough for the state file. `swap` tells the caller
+    which half failed: producing the site (the previous one keeps serving, the
+    run is still a success) or publishing it (the served tree may now be missing
+    a pair, so the run exits non-zero and Kubernetes shows the failure).
+    """
+
+    def __init__(self, detail: str, swap: bool = False) -> None:
+        super().__init__(detail)
+        self.detail = detail
+        self.swap = swap
+
+
+TEMPLATE_PATH = Path(__file__).resolve().with_name("mkdocs.yml.tpl")
+
+
+def _yaml_escaped(value: str) -> str:
+    """`value` as the inside of a double-quoted YAML scalar.
+
+    The template wraps every substitution in quotes, and one of them is a path
+    taken from the environment. A backslash or a quote there would end the
+    scalar early and turn a site build into a parse error nobody can read.
+    """
+    return value.replace("\\", "\\\\").replace('"', '\\"')
+
+
+def render_config(destination: Path, site_name: str, docs_dir: Path, site_dir: Path) -> Path:
+    """Render `mkdocs.yml.tpl` to `destination` and return it.
+
+    Used only for a repository that carries no `mkdocs.yml` of its own: the
+    common case, where a `docs/` folder is all a repository has to provide.
+    """
+    try:
+        body = TEMPLATE_PATH.read_text(encoding="utf-8")
+    except OSError as exc:
+        raise BuildError(f"cannot read {TEMPLATE_PATH.name}: {exc}") from None
+
+    for placeholder, value in (
+        ("{{site_name}}", site_name),
+        ("{{docs_dir}}", str(docs_dir)),
+        ("{{site_dir}}", str(site_dir)),
+    ):
+        body = body.replace(placeholder, _yaml_escaped(value))
+    if "{{" in body:
+        raise BuildError(f"{TEMPLATE_PATH.name} has a placeholder this code does not fill")
+
+    try:
+        destination.write_text(body, encoding="utf-8")
+    except OSError as exc:
+        # The path is the whole message: the caller sees one line in the state
+        # file and needs to know which file could not be written.
+        raise BuildError(f"cannot write {destination}: {exc}") from None
+    return destination
+
+
+def build_env() -> dict[str, str]:
+    """This process's environment with every credential-shaped variable gone.
+
+    A repository's `mkdocs.yml` may declare `hooks:`, which MkDocs imports and
+    runs in the build process; so the checkout is code and the environment it
+    sees is part of the attack surface. The build needs none of these: no
+    network identity, no registry login, no cloud key.
+    """
+    return {name: value for name, value in os.environ.items() if not CREDENTIAL_ENV.search(name)}
+
+
+def _unquote(value: str) -> str:
+    """The scalar inside a YAML `key: value` line, comment and quotes removed."""
+    if value[:1] in {'"', "'"}:
+        quote = value[0]
+        end = value.find(quote, 1)
+        return value[1:end] if end != -1 else value[1:]
+    return value.split("#", 1)[0].strip()
+
+
+def check_docs_dir(config: Path, src: Path) -> None:
+    """Refuse a repository config whose `docs_dir` leaves the checkout.
+
+    MkDocs reads the key itself, so this only has to answer one question: does
+    the directory it names resolve inside the checkout it came from? An absolute
+    `docs_dir: /etc`, or a relative one that walks out with `..`, would publish
+    whatever this container can read. The line scan is deliberately shallow —
+    a top-level key, no YAML library available — and it is a refusal only: a
+    config this function cannot read is left for MkDocs to report.
+
+    A path value may be quoted, and a comment may follow it; both forms appear
+    in real configs. Only the value MkDocs would see is compared.
+    """
+    try:
+        text = config.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return  # unreadable here means MkDocs reports it, with a better message
+    declared: str | None = None
+    for line in text.splitlines():
+        if not line or line[0] in " \t#-":
+            continue  # nested, commented or a list item: not the top-level key
+        key, separator, rest = line.partition(":")
+        if separator and key.strip() == "docs_dir":
+            declared = _unquote(rest.strip())
+    if not declared:
+        return  # no key, or an empty one: MkDocs' own default, `docs`
+
+    root = Path(src).resolve()
+    try:
+        resolved = (Path(declared) if Path(declared).is_absolute() else root / declared).resolve()
+    except OSError as exc:
+        raise BuildError(f"docs_dir {declared!r}: {exc}") from None
+    if resolved != root and not resolved.is_relative_to(root):
+        raise BuildError(
+            f"docs_dir {declared!r} in the repository's mkdocs.yml resolves outside the "
+            f"checkout ({resolved}); refusing to publish anything from it"
+        )
+
+
+def missing_docs(src: Path) -> str | None:
+    """Why `src` has nothing to publish, or None when it has documentation.
+
+    A repository with its own `mkdocs.yml` decides for itself where its pages
+    live — `docs_dir: documentation` is legal and common — so the gate steps
+    aside and lets MkDocs answer. Only a repository without a config is held to
+    the `docs/` convention the shared template uses.
+    """
+    if (Path(src) / "mkdocs.yml").is_file():
+        return None
+    docs = Path(src) / "docs"
+    if not docs.is_dir():
+        return "no docs/ directory"
+    if next(docs.rglob("*.md"), None) is None:
+        return "no Markdown file under docs/"
+    return None
+
+
+def _run_mkdocs(config: Path, staging: Path, src: Path) -> None:
+    """Build `config` into `staging`, or raise `BuildError` with what MkDocs said.
+
+    `--strict` is deliberately absent: a repository that wants warnings to fail
+    its build sets `strict: true` in its own `mkdocs.yml`. Putting it here would
+    let one broken link in one repository stop that repository from publishing
+    for good, with no way to opt out.
+
+    The environment is `build_env()`, never the inherited one: the config may
+    run hooks, and the token is not part of a site build.
+    """
+    command = ["mkdocs", "build", "-f", str(config), "-d", str(staging), "--quiet"]
+    try:
+        subprocess.run(
+            command,
+            cwd=str(src),  # hooks and extra assets resolve as the repository expects
+            env=build_env(),
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+    except FileNotFoundError:
+        raise BuildError("mkdocs is not on PATH") from None
+    except subprocess.CalledProcessError as exc:
+        text = f"{exc.stderr or ''}\n{exc.stdout or ''}"
+        detail = " ".join(text.split()) or f"mkdocs build exited {exc.returncode}"
+        raise BuildError(detail[:DETAIL_LIMIT]) from None
+    except OSError as exc:
+        raise BuildError(f"could not run mkdocs: {exc}") from None
+
+
+def _prune_empty_dir(path: Path) -> None:
+    """Remove `path` when nothing is left in it.
+
+    The staging and replaced directories exist only to hold one run's
+    subdirectories. Once the last of those has been moved out or deleted the
+    parent is empty, and `rmdir` is the only call that removes it without ever
+    touching a sibling run's contents: it fails on a directory that is not
+    empty, and that failure is the expected case, not an error.
+    """
+    try:
+        path.rmdir()
+    except OSError:
+        pass  # already gone, or another run still has work in it
+
+
+def _park_failure(
+    work_root: Path, pair: str, staging: Path, config: Path | None, rendered: Path | None
+) -> None:
+    """Keep what a failed build produced under `.failed/`, until the sweep.
+
+    The staging tree is the only place the warning lines and the half-written
+    site can be looked at, and the configuration is what most often caused the
+    failure, so both are kept. A repository's own `mkdocs.yml` is copied rather
+    than moved: the checkout is the caller's and never anything to dispose of on
+    the way out. Keeping the wreckage is a convenience; it must never turn into
+    a second failure.
+
+    A failure before MkDocs ran — an unrenderable template, a refused
+    `docs_dir` — has nothing to keep. Saying so is better than creating an empty
+    directory and printing that the wreckage was kept.
+    """
+    has_site = staging.exists()
+    own_config = config is not None and config.is_file()
+    has_config = (rendered is not None and rendered.exists()) or own_config
+    if not has_site and not has_config:
+        print(f"# nothing to keep for {pair}: the build stopped before MkDocs wrote anything")
+        return
+
+    failed = work_root / FAILED_DIR_NAME / pair
+    try:
+        shutil.rmtree(failed, ignore_errors=True)
+        failed.mkdir(parents=True, exist_ok=True)
+        if has_site:
+            os.replace(staging, failed / "site")
+        if rendered is not None and rendered.exists():
+            os.replace(rendered, failed / "mkdocs.yml")
+        elif own_config:
+            shutil.copy2(config, failed / "mkdocs.yml")
+    except OSError as exc:
+        print(f"warning: could not keep the failed build: {exc}", file=sys.stderr)
+        return
+    print(f"# kept the failed build in {failed}", file=sys.stderr)
+
+
+def _publish(repo: str, ref: str, staging: Path, site_root: Path, work_root: Path) -> Path:
+    """Move a finished site into the served tree; return where it landed.
+
+    The previous site is renamed aside under `WORK_ROOT` first, so a failed
+    `os.replace` can put it back and the route keeps answering. Renaming a
+    directory is only atomic within one filesystem, which is why the default
+    work root is the site root's sibling.
+    """
+    target = site_root / repo / ref
+    try:
+        target.parent.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        raise BuildError(f"could not create {target.parent}: {exc}", swap=True) from None
+
+    aside: Path | None = None
+    if target.exists() or target.is_symlink():
+        aside = work_root / REPLACED_DIR_NAME / f"{repo}__{ref}.{run_id()}"
+        try:
+            aside.parent.mkdir(parents=True, exist_ok=True)
+            shutil.rmtree(aside, ignore_errors=True)
+            os.replace(target, aside)
+        except OSError as exc:
+            raise BuildError(f"could not move the previous site aside: {exc}", swap=True) from None
+
+    try:
+        os.replace(staging, target)
+    except OSError as exc:
+        if aside is not None:
+            try:
+                os.replace(aside, target)
+            except OSError:
+                pass  # both failed; the state records the pair as failed
+        raise BuildError(
+            f"could not publish {target}: {exc} (WORK_ROOT and SITE_ROOT must be on one filesystem)",
+            swap=True,
+        ) from None
+
+    if aside is not None:
+        shutil.rmtree(aside, ignore_errors=True)
+        _prune_empty_dir(work_root / REPLACED_DIR_NAME)
+    return target
+
+
+def _make_dir(path: Path) -> None:
+    """`mkdir -p`, or a `BuildError` naming the directory that could not be made."""
+    try:
+        path.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        raise BuildError(f"cannot create {path}: {exc}") from None
+
+
+def build_site(repo: str, ref: str, src: Path, site_root: Path, work_root: Path) -> None:
+    """Render `src` into `<site_root>/<repo>/<ref>/`, atomically.
+
+    A repository that carries `mkdocs.yml` at its root is built with it, verbatim:
+    it owns its documentation. Everything else gets the shared template, whose
+    only inputs are the checkout's `docs/` directory and the staging path. A
+    repository's config is trusted to run code (MkDocs executes `hooks:`), so it
+    is given an environment without credentials and its `docs_dir` must resolve
+    inside the checkout.
+
+    The build happens entirely under `work_root`, which nginx never serves. Only
+    a complete site is moved into place, so a failure leaves the previous site
+    answering and raises `BuildError` with MkDocs' own first lines.
+    """
+    check_name("repository", repo)
+    check_name("ref", ref)
+    src, site_root, work_root = Path(src), Path(site_root), Path(work_root)
+
+    pair = f"{repo}__{ref}"
+    staging_parent = work_root / STAGING_DIR_NAME / run_id()
+    staging = staging_parent / pair
+    rendered: Path | None = None
+    config: Path | None = None
+
+    try:
+        _make_dir(staging_parent)
+        own_config = src / "mkdocs.yml"
+        if own_config.is_file():
+            config = own_config  # the repository's own configuration, used as it stands
+            # A config is code (hooks), but a `docs_dir` is also a filesystem
+            # read, and MkDocs would happily publish /etc. Checked before the
+            # build, so the pair is `failed` and nothing is written.
+            check_docs_dir(config, src)
+        else:
+            rendered = render_config(
+                staging_parent / f"{pair}.yml",
+                site_name=f"{repo} {ref}",
+                docs_dir=src / "docs",
+                site_dir=staging,
+            )
+            config = rendered
+
+        _run_mkdocs(config, staging, src)
+        _publish(repo, ref, staging, site_root, work_root)
+    except BuildError as exc:
+        _park_failure(work_root, pair, staging, config, rendered)
+        raise
+    finally:
+        # The per-run staging directory holds this pair and nothing else once
+        # the site has been moved out of it. `.staging` itself stays behind
+        # empty after the last run directory goes, so it is pruned here rather
+        # than leaving one empty level per build in the work root.
+        shutil.rmtree(staging_parent, ignore_errors=True)
+        _prune_empty_dir(work_root / STAGING_DIR_NAME)
+
+
+# --------------------------------------------------------------------------- #
 # State
 # --------------------------------------------------------------------------- #
 
@@ -473,6 +885,14 @@ def entry_digest(sha: str | None, etag: str | None) -> str:
 
 def empty_state() -> dict[str, Any]:
     return {"refs": {}, "last_full": None, "invisible": []}
+
+
+def failure_count(entry: dict[str, Any]) -> int:
+    """How many runs in a row have failed on this pair, as the entry records it."""
+    value = entry.get("failures")
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        return 0
+    return value
 
 
 def clean_state(raw: Any) -> dict[str, Any]:
@@ -507,6 +927,7 @@ def clean_state(raw: Any) -> dict[str, Any]:
                 "built_at": entry.get("built_at") if isinstance(entry.get("built_at"), str) else None,
                 "status": entry.get("status") if entry.get("status") in {"ok", "absent", "failed"} else "failed",
                 "detail": entry.get("detail") if isinstance(entry.get("detail"), str) else "",
+                "failures": failure_count(entry),
             }
 
     if isinstance(raw.get("last_full"), str):
@@ -573,17 +994,40 @@ def sweep_stale(settings: Settings, max_age: int = WORK_SWEEP_SECONDS) -> None:
     A run killed mid-download would otherwise leave a full checkout of a private
     repository on the volume for good. Only entries older than `max_age` are
     removed, so a concurrent run — which is younger than any run's deadline — is
-    never touched.
+    never touched, with the caveat that a run which outlives `max_age` is exactly
+    the case the CronJob's deadline is there to prevent.
     """
     cutoff = time.time() - max_age
 
-    work_root = settings.site_root / WORK_DIR_NAME
+    # The earlier layout put the work tree under the served directory, where a
+    # kill mid-run published a private checkout. Nothing writes there now, so
+    # whatever is found is a corpse and goes on sight rather than on age.
+    legacy = settings.site_root / LEGACY_WORK_DIR_NAME
+    if legacy.exists() or legacy.is_symlink():
+        if legacy.is_dir() and not legacy.is_symlink():
+            shutil.rmtree(legacy, ignore_errors=True)
+        else:
+            legacy.unlink(missing_ok=True)
+        print(f"# removed legacy work tree left under the site root: {legacy}")
+
     try:
-        entries = list(work_root.iterdir())
+        entries = list(settings.work_root.iterdir())
     except OSError:
         entries = []
+    # Second line of defence. `load_settings` refuses a work root that holds the
+    # served tree, but the sweep is the operation that turns a bad path into a
+    # deleted site, so it also refuses to touch anything named like the served
+    # tree or the state file, whatever the roots say.
+    served = settings.site_root.resolve()
+    state_file = settings.state_path.resolve()
+    guarded_names = {served.name, state_file.name}
     for entry in entries:
         try:
+            if entry.name in guarded_names:
+                continue
+            resolved = entry.resolve()
+            if resolved == served or resolved == state_file or resolved.is_relative_to(served):
+                continue
             if entry.lstat().st_mtime >= cutoff:
                 continue
             if entry.is_dir() and not entry.is_symlink():
@@ -650,6 +1094,27 @@ class Decision:
         return f"{self.action} {self.key}"
 
 
+def published_missing(repo: str, ref: str) -> bool:
+    """True when the pair's published index page is not in the served tree.
+
+    A swap renames the old site aside and then moves the new one in. A process
+    killed between the two leaves the pair with no site at all, and the aside
+    under `WORK_ROOT/.replaced` is erased by the next sweep — so the loss is
+    permanent until somebody notices. Nothing else would notice it: the state
+    still says `ok` with the same sha, so a daily `--full` rebuild skips the
+    pair on the second pass. The served index is therefore the fact the state is
+    checked against at the start of every run, which also heals a site somebody
+    deleted by hand and costs one `stat` per pair.
+    """
+    try:
+        settings = load_settings()
+        check_name("repository", repo)
+        check_name("ref", ref)
+    except ConfigError:
+        return False
+    return not (settings.site_root / repo / ref / "index.html").is_file()
+
+
 def decide(
     repo: str, ref: str, stored: dict[str, Any], full: bool
 ) -> Decision:
@@ -674,12 +1139,26 @@ def decide(
         # 304: the head is the one already recorded, so the recorded sha stands.
         sha = stored.get("sha")
 
+    # `absent` no longer means only "no such branch": a branch that carries no
+    # `docs/` is absent too, with its head recorded. Forcing a rebuild on every
+    # `absent` entry would therefore re-download every repository without docs
+    # once a minute, forever. A branch that appears is caught by the sha
+    # comparison instead (the stored sha is None), and a repository that adds
+    # `docs/` does so in a commit, which moves the sha.
+    #
+    # `failed` is retried at once — a network blip heals on the next run — but
+    # only for the first `FAILURE_LIMIT` attempts. Past that the failure is the
+    # repository's (a config MkDocs cannot parse, a docs_dir that was refused),
+    # and nothing but the head moving can change the answer.
+    stuck = stored.get("status") == "failed" and failure_count(stored) >= FAILURE_LIMIT
+    lost = stored.get("status") == "ok" and published_missing(repo, ref)
     rebuild = (
         full
         or not trusted
         or not isinstance(sha, str)
         or stored.get("sha") != sha
-        or stored.get("status") in {"absent", "failed"}
+        or (stored.get("status") == "failed" and not stuck)
+        or lost
     )
     return Decision(repo, ref, "build" if rebuild else "skip", sha=sha, etag=etag)
 
@@ -735,15 +1214,18 @@ def resolve_invisible(state: dict[str, Any], listed: list[str]) -> list[str]:
 
 
 def execute(decisions: list[Decision], state: dict[str, Any], settings: Settings) -> int:
-    """Carry out the plan: fetch what was selected, then persist the state.
+    """Carry out the plan: fetch and build what was selected, then persist the state.
 
-    Part one has nothing to render, so a successful fetch is the whole job and
-    is recorded as `ok`. Part two replaces the fetch with a build and keeps the
-    same state shape.
+    One repository's breakage never stops the run, and a build that fails is not
+    a run failure: the previous site keeps serving and the state says why. The
+    return value is non-zero only when the state could not be written or a
+    finished site could not be moved into place, because those are the two ways
+    the served tree stops matching what the state claims.
     """
     # Every run unpacks under its own directory, so a run that overruns cannot
     # have its tree removed by the run that follows it.
-    work_root = settings.site_root / WORK_DIR_NAME / run_id()
+    run_root = settings.work_root / run_id()
+    swap_failed = False
 
     for decision in decisions:
         key = decision.key
@@ -757,6 +1239,7 @@ def execute(decisions: list[Decision], state: dict[str, Any], settings: Settings
                 "built_at": stored.get("built_at"),
                 "status": "absent",
                 "detail": "no such branch",
+                "failures": 0,
             }
             continue
 
@@ -764,29 +1247,57 @@ def execute(decisions: list[Decision], state: dict[str, Any], settings: Settings
             # A skip leaves the entry untouched: nothing was asked of it.
             continue
 
-        pair_work = work_root / f"{decision.repo}__{decision.ref}"
+        pair_work = run_root / f"{decision.repo}__{decision.ref}"
         try:
             fetched = fetch_tarball(decision.repo, decision.ref, pair_work)
-            detail = f"fetched {fetched.name}"
+            absent = missing_docs(fetched)
+            if absent is not None:
+                # The ref exists, so its head is recorded: the pair is skipped
+                # until it moves, and the index can say why there is no site.
+                state["refs"][key] = {
+                    "sha": decision.sha,
+                    "etag": decision.etag,
+                    "digest": entry_digest(decision.sha, decision.etag),
+                    "built_at": stored.get("built_at"),
+                    "status": "absent",
+                    "detail": absent,
+                    "failures": 0,
+                }
+                print(f"# absent {key}: {absent}")
+                continue
+
+            build_site(
+                decision.repo, decision.ref, fetched, settings.site_root, settings.work_root
+            )
             state["refs"][key] = {
                 "sha": decision.sha,
                 "etag": decision.etag,
                 "digest": entry_digest(decision.sha, decision.etag),
                 "built_at": now_iso(),
                 "status": "ok",
-                "detail": detail,
+                "detail": f"built {decision.repo}/{decision.ref}",
+                "failures": 0,
             }
+            print(f"# built {key} -> {settings.site_root / decision.repo / decision.ref}")
         except Exception as exc:  # noqa: BLE001 - one repository never stops the run
-            # The previous sha and etag stay, so the next run sees a difference
-            # and tries again instead of accepting a head it never built.
+            # The head that was attempted is recorded, not the one before it:
+            # the failure counter can only bound the retries if the comparison
+            # it feeds converges. `decide` still retries a `failed` entry at
+            # once for the first `FAILURE_LIMIT` runs, because the status says
+            # so; the sha is what lets the sixth run wait for the head to move.
+            sha = decision.sha if isinstance(decision.sha, str) else stored.get("sha")
+            etag = decision.etag if isinstance(decision.etag, str) else stored.get("etag")
             state["refs"][key] = {
-                "sha": stored.get("sha"),
-                "etag": stored.get("etag"),
-                "digest": entry_digest(stored.get("sha"), stored.get("etag")),
+                "sha": sha,
+                "etag": etag,
+                "digest": entry_digest(sha if isinstance(sha, str) else None, etag),
                 "built_at": stored.get("built_at"),
                 "status": "failed",
-                "detail": scrub(f"{type(exc).__name__}: {exc}")[:DETAIL_LIMIT],
+                "detail": scrub(_failure_detail(exc))[:DETAIL_LIMIT],
+                "failures": failure_count(stored) + 1,
             }
+            swap_failed = swap_failed or bool(getattr(exc, "swap", False))
+            print(f"# failed {key}: {scrub(_failure_detail(exc))}", file=sys.stderr)
             # A 403 or 404 from codeload is the repository talking, not the ref:
             # the head check already ruled the ref out. The index says so
             # instead of showing a hole.
@@ -795,7 +1306,7 @@ def execute(decisions: list[Decision], state: dict[str, Any], settings: Settings
         finally:
             shutil.rmtree(pair_work, ignore_errors=True)
             try:
-                work_root.rmdir()
+                run_root.rmdir()
             except OSError:
                 pass  # another pair in this same run still has work under it
 
@@ -805,7 +1316,18 @@ def execute(decisions: list[Decision], state: dict[str, Any], settings: Settings
         print(f"error: could not write state ({scrub(str(exc))})", file=sys.stderr)
         return 1
 
-    return 0
+    return 1 if swap_failed else 0
+
+
+def _failure_detail(exc: BaseException) -> str:
+    """What the state records for one failed pair.
+
+    A `BuildError` already carries MkDocs' own words, cut to length; anything
+    else gets its type, which is the part that says where to look.
+    """
+    if isinstance(exc, BuildError):
+        return exc.detail
+    return f"{type(exc).__name__}: {exc}"
 
 
 def parse_args(argv: list[str] | None) -> argparse.Namespace:
