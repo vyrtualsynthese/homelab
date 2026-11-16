@@ -61,6 +61,7 @@ REPOS=(
 # never creates a second kanban view, because two would hold two answers to
 # "where is this task".
 VIEW_TITLE="Board"
+VIEW_KIND="kanban"
 # A bucket renamed from an earlier shape is adopted in place, so its id — which
 # the saved filters store — survives. Only buckets holding no cards are renamed.
 BUCKET_RENAMES=("Ideas:Idea" "Revision:Validation")
@@ -178,12 +179,12 @@ read_endpoint() {
 }
 
 # Saved filters have no list endpoint on this API version: GET /filters answers
-# 405. They do appear in GET /projects as pseudo-projects with negative ids, so
-# that listing is where one is found — by title, and never by a positive id, so a
-# real project of the same name cannot be mistaken for a filter.
+# 405. They do appear in GET /projects as pseudo-projects, with an id derived
+# from the filter's own: a filter with id 2 is project -3, so the real id is
+# -id - 1. That derivation is the only way to reach GET/POST/DELETE /filters/{id}.
 list_saved_filters() {
   read_endpoint /projects
-  API_BODY="$(jq -c '[.[] | select(.id < 0)]' <<<"$API_BODY")"
+  API_BODY="$(jq -c '[.[] | select(.id < 0) | {id: (-.id - 1), title, is_favorite}]' <<<"$API_BODY")"
 }
 
 # One read against the v2 API, leaving API_PATH as it was.
@@ -247,7 +248,7 @@ put_bucket() {
 seed_project() {
   local repo="$1"
   local project_id="" view_id="" done_id="" default_id="" body="" projects_json=""
-  local view_title_current="" view_position_current="" default_current=""
+  local view_title_current="" view_position_current="" view_kind_current="" default_current=""
   local views_json="" view_json="" buckets_json="" known_json=""
   local bid="" btitle="" title="" bucket_id="" position="" current_position="" cards="" counts=""
   local mode_current="" done_current="" pair old new renamed=0
@@ -320,6 +321,7 @@ Kind: label \`feature\` / \`story\` / \`task\`. A subtask is a checklist line in
   fi
   view_id="$(jq -r '.id' <<<"$view_json")"
   view_title_current="$(jq -r '.title // ""' <<<"$view_json")"
+  view_kind_current="$(jq -r '.view_kind // ""' <<<"$view_json")"
   view_position_current="$(jq -r '.position // 0' <<<"$view_json")"
   mode_current="$(jq -r '.bucket_configuration_mode // ""' <<<"$view_json")"
   done_current="$(jq -r '.done_bucket_id // 0' <<<"$view_json")"
@@ -442,12 +444,14 @@ Kind: label \`feature\` / \`story\` / \`task\`. A subtask is a checklist line in
     die "project \"$repo\" has no \"$DONE_TITLE\" or no \"$DEFAULT_BUCKET_TITLE\" column after the bucket pass — cannot wire the view"
   fi
 
-  desired="$(jq -cn --arg t "$VIEW_TITLE" --arg m "$BUCKET_MODE" \
+  # view_kind is in the body because it is zeroed like every other omitted
+  # field: leaving it out turns the board into a list view on the first repair.
+  desired="$(jq -cn --arg t "$VIEW_TITLE" --arg m "$BUCKET_MODE" --arg k "$VIEW_KIND" \
     --argjson d "$done_id" --argjson b "$default_id" \
-    '{title: $t, position: 1, bucket_configuration_mode: $m, done_bucket_id: $d, default_bucket_id: $b}')"
-  current="$(jq -cn --arg t "$view_title_current" --arg m "$mode_current" \
+    '{title: $t, view_kind: $k, position: 1, bucket_configuration_mode: $m, done_bucket_id: $d, default_bucket_id: $b}')"
+  current="$(jq -cn --arg t "$view_title_current" --arg m "$mode_current" --arg k "$view_kind_current" \
     --argjson pos "$view_position_current" --argjson d "$done_current" --argjson b "$default_current" \
-    '{title: $t, position: $pos, bucket_configuration_mode: $m, done_bucket_id: $d, default_bucket_id: $b}')"
+    '{title: $t, view_kind: $k, position: $pos, bucket_configuration_mode: $m, done_bucket_id: $d, default_bucket_id: $b}')"
 
   if [ "$desired" = "$current" ]; then
     say view "$repo / $VIEW_TITLE" existing "$desired"
@@ -636,6 +640,10 @@ verify() {
     order="$(jq -r 'sort_by(.position) | [.[].title] | join(", ")' <<<"$buckets_json")"
     done_id="$(jq -r --arg t "$DONE_TITLE" '[.[] | select(.title == $t)][0].id // 0' <<<"$buckets_json")"
     default_id="$(jq -r --arg t "$DEFAULT_BUCKET_TITLE" '[.[] | select(.title == $t)][0].id // 0' <<<"$buckets_json")"
+    # The filter check at the end needs the two column ids, and this is the only
+    # place they are read from the board.
+    VALIDATION_BUCKET_ID="$(jq -r --arg t "$VALIDATION_TITLE" '[.[] | select(.title == $t)][0].id // empty' <<<"$buckets_json")"
+    DOING_BUCKET_ID="$(jq -r --arg t "$DOING_TITLE" '[.[] | select(.title == $t)][0].id // empty' <<<"$buckets_json")"
 
     if [ "$order" = "$expected_order" ]; then
       printf 'PASS %-12s columns %s\n' "$repo" "$order"
@@ -710,8 +718,8 @@ verify() {
     if [ -z "$filter_id" ]; then
       printf 'FAIL %-12s saved filter "%s" is missing\n' filters "$title"
       failures=$((failures + 1))
-    elif jq -e --arg t "$title" --arg q "$query" \
-      'any(.[]; .title == $t and ((.filters.filter // .filter // "") | contains($q)))' >/dev/null <<<"$filters_json"; then
+    elif http GET "/filters/$filter_id" \
+      && jq -e --arg q "$query" '(.filters.filter // "") | contains($q)' >/dev/null <<<"$API_BODY"; then
       printf 'PASS %-12s saved filter "%s" reads %s\n' filters "$title" "$query"
     else
       printf 'FAIL %-12s saved filter "%s" does not read "%s"\n' filters "$title" "$query"
