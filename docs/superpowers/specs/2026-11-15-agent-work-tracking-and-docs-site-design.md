@@ -335,8 +335,15 @@ almost nothing: each run only asks whether a branch moved, and rebuilds only wha
   good build time per section.
 - Server: `nginx-unprivileged` pinned by tag, read-only root filesystem, the PVC mounted read-only at
   the web root, `strategy: Recreate`, 32Mi / 64Mi memory.
-- One IngressRoute: `docs.kub.local`, `entryPoints: [web]`, `kube-system-lan-only@kubernetescrd`.
-  No TLS, following the `grafana.kub.local` / `prometheus.kub.local` convention.
+- Two IngressRoutes, the shape every `kub.local` app has had since 2026-11-15: `websecure` with
+  `tls.options.name: internal-tls` in `kube-system` and no `secretName`/`certResolver`, and a `web`
+  mirror that runs `kube-system-lan-only` then `kube-system-redirect-to-https`.
+- Middleware on the TLS router: `kube-system-lan-only@kubernetescrd` then
+  `kube-system-authentik-forwardauth@kubernetescrd` (operator decision, 2026-11-17). The site is
+  static HTML and has no identity of its own, so there is no native OIDC to prefer; the forward-auth
+  provider `docs` in authentik is the gate, bound to `authentik Admins` because the content is built
+  from private repositories. LAN-only stays in front, so an off-LAN request is refused before
+  authentik is asked anything.
 
 ### 10.5 Triggering by hand
 

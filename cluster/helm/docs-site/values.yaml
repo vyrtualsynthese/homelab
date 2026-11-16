@@ -57,8 +57,15 @@ traefik:
     options: internal-tls
     optionsNamespace: kube-system
   redirectToHttps: true
+  # `lan-only` first: a request from outside the LAN is refused before authentik
+  # is asked anything. Then the forward-auth gate — the site is static files and
+  # has no identity of its own, so there is no native OIDC to prefer here. The
+  # provider is `docs` in authentik, created by
+  # `cluster/helm/authentik/files/app-docs.yaml`.
   middlewares:
     - namespace: kube-system
       name: lan-only
+    - namespace: kube-system
+      name: authentik-forwardauth
   service: docs-site
   port: 8080

@@ -24,7 +24,7 @@ come before any sync.
 | Claim | `docs-site-site`, 2Gi, `local-path`, on `nuc0` |
 | Address | `https://docs.kub.local` |
 | Certificate | the default `kube-system/local-cert` (identity `CN=kub.local`) |
-| Gate | `lan-only`, and nothing else — no authentik, no public hostname |
+| Gate | `lan-only`, then `authentik-forwardauth` (provider `docs`, `authentik Admins` only) |
 | Secret | `github-docs-ro`, key `token` |
 
 ## Preconditions
@@ -75,6 +75,10 @@ kubectl -n argocd get application docs-site \
 # expect: Synced Healthy
 ```
 
+The route is gated by authentik, and the provider it names comes from the `authentik` Application,
+not this one: sync `authentik` too, or wait for its blueprint scan. Until `app-docs.yaml` has been
+applied, `https://docs.kub.local/` answers authentik's 404 instead of a sign-in redirect (Step 6).
+
 ## Step 4 — the nginx pod is up
 
 ```bash
@@ -86,13 +90,13 @@ The init container creates `/data/site` and leaves a placeholder page only when 
 pod is ready before the first build. A pod stuck in `CreateContainerConfigError` is the missing
 Secret from Step 2.
 
+The route is gated, so an unauthenticated request never reaches the placeholder — it is redirected to
+authentik instead. That 302 is Step 6's first check; here it only proves the pod serves something:
+
 ```bash
 curl -sk -o /dev/null -w '%{http_code}\n' https://docs.kub.local/
-# expect: 200
+# expect: 302
 ```
-
-At this point the page says the first build has not run yet. That is the whole point of the
-placeholder: the route answers before the builder has done anything.
 
 ## Step 5 — the first build
 
@@ -117,11 +121,26 @@ repository is the token's permissions (Step 1), not the builder.
 
 The first run takes about a minute for the current catalogue; the job's own deadline is 900s.
 
-## Step 6 — the site answers
+## Step 6 — the gate, then the site
+
+The gate first. Without a session, the route answers a redirect to authentik's sign-in page:
+
+```bash
+curl -sk -o /dev/null -w '%{http_code} %{redirect_url}\n' https://docs.kub.local/
+# expect: 302 followed by the authentik sign-in address
+```
+
+A **404** here is not a missing route: it is authentik saying it has no provider for this host, which
+means the blueprint `cluster/helm/authentik/files/app-docs.yaml` has not been applied yet. Sync the
+`authentik` Application (or wait for its next blueprint scan) and repeat. A **200** means the gate is
+missing from the route — the site is then protected by `lan-only` alone.
+
+Then sign in. Open `https://docs.kub.local/` in a browser; authentik asks for the operator account,
+returns you to the index, and the site renders:
 
 ```bash
 curl -sk -o /dev/null -w '%{http_code}\n' https://docs.kub.local/
-# expect: 200
+# expect: 200 once the browser holds a session (the cookie is what the check needs)
 ```
 
 ```bash
@@ -136,6 +155,10 @@ curl -sk https://docs.kub.local/homelab/develop/ | head -20
 
 A repository whose documentation has no `index.md` of its own gets a generated landing page that
 lists its pages, so `/<repo>/<ref>/` always answers a page and never a directory listing.
+
+The provider is bound to `authentik Admins`, so an account in `homelab-users` signs in to authentik
+and is then refused by the application. Widening it is one more policy binding in the same blueprint;
+nothing in this chart changes.
 
 ## Step 7 — the certificate
 
@@ -178,7 +201,9 @@ The old token is revoked on GitHub after the first green run.
 
 ## Success, in one place
 
-- `Synced Healthy`, one nginx pod `1/1`, and `https://docs.kub.local/` answers `200`.
+- `Synced Healthy`, one nginx pod `1/1`, and `https://docs.kub.local/` answers `200` after the
+  authentik sign-in.
+- Without a session the same address answers `302` to authentik, and from outside the LAN a `403`.
 - The index lists every repository with docs, and names the ones without, with the last build time.
 - `https://docs.kub.local/homelab/develop/` shows the Material site.
 - The certificate validates against `local-ca.pem`, `subject CN=kub.local`, `issuer CN=ashulab internal CA`.
@@ -220,7 +245,8 @@ And last the token in GitHub (Step 1), which is the credential this whole proced
   one.
 - The daily full rebuild: `fullRebuildAge` in the chart's values, 86400s, no procedure needed.
 - The gate and the certificate themselves: shared with every other internal application, see
-  [`internal-ca.md`](internal-ca.md).
+  [`authentik-apps.md`](authentik-apps.md) and [`internal-ca.md`](internal-ca.md). The provider is the
+  one object this procedure adds to authentik, through `app-docs.yaml`.
 
 ## Measured
 

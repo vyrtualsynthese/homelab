@@ -42,13 +42,19 @@ kubectl -n docs logs job/docs-manual-1 -f
 
 Cluster writes are the operator's, not an agent's: the site is not an agent's output.
 
-## Why the route is LAN-only
+## Why the route is LAN-only and behind authentik
 
-`docs.kub.local` carries `kube-system-lan-only@kubernetescrd` and nothing else. The content is
-private repository documentation — paths, hostnames, the odd credential-shaped string if a
-repository is careless — and a public route would need an authentication gate in front of every
-page. The TLS router uses the cluster's default certificate (`internal-tls` option in `kube-system`,
-no `secretName`, no `certResolver`), and the `web` router redirects to it after the LAN check.
+`docs.kub.local` carries `kube-system-lan-only@kubernetescrd` and then
+`kube-system-authentik-forwardauth@kubernetescrd`, in that order. The content is private repository
+documentation — paths, hostnames, the odd credential-shaped string if a repository is careless — so
+it is not a public page: the LAN check refuses an off-LAN request before authentik is asked anything,
+and the forward-auth gate then requires a session from the provider `docs` (blueprint
+`cluster/helm/authentik/files/app-docs.yaml`, bound to `authentik Admins`).
+
+The site is static files and has no identity of its own, so there is no native OIDC to prefer; the
+middleware is the only mechanism available. The TLS router uses the cluster's default certificate
+(`internal-tls` option in `kube-system`, no `secretName`, no `certResolver`), and the `web` router
+redirects to it after the LAN check.
 
 ## First run and the token
 

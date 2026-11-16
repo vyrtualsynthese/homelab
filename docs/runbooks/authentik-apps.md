@@ -16,6 +16,7 @@ browser that passes it arrives as the same identity.
 | FileBrowser | proxy only | proxy auth, forward-auth middleware | not configured |
 | Sonarr, Radarr, Lidarr, Prowlarr, Bazarr, Bazarr-anime | none | `authentik-forwardauth` | configured |
 | Tautulli | none | `authentik-forwardauth` | configured |
+| Docs site (MkDocs) | none | `authentik-forwardauth` | pending — blueprint `app-docs` written, Admins only; the first sync applies it |
 | Maintainerr | to verify | `authentik-forwardauth` | verify before the next touch |
 | qBittorrent | none | `lan-only`, own login | by decision, in its values |
 | dashy | none | `lan-only` | **fix** — it names `kube-system-authentik`, which is headers, not a gate |
