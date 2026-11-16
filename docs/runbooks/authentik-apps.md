@@ -20,6 +20,11 @@ browser that passes it arrives as the same identity.
 | qBittorrent | none | `lan-only`, own login | by decision, in its values |
 | dashy | none | `lan-only` | **fix** — it names `kube-system-authentik`, which is headers, not a gate |
 
+Where the application offers no other way in, the password form is closed as well: **Argo CD** has
+`admin.enabled: "false"` (that built-in user is its only password login) and **Vikunja** has
+`auth.local.enabled: false`. Both leave one route — authentik — so the break-glass for each is a
+configmap or env flip plus a rollout, written next to the setting in the chart.
+
 Two traps this table exists to prevent:
 
 - **`kube-system-authentik` is not authentication.** It is a headers middleware. The gate is
