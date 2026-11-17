@@ -23,12 +23,26 @@ class TitleTests(unittest.TestCase):
         self.assertEqual(m.clean_title("w0-cleanup: inventory it", "w0-cleanup"), "Inventory it")
 
 
+class SiteUrlTests(unittest.TestCase):
+    def test_a_plan(self):
+        self.assertEqual(m.site_url("docs/superpowers/plans/x.md"),
+                         "https://docs.kub.local/homelab/develop/superpowers/plans/x/")
+
+    def test_a_page(self):
+        self.assertEqual(m.site_url("docs/agent-protocol.md"),
+                         "https://docs.kub.local/homelab/develop/agent-protocol/")
+
+    def test_a_non_docs_path_has_no_page(self):
+        self.assertIsNone(m.site_url("cluster/helm/sonarr"))
+
+
 class DescriptionTests(unittest.TestCase):
     def test_block_with_no_pr(self):
         self.assertEqual(
             m.render_description("docs/x.md", "none", "none", ""),
             "repo: vyrtualsynthese/homelab\n"
             "docs: https://github.com/vyrtualsynthese/homelab/blob/develop/docs/x.md\n"
+            "site: [Rendered page](https://docs.kub.local/homelab/develop/x/)\n"
             "branch: none\npr: none")
 
     def test_body_is_kept_under_its_heading(self):
@@ -40,6 +54,26 @@ class DescriptionTests(unittest.TestCase):
         got = m.render_description("docs/x.md", "none", "none", "", commit="0c83219c")
         self.assertTrue(got.endswith(
             "pr: none\ncommit: https://github.com/vyrtualsynthese/homelab/commit/0c83219c"))
+
+    def test_the_site_line_sits_directly_after_docs(self):
+        text = m.render_description("docs/status.md", "none", "none", "")
+        self.assertEqual(text.splitlines()[:3], [
+            "repo: vyrtualsynthese/homelab",
+            "docs: https://github.com/vyrtualsynthese/homelab/blob/develop/docs/status.md",
+            "site: [Rendered page](https://docs.kub.local/homelab/develop/status/)",
+        ])
+
+    def test_no_docs_means_no_site_line(self):
+        text = m.render_description("none", "none", "none", "")
+        self.assertEqual(text.splitlines()[:2], [
+            "repo: vyrtualsynthese/homelab",
+            "docs: none",
+        ])
+        self.assertNotIn("site:", text)
+
+    def test_a_page_that_is_not_on_develop_says_none(self):
+        text = m.render_description("docs/x.md", "feature/a", "none", "", on_develop=False)
+        self.assertEqual(text.splitlines()[2], "site: none")
 
 
 class ValidateTests(unittest.TestCase):
