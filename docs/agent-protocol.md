@@ -187,6 +187,13 @@ Leaving it in `Doing` is not a soft `Done`, and it is not a reason to move it ba
   wins: fix the plan to match the board, never the other way round.
 - **No second todo list.** No markdown checklist in a report, no "remaining work" section in a
   description that is consulted later. If it is work, it is a ticket.
+- **How to talk to it.** The wire is not in this page. The `vikunja-board` skill in the workstation's
+  OpenCode config (`~/.config/opencode/skills/vikunja-board/`) carries the calls that work, verified
+  against the running instance, and the traps that otherwise cost a rejected call each: the instance
+  serves **two** APIs and v1 inverts the verbs (`PUT` creates, `POST` updates) while v2 does not,
+  v1 silently ignores `bucket_id` on create, and positions sort ascending on an epoch scale. Without
+  the skill, the instance documents itself: `GET /api/v2/openapi.json` matches the deployed version.
+  This page is the process; that skill is the API.
 
 ## What this supersedes
 
