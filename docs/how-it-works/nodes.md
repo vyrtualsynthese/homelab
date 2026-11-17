@@ -17,6 +17,8 @@ The four cluster nodes are all `Ready`, with no memory or disk pressure, on K3s 
 22.04.5 LTS. `streaming` is the only one on a 6.8 kernel; the other three are on 5.15. Memory below
 is the total Kubernetes reports for the node.
 
+![The four cluster nodes with their workloads and disks, the router, and the two edge Pis](../assets/diagrams/nodes.svg)
+
 | Node | Role | CPU / architecture | Memory | What runs there |
 |---|---|---|---|---|
 | `nas` | worker | 12 vCPU, amd64 | ~62.6 GiB | the media library and its NFS exports, the observability stack (Prometheus, Grafana, Loki), PostgreSQL |

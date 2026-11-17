@@ -41,6 +41,17 @@ the [SSO access-model design](../superpowers/specs/2026-11-14-sso-access-model-d
 The order is fixed: **native OIDC first**, then proxy auth where the app is built for it, then the
 `authentik-forwardauth` gate, then `lan-only` alone with the reason written next to the route.
 
+```mermaid
+flowchart TD
+    A[An app needs a login] --> B{Speaks OIDC?}
+    B -- yes --> C[Native OIDC<br/>the app holds the identity]
+    B -- no --> D{Built for proxy auth?}
+    D -- yes --> E[Proxy auth<br/>username from a header]
+    D -- no --> F{Can a gate sit in front?}
+    F -- yes --> G[authentik-forwardauth<br/>one shared identity]
+    F -- no --> H[lan-only alone<br/>the chart records why]
+```
+
 - **OIDC** (OpenID Connect, the sign-in protocol where the app itself talks to authentik) wins because
   the app holds the identity: it shows the username, attributes a change to a person, and maps groups
   onto its own roles.

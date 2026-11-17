@@ -20,6 +20,17 @@ with a Markdown file, discovered through the GitHub API; one shipping its own `m
 verbatim, the rest with a shared template. The chart and its trust model are in
 [the chart's README](../../cluster/helm/docs-site/README.md).
 
+```mermaid
+flowchart LR
+    C[CronJob<br/>every minute] --> G[GitHub API<br/>branch heads]
+    G -- moved --> T[Tarball from codeload]
+    G -- 304 --> S[Skip the pair]
+    T --> B[mkdocs build<br/>into staging]
+    B -- ok --> W[Swap into /data/site]
+    B -- fail --> K[Keep the last good site]
+    W --> N[nginx serves it]
+```
+
 ## When it rebuilds
 
 It runs every minute, and cheaply: the builder asks GitHub for each branch head with a conditional
