@@ -36,7 +36,7 @@ Most of what looks strange at first follows from five rules. Each links the page
 | I want to… | Start here |
 |---|---|
 | **Understand** the place | [The homelab in one page](how-it-works/README.md), then the topic pages it lists |
-| **See what is broken** right now | [Application status](status.md): what runs, what is `Pending` and what is broken, on its own date |
+| **Fix something**, or see what is broken | [Running it](running-it/README.md) opens the page for each intention; [application status](status.md) is the dated snapshot of what is red |
 | **Read a plan**, or file work of my own | the board at [vikunja.kub.local](https://vikunja.kub.local), with [the operator↔agent protocol](agent-protocol.md) |
 
 The board is the state of the work: when a plan's checkboxes and the board disagree, the board wins.

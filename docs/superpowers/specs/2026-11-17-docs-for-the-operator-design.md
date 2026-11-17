@@ -324,12 +324,13 @@ navigation features:
 A ticket's fixed block currently carries `repo:`, `docs:`, `branch:` and `pr:`. It gains one line:
 
 ```text
-site: https://docs.kub.local/homelab/develop/superpowers/plans/<plan>/
+site: [Rendered page](https://docs.kub.local/homelab/develop/superpowers/plans/<plan>/)
 ```
 
 - `docs:` keeps the GitHub URL, because agents cannot get through the authentik gate.
 - `site:` is the rendered page, for the human. It points at `develop`, the branch the site builds
-  while work is in progress.
+  while work is in progress. It is a Markdown link, never a bare URL: a bare URL renders inert and
+  is a defect in the card, the same rule that applies to `docs:`.
 - The path inside the site is the file's path under `docs/` with `.md` removed and a trailing slash:
   `docs/superpowers/plans/x.md` → `superpowers/plans/x/`; `docs/agent-protocol.md` →
   `agent-protocol/`.
@@ -369,7 +370,7 @@ The operator reviews six to ten pages at a time instead of thirty.
 | 1 | `mkdocs.yml`, the new home page, all of `how-it-works/` (10 pages) | The site's navigation, the mental model, and the answer to "why is it like this?" |
 | 2 | All of `running-it/` (10 pages) and the refreshed `status.md` | The day-2 tasks, and a current answer to "what is broken?" |
 | 3 | `reference/` (8 pages), the `charts/README.md` and `observability-conventions.md` splits, `secrets.md` completed, the `AGENTS.md` §5 pointer, the `runbooks/README.md` rewrite and statuses | The long-form detail, the complete secret inventory, and an honest runbook index |
-| 4 | `agent-work.md`, the protocol's `site:` line, the `hack/vikunja_migrate.py` renderer and the one-off backfill, the `audit/` and `decisions/` indexes | Plans reachable by theme and from a ticket, and history clearly labelled |
+| 4 | `agent-work.md`, the `hack/vikunja_migrate.py` renderer and the one-off backfill, the `audit/` and `decisions/` indexes (the protocol's `site:` line landed in stage 2, with the board page) | Plans reachable by theme and from a ticket, and history clearly labelled |
 
 The board carries one **feature** card, "Documentation for the operator", and four **task** cards,
 one per stage. Each task gets the branch, the PR and the verification when the stage is handed over.

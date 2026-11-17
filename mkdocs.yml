@@ -50,6 +50,18 @@ validation:
 
 nav:
   - Start here: README.md
+  - Running it:
+      - running-it/README.md
+      - What is broken right now: status.md
+      - Every day: running-it/every-day.md
+      - Ship a change: running-it/ship-a-change.md
+      - Roll back: running-it/roll-back.md
+      - Add an application: running-it/add-an-application.md
+      - Fix a pending pod: running-it/fix-a-pending-pod.md
+      - Rotate a secret: running-it/rotate-a-secret.md
+      - Use the board: running-it/use-the-board.md
+      - Rebuild the docs site: running-it/rebuild-the-docs-site.md
+      - Disaster recovery: running-it/disaster-recovery.md
   - How it works:
       - how-it-works/README.md
       - The shape and why: how-it-works/the-shape-and-why.md
