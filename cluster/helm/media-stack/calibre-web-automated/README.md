@@ -191,7 +191,7 @@ TLSOption from the `traefik-gate` chart, not an object of this chart's own.
 
 The root is `~/.config/secrets/kub-local/local-ca.pem`, installed once per client. Backup rules, the
 restore drill and the per-client trust install are in
-[`docs/runbooks/internal-ca.md`](../../../docs/runbooks/internal-ca.md) — read it before touching that
+[`docs/runbooks/internal-ca.md`](../../../../docs/runbooks/internal-ca.md) — read it before touching that
 directory, because losing `local-ca-key.pem` is what forced a new root the last time.
 
 ### Sign-in
