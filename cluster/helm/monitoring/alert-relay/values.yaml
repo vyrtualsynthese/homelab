@@ -2,7 +2,7 @@
 # ConfigMap, so there is no image to build and no registry to trust.
 image:
   repository: python
-  tag: "3.12.7-alpine"
+  tag: "3.15.2-alpine"
 
 replicaCount: 1
 
