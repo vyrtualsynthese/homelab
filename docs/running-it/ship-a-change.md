@@ -8,6 +8,17 @@
 
 The commit's journey is [gitops.md](../how-it-works/gitops.md); this page is the doing.
 
+```mermaid
+flowchart LR
+    E[Edit the chart or values] --> C[Local checks]
+    C --> B[Branch, commit, push]
+    B --> P[Pull request]
+    P --> M[Merge to develop]
+    M --> S[ArgoCD sync]
+    S --> V[Verify]
+    S -- stops --> T[The syncPolicy.automated trap]
+```
+
 ## Before you edit
 
 Find the value first: editing the object in the cluster cannot work, because `selfHeal` reverts it to

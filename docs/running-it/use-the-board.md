@@ -14,6 +14,8 @@ the work; a plan is not. The long form is
 
 `Idea`, `Shaping`, `Backlog`, `Doing`, `Validation`, `Done`.
 
+![A wireframe of the six board columns, the cards each holds, and who moves them](../assets/diagrams/board.svg)
+
 - **`Idea`** — a thought worth keeping, not a commitment.
 - **`Shaping`** — decided it is worth doing, being cut into tasks. Yours: you move a card here; an
   agent leaves it alone.

@@ -20,6 +20,19 @@ container waiting.
 Never patch a GitOps-managed object; the sync reverts it
 ([gitops.md](../how-it-works/gitops.md)).
 
+```mermaid
+flowchart TD
+    A[Pod Pending] --> B{NODE column empty?}
+    B -- yes --> C{Claim bound?}
+    C -- no --> D[No claim to bind]
+    C -- yes --> E[Claim bound to another node]
+    B -- no --> F{Container started?}
+    F -- no --> G{What does the event say?}
+    G -- secret --> H[Missing Secret]
+    G -- image --> I[Image will not pull]
+    F -- yes --> J[Check the resource request and the event]
+```
+
 ## No claim to bind
 
 **The claim is missing.** The event says `persistentvolumeclaim "<name>" not found`. The chart
