@@ -82,14 +82,24 @@ spec:
                   drop:
                     - ALL
                   # The build runs as `nobody` so a repository's `hooks:` code
-                  # cannot read the token out of this process's /proc/1/environ,
-                  # and dropping to another uid needs exactly these two — a root
-                  # process without them cannot call setuid/setgid at all. They
-                  # grant nothing the build uses: `nobody` gets no capability
-                  # back, and the binary it runs is MkDocs, not a shell tool.
+                  # cannot read the token out of this process's /proc/1/environ.
+                  # Three capabilities come back, and only these:
+                  #
+                  # - SETUID, SETGID: without them a root process cannot call
+                  #   setuid at all, so the drop would fail with EPERM.
+                  # - DAC_OVERRIDE: the parent has to finish what the child
+                  #   produced — write the landing page into the built tree,
+                  #   park a failed build, delete the work tree. Those files
+                  #   belong to `nobody` and are 0755, and root without this
+                  #   capability is a normal user as far as the kernel is
+                  #   concerned (2026-11-17: every pair failed on
+                  #   "cannot write the landing page … Permission denied").
+                  #
+                  # `nobody` inherits none of them, so a hook gains nothing.
                   add:
                     - SETUID
                     - SETGID
+                    - DAC_OVERRIDE
           volumes:
             - name: site
               persistentVolumeClaim:
