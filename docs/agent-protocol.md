@@ -11,15 +11,13 @@ of steps; it does not say the result was accepted.
 
 ## The board in one paragraph
 
-One project per GitHub repository exists on the board, and **`config` is the boarded one, whichever
-repository a session works in**: tickets are filed there from `homelab`, from `config` itself and
-from the other five, so those six projects stay empty. This reverses a decision taken a day earlier:
-task #255 boarded `homelab` and `config` together, and the dated specs and plans under
-`docs/superpowers/` keep that wording on purpose, because they record the rule as it stood then.
-`config` has one kanban view, `Board`, whose columns are `Idea`, `Shaping`, `Backlog`, `Doing`,
-`Validation` and `Done`. `Done` is the view's **done column**: a card moved there is marked done by
-Vikunja itself. Two saved filters read across the board — `Needs my validation` and `Agent work in
-flight` — and they are the operator's queue, not columns.
+One project per GitHub repository, and **`homelab` and `config` are boarded**: the projects for the
+other five repositories exist and are empty, and a session working in one of them files no ticket
+until that repository is boarded. Each boarded project has one kanban view, `Board`, whose columns
+are `Idea`, `Shaping`, `Backlog`, `Doing`, `Validation` and `Done`. `Done` is the view's **done
+column**: a card moved there is marked done by Vikunja itself. Two saved filters read across the
+board — `Needs my validation` and `Agent work in flight` — and they are the operator's queue, not
+columns.
 
 ## Three kinds of card, and what a column may hold
 
@@ -185,11 +183,10 @@ Leaving it in `Doing` is not a soft `Done`, and it is not a reason to move it ba
 
 ## Where the board is, and what it is not
 
-- **Which projects are boarded:** `config` alone, whatever repository a session works in.
-  `homelab`, `ashuvidz-website`, `ashudev-website`, `selfhosted-helmcharts`, `ashuworld` and
-  `ashuvidz-creator` each have an empty project on the board; an agent ignores them and files on
-  `config` all the same. The repository a card belongs to is its `repo:` line, never the project it
-  sits in.
+- **`homelab` and `config` are boarded.** `ashuvidz-website`, `ashudev-website`,
+  `selfhosted-helmcharts`, `ashuworld` and `ashuvidz-creator` exist and are empty. A session working
+  in one of them files no ticket; it says so in its report instead, and the operator boards that
+  repository when the work is worth tracking.
 - **The board is state.** Whether a task is planned, being worked, awaiting review or done is answered
   there and nowhere else.
 - **Plan checkboxes are the plan.** Agents keep ticking them as they go, because the plans' own skills
