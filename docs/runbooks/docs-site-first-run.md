@@ -39,29 +39,30 @@ come before any sync.
 
 ## Step 1 — the token
 
-There is no GitHub UI step and no token to paste. The Secret is seeded from the machine's own token,
-so the whole of Step 2 is one command:
+One command, with the token in the line and the value going through stdin:
 
 ```bash
-set -a; . ~/.config/secrets/keys.env; set +a
-printf '%s' "$GITHUB_PERSONAL_ACCESS_TOKEN" \
+printf '%s' 'github_pat_…' \
   | kubectl -n docs create secret generic github-docs-ro --from-file=token=/dev/stdin
 ```
 
-The value never reaches the command line (so not `/proc/*/cmdline`, not shell history), and the same
-command rotates it with `--dry-run=client -o yaml | kubectl apply -f -`.
+`printf` is a shell builtin, so the value never reaches a process argument list; the same command
+rotates it with `--dry-run=client -o yaml | kubectl apply -f -` in place of the bare `create`.
+It does land in the shell history — start the line with a space if `HISTCONTROL=ignorespace`, or drop
+it afterwards.
 
-**What that token can do.** It is the operator's machine token: it can push. The builder only reads
-with it, and three things bound the risk rather than the token's rights:
+**The token itself.** A fine-grained token (Settings → Developer settings → Fine-grained tokens) with
+resource owner `vyrtualsynthese`, repository access **All repositories**, and exactly two permissions:
+`Contents: Read-only` and `Metadata: Read-only`. The repository selection is the real scope of the
+site: a *selected* rather than all-repositories token hides every repository that is not in the list,
+private ones included, and a new repository stays invisible until it is added (measured 2026-11-17).
+
+**What bounds the risk** rather than the token's rights:
 
 - the build runs as uid 65534, so a repository's `hooks:` code cannot read the token out of the
   builder's `/proc/1/environ`;
 - the pod mounts no service-account token, so that code cannot reach the API server either;
 - the token is never written to the state file, a log line, or the served tree.
-
-A dedicated fine-grained token (`Contents: read`, `Metadata: read`, all repositories) is still the
-better end state when this one is rotated by hand anyway; nothing in the chart changes, only this
-command.
 
 ## Step 2 — the namespace and the Secret
 
@@ -74,8 +75,8 @@ kubectl create namespace docs
 Then the command from Step 1, and a check that the key holds what was read:
 
 ```bash
-kubectl -n docs get secret github-docs-ro -o jsonpath='{.data.token}' | base64 -d | head -c 8
-# expect: the first characters of the token (github_pat_…), then no error
+kubectl -n docs get secret github-docs-ro -o jsonpath='{.data.token}' | base64 -d | head -c 11
+# expect: github_pat_ and no error
 ```
 
 The builder reads `GITHUB_TOKEN` from that key and never writes it anywhere: not to the state file,
@@ -132,13 +133,18 @@ Expected shape, not a fixed list: the repositories are discovered, not listed an
 build homelab/develop <sha>
 absent homelab/main no docs/ directory
 …
-# build 21, absent 7, API calls left 4936/5000
+# built homelab/develop -> /data/site/homelab/develop
+# build 10, skip 20, absent 7, API calls left 4936/5000
 ```
 
-What must **not** appear: a traceback, or a `GITHUB_TOKEN` in any line. A `403` or `404` on every
-repository is the token's permissions (Step 1), not the builder.
+The closing line counts *decisions*; the `# built` lines are the outcomes. What must **not** appear: a
+traceback, a `GITHUB_TOKEN`, or `# failed` without a reason — a failure prints
+`# mkdocs exit <code>: <what MkDocs said>`, and that message is the diagnosis.
 
-The first run takes about a minute for the current catalogue; the job's own deadline is 900s.
+A `403` or `404` on every repository is the token's permissions (Step 1), not the builder. A `404`
+from the *site* instead is the gate, not the builder — see Step 6.
+
+First run measured under 2 minutes for ten pairs; the job's own deadline is 900s.
 
 ## Step 6 — the gate, then the site
 
@@ -273,5 +279,27 @@ And last the token in GitHub (Step 1), which is the credential this whole proced
 
 ## Measured
 
-Pending — filled in after the operator runs Steps 1 to 7 and pastes 4, 5 and 7 back, and again after
-the acceptance checks in the plan's Task 6 (discovery latency, merge latency).
+First run 2026-11-17. Sixteen repositories discovered, thirty-two (repository, ref) pairs, ten of
+them carrying documentation.
+
+| Step | Measured |
+|---|---|
+| ArgoCD sync to both pods ready | about a minute (images already on `nuc0`) |
+| Blueprint apply (provider `docs`, application `Docs`) | about 4 minutes, queue to applied; the host answers `302` only after that |
+| First full build, ten pairs | under 2 minutes |
+| Merge on `develop` to rebuilt page | under a minute, one job, one pair (`build 1, skip 20, absent 7`) |
+| A minute with nothing merged | `skip` for every pair, no build, about 20 API calls of 5 000 |
+| Certificate | `ssl_verify_result=0` against `local-ca.pem`, `CN=kub.local`, issuer `ashulab internal CA` |
+| A restart of the builder | retries the pairs the previous one failed, once (the `builder` stamp in the state) |
+
+The first start did not go in one pass. Three things cost a cycle each, and each looked like a
+different problem than it was — they are recorded here because the messages are misleading:
+
+- **A directory the build cannot enter looks like a missing one.** MkDocs reported
+  `Config value 'docs_dir': The path '/data/work/…/.homelab__develop.…/homelab-develop/docs' isn't an
+  existing directory` for a directory that existed and was unreadable to the build user.
+- **`mkdtemp` is private.** The unpack directory is `0700`; the build drops to `nobody`, which cannot
+  enter it. `fetch_tarball` now opens it to `0755`.
+- **Root without capabilities is not root.** Dropping the build to `nobody` needs `SETUID` and
+  `SETGID`, and the parent needs `DAC_OVERRIDE` to write into and delete what `nobody` produced.
+  All three are on the CronJob's builder container and nowhere else.
