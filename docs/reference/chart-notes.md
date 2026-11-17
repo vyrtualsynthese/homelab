@@ -55,8 +55,8 @@ render from the same `exportarr` block, so the announced port cannot disagree wi
 
 Since 2026-11-15 `sonarr`'s `/api` is exempt from the authentik gate: a second rule, `PathPrefix(/api)`
 at `priority: 100`, carries `lan-only` alone, because every `/api/v3` request must carry `X-Api-Key`
-and an API client cannot complete a sign-in redirect. `sonarr-anime` has no gate at all, so its chart
-sets neither the gate nor the exemption.
+and an API client cannot complete a sign-in redirect. `sonarr-anime` follows the same shape since
+2026-11-18: it carries the gate plus the `/api` exemption, and its own login is off.
 
 ### recyclarr
 
