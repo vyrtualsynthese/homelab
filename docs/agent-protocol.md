@@ -11,12 +11,13 @@ of steps; it does not say the result was accepted.
 
 ## The board in one paragraph
 
-One project per GitHub repository, and **only `homelab` is boarded today**: the other six are empty,
-and a session working in one of them files no ticket until that repository is boarded. The `homelab`
-project has one kanban view, `Board`, whose columns are `Idea`, `Shaping`, `Backlog`, `Doing`,
-`Validation` and `Done`. `Done` is the view's **done column**: a card moved there is marked done by
-Vikunja itself. Two saved filters read across the board — `Needs my validation` and `Agent work in
-flight` — and they are the operator's queue, not columns.
+One project per GitHub repository, and **`homelab` and `config` are boarded**: the projects for the
+other five repositories exist and are empty, and a session working in one of them files no ticket
+until that repository is boarded. Each boarded project has one kanban view, `Board`, whose columns
+are `Idea`, `Shaping`, `Backlog`, `Doing`, `Validation` and `Done`. `Done` is the view's **done
+column**: a card moved there is marked done by Vikunja itself. Two saved filters read across the
+board — `Needs my validation` and `Agent work in flight` — and they are the operator's queue, not
+columns.
 
 ## Three kinds of card, and what a column may hold
 
@@ -176,7 +177,7 @@ Leaving it in `Doing` is not a soft `Done`, and it is not a reason to move it ba
 
 ## Where the board is, and what it is not
 
-- **Only `homelab` is boarded.** `config`, `ashuvidz-website`, `ashudev-website`,
+- **`homelab` and `config` are boarded.** `ashuvidz-website`, `ashudev-website`,
   `selfhosted-helmcharts`, `ashuworld` and `ashuvidz-creator` exist and are empty. A session working
   in one of them files no ticket; it says so in its report instead, and the operator boards that
   repository when the work is worth tracking.
