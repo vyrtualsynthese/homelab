@@ -13,6 +13,14 @@ entries:
   # `docs.kub.local` did until `docs` was added on 2026-11-17. When a proxy
   # provider is retired (vikunja's went with the OIDC migration), delete its
   # line in the same commit that retires it.
+  #
+  # The first sync of a NEW app is the one case where this file rolls back on
+  # its own: discovery creates that app's blueprint instance in the same pass
+  # that applies this one, so the `!Find` below can run before the provider
+  # exists. The outpost then keeps the previous list and the new host answers
+  # 404 until this file is applied again — Apply on this instance in the
+  # authentik UI, or any later change to this file, is enough. sonarr-anime hit
+  # it on 2026-11-18, the first app added since the file was written.
 
   - model: authentik_blueprints.metaapplyblueprint
     attrs:
