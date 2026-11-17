@@ -2,8 +2,9 @@
 
 A second Sonarr instance, dedicated to the anime library. It runs the same image and the same chart
 shape as [`../sonarr`](../sonarr), with its own config claim, host, API key and memory size. It is
-internal-only: `sonarr-anime.kub.local`, over TLS since 2026-11-15, no authentication in front
-of it.
+internal-only: `sonarr-anime.kub.local`, over TLS since 2026-11-15, behind the authentik
+forward-auth gate, with the instance's own login off and `/api` carrying `lan-only` alone (the API
+checks `X-Api-Key` itself).
 
 The chart is built from the reference chart `../prowlarr` and the contract in
 [`docs/charts/README.md`](../../../../docs/charts/README.md). The differences are listed below; each
