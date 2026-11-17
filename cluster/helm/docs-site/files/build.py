@@ -521,6 +521,12 @@ def fetch_tarball(repo: str, ref: str, workdir: Path) -> Path:
     workdir = Path(workdir)
     workdir.mkdir(parents=True, exist_ok=True)
     unpack = Path(tempfile.mkdtemp(prefix=f".{repo}__{ref}.", dir=workdir))
+    # `mkdtemp` makes the directory 0700 — private to the uid that created it,
+    # which is this process. The build does not run as this process: it drops to
+    # `nobody`, and a directory it cannot enter makes MkDocs report the docs
+    # folder as non-existent. The archive's own modes are left alone; only this
+    # outer directory is opened up, to the same 0755 every other work path has.
+    os.chmod(unpack, 0o755)
     handle, archive_name = tempfile.mkstemp(prefix=f".{repo}__{ref}.", suffix=".tar.gz", dir=workdir)
     os.close(handle)
     archive = Path(archive_name)
