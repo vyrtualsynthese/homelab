@@ -29,6 +29,7 @@ from typing import Any
 
 REPO = "vyrtualsynthese/homelab"
 DOCS_BASE = f"https://github.com/{REPO}/blob/develop/"
+SITE_BASE = "https://docs.kub.local/homelab/develop/"
 KINDS = ("feature", "story", "task")
 COLUMNS = ("Idea", "Shaping", "Backlog", "Doing", "Validation", "Done")
 CONTAINER_COLUMNS = ("Idea", "Shaping", "Backlog", "Done")
@@ -37,7 +38,7 @@ DEFAULT_MAP = os.path.join(os.path.dirname(os.path.abspath(__file__)),
 
 
 # ---------------------------------------------------------------------------
-# Pure helpers, tested in tests/test_vikunja_migrate.py.
+# Pure helpers, tested in hack/tests/test_vikunja_migrate.py.
 # ---------------------------------------------------------------------------
 def clean_title(title: str, plan_key: str) -> str:
     """Drop the ``<plan-key>: `` prefix, keep every other colon, capitalise."""
@@ -47,15 +48,37 @@ def clean_title(title: str, plan_key: str) -> str:
     return title[:1].upper() + title[1:] if title else title
 
 
+def site_url(docs: str) -> str | None:
+    """The rendered page for a file under ``docs/``, or ``None`` when there is none.
+
+    The URL is derived from the path alone. Whether that page is live yet is the
+    caller's to know, because the site builds ``develop``, not a feature branch.
+    """
+    if not docs or not docs.startswith("docs/") or not docs.endswith(".md"):
+        return None
+    return f"{SITE_BASE}{docs[len('docs/'):-len('.md')]}/"
+
+
 def render_description(docs: str, branch: str, pr: str, body: str,
-                       commit: str = "none") -> str:
-    """The fixed block every ticket opens with, then the body, if any."""
+                       commit: str = "none", on_develop: bool = True) -> str:
+    """The fixed block every ticket opens with, then the body, if any.
+
+    ``on_develop`` is the caller's knowledge, not this function's: the site builds
+    ``develop``, so a ``docs:`` path that only exists on a feature branch renders
+    nowhere and its ``site:`` line says ``none`` instead of pointing at a 404.
+    """
     lines = [
         f"repo: {REPO}",
         f"docs: {DOCS_BASE}{docs}" if docs and docs != "none" else "docs: none",
+    ]
+    # A labelled link, never a bare URL: the protocol treats a bare URL as a card defect.
+    site = site_url(docs)
+    if site is not None:
+        lines.append(f"site: [Rendered page]({site})" if on_develop else "site: none")
+    lines.extend([
         f"branch: {branch or 'none'}",
         f"pr: {pr or 'none'}",
-    ]
+    ])
     if commit and commit != "none":
         lines.append(f"commit: https://github.com/{REPO}/commit/{commit}")
     block = "\n".join(lines)

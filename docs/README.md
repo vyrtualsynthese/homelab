@@ -37,7 +37,7 @@ Most of what looks strange at first follows from five rules. Each links the page
 |---|---|
 | **Understand** the place | [The homelab in one page](how-it-works/README.md), then the topic pages it lists |
 | **Fix something**, or see what is broken | [Running it](running-it/README.md) opens the page for each intention; [application status](status.md) is the dated snapshot of what is red |
-| **Read a plan**, or file work of my own | the board at [vikunja.kub.local](https://vikunja.kub.local), with [the operator↔agent protocol](agent-protocol.md) |
+| **Read a plan**, or file work of my own | [How to read a plan](agent-work.md) explains the folder and indexes it; the board at [vikunja.kub.local](https://vikunja.kub.local) is the state, and [the operator↔agent protocol](agent-protocol.md) says how a card is written |
 
 The board is the state of the work: when a plan's checkboxes and the board disagree, the board wins.
 

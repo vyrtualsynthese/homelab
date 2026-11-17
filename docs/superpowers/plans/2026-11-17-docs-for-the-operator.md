@@ -19,7 +19,7 @@
 - Plain language. Gloss a media or design term the first time it appears in a page.
 - The body must render on GitHub as well as in Material: blockquotes, not `!!!` admonitions.
 - Work happens on `develop`. `main` has no `docs/` folder and is out of scope.
-- No cluster objects change. The only non-Markdown file added outside `hack/` and `tests/` is `mkdocs.yml`.
+- No cluster objects change. The only non-Markdown file added outside `hack/` is `mkdocs.yml`.
 - Build with `uv run --quiet --with 'mkdocs-material==9.8.1' mkdocs build -d /tmp/docs-build`; it must exit 0.
 - `python3 hack/check_docs_links.py` must print `0 broken relative links` before every commit.
 - Commit messages use the repo's emoji prefixes, e.g. `📝 docs: ...`.
@@ -1066,18 +1066,19 @@ git commit -m "📝 docs: decisions and audits as history, with a way back to to
 **Files:**
 - Modify: `docs/agent-protocol.md`
 - Modify: `hack/vikunja_migrate.py`
-- Create: `tests/test_vikunja_migrate.py`
+- Create: `hack/tests/test_vikunja_migrate.py`
 - Modify: `docs/running-it/use-the-board.md`
 
 **Interfaces:**
 - Produces: `site_url(docs: str) -> str | None` in `hack/vikunja_migrate.py`, returning
   `https://docs.kub.local/homelab/develop/<path>/` for a `docs/....md` path and `None` otherwise.
-- Produces: `render_description(docs, branch, pr, body, commit="none")` emitting `site:` directly
-  after `docs:` when `site_url` is not `None`.
+- Produces: `render_description(docs, branch, pr, body, commit="none", on_develop=True)` emitting
+  `site:` directly after `docs:` when `site_url` is not `None`, and `site: none` when the path is
+  not on `develop`.
 
 - [ ] **Step 1: Write the failing tests**
 
-`tests/test_vikunja_migrate.py`, pytest:
+`hack/tests/test_vikunja_migrate.py`, pytest:
 
 ```python
 from hack.vikunja_migrate import render_description, site_url
@@ -1108,7 +1109,7 @@ def test_render_description_without_docs_has_no_site_line():
 
 - [ ] **Step 2: Run and watch them fail**
 
-`uv run --quiet --with pytest python -m pytest -q tests/test_vikunja_migrate.py`
+`uv run --quiet --with pytest python -m pytest -q hack/tests/test_vikunja_migrate.py`
 Expected: import error for `site_url`.
 
 - [ ] **Step 3: Implement `site_url` and the renderer change**
@@ -1120,7 +1121,7 @@ Markdown link, never a bare URL, because the protocol treats a bare URL as a car
 
 - [ ] **Step 4: Run the tests**
 
-Expected: 5 passed.
+Expected: 6 passed (the five above plus the `on_develop=False` case).
 
 - [ ] **Step 5: Verify the protocol and the board how-to**
 
@@ -1132,7 +1133,7 @@ is still missing.
 - [ ] **Step 6: Commit**
 
 ```bash
-git add hack/vikunja_migrate.py tests/test_vikunja_migrate.py docs/agent-protocol.md docs/running-it/use-the-board.md
+git add hack/vikunja_migrate.py hack/tests/test_vikunja_migrate.py docs/agent-protocol.md docs/running-it/use-the-board.md
 git commit -m "📝 docs: point every ticket at the rendered page"
 ```
 
@@ -1142,31 +1143,59 @@ git commit -m "📝 docs: point every ticket at the rendered page"
 
 **Files:**
 - Create: `hack/vikunja_site_backfill.py`
-- Create: `tests/test_vikunja_site_backfill.py`
+- Create: `hack/tests/test_vikunja_site_backfill.py`
 
 **Interfaces:**
 - Consumes: `site_url` from Task 20.
-- Produces: `add_site_line(description: str) -> str`, adding `site: [Rendered page](<url>)` after the
-  `docs:` line when a site URL applies and no `site:` line exists; otherwise returning the description
+- Produces: `add_site_line(description: str, on_develop: bool = True) -> str`, adding
+  `site: [Rendered page](<url>)` after the `docs:` line when a site URL applies and no `site:` line
+  exists, `site: none` when the path is not on `develop`, and otherwise returning the description
   unchanged. A labelled link, matching the renderer.
-- Produces: `--dry-run` (default) and `--apply`; open columns only.
+- Produces: `check_develop(ref: str = "origin/develop") -> str`, the pre-flight. It fetches `ref`'s
+  remote branch quietly, then compares the updated ref with the commit the remote advertises, and
+  exits naming the fetch when either step fails. Without a current ref every path reads as absent,
+  so every open card would be stamped `site: none` and the idempotence guard would defend the
+  mistake.
+- Produces: `open_cards(board, project, view) -> list[dict]`, the read of `Backlog`, `Doing` and
+  `Validation` only, which refuses a truncated bucket rather than guessing the rest.
+- Produces: `--dry-run` (default) and `--apply`; one report line per card — `would update`/`updated`,
+  `unchanged`, `skipped`, `stale none`, `failed` — and a summary count.
 
 - [ ] **Step 1: Write the failing tests**
 
-Cases: a description with `docs:` and no `site:` gains the line after `docs:`; a description that
-already has `site:` is unchanged; a description with `docs: none` is unchanged; the body after the
-block is preserved byte for byte; running the function twice equals running it once.
+Pure cases: a description with `docs:` and no `site:` gains the line after `docs:`; a description
+that already has `site:` is unchanged; `docs: none` and a non-`docs` path are unchanged; a labelled
+`docs:` line is read as well; the body after the block is preserved byte for byte; running the
+function twice equals running it once; a path that is not on `develop` gains `site: none`; a
+description with no fixed block is left alone; HTML from the board editor is recognised.
+
+Column-whitelist cases, against a stub board that answers the bucket read: `Idea`, `Shaping` and
+`Done` are never returned while `Backlog`, `Doing` and `Validation` are; a bucket with no `tasks`
+key is empty, not an error; a bucket at the server cap, or shorter than its own `count`, aborts the
+run; the same card in two columns aborts the run.
+
+Pre-flight cases, with `subprocess.run` mocked: a failed fetch exits naming the fetch; a local ref
+that the remote has moved past exits naming both commits; a ref that matches is returned; and a
+local branch name, which cannot be fetched, is refused.
 
 - [ ] **Step 2: Run and watch them fail**
 
-`uv run --quiet --with pytest python -m pytest -q tests/test_vikunja_site_backfill.py`
+`uv run --quiet --with pytest python -m pytest -q hack/tests/test_vikunja_site_backfill.py`
 
 - [ ] **Step 3: Implement the script**
 
-Use `VIKUNJA_API_TOKEN` and the same API base as `vikunja_migrate.py`. Read the board's open columns
-(`Backlog`, `Doing`, `Validation`) through the project view buckets endpoint. For each card, parse the
+Use `VIKUNJA_API_TOKEN` and the same API base as `vikunja_migrate.py`. The pre-flight comes before
+the board is read: `check_develop` runs `git fetch --quiet origin develop`, exits naming the fetch
+when it fails, then compares `git rev-parse origin/develop` with the commit
+`git ls-remote origin refs/heads/develop` advertises and exits when the two disagree — a stale ref
+would stamp `site: none` on every card. Then read the board's open columns (`Backlog`,
+`Doing`, `Validation`) through the project view buckets endpoint, and refuse a bucket that came back
+truncated — at the 100-card cap, or shorter than the `count` beside it. For each card, parse the
 description's first block, apply `add_site_line`, and report `would update <id> <title>` or
-`unchanged`. `--apply` sends the new description. Never touch `Idea` or `Done`.
+`unchanged`. A card with no fixed block is `skipped` and never written. A card whose line says
+`site: none` while its path is on `develop` now is reported `stale none`, and the rewrite is the
+operator's call. `--apply` sends the new description, counts a card as updated only once the write
+returned, and names a rejected card `failed` without stopping the run. Never touch `Idea` or `Done`.
 
 - [ ] **Step 4: Run the tests**
 
@@ -1185,7 +1214,8 @@ unchanged, `site:` after it, click it and land on the rendered plan.
 - [ ] **Step 6: Commit**
 
 ```bash
-git add hack/vikunja_site_backfill.py tests/test_vikunja_site_backfill.py
+git add hack/vikunja_site_backfill.py hack/tests/test_vikunja_site_backfill.py \
+  docs/superpowers/plans/2026-11-17-docs-for-the-operator.md hack/tests/test_vikunja_migrate.py
 git commit -m "📝 docs: backfill the rendered-page link on open tickets"
 ```
 
@@ -1213,7 +1243,7 @@ Agent work. Check that no tab is empty and no page is listed twice.
 - `python3 hack/check_docs_links.py` → 0.
 - `uv run --quiet --with 'mkdocs-material==9.8.1' mkdocs build -d /tmp/docs-build` → exit 0; every
   warning read and accepted explicitly.
-- `uv run --quiet --with pytest python -m pytest -q tests/` → all passed.
+- `uv run --quiet --with pytest python -m pytest -q hack/tests/` → all passed.
 - `git diff --name-status origin/develop -- docs/superpowers | grep -v '^A'` → empty: nothing but
   additions under the superpowers folder.
 

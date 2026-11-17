@@ -87,9 +87,9 @@ Every description opens with the same block, so the same facts sit in the same p
 ```text
 repo: [vyrtualsynthese/homelab](https://github.com/vyrtualsynthese/homelab)
 docs: [Plan — <title>](https://github.com/vyrtualsynthese/homelab/blob/develop/docs/superpowers/plans/<plan>.md)
+site: [Rendered page](https://docs.kub.local/homelab/develop/superpowers/plans/<plan>/)
 branch: feature/<branch>
 pr: [#<number>](https://github.com/vyrtualsynthese/homelab/pull/<number>)
-site: [Rendered page](https://docs.kub.local/homelab/develop/superpowers/plans/<plan>/)
 ```
 
 `docs:` points at the file the task came from. `site:` is that same file rendered on the docs site,
@@ -124,9 +124,9 @@ Column: `Validation`.
 ```text
 repo: [vyrtualsynthese/homelab](https://github.com/vyrtualsynthese/homelab)
 docs: [Plan — <title>](https://github.com/vyrtualsynthese/homelab/blob/develop/docs/superpowers/plans/<plan>.md)
+site: [Rendered page](https://docs.kub.local/homelab/develop/superpowers/plans/<plan>/)
 branch: feature/<branch>
 pr: [#<number>](https://github.com/vyrtualsynthese/homelab/pull/<number>)
-site: [Rendered page](https://docs.kub.local/homelab/develop/superpowers/plans/<plan>/)
 
 What changed
 - <path>: <the change, in a line or two>. Nothing else in the chart was touched.

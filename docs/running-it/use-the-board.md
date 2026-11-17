@@ -67,9 +67,9 @@ Every description opens with the same block, so the same facts sit in the same p
 ```text
 repo: [owner/repository](https://github.com/owner/repository)
 docs: [Plan — <title>](https://github.com/owner/repository/blob/develop/docs/superpowers/plans/<plan>.md)
+site: [Rendered page](https://docs.kub.local/homelab/develop/superpowers/plans/<plan>/)
 branch: feature/<branch>
 pr: [#<number>](https://github.com/owner/repository/pull/<number>)
-site: [Rendered page](https://docs.kub.local/homelab/develop/superpowers/plans/<plan>/)
 ```
 
 - **`docs:`** is the GitHub URL, because an agent cannot get through the sign-in gate.
