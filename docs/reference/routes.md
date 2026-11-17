@@ -70,7 +70,7 @@ own certificate on a `*.kub.home.ashudev.com` or `*.ashudev.com` name.
 | `radarr.kub.local` | Radarr | `media-stack` | forward-auth; `lan-only` alone on `/api` | internal CA | no |
 | `radarr-anime.kub.local` | Radarr (anime) | `media-stack` | `lan-only` | internal CA | no |
 | `sonarr.kub.local` | Sonarr | `media-stack` | forward-auth; `lan-only` alone on `/api` | internal CA | no |
-| `sonarr-anime.kub.local` | Sonarr (anime) | `media-stack` | `lan-only` | internal CA | no |
+| `sonarr-anime.kub.local` | Sonarr (anime) | `media-stack` | forward-auth; `lan-only` alone on `/api` | internal CA | no |
 | `syncthing.kub.home.ashudev.com` | Syncthing | `syncthing` | **none** | Let's Encrypt | no |
 | `tautulli.kub.local` | Tautulli | `media-stack` | forward-auth; `lan-only` alone on `/api` | internal CA | no |
 | `thelounge.kub.home.ashudev.com` | The Lounge | `thelounge` | **none** | Let's Encrypt | no |

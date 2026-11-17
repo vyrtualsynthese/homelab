@@ -44,7 +44,7 @@ absent from this table has no single sign-on at all — no provider, no gate —
 | Dashy | none | **fix** — no gate and no `lan-only` live: it names `kube-system-authentik`, which is headers, not a gate. The chart already emits `lan-only` and the live object predates that rule, so a sync closes the gap | `dashy.ashudev.com` |
 | qBittorrent | LAN only | by decision, own login — the reason is in its values; no gate until its hand-written `templates/ingress.yaml` grows a middleware list | `qbittorrent.kub.local` |
 | Radarr (anime) | LAN only | by decision, own login | `radarr-anime.kub.local` |
-| Sonarr (anime) | LAN only | by decision, own login | `sonarr-anime.kub.local` |
+| Sonarr (anime) | forward-auth gate | configured 2026-11-18; its own login is off; `/api` exempt | `sonarr-anime.kub.local` |
 | Plex | none | no gate and no `lan-only`: Plex clients cannot complete a browser sign-in, so the host answers the internet and its own account model decides | `plex.kub.home.ashudev.com` |
 | Seerr | none | no gate and no `lan-only`; its own login, and its users arrive from Plex | `seerr.kub.home.ashudev.com` |
 
@@ -157,7 +157,7 @@ session.
 | maintainerr | `https://maintainerr.kub.local` | forward-auth; **`/api` exempt** (`lan-only` only) since 2026-11-15 | none exists |
 | autobrr | `https://autobrr.kub.local` | **OIDC, no gate** | replaced by OIDC |
 | qbittorrent | `https://qbittorrent.kub.local` | `lan-only` only — **no authentik gate yet** | its own login |
-| sonarr-anime | `https://sonarr-anime.kub.local` | `lan-only` only — no authentik gate by decision | its own login |
+| sonarr-anime | `https://sonarr-anime.kub.local` | forward-auth; **`/api` exempt** since 2026-11-18 | off |
 | radarr-anime | `https://radarr-anime.kub.local` | `lan-only` only — no authentik gate by decision | its own login |
 
 Every route also carries `lan-only`. That middleware allows `192.168.1.0/24` (LAN), `10.8.0.0/24`
@@ -418,12 +418,13 @@ table of `/config/app.db` on the config claim; `0` is standard, `2` is OAuth.
 - **qbittorrent** has no gate. Its `templates/ingress.yaml` is hand-written rather than the shared
   `ingressroute.yaml`, so it needs a middleware list added before the values can carry one.
 - **tautulli** still shows its own login (UI toggle, above).
-- **No media-stack API is behind the gate any more** (2026-11-15). Every chart built on the shared
-  `ingressroute.yaml` has the `apiBypassMiddlewares` block, and the six gated tools that check their
-  own key — sonarr, radarr, lidarr, prowlarr, tautulli — set it to `lan-only`, joining `bazarr`,
-  `bazarr-anime` and `maintainerr`. Charts without an authentik gate (autobrr, sonarr-anime,
-  radarr-anime, qbittorrent, calibre, kavita, plex, seerr) never had one on `/api` either, so they
-  need nothing. Any new chart that copies the template must decide this explicitly.
+- **No media-stack API is behind the gate any more** (2026-11-15; sonarr-anime joined on 2026-11-18).
+  Every chart built on the shared `ingressroute.yaml` has the `apiBypassMiddlewares` block, and the
+  six gated tools that check their own key — sonarr, sonarr-anime, radarr, lidarr, prowlarr,
+  tautulli — set it to `lan-only`, joining `bazarr`, `bazarr-anime` and `maintainerr`. Charts without
+  an authentik gate (autobrr, radarr-anime, qbittorrent, calibre, kavita, plex, seerr) never had one
+  on `/api` either, so they need nothing. Any new chart that copies the template must decide this
+  explicitly.
 - **maintainerr's `/api` is open to the LAN** (since 2026-11-15, by decision). The UI keeps the
   authentik gate; the API does not, and upstream checks no key on inbound requests. Close it with
   `apiBypassMiddlewares: []`, or put a `basicauth` middleware on the `/api` rule.
