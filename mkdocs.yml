@@ -50,6 +50,17 @@ validation:
 
 nav:
   - Start here: README.md
+  - How it works:
+      - how-it-works/README.md
+      - The shape and why: how-it-works/the-shape-and-why.md
+      - Nodes: how-it-works/nodes.md
+      - GitOps: how-it-works/gitops.md
+      - Storage: how-it-works/storage.md
+      - Network: how-it-works/network.md
+      - Identity: how-it-works/identity.md
+      - Observability: how-it-works/observability.md
+      - Media: how-it-works/media.md
+      - Applications: how-it-works/applications.md
   - Running it:
       - running-it/README.md
       - What is broken right now: status.md
@@ -62,17 +73,6 @@ nav:
       - Use the board: running-it/use-the-board.md
       - Rebuild the docs site: running-it/rebuild-the-docs-site.md
       - Disaster recovery: running-it/disaster-recovery.md
-  - How it works:
-      - how-it-works/README.md
-      - The shape and why: how-it-works/the-shape-and-why.md
-      - Nodes: how-it-works/nodes.md
-      - GitOps: how-it-works/gitops.md
-      - Storage: how-it-works/storage.md
-      - Network: how-it-works/network.md
-      - Identity: how-it-works/identity.md
-      - Observability: how-it-works/observability.md
-      - Media: how-it-works/media.md
-      - Applications: how-it-works/applications.md
   - Reference:
       - reference/README.md
       - Routes: reference/routes.md
@@ -96,3 +96,14 @@ nav:
       - Shape the board: runbooks/vikunja-board-seed.md
       - The books cutover: runbooks/books-cutover.md
       - First run of the docs site: runbooks/docs-site-first-run.md
+  - History:
+      - Decisions: decisions/README.md
+      - nuc0 throttling: decisions/2026-11-13-nuc0-throttling-accepted.md
+      - streaming overheating: decisions/2026-11-13-streaming-overheating-deferred.md
+      - Audits: audit/README.md
+      - Ansible and hosts: audit/ansible-hosts.md
+      - ArgoCD and Helm: audit/argocd-helm.md
+      - Observability and storage: audit/observability-storage.md
+  - Agent work:
+      - How to read a plan: agent-work.md
+      - The board protocol: agent-protocol.md
