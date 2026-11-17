@@ -147,39 +147,9 @@ time. Examples:
 
 ## 5. Secrets (never commit)
 
-Templates expect these Secrets to already exist; a missing one shows up as
-`CreateContainerConfigError`. **[verify]** the full list against the cluster.
-
-| Namespace | Secret | Keys / used by |
-|---|---|---|
-| media-stack | `sonarr`, `sonarr-anime`, `radarr`, `radarr-anime`, `lidarr`, `prowlarr` | `secret` → exportarr APIKEY |
-| media-stack | `bazarr`, `bazarr-anime` | `secret` → exportarr APIKEY (only when `exportarr.enabled`; off until exportarr v3) |
-| media-stack | `plex` | `plex_claim` |
-| media-stack | `qbittorrent-exporter` | `username`, `password` |
-| media-stack | `cross-seed` | mounted as a file (`conf.secretName`) |
-| media-stack | `recyclarr` | mounted as a file |
-| filebrowser | `filebrowser` | `FB_CONFIG`, `FB_DATABASE`, `FB_USERNAME`, `FB_PASSWORD` (bcrypt) — first admin |
-| firefly | `firefly-app` | `APP_KEY`, `STATIC_CRON_TOKEN` |
-| firefly | `firefly-db` | `DB_DATABASE`, `DB_USERNAME`, `DB_PASSWORD` |
-| guacamole | `guacamole-db` | `POSTGRES_USER`, `POSTGRES_PASSWORD` |
-| koillection | `koillection` | `DB_NAME`, `DB_HOST`, `DB_USER`, `DB_PASSWORD` |
-| monitorss | `monitorss` | bot `clientid`, `clientsecret`, `token` |
-| wiki | `wikijs` | `password` |
-| ghostfolio | `ghostfolio` | `envFrom` |
-| syncthing | `syncthing-backup` | `envFrom` (restic credentials) |
-| authentik | `authentik-env` | `envFrom` |
-| dashy | `dashy-conf` | external chart `existingSecret` |
-| discourse | `discourse` | `discourse-password` |
-| databases | `postgres-secrets` | Bitnami PostgreSQL `existingSecret` |
-| databases | `pgadmin` | external chart `existingSecret` |
-| renovate | `renovate` | external chart `existingSecret` |
-| monitoring | `pihole-exporter` | `key` |
-| monitoring | `mktxp-conf` | mounted as a file |
-| monitoring | `grafana` | `admin-user`, `admin-password` — required; the chart reads it via `admin.existingSecret` |
-| kube-system | `local-cert` | Traefik default TLS cert (`TLSStore`) |
-| kube-system | `traefik-dashboard-auth` | basicAuth for the dashboard |
-
-`n8n` references no pre-existing Secret. `postiz` templates `<fullname>-secrets` itself.
+The inventory is [`docs/secrets.md`](docs/secrets.md). The chart that mounts or references a Secret
+is the authority on its keys. A missing Secret shows as `CreateContainerConfigError`, not as a
+failed sync.
 
 ## 6. Validate before committing (no cluster needed)
 

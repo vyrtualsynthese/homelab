@@ -63,7 +63,7 @@ Each is decided, dated and written down. Meeting it again is not a finding; read
   [the decision](../decisions/2026-11-13-nuc0-throttling-accepted.md).
 - **The `nas` SSD is out of life.** It holds the `nas`-pinned configuration claims, including the
   monitoring stack's, and waits on a replacement:
-  [the readings](../observability-conventions.md#dashboards).
+  [the readings](../reference/metrics.md#current-health-facts-2026-11-13).
 - **qBittorrent's Web UI stalls during downloads.** The UI and its API stop answering for an hour or
   two, then clear; the download itself never stops:
   [the evidence](../qbittorrent-webui-stalls.md).

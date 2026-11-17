@@ -1,5 +1,11 @@
 # First run of the docs site
 
+> **In one line.** The first start of `https://docs.kub.local`: the token, the chart, one manual run
+> of the builder, and what it rendered.
+>
+> **Use it when** the docs site is rebuilt from nothing, or you want the first run as measured ·
+> **Kind:** completed record 2026-11-17
+
 Date: 2026-11-16
 
 **Changes the cluster:** creates the `docs` namespace, one Secret, one claim and two workloads. See
@@ -274,8 +280,8 @@ And last the token in GitHub (Step 1), which is the credential this whole proced
   one.
 - The daily full rebuild: `fullRebuildAge` in the chart's values, 86400s, no procedure needed.
 - The gate and the certificate themselves: shared with every other internal application, see
-  [`authentik-apps.md`](authentik-apps.md) and [`internal-ca.md`](internal-ca.md). The provider is the
-  one object this procedure adds to authentik, through `app-docs.yaml`.
+  [`sso-applications.md`](../reference/sso-applications.md) and [`internal-ca.md`](internal-ca.md).
+  The provider is the one object this procedure adds to authentik, through `app-docs.yaml`.
 
 ## Measured
 

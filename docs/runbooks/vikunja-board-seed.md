@@ -1,5 +1,11 @@
 # Shaping the board
 
+> **In one line.** The board's shape — projects, columns, labels, saved filters — recreated from the
+> git-tracked seed, with the `--verify` run that checks it.
+>
+> **Use it when** the boards must be recreated after a loss, or the seed script changes ·
+> **Kind:** completed record 2026-11-16
+
 Date: 2026-11-16
 
 **Changes the cluster:** no. This writes to the task board — projects, one view, six columns, seven

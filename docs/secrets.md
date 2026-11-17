@@ -9,9 +9,46 @@ bootstrap Job that never creates its roles.
 the cluster and in the operator's password manager, nowhere else. Secrets are not in git and must
 not be added to it.
 
-State: 2026-11-13, read from the charts on branch `feature/postgres-design`. The application
-Secrets that predate the PostgreSQL workstream stay listed in [`AGENTS.md` §5](../AGENTS.md); this
-file covers the database instance and points at the pairs the add-database runbook creates.
+State: 2026-11-17, read from the charts on branch `feature/docs-stage-3`. This file is the whole
+inventory: every Secret a chart expects, then the PostgreSQL instance and the per-application
+database passwords.
+
+## Application secrets expected by the charts
+
+> Compiled from the charts on 2026-11-17; not verified against the cluster, because the read-only
+> account cannot read Secrets. The chart that mounts or references a Secret is the authority on its
+> keys.
+
+| Secret | Namespace | Keys and consumer |
+|---|---|---|
+| `sonarr`, `sonarr-anime`, `radarr`, `radarr-anime`, `lidarr`, `prowlarr` | `media-stack` | `secret` → exportarr APIKEY |
+| `bazarr`, `bazarr-anime` | `media-stack` | `secret` → exportarr APIKEY (only when `exportarr.enabled`; off until exportarr v3) |
+| `plex` | `media-stack` | `plex_claim` |
+| `qbittorrent-exporter` | `media-stack` | `username`, `password` |
+| `cross-seed` | `media-stack` | mounted as a file (`conf.secretName`) |
+| `recyclarr` | `media-stack` | mounted as a file |
+| `filebrowser` | `filebrowser` | `FB_CONFIG`, `FB_DATABASE`, `FB_USERNAME`, `FB_PASSWORD` (bcrypt) — first admin |
+| `firefly-app` | `firefly` | `APP_KEY`, `STATIC_CRON_TOKEN` |
+| `firefly-db` | `firefly` | `DB_DATABASE`, `DB_USERNAME`, `DB_PASSWORD` |
+| `guacamole-db` | `guacamole` | `POSTGRES_USER`, `POSTGRES_PASSWORD` |
+| `koillection` | `koillection` | `DB_NAME`, `DB_HOST`, `DB_USER`, `DB_PASSWORD` |
+| `monitorss` | `monitorss` | bot `clientid`, `clientsecret`, `token` |
+| `wikijs` | `wiki` | `password` |
+| `ghostfolio` | `ghostfolio` | `envFrom` |
+| `syncthing-backup` | `syncthing` | `envFrom` (restic credentials) |
+| `authentik-env` | `authentik` | `envFrom` |
+| `dashy-conf` | `dashy` | external chart `existingSecret` |
+| `discourse` | `discourse` | `db-password`, `admin-db-password` for the database, `discourse-password` for the forum admin login |
+| `postgres-secrets` | `databases` | Bitnami PostgreSQL `existingSecret` |
+| `pgadmin` | `databases` | external chart `existingSecret` |
+| `renovate` | `renovate` | external chart `existingSecret` |
+| `pihole-exporter` | `monitoring` | `key` |
+| `mktxp-conf` | `monitoring` | mounted as a file |
+| `grafana` | `monitoring` | `admin-user`, `admin-password` — required; the chart reads it via `admin.existingSecret` |
+| `local-cert` | `kube-system` | Traefik default TLS cert (`TLSStore`) |
+| `traefik-dashboard-auth` | `kube-system` | basicAuth for the dashboard |
+
+`n8n` references no pre-existing Secret. `postiz` templates `<fullname>-secrets` itself.
 
 ## The PostgreSQL instance (`databases` namespace)
 
@@ -67,10 +104,6 @@ beside the instance that creates the role, once beside the application that cons
 
 Only the password keys hold secrets; `DB_NAME`, `DB_HOST`, `DB_USER` and `POSTGRES_USER` live in
 the Secret because the chart reads them there, not because they are sensitive.
-
-[`AGENTS.md` §5](../AGENTS.md) lists one `discourse-password` key for the `discourse` Secret. The
-charts are the authority and they read three keys: `db-password` and `admin-db-password` for the
-database, `discourse-password` for the forum login. §5 is corrected the next time it is touched.
 
 Rotation is therefore two writes and one statement: update both Secrets, then
 `ALTER ROLE <app> PASSWORD '<new value>'`, then restart the application pod. Until the dedicated

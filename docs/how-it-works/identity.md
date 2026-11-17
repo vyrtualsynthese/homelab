@@ -81,7 +81,8 @@ recovery is deleting the lost device and enrolling again.
 
 ## Where the per-app detail is
 
-The procedure for wiring an app — blueprint, outpost list (the proxy that serves the login pages),
-chart values, verification — is [runbooks/authentik-apps.md](../runbooks/authentik-apps.md). The
-per-app matrix moves to [reference/sso-applications.md](../reference/sso-applications.md), the one
-home for which app is protected how.
+The per-app matrix, the traps and the steps that wire a new application — blueprint, outpost list
+(the proxy that serves the login pages), chart values — are
+[reference/sso-applications.md](../reference/sso-applications.md). The walks for the applications
+that speak OIDC themselves (the four client secrets, Grafana, pgAdmin, Kavita, Argo CD) are
+[runbooks/authentik-apps.md](../runbooks/authentik-apps.md).

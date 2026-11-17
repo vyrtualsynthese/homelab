@@ -59,7 +59,8 @@ headers, not authentication — a route named with it is gated by nothing.
 
 The order of preference is native OIDC first, then proxy auth where the app is built for it, then the
 gate, then `lan-only` alone with the reason written next to it. Per-app detail is in
-[identity.md](identity.md) and the [authentik runbook](../runbooks/authentik-apps.md).
+[reference/sso-applications.md](../reference/sso-applications.md); what the mechanisms are is
+[identity.md](identity.md).
 
 ## TLS on `kub.local`
 

@@ -73,3 +73,26 @@ nav:
       - Observability: how-it-works/observability.md
       - Media: how-it-works/media.md
       - Applications: how-it-works/applications.md
+  - Reference:
+      - reference/README.md
+      - Routes: reference/routes.md
+      - SSO applications: reference/sso-applications.md
+      - Chart notes: reference/chart-notes.md
+      - Chart sizing: reference/chart-sizing.md
+      - Metrics: reference/metrics.md
+      - Alerts: reference/alerts.md
+      - Dashboards: reference/dashboards.md
+      - Secrets: secrets.md
+      - qBittorrent Web UI stalls: qbittorrent-webui-stalls.md
+  - Runbooks:
+      - runbooks/README.md
+      - Wire an application to authentik: runbooks/authentik-apps.md
+      - The internal CA: runbooks/internal-ca.md
+      - Add a database: runbooks/postgres-add-database.md
+      - Restore a database: runbooks/postgres-restore.md
+      - The alert relay: runbooks/alert-relay.md
+      - The board's database: runbooks/vikunja-database.md
+      - First start of the board: runbooks/vikunja-first-start.md
+      - Shape the board: runbooks/vikunja-board-seed.md
+      - The books cutover: runbooks/books-cutover.md
+      - First run of the docs site: runbooks/docs-site-first-run.md

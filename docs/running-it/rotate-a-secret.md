@@ -104,7 +104,8 @@ Unequal means one copy is stale: set it to the other's value, then `ALTER ROLE`.
 `AUTHENTIK_SECRET_KEY` signs sessions, so rotating it signs everybody out;
 `AUTHENTIK_BOOTSTRAP_PASSWORD` only creates `akadmin` on first start — rotate that account in
 the UI. Blueprints read `!Env` at apply time: restart the worker **and** re-apply
-([`authentik-apps.md`](../runbooks/authentik-apps.md)).
+([`sso-applications.md`](../reference/sso-applications.md), trap 5); the app-specific steps are in
+[`authentik-apps.md`](../runbooks/authentik-apps.md).
 
 **A client secret has two copies, and the provider's goes first.** `PGADMIN_CLIENT_SECRET` is read
 from `authentik-sso` at apply time: patch that Secret, re-apply the blueprint, then the app's copy —
