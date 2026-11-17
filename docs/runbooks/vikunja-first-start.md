@@ -1,5 +1,11 @@
 # First start of the board
 
+> **In one line.** The board's first start: the owner account, the certificate, single sign-on, and
+> the API checks that showed the board was up and closed to the internet.
+>
+> **Use it when** the board is built again from nothing, or you need to know what its first start
+> proved · **Kind:** completed record 2026-11-16
+
 Date: 2026-11-15
 
 **Changes the cluster:** creates the board's owner account and the first row in its database.
@@ -118,7 +124,7 @@ comes from the `vikunja-redirect` route, which runs the `lan-only` gate and then
 a request from outside the LAN is refused here, before it is redirected anywhere.
 
 That number is what this cluster's shared `redirect-to-https` middleware returns — the same code
-[`authentik-apps.md`](authentik-apps.md) records for every `-redirect` route. Anything else means
+[`sso-applications.md`](../reference/sso-applications.md) records for every `-redirect` route. Anything else means
 that shared middleware has changed, so check it before reading anything into the board's route.
 
 What must **not** appear is a redirect to authentik here. The sign-in gate applies after the scheme
@@ -180,7 +186,7 @@ the proof that `/` does not skip it. A `200` on the second call means the gate i
 route, and the board is reachable by anybody who can reach the cluster.
 
 If the second call comes back with something other than `200` or `302`, the status is the fastest
-diagnostic — the same table [`authentik-apps.md`](authentik-apps.md) gives: **404** means authentik
+diagnostic — the same table [`sso-applications.md`](../reference/sso-applications.md) gives: **404** means authentik
 has no provider for this host (the blueprint is missing, or was never applied), **403** means the
 provider exists but its policy refused this account.
 
@@ -344,4 +350,4 @@ retention.
 - The board's own content: projects, labels and views are created by `vikunja-board-seed.md`.
 - Backups: the database is in the nightly dump, nothing exports the board separately.
 - The gate and the certificate themselves: those are shared with every other internal application,
-  see [`authentik-apps.md`](authentik-apps.md) and [`internal-ca.md`](internal-ca.md).
+  see [`sso-applications.md`](../reference/sso-applications.md) and [`internal-ca.md`](internal-ca.md).

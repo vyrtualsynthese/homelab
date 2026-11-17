@@ -1,5 +1,11 @@
 # Books cutover: Calibre desktop out, Calibre-Web Automated in, Kavita back up
 
+> **In one line.** The sitting that moved the books library off Calibre desktop and onto
+> Calibre-Web Automated as its single writer, with Kavita reading the same share.
+>
+> **Use it when** the books stack is rebuilt from nothing, or you need the record of what that move
+> did and the `metadata.db` copy it left · **Kind:** completed record 2026-11-13
+
 > **Destructive.** This deletes the running Calibre Deployment and every other object its
 > Application created, and it is the moment the library's single writer changes hands. The books
 > themselves are not touched, and one copy of `metadata.db` is taken before anything is deleted.
