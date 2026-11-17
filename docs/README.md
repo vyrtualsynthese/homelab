@@ -1,72 +1,74 @@
 # Documentation
 
-Everything authoritative about this homelab lives here. If a document elsewhere in the repo
-disagrees with one of these, these win.
+> **In one line.** The start-here page for this homelab: what the machines are, how a change reaches
+> them, and where the answer to your question already lives.
+>
+> **Use it when** you are new to the cluster, or you cannot remember which page owns a subject ·
+> **Verified** 2026-11-17 · **Kind:** living page
 
-## Read in this order
+## What this is
 
-| Document | What it answers |
+This is the documentation of one K3s homelab: four cluster nodes, two edge Pis, and the applications
+they run. Everything authoritative about it lives here in `docs/`, and where a file elsewhere in the
+repository disagrees with one of these pages, these pages win. The same files render as a site with
+navigation and search at
+[https://docs.kub.local/homelab/develop/](https://docs.kub.local/homelab/develop/).
+
+## Five things worth remembering
+
+Most of what looks strange at first follows from five rules. Each links the page that argues it.
+
+1. **Every rebuilt workload is pinned** to a named machine, and a `local-path` volume is created on
+   the machine its first pod landed on. [The machines](how-it-works/nodes.md)
+2. **Configuration lives on `local-path`**: a directory on one machine's own disk. There is no
+   replicated volume and no failover, so losing that disk loses the data.
+   [Where the data lives](how-it-works/storage.md)
+3. **GitOps is the only door for applications.** A merge to `develop` is a deployment; a hand edit is
+   drift that gets reverted. [GitOps](how-it-works/gitops.md)
+4. **Every non-public route carries `lan-only`.** The house router forwards 80 and 443 to the cluster
+   and Traefik routes on the `Host` header alone, so a route without the gate answers the internet.
+   [Network](how-it-works/network.md)
+5. **Native SSO first.** An app that speaks OIDC uses it. The forward-auth gate treats everyone who
+   passed as the same person, so it is the fallback, not the default. [Identity](how-it-works/identity.md)
+
+## Choose a path
+
+| I want to… | Start here |
 |---|---|
-| [`audit/`](audit/) | What is actually true about the cluster and the repo, with evidence. Captured 2026-11-10 — a snapshot, not a live view. |
-| [`superpowers/specs/2026-11-10-homelab-stabilisation-design.md`](superpowers/specs/2026-11-10-homelab-stabilisation-design.md) | Why the rebuild looks the way it does: intent, constraints, conventions, the nine workstreams and the risks. |
-| [`superpowers/plans/2026-11-10-homelab-programme-index.md`](superpowers/plans/2026-11-10-homelab-programme-index.md) | The workstreams with estimates, dependencies and the operator's priority order. |
-| [`superpowers/plans/`](superpowers/plans/) | One implementation plan per workstream, written to the command. |
-| [`status.md`](status.md) | Which applications are repaired, which are working but not rebuilt, and which are broken — with the date it was checked. Start here before trusting any other page's "done". |
-| [`runbooks/`](runbooks/) | Procedures to execute, produced as workstreams land. |
-| [`observability-conventions.md`](observability-conventions.md) | The live monitoring stack: what runs, how to query it, the dashboards, the alert set and its known holes. Read before touching Grafana, Prometheus or Loki. |
+| **Understand** the place | [The homelab in one page](how-it-works/README.md), then the topic pages it lists |
+| **See what is broken** right now | [Application status](status.md): what runs, what is `Pending` and what is broken, on its own date |
+| **Read a plan**, or file work of my own | the board at [vikunja.kub.local](https://vikunja.kub.local), with [the operator↔agent protocol](agent-protocol.md) |
 
-## The audit set
+The board is the state of the work: when a plan's checkboxes and the board disagree, the board wins.
 
-| File | Scope |
-|---|---|
-| [`audit/observability-storage.md`](audit/observability-storage.md) | Prometheus, Grafana, Loki, exporters, Longhorn, storage classes, what the data loss took |
-| [`audit/argocd-helm.md`](audit/argocd-helm.md) | Application reference integrity, sync policy, pattern classification, versions, ingress, secrets, decommissioned software |
-| [`audit/ansible-hosts.md`](audit/ansible-hosts.md) | Playbooks, inventory, backups, runner templates, staleness, what a rebuild would not reproduce |
+## The map
 
-These are dated on purpose. They describe the cluster at one moment and will drift; a later
-workstream supersedes them by producing a runbook, not by editing the audit. For the current state
-instead, read [`status.md`](status.md).
-
-## Faults that are tracked, not fixed
-
-Known conditions that are accepted for now, each with a record rather than an alert nobody can act
-on. Read the record before opening a new investigation into one of them.
-
-| Fault | Record | How it is tracked |
+| Subject | Page | It answers |
 |---|---|---|
-| `streaming` runs at its thermal ceiling; the cooler needs money, not configuration | [`decisions/2026-11-13-streaming-overheating-deferred.md`](decisions/2026-11-13-streaming-overheating-deferred.md) | `NodeTemperatureHigh` fires; a time-boxed silence keeps the state visible without messaging |
-| `nuc0` overheats and throttles by design of its chassis; replacement node is the fix | [`decisions/2026-11-13-nuc0-throttling-accepted.md`](decisions/2026-11-13-nuc0-throttling-accepted.md) | Document only, deliberately no alert |
-| qBittorrent's Web UI stops answering during downloads | [`qbittorrent-webui-stalls.md`](qbittorrent-webui-stalls.md) | Measurements and the decisive test; no fix applied |
+| Nodes | [The machines](how-it-works/nodes.md) | which machines exist, what each is for, what a dead node takes with it |
+| Storage | [Where the data lives](how-it-works/storage.md) | `local-path` against NFS, claim naming, the honest state of backups |
+| Identity | [Who gets in](how-it-works/identity.md) | authentik's job, the three groups, and how a route is protected |
+| Monitoring | [What watches the cluster](how-it-works/observability.md) | metrics and logs, the dashboards, where alerts go, the known holes |
+| Media | [The media pipeline](how-it-works/media.md) | from finding releases to playback, the storage paths, the two book apps |
+
+Two pages finish the set: [Applications](how-it-works/applications.md) is the catalogue — every
+application with its node, route and protection — and [The shape and why](how-it-works/the-shape-and-why.md)
+explains what failed in 2026 and which constraints became the five rules above.
 
 ## Where each kind of knowledge lives
 
-Set out in the design at §8.8, and worth repeating because it is the rule that stops the drift:
-
 | Kind | Home |
 |---|---|
-| Decisions and designs | `docs/superpowers/specs/`, `docs/decisions/` |
-| Evergreen knowledge: architecture, runbooks, secret inventory | `docs/` |
-| Work state: what is being thought about, planned, being done, awaiting validation, done | Vikunja (`vikunja.kub.local`) only, in six columns: `Idea`, `Shaping`, `Backlog`, `Doing`, `Validation`, `Done` |
+| Evergreen knowledge: architecture, runbooks, secret inventory | `docs/` in this repository, and nowhere else |
+| Work state: ideas, plans, what is being done, what awaits validation | the board, and nothing else — no second todo list |
+| Designs and plans | `docs/superpowers/`: a spec argues, a plan executes, the pair carries its date |
 | Agent recall: facts learned, preferences, past mistakes | OpenMemory |
 
-No second todo list, anywhere. A task links to a decision; it does not contain one. Documentation is
-files in git, never a wiki as the source of truth.
+Documentation is files in git, never a wiki as the source of truth. A task links to a decision; it does
+not contain one.
 
-Plan checkboxes record what was planned and what was executed; they are never consulted to answer
-whether a task is done. The board is the state, and when the two disagree the board wins. See
-[`agent-protocol.md`](agent-protocol.md).
+## Freshness
 
-## Reading it comfortably
-
-Markdown in git is the source. Material for MkDocs renders the same files into a browsable site with
-navigation and search, and Mermaid diagrams render both there and on GitHub, so the repo is readable
-with no build step.
-
-## The deletion of 2026-11-11
-
-`TODO.MD` and `REBUILD.md` were removed. Both described a plan that had been overtaken: `TODO.MD` was
-a 15-session checklist with nothing ticked, and `REBUILD.md` carried figures the cluster contradicted
-(31 self-healing Applications when the real number is near 20; 17 Pending pods when there were more;
-11 PVCs described as safely bound when they were mid-deletion). Keeping them would have left three
-documents disagreeing about the same machines — the failure mode this directory exists to prevent.
-Their useful reasoning was carried into the design before deletion.
+A living page carries the date it was last verified in its first blockquote, and is re-verified rather
+than guessed at. A snapshot says so in its opening line and is not edited afterwards: the audit set and
+`status.md` are snapshots, so read their date before trusting a claim about what is running.
