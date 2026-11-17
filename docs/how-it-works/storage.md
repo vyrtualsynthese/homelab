@@ -26,6 +26,8 @@ A configuration claim is `<app>-config`, `128Mi` unless there is a reason: confi
 GiB-sized guesses proved wrong. Two exceptions keep book-sized files in their own volume:
 `calibre-web-automated` at `10Gi`, `kavita` at `2Gi`.
 
+![Configuration on local-path per node, the media library on NFS classes from nas, and the Longhorn claims that remain](../assets/diagrams/storage.svg)
+
 The [stabilisation design](../superpowers/specs/2026-11-10-homelab-stabilisation-design.md#82-storage-classes)
 keeps a smaller named set and retires the rest; that sweep has not happened, so the last row is
 leftovers.

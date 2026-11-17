@@ -1,0 +1,99 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 600" role="img" aria-labelledby="title desc" font-family="Inter, 'Segoe UI', Helvetica, Arial, sans-serif">
+  <title id="title">Four cluster nodes and two edge Pis</title>
+  <desc id="desc">The four K3s nodes with their workloads and disks, the router, and the two edge Pis outside the cluster. Every workload is pinned to one node, and its local-path claim lives on that node's disk.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#64748b"/>
+    </marker>
+  </defs>
+
+  <rect width="1000" height="600" fill="#f8fafc"/>
+  <text x="40" y="40" font-size="24" font-weight="700" fill="#0f172a">Four cluster nodes and two edge Pis</text>
+  <text x="40" y="68" font-size="14" fill="#475569">Every workload is pinned to one node, and its local-path claim lives on that node's disk.</text>
+
+  <!-- nodes -->
+  <g>
+    <rect x="40" y="100" width="215" height="205" rx="12" fill="#ffffff" stroke="#cbd5e1"/>
+    <rect x="40" y="100" width="215" height="8" rx="4" fill="#0ea5e9"/>
+    <text x="58" y="138" font-size="19" font-weight="700" fill="#0f172a">nas</text>
+    <text x="58" y="160" font-size="12" fill="#0ea5e9" font-weight="600">storage and data</text>
+    <text x="58" y="188" font-size="13" fill="#334155">PostgreSQL, Prometheus,</text>
+    <text x="58" y="207" font-size="13" fill="#334155">Grafana, Loki</text>
+    <text x="58" y="226" font-size="13" fill="#334155">NFS exports</text>
+    <text x="58" y="260" font-size="12" fill="#475569">SSD · local-path</text>
+    <text x="58" y="278" font-size="12" fill="#475569">HDD · the media library</text>
+    <text x="58" y="296" font-size="11" fill="#64748b">pinned with nodeSelector</text>
+  </g>
+
+  <g>
+    <rect x="275" y="100" width="215" height="205" rx="12" fill="#ffffff" stroke="#cbd5e1"/>
+    <rect x="275" y="100" width="215" height="8" rx="4" fill="#8b5cf6"/>
+    <text x="293" y="138" font-size="19" font-weight="700" fill="#0f172a">streaming</text>
+    <text x="293" y="160" font-size="12" fill="#8b5cf6" font-weight="600">GPU and media</text>
+    <text x="293" y="188" font-size="13" fill="#334155">Plex, the *arr apps,</text>
+    <text x="293" y="207" font-size="13" fill="#334155">qBittorrent, Kavita,</text>
+    <text x="293" y="226" font-size="13" fill="#334155">the books pair</text>
+    <text x="293" y="260" font-size="12" fill="#475569">SSD · local-path</text>
+    <text x="293" y="278" font-size="12" fill="#475569">NVIDIA GPU for Plex</text>
+    <text x="293" y="296" font-size="11" fill="#64748b">pinned with nodeSelector</text>
+  </g>
+
+  <g>
+    <rect x="510" y="100" width="215" height="205" rx="12" fill="#ffffff" stroke="#cbd5e1"/>
+    <rect x="510" y="100" width="215" height="8" rx="4" fill="#22c55e"/>
+    <text x="528" y="138" font-size="19" font-weight="700" fill="#0f172a">nuc0</text>
+    <text x="528" y="160" font-size="12" fill="#22c55e" font-weight="600">general catalogue</text>
+    <text x="528" y="188" font-size="13" fill="#334155">authentik, the board,</text>
+    <text x="528" y="207" font-size="13" fill="#334155">the docs site,</text>
+    <text x="528" y="226" font-size="13" fill="#334155">most other apps</text>
+    <text x="528" y="260" font-size="12" fill="#475569">SSD · local-path</text>
+    <text x="528" y="278" font-size="12" fill="#475569">control plane + etcd</text>
+    <text x="528" y="296" font-size="11" fill="#64748b">pinned with nodeSelector</text>
+  </g>
+
+  <g>
+    <rect x="745" y="100" width="215" height="205" rx="12" fill="#ffffff" stroke="#cbd5e1"/>
+    <rect x="745" y="100" width="215" height="8" rx="4" fill="#f59e0b"/>
+    <text x="763" y="138" font-size="19" font-weight="700" fill="#0f172a">rbp2</text>
+    <text x="763" y="160" font-size="12" fill="#f59e0b" font-weight="600">control plane only</text>
+    <text x="763" y="188" font-size="13" fill="#334155">no application workload</text>
+    <text x="763" y="207" font-size="13" fill="#334155">etcd quorum member</text>
+    <text x="763" y="260" font-size="12" fill="#475569">SSD · local-path</text>
+    <text x="763" y="278" font-size="12" fill="#475569">ARM64 Raspberry Pi</text>
+    <text x="763" y="296" font-size="11" fill="#64748b">never a workload target</text>
+  </g>
+
+  <!-- router and edge -->
+  <g>
+    <rect x="40" y="350" width="230" height="72" rx="10" fill="#ffffff" stroke="#94a3b8"/>
+    <text x="58" y="378" font-size="15" font-weight="600" fill="#0f172a">Router / firewall</text>
+    <text x="58" y="398" font-size="12" fill="#475569">forwards 80/443 to the cluster</text>
+    <text x="58" y="414" font-size="12" fill="#475569">Traefik answers on all four nodes</text>
+  </g>
+  <line x1="155" y1="350" x2="155" y2="310" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <g>
+    <rect x="330" y="350" width="200" height="72" rx="10" fill="#ffffff" stroke="#cbd5e1"/>
+    <text x="348" y="378" font-size="15" font-weight="600" fill="#0f172a">rbp0 · edge</text>
+    <text x="348" y="398" font-size="12" fill="#475569">Pi-hole + WireGuard</text>
+    <text x="348" y="414" font-size="12" fill="#475569">outside the cluster</text>
+  </g>
+  <g>
+    <rect x="560" y="350" width="200" height="72" rx="10" fill="#ffffff" stroke="#cbd5e1"/>
+    <text x="578" y="378" font-size="15" font-weight="600" fill="#0f172a">rbp1 · edge</text>
+    <text x="578" y="398" font-size="12" fill="#475569">Pi-hole + WireGuard</text>
+    <text x="578" y="414" font-size="12" fill="#475569">outside the cluster</text>
+  </g>
+  <line x1="270" y1="386" x2="330" y2="386" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)"/>
+  <line x1="530" y1="386" x2="560" y2="386" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- shared storage -->
+  <g>
+    <rect x="40" y="480" width="920" height="64" rx="10" fill="#eff6ff" stroke="#bfdbfe"/>
+    <text x="58" y="506" font-size="14" font-weight="600" fill="#1e3a8a">Shared library</text>
+    <text x="58" y="528" font-size="12" fill="#1e40af">NFS exports on nas, one class each: nfs-plex, nfs-audio, nfs-books, qbittorrent-download, nfs-syncthing, stash-nfs.</text>
+  </g>
+  <path d="M240,305 L285,330 L285,478" fill="none" stroke="#60a5fa" stroke-width="2" stroke-dasharray="5 4" marker-end="url(#arrow)"/>
+
+  <text x="40" y="578" font-size="12" fill="#64748b">local-path is a directory on one node's disk. There is no replicated volume and no failover.</text>
+</svg>
