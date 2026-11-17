@@ -44,8 +44,8 @@ leftovers.
 
 Every other class is an NFS claim onto a `nas` export, working or not.
 
-`local-path` is hostPath-backed: `fsGroup` does nothing there, and `runAsUser` on a claim another UID
-has written makes `/config` unreadable. The safe order is in the chart contract —
+`local-path` is hostPath-backed: `fsGroup` does nothing, and `runAsUser` on a claim another UID wrote
+makes `/config` unreadable. The safe order is in the chart contract —
 [changing the UID breaks the config volume](../charts/README.md#changing-the-uid-breaks-the-config-volume).
 
 ## The binding trap
@@ -54,14 +54,14 @@ has written makes `/config` unreadable. The safe order is in the chart contract 
 the claim lands. That schedule decides where the data lives; a pin added later does not move it.
 
 The failure is a chart rebuild. `lidarr`, 2026-11-13: the claim bound to `nuc0` because the old pod's
-affinity made that node eligible, then the sync replaced the pod with one pinned to `streaming`. It
-stayed `Pending` with `1 node(s) didn't find available persistent volumes to bind` — an event naming
-where the pod may not run, not where the volume is.
+affinity made it eligible, then the sync replaced the pod with one pinned to `streaming`. It stayed
+`Pending` with `1 node(s) didn't find available persistent volumes to bind` — an event naming where the
+pod may not run, not where the volume is.
 
 Recovery while the claim holds nothing: delete the claim, let ArgoCD recreate it, then **delete the
 pod**; otherwise the scheduler keeps queueing it against the old claim's identity. A `Retain` volume
-stays behind as `Released` — delete it and its directory. The habit that avoids it: scale the old
-Deployment to zero before the first sync that creates the claim.
+stays as `Released` — delete it and its directory. The habit that avoids it: scale the old Deployment
+to zero before the first sync that creates the claim.
 
 ## Longhorn's corpse
 
@@ -69,22 +69,23 @@ Longhorn is the replicated-storage layer that failed in 2026. It was not rebuilt
 in the application namespaces are stuck in `Terminating`, each carrying a finalizer naming a storage
 driver that is gone, so nothing will clear them. Their contents were abandoned by decision.
 
-They are inert: no data, nothing blocked, visible in `kubectl get pvc -A` and `kubectl get pv`.
-Clear one by hand: patch the volume's finalizers away, then the claim's. The cause is in the audit
-([§2.1](../audit/observability-storage.md#21-longhorn-removed-not-cleaned-up)); the list is in
-[`status.md`](../status.md), which owns the counts.
+The claims still mounted by a running application are **not** inert: clearing their finalizers stops
+the application and destroys its configuration, and [`status.md`](../status.md) names them. The rest
+hold no data and block nothing. Clear one by hand only after checking which it is: patch the volume's
+finalizers away, then the claim's
+([cause](../audit/observability-storage.md#21-longhorn-removed-not-cleaned-up)).
 
 ## Backups
 
 Plainly: no backup of this cluster works. The audit's
 [backup table](../audit/observability-storage.md#3-backups) is the evidence: the K3s script dumps a
 SQLite file this etcd cluster lacks; the NAS script writes to a MinIO path deleted in July 2024
-([ansible audit](../audit/ansible-hosts.md)); host restic covers only the two edge Pis, to an S3
-bucket; PostgreSQL's `pg_dumpall` writes into a dead Longhorn claim; Syncthing's restic job covers its
+([ansible audit](../audit/ansible-hosts.md)); host restic covers only the two edge Pis, to S3;
+PostgreSQL's `pg_dumpall` writes into a dead Longhorn claim; Syncthing's restic job covers its
 configuration alone.
 
 The one thing with two copies is the internal CA's root key: a password-manager note and an offline
 USB stick, both hand-made, while the automated offsite path is broken too
-([runbooks/internal-ca.md](../runbooks/internal-ca.md)). W4, the design's offsite backup workstream,
-owns the fix; until it lands, treat a lost disk as lost data. Which claim belongs to which app is in
+([runbooks/internal-ca.md](../runbooks/internal-ca.md)). W4, the offsite backup workstream, owns the
+fix; until it lands, treat a lost disk as lost data. Which claim belongs to which app:
 [applications.md](applications.md).

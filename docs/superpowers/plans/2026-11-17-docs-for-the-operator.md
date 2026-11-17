@@ -1098,7 +1098,7 @@ def test_render_description_puts_site_after_docs():
     assert text.splitlines()[:3] == [
         "repo: vyrtualsynthese/homelab",
         "docs: https://github.com/vyrtualsynthese/homelab/blob/develop/docs/status.md",
-        "site: https://docs.kub.local/homelab/develop/status/",
+        "site: [Rendered page](https://docs.kub.local/homelab/develop/status/)",
     ]
 
 def test_render_description_without_docs_has_no_site_line():
@@ -1115,18 +1115,19 @@ Expected: import error for `site_url`.
 
 In `hack/vikunja_migrate.py`: `site_url` returns `None` unless `docs` starts with `docs/` and ends
 with `.md`; strip the prefix and suffix, append `/`, and prefix the site base. `render_description`
-inserts the `site:` line after `docs:` only when `site_url` is not `None`.
+inserts `site: [Rendered page](<url>)` after `docs:` only when `site_url` is not `None` — a labelled
+Markdown link, never a bare URL, because the protocol treats a bare URL as a card defect.
 
 - [ ] **Step 4: Run the tests**
 
 Expected: 5 passed.
 
-- [ ] **Step 5: Update the protocol and the board how-to**
+- [ ] **Step 5: Verify the protocol and the board how-to**
 
-In `docs/agent-protocol.md`'s "What a ticket carries": add `site:` to the fixed block, the URL rule,
-the rule that it is only added when the file is on `develop`, and that `docs:` stays for agents. Add
-the summary block (`Kind: living page`, `Verified` today) under the H1. Update
-`docs/running-it/use-the-board.md`'s description of the block to match.
+The protocol and the board page already carry the `site:` line and the labelled-link rule: stage 2
+added them with `docs/running-it/use-the-board.md`. Re-read both and change them only if the renderer's
+output shape (above) differs from what they say. Add the summary block under the protocol's H1 if it
+is still missing.
 
 - [ ] **Step 6: Commit**
 
@@ -1145,8 +1146,9 @@ git commit -m "📝 docs: point every ticket at the rendered page"
 
 **Interfaces:**
 - Consumes: `site_url` from Task 20.
-- Produces: `add_site_line(description: str) -> str`, adding `site:` after the `docs:` line when a
-  site URL applies and no `site:` line exists; otherwise returning the description unchanged.
+- Produces: `add_site_line(description: str) -> str`, adding `site: [Rendered page](<url>)` after the
+  `docs:` line when a site URL applies and no `site:` line exists; otherwise returning the description
+  unchanged. A labelled link, matching the renderer.
 - Produces: `--dry-run` (default) and `--apply`; open columns only.
 
 - [ ] **Step 1: Write the failing tests**
