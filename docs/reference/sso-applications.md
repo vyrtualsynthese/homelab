@@ -75,8 +75,13 @@ Three traps this table exists to prevent:
 2. Add the file's name to the `metaapplyblueprint` list in `outpost-embedded.yaml`, and add a
    `!Find` line for the provider to that file's `providers` list. Missing either one is a silent
    404 from the outpost at the browser.
-3. In the tool's chart values, put `authentik-forwardauth` after `lan-only` in the middleware list.
-4. Bump both chart versions, open one PR, sync `authentik` and the tool.
+3. **Expect one re-apply on a brand-new app.** The first sync creates that app's blueprint instance
+   in the same discovery pass that applies `outpost-embedded.yaml`, so the outpost's `!Find` can run
+   before the provider exists, the file rolls back, and the new host answers `404` while every other
+   provider keeps working. Press Apply on `ashulab-outpost-embedded` (or make any later change to that
+   file) and it attaches. `sonarr-anime` hit this on 2026-11-18.
+4. In the tool's chart values, put `authentik-forwardauth` after `lan-only` in the middleware list.
+5. Bump both chart versions, open one PR, sync `authentik` and the tool.
 
 Adding the middleware without step 2 is the mistake made once already: the route asks authentik
 about a host authentik has never heard of, and authentik answers its own 404 page. The status code
@@ -384,7 +389,8 @@ table of `/config/app.db` on the config claim; `0` is standard, `2` is OAuth.
 3. **The embedded outpost reloads its application map on a delay** of about two minutes. A `404`
    right after a blueprint apply is not a failure. Those requests are logged by Django
    (`authentik.asgi`), while the outpost binary logs them with `ak-axum`; the API is the reliable
-   source of truth, not the log tail.
+   source of truth, not the log tail. A `404` that survives several reloads is not the delay: the
+   outpost file rolled back, and "Adding a tool" step 3 is the cure.
 4. **A proxy provider is an OAuth2 provider underneath.** Naming a new OIDC provider the same as an
    existing proxy provider updates that object and keeps its forward-auth redirect URIs. Give the
    OIDC provider its own name (`autobrr-oidc`).
