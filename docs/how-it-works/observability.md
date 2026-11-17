@@ -42,8 +42,8 @@ scrape jobs trim them back, `kubernetes-nodes` dropping the republished families
 `kubernetes-api-servers` the histogram buckets; without both trims Prometheus would need ~196k *series*
 (one number over time per label set) and die at its 2 GiB limit.
 
-Query recipes and exporter quirks: [observability-conventions.md](../observability-conventions.md);
-measured series and targets: [reference/metrics.md](../reference/metrics.md).
+Query recipes: [observability-conventions.md](../observability-conventions.md); exporter quirks and
+measured series and targets: [reference/metrics.md](../reference/metrics.md#exporter-quirks).
 
 ## How logs arrive
 
@@ -51,7 +51,7 @@ Fluent Bit tails `/var/log/containers/*.log` on every node: container output onl
 systemd journal. Each line becomes one JSON envelope a query must unwrap. Labels are `job`,
 `namespace`, `container` and `node`; the pod name is metadata, because it changes on every restart.
 Envelope fields and the query that unwraps it:
-[observability-conventions.md](../observability-conventions.md).
+[reference/metrics.md](../reference/metrics.md#exporter-quirks).
 
 ## What you look at
 
@@ -101,5 +101,5 @@ Health.
   overheating](../decisions/2026-11-13-streaming-overheating-deferred.md) and [`nuc0`
   throttling](../decisions/2026-11-13-nuc0-throttling-accepted.md).
 
-The full list, its evidence and re-check commands: [known gaps](../observability-conventions.md#known-gaps).
+The full list, its evidence and re-check commands: [known gaps](../reference/alerts.md#known-gaps).
 What is broken now: [status.md](../status.md).

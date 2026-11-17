@@ -1,5 +1,11 @@
 # Hand-maintained charts — the contract
 
+> **In one line.** Every chart under `cluster/helm/` is hand-written against one contract, and
+> `autobrr` is the worked example of what meeting it looks like.
+>
+> **Use it when** you are writing a chart, reviewing one against the list it has to satisfy, or
+> looking for the reason a rule exists · **Verified** 2026-11-17 · **Kind:** living page
+
 Most charts in `cluster/helm/` are written here rather than vendored. This page is the checklist
 every one of them is expected to satisfy. [`cluster/helm/media-stack/autobrr`](../../cluster/helm/media-stack/autobrr)
 is the reference implementation: a worked example of the principles and the contract below, not a
@@ -65,6 +71,11 @@ that are not valid environment-variable names. If a rollout is only correct beca
 | 17 | If the image ships a Prometheus exporter, it is enabled and scraped (see **Metrics**) | An exporter that is off is an observability hole nobody notices until the incident |
 | 18 | The app logs at `warning` or above, not at `info` (see **Logs**) | Fluent Bit ships every line to Loki with no filter; `info` is thousands of lines a day nobody reads |
 | 19 | A non-public route references `kube-system-lan-only@kubernetescrd`; a public one does not | The internet reaches every route by hostname, so the allowlist is the only thing that keeps internal apps internal |
+
+Two things live outside this page because they change for reasons the contract does not:
+[chart sizing](../reference/chart-sizing.md) records which charts have been measured against Prometheus
+and what each number became, and [chart notes](../reference/chart-notes.md) is the per-app record of how
+each chart meets the list above and where it had to diverge.
 
 ### Metrics
 
@@ -199,70 +210,6 @@ Two habits follow:
 | `kavita` | startup and liveness only, both on `/api/health` | capabilities dropped except `CHOWN`/`SETUID`/`SETGID`, which the LinuxServer init needs; seccomp; no privilege escalation; no API token; read-only root filesystem with `emptyDir` at `/run` and `/tmp`; public TLS route | **no — the image starts as root, then drops to 1100** |
 | everything else | no | no | no |
 
-## Resource sizing: the reviewed set
-
-Requirement 14 is a floor, not a target. This table is the record of which charts have actually been
-measured against Prometheus, so a later audit can tell a settled number from an unexamined one
-instead of re-deriving every chart and reporting the same findings again.
-
-**Only the charts in the tables below have been sized against real data.** Anything absent is
-"sets a request and a limit, never measured" — worth a measurement, not worth an incident. A chart
-is re-measured when the app itself changes (new image, new library, new feature) or when this table
-is more than six months old; not because someone noticed the number is round.
-
-Source: Prometheus on 2026-11-13, the 39 h of history it holds, `container_memory_working_set_bytes`
-(working set — file cache included — not RSS), peak and average per container.
-
-### Adjusted on 2026-11-13
-
-| Chart | Measured peak | Request was → now | Limit was → now | Why |
-|---|---|---|---|---|
-| `media-stack/lidarr` | 930Mi | 256Mi → **512Mi** | 1Gi → **2Gi** | limit filled to 93 %; the app had grown since it was sized from sonarr's profile |
-| `media-stack/sonarr-anime` | 800Mi | 384Mi → **512Mi** | 1Gi → **2Gi** | limit filled to 80 %; the pre-rebuild 30-day sample understated it by half |
-| `media-stack/sonarr` | 570Mi | 256Mi → **384Mi** | 768Mi → **1.5Gi** | same sample, same drift |
-| `media-stack/bazarr-anime` | 660Mi | 256Mi → **384Mi** | 768Mi → **1.5Gi** | the old pair was a guess made while the app was Pending |
-| `media-stack/bazarr` | 480Mi | 256Mi → **384Mi** | 768Mi → **1.5Gi** | kept identical to `bazarr-anime`: one image, two libraries |
-| `media-stack/unpackerr` | 460Mi burst | 64Mi (unchanged) | 512Mi → **1Gi** | the peak is extraction children, and 92 % of the limit risks killing a big archive |
-| `n8n` | 420Mi | 256Mi (unchanged) | 512Mi → **768Mi** | 85 % of the limit on a workflow run |
-| `monitoring/grafana` | 370Mi | 256Mi (unchanged) | 512Mi → **768Mi** | it evaluates and delivers every alert in the cluster; 74 % is not enough headroom |
-| `filebrowser` | 20Mi | 512Mi → **64Mi** | 1Gi → **256Mi** | reserved 25× the app |
-| `media-stack/maintainerr` | 230Mi | 512Mi → **256Mi** | 1Gi (unchanged) | reserved 2× the app |
-| `media-stack/tautulli` | 120Mi | 256Mi → **128Mi** | 1Gi → **512Mi** | both numbers were aspirational |
-| `dashy` | 270Mi | 500m CPU → **10m**, 512Mi → **256Mi** | 4Gi → **1Gi** | upstream defaults, never visited |
-| `monitoring/mktxp` | 30Mi | 128Mi → **64Mi** | 256Mi (unchanged) | 4× the app |
-| `firefly` | 80Mi | 258Mi → **128Mi** | 512Mi (unchanged) | 3× the app |
-| `guacamole` | 370Mi flat | none → **384Mi** | none → **768Mi** | had `resources: {}`, so it was unaccounted for by the scheduler |
-| `syncthing` | 110Mi | none → **128Mi** | none → **256Mi** | had `resources: {}` |
-| `databases/pgadmin` | 220Mi | none → **256Mi** | none → **384Mi** | had `resources: {}` |
-
-Net effect: about 1.25 GiB of reservation released, all eight tight limits given real headroom, and
-three workloads moved out of the unaccounted set.
-
-### Verified adequate, unchanged
-
-Measured on the same run and left alone. Peak as a share of the limit is in brackets; the number is
-recorded so the next audit does not repeat the exercise.
-
-| Chart | Peak / limit |
-|---|---|
-| `media-stack/plex` | 2.55Gi / 4Gi (64 %) |
-| `media-stack/qbittorrent` | 9.81Gi / 12Gi (82 %) — but 0.24Gi is RSS and the rest is page cache, so the limit is not the number to tune |
-| `monitoring/prometheus` | 0.96Gi / 2Gi — GC follows the cgroup limit, see `docs/observability-conventions.md` |
-| `monitoring/loki` | 0.24Gi / 1Gi |
-| `media-stack/radarr`, `radarr-anime` | 0.35Gi, 0.22Gi / 1Gi |
-| `media-stack/prowlarr` | 0.26Gi / 1Gi |
-| `media-stack/autobrr` | 0.22Gi / 768Mi |
-| `media-stack/seerr` | 0.20Gi / 512Mi |
-| `media-stack/cross-seed` | 0.07Gi / 512Mi |
-| `media-stack/flaresolverr` | 0.23Gi / 1Gi |
-| `media-stack/tautulli` | see above — adjusted |
-| `thelounge` | 0.07Gi / 128Mi (60 %) |
-| `monitorss` | 0.14Gi web, 0.04Gi bot / 256Mi |
-| `linkstack`, `qbittorrent-exporter` | under 0.02Gi |
-| `monitoring/prometheus-smartctl`, `prometheus-node-exporter`, `fluent-bit` | under 0.03Gi |
-
-`recyclarr` is a CronJob: it has resources but no steady state to measure, so it is out of scope.
-
 ## Checking a chart against this list
 
 ```bash
@@ -287,152 +234,3 @@ claim name is derived rather than hardcoded.
 The helpers are unprefixed (`app.fullname`, `app.labels`, `app.selectorLabels`) so a chart can be
 rebuilt from the reference without a rename sweep. The trade-off still stands: do not use two of
 these charts as subcharts of the same parent, or the helper names collide.
-
-## What good looks like
-
-`autobrr` (2026-11-11): five objects render, ingress fully driven by values, env inline in the
-Deployment, claim name derived from the release.
-
-`cross-seed` (2026-11-12): four objects render, no ingress because the UI is not exposed, named
-`configFile` and `torrents` values instead of raw pod spec, liveness only, claim name derived from
-the release. It shares the naming helpers and the generic Service, ServiceAccount and claim
-templates with `autobrr`; the Deployment and the values are built around cross-seed's read-only
-config file, its NFS torrent directory and its liveness-only probe.
-
-`flaresolverr` as of 2026-11-12: the app-shaped version of the same chart. Three objects because the
-app keeps no state and is never exposed, `RollingUpdate` because there is no claim to fight over,
-probes on the app's own `/health`, a `metrics` block that turns its exporter on in one place —
-environment, port and scrape annotations together — and `LOG_LEVEL: warning`, with the counters
-carrying the outcomes the log no longer prints.
-
-`prowlarr` as of 2026-11-12: the same shape for a LinuxServer image. Five objects, including the
-config claim, probes on `/ping`, and `PROWLARR__LOG__LEVEL` / `PROWLARR__LOG__CONSOLELEVEL` at
-`warn`. The hardening stops where the LinuxServer init starts: the image must run as root to
-prepare `/config` and then drop to `PUID`/`PGID`, so `runAsNonRoot`, `runAsUser` and dropping all
-capabilities are not options. Only `allowPrivilegeEscalation: false` and the runtime seccomp profile
-are safe. Its exportarr sidecar is wired from one `exportarr` block that carries the listener, the
-scrape annotations and the API-key Secret reference together. The key was rotated to the app's
-current value on 2026-11-12, and the Prometheus target is verified `up`; `APIKEY` is exportarr v1's
-spelling, still accepted by v2.3.0, the newest published release. Since 2026-11-15 its `/api` is
-exempt from the authentik gate (a `priority: 100` rule with `lan-only` alone): `/api/v1` requires
-`X-Api-Key`, so the key check replaces the gate rather than disappearing with it.
-
-`sonarr` and `sonarr-anime` as of 2026-11-12: the LinuxServer-plus-exporter pair, two charts because a
-shared chart is not allowed. Five objects each, two named NFS media mounts next to the config claim,
-probes on `/ping`, and both Sonarr log-level variables at `warn`. The exporter target is built from
-the release name and `service.port` instead of being typed in twice; the previous `sonarr` chart had
-`7878` in the target and `8989` in the Service, and the target never came up. The scrape annotations
-render from the same `exportarr` block, so the announced port cannot disagree with the listener.
-
-Since 2026-11-15 `sonarr`'s `/api` is exempt from the authentik gate: a second rule, `PathPrefix(/api)`
-at `priority: 100`, carries `lan-only` alone, because every `/api/v3` request must carry `X-Api-Key`
-and an API client cannot complete a sign-in redirect. `sonarr-anime` has no gate at all, so its chart
-sets neither the gate nor the exemption.
-
-`recyclarr` as of 2026-11-13: the batch-job case. Three objects, no listener, no probes, no metrics.
-The CronJob's schedule, timezone, concurrency policy and deadlines are values; the Secret holding
-`recyclarr.yml` is mounted read-only at `/config/recyclarr.yml` instead of being copied into the claim
-by an init container; the claim is derived from the release and stays on `nuc0`, where its PV lives.
-It runs as UID 1000, the image's own default and the claim's existing owner, so enabling non-root cost
-no node-side `chown` and needs no runbook.
-
-`tautulli` as of 2026-11-13: the first chart in the media stack with **no public route at all**. One
-IngressRoute at `tautulli.kub.local`, LAN-only — and since 2026-11-15 that means two of them, a
-`websecure` route and a `web` redirect, like every other `kub.local` route in the namespace. It also carries the second deliberate readiness exception: Tautulli reports Plex
-reachability and SQLite integrity only in a JSON body with HTTP 200, which the kubelet cannot read,
-so readiness is disabled rather than pointed at liveness. Its image starts as root and drops to
-`PUID`/`PGID`, so the capability set is `ALL` dropped plus the three calls that init makes. Since
-2026-11-15 the route carries the authentik forward-auth gate, and Tautulli's own login is the one
-thing still on — its web auth has no API, so it is a UI toggle. Since the same day `/api` is exempt
-from the gate (a `priority: 100` rule with `lan-only` alone): Tautulli keys each API request with
-`apikey` in the query string rather than with the UI session. The chart
-creates the config claim: the previous one was a Longhorn volume that vanished in 2026, which is why
-the app had not run for 71 days.
-
-`radarr` and `radarr-anime` as of 2026-11-13: the same LinuxServer-plus-exporter pair as `sonarr` and
-`sonarr-anime`, five objects each. The two NFS media claims are exposed as named `downloads` and
-`media` values rather than hardcoded pod volumes; probes are on `/ping` with a 300s startup budget
-for the database migration; `RADARR__LOG__LEVEL` and `RADARR__LOG__CONSOLELEVEL` are both at `warn`.
-Claim names already matched the derived `<fullname>-config`, so no data moved. The `radarr-anime`
-instance also moved off `PUID 0`, which is the chown runbook the contract's UID section describes.
-Both exporter sidecars still answer 401 until the operator patches the stale keys in Secrets
-`radarr` and `radarr-anime`. Since 2026-11-15 `radarr`'s `/api` is exempt from the gate (a
-`priority: 100` rule carrying `lan-only` alone), because `/api/v3` requires `X-Api-Key` on every
-request; `radarr-anime` has no gate, so it carries no exemption either.
-
-`lidarr` as of 2026-11-13: the sonarr pair's shape with a second media claim. Five objects, the
-config claim created by the chart because the previous one was Longhorn and vanished with the 2026
-disk failure, `/downloads` and `/audio` as named values, and probes on `/ping` — which is not a plain
-process ping: `PingController` reads the config repository, so it answers 500 when the database
-cannot be opened, and readiness shares it rather than inventing a second endpoint. Its default log
-level is `debug`, the noisiest in the stack, so both `LIDARR__LOG__LEVEL` and
-`LIDARR__LOG__CONSOLELEVEL` are at `warn`. The config claim is new, so the first start mints a new API
-key: the exporter stays down until the operator pastes it into `homelab.env` and the `lidarr` Secret,
-and the chart README says so instead of leaving it to be discovered. Since 2026-11-15 its `/api` is
-exempt from the authentik gate (a `priority: 100` rule with `lan-only` alone): `/api/v1` requires
-`X-Api-Key`, so the key check replaces the gate rather than disappearing with it.
-
-`bazarr` and `bazarr-anime` as of 2026-11-13: five objects each, one config claim and the shared
-`pvc-plex-media` at `/media`, probes on `/` with a 300 s startup budget for a first start on a fresh
-`/config`. The `exportarr` block is present and **off**: exportarr v2.3.0's Bazarr collector walks
-every episode on each scrape and takes tens of seconds, the 60 s interval would overlap, and the flag
-that removes the walk (`DISABLE_EPISODE_METRICS`) is unreleased. No scrape annotation renders while
-the block is off, so Bazarr is absent from the target list rather than present and down. Bazarr's
-logger has only INFO and DEBUG and no variable selects either, so the chart sets no log level and
-records the INFO volume as accepted debt instead of inventing a warning level that does not exist.
-Both charts keep the `pvc-plex-media` mount read-write because subtitle files are written next to the
-videos, and both keep the LinuxServer root-then-`PUID`/`PGID` init.
-
-`unpackerr` as of 2026-11-13: two objects because it keeps no state of its own and is never exposed,
-per-instance values (`sonarr0`, `radarr1`, …) that render `UN_<APP>_<i>_*` through one helper, API
-keys from the per-app Secrets, and metrics deliberately off because v1 requires an API key for
-`/metrics`. It is the worked example of the metrics rule's other half: when the exporter cannot be
-scraped by the annotation job, announce nothing rather than leave a target permanently down.
-
-`maintainerr` as of 2026-11-13: the first chart whose readiness probe is a real dependency check.
-`/api/health/live` answers while the process serves and never touches the database; `/api/health/ready`
-runs `SELECT 1` and returns `503` when the SQLite file is missing, locked or corrupt — its own path,
-so no exception is needed. The image already runs as UID 1000 and never as root, and the chart keeps
-it there: `ALL` capabilities dropped, no root phase, and a fresh claim the `local-path` provisioner
-creates `0777` and chowns to 1100. It is the one chart where the process UID and the claim owner
-differ, which works only because of the directory mode. Upstream gives it **no
-authentication at all**: its model is an appliance on a network you control. The LAN boundary is no
-longer the only control — since 2026-11-15 the route carries the authentik forward-auth gate, which
-is also why its API must stay gated: with no login and no API key, the gate is all it has. The app
-had been `Pending` for 76 days on a claim the old chart named and never created.
-
-`calibre-web-automated` as of 2026-11-13: a config claim sized in GiB rather than `128Mi` — 10Gi,
-because `/config/processed_books` keeps a copy of every file the import pipeline processes, the only
-per-book recovery point for a bad conversion or a bad metadata edit. The ingest drop folder is a
-second claim on the same node. The book library on the NAS is mounted read-only in Kavita's pod spec,
-so the single-writer rule is enforced by the pod specs. Readiness is disabled, the exception
-`tautulli` and `cross-seed` already record: its real dependency, the NFS library, has no endpoint
-that reports its health, so readiness on `/` would duplicate liveness and turn a share blip into a
-restart loop. The log level is debt of `bazarr`'s kind — no documented variable selects it, so the
-chart sets none, accepts default `INFO`, and leaves the activity view and the app database as the
-operational record. Its access control is the LAN allow list plus a sign-in: the UI can delete books and
-rewrite files, and `calibre.kub.local` is only a DNS entry, so the shared `kube-system-lan-only`
-Middleware is what stops an outside request with `403` before the app sees it, and Calibre-Web asks
-authentik for a sign-in itself over OIDC (v4.0.8's generic provider, 2026-11-15). There is no proxy gate
-in front of it: `/opds` and Kobo sync use basic auth and cannot follow a redirect. It was the first media
-tool on HTTPS — `https://calibre.kub.local`, because its OAuth login forces a `Secure` session cookie and
-cannot complete a sign-in over plain HTTP — and on 2026-11-15 the whole namespace followed it, one shared
-`redirect-to-https` Middleware and one shared `internal-tls` TLSOption from the `traefik-gate` chart.
-
-`kavita` as of 2026-11-13: a rebuild, not a touch-up. The old pod sat `Pending` for months on a
-Longhorn claim that vanished in the 2026 disk failure, so the chart now creates `kavita-config` on
-`local-path`, 2Gi because the page cache it keeps under `/config` grows with the library. The
-library claim is mounted **read-only**, the manifest side of CWA's single-writer rule, and Kavita is
-the only authority on reading position. It serves a single public hostname:
-`kavita.kub.home.ashudev.com` over TLS on `websecure`, with a plain-HTTP router that redirects, and
-no LAN route by decision. Readiness is disabled for the shared reason — a database it cannot open
-stops the process from starting, so there is no dependency that can fail while the process stays
-healthy.
-
-## Charts still to align
-
-Only non-public apps with hand-maintained charts are in scope for now. Public-facing apps wait,
-because their ingress, TLS and auth wiring is what changes first in W5 and W7.
-
-Metrics count as debt of the same kind. The rule above is recorded now and applied one chart at a
-time; `flaresolverr` is the first, and the rest are not aligned yet.

@@ -1,22 +1,31 @@
 # Observability conventions
 
-Homelab-specific facts for the `monitoring` stack. The general practice — how to
-choose a threshold, lay out a screen, verify a panel — lives in the project skill
-at `.opencode/skills/observability-and-alerting/SKILL.md`. This file only records
-what is true **here** and would be wrong elsewhere.
+> **In one line.** What watches this cluster, where each component runs and how big it is, how to
+> query Prometheus, Loki and Grafana without cluster access, and how metrics get in.
+>
+> **Use it when** you want a number out of the stack, or you are adding an exporter · **Verified**
+> 2026-11-17 · **Kind:** living page
 
-State: 2026-11-13, verified against the live cluster; the scrape targets, the
-media-stack silence and the media dashboard were re-checked after the media chart
-repairs. Re-verify the "measured" numbers before trusting them in a new document.
+The general practice — how to choose a threshold, lay out a screen, verify a panel — lives in the
+project skill at `.opencode/skills/observability-and-alerting/SKILL.md`. This file only records what
+is true **here** and would be wrong elsewhere.
+
+Each fact carries its measurement date: the sizing below and the counts behind
+[`reference/metrics.md`](reference/metrics.md) were taken on 2026-11-13 against the live cluster,
+after the media chart repairs. Re-verify a measured number before trusting it in a new document.
 
 ## What runs where
 
-| Component | Version | Placement | Data |
-|---|---|---|---|
-| Prometheus | 3.16.0 | `nas`, 2 GiB limit | 25 GiB `local-path`, 90 d / 20 GiB cap |
-| Grafana | 13.3.1 | `nas`, 768 MiB limit | 5 GiB `local-path` |
-| Loki | 3.7.9 | `nas`, monolithic | 20 GiB `local-path`, 30 d retention |
-| Fluent Bit | 5.1.3 | DaemonSet, all 4 nodes | tails `/var/log/containers/*.log` only |
+| Component | Version | Placement |
+|---|---|---|
+| Prometheus | 3.16.0 | `nas`, 2 GiB limit |
+| Grafana | 13.3.1 | `nas`, 768 MiB limit |
+| Loki | 3.7.9 | `nas`, monolithic |
+| Fluent Bit | 5.1.3 | DaemonSet, all 4 nodes |
+
+Fluent Bit tails `/var/log/containers/*.log` only: container output, no host logs and no systemd
+journal. The claim sizes and how long each keeps data are in
+[`reference/metrics.md#storage-and-retention`](reference/metrics.md#storage-and-retention).
 
 All four are wrapper charts under `cluster/helm/monitoring/`, one ArgoCD
 Application each; the design is
@@ -36,7 +45,7 @@ Grafana's limit moved from 512 MiB to 768 MiB on 2026-11-13: the rebuilt pod
 peaked at 370 MiB, filling the old limit to 74 %, and Grafana evaluates and
 delivers every alert in the cluster. The other rows are unchanged; the wider
 stack review of that date is the table in
-[`charts/README.md`](charts/README.md#resource-sizing-the-reviewed-set).
+[`reference/chart-sizing.md`](reference/chart-sizing.md).
 
 Prometheus keeps its 2 GiB ceiling because it sizes its own GC from the cgroup
 limit and was OOM-killed at 1 GiB; only its request moved up to the measured
@@ -68,7 +77,8 @@ It holds **no alert rules and no Alertmanager** (`alertmanager.enabled: false`,
 `rule_files` empty): alerting lives entirely in Grafana.
 
 **Loki** — `http://loki.kub.local`, no authentication. Every line is a Fluent Bit
-JSON envelope; unwrap it in the query (see below). The UI is at `/ui`.
+JSON envelope; unwrap it in the query (see the exporter notes in
+[`reference/metrics.md`](reference/metrics.md#exporter-quirks)). The UI is at `/ui`.
 
 **Grafana** — `https://grafana.kub.local`, served over the cluster's internal
 certificate (`*.kub.local` from the ashulab internal CA,
@@ -88,10 +98,10 @@ curl -s -H "Authorization: Bearer $GRAFANA_TOKEN" \
 ```
 
 The token belongs to a service account with the Admin role; the only interactive
-user is `admin`. Dashboards, alert rules, contact points and silences all live in
-Grafana's SQLite database, **not in git**. The Discord webhook exists only in the
-`discord-homelab` contact point. There is exactly one copy of all of it, on the
-Grafana claim.
+user is `admin`. The dashboards, the rules, the contact points and the silences are
+Grafana's own data: where they live, and what that costs, is in
+[`reference/dashboards.md`](reference/dashboards.md) and
+[`reference/alerts.md#known-gaps`](reference/alerts.md#known-gaps).
 
 ## How metrics get in
 
@@ -112,370 +122,17 @@ Grafana claim.
   follows the cgroup limit, so lowering it below the working set restarts the
   OOM loop of 2026-11-12.
 
-**Measured on 2026-11-13:** 121,431 head series, ~1,980 samples/s, 48 scrape
-targets (all up). Series by job: `kubernetes-api-servers` 49 243,
+**Measured on 2026-11-13:** 121,431 head series, ~1,980 samples/s, every scrape
+target up. Series by job: `kubernetes-api-servers` 49 243,
 `kubernetes-service-endpoints` 27 748, `kubernetes-nodes-cadvisor` 22 105,
 `kubernetes-pods` 8 841, `kubernetes-nodes` 7 207, `rbp0` 1 343, `rbp1` 1 341,
 `prometheus` 1 309. The `kubernetes-pods` growth is the exportarr sidecars and
 the Plex, autobrr, n8n and qBittorrent exporters.
 
-## Exporter quirks
+## Where the detail lives
 
-**SMART** (`matusnovak/prometheus-smartctl`, metrics `smartprom_*`, not
-`smartctl_*`):
-
-- The plain metric is the drive's **normalized SMART value** (0–100 health
-  score); the measurement is `_raw`. Charting the plain name shows 132 °C on a
-  49 °C disk.
-- NVMe drives publish only the plain form (`smartprom_temperature`,
-  `smartprom_percentage_used`); SATA drives publish both.
-- Life coverage differs per vendor: Crucial → `percent_lifetime_remain`,
-  NVMe → `100 - percentage_used`, Samsung SATA → `wear_leveling_count`.
-  Coalesce the three, or most SSDs render blank.
-- Drives that do not report an attribute render blank, never 0.
-- 18 series cover 18 drives: `nas` 11 (9 SATA, 2 NVMe), `nuc0` 2,
-  `streaming` 2, `rbp2` 1, `rbp0` 1 and `rbp1` 1. The two edge Pi drives carry
-  no `node` label; use `instance` to name them.
-
-**Fluent Bit** writes `Line_Format json`, so every Loki line is an envelope
-(`time`, `stream`, `log`, and a ~1 KB `kubernetes` block of labels, annotations
-and image hashes). Log panels unwrap it in the query:
-
-```
-{job="fluent-bit"} | json | line_format "{{if .log}}{{.log}}{{else}}{{__line__}}{{end}}"
-```
-
-Labels are `job=fluent-bit`, `namespace`, `container`, `node`; the pod name is
-structured metadata, not a label.
-
-**qBittorrent** (`martabal/qbittorrent-exporter`, metrics `qbittorrent_*`):
-qBittorrent 5.2 answers `/api/v2/auth/login` with `204 No Content` and sets a
-`QBT_SID_<webui port>` cookie, so the exporter needs
-`QBITTORRENT_COOKIE_NAME=QBT_SID_8080` in this cluster. The Java exporter it
-replaced (`caseyscarborough` v1.3.5) expects `200` and a cookie named `SID` and
-cannot log in at all. Tracker collection costs one Web API call per distinct
-tracker — about 40 here — which pushed the collection past Prometheus's 10 s
-scrape timeout on 2026-11-13; the chart turns it off.
-
-**Temperature**: `node_hwmon_chip_names` carries the driver name for each hwmon
-`chip`, and the `chip` label itself is a device path — `k10temp` on `streaming`
-appears as `pci0000:00_0000:00:18_3`, which looks like a motherboard sensor and
-is not one. `NodeTemperatureHigh` and the Platform panel therefore select by
-driver, not by path:
-
-```
-node_hwmon_temp_celsius
-  and on(instance, chip)
-node_hwmon_chip_names{chip_name=~"k10temp|coretemp|zenpower|cpu_thermal"}
-```
-
-That reads the CPU package on the three x86 nodes (`coretemp` on `nas` and
-`nuc0`, `k10temp` on `streaming`) and the SoC on the three Pis
-(`cpu_thermal`), and skips `nct6796` (the NAS's unconnected header, 95 °C),
-`acpitz` (16.8 °C on `streaming`, meaningless), `gigabyte_wmi`, `nvme` and
-`iwlwifi_1`.
-
-`streaming` is genuinely hot: `Tctl` 81–91 °C at 10–28 % CPU on 2026-11-13, and
-the reading follows load. `NodeTemperatureHigh` fires for it and that is
-correct — the fix is cooling, not a wider or narrower selector. Per-host maxima
-on 2026-11-13: `nas` 43, `nuc0` 44, `streaming` 82, `rbp2` 54, `rbp0` 50,
-`rbp1` 51.
-
-Both x86 nodes that run hot are accepted faults with a dated record rather than
-a tunable threshold:
-[`decisions/2026-11-13-streaming-overheating-deferred.md`](decisions/2026-11-13-streaming-overheating-deferred.md)
-(`streaming`, cooling deferred for budget) and
-[`decisions/2026-11-13-nuc0-throttling-accepted.md`](decisions/2026-11-13-nuc0-throttling-accepted.md)
-(`nuc0`, 95 °C peak and 2 005 hardware throttle events in the 39 h to
-2026-11-13, already repasted, no alert on purpose). Read those before filing a
-new temperature finding.
-
-**Volume stats are partial, and the reason is structural**: the K3s kubelet
-publishes `kubelet_volume_stats_*` only for volumes whose plugin can measure
-bytes — the NFS claims here. `local-path` is a hostPath directory, so its 17
-claims (including Prometheus 25 GiB, Loki 20 GiB and Grafana 5 GiB) publish no
-per-claim bytes at all. The panels show blank for them, and `PVCFillingUp` is
-NFS-only by construction. Their capacity is still covered: each local-path
-directory sits on a real filesystem (`/mnt/ssd0` on `nas`, `streaming` and
-`rbp2`), and `DiskFillingUp` / `DiskWillFill` watch every filesystem. `/mnt/ssd0`
-on `nas` was 5.2 % used on 2026-11-12.
-
-The live `local-path-config` ConfigMap has a typo: its map entry is `nuc`, while
-the node is `nuc0`. `nuc0` therefore falls back to
-`/opt/local-path-provisioner` on its root filesystem instead of `/mnt/ssd0`.
-Harmless today (the root disk is monitored), wrong if that node is meant to use
-its SSD.
-
-## Dashboards
-
-Folder **Homelab**, created through the HTTP API:
-
-| Dashboard | uid | Panels | Purpose |
-|---|---|---|---|
-| Homelab · Health | `homelab-health` | 12 | First look: four counts, pods and targets needing attention, crash loops, restarts, firing alerts, errors, disk |
-| Homelab · Applications | `homelab-applications` | 9 | Debug one namespace: replicas, pods, CPU, memory, restarts, claims, dead exporters, recent errors |
-| Homelab · Platform | `homelab-platform` | 15 | Nodes, control plane and Prometheus when the problem is not an app |
-| Homelab · Logs | `homelab-logs` | 5 + rows | Volume, errors and warnings by container, log volume by node, live stream |
-| Homelab · Disks | `homelab-disks` | 11 | SMART per drive: status, life, temperature, hours, sectors, wear |
-| Homelab · Showcase | `homelab-showcase` | 13 | Presentation screen: drawn topology, four big numbers, network, storage, GPU |
-| Homelab · Media | `homelab-media` | 9 + rows | Media stack: app health issues, queues, missing items, indexers, release intake, qBittorrent transfer, Plex sessions and library |
-
-The old `homelab-investigate` was replaced by `homelab-platform` on 2026-11-12: its workload
-row duplicated the new Applications dashboard, and its node/control-plane/Prometheus panels are
-what Platform keeps. Tables use `labelsToFields` + `merge` + `organize`; a plain multi-query table
-shows only the first frame and leaks Kubernetes metadata columns. Legend names come from the
-`node` label, with `instance` mapped for `rbp0`/`rbp1` (they have no `node`).
-
-Media panels name their series from `app_kubernetes_io_instance`, not `pod`, because a pod name
-changes on every restart. `Playback bandwidth` is blank while nobody streams:
-`plex_session_bandwidth_kbps` is only published during playback, and a zero would be a lie.
-
-All seven have a 30 s–1 m refresh and a 6 h–24 h default range. They are not
-backed up: Grafana's 5 GiB claim is the only copy. A `docker save` of the
-dashboard JSON is not a backup either — the SQLite file is what would be lost.
-
-## Alerting
-
-Grafana unified alerting, folder `Homelab`, rule group `homelab-core`,
-evaluation interval **60 s**. **29 rules**, one contact point, two routes by
-severity.
-
-**Delivery**: contact point `discord-homelab` (type `discord`).
-`group_by [alertname, instance]`, `group_wait 30s`, `group_interval 5m`.
-Warnings repeat every **12 h**; a child route matching `severity="critical"`
-repeats every **1 h**. The webhook URL is not readable through the API (it is a
-secure field), so the contact point is never rewritten by automation.
-
-**Rule set and live state on 2026-11-13:**
-
-| Rule | Condition | for | Severity | State |
-|---|---|---|---|---|
-| `NodeDown` | `1 - up` for the six node exporters | 5m | critical | inactive |
-| `KubeNodeNotReady` | node Ready condition false | 5m | critical | inactive |
-| `CoreDeploymentDown` | 0 available replicas in kube-system/monitoring/argocd | 10m | critical | inactive |
-| `CoreStatefulSetDown` | ready < desired in those namespaces | 10m | critical | inactive |
-| `CoreDaemonSetDown` | available < desired in those namespaces | 10m | critical | inactive |
-| `MediaDeploymentDown` | a `media-stack` Deployment at 0 available | 10m | warning | inactive |
-| `KubeStateMetricsDown` | `absent(up{service=...} == 1)` | 5m | critical | inactive |
-| `NodeFilesystemReadOnly` | filesystem mounted read-only | 5m | critical | inactive |
-| `MonitoringDown` | `1 - up{job="prometheus"}`; `execErrState: Alerting` | 5m | critical | inactive |
-| `DriveNeedsReplacement` | SMART failed, exit != 0, <10 % life, or pending sectors | 10m | critical | **firing** on `nas /dev/sdf` |
-| `ScrapeTargetDown` | any non-node target down, including the edge Pis' SMART and Docker exporters; Prometheus and kube-state-metrics excluded (own rules) | 15m | warning | inactive |
-| `NodeCpuHigh` | >90 % by host | 15m | warning | inactive |
-| `NodeMemoryHigh` | >90 % of `MemAvailable` | 15m | warning | inactive |
-| `NodeTemperatureHigh` | hottest CPU or SoC sensor, selected by hwmon driver >80 °C | 10m | warning | **firing** on `streaming` |
-| `GpuTemperatureHigh` | `DCGM_FI_DEV_GPU_TEMP` >80 °C | 10m | warning | inactive |
-| `DiskTooHot` | drive >55 °C | 15m | warning | inactive |
-| `DiskFillingUp` | filesystem >85 % | 30m | warning | inactive |
-| `DiskWillFill` | predicted full in 24 h above 80 % used | 30m | warning | inactive |
-| `PVCFillingUp` | claim >85 % (NFS claims only) | 30m | warning | inactive |
-| `DiskReallocatingSectors` | any new sector in 1 h | 5m | warning | inactive |
-| `RestartStorm` | 5+ restarts in an hour | 5m | warning | **firing, silenced** (the three long-broken apps) |
-| `OOMKilled` | terminated by OOM in the last hour | 5m | warning | inactive |
-| `JobFailed` | any Job with a failed pod, no success, and younger than 2 h | 5m | warning | inactive |
-| `RecyclarrNotSucceeding` | no successful recyclarr run in 26 h | 5m | warning | inactive |
-| `CertificateExpiring` | newest Traefik cert per SAN <21 days | 1h | warning | inactive |
-| `PodCrashLooping` | CrashLoopBackOff | 15m | warning | **firing, silenced** ×3 |
-| `PodPending` | Pending, created <2 h ago | 15m | warning | **firing** on `databases/pgadmin-67c5f5c85` (missing Secret, 2026-11-14) |
-| `PodNotStarting` | Scheduled, container still not started, older than 2 h | 5m | warning | **firing, silenced** (the abandoned `nfs-ssd` provisioner) |
-| `LokiSilent` | no Fluent Bit lines in 10 min (`noDataState: Alerting`) | 10m | warning | inactive |
-
-**`JobFailed`** is the batch-workload rule. Its expression is
-`((kube_job_status_failed > 0) unless on(namespace, job_name) (kube_job_status_succeeded > 0)) and on(namespace, job_name) ((time() - kube_job_status_start_time) < 7200)`:
-it fires for a Job whose pod failed and whose retry did not succeed, and it
-resolves by itself after two hours even if the failed Job object stays in the
-history. That window is what keeps one bad night from firing for days.
-
-**`RecyclarrNotSucceeding`** covers the other half: a run that never starts or
-never finishes leaves no failure to alert on. It fires when
-`kube_cronjob_status_last_successful_time` is more than 26 h old — one daily slot
-plus two hours of slack — and resolves on the next successful run. It is scoped
-to recyclarr because KSM 2.20 no longer publishes `kube_cronjob_spec_schedule`,
-so a generic rule cannot know how often each CronJob should succeed.
-
-**`PodPending` and `PodNotStarting` split one symptom by cause.** `Pending` covers
-two different faults: a pod that was never scheduled (unbound claim, node selector,
-resource request) and a pod that was scheduled but whose container never started
-(image pull, volume that will not mount, missing Secret). `kube_pod_status_phase`
-cannot tell them apart, and the first version of `PodPending` asserted the first
-cause in its message — which sent the investigation of `pgadmin` looking at claims
-and node selectors while the real fault was a missing `pgadmin-oidc` Secret.
-`PodPending` keeps the broad half: anything Pending in its first two hours,
-`for: 15m`, and a message that now names both causes. `PodNotStarting` takes over
-at the two-hour mark with no upper bound:
-
-```
-(kube_pod_status_phase{phase="Pending"} == 1)
-  and on(namespace, pod) (kube_pod_status_scheduled{condition="true"} == 1)
-  and on(namespace, pod) ((time() - kube_pod_created) > 7200)
-  unless on(namespace, pod) kube_pod_deletion_timestamp
-```
-
-`PodScheduled` is what separates "never placed" from "never started", and `unless
-kube_pod_deletion_timestamp` keeps a pod that is waiting on its own deletion out of
-the count. The two rules hand over at exactly 7200 s, so a pod stays covered without
-a gap and without two messages for one fault. A pod that is **unschedulable** is
-still only covered for its first two hours: the six pods left unschedulable by the
-Longhorn loss have sat that way for 72 days, and any rule without that ceiling would
-page for them continuously. Deleting those workloads is what closes that gap, not a
-wider expression.
-
-`ScrapeTargetDown` excludes the Prometheus self-scrape and kube-state-metrics
-targets; `MonitoringDown` and `KubeStateMetricsDown` own those two conditions, and
-without the exclusion one dead component sent a critical and a warning at once. It
-also covers the edge Pis' SMART (`:9902`) and Docker (`:9323`) exporters, which
-`NodeDown` does not watch — that rule only sees their node exporter on `:9100`.
-Those targets are static, so the alert names the instance IP rather than a host
-label.
-
-`noDataState` is `OK` on every rule **except `LokiSilent`**, which is `Alerting`
-on no data: its expression returns an empty vector when no lines arrive, and that
-is exactly the condition it must report. `MonitoringDown` and `LokiSilent` also
-raise on evaluation errors (`execErrState: Alerting`), so a Prometheus restart or
-a dead Loki produces one message rather than none.
-
-**The rule pattern matters.** A PromQL comparison such as `up == 0` returns the
-value `0` when true, and the threshold condition is "above 0" — so it can never
-fire. Rules must return a **positive value when firing**: `1 - up`,
-`replicas - ready`, `0 - predict_linear(...)`, `1 - kube_node_status_condition`,
-or an explicit `> 85` / `> 55` / `> 80` inside the expression. The original set
-had `NodeDown` and `MonitoringDown` silently dead this way, and
-`DriveNeedsReplacement` survived only because the failing drive also reported
-`exit_code = 32`.
-
-**`DiskReallocatingSectors`** uses a subquery,
-`delta(max by (...)(metric)[1h:]) > 0`. The previous form without the colon was
-invalid PromQL and never evaluated.
-
-**Silences** (each has an expiry and a comment):
-
-- Until 2026-12-12: `pod=~"ghostfolio-.*|wiki-app-.*|monitorss-bot-.*"` — three
-  apps crash-looping since the Longhorn loss. They still show `firing`; only the
-  notification is suppressed.
-- Until 2027-03-01: `host="streaming"`, `severity="warning"`,
-  `__alert_rule_uid__="cg433wfzcwiyob"` — the node runs at its thermal ceiling and
-  the cooling fix is deferred
-  (`decisions/2026-11-13-streaming-overheating-deferred.md`). The rule still
-  evaluates, still reports `firing`, and still shows on the Health dashboard.
-- Until 2027-03-01: the same matchers with `host="nuc0"` — the chassis is too small
-  for its CPU, the condition is accepted
-  (`decisions/2026-11-13-nuc0-throttling-accepted.md`), and the action it would ask
-  for (a new node) is already the plan. `NodeTemperatureHigh` is one
-  host-agnostic rule, so a silence per host beats narrowing the expression.
-- Until 2026-12-12: `alertname="DriveNeedsReplacement"` with the `nas /dev/sdf`
-  labels — the drive is known dead (`docs/audit/ansible-hosts.md`) and waiting on
-  a replacement. Only the notification is suppressed; the rule still fires.
-- Until 2026-12-12: `pod=~"nfs-ssd-nfs-subdir-external-provisioner-.*"` — this pod
-  has been unable to mount `192.168.1.41:/mnt/ssd0/nfs` since 2026-09-03, because
-  that export does not exist on `nas`. It belongs to no chart and no ArgoCD
-  Application; it is hand-applied drift, and `PodNotStarting` would report it
-  every few hours forever. Fix the export or delete the workload, then remove the
-  silence.
-
-The `alertname="ScrapeTargetDown", namespace="media-stack"` silence was **removed
-on 2026-11-13**, together with its narrow `pod=~"qbittorrent-exporter-.*"`
-revision: the exporter was replaced and now answers, the rule has no match, and
-only the notification was ever suppressed. A media exporter that breaks from now
-on will notify.
-
-A silence changes notification delivery, not alert state. A silenced rule still
-reports `firing` on the Health dashboard.
-
-## Storage and retention
-
-| Volume | Claim | Size | Retention |
-|---|---|---|---|
-| Prometheus TSDB | `monitoring/prometheus-server` | 25 GiB | `90d`, hard cap `20GiB` (`retention.size`) |
-| Grafana database | `monitoring/grafana` | 5 GiB | n/a |
-| Loki chunks + index | `monitoring/storage-loki-0` | 20 GiB | `720h` via the compactor |
-
-Verify rather than trust:
-
-```bash
-curl -s http://prometheus.kub.local/api/v1/status/flags | grep retention
-curl -s http://loki.kub.local/config | sed -n '/limits_config:/,/^[a-z]/p'
-```
-
-`nas`'s `/mnt/ssd0` holds all `local-path` claims and currently has far more free
-space than the 50 GiB provisioned. Loki's compactor retains by time; confirm it
-runs (config shows `retention_enabled: true`,
-`delete_request_store: filesystem`) before assuming old logs disappear.
-
-## Current health facts (2026-11-13)
-
-- 6 hosts: `nas` (.41), `nuc0` (.27), `streaming` (.46), `rbp2` (.48), `rbp0`
-  (.22), `rbp1` (.38). All answer.
-- 132 pods known, 112 Running, 11 Pending, 1 Failed, 8 Completed.
-- 36 PVCs; 12 are stuck `Terminating` from Longhorn.
-- 11 Pending, none younger than the 2-hour `PodPending` window, so the alert is
-  correctly inactive. The pending set is W0's cleanup, not monitoring's.
-- All 48 scrape targets answer on 2026-11-13. The rebuilt `radarr`,
-  `radarr-anime`, `lidarr`, `sonarr`, `sonarr-anime` and `prowlarr` exporters
-  answer with real data; `unpackerr` and the `bazarr` pair publish no target on
-  purpose. `qbittorrent-exporter` now runs
-  `ghcr.io/martabal/qbittorrent-exporter:v2.0.4` on port 8090 and publishes 58
-  `qbittorrent_*` names; the caseyscarborough v1.3.5 image it replaced could not
-  log in to qBittorrent 5.2 at all. `ScrapeTargetDown` is inactive and its
-  media-stack silence is gone.
-- `nas /dev/sdf` (Crucial BX500, holds `local-path`, therefore Prometheus, Loki,
-  Grafana and every config volume) is at **0 % life left**, SMART exit code 32.
-  It needs replacing; `DriveNeedsReplacement` fires for it and is silenced until
-  2026-12-12.
-- `streaming` runs hot: `k10temp` reads **Tctl 81–91 °C** at 10–28 % CPU on
-  2026-11-13, and the value follows load, so `NodeTemperatureHigh` firing for it
-  is correct. The `gigabyte_wmi` zone mirrors Tctl; the GPU is at 40 °C and the
-  NVMe at 46–57 °C. Check fans and airflow — the alert is telling the truth.
-
-## Known gaps
-
-- **`PVCFillingUp` is blind for `local-path` claims** (25 of 36 claims publish
-  volume stats, mostly NFS). The node filesystem rule covers the same disk, at a
-  coarser grain.
-- **No backup-freshness metric.** Backups do not run today, so an alert would
-  either never fire or lie.
-- **No vulnerability scanning.** Nothing reports which CVEs affect the running
-  images, so there is no metric to alert on. Design and cost are recorded in
-  [`superpowers/specs/2026-11-14-vulnerability-alerting-design.md`](superpowers/specs/2026-11-14-vulnerability-alerting-design.md);
-  it is deferred, not built.
-- **No blackbox probe, no certificate check outside Traefik.** A public hostname
-  that resolves but serves nothing is not detected.
-- **No GPU XID/ECC alert.** The NVIDIA exporter on this cluster does not publish
-  those families; only temperature, utilisation and frame-buffer use exist.
-- **Application coverage is limited to pods, restarts, `media-stack` and the
-  core namespaces.** `CoreDeploymentDown` covers kube-system, monitoring and
-  argocd; `MediaDeploymentDown` covers `media-stack` with no exclusions. One
-  exclusion was retired on 2026-11-13 when the app got a real claim and a running
-  pod, and a second was dropped when its abandoned app was deleted instead of
-  rebuilt. A broken app in any other namespace shows up through
-  `PodCrashLooping`, `PodPending`, `PodNotStarting` or `RestartStorm`, not through a replica
-  check. `JobFailed` covers every Job, but only `recyclarr` has per-schedule
-  staleness coverage; the other CronJobs fail loudly but a run that never starts
-  is silent.
-- **qBittorrent's `cross-seed` alias is a literal ClusterIP.** The pod keeps
-  `dnsPolicy: None`, so `hostAliases` maps `cross-seed` to `crossSeedServiceIP`
-  in the chart. If that Service is recreated with a new IP, the completion hook
-  fails silently; re-check the value.
-- **Alerting is a single point of failure**: Grafana evaluates and delivers. If
-  Grafana, Prometheus or `nas` goes down, no message is sent. The operator
-  accepts this risk (watchdog declined on 2026-11-12).
-- No metrics for the NFS provisioners or the Pi-hole resolver itself (only its
-  exporter).
-- Dashboards and rules are not in git and are not backed up.
-
-## Changing things
-
-- Dashboards: `POST /api/dashboards/db` with `{dashboard, folderUid: "homelab",
-  overwrite: true}`. Read one with `GET /api/dashboards/uid/<uid>`.
-- Alert rules: `GET/POST /api/v1/provisioning/alert-rules`, groups under
-  `/api/v1/provisioning/folder/homelab/rule-groups/homelab-core`. Delivery is
-  `/api/v1/provisioning/contact-points` and `/api/v1/provisioning/policies`.
-- Testing a contact point: use its **Test** button. Grafana 13 has no working
-  HTTP test route for a receiver created through the provisioning API — the
-  legacy paths return 404, and the `/apis/notifications.alerting.grafana.app`
-  route answers "Receiver not found" because the webhook lives in the legacy
-  store and its URL is a redacted secure field.
-- Validate every PromQL expression against Prometheus before saving it. The
-  `DiskReallocatingSectors` bug is what skipping this costs.
-- Never `kubectl apply` a dashboard or rule; nothing in the repo produces them.
-  Never `kubectl` at all on this workstation: the harness blocks it and the MCP
-  account is read-only. Use the HTTP APIs above.
+| Question | Page |
+|---|---|
+| What does an exporter really publish, how long is data kept, what did the stack look like on 2026-11-13? | [`reference/metrics.md`](reference/metrics.md) |
+| Which dashboard do I open, and how do I change one? | [`reference/dashboards.md`](reference/dashboards.md) |
+| What do the rules check, why is this silenced, and what is not monitored? | [`reference/alerts.md`](reference/alerts.md) |

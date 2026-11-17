@@ -58,7 +58,7 @@ Known, written down, left alone: do not change one without a decision that repla
   none work. The design's offsite workstream (W4) owns the fix.
 - **Alerting has one point of failure.** Grafana evaluates the rules and delivers them to Discord; if
   Grafana, Prometheus or `nas` is down, nothing is sent. The other holes are in
-  [`observability-conventions.md`](../observability-conventions.md#known-gaps).
+  [`reference/alerts.md`](../reference/alerts.md#known-gaps).
 - **Heat.** `streaming` and `nuc0` both run at their thermal limit; the fix for each is hardware not
   yet bought. Both carry a silence on the shared temperature rule, so the condition stays visible without
   notifying: see

@@ -1,5 +1,10 @@
 # The board's database
 
+> **In one line.** The one-time creation of the board's role, database and Secret; it remains the
+> reference when the board's database is rebuilt.
+>
+> **Use it when** the board's database is rebuilt · **Kind:** completed record 2026-11-16
+
 Date: 2026-11-15
 
 **Changes the cluster:** creates a namespace, a role, a database and one Secret. Reversible only
