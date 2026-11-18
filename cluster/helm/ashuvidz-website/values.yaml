@@ -1,7 +1,11 @@
 nginx:
   image:
     registry: docker.io
-    repository: bitnami/nginx
+    ## bitnamilegacy, not bitnami: on 2026-11-18 Bitnami publishes only `latest` under `bitnami/*`
+    ## and moved every versioned tag to the frozen `bitnamilegacy/*` namespace. The tag below no
+    ## longer resolves under `bitnami/`, so any pod on a node without it cached failed to start.
+    ## See the README: the durable fix is a chart on a maintained nginx image.
+    repository: bitnamilegacy/nginx
     tag: 1.28.0-debian-12-r0
     digest: ""
     ## Specify a imagePullPolicy
@@ -445,7 +449,9 @@ nginx:
     ##
     image:
       registry: docker.io
-      repository: bitnami/git
+      ## bitnamilegacy for the same reason as the nginx image above: `bitnami/git` keeps only
+      ## `latest` now, and this tag lives in the frozen namespace.
+      repository: bitnamilegacy/git
       tag: 2.49.0-debian-12-r5
       digest: ""
       ## Specify a imagePullPolicy
