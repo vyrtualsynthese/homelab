@@ -30,6 +30,8 @@ absent from this table has no single sign-on at all — no provider, no gate —
 | Grafana | OIDC | configured; every sign-in lands as a **Viewer** | `grafana.kub.local` |
 | Kavita | OIDC | configured 2026-11-15; password login disabled | `kavita.kub.home.ashudev.com` |
 | pgAdmin | OIDC | configured; no local login left | `pgadmin.kub.local` |
+| Radarr | OIDC | configured 2026-11-18 — Radarr 7's own OIDC; the forward-auth gate and the app's login are gone, `/api` exempt | `radarr.kub.local` |
+| Radarr (anime) | OIDC | configured 2026-11-18 — same settings as Radarr, own client id; `/api` exempt | `radarr-anime.kub.local` |
 | Vikunja | OIDC | done 2026-11-16 — gate removed, subject linked to the original account | `vikunja.kub.local` |
 | FileBrowser | proxy auth — it is built for it | not configured: the chain, the outpost attachment and `filebrowser-editors` are deferred, so it runs `lan-only` plus its own accounts | `filebrowser.kub.home.ashudev.com` |
 | Bazarr | forward-auth gate | configured; its own login is off; `/api` exempt | `bazarr.kub.local` |
@@ -38,12 +40,10 @@ absent from this table has no single sign-on at all — no provider, no gate —
 | Lidarr | forward-auth gate | configured; its own login is off; `/api` exempt | `lidarr.kub.local` |
 | Maintainerr | forward-auth gate | **to verify** before the next touch — it has no login of its own; `/api` exempt since 2026-11-15 | `maintainerr.kub.local` |
 | Prowlarr | forward-auth gate | configured; its own login is off; `/api` exempt; its probes carry a `Host` header | `prowlarr.kub.local` |
-| Radarr | forward-auth gate | configured; its own login is off; `/api` exempt | `radarr.kub.local` |
 | Sonarr | forward-auth gate | configured; its own login is off; `/api` exempt | `sonarr.kub.local` |
 | Tautulli | forward-auth gate | configured; **its own login is still on** — a UI toggle, there is no API for it; `/api` exempt | `tautulli.kub.local` |
 | Dashy | none | **fix** — no gate and no `lan-only` live: it names `kube-system-authentik`, which is headers, not a gate. The chart already emits `lan-only` and the live object predates that rule, so a sync closes the gap | `dashy.ashudev.com` |
 | qBittorrent | LAN only | by decision, own login — the reason is in its values; no gate until its hand-written `templates/ingress.yaml` grows a middleware list | `qbittorrent.kub.local` |
-| Radarr (anime) | forward-auth gate | configured 2026-11-18; its own login is off; `/api` exempt | `radarr-anime.kub.local` |
 | Sonarr (anime) | forward-auth gate | configured 2026-11-18; its own login is off; `/api` exempt | `sonarr-anime.kub.local` |
 | Plex | none | no gate and no `lan-only`: Plex clients cannot complete a browser sign-in, so the host answers the internet and its own account model decides | `plex.kub.home.ashudev.com` |
 | Seerr | none | no gate and no `lan-only`; its own login, and its users arrive from Plex | `seerr.kub.home.ashudev.com` |
@@ -153,7 +153,7 @@ session.
 |---|---|---|---|
 | calibre | `https://calibre.kub.local` | **OIDC, no gate** — verified live 2026-11-15 | renamed to the authentik username; the password stays as break-glass |
 | sonarr | `https://sonarr.kub.local` | forward-auth; **`/api` exempt** since 2026-11-15 | off |
-| radarr | `https://radarr.kub.local` | forward-auth; **`/api` exempt** since 2026-11-15 | off |
+| radarr | `https://radarr.kub.local` | **OIDC, no gate** since 2026-11-18; **`/api` exempt** | OIDC; password login off |
 | lidarr | `https://lidarr.kub.local` | forward-auth; **`/api` exempt** since 2026-11-15 | off |
 | prowlarr | `https://prowlarr.kub.local` | forward-auth; **`/api` exempt** since 2026-11-15 | off, probes fixed |
 | bazarr | `https://bazarr.kub.local` | forward-auth; `/api` exempt | none (always was) |
@@ -163,7 +163,7 @@ session.
 | autobrr | `https://autobrr.kub.local` | **OIDC, no gate** | replaced by OIDC |
 | qbittorrent | `https://qbittorrent.kub.local` | `lan-only` only — **no authentik gate yet** | its own login |
 | sonarr-anime | `https://sonarr-anime.kub.local` | forward-auth; **`/api` exempt** since 2026-11-18 | off |
-| radarr-anime | `https://radarr-anime.kub.local` | forward-auth; **`/api` exempt** since 2026-11-18 | off |
+| radarr-anime | `https://radarr-anime.kub.local` | **OIDC, no gate** since 2026-11-18; **`/api` exempt** | OIDC; password login off |
 
 Every route also carries `lan-only`. That middleware allows `192.168.1.0/24` (LAN), `10.8.0.0/24`
 (WireGuard) and `10.42.0.0/16` (pods — see the first trap below).
@@ -424,13 +424,14 @@ table of `/config/app.db` on the config claim; `0` is standard, `2` is OAuth.
 - **qbittorrent** has no gate. Its `templates/ingress.yaml` is hand-written rather than the shared
   `ingressroute.yaml`, so it needs a middleware list added before the values can carry one.
 - **tautulli** still shows its own login (UI toggle, above).
-- **No media-stack API is behind the gate any more** (2026-11-15; sonarr-anime and radarr-anime joined
-  on 2026-11-18). Every chart built on the shared `ingressroute.yaml` has the `apiBypassMiddlewares`
-  block, and the seven gated tools that check their own key — sonarr, sonarr-anime, radarr,
-  radarr-anime, lidarr, prowlarr, tautulli — set it to `lan-only`, joining `bazarr`, `bazarr-anime`
-  and `maintainerr`. Charts without an authentik gate (autobrr, qbittorrent, calibre, kavita, plex,
-  seerr) never had one on `/api` either, so they need nothing. Any new chart that copies the template
-  must decide this explicitly.
+- **No media-stack API is behind a sign-in any more** (2026-11-15; sonarr-anime and radarr-anime joined
+  on 2026-11-18; radarr's two were the last). Every chart built on the shared `ingressroute.yaml` has
+  the `apiBypassMiddlewares` block, and the five gated tools that check their own key — sonarr,
+  sonarr-anime, lidarr, prowlarr, tautulli — set it to `lan-only`, joining `bazarr`, `bazarr-anime` and
+  `maintainerr`; `radarr` and `radarr-anime` carry the same exemption but behind their own OIDC rather
+  than a gate. Charts without a sign-in (autobrr, qbittorrent, calibre, kavita, plex, seerr) never had
+  one on `/api` either, so they need nothing. Any new chart that copies the template must decide this
+  explicitly.
 - **maintainerr's `/api` is open to the LAN** (since 2026-11-15, by decision). The UI keeps the
   authentik gate; the API does not, and upstream checks no key on inbound requests. Close it with
   `apiBypassMiddlewares: []`, or put a `basicauth` middleware on the `/api` rule.

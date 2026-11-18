@@ -91,16 +91,24 @@ for the database migration; `RADARR__LOG__LEVEL` and `RADARR__LOG__CONSOLELEVEL`
 Claim names already matched the derived `<fullname>-config`, so no data moved. The `radarr-anime`
 instance also moved off `PUID 0`, which is the chown runbook the contract's UID section describes.
 Both exporter sidecars still answer 401 until the operator patches the stale keys in Secrets
-`radarr` and `radarr-anime`. Since 2026-11-15 `radarr`'s `/api` is exempt from the gate (a
+`radarr` and `radarr-anime`. Since 2026-11-15 `radarr`'s `/api` is exempt from the sign-in (a
 `priority: 100` rule carrying `lan-only` alone), because `/api/v3` requires `X-Api-Key` on every
-request. Since 2026-11-18 `radarr-anime` carries the same gate and the same `/api` exemption. Both
-instances keep Radarr's own login switched off for the network Traefik forwards from:
-`authenticationMethod: forms` with `authenticationRequired: disabledForLocalAddresses` and the three
-LAN ranges trusted, which is the sonarr pair's setting. `authenticationMethod: none` is not the way to
-turn the login off — `AuthenticationRequired` is checked independently, so `enabled` demands a login
-that no method can satisfy, and Radarr shows its Authentication Required form with no way to fill it.
-Both instances moved from `6.4.4.10685-ls326` to `7.0.3.10918-ls328` on 2026-11-18; the `/api/v3`
-prefix is unchanged in v7, so `exportarr` and the `/api` exemption keep working.
+request; `radarr-anime` has carried the same exemption since 2026-11-18.
+
+Both instances moved from `6.4.4.10685-ls326` to `7.0.3.10918-ls328` on 2026-11-18, and v7 is what
+made the rest possible: the `/api/v3` prefix is unchanged (so `exportarr` keeps working), and Radarr 7
+signs users in with OIDC itself. Both now do: `authenticationMethod: oidc`, authority
+`https://authentik.kub.home.ashudev.com/application/o/radarr/` (and `…/radarr-anime/`), callback
+`/signin-oidc`, `authenticationRequired: enabled`, and the password login is off. The forward-auth gate
+and the boilerplate that came with it — `authenticationMethod: none`, `disabledForLocalAddresses`,
+trusted ranges — are gone: with `Enabled`, the local bypass would let a forwarded request in as the
+admin user without passing authentik at all.
+
+`Allowed Hosts` is set on both, `radarr.kub.local, radarr, radarr.media-stack.svc.cluster.local` and
+the anime equivalent, which is what `AllowedHostsCheck` was warning about while `0.0.0.0` stood in for
+"any host". ASP.NET enforces that list through host filtering, so the probes send a `Host` header of
+their own (`probes.*.httpHeaders`), the way `prowlarr` already did: the kubelet would otherwise send
+the pod IP, which no list can name.
 
 ### lidarr
 

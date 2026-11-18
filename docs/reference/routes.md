@@ -67,8 +67,8 @@ own certificate on a `*.kub.home.ashudev.com` or `*.ashudev.com` name.
 | `n8n.kub.home.ashudev.com` | n8n | `n8n` | **none** | Let's Encrypt | no |
 | `prowlarr.kub.local` | Prowlarr | `media-stack` | forward-auth; `lan-only` alone on `/api` | internal CA | no |
 | `qbittorrent.kub.local` | qBittorrent | `media-stack` | `lan-only` | internal CA | no |
-| `radarr.kub.local` | Radarr | `media-stack` | forward-auth; `lan-only` alone on `/api` | internal CA | no |
-| `radarr-anime.kub.local` | Radarr (anime) | `media-stack` | forward-auth; `lan-only` alone on `/api` | internal CA | no |
+| `radarr.kub.local` | Radarr | `media-stack` | `lan-only`; OIDC in the app, `/api` on `lan-only` alone | internal CA | no |
+| `radarr-anime.kub.local` | Radarr (anime) | `media-stack` | `lan-only`; OIDC in the app, `/api` on `lan-only` alone | internal CA | no |
 | `sonarr.kub.local` | Sonarr | `media-stack` | forward-auth; `lan-only` alone on `/api` | internal CA | no |
 | `sonarr-anime.kub.local` | Sonarr (anime) | `media-stack` | forward-auth; `lan-only` alone on `/api` | internal CA | no |
 | `syncthing.kub.home.ashudev.com` | Syncthing | `syncthing` | **none** | Let's Encrypt | no |
