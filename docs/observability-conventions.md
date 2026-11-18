@@ -59,9 +59,9 @@ before lowering Loki further.
 Three older exporters live beside them: `mktxp` and `pihole-exporter`
 on `nuc0`, and `prometheus-smartctl` as a DaemonSet (its pods on `nas`, `nuc0`,
 `streaming`, `rbp2`). `mktxp` reads the CRS326 and CRS309 switches; since
-2026-11-18 its image is pinned to a release tag instead of `latest`, and it is
-scheduled by `nodeSelector` on `nuc0` rather than by the retired `node-type`
-label.
+2026-11-18 it is scheduled by `nodeSelector` on `nuc0` rather than by the retired
+`node-type` label. Its image stays on `latest`: the registry publishes no
+semver or digest-friendly tags.
 
 ## How to query the stack
 

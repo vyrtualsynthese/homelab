@@ -72,6 +72,11 @@ scrape timeout on 2026-11-13; the chart turns it off.
   why the `SwitchDown` rule uses `absent()` per address instead of `1 - up`.
 - `mktxp_interface_comment_info` is empty here: neither switch has port
   descriptions, so a port table cannot show a human label for a cable.
+- `mktxp` publishes no semver tags on ghcr: only `latest`, `stable-<timestamp>`
+  (last built 2024-08-21) and `gha-<run>`. Pinning the GitHub release name
+  `v2.1.0` produced `ImagePullBackOff` on 2026-11-18 and took both switches
+  offline, so the chart keeps `latest` with `pullPolicy: Always`. Pinning this
+  image means pinning a digest; it is not done yet.
 - Ports with no cable report `mktxp_interface_status == 0`. That is normal on
   both switches (17 of the CRS326's 26 ports and 5 of the CRS309's 9), so the
   alert rules watch SFP faults and link flaps, never a bare "port down".
