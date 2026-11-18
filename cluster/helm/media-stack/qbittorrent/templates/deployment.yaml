@@ -1,16 +1,16 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "fullname" . }}
+  name: {{ include "app.fullname" . }}
   labels:
-    {{- include "labels" . | nindent 4 }}
+    {{- include "app.labels" . | nindent 4 }}
 spec:
-  replicas: 1
+  replicas: {{ .Values.replicaCount }}
   strategy:
-    type: Recreate
+    type: {{ .Values.strategy }}
   selector:
     matchLabels:
-      {{- include "selectorLabels" . | nindent 6 }}
+      {{- include "app.selectorLabels" . | nindent 6 }}
   template:
     metadata:
       {{- with .Values.podAnnotations }}
@@ -18,37 +18,28 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       labels:
-        {{- include "selectorLabels" . | nindent 8 }}
+        {{- include "app.labels" . | nindent 8 }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
     spec:
-      dnsPolicy: "None"
+      # Public resolvers on purpose: the torrent client's DNS must not depend on
+      # the cluster. Cluster names are resolved through the single hostAlias below.
+      dnsPolicy: {{ .Values.dns.policy }}
       dnsConfig:
         nameservers:
-          - 1.1.1.1
-          - 1.0.0.1
-      {{- with .Values.crossSeedServiceIP }}
+          {{- toYaml .Values.dns.nameservers | nindent 10 }}
+      {{- with .Values.dns.crossSeedServiceIP }}
       hostAliases:
         - ip: {{ . | quote }}
           hostnames:
             - cross-seed
       {{- end }}
-      volumes:
-        - name: qbittorrent-vpn-config-volume
-          persistentVolumeClaim:
-            claimName: qbittorrent-vpn-config
-        - name: qbittorrent-config-volume
-          persistentVolumeClaim:
-            claimName: pvc-nfs-qbittorrent-config-nfs-subdir-external-provisioner
-        - name: qbittorrent-download-volume
-          persistentVolumeClaim:
-            claimName: pvc-nfs-qbittorrent-download-nfs-subdir-external-provisioner
-        - name: "dev-tun" # Needed for VPN
-          hostPath:
-            path: "/dev/net/tun"
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      serviceAccountName: {{ include "serviceAccountName" . }}
+      serviceAccountName: {{ include "app.serviceAccountName" . }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       initContainers:
@@ -79,8 +70,8 @@ spec:
               rm -f /downloads/.mount-probe
               echo "downloads volume ready"
           volumeMounts:
-            - name: qbittorrent-download-volume
-              mountPath: /downloads
+            - name: downloads
+              mountPath: {{ .Values.storage.downloads.mountPath }}
         {{- end }}
         - name: init-qbittorrent
           image: "alpine:{{ .Values.vueTorrent.initTag }}"
@@ -122,58 +113,99 @@ spec:
               rm -rf /config/ui.prev "$tmp"
               echo "VueTorrent $want installed"
           volumeMounts:
-            - name: qbittorrent-config-volume
-              mountPath: /config
+            - name: config
+              mountPath: {{ .Values.storage.config.mountPath }}
       containers:
         - name: {{ .Chart.Name }}-vpn
           securityContext:
-            capabilities: # Needed for VPN
-              add:
-                - NET_ADMIN
-                - SYS_MODULE
-            privileged: true
-          image: "{{ .Values.vpnimage.repository }}:{{ .Values.vpnimage.tag | default .Chart.AppVersion }}"
+            {{- toYaml .Values.vpn.securityContext | nindent 12 }}
+          image: "{{ .Values.vpnimage.repository }}:{{ .Values.vpnimage.tag }}"
           imagePullPolicy: {{ .Values.vpnimage.pullPolicy }}
+          {{- $env := list }}
+          {{- range $name, $value := .Values.env }}
+          {{- $env = append $env (dict "name" $name "value" ($value | toString)) }}
+          {{- end }}
+          {{- $env = concat $env (.Values.extraEnv | default list) }}
+          {{- with $env }}
           env:
-            - name: "PUID"
-              value: "1100"
-            - name: "PGID"
-              value: "1100"
-            - name: "TZ"
-              value: "Europe/Paris"
-          volumeMounts:
-            - name: "dev-tun"
-              mountPath: "/dev/net/tun"
-            - name: qbittorrent-vpn-config-volume
-              mountPath: /config
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.envFrom }}
+          envFrom:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           resources:
-            {{- toYaml .Values.vpnresources | nindent 12 }}
+            {{- toYaml .Values.vpn.resources | nindent 12 }}
+          volumeMounts:
+            - name: dev-tun
+              mountPath: {{ .Values.vpn.tunDevice }}
+            - name: vpn-config
+              mountPath: {{ .Values.storage.vpn.mountPath }}
         - name: {{ .Chart.Name }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- $env := list }}
+          {{- range $name, $value := .Values.env }}
+          {{- $env = append $env (dict "name" $name "value" ($value | toString)) }}
+          {{- end }}
+          {{- $env = concat $env (.Values.extraEnv | default list) }}
+          {{- with $env }}
           env:
-            - name: "TZ"
-              value: "Europe/Paris"
-            - name: "PUID"
-              value: "1100"
-            - name: "PGID"
-              value: "1100"
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.envFrom }}
+          envFrom:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          ports:
+            - name: {{ .Values.service.portName }}
+              containerPort: {{ include "app.containerPort" . }}
+              protocol: TCP
+            - name: torrent
+              containerPort: {{ .Values.torrent.port }}
+              protocol: TCP
+            - name: torrent-udp
+              containerPort: {{ .Values.torrent.port }}
+              protocol: UDP
+          {{- with .Values.probes.liveness }}
+          {{- if .enabled }}
+          livenessProbe:
+            tcpSocket:
+              port: {{ .port }}
+            initialDelaySeconds: {{ .initialDelaySeconds }}
+            periodSeconds: {{ .periodSeconds }}
+            timeoutSeconds: {{ .timeoutSeconds }}
+            failureThreshold: {{ .failureThreshold }}
+          {{- end }}
+          {{- end }}
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
           volumeMounts:
-            - name: qbittorrent-config-volume
-              mountPath: /config
-            - name: qbittorrent-download-volume
-              mountPath: /downloads
-          ports:
-            - name: torrent-webui
-              containerPort: 8080
-            - name: torrent
-              containerPort: 18515
-              protocol: TCP
-            - name: torrent-udp
-              containerPort: 18515
-              protocol: UDP
+            - name: config
+              mountPath: {{ .Values.storage.config.mountPath }}
+            - name: downloads
+              mountPath: {{ .Values.storage.downloads.mountPath }}
+            {{- with .Values.volumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+      volumes:
+        - name: vpn-config
+          persistentVolumeClaim:
+            claimName: {{ include "app.vpnClaimName" . }}
+        - name: config
+          persistentVolumeClaim:
+            claimName: {{ required "storage.config.existingClaim is required" .Values.storage.config.existingClaim }}
+        - name: downloads
+          persistentVolumeClaim:
+            claimName: {{ required "storage.downloads.existingClaim is required" .Values.storage.downloads.existingClaim }}
+        - name: dev-tun
+          hostPath:
+            path: {{ .Values.vpn.tunDevice }}
+        {{- with .Values.volumes }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
