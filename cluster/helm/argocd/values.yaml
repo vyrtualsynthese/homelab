@@ -12,6 +12,15 @@ global:
 configs:
   params:
     server.insecure: true
+    # Measured 2026-11-18: these three wrote 747 MB/day between them, 49 % of the
+    # log pipeline. The application controller logs every reconcile step for every
+    # application, repo-server every gRPC call and cache hit, and the notifications
+    # controller a "Start processing"/"Processing completed" pair per notification.
+    # `warn` keeps a failed sync, a failed manifest generation and an auth error,
+    # which are the three a human acts on.
+    controller.log.level: warn
+    reposerver.log.level: warn
+    notificationscontroller.log.level: warn
   cm:
     # Must be exactly the URL the browser uses, scheme included. Argo CD checks
     # the SSO return URL against this value and answers `Invalid redirect URL:

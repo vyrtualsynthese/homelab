@@ -71,7 +71,7 @@ fluent-bit:
           Host loki.monitoring.svc.cluster.local
           Port 3100
           Line_Format json
-          Remove_Keys kubernetes, stream, time, _p
+          Remove_Keys kubernetes,stream,time,_p
           Drop_Single_Key raw
           Compress gzip
           Retry_Limit no_limits
