@@ -13,6 +13,12 @@ use_directory_urls: true
 theme:
   name: material
   language: en
+  # The builder serves the identity at /brand/, and injects the link into every
+  # page of a site whose own config it does not control. Declared here as well so
+  # the file says what the site looks like.
+  logo: /brand/ashulab-badge-transparent.svg
+  favicon: /brand/ashulab-badge.svg
+  font: false # no Google Fonts request from an intranet page
   features:
     - navigation.tabs
     - navigation.sections
@@ -24,6 +30,11 @@ theme:
     - search.highlight
   palette:
     scheme: slate
+    primary: black # /brand/ashulab.css sets the brand navy #0B1220
+    accent: cyan # and the brand cyan #2DD4FF
+
+extra_css:
+  - /brand/ashulab.css
 
 markdown_extensions:
   - admonition

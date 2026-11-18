@@ -178,12 +178,14 @@ curl -sk -o /dev/null -w '%{http_code}\n' https://docs.kub.local/
 
 ```bash
 curl -sk https://docs.kub.local/ | sed -n '1,60p'
-# expect: the index table — one row per (repository, ref), the build time, and a status
+# expect: the documentation hub — one card per repository, a row per branch with
+# its last build, and the brand mark at the top
 ```
 
 ```bash
 curl -sk https://docs.kub.local/homelab/develop/ | head -20
-# expect: the Material page for this repository's docs
+# expect: the Material page for this repository's docs, with the AshuLab header and
+# the branch bar under it (main | develop, develop marked as current)
 ```
 
 A repository whose documentation has no `index.md` of its own gets a generated landing page that
@@ -239,8 +241,9 @@ changes.
 - `Synced Healthy`, one nginx pod `1/1`, and `https://docs.kub.local/` answers `200` after the
   authentik sign-in.
 - Without a session the same address answers `302` to authentik, and from outside the LAN a `403`.
-- The index lists every repository with docs, and names the ones without, with the last build time.
-- `https://docs.kub.local/homelab/develop/` shows the Material site.
+- The hub lists every repository with docs, and names the ones without, with each branch's last build.
+- `https://docs.kub.local/homelab/develop/` shows the Material site, and the branch bar under the
+  header switches to `main` without leaving the page being read.
 - The certificate validates against `local-ca.pem`, `subject CN=kub.local`, `issuer CN=ashulab internal CA`.
 - The first job's log has one line per pair, a closing summary, and no traceback and no token.
 - `./hack/check-exposure.sh` passes.

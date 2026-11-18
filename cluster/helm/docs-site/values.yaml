@@ -19,7 +19,7 @@ builder:
   # builder records this in its state so a deploy retries the pairs the
   # previous build failed; without it, a manifest-only fix would leave them
   # parked until each branch head moved.
-  revision: "4"
+  revision: "5"
   resources:
     requests:
       cpu: 100m

@@ -1065,6 +1065,261 @@ def build_site(repo: str, ref: str, src: Path, site_root: Path, work_root: Path)
 
 
 # --------------------------------------------------------------------------- #
+# The identity and the branch bar
+# --------------------------------------------------------------------------- #
+
+# The stylesheet and the mark are published once at /brand/, not once per site: a
+# site is served under /<repo>/<ref>/, and the same files answer for all of them.
+# The chart renders them out of `files/` into the builder ConfigMap, and a
+# ConfigMap mounts every key as a file in one directory — so at run time they sit
+# next to this script, exactly as they do in the chart.
+BRAND_DIR_NAME = "brand"
+BRAND_SOURCE_DIR = Path(__file__).resolve().parent
+BRAND_FILES = ("ashulab.css", "ashulab-badge.svg", "ashulab-badge-transparent.svg")
+BRAND_URL = f"/{BRAND_DIR_NAME}/ashulab.css"
+
+# The bar the builder writes into every page: a way home, the repository, and the
+# branch being read. `main` and `develop` are the only branches built, so the bar
+# never offers a third. The comments are the marker a restamp removes by, and
+# the scan length is where both the stylesheet link and the bar fall.
+REFBAR_ATTR = "data-ashulab-refbar"
+REFBAR_REFS_ATTR = "data-ashulab-refs"
+REFBAR_START = "<!-- ashulab-refbar:start -->"
+REFBAR_END = "<!-- ashulab-refbar:end -->"
+REFBAR_SCAN = 16384
+
+
+def brand_stamp() -> str:
+    """A short fingerprint of the identity as this build serves it.
+
+    Changes when the stylesheet, the mark or the builder changes, so pages
+    stamped by an older identity are rewritten on the next run instead of
+    waiting for the daily full rebuild.
+    """
+    digest = hashlib.sha256(builder_stamp().encode("utf-8"))
+    for name in BRAND_FILES:
+        try:
+            digest.update(BRAND_SOURCE_DIR.joinpath(name).read_bytes())
+        except OSError:
+            digest.update(name.encode("utf-8"))
+    return digest.hexdigest()[:12]
+
+
+def publish_brand(site_root: Path) -> None:
+    """Copy the stylesheet and the mark to `<site_root>/brand/`, skipping what is there.
+
+    Runs before the builds: the landing page and every injected bar link them at
+    an absolute path, so they have to answer even on a run that builds nothing.
+    A file is rewritten only when its bytes differ, which keeps the served tree
+    quiet. A failure is reported and not raised: a missing mark is cosmetic, and
+    it must not cost a repository its build.
+    """
+    target_dir = Path(site_root) / BRAND_DIR_NAME
+    try:
+        _make_dir(target_dir)
+    except BuildError as exc:
+        print(f"warning: {exc.detail}", file=sys.stderr)
+        return
+
+    for name in BRAND_FILES:
+        source = BRAND_SOURCE_DIR / name
+        target = target_dir / name
+        temporary = target.with_name(f"{name}.{run_id()}.tmp")
+        try:
+            body = source.read_bytes()
+            if target.is_file() and target.read_bytes() == body:
+                continue
+            temporary.write_bytes(body)
+            os.chmod(temporary, 0o644)  # nginx serves as uid 101, not as this process
+            os.replace(temporary, target)
+        except OSError as exc:
+            print(f"warning: cannot publish brand file {name} ({exc})", file=sys.stderr)
+        finally:
+            temporary.unlink(missing_ok=True)
+
+
+def _refbar(
+    repo: str, ref: str, published: list[str], page_path: str, site_root: Path, stamp: str
+) -> str:
+    """The bar's markup for one page, linking to the same page on the other branch.
+
+    `page_path` is the page's directory inside its site ("" at the root). When
+    that page exists on the other branch the chip opens it; when it does not
+    — the two branches document different things — the chip opens that branch's
+    start page instead of a 404.
+    """
+    chips: list[str] = []
+    for name in published:
+        if name == ref:
+            chips.append(
+                f'<span class="ashulab-refbar__ref" aria-current="true">{html.escape(name)}</span>'
+            )
+            continue
+        same_page = not page_path or (
+            site_root / repo / name / page_path / "index.html"
+        ).is_file()
+        target = page_path if same_page else ""
+        href = f"/{repo}/{name}/" + (f"{target}/" if target else "")
+        hint = "this page" if same_page else "its start page"
+        chips.append(
+            f'<a class="ashulab-refbar__ref" href="{html.escape(href)}"'
+            f' title="{html.escape(hint)} on {html.escape(name)}">{html.escape(name)}</a>'
+        )
+
+    return (
+        f"{REFBAR_START}\n"
+        f'<div class="ashulab-refbar" {REFBAR_ATTR}="{stamp}"'
+        f' {REFBAR_REFS_ATTR}="{html.escape(",".join(published))}">\n'
+        '<div class="ashulab-refbar__inner">\n'
+        '<a class="ashulab-refbar__home" href="/">'
+        '<span class="ashulab-refbar__word">AshuLab </span>docs</a>\n'
+        f'<span class="ashulab-refbar__repo">{html.escape(repo)}</span>\n'
+        '<nav class="ashulab-refbar__refs" aria-label="Documentation branch">'
+        '<span class="ashulab-refbar__label">branch</span>' + "".join(chips) + "</nav>\n"
+        "</div>\n"
+        "</div>\n"
+        f"{REFBAR_END}\n"
+    )
+
+
+def _stamp_page(
+    page: Path,
+    repo: str,
+    ref: str,
+    published: list[str],
+    page_path: str,
+    site_root: Path,
+    stamp: str,
+    force: bool,
+) -> bool:
+    """Put the identity link and the branch bar on one page; True when it was rewritten.
+
+    The first `REFBAR_SCAN` bytes answer "already stamped": the stylesheet link
+    is in `<head>` and the bar follows `</header>`. Reading only that prefix
+    keeps an idle run cheap on a tree of a few thousand pages; the whole file is
+    read only when something has to change.
+    """
+    try:
+        with page.open("rb") as handle:
+            prefix_bytes = handle.read(REFBAR_SCAN)
+            if not force:
+                prefix = prefix_bytes.decode("utf-8", "ignore")
+                if (
+                    f'{REFBAR_ATTR}="{stamp}"' in prefix
+                    and f'{REFBAR_REFS_ATTR}="{",".join(published)}"' in prefix
+                    and BRAND_URL in prefix
+                ):
+                    return False
+            raw = prefix_bytes + handle.read()
+    except OSError as exc:
+        print(f"warning: cannot read {page} ({exc})", file=sys.stderr)
+        return False
+
+    try:
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError:
+        # A page that is not UTF-8 is not something MkDocs produced; rewriting it
+        # would replace its bytes with replacement characters.
+        print(f"warning: {page} is not UTF-8; left as it is", file=sys.stderr)
+        return False
+
+    original = text
+    if REFBAR_START in text:
+        # An older stamp: remove its bar whole, so the page never stacks two.
+        text = re.sub(
+            re.escape(REFBAR_START) + r".*?" + re.escape(REFBAR_END) + r"\s*",
+            "",
+            text,
+            count=1,
+            flags=re.S,
+        )
+
+    if BRAND_URL not in text.split("</head>", 1)[0]:
+        head_end = text.find("</head>")
+        if head_end != -1:
+            text = text[:head_end] + f'<link rel="stylesheet" href="{BRAND_URL}">\n' + text[head_end:]
+
+    bar = _refbar(repo, ref, published, page_path, site_root, stamp)
+    header_end = text.find("</header>")
+    if header_end != -1:
+        cut = header_end + len("</header>")
+        text = text[:cut] + "\n" + bar + text[cut:]
+    else:
+        body = re.search(r"<body[^>]*>", text)
+        if body is None:
+            print(f"warning: no header or body to carry the branch bar in {page}", file=sys.stderr)
+            return False
+        text = text[: body.end()] + "\n" + bar + text[body.end():]
+
+    if text == original:
+        return False
+
+    temporary = page.with_name(f"{page.name}.{run_id()}.tmp")
+    try:
+        temporary.write_text(text, encoding="utf-8")
+        os.chmod(temporary, 0o644)
+        os.replace(temporary, page)
+    except OSError as exc:
+        print(f"warning: cannot stamp {page} ({exc})", file=sys.stderr)
+        return False
+    finally:
+        temporary.unlink(missing_ok=True)
+    return True
+
+
+def stamp_sites(
+    site_root: Path, refs: tuple[str, ...], stamp: str, touched: set[str] | None = None
+) -> int:
+    """Put the identity and the branch bar on every published page; returns how many.
+
+    Runs over the served tree, not the checkout: the link a chip offers has to
+    exist, and only the served tree knows which pages a branch actually has.
+    A page already carrying this stamp and this repository's published branches
+    is left alone, so a run with nothing to build costs one small read per page.
+
+    A repository is `touched` when this run rebuilt one of its branches: the
+    other branch's chips then point into a tree whose page list may have
+    changed, so its pages are rewritten even though their stamp still matches.
+    """
+    touched = touched or set()
+    written = 0
+    try:
+        candidates = sorted(Path(site_root).iterdir())
+    except OSError as exc:
+        print(f"warning: cannot list {site_root} ({exc})", file=sys.stderr)
+        return 0
+
+    for repo_dir in candidates:
+        if not repo_dir.is_dir() or repo_dir.name == BRAND_DIR_NAME:
+            continue
+        try:
+            repo = check_name("repository", repo_dir.name)
+        except ConfigError:
+            continue
+        published = [ref for ref in refs if (repo_dir / ref / "index.html").is_file()]
+        if not published:
+            continue
+        for ref in published:
+            base = repo_dir / ref
+            for page in sorted(base.rglob("index.html")):
+                page_path = page.parent.relative_to(base).as_posix()
+                if page_path == ".":
+                    page_path = ""
+                if _stamp_page(
+                    page,
+                    repo,
+                    ref,
+                    published,
+                    page_path,
+                    Path(site_root),
+                    stamp,
+                    repo in touched,
+                ):
+                    written += 1
+    return written
+
+
+# --------------------------------------------------------------------------- #
 # State
 # --------------------------------------------------------------------------- #
 
@@ -1459,66 +1714,244 @@ def resolve_invisible(state: dict[str, Any], listed: list[str]) -> list[str]:
 # The catalogue page
 # --------------------------------------------------------------------------- #
 
-INDEX_PAGE = """<!doctype html>
+LANDING_PAGE = """<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Documentation</title>
+<title>AshuLab documentation</title>
+<link rel="icon" href="/brand/ashulab-badge.svg">
 <style>
-body {{ font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; max-width: 60rem;
-       margin: 2rem auto; padding: 0 1rem; background: #1e2129; color: #e6e6e6; }}
-h1 {{ font-weight: 600; }}
-a {{ color: #7cb8ff; }}
-table {{ border-collapse: collapse; width: 100%; }}
-th, td {{ text-align: left; padding: .4rem .6rem; border-bottom: 1px solid #3a3f4b;
-          vertical-align: top; }}
-th {{ color: #9aa0ad; font-weight: 500; }}
-code {{ background: #2b303b; padding: 0 .25rem; border-radius: 3px; }}
-.muted {{ color: #9aa0ad; }}
+:root {
+  --ashu-navy: #0b1220;
+  --ashu-raised: #0f1a2b;
+  --ashu-cyan: #2dd4ff;
+  --ashu-cyan-deep: #0e7490;
+  --ashu-paper: #e8eef5;
+  --ashu-muted: #93a3b8;
+  --ashu-line: rgba(45, 212, 255, .14);
+  --ashu-bad: #f58a8a; /* semantic red, not brand: Ashuvidz owns orange and magenta */
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; min-height: 100vh; padding-bottom: 3rem;
+  background:
+    radial-gradient(80rem 42rem at 15% -12%, #12233f 0%, rgba(11, 18, 32, 0) 60%),
+    var(--ashu-navy);
+  color: var(--ashu-paper);
+  font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Ubuntu, Cantarell, sans-serif;
+}
+a { color: var(--ashu-cyan); }
+a:focus-visible { outline: 2px solid var(--ashu-cyan); outline-offset: 2px; border-radius: 4px; }
+code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .88em; }
+.wrap { max-width: 64rem; margin: 0 auto; padding: 0 1.25rem; }
+.hub { padding: 3.2rem 0 1.4rem; border-bottom: 1px solid var(--ashu-line); }
+.hub__brand { display: flex; align-items: center; gap: .85rem; text-decoration: none; }
+.hub__mark { flex: none; filter: drop-shadow(0 0 18px rgba(45, 212, 255, .25)); }
+.hub__title { margin: 0; font-size: 1.7rem; font-weight: 650; letter-spacing: -.02em; color: var(--ashu-paper); }
+.hub__title span { color: var(--ashu-muted); font-weight: 350; }
+.hub__lede { margin: 1.1rem 0 0; max-width: 48rem; color: #b9c6d6; font-size: .95rem; }
+.meta { margin: .9rem 0 0; color: var(--ashu-muted); font-size: .8rem; font-variant-numeric: tabular-nums; }
+main .wrap { padding-top: .4rem; }
+h2 {
+  margin: 2.2rem 0 .8rem; color: var(--ashu-muted);
+  font-size: .72rem; font-weight: 600; letter-spacing: .12em; text-transform: uppercase;
+}
+.cards { display: grid; gap: .9rem; grid-template-columns: repeat(auto-fill, minmax(19rem, 1fr));
+         list-style: none; margin: 0; padding: 0; }
+.card {
+  border: 1px solid var(--ashu-line); border-radius: 14px; padding: .85rem 1rem 1rem;
+  background: linear-gradient(180deg, rgba(45, 212, 255, .05), rgba(45, 212, 255, 0) 45%), var(--ashu-raised);
+}
+.card__head { display: flex; align-items: baseline; justify-content: space-between; gap: .5rem; }
+.card h3 { margin: 0; font-size: 1.05rem; letter-spacing: -.01em; }
+.card h3 a { color: var(--ashu-paper); text-decoration: none; }
+.card h3 a:hover { color: var(--ashu-cyan); }
+.card__count { color: var(--ashu-muted); font-size: .7rem; }
+.refs { list-style: none; margin: .65rem 0 0; padding: 0; }
+.ref { display: flex; align-items: center; gap: .6rem; padding: .42rem 0;
+       border-top: 1px solid rgba(147, 163, 184, .1); }
+.ref:first-child { border-top: 0; }
+.ref__name { color: var(--ashu-paper); font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+             font-size: .82rem; }
+.ref__state { color: var(--ashu-muted); font-size: .78rem; margin-right: auto; overflow: hidden;
+              text-overflow: ellipsis; white-space: nowrap; }
+.ref__open { border: 1px solid var(--ashu-cyan-deep); border-radius: 999px; color: var(--ashu-cyan);
+             flex: none; font-size: .75rem; padding: .08rem .55rem; text-decoration: none; }
+.ref__open:hover { background: var(--ashu-cyan); color: var(--ashu-navy); }
+.ref--failed .ref__state { color: var(--ashu-bad); }
+.ref--absent .ref__state { opacity: .75; }
+.empty, .aside { color: var(--ashu-muted); font-size: .85rem; max-width: 52rem; }
+footer { margin-top: 2.6rem; padding: 1rem 0 0; border-top: 1px solid var(--ashu-line);
+         color: var(--ashu-muted); font-size: .8rem; }
+@media (max-width: 34em) { .hub { padding-top: 2rem; } }
 </style>
 </head>
 <body>
-<h1>Documentation</h1>
-<p class="muted">Generated {generated}. Rebuilt by a Kubernetes CronJob on the schedule
-<code>{schedule}</code>; only <code>main</code> and <code>develop</code> are built, so a page older
-than its branch is a run that has not happened yet.</p>
-{body}
+<header class="wrap hub">
+  <a class="hub__brand" href="/">
+    <svg class="hub__mark" viewBox="0 0 512 512" width="46" height="46" aria-hidden="true">
+      <circle cx="256" cy="256" r="256" fill="#0b1220"/>
+      <g transform="translate(0.50,-3.00) translate(256,256) scale(1.100) translate(-256,-256)"
+         stroke="#2dd4ff" stroke-width="28" stroke-linecap="round" stroke-linejoin="round" fill="none">
+        <line x1="256" y1="146" x2="146" y2="372"/>
+        <line x1="256" y1="146" x2="366" y2="372"/>
+        <line x1="185.9" y1="290" x2="326.1" y2="290"/>
+      </g>
+      <g transform="translate(0.50,-3.00) translate(256,256) scale(1.100) translate(-256,-256)"
+         fill="#2dd4ff">
+        <circle cx="256" cy="146" r="26"/>
+        <circle cx="146" cy="372" r="26"/>
+        <circle cx="366" cy="372" r="26"/>
+      </g>
+    </svg>
+    <h1 class="hub__title">AshuLab <span>documentation</span></h1>
+  </a>
+  <p class="hub__lede">Every repository under the account that carries a <code>docs/</code> folder,
+  rendered as a site on its <code>main</code> and <code>develop</code> branches. A failed build keeps
+  the previous site answering.</p>
+  <p class="meta">@@META@@</p>
+</header>
+<main class="wrap">
+@@BODY@@
+</main>
+<div class="wrap">
+<footer>
+  <p>Only <code>main</code> and <code>develop</code> are built, so a page older than its branch is a
+  run that has not happened yet. Rebuilt by a Kubernetes CronJob on the schedule
+  <code>@@SCHEDULE@@</code>.</p>
+</footer>
+</div>
 </body>
 </html>
 """
 
 
-def _index_rows(state: dict[str, Any]) -> list[str]:
-    """One table row per published pair, then one per unreadable repository."""
-    rows: list[str] = []
-    for key in sorted(state["refs"]):
-        repo, _, ref = key.partition("/")
-        entry = state["refs"][key]
-        section = html.escape(key)
-        status = entry.get("status")
-        built_at = html.escape(entry.get("built_at") or "never")
-        if status == "ok":
-            body = f'<a href="/{html.escape(repo)}/{html.escape(ref)}/">{section}</a>'
-            verdict = "built"
-        elif status == "absent":
-            body = section
-            verdict = "no docs on this ref"
-        elif status == "failed":
-            body = section
-            detail = entry.get("detail") or "no detail recorded"
-            verdict = f"build failed: {html.escape(detail)}"
-        else:
-            body = section
-            verdict = html.escape(str(status))
-        rows.append(f"<tr><td>{body}</td><td>{built_at}</td><td>{verdict}</td></tr>")
+def _ago(value: str | None) -> str:
+    """A stored ISO timestamp as `3 min ago`; the raw value when it is unreadable."""
+    if not value:
+        return "never"
+    try:
+        moment = datetime.fromisoformat(value)
+    except (TypeError, ValueError):
+        return str(value)
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=timezone.utc)
+    seconds = int((datetime.now(timezone.utc) - moment).total_seconds())
+    if seconds < 90:
+        return "just now"
+    if seconds < 5400:
+        return f"{seconds // 60} min ago"
+    if seconds < 172800:
+        return f"{seconds // 3600} h ago"
+    return f"{seconds // 86400} d ago"
 
-    for name in sorted(state.get("invisible") or []):
-        rows.append(
-            f"<tr><td>{html.escape(name)}</td><td>&mdash;</td>"
-            "<td>not readable by the token</td></tr>"
+
+def _clock(value: str | None) -> str:
+    """A stored ISO timestamp as `2026-11-18 00:46 UTC`; the raw value if unreadable."""
+    if not value:
+        return "never"
+    try:
+        moment = datetime.fromisoformat(value)
+    except (TypeError, ValueError):
+        return str(value)
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=timezone.utc)
+    return moment.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+
+
+def _short(text: str, limit: int = 120) -> str:
+    """A build error collapsed to one line short enough for a card."""
+    text = " ".join(text.split())
+    return text if len(text) <= limit else text[: limit - 1].rstrip() + "…"
+
+
+def _catalogue(
+    state: dict[str, Any], refs: tuple[str, ...]
+) -> list[tuple[str, list[tuple[str, dict[str, Any]]]]]:
+    """The state grouped per repository, repositories and branches in display order.
+
+    Branches follow `REFS` (`main` then `develop`), not the alphabet, so the
+    page reads the same way as the configuration. A pair whose ref has dropped
+    out of `REFS` is left out: it has no site on the served tree any more.
+    """
+    order = {ref: index for index, ref in enumerate(refs)}
+    grouped: dict[str, list[str]] = {}
+    for key in state["refs"]:
+        repo, _, ref = key.partition("/")
+        if ref in order:
+            grouped.setdefault(repo, []).append(ref)
+    return [
+        (
+            repo,
+            [
+                (ref, state["refs"].get(f"{repo}/{ref}") or {})
+                for ref in sorted(grouped[repo], key=order.__getitem__)
+            ],
         )
-    return rows
+        for repo in sorted(grouped)
+    ]
+
+
+def _ref_item(repo: str, ref: str, entry: dict[str, Any], published: bool) -> str:
+    """One branch row inside a repository card.
+
+    `published` is the served tree's answer, not the state's: a swap killed
+    between its two renames leaves the state saying `ok` with no site behind it,
+    and the page must not offer a link that answers 404.
+    """
+    status = entry.get("status")
+    detail = " ".join(str(entry.get("detail") or "").split())
+    url = f"/{repo}/{ref}/"
+    css = ""
+    link = ""
+    title = ""
+    if status == "ok" and published:
+        state = f"built {_ago(entry.get('built_at'))}"
+        link = f'<a class="ref__open" href="{url}">Open</a>'
+    elif status == "ok":
+        css = " ref--failed"
+        state = "site missing — the next run rebuilds it"
+    elif status == "failed":
+        css = " ref--failed"
+        state = "build failed" + (f" — {_short(detail)}" if detail else "")
+        title = f' title="{html.escape(detail, quote=True)}"' if detail else ""
+        if published:
+            link = f'<a class="ref__open" href="{url}">Open last good</a>'
+    elif status == "absent":
+        css = " ref--absent"
+        state = _short(detail) if detail else "no documentation on this branch"
+    elif entry:
+        css = " ref--absent"
+        state = _short(str(status))
+    else:
+        css = " ref--absent"
+        state = "not built yet"
+    return (
+        f'<li class="ref{css}"><span class="ref__name">{html.escape(ref)}</span>'
+        f'<span class="ref__state"{title}>{html.escape(state)}</span>{link}</li>'
+    )
+
+
+def _card(repo: str, pairs: list[tuple[str, dict[str, Any]]], published: set[str]) -> str:
+    """One repository, its branches, and a link to the branch a reader wants first.
+
+    `develop` is the integration branch and the one the documentation is written
+    against, so the card's title opens it when it exists, then `main`.
+    """
+    preferred = next((ref for ref in ("develop", "main") if ref in published), None)
+    if preferred is None and published:
+        preferred = sorted(published)[0]
+    name = html.escape(repo)
+    title = f'<a href="/{repo}/{preferred}/">{name}</a>' if preferred else name
+    items = "".join(_ref_item(repo, ref, entry, ref in published) for ref, entry in pairs)
+    count = len(published)
+    sites = f"{count} site" + ("" if count == 1 else "s")
+    return (
+        f'<li class="card"><div class="card__head"><h3>{title}</h3>'
+        f'<span class="card__count">{sites}</span></div>\n'
+        f'<ul class="refs">\n{items}\n</ul></li>'
+    )
 
 
 def write_index(site_root: Path, state: dict[str, Any]) -> None:
@@ -1527,8 +1960,8 @@ def write_index(site_root: Path, state: dict[str, Any]) -> None:
     The page is the only place a reader learns that a repository exists but has
     no documentation, that its last build failed, or that the token cannot see
     it — the three cases where nothing else on the site would say anything. It
-    carries no JavaScript and no asset from the site, because it must render
-    even when no build has ever succeeded.
+    carries no JavaScript and draws the mark inline, so it renders even when no
+    build has ever succeeded.
 
     It is written through a temporary and `os.replace`, so a reader never gets
     half a page, and it is written at the end of a run only: a run that dies
@@ -1536,26 +1969,59 @@ def write_index(site_root: Path, state: dict[str, Any]) -> None:
     about the sites that are actually there.
     """
     try:
-        schedule = load_settings().schedule
+        loaded = load_settings()
+        schedule, refs = loaded.schedule, loaded.refs
     except ConfigError:
-        schedule = ENV_DEFAULTS["SCHEDULE"]
+        schedule, refs = ENV_DEFAULTS["SCHEDULE"], ("main", "develop")
 
-    rows = _index_rows(state)
-    if rows:
-        body = (
-            "<table>\n<thead><tr><th>Section</th><th>Last built</th><th>Status</th></tr>"
-            "</thead>\n<tbody>\n" + "\n".join(rows) + "\n</tbody>\n</table>"
-        )
+    catalogue = _catalogue(state, refs)
+    cards: list[str] = []
+    published_total = 0
+    for repo, pairs in catalogue:
+        published = {
+            ref for ref, _ in pairs if (site_root / repo / ref / "index.html").is_file()
+        }
+        published_total += len(published)
+        cards.append(_card(repo, pairs, published))
+
+    if cards:
+        body = '<h2>Repositories</h2>\n<ul class="cards">\n' + "\n".join(cards) + "\n</ul>"
     else:
-        body = "<p>No site has been built yet. The next run fills this page.</p>"
+        body = (
+            '<h2>Repositories</h2>\n<p class="empty">No build has been recorded yet. '
+            "The next run fills this page.</p>"
+        )
 
-    page = INDEX_PAGE.format(generated=now_iso(), schedule=html.escape(schedule), body=body)
+    invisible = sorted(state.get("invisible") or [])
+    if invisible:
+        names = ", ".join(f"<code>{html.escape(name)}</code>" for name in invisible)
+        body += (
+            "\n<h2>Not readable by the token</h2>\n"
+            f'<p class="aside">{names}: the token cannot see these repositories, so they cannot '
+            "be built. A site published earlier still answers.</p>"
+        )
+
+    generated = now_iso()
+    repositories = len(catalogue)
+    sites = f"{published_total} site" + ("" if published_total == 1 else "s")
+    owners = f"{repositories} repositor" + ("y" if repositories == 1 else "ies")
+    meta = (
+        f"{sites} from {owners} · rebuilt every minute · generated "
+        f'<time datetime="{html.escape(generated)}">{html.escape(_clock(generated))}</time>'
+    )
+
+    page = (
+        LANDING_PAGE.replace("@@META@@", meta)
+        .replace("@@BODY@@", body)
+        .replace("@@SCHEDULE@@", html.escape(schedule))
+    )
 
     target = site_root / "index.html"
     temporary = target.with_name(f"{target.name}.{run_id()}.tmp")
     try:
         site_root.mkdir(parents=True, exist_ok=True)
         temporary.write_text(page, encoding="utf-8")
+        os.chmod(temporary, 0o644)  # nginx serves as uid 101, not as this process
         os.replace(temporary, target)
     except OSError as exc:
         print(f"warning: could not write the index page ({scrub(str(exc))})", file=sys.stderr)
@@ -1720,6 +2186,9 @@ def main(argv: list[str] | None = None) -> int:
         # A dry run writes nothing, so it does not sweep either. A real run
         # clears what a killed predecessor left behind before unpacking anything.
         sweep_stale(settings)
+        # Before the builds: the landing page and the bars link the brand at an
+        # absolute path, and a run that builds nothing must still serve it.
+        publish_brand(settings.site_root)
 
     state = load_state(settings.state_path)
 
@@ -1761,6 +2230,18 @@ def main(argv: list[str] | None = None) -> int:
         # before this point leaves the old stamp, so the retry is not spent.
         state["builder"] = stamp
         save_state(settings.state_path, state)
+
+    # After the builds and before the index: the bar links the served tree, so a
+    # repository rebuilt in this run has both of its branches restamped — the
+    # page list on one side may have changed what the other side can offer.
+    stamped = stamp_sites(
+        settings.site_root,
+        settings.refs,
+        brand_stamp(),
+        {decision.repo for decision in decisions if decision.action == "build"},
+    )
+    if stamped:
+        print(f"# stamped {stamped} pages with the branch bar")
 
     write_index(settings.site_root, state)
 

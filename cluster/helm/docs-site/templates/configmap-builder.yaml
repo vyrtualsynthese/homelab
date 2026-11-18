@@ -12,3 +12,14 @@ data:
 {{ .Files.Get "files/build.py" | indent 4 }}
   mkdocs.yml.tpl: |
 {{ .Files.Get "files/mkdocs.yml.tpl" | indent 4 }}
+  # The identity, served to every site at /brand/. The two SVGs are copies of
+  # assets/branding/ashulab/ in this repository, because Helm reads only files
+  # inside the chart; refresh them when the master mark changes. The keys are
+  # flat because a ConfigMap mounts them as files in one directory, which is
+  # also where the builder looks for them.
+  ashulab.css: |
+{{ .Files.Get "files/ashulab.css" | indent 4 }}
+  ashulab-badge.svg: |
+{{ .Files.Get "files/ashulab-badge.svg" | indent 4 }}
+  ashulab-badge-transparent.svg: |
+{{ .Files.Get "files/ashulab-badge-transparent.svg" | indent 4 }}
