@@ -18,7 +18,9 @@ without GitHub, MkDocs or a cluster. Three properties are load-bearing and each 
 
 from __future__ import annotations
 
+import contextlib
 import importlib.util
+import io
 import os
 import shutil
 import sys
@@ -124,6 +126,7 @@ class DocsBuilderTest(unittest.TestCase):
                 "homelab/develop": {"status": "ok", "built_at": self.build.now_iso(), "detail": "built"},
                 "homelab/main": {"status": "ok", "built_at": self.build.now_iso(), "detail": "built"},
                 "config/develop": {"status": "absent", "detail": "no docs/ folder", "built_at": None},
+                "config/main": {"status": "absent", "detail": "no such branch", "built_at": None},
                 "scripts/main": {
                     "status": "failed",
                     "detail": "mkdocs said something long\nand then more",
@@ -142,12 +145,105 @@ class DocsBuilderTest(unittest.TestCase):
             'class="card"',
             "build failed",
             "no docs/ folder",
+            "no such branch",
             "secret-repo",
             'class="ref ref--failed"',
         ):
             self.assertIn(needle, page)
         self.assertIn('href="/homelab/develop/"', page)
         self.assertTrue((self.site / "index.html").stat().st_mode & 0o444, "index not readable")
+
+    def test_docs_dir_is_read_as_yaml_not_line_by_line(self) -> None:
+        """A quoted key, flow style or a block scalar must not slip past the refusal."""
+        src = self.tmp / "checkout"
+        src.mkdir(exist_ok=True)
+        cases = {
+            "quoted key": '"docs_dir": /etc\nsite_name: x\n',
+            "flow style": "{docs_dir: /etc, site_name: x}\n",
+            "block scalar": "docs_dir: |-\n  /etc\nsite_name: x\n",
+            "unknown tag": "docs_dir: /etc\nsite_name: !!python/object:x.Y {a: b}\n",
+        }
+        for name, text in cases.items():
+            config = self.tmp / f"{name.replace(' ', '-')}.yml"
+            config.write_text(text, encoding="utf-8")
+            with self.subTest(case=name):
+                with self.assertRaises(self.build.BuildError):
+                    self.build.check_docs_dir(config, src)
+
+    def test_docs_dir_inside_the_checkout_or_not_at_the_top_level_is_left_alone(self) -> None:
+        src = self.tmp / "checkout"
+        src.mkdir(exist_ok=True)
+        cases = {
+            "inside": "docs_dir: documentation\nsite_name: x\n",
+            "nested": "site_name: x\nnav:\n  - docs_dir: /etc\n",
+            "unparsable": "docs_dir: [ /etc\nsite_name: x\n",
+        }
+        for name, text in cases.items():
+            config = self.tmp / f"allowed-{name}.yml"
+            config.write_text(text, encoding="utf-8")
+            with self.subTest(case=name):
+                self.build.check_docs_dir(config, src)
+
+    def test_a_failed_pair_that_lost_its_site_is_rebuilt_past_the_failure_limit(self) -> None:
+        """A swap failure records `failed`; skipping it forever would strand the pair."""
+        original = self.build.head_sha
+        self.build.head_sha = lambda repo, ref, etag: ("sha1", "etag1", "ok")
+        try:
+            published_before = {
+                "status": "failed",
+                "sha": "sha1",
+                "etag": "etag1",
+                "digest": self.build.entry_digest("sha1", "etag1"),
+                "built_at": "2026-11-17T00:00:00+00:00",
+                "detail": "could not publish",
+                "failures": self.build.FAILURE_LIMIT,
+            }
+            self.assertEqual(
+                self.build.decide("ghost", "develop", published_before, full=False).action,
+                "build",
+                "a pair whose site disappeared must not wait for its head to move",
+            )
+
+            never_published = dict(published_before, built_at=None, detail="mkdocs refused")
+            self.assertEqual(
+                self.build.decide("ghost", "main", never_published, full=False).action,
+                "skip",
+                "a pair that never published keeps its backoff",
+            )
+        finally:
+            self.build.head_sha = original
+
+    def test_probe_tells_a_deleted_repository_from_a_refused_one(self) -> None:
+        original = self.build.http_get
+        try:
+            self.build.http_get = lambda url, headers: (404, {}, b"{}")
+            self.assertEqual(self.build.probe_repo("gone"), "gone")
+            self.build.http_get = lambda url, headers: (403, {}, b"{}")
+            self.assertEqual(self.build.probe_repo("hidden"), "refused")
+            self.build.http_get = lambda url, headers: (200, {}, b"{}")
+            self.assertEqual(self.build.probe_repo("fine"), "readable")
+        finally:
+            self.build.http_get = original
+
+    def test_a_deleted_repository_is_forgotten_and_a_refused_one_is_kept(self) -> None:
+        state = {
+            "refs": {
+                "gone/develop": {"status": "ok"},
+                "hidden/main": {"status": "ok"},
+            },
+            "invisible": ["gone"],
+        }
+        original = self.build.probe_repo
+        self.build.probe_repo = lambda name: {"gone": "gone", "hidden": "refused"}[name]
+        try:
+            with contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(self.build.resolve_invisible(state, []), [])
+        finally:
+            self.build.probe_repo = original
+        self.assertNotIn("gone/develop", state["refs"], "a deleted repository was kept")
+        self.assertNotIn("gone", state["invisible"], "a deleted repository stays on the index")
+        self.assertIn("hidden/main", state["refs"], "a refused repository lost its branches")
+        self.assertEqual(state["invisible"], ["hidden"])
 
     def test_clock_and_ago_read_the_states_timestamps(self) -> None:
         moment = "2026-11-18T00:46:45+00:00"

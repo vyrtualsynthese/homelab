@@ -65,8 +65,9 @@ container. The trust boundary is therefore "repositories under the operator's ac
 builder keeps the blast radius inside it: `mkdocs` runs as an unprivileged uid with every
 credential-shaped variable stripped from its environment, so a hook cannot read the GitHub token out
 of the builder's `/proc/1/environ`, and the pod mounts no service-account token, so a hook cannot
-reach the API server either. `docs_dir` is also checked against the checkout before the build, but
-that check is shallow — the real boundary is which repositories are in scope.
+reach the API server either. `docs_dir` is also checked against the checkout before the build, by
+reading the config as YAML and refusing a value that resolves outside it; that check is a guardrail,
+not the boundary, which remains which repositories are in scope.
 
 ## Change detection
 

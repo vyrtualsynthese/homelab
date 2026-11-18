@@ -66,10 +66,11 @@ The index answers this. Usual causes, in order:
 **The ref was never built.** Branches, tags and worktrees are not on the site; only `main` and
 `develop` are.
 
-**The page is not on that ref.** The row reads `no docs on this ref`: the folder is on `develop` and
-not on `main`, the branch carries no `docs/` at all, or it carries one with no Markdown.
+**The page is not on that ref.** The row gives the reason — `no such branch`, `no docs/ directory`, or
+`no Markdown file under docs/` — so a missing branch is not mistaken for an empty one: the folder is on
+`develop` and not on `main`, the branch carries no `docs/` at all, or it carries one with no Markdown.
 
-**The build failed.** The row reads `build failed:` followed by the reason, and what is served behind
+**The build failed.** The row reads `build failed —` followed by the reason, and what is served behind
 it is the last good site, if there was one — so the page is old, not absent.
 
 **The page is not in the navigation.** This repository lists its nav by hand in its own `mkdocs.yml`;
@@ -77,13 +78,15 @@ an unlisted page renders at its address but no link leads to it.
 
 **The token cannot see the repository.** The row reads `not readable by the token`, a verdict only for
 a repository the builder has seen before; one never listed is missing from the index silently, so check
-the token's repository selection — a *selected* fine-grained token hides the rest.
+the token's repository selection — a *selected* fine-grained token hides the rest. A repository that
+answers `404` is different: deleted or renamed, it leaves the index on the next run rather than sitting
+there for ever.
 
 ## Read a failure
 
-Start at the index with the status column: an old row with `build failed:` is a finished run. The time
-is the last good build, not the last attempt, and the index is written at the end of a run only, so a
-run that dies mid-build leaves the previous one standing.
+Start at the index: a row reading `build failed —` is a finished run. The time shown next to a built
+branch is the last good build, not the last attempt, and the index is written at the end of a run only,
+so a run that dies mid-build leaves the previous one standing.
 
 Then the Job's log: one line per pair (`build`, `skip`, `absent`, `failed`) and a closing summary. The
 diagnosis is the `# mkdocs exit <code>:` line; the log keeps the tail of MkDocs output, the index a
