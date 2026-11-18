@@ -28,8 +28,8 @@ spec:
         - name: {{ include "app.fullname" . }}
           port: {{ .Values.service.port }}
     {{- with .Values.ingressRoute.apiBypassMiddlewares }}
-    # API path, deliberately without the forward-auth middleware: API clients send
-    # an API key, not a browser session, and cannot complete a sign-in redirect.
+    # API path, deliberately without the sign-in: API clients send an API key,
+    # not a browser session, and cannot complete an OIDC redirect.
     # Higher priority so it wins over the route above; keep `lan-only` here or the
     # API becomes reachable from outside the LAN.
     - kind: Rule

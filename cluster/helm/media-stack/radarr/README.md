@@ -41,15 +41,16 @@ helm template radarr cluster/helm/media-stack/radarr --namespace media-stack
 
 The `radarr` IngressRoute carries a second rule on the same host, `PathPrefix(/api)` with
 `priority: 100`, whose middleware list is `lan-only` alone (`ingressRoute.apiBypassMiddlewares`).
-A script cannot complete an authentik sign-in redirect, so `/api` was unusable from a shell while the
-gate covered the whole host — the same problem the two bazarr charts solved first.
+A script cannot complete a sign-in redirect, so `/api` is unusable from a shell if the UI route's
+authentication covers the whole host. That was true while the forward-auth gate sat in front, and it
+stays true now that Radarr 7 signs users in with OIDC.
 
 Radarr's API is not part of the browser session anyway: every `/api/v3` request must carry
-`X-Api-Key`, and a request without one is refused by Radarr itself with `401`. The gate and the key
-check were stacked on top of each other, not alternatives, so dropping the gate on this path leaves
-the key as the control. `lan-only` stays, so the API answers the LAN, WireGuard and the pod
-network that middleware already allows — never the internet. The UI route keeps its gate. Set `ingressRoute.apiBypassMiddlewares: []` to close the
-exemption again; the second rule then stops rendering.
+`X-Api-Key`, and a request without one is refused by Radarr itself with `401`. The key is the control
+on this path. `lan-only` stays, so the API answers the LAN, WireGuard and the pod network that
+middleware already allows — never the internet. The UI route keeps its OIDC sign-in. Set
+`ingressRoute.apiBypassMiddlewares: []` to close the exemption again; the second rule then stops
+rendering.
 
 ## What the values control
 

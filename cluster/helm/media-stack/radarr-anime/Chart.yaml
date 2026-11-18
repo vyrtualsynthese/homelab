@@ -3,7 +3,7 @@ name: radarr-anime
 description: "Radarr for the anime library: a second instance with its own database, quality profile and root folder."
 type: application
 # Chart version. Renovate bumps this when the image tag moves.
-version: 1.2.3
+version: 1.2.4
 # Must match image.tag in values.yaml.
 appVersion: "7.0.3.10918-ls328"
 icon: https://raw.githubusercontent.com/Radarr/Radarr/develop/Logo/1024.png
