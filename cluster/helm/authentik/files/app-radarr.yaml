@@ -12,8 +12,8 @@ entries:
   # request and answers Traefik, which does pass the X-authentik-* headers on,
   # since its middleware lists them in `authResponseHeaders`. There is no
   # strip-authentik-header step because it would buy nothing: Radarr does not
-  # trust those headers. It keeps its own login until that is switched off, and
-  # from then on trusts nothing arriving from the network.
+  # trust those headers. Its own login is switched off in the app, and from then
+  # on it trusts nothing arriving from the network.
   - model: authentik_providers_proxy.proxyprovider
     id: radarr-provider
     identifiers:
