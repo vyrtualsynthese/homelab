@@ -140,6 +140,18 @@ prometheus:
           source_labels:
             - __name__
           regex: "kube_secret_.*|kube_pod_tolerations|kube_replicaset_.*|kube_pod_status_qos_class"
+    # The pod-scraped exporters publish what they publish: qBittorrent writes
+    # one series per torrent per field, 6,240 series for 365 torrents, while the
+    # Media board reads four qbittorrent_global_* totals. The n8n and Traefik
+    # histograms are 3,090 more with no panel and no rule. Measured 2026-11-18:
+    # 9,330 series from this job. container_* is not touched here; the cadvisor
+    # job owns those families.
+    kubernetes-pods:
+      metric_relabel_configs:
+        - action: drop
+          source_labels:
+            - __name__
+          regex: "qbittorrent_torrent_.*|n8n_http_request_duration_seconds_bucket|traefik_.*_bucket"
     rbp0:
       enabled: true
       static_configs:
