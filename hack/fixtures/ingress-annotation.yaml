@@ -12,8 +12,8 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: ghostfolio
-  namespace: ghostfolio
+  name: koillection
+  namespace: koillection
 spec:
   rules:
-    - host: ghostfolio.kub.home.ashudev.com
+    - host: koillection.kub.home.ashudev.com

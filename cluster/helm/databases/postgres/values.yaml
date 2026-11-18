@@ -54,10 +54,7 @@ networkPolicy:
   consumerNamespaces:
     - authentik
     - discourse
-    - firefly
-    - guacamole
     - koillection
-    - wiki
 
 exporter:
   repository: prometheuscommunity/postgres-exporter

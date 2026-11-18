@@ -28,13 +28,7 @@ database passwords.
 | `cross-seed` | `media-stack` | mounted as a file (`conf.secretName`) |
 | `recyclarr` | `media-stack` | mounted as a file |
 | `filebrowser` | `filebrowser` | `FB_CONFIG`, `FB_DATABASE`, `FB_USERNAME`, `FB_PASSWORD` (bcrypt) — first admin |
-| `firefly-app` | `firefly` | `APP_KEY`, `STATIC_CRON_TOKEN` |
-| `firefly-db` | `firefly` | `DB_DATABASE`, `DB_USERNAME`, `DB_PASSWORD` |
-| `guacamole-db` | `guacamole` | `POSTGRES_USER`, `POSTGRES_PASSWORD` |
 | `koillection` | `koillection` | `DB_NAME`, `DB_HOST`, `DB_USER`, `DB_PASSWORD` |
-| `monitorss` | `monitorss` | bot `clientid`, `clientsecret`, `token` |
-| `wikijs` | `wiki` | `password` |
-| `ghostfolio` | `ghostfolio` | `envFrom` |
 | `syncthing-backup` | `syncthing` | `envFrom` (restic credentials) |
 | `authentik-env` | `authentik` | `envFrom` |
 | `dashy-conf` | `dashy` | external chart `existingSecret` |
@@ -48,7 +42,7 @@ database passwords.
 | `local-cert` | `kube-system` | Traefik default TLS cert (`TLSStore`) |
 | `traefik-dashboard-auth` | `kube-system` | basicAuth for the dashboard |
 
-`n8n` references no pre-existing Secret. `postiz` templates `<fullname>-secrets` itself.
+`n8n` references no pre-existing Secret. No chart templates a Secret of its own.
 
 ## The PostgreSQL instance (`databases` namespace)
 
@@ -96,13 +90,10 @@ beside the instance that creates the role, once beside the application that cons
 | `grafana-oidc` | `monitoring` | `GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET` | Grafana chart `envFromSecret`; `grafana.ini` reads it with `$__env{}` | Copy of `GRAFANA_CLIENT_SECRET` from `authentik-sso` |
 | `pgadmin-oidc` | `databases` | `config_local.py` | Mounted at `/pgadmin4/config_local.py` by the chart | Generated file holding `OAUTH2_CONFIG`, with the client secret copied from `authentik-sso` |
 | `discourse` | `discourse` | `db-password`, `admin-db-password`, and `discourse-password` for the forum admin login | `externalDatabase.existingSecret` (`db-password`, `admin-db-password`) and `auth.existingSecret` (`discourse-password`) | The existing Secret, with the database password replaced when the application moves onto this instance. |
-| `firefly-db` | `firefly` | `DB_DATABASE`, `DB_USERNAME`, `DB_PASSWORD` | The application pod's `env` | Existing Secret; `DB_DATABASE` and `DB_USERNAME` are not secret values but the chart reads them here, so a missing one is a pod that does not start. |
-| `guacamole-db` | `guacamole` | `POSTGRES_USER`, `POSTGRES_PASSWORD` | The application pod's `env` | Existing Secret, same caveat about the non-secret user key. |
 | `koillection` | `koillection` | `DB_NAME`, `DB_HOST`, `DB_USER`, `DB_PASSWORD` | The application pod's `env` | Existing Secret. `DB_HOST` is where the hostname moves; the file is also the documented rotation point for the password. |
-| `wikijs` | `wiki` | `password` | The application pod's `DB_PASS` | Existing Secret, key `password`, consumed as the wiki's database password. |
 | `vikunja-db` | `vikunja` | `VIKUNJA_DATABASE_PASSWORD` | The board pod's environment; the key name is Vikunja's own variable, so the chart needs no mapping | Created by [`runbooks/vikunja-database.md`](runbooks/vikunja-database.md) with `openssl rand -base64 24`, so the value is 32 characters. Deliberately **no** `databases/pg-vikunja` copy: this Secret is the only one, and losing it is repaired with `ALTER ROLE` plus a new Secret. |
 
-Only the password keys hold secrets; `DB_NAME`, `DB_HOST`, `DB_USER` and `POSTGRES_USER` live in
+Only the password keys hold secrets; `DB_NAME`, `DB_HOST` and `DB_USER` live in
 the Secret because the chart reads them there, not because they are sensitive.
 
 Rotation is therefore two writes and one statement: update both Secrets, then

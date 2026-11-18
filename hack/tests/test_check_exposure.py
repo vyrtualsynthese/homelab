@@ -38,7 +38,7 @@ class GateTests(unittest.TestCase):
     def test_core_ingress_annotation_is_checked(self):
         found = violations("ingress-annotation.yaml")
         self.assertEqual(len(found), 1)
-        self.assertIn("ghostfolio", found[0])
+        self.assertIn("koillection", found[0])
 
     def test_public_host_must_not_be_gated(self):
         found = violations("public-gated.yaml")

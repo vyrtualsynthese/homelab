@@ -17,6 +17,16 @@ lists defects that were fixed on 2026-11-12.
 **Refresh this page when a workstream lands.** The date at the top is the only claim it makes: if it
 is older than the last merge on `develop`, distrust it rather than argue with it.
 
+## Retired after this snapshot
+
+`firefly`, `ghostfolio`, `guacamole`, `linkstack`, `monitorss`, `postiz` and `wiki` were removed from
+the cluster and from git on 2026-11-18 — charts, `Application` files and namespaces. Four of them
+appear below as broken and three as running; **nothing on this page's lists applies to those seven any
+more**, and their rows are the 17 November state, not a queue to pick up. The reasoning is
+[`decisions/2026-11-18-retire-seven-applications.md`](decisions/2026-11-18-retire-seven-applications.md);
+[`how-it-works/applications.md`](how-it-works/applications.md) and
+[`reference/routes.md`](reference/routes.md) carry the lists as they stand today.
+
 ## How to check right now
 
 Operator, with the normal kubeconfig:

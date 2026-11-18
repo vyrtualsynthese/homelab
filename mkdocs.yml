@@ -111,6 +111,7 @@ nav:
       - Decisions: decisions/README.md
       - nuc0 throttling: decisions/2026-11-13-nuc0-throttling-accepted.md
       - streaming overheating: decisions/2026-11-13-streaming-overheating-deferred.md
+      - Retiring seven applications: decisions/2026-11-18-retire-seven-applications.md
       - Audits: audit/README.md
       - Ansible and hosts: audit/ansible-hosts.md
       - ArgoCD and Helm: audit/argocd-helm.md

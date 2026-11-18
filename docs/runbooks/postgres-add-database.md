@@ -31,9 +31,9 @@ advance, so this procedure is the record of what exists and why. It is run by ha
 Pick `<app>` once; it is the role name, the database name and the suffix of the Secret in the
 `databases` namespace. Lowercase ASCII letters, digits and underscores only — no dashes, no dots,
 because the name is pasted into SQL unquoted. 63 characters at most. Examples, taken from the
-application table in the design (§2): `firefly`, `wikijs`, `authentik`. The name is not always the
-application's directory name: the wiki application's role and database are `wikijs`, and its
-namespace is `wiki`.
+applications that hold a database today: `koillection`, `vikunja`, `authentik`. The name is not
+always the application's directory name: `vikunja`'s Secret is `vikunja-db` and its key is
+Vikunja's own `VIKUNJA_DATABASE_PASSWORD`.
 
 The second Secret keeps whatever name the application's chart already reads. Where a chart has no
 existing Secret, use `<app>-db` with the key `password`.
@@ -41,9 +41,9 @@ existing Secret, use `<app>-db` with the key `password`.
 ## Step 1 — generate the password
 
 ```bash
-APP=firefly               # role, database, and the suffix of the Secret in databases/
-APP_NS=firefly            # the namespace the application runs in
-APP_SECRET=firefly-db     # the Secret its chart reads; see Naming
+APP=koillection           # role, database, and the suffix of the Secret in databases/
+APP_NS=koillection        # the namespace the application runs in
+APP_SECRET=koillection    # the Secret its chart reads; see Naming
 APP_SECRET_KEY=DB_PASSWORD  # that Secret's password key; the check pod reads this one
 PW=$(openssl rand -hex 24)
 ```
@@ -58,13 +58,12 @@ kubectl -n "$APP_NS" create secret generic "$APP_SECRET" --from-literal="$APP_SE
 ```
 
 The key on `pg-<app>` is always `password`; the key on the application's Secret is whatever its
-chart reads — `password` for the wiki, `DB_PASSWORD` for firefly, `POSTGRES_PASSWORD` for
-guacamole — and it is the value of `APP_SECRET_KEY` used by the check pod in Step 4. The two
-values must be identical: the role is created from one copy and the application logs in with the
-other.
+chart reads — `DB_PASSWORD` for koillection, `VIKUNJA_DATABASE_PASSWORD` for Vikunja — and it is
+the value of `APP_SECRET_KEY` used by the check pod in Step 4. The two values must be identical:
+the role is created from one copy and the application logs in with the other.
 
-A chart may read several keys from that Secret, and the non-secret ones must survive: firefly
-reads `DB_DATABASE` and `DB_USERNAME` as well, koillection four keys in all, discourse two. Where
+A chart may read several keys from that Secret, and the non-secret ones must survive: koillection
+reads `DB_NAME` and `DB_HOST` as well, four keys in all; discourse reads two. Where
 the Secret already exists with those keys, do not run the second command — it fails with
 `AlreadyExists`, which stops the run — set the password key in a copy of the existing object and
 apply it, or recreate it with every key it had. The keys each chart expects are listed in

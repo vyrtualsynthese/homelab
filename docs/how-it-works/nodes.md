@@ -22,7 +22,7 @@ is the total Kubernetes reports for the node.
 | Node | Role | CPU / architecture | Memory | What runs there |
 |---|---|---|---|---|
 | `nas` | worker | 12 vCPU, amd64 | ~62.6 GiB | the media library and its NFS exports, the observability stack (Prometheus, Grafana, Loki), PostgreSQL |
-| `nuc0` | control plane, etcd | 16 vCPU, amd64 | ~62.4 GiB | the general catalogue: authentik, FileBrowser, Vikunja, the wiki, Firefly, Ghostfolio, Guacamole, Koillection, n8n, and the forum and chat tools |
+| `nuc0` | control plane, etcd | 16 vCPU, amd64 | ~62.4 GiB | the general catalogue: authentik, FileBrowser, Vikunja, Koillection, n8n, and the forum and chat tools |
 | `streaming` | control plane, etcd, NVIDIA GPU | 16 vCPU, amd64 | ~31.2 GiB | Plex and transcoding, the *arr apps (Sonarr, Radarr, Lidarr and Prowlarr, the tools that fetch and organise media), qBittorrent and its download helpers, Seerr, Tautulli, Kavita, Calibre-Web |
 | `rbp2` | control plane, etcd | 4 cores, arm64 | ~7.6 GiB | nothing but the control plane |
 
