@@ -7,5 +7,5 @@ metadata:
 spec:
   redirectRegex:
     regex: "^https?://kub\\.home\\.ashudev\\.com/(.*)"
-    replacement: "https://dashy.ashudev.com/$1"
+    replacement: "https://dashy.kub.local/$1"
     permanent: true

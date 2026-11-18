@@ -16,6 +16,8 @@ dashy:
     # Automatically mount a ServiceAccount's API credentials?
     automount: false
 
+  # Disabled: the routes are Traefik CRDs in templates/. The block is kept in
+  # step with them so nobody reads the retired hostname out of the values file.
   ingress:
     enabled: false
     ingressClassName: "traefik" # This must match Traefik's ingressClass
@@ -23,10 +25,9 @@ dashy:
       kubernetes.io/ingress.class: "traefik"
       traefik.ingress.kubernetes.io/router.entrypoints: "websecure"
       traefik.ingress.kubernetes.io/router.tls: "true"
-      traefik.ingress.kubernetes.io/router.tls.certresolver: "myresolver"
-      traefik.ingress.kubernetes.io/router.middlewares: "kube-system-redirect-https@kubernetescrd,kube-system-authentik@kubernetescrd,kube-system-security@kubernetescrd"
+      traefik.ingress.kubernetes.io/router.middlewares: "kube-system-lan-only@kubernetescrd,kube-system-authentik-forwardauth@kubernetescrd,kube-system-security@kubernetescrd"
     hosts:
-      - host: dashy.ashudev.com
+      - host: dashy.kub.local
         paths:
           - path: /
             pathType: Prefix

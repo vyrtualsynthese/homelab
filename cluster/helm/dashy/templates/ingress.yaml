@@ -1,4 +1,13 @@
 # yaml-language-server: $schema=https://raw.githubusercontent.com/datreeio/CRDs-catalog/refs/heads/main/traefik.containo.us/ingressroute_v1alpha1.json
+# Internal only, on purpose: the page links to every application, so it is
+# reachable from the LAN and nowhere else. The old public-looking address is
+# retired. The gate is `authentik-forwardauth`, bound to `authentik Admins` by
+# cluster/helm/authentik/files/app-dashy.yaml; the plain `authentik`
+# middleware is headers and authenticates nothing.
+#
+# No secretName and no certResolver: the cluster's default certificate
+# (`kube-system/local-cert`, set by the TLSStore) answers, and the internal TLS
+# option in kube-system is what every internal app uses.
 apiVersion: traefik.containo.us/v1alpha1
 kind: IngressRoute
 metadata:
@@ -8,12 +17,12 @@ spec:
   entryPoints:
     - websecure
   routes:
-    - match: Host(`dashy.ashudev.com`) && PathPrefix(`/`)
+    - match: Host(`dashy.kub.local`)
       kind: Rule
       middlewares:
         - name: lan-only
           namespace: kube-system
-        - name: authentik
+        - name: authentik-forwardauth
           namespace: kube-system
         - name: security
           namespace: kube-system
@@ -21,4 +30,6 @@ spec:
         - name: dashy
           port: 8080
   tls:
-    certResolver: myresolver
+    options:
+      name: internal-tls
+      namespace: kube-system
