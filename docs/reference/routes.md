@@ -49,7 +49,7 @@ own certificate on a `*.kub.home.ashudev.com` or `*.ashudev.com` name.
 | `bazarr.kub.local` | Bazarr | `media-stack` | forward-auth; `lan-only` alone on `/api` | internal CA | no |
 | `bazarr-anime.kub.local` | Bazarr (anime) | `media-stack` | forward-auth; `lan-only` alone on `/api` | internal CA | no |
 | `calibre.kub.local` | Calibre-Web Automated | `media-stack` | `lan-only` | internal CA | no |
-| `dashy.ashudev.com` | Dashy | `dashy` | **none** — `authentik` headers only, which gate nothing | Let's Encrypt | no — reachable anyway |
+| `dashy.kub.local` | Dashy | `dashy` | `lan-only` then forward-auth, admins only | internal CA | no |
 | `docs.kub.local` | the docs site | `docs` | `lan-only` then forward-auth | internal CA | no |
 | `filebrowser.kub.home.ashudev.com` | FileBrowser | `filebrowser` | `lan-only`; the app does its own sign-in | Let's Encrypt | no |
 | `freshrss.kub.home.ashudev.com` | FreshRSS | `news` | **none** | Let's Encrypt | no |
@@ -95,11 +95,9 @@ exist only to redirect and are not rows in any table: `kub.home.ashudev.com` to 
 sends a key, not a browser session. `maintainerr` checks no key of its own, so on that host `lan-only`
 is the only control on `/api`.
 
-**Six routes carry no `lan-only`.** They are the six rows whose gate reads **none**. All six are
-chart-first: the charts already emit `kube-system-lan-only@kubernetescrd` — for Dashy that is
-`cluster/helm/dashy/templates/ingress.yaml`, where `values.yaml`'s `ingress.enabled: false` only
-switches off the *upstream* chart's own Ingress — the live objects predate the rule, and a sync
-closes the gap. `hack/check-exposure.sh` sees all six and passes.
+**Five routes carry no `lan-only`.** They are the five rows whose gate reads **none**. All five are
+chart-first: the charts already emit `kube-system-lan-only@kubernetescrd`, the live objects predate
+the rule, and a sync closes the gap. `hack/check-exposure.sh` sees all five and passes.
 
 **Two routers on Plex.** `plex.kub.home.ashudev.com` is claimed twice, both on `websecure`:
 `plex-public` (headers and rate limit) and a leftover `plex-media-public` from an older release with

@@ -107,8 +107,8 @@ they are what everything above stands on.
 
 Most charts pin their pod with `nodeSelector: kubernetes.io/hostname`. The older ones were written
 before that rule and are still configured to select the retired `node-type` label instead, which
-matches `nuc0` today (`dashy` also accepts the `small` label on `rbp2`). They are `dashy`,
-`koillection`, `mktxp`, `pihole-exporter`, `n8n`, `news-freshrss`, `renovate`, `syncthing`,
+matches `nuc0` today. They are `koillection`, `mktxp`, `pihole-exporter`, `n8n`, `news-freshrss`,
+`renovate`, `syncthing`,
 `thelounge`, and the `books-media`, `nfs-audio`, `nfs-syncthing`, `stash-nfs` and `traefik-nfs`
 provisioners. This is what each chart asks
 for, not a statement about where its pod is: `renovate` selects `general` yet its last pods ran on
