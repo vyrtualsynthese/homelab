@@ -1,2 +1,177 @@
+# Every application with a web page on the lab, grouped by what it is for.
+#
+# Rendered into the `dashy-conf` Secret by templates/secret-config.yaml and
+# mounted at /app/user-data/conf.yml. Hosts are the ones in
+# docs/reference/routes.md: the `.kub.local` names use the cluster's internal
+# certificate, the `.kub.home.ashudev.com` names a Let's Encrypt one.
+#
+# Nothing here is secret. A widget that needs an API key later puts it in an
+# env secret (`env.existingSecret`), never in this file.
+
 pageInfo:
   title: ashulab
+  description: every service on the lab
+
+appConfig:
+  theme: callisto
+  layout: horizontal
+  iconSize: medium
+  defaultOpeningMethod: newtab
+  statusCheck: false
+  preventWriteToDisk: true
+  disableConfiguration: true
+  enableServiceWorker: false
+  faviconApi: local
+
+sections:
+  - name: Media
+    icon: fas fa-film
+    items:
+      - title: Plex
+        description: films and television
+        url: https://plex.kub.home.ashudev.com
+        icon: hl-plex
+      - title: Seerr
+        description: requests
+        url: https://seerr.kub.home.ashudev.com
+        icon: hl-jellyseerr
+      - title: Sonarr
+        description: television
+        url: https://sonarr.kub.local
+        icon: hl-sonarr
+      - title: Sonarr (anime)
+        description: anime television
+        url: https://sonarr-anime.kub.local
+        icon: hl-sonarr
+      - title: Radarr
+        description: films
+        url: https://radarr.kub.local
+        icon: hl-radarr
+      - title: Radarr (anime)
+        description: anime films
+        url: https://radarr-anime.kub.local
+        icon: hl-radarr
+      - title: Lidarr
+        description: music
+        url: https://lidarr.kub.local
+        icon: hl-lidarr
+      - title: Prowlarr
+        description: indexers
+        url: https://prowlarr.kub.local
+        icon: hl-prowlarr
+      - title: Bazarr
+        description: subtitles
+        url: https://bazarr.kub.local
+        icon: hl-bazarr
+      - title: Bazarr (anime)
+        description: anime subtitles
+        url: https://bazarr-anime.kub.local
+        icon: hl-bazarr
+      - title: qBittorrent
+        description: downloads
+        url: https://qbittorrent.kub.local
+        icon: hl-qbittorrent
+      - title: autobrr
+        description: releases from IRC
+        url: https://autobrr.kub.local
+        icon: hl-autobrr
+      - title: Maintainerr
+        description: library clean-up
+        url: https://maintainerr.kub.local
+        icon: hl-maintainerr
+      - title: Tautulli
+        description: viewing statistics
+        url: https://tautulli.kub.local
+        icon: hl-tautulli
+
+  - name: Books and reading
+    icon: fas fa-book
+    items:
+      - title: Calibre-Web Automated
+        description: the books library
+        url: https://calibre.kub.local
+        icon: hl-calibre-web
+      - title: Kavita
+        description: reading
+        url: https://kavita.kub.home.ashudev.com
+        icon: hl-kavita
+      - title: Koillection
+        description: collection catalogue
+        url: https://koillection.kub.home.ashudev.com
+        icon: hl-koillection
+      - title: FreshRSS
+        description: feeds
+        url: https://freshrss.kub.home.ashudev.com
+        icon: hl-freshrss
+
+  - name: Home and tools
+    icon: fas fa-toolbox
+    items:
+      - title: FileBrowser
+        description: the shares
+        url: https://filebrowser.kub.home.ashudev.com
+        icon: hl-filebrowser
+      - title: Syncthing
+        description: file sync
+        url: https://syncthing.kub.home.ashudev.com
+        icon: hl-syncthing
+      - title: The Lounge
+        description: IRC
+        url: https://thelounge.kub.home.ashudev.com
+        icon: hl-thelounge
+      - title: n8n
+        description: workflows
+        url: https://n8n.kub.home.ashudev.com
+        icon: hl-n8n
+      - title: Vikunja
+        description: the task board
+        url: https://vikunja.kub.local
+        icon: hl-vikunja
+      - title: Docs
+        description: the lab documentation
+        url: https://docs.kub.local
+        icon: hl-mkdocs
+
+  - name: Infrastructure
+    icon: fas fa-server
+    items:
+      - title: Argo CD
+        description: what runs where
+        url: https://argocd.kub.local
+        icon: hl-argo-cd
+      - title: Authentik
+        description: sign-in
+        url: https://authentik.kub.home.ashudev.com
+        icon: hl-authentik
+      - title: Grafana
+        description: dashboards
+        url: https://grafana.kub.local
+        icon: hl-grafana
+      - title: Prometheus
+        description: metrics
+        url: http://prometheus.kub.local
+        icon: hl-prometheus
+      - title: Loki
+        description: logs
+        url: http://loki.kub.local
+        icon: hl-loki
+      - title: pgAdmin
+        description: PostgreSQL
+        url: http://pgadmin.kub.local
+        icon: hl-pgadmin
+      - title: Traefik
+        description: routes
+        url: http://traefik.kub.local/dashboard/
+        icon: hl-traefik
+
+  - name: Elsewhere
+    icon: fas fa-globe
+    items:
+      - title: ashuvidz.com
+        description: the site
+        url: https://ashuvidz.com
+        icon: favicon
+      - title: Forum
+        description: the community
+        url: https://forum.ashuvidz.com
+        icon: hl-discourse

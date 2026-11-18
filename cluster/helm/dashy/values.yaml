@@ -8,7 +8,7 @@ dashy:
     # The config Secret is mounted with subPath, so an update to `files/conf.yml`
     # changes nothing inside the running container until the pod is replaced.
     # Bump this value in the same commit as any config change.
-    dashy.kub.local/config: "1"
+    dashy.kub.local/config: "2"
 
   serviceAccount:
     # Specifies whether a service account should be created
