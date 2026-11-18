@@ -62,6 +62,15 @@ vueTorrent:
   # -- installer needs `apk`, which `busybox` does not carry.
   # renovate: datasource=docker depName=alpine
   initTag: "3.22"
+  # -- The installer runs for a few seconds at pod start, which is shorter than
+  # the scrape interval, so there is no sample to size it from. These are a
+  # protection ceiling, not a measurement: `apk add unzip` and one download.
+  resources:
+    requests:
+      cpu: 5m
+      memory: 16Mi
+    limits:
+      memory: 64Mi
 
 # The post-download hook calls cross-seed by name. The pod runs with
 # dnsPolicy: None and public resolvers on purpose, so cluster names do not
@@ -158,6 +167,9 @@ ingress:
     # -- TLSOption from the `traefik-gate` chart.
     options: internal-tls
     optionsNamespace: kube-system
+# Re-measured 2026-11-18 over the 5 days Prometheus retains: p95 9726Mi, peak 12256Mi
+# (working set, page cache included).
+# The request stays at RSS, not p95: the rest is download page cache.
 resources:
   requests:
     cpu: 100m
@@ -168,12 +180,15 @@ resources:
 # WireGuard in kernel mode: the tunnel's buffers live in the kernel, not in
 # this container. Measured peak is 4MiB memory and 0.02m CPU, so the previous
 # 256Mi/50m reservation was pure over-reservation.
+# Measured 2026-11-18 over 5 days: p95 15Mi, peak 22Mi. The tunnel's buffers
+# live in the kernel and are not charged to the container, so 64Mi is already
+# 2.9x the peak.
 vpnresources:
   requests:
     cpu: 10m
-    memory: 64Mi
+    memory: 16Mi
   limits:
-    memory: 128Mi
+    memory: 64Mi
 
 # qBittorrent drops torrents it cannot restore ("Failed to restore torrent")
 # when it starts before the NFS downloads volume answers. Two restarts earlier
@@ -183,6 +198,13 @@ vpnresources:
 waitForDownloads:
   enabled: true
   image: busybox:1.38
+  # -- Same shape as the installer: seconds of runtime, no sample, a ceiling only.
+  resources:
+    requests:
+      cpu: 1m
+      memory: 8Mi
+    limits:
+      memory: 32Mi
 
 autoscaling:
   enabled: false

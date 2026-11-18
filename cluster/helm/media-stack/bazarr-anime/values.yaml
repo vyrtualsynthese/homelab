@@ -190,12 +190,14 @@ exportarr:
     # `bazarr` Secret in the media-stack namespace, once it exists.
     secretName: ""
     secretKey: secret
+  # Re-measured 2026-11-18 over 5 days, across the eight sidecars: p95 26Mi,
+  # peak 38Mi. 32Mi request, 64Mi limit (peak x 1.5 rounded up).
   resources:
     requests:
       cpu: 2m
-      memory: 56Mi
+      memory: 32Mi
     limits:
-      memory: 112Mi
+      memory: 64Mi
 
 nodeSelector:
   # -- Every workload is pinned to a named node; local-path claims are node-bound.
@@ -216,12 +218,14 @@ affinity: {}
 # No CPU limit, here or anywhere in this cluster: a limit throttles exactly the
 # short burst this app needs during a scan, and the node's capacity is the real
 # ceiling. The 10m request is only there so the scheduler places the pod.
+# Re-measured 2026-11-18 over the 5 days Prometheus retains: p95 467Mi, peak 1300Mi
+# (working set, page cache included).
 resources:
   requests:
     cpu: 10m
-    memory: 384Mi
+    memory: 480Mi
   limits:
-    memory: 1.5Gi
+    memory: 2Gi
 
 # Probes. `/` is the only unauthenticated endpoint Bazarr answers: the API's
 # status endpoint requires the API key, and a probe cannot read a Secret.

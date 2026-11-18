@@ -208,12 +208,14 @@ affinity: {}
 # The request is what the scheduler reserves, so it follows the measured steady
 # state (320Mi), not the limit. CPU has no limit: a limit would throttle a
 # library scan or a poster burst without protecting anything.
+# Re-measured 2026-11-18 over the 5 days Prometheus retains: p95 286Mi, peak 733Mi
+# (working set, page cache included).
 resources:
   requests:
     cpu: 10m
     memory: 320Mi
   limits:
-    memory: 512Mi
+    memory: 1.25Gi
 
 # Probes.
 #
