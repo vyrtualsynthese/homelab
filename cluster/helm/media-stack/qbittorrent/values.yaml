@@ -87,9 +87,17 @@ ingress:
   # -- logs. API clients never cross Traefik, so an `/api` rule would open a hole
   # -- nothing needs. Revisit if a client is ever pointed at the hostname.
   # --
-  # -- qBittorrent keeps its own WebUI login as break-glass: behind the gate it is a
-  # -- second prompt for an admin, and the way in while authentik is down. Turn it
-  # -- off only after this route is proven, and only on purpose.
+  # -- The WebUI's own login is bypassed for the pod network, not disabled: since
+  # -- 2026-11-18 `bypass_auth_subnet_whitelist_enabled=true` with
+  # -- `bypass_auth_subnet_whitelist=10.42.0.0/16`, so a browser arriving through
+  # -- Traefik (whose pod address qBittorrent sees) lands straight in the WebUI and
+  # -- this gate is the only prompt, and the only control for anything else on the
+  # -- pod network. Those two preferences live in `qBittorrent.conf` on the config
+  # -- claim, not in this file: re-apply them on a rebuilt volume.
+  # --
+  # -- `bypass_local_auth` stays false, so `kubectl port-forward svc/qbittorrent
+  # -- 8080:8080` still asks for the password. That is the break-glass while
+  # -- authentik is down. Do not remove the gate without restoring the login first.
   middlewares:
     - name: lan-only
       namespace: kube-system
