@@ -17,6 +17,10 @@ spec:
       annotations:
         {{- if .Values.metrics.enabled }}
         prometheus.io/scrape: "true"
+        # Also match the 5-minute job, which takes the target off the 60-second
+        # one: no panel reads these counters, they are the numeric fallback for
+        # the log level above, and a solve rate does not move in a minute.
+        prometheus.io/scrape_slow: "true"
         prometheus.io/scheme: http
         prometheus.io/port: {{ .Values.metrics.port | quote }}
         prometheus.io/path: {{ .Values.metrics.path | quote }}

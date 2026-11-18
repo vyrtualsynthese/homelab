@@ -69,14 +69,19 @@ FlareSolverr exports its own metrics. They are off by default upstream and enabl
 
 `metrics.enabled: true` does three things at once: it sets `PROMETHEUS_ENABLED=true` and
 `PROMETHEUS_PORT`, it opens the named container port `metrics`, and it writes the pod annotations that
-the cluster's Prometheus uses for pod discovery (`kubernetes-pods` job):
+the cluster's Prometheus uses for pod discovery (the `-slow` job, every 5 minutes):
 
 ```yaml
 prometheus.io/scrape: "true"
+prometheus.io/scrape_slow: "true"
 prometheus.io/scheme: http
 prometheus.io/port: "8192"
 prometheus.io/path: "/metrics"
 ```
+
+`scrape_slow` takes the pod off the 60-second `kubernetes-pods` job and puts it on
+`kubernetes-pods-slow`: no panel reads these counters, and the chart's `LOG_LEVEL: warning` relies on
+them being the fallback for the request log lines it removes.
 
 The metrics port is deliberately **not** on the Service. Prometheus scrapes the pod IP directly, and
 adding a second Service port would only widen the app's surface for nothing.

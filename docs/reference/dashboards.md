@@ -28,7 +28,10 @@ shows only the first frame and leaks Kubernetes metadata columns. Legend names c
 `node` label, with `instance` mapped for `rbp0`/`rbp1` (they have no `node`).
 
 Media panels name their series from `app_kubernetes_io_instance`, not `pod`, because a pod name
-changes on every restart. `Playback bandwidth` is blank while nobody streams:
+changes on every restart. `Missing per app` is a table with an `app` column: as a bargauge its
+bars were named from the raw label set (`{app_kubernetes_io_instance="sonarr"}`), because an
+instant query returns one frame per series and the datasource sets `displayNameFromDS` from the
+labels, which overrides `legendFormat`. `Playback bandwidth` is blank while nobody streams:
 `plex_session_bandwidth_kbps` is only published during playback, and a zero would be a lie.
 
 **Homelab · Network** was added on 2026-11-18 because mktxp had been publishing

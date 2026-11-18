@@ -89,6 +89,14 @@ four:
 | `prometheus.io/scheme` | `http` |
 | `prometheus.io/port` | the exporter's own port |
 | `prometheus.io/path` | `/metrics`, unless the app serves metrics elsewhere |
+| `prometheus.io/scrape_slow` | `"true"` as well, when nothing reads the numbers inside a minute |
+
+**`scrape_slow` moves the target to the 5-minute job.** The fast job refuses any pod carrying it, so
+both annotations are set: the port and path still live in one block, and the cadence is the only
+thing that changes. Use it when every reader is a table or a one-hour increase — queue depth, library
+counts, per-app totals — and not when a panel shows "now". The six exportarr sidecars
+(`sonarr`, `sonarr-anime`, `radarr`, `radarr-anime`, `lidarr`, `prowlarr`), `autobrr` and
+`flaresolverr` do this since 2026-11-18.
 
 Rules that came out of `flaresolverr`:
 

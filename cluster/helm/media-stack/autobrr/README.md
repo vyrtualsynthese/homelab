@@ -110,9 +110,10 @@ annotations in `podAnnotations`; there is no exporter, sidecar or Service involv
 | `AUTOBRR__METRICS_HOST` | `0.0.0.0` | Upstream default is `127.0.0.1`, which no other pod can reach |
 | `AUTOBRR__METRICS_PORT` | `9074` | The listener's own port, not `service.port` |
 
-Prometheus scrapes it through its `kubernetes-pods` job, which keeps pods annotated
-`prometheus.io/scrape: "true"` and reads the port and path from the other two annotations. That is
-the whole contract: a new exporter in this cluster needs the annotation, not a scrape config.
+Prometheus scrapes it through the `kubernetes-pods-slow` job, which keeps pods annotated
+`prometheus.io/scrape_slow: "true"` and reads the port and path from the other annotations. That is
+the whole contract: a new exporter in this cluster needs the annotation, not a scrape config. The
+slow job scrapes every 5 minutes, which is enough for a one-hour increase and a connected count.
 
 The endpoint is unauthenticated. That is accepted because it is only reachable inside the cluster
 (the Service is `ClusterIP` and nothing routes port 9074); it costs release counters and IRC/feed

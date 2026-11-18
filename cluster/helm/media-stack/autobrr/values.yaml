@@ -38,6 +38,10 @@ serviceAccount:
 # wrong default is an empty target, not an error.
 podAnnotations:
   prometheus.io/scrape: "true"
+  # Also match the 5-minute job, which takes the target off the 60-second one.
+  # The Media board reads one 1-hour increase and one connected count; no rule
+  # reads autobrr at all.
+  prometheus.io/scrape_slow: "true"
   prometheus.io/port: "9074"
   prometheus.io/path: "/metrics"
 podLabels: {}

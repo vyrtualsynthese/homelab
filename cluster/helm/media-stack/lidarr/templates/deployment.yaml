@@ -17,6 +17,10 @@ spec:
       annotations:
         {{- if .Values.exportarr.enabled }}
         prometheus.io/scrape: "true"
+        # Also match the 5-minute job, which takes the target off the 60-second
+        # one. A library and queue count moves in hours, and no alert rule reads what
+        # the exporter publishes: only the Media board does.
+        prometheus.io/scrape_slow: "true"
         prometheus.io/scheme: http
         prometheus.io/port: {{ .Values.exportarr.port | quote }}
         prometheus.io/path: "/metrics"
@@ -132,6 +136,11 @@ spec:
                 secretKeyRef:
                   name: {{ include "app.exportarrSecretName" . }}
                   key: {{ .Values.exportarr.apiKey.secretKey }}
+            # exportarr logs one line per API call and a scrape is a dozen
+            # calls: 6-14 MB a day per sidecar, the largest log writer in the
+            # namespace after unpackerr. `warn` keeps the failures.
+            - name: LOG_LEVEL
+              value: warn
           args:
             - lidarr
           resources:
