@@ -170,10 +170,13 @@ This chart announces no metrics: qBittorrent has no exporter, and `cluster/helm/
 runs as its own Application against `http://qbittorrent:8080`. Nothing here should add a scrape
 annotation.
 
-The log level is **debt of the `bazarr` kind**: no documented variable selects qBittorrent's level,
-so the chart sets none, the image logs at `INFO`, and the app's own log file and the WebUI activity
-view are the operational record. Raise it from `qBittorrent.conf` by hand if a live problem needs
-more, and put it back.
+The log level is **debt with no knob at all**, one step past `bazarr`'s. qBittorrent 5.3.0 has no
+verbosity setting: `app/setPreferences` exposes only `file_log_enabled`, `file_log_path`,
+`file_log_max_size` and the rotation keys (`src/webui/api/appcontroller.cpp` at tag
+`release-5.3.0`), and `qBittorrent.conf` carries no level either. The API key does not help — there
+is nothing for it to set. So the chart sets none, the app logs at its own fixed level, and the
+WebUI's Log view plus the log file are the operational record. That volume cannot be turned down
+from here; it stays debt until upstream adds a level.
 
 ## After a merge
 
