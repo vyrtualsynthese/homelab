@@ -133,8 +133,11 @@ nginx:
   dnsConfig: { }
   ## @param nodeSelector Node labels for pod assignment. Evaluated as a template.
   ## Ref: https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/
+  ## Pinned to nuc0, where the other small web front ends live (authentik, filebrowser,
+  ## vikunja). The site keeps no state, so the pin costs nothing and makes placement a fact.
   ##
-  nodeSelector: { }
+  nodeSelector:
+    kubernetes.io/hostname: nuc0
   ## @param tolerations Tolerations for pod assignment. Evaluated as a template.
   ## Ref: https://kubernetes.io/docs/concepts/configuration/taint-and-toleration/
   ##
@@ -254,18 +257,29 @@ nginx:
   ## @param resourcesPreset Set container resources according to one common preset (allowed values: none, nano, micro, small, medium, large, xlarge, 2xlarge). This is ignored if resources is set (resources is recommended for production).
   ## More information: https://github.com/bitnami/charts/blob/main/bitnami/common/templates/_resources.tpl#L15
   ##
-  resourcesPreset: "nano"
-  ## @param resources Set container requests and limits for different resources like CPU or memory (essential for production workloads)
-  ## Example:
-  ## resources:
-  ##   requests:
-  ##     cpu: 2
-  ##     memory: 512Mi
-  ##   limits:
-  ##     cpu: 3
-  ##     memory: 1024Mi
+  ## Left at "none" on purpose: the explicit block below is the only place the numbers live, so a
+  ## preset cannot quietly change them. Bitnami applies this block to every container it renders
+  ## except the git-repo-syncer, which carries its own under cloneStaticSiteFromGit.gitSync.
   ##
-  resources: { }
+  resourcesPreset: "none"
+  ## @param resources Set container requests and limits for different resources like CPU or memory (essential for production workloads)
+  ## Measured 2026-11-18 over the 5 days Prometheus retains (the whole window),
+  ## container_memory_working_set_bytes: nginx p95 23.8Mi / peak 23.9Mi, so the request is the p95
+  ## rounded up. The limit is 128Mi rather than 1.5x that peak because Bitnami applies this block to
+  ## the two init containers as well, and the `git clone` one lives for seconds — too short to be
+  ## scraped, so it has no measurement to size from. 128Mi leaves a clone room and is still below the
+  ## 192Mi the nano preset gave every container.
+  ## Request and limit both carry ephemeral-storage: /app holds the cloned site on disk, and
+  ## without a limit one bad clone fills the node's disk.
+  ##
+  resources:
+    requests:
+      cpu: 10m
+      memory: 32Mi
+      ephemeral-storage: 50Mi
+    limits:
+      memory: 128Mi
+      ephemeral-storage: 2Gi
   ## NGINX containers' lifecycleHooks
   ## ref: https://kubernetes.io/docs/concepts/containers/container-lifecycle-hooks/
   ## ref: https://kubernetes.io/docs/tasks/configure-pod-container/attach-handler-lifecycle-event/
@@ -478,18 +492,20 @@ nginx:
       ## @param cloneStaticSiteFromGit.gitSync.resourcesPreset Set container resources according to one common preset (allowed values: none, nano, micro, small, medium, large, xlarge, 2xlarge). This is ignored if cloneStaticSiteFromGit.gitSync.resources is set (cloneStaticSiteFromGit.gitSync.resources is recommended for production).
       ## More information: https://github.com/bitnami/charts/blob/main/bitnami/common/templates/_resources.tpl#L15
       ##
-      resourcesPreset: "nano"
+      resourcesPreset: "none"
       ## @param cloneStaticSiteFromGit.gitSync.resources Set container requests and limits for different resources like CPU or memory (essential for production workloads)
-      ## Example:
-      ## resources:
-      ##   requests:
-      ##     cpu: 2
-      ##     memory: 512Mi
-      ##   limits:
-      ##     cpu: 3
-      ##     memory: 1024Mi
+      ## Measured 2026-11-18 over the same 5-day window, container=git-repo-syncer:
+      ## p95 21.2Mi / peak 25Mi, so the request is the p95 rounded up and the limit is 2.5x the peak.
+      ## The helper only runs `git pull` once a minute.
       ##
-      resources: { }
+      resources:
+        requests:
+          cpu: 10m
+          memory: 32Mi
+          ephemeral-storage: 50Mi
+        limits:
+          memory: 64Mi
+          ephemeral-storage: 2Gi
     ## @param cloneStaticSiteFromGit.extraEnvVars Additional environment variables to set for the in the containers that clone static site from git
     ## E.g:
     ## extraEnvVars:
@@ -859,6 +875,9 @@ nginx:
   ##
   metrics:
     ## @param metrics.enabled Start a Prometheus exporter sidecar container
+    ## Off, and recorded as debt in the chart README: exporters are turned on one chart at a time,
+    ## starting with flaresolverr. The sidecar, its port and its scrape annotations have to be
+    ## enabled together, so that is the shape of the change an enable would carry.
     ##
     enabled: false
     ## Bitnami NGINX Prometheus Exporter image
@@ -949,8 +968,10 @@ nginx:
     ##
     serviceMonitor:
       ## @param metrics.serviceMonitor.enabled Creates a Prometheus Operator ServiceMonitor (also requires `metrics.enabled` to be `true`)
+      ## False because there is no Prometheus Operator here: Prometheus discovers pods by annotation.
+      ## Turning it on next to `metrics.enabled` would render a CRD nobody reconciles.
       ##
-      enabled: true
+      enabled: false
       ## @param metrics.serviceMonitor.namespace Namespace in which Prometheus is running
       ##
       namespace: ""
@@ -992,8 +1013,10 @@ nginx:
     ##
     prometheusRule:
       ## @param metrics.prometheusRule.enabled if `true`, creates a Prometheus Operator PrometheusRule (also requires `metrics.enabled` to be `true` and `metrics.prometheusRule.rules`)
+      ## Off with the ServiceMonitor, and for the same reason: no Operator reconciles it. Alert rules
+      ## for this cluster live in Grafana, not in a CRD.
       ##
-      enabled: true
+      enabled: false
       ## @param metrics.prometheusRule.namespace Namespace for the PrometheusRule Resource (defaults to the Release Namespace)
       ##
       namespace: ""
