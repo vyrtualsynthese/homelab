@@ -68,7 +68,26 @@ ingressRoute:
   pathPrefix: /
   # -- Render the plain-HTTP mirror router that redirects to this one.
   redirectToHttps: true
+  # -- Middlewares, rendered as `<namespace>-<name>@kubernetescrd`.
+  # The LAN gate runs first: an outside request is rejected before the
+  # forward-auth round trip.
+  # No strip-authentik-header on purpose: Radarr trusts no X-authentik-* header.
   middlewares:
+    - name: lan-only
+      namespace: kube-system
+    - name: authentik-forwardauth
+      namespace: kube-system
+  # -- Middlewares for the `/api` rule, rendered as a second, higher-priority route
+  # on the same host. Empty means `/api` is gated like the rest of the app; here it
+  # is set to `lan-only` alone so scripts can call the API without a browser session.
+  #
+  # Radarr's API is not part of the browser session: every `/api/v3` request must
+  # carry `X-Api-Key`, and one without it gets `401` from Radarr itself. Exempting
+  # `/api` swaps the authentik gate for the app's own key check; it does not remove
+  # the last control. `lan-only` stays, so the API answers the LAN, WireGuard and
+  # the pod network that middleware already allows, never the internet, and the UI
+  # route above keeps its gate.
+  apiBypassMiddlewares:
     - name: lan-only
       namespace: kube-system
   labels: {}

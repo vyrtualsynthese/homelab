@@ -10,7 +10,9 @@ metrics exporter runs against Radarr's own API.
 This is the second Radarr instance in the cluster. It serves the anime library as its own release —
 its own SQLite database, quality profile and root folder — so the two instances never share settings.
 The chart is identical to `media-stack/radarr`; only the release-specific values differ, and both
-names (`radarr-anime`, `radarr-anime-config`) derive from the release name.
+names (`radarr-anime`, `radarr-anime-config`) derive from the release name. It is internal-only:
+`radarr-anime.kub.local`, over TLS since 2026-11-15, behind the authentik forward-auth gate, with the
+instance's own login off and `/api` carrying `lan-only` alone (the API checks `X-Api-Key` itself).
 
 ## Upstream
 
