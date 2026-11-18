@@ -26,6 +26,8 @@ limit.
 
 | Chart | p95 / peak | Request was → now | Limit was → now | Why |
 |---|---|---|---|---|
+| `ashuvidz-website` nginx | 24Mi / 24Mi | 128Mi → **32Mi** | 192Mi → **128Mi** | The site serves files from disk: memory does not track page size. The limit covers the `git clone` init container too, which runs for seconds and has no sample to size from |
+| `ashuvidz-website` git-syncer | 21Mi / 25Mi | 128Mi → **32Mi** | 192Mi → **64Mi** | One `git pull` a minute; the limit is 2.5× the peak |
 | `media-stack/autobrr` | 417Mi / 681Mi | 192Mi → **448Mi** | 768Mi → **1Gi** | Grew well past the reference chart's first-day sample |
 | `media-stack/bazarr` | 398Mi / 691Mi | 384Mi → **416Mi** | 1.5Gi → **1.25Gi** | Request was below p95; limit reserved 2.2× the peak |
 | `media-stack/bazarr-anime` | 467Mi / 1300Mi | 384Mi → **480Mi** | 1.5Gi → **2Gi** | The anime library's subtitle scan is the peak |
