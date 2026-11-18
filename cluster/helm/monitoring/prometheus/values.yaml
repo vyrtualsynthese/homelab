@@ -120,7 +120,12 @@ prometheus:
     # Loki and Grafana publish their own /metrics and nothing scraped them
     # before 2026-11-18. Without these two jobs the stack watched every app
     # but not itself: a Loki rejecting writes and a Grafana whose rules fail to
-    # evaluate both looked like silence. Both Services are in this namespace.
+    # evaluate both looked like silence.
+    #
+    # Scrape the Service port, not the container port. Loki's Service declares
+    # 3100, so that address works; Grafana's Service declares only 80 and maps
+    # it to the container's 3000, so :3000 answers nothing and the scrape times
+    # out. That was the first version of this job.
     loki:
       static_configs:
         - targets:
@@ -128,4 +133,4 @@ prometheus:
     grafana:
       static_configs:
         - targets:
-            - grafana.monitoring.svc:3000
+            - grafana.monitoring.svc:80
