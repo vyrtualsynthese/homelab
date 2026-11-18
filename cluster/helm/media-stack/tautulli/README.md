@@ -51,23 +51,26 @@ under its own organisation. Provenance is therefore identical; the lab's image p
 over Docker Hub, so this chart uses GHCR. Renovate manages the tag, and `appVersion` in `Chart.yaml`
 must move with it.
 
-## Local-only
+## Local-only, with its own login
 
-Tautulli is on the LAN, not the internet. The one route is at `tautulli.kub.local`, over TLS since 2026-11-15. Since 2026-11-15 it carries `lan-only` and the authentik forward-auth gate; Tautulli's own login is still on because its web auth has no API.
-`kub.local` resolves through the Pi-hole wildcard record; it is not in a public zone.
+Tautulli is on the LAN, not the internet. The one route is at `tautulli.kub.local`, over TLS since
+2026-11-15, and it carries `lan-only` and nothing else. `kub.local` resolves through the Pi-hole
+wildcard record; it is not in a public zone.
 
-### The `/api` exemption
+**There is no authentik gate, by decision.** authentik's forward-auth gate cannot carry an identity
+into the app: every browser that passes it reaches Tautulli as the same user, so per-user watch
+history would collapse into one account. Tautulli's own login is the access control, and `lan-only`
+keeps the route off the internet. This is the written exception to the native-first rule.
 
-The `tautulli` IngressRoute carries a second rule on the same host, `PathPrefix(/api)` with
-`priority: 100`, whose middleware list is `lan-only` alone (`ingressRoute.apiBypassMiddlewares`).
-A script cannot complete an authentik sign-in redirect, so `/api/v2?apikey=…` was unreachable from a
-shell while the gate covered the whole host. Tautulli authenticates the API per request with `apikey`
-in the query string, not with the UI login, so the gate was the only thing standing in the way of a
-keyed script — the same problem the two bazarr charts solved first.
+The login is Tautulli's own. `docs.tautulli.com` documents the HTTP username/password method only;
+the v2.19.0 release notes add the ability to switch that login off and leave Plex sign-in alone, and
+the toggle lives in Settings → Web Interface. The chart does not set it: it is database state with no
+API, and the official documentation has no Plex-only procedure, so flipping it stays the operator's
+call.
 
-`lan-only` stays, so the API answers the LAN, WireGuard and the pod network that middleware already
-allows — never the internet — and the UI route above keeps its gate. Set `ingressRoute.apiBypassMiddlewares: []` to close the exemption again; the second
-rule then stops rendering.
+`/api` needs no exemption now. A script cannot complete an authentik sign-in redirect, which is why
+the old gated chart carried a second `PathPrefix(/api)` rule; without a gate, `lan-only` covers the
+whole host and Tautulli authenticates each API call with `apikey` in the query string.
 
 The chart used to publish `tautulli.kub.home.ashudev.com` over TLS with a redirect from HTTP. Those
 templates are gone, but the live objects are **not** deleted by the sync: the Application has no

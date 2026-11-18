@@ -131,8 +131,9 @@ ingress:
   labels: {}
   annotations: {}
   # -- Extra middlewares, rendered as `<namespace>-<name>@kubernetescrd`.
-  # Deliberately no auth middleware: Seerr's own login is the gate, and the same
-  # host serves its API clients.
+  # Deliberately no authentik middleware: Plex login is the gate, and the same
+  # host serves its API clients, so a gate would add a second sign-in that
+  # carries no identity into Seerr.
   middlewares: []
   # -- Plain HTTP on the `web` entry point, redirected to HTTPS.
   redirect:

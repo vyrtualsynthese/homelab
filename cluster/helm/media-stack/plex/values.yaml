@@ -201,8 +201,8 @@ ingress:
   labels: {}
   annotations: {}
   # -- Extra middlewares, rendered as `<namespace>-<name>@kubernetescrd`.
-  # Deliberately no auth middleware: Plex clients cannot complete a forward-auth
-  # flow, so the app's own account model is the gate.
+  # Deliberately no auth middleware: Plex login is the gate. Plex clients cannot
+  # complete a forward-auth flow, so the server's own account model decides.
   middlewares: []
   # -- Plain HTTP on the `web` entry point, redirected to HTTPS.
   redirect:

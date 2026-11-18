@@ -41,12 +41,12 @@ absent from this table has no single sign-on at all — no provider, no gate —
 | Maintainerr | forward-auth gate | **to verify** before the next touch — it has no login of its own; `/api` exempt since 2026-11-15 | `maintainerr.kub.local` |
 | Prowlarr | forward-auth gate | configured; its own login is off; `/api` exempt; its probes carry a `Host` header | `prowlarr.kub.local` |
 | Sonarr | forward-auth gate | configured; its own login is off; `/api` exempt | `sonarr.kub.local` |
-| Tautulli | forward-auth gate | configured; **its own login is still on** — a UI toggle, there is no API for it; `/api` exempt | `tautulli.kub.local` |
+| Tautulli | none | by decision: no gate and no authentik object; `lan-only` stays, and Tautulli's own login is the gate because a gate would collapse per-user history | `tautulli.kub.local` |
 | Dashy | none | **fix** — no gate and no `lan-only` live: it names `kube-system-authentik`, which is headers, not a gate. The chart already emits `lan-only` and the live object predates that rule, so a sync closes the gap | `dashy.ashudev.com` |
 | qBittorrent | LAN only | by decision, own login — the reason is in its values; no gate until its hand-written `templates/ingress.yaml` grows a middleware list | `qbittorrent.kub.local` |
 | Sonarr (anime) | forward-auth gate | configured 2026-11-18; its own login is off; `/api` exempt | `sonarr-anime.kub.local` |
-| Plex | none | no gate and no `lan-only`: Plex clients cannot complete a browser sign-in, so the host answers the internet and its own account model decides | `plex.kub.home.ashudev.com` |
-| Seerr | none | no gate and no `lan-only`; its own login, and its users arrive from Plex | `seerr.kub.home.ashudev.com` |
+| Plex | none | no gate and no `lan-only`: Plex clients cannot complete a browser sign-in, so the host answers the internet and Plex login is the gate | `plex.kub.home.ashudev.com` |
+| Seerr | none | no gate and no `lan-only`; Plex login is the gate, and local sign-in is off | `seerr.kub.home.ashudev.com` |
 
 Where the application offers no other way in, the password form is closed as well: **Argo CD** has
 `admin.enabled: "false"` (that built-in user is its only password login) and **Vikunja** has
@@ -181,7 +181,7 @@ session.
 | prowlarr | `https://prowlarr.kub.local` | forward-auth; **`/api` exempt** since 2026-11-15 | off, probes fixed |
 | bazarr | `https://bazarr.kub.local` | forward-auth; `/api` exempt | none (always was) |
 | bazarr-anime | `https://bazarr-anime.kub.local` | forward-auth; `/api` exempt | none (always was) |
-| tautulli | `https://tautulli.kub.local` | forward-auth; **`/api` exempt** since 2026-11-15 | **still on — needs a UI toggle** |
+| tautulli | `https://tautulli.kub.local` | **no gate** since 2026-11-18; `lan-only` alone | its own login; the Plex-only toggle is not in the official docs |
 | maintainerr | `https://maintainerr.kub.local` | forward-auth; **`/api` exempt** (`lan-only` only) since 2026-11-15 | none exists |
 | autobrr | `https://autobrr.kub.local` | **OIDC, no gate** | replaced by OIDC |
 | qbittorrent | `https://qbittorrent.kub.local` | `lan-only` only — **no authentik gate yet** | its own login |
@@ -446,15 +446,17 @@ table of `/config/app.db` on the config claim; `0` is standard, `2` is OAuth.
 
 - **qbittorrent** has no gate. Its `templates/ingress.yaml` is hand-written rather than the shared
   `ingressroute.yaml`, so it needs a middleware list added before the values can carry one.
-- **tautulli** still shows its own login (UI toggle, above).
+- **tautulli** has no gate since 2026-11-18 and keeps its own login. Plex-only sign-in exists as a UI
+  toggle in v2.19.0, but `docs.tautulli.com` documents neither it nor a procedure for it, so the
+  chart leaves the login alone.
 - **No media-stack API is behind a sign-in any more** (2026-11-15; sonarr-anime and radarr-anime joined
   on 2026-11-18; radarr's two were the last). Every chart built on the shared `ingressroute.yaml` has
-  the `apiBypassMiddlewares` block, and the five gated tools that check their own key — sonarr,
-  sonarr-anime, lidarr, prowlarr, tautulli — set it to `lan-only`, joining `bazarr`, `bazarr-anime` and
+  the `apiBypassMiddlewares` block, and the four gated tools that check their own key — sonarr,
+  sonarr-anime, lidarr, prowlarr — set it to `lan-only`, joining `bazarr`, `bazarr-anime` and
   `maintainerr`; `radarr` and `radarr-anime` carry the same exemption but behind their own OIDC rather
-  than a gate. Charts without a sign-in (autobrr, qbittorrent, calibre, kavita, plex, seerr) never had
-  one on `/api` either, so they need nothing. Any new chart that copies the template must decide this
-  explicitly.
+  than a gate. `tautulli` dropped its exemption with its gate on 2026-11-18, and the charts without a
+  sign-in (autobrr, qbittorrent, calibre, kavita, plex, seerr) never had one, so they need nothing.
+  Any new chart that copies the template must decide this explicitly.
 - **maintainerr's `/api` is open to the LAN** (since 2026-11-15, by decision). The UI keeps the
   authentik gate; the API does not, and upstream checks no key on inbound requests. Close it with
   `apiBypassMiddlewares: []`, or put a `basicauth` middleware on the `/api` rule.

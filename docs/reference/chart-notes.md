@@ -75,10 +75,11 @@ IngressRoute at `tautulli.kub.local`, LAN-only — and since 2026-11-15 that mea
 reachability and SQLite integrity only in a JSON body with HTTP 200, which the kubelet cannot read,
 so readiness is disabled rather than pointed at liveness. Its image starts as root and drops to
 `PUID`/`PGID`, so the capability set is `ALL` dropped plus the three calls that init makes. Since
-2026-11-15 the route carries the authentik forward-auth gate, and Tautulli's own login is the one
-thing still on — its web auth has no API, so it is a UI toggle. Since the same day `/api` is exempt
-from the gate (a `priority: 100` rule with `lan-only` alone): Tautulli keys each API request with
-`apikey` in the query string rather than with the UI session. The chart
+2026-11-18 the route carries `lan-only` and no authentik gate, by decision: the gate cannot carry an
+identity into the app, so every browser would share one Tautulli account and per-user watch history
+would collapse. Tautulli's own login is the gate, and it keeps the login it had; the Plex-only toggle
+from v2.19.0 is not in the official docs, so the chart does not set it. With no gate there is no
+`/api` exemption to render either; `lan-only` covers the whole host. The chart
 creates the config claim: the previous one was a Longhorn volume that vanished in 2026, which is why
 the app had not run for 71 days.
 

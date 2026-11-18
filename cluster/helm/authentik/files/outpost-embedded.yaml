@@ -85,11 +85,6 @@ entries:
   - model: authentik_blueprints.metaapplyblueprint
     attrs:
       identifiers:
-        name: ashulab-app-tautulli
-      required: true
-  - model: authentik_blueprints.metaapplyblueprint
-    attrs:
-      identifiers:
         name: ashulab-app-docs
       required: true
 
@@ -111,5 +106,4 @@ entries:
         - !Find [authentik_providers_proxy.proxyprovider, [name, qbittorrent]]
         - !Find [authentik_providers_proxy.proxyprovider, [name, maintainerr]]
         - !Find [authentik_providers_proxy.proxyprovider, [name, prowlarr]]
-        - !Find [authentik_providers_proxy.proxyprovider, [name, tautulli]]
         - !Find [authentik_providers_proxy.proxyprovider, [name, docs]]
