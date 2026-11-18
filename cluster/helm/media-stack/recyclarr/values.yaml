@@ -59,8 +59,19 @@ securityContext:
 
 # -- Arguments after the image entrypoint (`recyclarr`). `sync` processes
 # every instance in the configuration and exits; there is no daemon here.
+#
+# `--log warn` is v8's common option for the log level (v9 adds
+# `RECYCLARR_LOG_LEVEL` and a `logging` settings section). It follows the
+# subcommand because v8 declares it on each command's settings, not on the root.
+# A container's stdout is not a terminal, so recyclarr enters log mode on its own
+# and defaults to `info`, which printed a dozen `[INF]` lines per instance ("All
+# custom formats are already up to date!") that nobody reads. `warn` keeps
+# warnings and errors; a run's outcome is still readable from the Job status and
+# from the Radarr and Sonarr settings the sync changes.
 args:
   - sync
+  - --log
+  - warn
 
 # -- Environment variables, inline in the container spec.
 env:
