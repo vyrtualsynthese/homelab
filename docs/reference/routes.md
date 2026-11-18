@@ -95,10 +95,11 @@ plain-HTTP route at all. The four rows in the last table are served on `web` its
 exist only to redirect and are not rows in any table: `kub.home.ashudev.com` to Dashy,
 `discourse.kub.home.ashudev.com` to Forum, `wiki.kub.home.ashudev.com` to the wiki.
 
-**`/api` exemptions.** Eight hosts — `bazarr`, `bazarr-anime`, `lidarr`, `maintainerr`, `prowlarr`,
-`radarr`, `sonarr`, `tautulli` — carry a second rule on `Host(...) && PathPrefix(/api)` at
-`priority: 100` with the sign-in removed, because an API client sends a key, not a browser session.
-`maintainerr` checks no key of its own, so on that host `lan-only` is the only control on `/api`.
+**`/api` exemptions.** Ten hosts — `bazarr`, `bazarr-anime`, `lidarr`, `maintainerr`, `prowlarr`,
+`radarr`, `radarr-anime`, `sonarr`, `sonarr-anime`, `tautulli` — carry a second rule on
+`Host(...) && PathPrefix(/api)` at `priority: 100` with the sign-in removed, because an API client
+sends a key, not a browser session. `maintainerr` checks no key of its own, so on that host `lan-only`
+is the only control on `/api`.
 
 **Eleven routes carry no `lan-only`.** The ten rows whose gate reads **none**, plus
 `firefly-importer.kub.home.ashudev.com`, which has basic auth instead. All eleven are chart-first:
