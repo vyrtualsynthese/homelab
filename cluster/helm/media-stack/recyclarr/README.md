@@ -42,7 +42,7 @@ helm template recyclarr cluster/helm/media-stack/recyclarr --namespace media-sta
 | Value | Purpose | Default |
 |---|---|---|
 | `image.repository`, `image.tag` | Image. Tag is always pinned, never `latest`. | `ghcr.io/recyclarr/recyclarr`, `8.8.1` |
-| `args` | Arguments after the image entrypoint (`recyclarr`). | `[sync]` |
+| `args` | Arguments after the image entrypoint (`recyclarr`). | `[sync, --log, warn]` |
 | `schedule`, `timeZone` | When the CronJob runs. The timezone is explicit because the controller runs in UTC. | `0 6 * * *`, `Europe/Paris` |
 | `concurrencyPolicy` | What happens when a run is still going at the next tick. `Forbid` skips; `Replace` would kill a half-done sync. | `Forbid` |
 | `startingDeadlineSeconds` | How late a missed run may still start. | `300` |
@@ -134,14 +134,21 @@ one. The run's output is the record, and Fluent Bit already ships it to Loki.
 
 ## Logs
 
-A run prints about twenty lines: provider initialisation, per-instance progress and any warning or
-error. `NO_COLOR=1` keeps ANSI escapes out of Loki.
+`args` carries `--log warn`, v8's common option for console output. Recyclarr switches to log mode by
+itself when stdout is not a terminal — which is the case in a container — and defaults to `info`
+there, so without the flag a run wrote about a dozen `[INF]` lines per instance ("All custom formats
+are already up to date!", "Completed at …") that nobody reads. `warn` keeps warnings and errors, and
+the run's outcome is still readable two ways: the Job's status in the CronJob history, and the Radarr
+and Sonarr settings the sync changes. `NO_COLOR=1` keeps ANSI escapes out of Loki.
 
-**Debt: the level is not controllable in v8.** recyclarr v8 has no log-level setting or flag; the
-contract's "log at warning" rule applies when the app offers the knob. A once-a-day, seven-second run
-is not the volume problem that rule exists for. recyclarr already creates a `settings.yml` in the
-claim, but v8.8's settings schema has no logging section; the unreleased v9 adds `server.logging`
-there, and that is where this gets fixed.
+The option follows the subcommand — `sync --log warn`, not `--log warn sync` — because v8 declares
+`--log` on each command's settings rather than on the root. `recyclarr sync -h` lists it with the rest
+of the command's options.
+
+**v9 moves the level.** The flag stays, the settings file gains a `logging` section and the server
+gets `RECYCLARR_LOG_LEVEL`, so the value here follows the image when it moves. Until then the flag is
+the only place the level can be set, and it is set in `args`, not in a ConfigMap, so a change to it
+rolls the pod.
 
 ## Known data debt
 
