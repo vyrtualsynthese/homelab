@@ -128,6 +128,18 @@ prometheus:
           source_labels:
             - __name__
           regex: "container_(tasks_state|memory_failures_total|memory_failcnt|memory_max_usage_bytes|memory_mapped_file|memory_swap|memory_kernel_usage|memory_cache|blkio_device_usage_total|fs_reads_total|fs_writes_total|cpu_load_average_10s|file_descriptors|processes|sockets|threads|threads_max)"
+    # kube-state-metrics publishes 812 families because it publishes one per
+    # object. Four families here have no reader: every Secret in the cluster
+    # (421 of them, names and type only), pod tolerations, ReplicaSets — the
+    # replica panels read Deployments and StatefulSets — and the QoS class.
+    # Measured 2026-11-18: 5,739 series. kube_persistentvolume_status_phase
+    # stays: the Longhorn cleanup reads PV state.
+    kubernetes-service-endpoints:
+      metric_relabel_configs:
+        - action: drop
+          source_labels:
+            - __name__
+          regex: "kube_secret_.*|kube_pod_tolerations|kube_replicaset_.*|kube_pod_status_qos_class"
     rbp0:
       enabled: true
       static_configs:
