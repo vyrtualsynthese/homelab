@@ -1,11 +1,10 @@
 # Chart sizing: the reviewed set
 
-> **In one line.** The charts in the two tables below have been measured against Prometheus and
-> either adjusted or confirmed adequate; everything absent sets a request and a limit nobody has
-> checked.
+> **In one line.** Every chart below has been measured against Prometheus and either adjusted or
+> confirmed adequate; anything absent sets a request and a limit nobody has checked.
 >
 > **Use it when** you are setting a memory request or limit, or an audit asks which numbers are
-> evidence and which are guesses · **Verified** 2026-11-17 · **Kind:** living page
+> evidence and which are guesses · **Verified** 2026-11-18 · **Kind:** living page
 
 Requirement 14 is a floor, not a target. This table is the record of which charts have actually been
 measured against Prometheus, so a later audit can tell a settled number from an unexamined one
@@ -16,53 +15,61 @@ instead of re-deriving every chart and reporting the same findings again.
 is re-measured when the app itself changes (new image, new library, new feature) or when this table
 is more than six months old; not because someone noticed the number is round.
 
-Source: Prometheus on 2026-11-13, the 39 h of history it holds, `container_memory_working_set_bytes`
-(working set — file cache included — not RSS), peak and average per container.
+Source for the 2026-11-18 pass: the **6 days of history Prometheus retains** (5 days queried, to
+leave margin), `container_memory_working_set_bytes` (working set — file cache included — not RSS),
+p95 and max per container. The card that asked for this pass said 14 days; the retention is the
+limit, and the window is written into every chart's `values.yaml` so the next reader knows what the
+number covers. Method: **request = p95**, **limit = peak × 1.5**, CPU request 10–100m and no CPU
+limit.
 
-## Adjusted on 2026-11-13
+## Adjusted on 2026-11-18
 
-| Chart | Measured peak | Request was → now | Limit was → now | Why |
+| Chart | p95 / peak | Request was → now | Limit was → now | Why |
 |---|---|---|---|---|
-| `media-stack/lidarr` | 930Mi | 256Mi → **512Mi** | 1Gi → **2Gi** | limit filled to 93 %; the app had grown since it was sized from sonarr's profile |
-| `media-stack/sonarr-anime` | 800Mi | 384Mi → **512Mi** | 1Gi → **2Gi** | limit filled to 80 %; the pre-rebuild 30-day sample understated it by half |
-| `media-stack/sonarr` | 570Mi | 256Mi → **384Mi** | 768Mi → **1.5Gi** | same sample, same drift |
-| `media-stack/bazarr-anime` | 660Mi | 256Mi → **384Mi** | 768Mi → **1.5Gi** | the old pair was a guess made while the app was Pending |
-| `media-stack/bazarr` | 480Mi | 256Mi → **384Mi** | 768Mi → **1.5Gi** | kept identical to `bazarr-anime`: one image, two libraries |
-| `media-stack/unpackerr` | 460Mi burst | 64Mi (unchanged) | 512Mi → **1Gi** | the peak is extraction children, and 92 % of the limit risks killing a big archive |
-| `n8n` | 420Mi | 256Mi (unchanged) | 512Mi → **768Mi** | 85 % of the limit on a workflow run |
-| `monitoring/grafana` | 370Mi | 256Mi (unchanged) | 512Mi → **768Mi** | it evaluates and delivers every alert in the cluster; 74 % is not enough headroom |
-| `filebrowser` | 20Mi | 512Mi → **64Mi** | 1Gi → **256Mi** | reserved 25× the app |
-| `media-stack/maintainerr` | 230Mi | 512Mi → **256Mi** | 1Gi (unchanged) | reserved 2× the app |
-| `media-stack/tautulli` | 120Mi | 256Mi → **128Mi** | 1Gi → **512Mi** | both numbers were aspirational |
-| `dashy` | 270Mi | 500m CPU → **10m**, 512Mi → **256Mi** | 4Gi → **1Gi** | upstream defaults, never visited |
-| `monitoring/mktxp` | 30Mi | 128Mi → **64Mi** | 256Mi (unchanged) | 4× the app |
-| `syncthing` | 110Mi | none → **128Mi** | none → **256Mi** | had `resources: {}` |
-| `databases/pgadmin` | 220Mi | none → **256Mi** | none → **384Mi** | had `resources: {}` |
+| `media-stack/autobrr` | 417Mi / 681Mi | 192Mi → **448Mi** | 768Mi → **1Gi** | Grew well past the reference chart's first-day sample |
+| `media-stack/bazarr` | 398Mi / 691Mi | 384Mi → **416Mi** | 1.5Gi → **1.25Gi** | Request was below p95; limit reserved 2.2× the peak |
+| `media-stack/bazarr-anime` | 467Mi / 1300Mi | 384Mi → **480Mi** | 1.5Gi → **2Gi** | The anime library's subtitle scan is the peak |
+| `media-stack/calibre-web-automated` | 465Mi / 789Mi | 512Mi → **480Mi** | 2Gi → **1.25Gi** | The 2Gi limit reserved 2.5× the peak |
+| `media-stack/cross-seed` | 130Mi / 323Mi | 128Mi → **160Mi** | 512Mi (unchanged) | Request was a hair below p95 |
+| `media-stack/flaresolverr` | 382Mi / 912Mi | 256Mi → **416Mi** | 1Gi → **1.5Gi** | The Chromium peak, not the idle footprint |
+| `media-stack/kavita` | 550Mi / 954Mi | 256Mi → **576Mi** | 1Gi → **1.5Gi** | Chapter page cache holds the memory |
+| `media-stack/lidarr` | 1104Mi / 1836Mi | 512Mi → **1.125Gi** | 2Gi → **2.75Gi** | The 2026-11-13 sample understated the scan by half — again |
+| `media-stack/maintainerr` | 325Mi / 702Mi | 256Mi → **352Mi** | 1Gi → **1.25Gi** | Request was below p95 |
+| `media-stack/prowlarr` | 339Mi / 678Mi | 256Mi → **352Mi** | 1Gi (unchanged) | Request was below p95 |
+| `media-stack/radarr` | 276Mi / 477Mi | 256Mi → **288Mi** | 1Gi → **768Mi** | Limit reserved 2.1× the peak |
+| `media-stack/radarr-anime` | 299Mi / 634Mi | 256Mi → **320Mi** | 1Gi (unchanged) | Request was below p95 |
+| `media-stack/seerr` | 286Mi / 733Mi | 320Mi (unchanged) | 512Mi → **1.25Gi** | Peak is 1.4× the old limit, not 1.5× |
+| `media-stack/sonarr` | 308Mi / 1075Mi | 384Mi (unchanged) | 1.5Gi → **1.75Gi** | Peak filled the old limit to 70 % |
+| `media-stack/sonarr-anime` | 1109Mi / 1911Mi | 512Mi → **1.125Gi** | 2Gi → **3Gi** | This library's scan is the heaviest in the stack |
+| `media-stack/tautulli` | 135Mi / 334Mi | 128Mi → **160Mi** | 512Mi (unchanged) | Request was a hair below p95 |
+| `media-stack/unpackerr` | 34Mi / 472Mi | 64Mi (unchanged) | 1Gi → **768Mi** | 768Mi is still 1.6× the extraction peak |
+| `exportarr` sidecars (8) | 26Mi / 38Mi | 56Mi → **32Mi** | 112Mi → **64Mi** | Reserved twice what the sidecar holds |
+| `media-stack/plex` exporter sidecar | 19Mi / 37Mi | 64Mi → **32Mi** | 128Mi → **64Mi** | Same |
+| `nfs-*` provisioners (9) | 49Mi / 99Mi | none → **64Mi** | none → **192Mi** | `resources: {}` since they were vendored |
+| `media-stack/qbittorrent` vpn sidecar | 15Mi / 22Mi | 64Mi → **16Mi** | 128Mi → **64Mi** | Kernel tunnel buffers are not charged to the container |
 
-Net effect at the time: about 1.25 GiB of reservation released, all eight tight limits given real
-headroom, and three workloads moved out of the unaccounted set. Two rows of that pass are gone from
-this table because `firefly` and `guacamole` were retired on 2026-11-18.
+Two init containers in `qbittorrent` (`wait-for-downloads`, `init-qbittorrent`) run for seconds,
+shorter than the scrape interval, so there is no sample to size them from. They now carry a
+protection ceiling only, with the reason next to the values.
 
-## Verified adequate, unchanged
+## Kept, with the reason
 
-Measured on the same run and left alone. Peak as a share of the limit is in brackets; the number is
-recorded so the next audit does not repeat the exercise.
+| Chart | Request / limit | Why it did not move |
+|---|---|---|
+| `media-stack/plex` | 2Gi / 4Gi | A 30-day sample on the same workload is better evidence than this 5-day window: p95 2.19GiB, peak 2.37GiB. The recent window reads lower because the current pod's file cache is still filling |
+| `media-stack/qbittorrent` | 6Gi / 12Gi | 9.5Gi p95 is download page cache; RSS was 0.24Gi on 2026-11-13. The request stays at RSS, the limit at 12Gi |
+| `media-stack/qbittorrent-exporter` | 32Mi / 128Mi | 86Mi peak sits inside the 128Mi limit; re-measure after the next image bump |
+| `media-stack/recyclarr` | 128Mi / 1Gi | A CronJob run is shorter than the scrape interval, so it has no steady state to measure |
 
-| Chart | Peak / limit |
-|---|---|
-| `media-stack/plex` | 2.55Gi / 4Gi (64 %) |
-| `media-stack/qbittorrent` | 9.81Gi / 12Gi (82 %) — but 0.24Gi is RSS and the rest is page cache, so the limit is not the number to tune |
-| `monitoring/prometheus` | 0.96Gi / 2Gi — GC follows the cgroup limit, see `docs/observability-conventions.md` |
-| `monitoring/loki` | 0.24Gi / 1Gi |
-| `media-stack/radarr`, `radarr-anime` | 0.35Gi, 0.22Gi / 1Gi |
-| `media-stack/prowlarr` | 0.26Gi / 1Gi |
-| `media-stack/autobrr` | 0.22Gi / 768Mi |
-| `media-stack/seerr` | 0.20Gi / 512Mi |
-| `media-stack/cross-seed` | 0.07Gi / 512Mi |
-| `media-stack/flaresolverr` | 0.23Gi / 1Gi |
-| `media-stack/tautulli` | see above — adjusted |
-| `thelounge` | 0.07Gi / 128Mi (60 %) |
-| `qbittorrent-exporter` | under 0.02Gi |
-| `monitoring/prometheus-smartctl`, `prometheus-node-exporter`, `fluent-bit` | under 0.03Gi |
+## Enforced by the method, not by these numbers
 
-`recyclarr` is a CronJob: it has resources but no steady state to measure, so it is out of scope.
+No CPU limit anywhere, and CPU requests stay at 10–100m. CPU is compressible: a limit throttles the
+burst the app needs and protects nothing, while a truthful small request is all the scheduler needs
+to place the pod.
+
+## History
+
+The 2026-11-13 pass (commit `5a5432a0`) measured 18 charts against 39 h of history, raised eight
+limits that sat within 6–20 % of their peak, released about 1.25 GiB of reservations and gave
+`guacamole`, `syncthing` and `pgadmin` their first `resources` block. Its table is superseded by the
+one above; `git show 5a5432a0` has it, with the reasoning, if a number needs explaining.
