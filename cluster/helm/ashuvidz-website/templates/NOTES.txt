@@ -1,0 +1,16 @@
+{{ include "app.fullname" . }} has been deployed to namespace {{ .Release.Namespace }}.
+
+{{- if .Values.ingressRoute.enabled }}
+
+URL:
+  https://{{ .Values.ingressRoute.host }}/
+
+The router is public on purpose: no `lan-only`, no authentik gate.
+{{- end }}
+
+Content:
+  cloned from {{ .Values.content.repository }} ({{ .Values.content.ref }}) at pod start,
+  then pulled every {{ .Values.content.intervalSeconds }}s by the git-sync sidecar.
+  A content push is live after one interval; no image, no sync.
+
+  kubectl -n {{ .Release.Namespace }} logs deploy/{{ include "app.fullname" . }} -c git-sync --tail=5

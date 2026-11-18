@@ -1,0 +1,152 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "app.fullname" . }}
+  labels:
+    {{- include "app.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  strategy:
+    type: {{ .Values.strategy }}
+  selector:
+    matchLabels:
+      {{- include "app.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        # The nginx.conf ConfigMap is mounted with subPath, so it never refreshes
+        # on its own; hashing it here makes an edit roll the pod.
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+      labels:
+        {{- include "app.labels" . | nindent 8 }}
+    spec:
+      serviceAccountName: {{ include "app.serviceAccountName" . }}
+      automountServiceAccountToken: {{ .Values.serviceAccount.automount }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      initContainers:
+        # The content is cloned once, here, and pulled afterwards by the sidecar.
+        # An empty clone must not count as success: nginx would then serve an empty
+        # root and answer 403 for every path while the probe on `/` kept it out of
+        # the Service — a silent blank site. Failing the init container makes the
+        # pod visibly stuck instead.
+        - name: clone-content
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "{{ .Values.content.image.repository }}:{{ .Values.content.image.tag }}"
+          imagePullPolicy: {{ .Values.content.image.pullPolicy }}
+          command:
+            - /bin/sh
+            - -ec
+            - |
+              rm -rf /site/.[!.]* /site/* 2>/dev/null || true
+              git clone --quiet --depth 1 --branch "{{ .Values.content.ref }}" \
+                "{{ .Values.content.repository }}" /site
+              test -f /site/index.html
+          env:
+            - name: HOME
+              value: /tmp
+            - name: GIT_TERMINAL_PROMPT
+              value: "0"
+          resources:
+            {{- toYaml .Values.contentResources | nindent 12 }}
+          volumeMounts:
+            - name: site
+              mountPath: /site
+            - name: tmp
+              mountPath: /tmp
+      containers:
+        - name: nginx
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ include "app.containerPort" . }}
+              protocol: TCP
+          {{- with .Values.probes.liveness }}
+          {{- if .enabled }}
+          livenessProbe:
+            httpGet:
+              path: {{ .path }}
+              port: http
+            initialDelaySeconds: {{ .initialDelaySeconds }}
+            periodSeconds: {{ .periodSeconds }}
+            timeoutSeconds: {{ .timeoutSeconds }}
+            failureThreshold: {{ .failureThreshold }}
+          {{- end }}
+          {{- end }}
+          {{- with .Values.probes.readiness }}
+          {{- if .enabled }}
+          readinessProbe:
+            httpGet:
+              path: {{ .path }}
+              port: http
+            initialDelaySeconds: {{ .initialDelaySeconds }}
+            periodSeconds: {{ .periodSeconds }}
+            timeoutSeconds: {{ .timeoutSeconds }}
+            failureThreshold: {{ .failureThreshold }}
+          {{- end }}
+          {{- end }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: site
+              mountPath: /site
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+            - name: config
+              mountPath: /etc/nginx/nginx.conf
+              subPath: nginx.conf
+              readOnly: true
+        # The content refresh. `git pull --ff-only` never rewrites what nginx has
+        # open: a pull either fast-forwards the tree in place or fails and is
+        # logged, and the previous files keep being served either way.
+        - name: git-sync
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "{{ .Values.content.image.repository }}:{{ .Values.content.image.tag }}"
+          imagePullPolicy: {{ .Values.content.image.pullPolicy }}
+          command:
+            - /bin/sh
+            - -ec
+            - |
+              while true; do
+                git -c safe.directory=/site -C /site pull --ff-only --quiet \
+                  || echo "git pull failed, still serving the previous content" >&2
+                sleep {{ .Values.content.intervalSeconds }}
+              done
+          env:
+            - name: HOME
+              value: /tmp
+            - name: GIT_TERMINAL_PROMPT
+              value: "0"
+          resources:
+            {{- toYaml .Values.contentResources | nindent 12 }}
+          volumeMounts:
+            - name: site
+              mountPath: /site
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: site
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}
+        - name: config
+          configMap:
+            name: {{ include "app.fullname" . }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

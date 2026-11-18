@@ -211,7 +211,7 @@ Two habits follow:
 | `plex` | yes, on `/identity` | capabilities dropped except `CHOWN`/`SETUID`/`SETGID`, which the image's root init needs; seccomp; no privilege escalation | **no — the image starts as root, then drops to 1100** |
 | `seerr` | yes, on `/api/v1/status/appdata` | capabilities dropped, seccomp, no privilege escalation | **yes — 1000**, the image's own UID |
 | `qbittorrent-exporter` | n/a (no HTTP listener of its own) | capabilities dropped, seccomp, no privilege escalation | **no — no `runAsUser` set** |
-| `ashuvidz-website` | liveness only, a TCP connect to the HTTP port; readiness on `/`, which is the site's `index.html` | capabilities dropped, seccomp, no privilege escalation, read-only root filesystem — all from the wrapped Bitnami chart | **yes — 1001**, the image's own UID; no claim (the content is an `emptyDir` clone) |
+| `ashuvidz-website` | liveness on `/healthz`, a `return 200` in the chart's own `nginx.conf`; readiness on `/`, which is the site's `index.html` | capabilities dropped, seccomp, no privilege escalation, read-only root filesystem; `/site` mounted read-only into nginx and dotfiles denied | **yes — 101**, the `nginx-unprivileged` image's own UID; no claim (the content is an `emptyDir` clone) |
 | `qbittorrent` | liveness only, a TCP connect to the WebUI port — there is no unauthenticated HTTP endpoint to ask; readiness off | pod seccomp `RuntimeDefault` and `allowPrivilegeEscalation: false` on the app; the WireGuard sidecar is `privileged`, adds `NET_ADMIN`/`SYS_MODULE` and sets seccomp `Unconfined` for `/dev/net/tun` | **no — the image starts as root, then drops to 1100** |
 
 ## Checking a chart against this list
