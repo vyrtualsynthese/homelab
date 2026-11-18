@@ -25,6 +25,12 @@ grafana:
       cookie_secure: true
     users:
       auto_assign_org: true
+    log:
+      # Measured 2026-11-18: Grafana was writing 63k lines/day (70 MB), mostly the
+      # alert sender's `Sending alerts to local notifier` at info, one per rule
+      # per evaluation, plus every Prometheus plugin request. `warn` keeps errors
+      # and slow-query warnings, which are the two a human acts on.
+      level: warn
     auth:
       # Only authentik is offered; the local password form is hidden and a
       # visitor with an authentik session is sent there without a click.
