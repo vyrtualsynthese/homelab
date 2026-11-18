@@ -85,12 +85,16 @@ Every route but the two public ones below carries `lan-only`, then one of three 
 
 - **OIDC in the application** — autobrr, Calibre-Web Automated, Kavita, and since 2026-11-18 Radarr and
   Radarr Anime (Radarr 7). The app holds the identity; a gate on top would mean two logins.
-- **The forward-auth gate** — Sonarr, Sonarr Anime, Lidarr, Prowlarr, both Bazzars, Tautulli,
+- **The forward-auth gate** — Sonarr, Sonarr Anime, Lidarr, Prowlarr, both Bazzars,
   Maintainerr. The app behind it cannot tell its users apart; `maintainerr` checks no key of its own,
   so its `/api` exemption leaves `lan-only` as the only control.
-- **LAN only, by decision** — qBittorrent, with its own login.
+- **LAN only, with the app's own login** — qBittorrent, and Tautulli since 2026-11-18. Tautulli
+  cannot sit behind the gate either: the gate would make every browser the same user, and its whole
+  point is per-user history.
 
-**Plex** and **Seerr** are those two: no `lan-only`, no gate, only their own account model, because Plex
-clients and API callers cannot complete a browser sign-in. What the three mechanisms mean, and why OIDC
-comes first: [network.md](network.md). The per-app matrix and the media-tools traps:
-[reference/sso-applications.md](../reference/sso-applications.md).
+**Plex** and **Seerr** are the two public ones: no `lan-only`, no gate, and Plex login is the gate,
+because Plex clients and API callers cannot complete a browser sign-in. Seerr's local sign-in is off,
+so its Plex users are the only way in.
+
+What the four mechanisms mean, and why OIDC comes first: [network.md](network.md). The per-app matrix
+and the media-tools traps: [reference/sso-applications.md](../reference/sso-applications.md).

@@ -108,7 +108,7 @@ snapshot.
 | `bazarr` | media-stack | 2026-11-13 | exportarr present and **off** — its collector walks the whole library per scrape |
 | `bazarr-anime` | media-stack | 2026-11-13 | Same chart, second library |
 | `recyclarr` | media-stack | 2026-11-13 | CronJob: no listener, no probes; exit status is the health signal |
-| `tautulli` | media-stack | 2026-11-13 | LAN-only route, no TLS; readiness disabled for a documented reason |
+| `tautulli` | media-stack | 2026-11-13 | LAN-only route, TLS since 2026-11-15; no gate, its own login is the gate; readiness disabled for a documented reason |
 | `seerr` | media-stack | 2026-11-13 | Rebuilt and hardened on its public route |
 | `unpackerr` | media-stack | 2026-11-13 | Metrics deliberately off: v1 needs an API key for `/metrics` |
 | `maintainerr` | media-stack | 2026-11-13 | First real dependency check: readiness runs `SELECT 1` and answers 503 |
