@@ -1,4 +1,7 @@
 # yaml-language-server: $schema=https://raw.githubusercontent.com/datreeio/CRDs-catalog/refs/heads/main/traefik.containo.us/ingressroute_v1alpha1.json
+# Plain-HTTP mirror of the internal router: `lan-only` refuses an off-LAN
+# request here rather than redirecting it. The middleware list that matters is
+# in ingress.yaml.
 apiVersion: traefik.containo.us/v1alpha1
 kind: IngressRoute
 metadata:
@@ -8,7 +11,7 @@ spec:
   entryPoints:
     - web
   routes:
-    - match: Host(`dashy.ashudev.com`)
+    - match: Host(`dashy.kub.local`)
       kind: Rule
       middlewares:
         - name: lan-only
@@ -16,5 +19,5 @@ spec:
         - name: redirect-https
           namespace: kube-system
       services:
-        - kind: TraefikService
-          name: noop@internal
+        - name: dashy
+          port: 8080
