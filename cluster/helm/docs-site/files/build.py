@@ -3,7 +3,8 @@
 
 The builder runs in a CronJob every minute inside the `squidfunk/mkdocs-material`
 image: Python and MkDocs, but no `git`, no `jq`, no `curl`. Everything below is
-therefore the standard library.
+therefore the standard library, plus the PyYAML that MkDocs itself installs —
+the one dependency already in the image.
 
 The cost of a poll is the request, so every (repository, ref) pair keeps the ETag
 of the last answer and sends it back as `If-None-Match`. A `304 Not Modified`
@@ -78,6 +79,8 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+import yaml
 
 API_ROOT = "https://api.github.com"
 CODELOAD_ROOT = "https://codeload.github.com"
@@ -420,21 +423,29 @@ def list_repos(owner: str) -> list[str]:
     return sorted(names)
 
 
-def probe_repo(repo: str) -> bool:
-    """True when the token may read `repo`, False when GitHub refuses it.
+def probe_repo(repo: str) -> str:
+    """What GitHub answers about the token's access to `repo`.
 
-    A repository the token cannot read answers 404 and is indistinguishable from
-    one that does not exist; a 403 means the same thing for a fine-grained token
-    without `Metadata: read`. Both are recorded as "not readable by the token".
+    Three answers, because two of them call for different housekeeping:
+
+    - `readable` (200): the repository is there and the token can read it.
+    - `gone` (404): deleted, renamed, or never there. Its name has nothing left
+      to point at, so it is dropped from the state and the index.
+    - `refused` (403): the repository exists and this token may not look at it —
+      a fine-grained token without `Metadata: read` answers 403 where a deleted
+      repository answers 404. The name is kept and said to be unreadable, since
+      the site cannot tell it apart from a repository that is still ours.
     """
     settings = load_settings()
     check_name("repository", repo)
     url = f"{API_ROOT}/repos/{settings.owner}/{repo}"
     status, _, body = http_get(url, api_headers(settings.token))
     if status == 200:
-        return True
-    if status in (403, 404):
-        return False
+        return "readable"
+    if status == 404:
+        return "gone"
+    if status == 403:
+        return "refused"
     raise GithubError(status, f"{repo}: repository probe: {api_message(body, status)}")
 
 
@@ -659,14 +670,48 @@ def build_identity() -> tuple[int, int] | None:
     return BUILD_UID, BUILD_GID
 
 
+class _ConfigLoader(yaml.SafeLoader):
+    """`SafeLoader` that keeps the payload of a tag it does not know.
 
-def _unquote(value: str) -> str:
-    """The scalar inside a YAML `key: value` line, comment and quotes removed."""
-    if value[:1] in {'"', "'"}:
-        quote = value[0]
-        end = value.find(quote, 1)
-        return value[1:end] if end != -1 else value[1:]
-    return value.split("#", 1)[0].strip()
+    A MkDocs config may carry a Python object tag (`!!python/name:...`), which
+    `SafeLoader` refuses because plain data does not have such a value. MkDocs
+    itself accepts the file, so the tag is not a reason to stop reading it: the
+    payload is taken as it stands, and only `docs_dir` is ever looked at.
+    """
+
+
+def _keep_unknown_tag(loader: yaml.SafeLoader, tag: str, node: yaml.Node) -> Any:
+    if isinstance(node, yaml.MappingNode):
+        return loader.construct_mapping(node, deep=True)
+    if isinstance(node, yaml.SequenceNode):
+        return loader.construct_sequence(node, deep=True)
+    return loader.construct_scalar(node)
+
+
+_ConfigLoader.add_multi_constructor("", _keep_unknown_tag)
+
+
+def declared_docs_dir(config: Path) -> str | None:
+    """The `docs_dir` in `config`, as MkDocs would read it, or None.
+
+    None covers every case this function has no better answer for than MkDocs
+    does: a file it cannot read, YAML it cannot parse, a document that is not a
+    mapping, and a `docs_dir` that is missing or not a scalar.
+    """
+    try:
+        text = config.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return None
+    try:
+        parsed = yaml.load(text, Loader=_ConfigLoader)
+    except yaml.YAMLError:
+        return None
+    if not isinstance(parsed, dict):
+        return None
+    declared = parsed.get("docs_dir")
+    if declared is None or isinstance(declared, (dict, list)):
+        return None
+    return declared if isinstance(declared, str) else str(declared)
 
 
 def check_docs_dir(config: Path, src: Path) -> None:
@@ -675,24 +720,16 @@ def check_docs_dir(config: Path, src: Path) -> None:
     MkDocs reads the key itself, so this only has to answer one question: does
     the directory it names resolve inside the checkout it came from? An absolute
     `docs_dir: /etc`, or a relative one that walks out with `..`, would publish
-    whatever this container can read. The line scan is deliberately shallow —
-    a top-level key, no YAML library available — and it is a refusal only: a
-    config this function cannot read is left for MkDocs to report.
+    whatever this container can read.
 
-    A path value may be quoted, and a comment may follow it; both forms appear
-    in real configs. Only the value MkDocs would see is compared.
+    The key is read by parsing the file as YAML, because the value MkDocs sees
+    is the parsed one: a quoted key, a flow mapping or a block scalar is written
+    differently and means the same thing, and a line scan sees three forms it
+    does not recognise. A config this function cannot parse is left for MkDocs
+    to report. It is a refusal only, and not the trust boundary: `mkdocs.yml` is
+    code either way (see the module docstring).
     """
-    try:
-        text = config.read_text(encoding="utf-8", errors="replace")
-    except OSError:
-        return  # unreadable here means MkDocs reports it, with a better message
-    declared: str | None = None
-    for line in text.splitlines():
-        if not line or line[0] in " \t#-":
-            continue  # nested, commented or a list item: not the top-level key
-        key, separator, rest = line.partition(":")
-        if separator and key.strip() == "docs_dir":
-            declared = _unquote(rest.strip())
+    declared = declared_docs_dir(config)
     if not declared:
         return  # no key, or an empty one: MkDocs' own default, `docs`
 
@@ -1647,7 +1684,17 @@ def decide(
         and failure_count(stored) >= FAILURE_LIMIT
         and not retry_failed
     )
-    lost = stored.get("status") == "ok" and published_missing(repo, ref)
+    # A pair that has published before and whose published index is now missing
+    # lost its site to something other than its own build: a swap killed between
+    # its two renames, a failed swap whose restore failed, a site deleted by
+    # hand. `built_at` is the marker that a site was there — a `failed` entry
+    # keeps it — so a pair that never published is not caught here and keeps its
+    # backoff. Without the `failed` half, a swap failure that recorded `failed`
+    # would walk the counter to the limit and then wait forever for a head that
+    # nothing in this repository will move.
+    lost = (stored.get("status") == "ok" or bool(stored.get("built_at"))) and published_missing(
+        repo, ref
+    )
     rebuild = (
         full
         or not trusted
@@ -1674,13 +1721,29 @@ def collect_plan(
     return decisions
 
 
+def forget_repo(state: dict[str, Any], name: str) -> None:
+    """Drop every trace of a repository GitHub says is gone.
+
+    A 404 means nothing is left to serve under that name, so its branches and
+    its entry on the index would both be a claim about a repository that no
+    longer exists. Removing the refs also keeps the plan from asking GitHub for
+    their heads on every run from now on.
+    """
+    for key in [key for key in state["refs"] if repo_of(key) == name]:
+        del state["refs"][key]
+    print(f"# forgot {name}: GitHub answers 404, so the repository is gone")
+
+
 def resolve_invisible(state: dict[str, Any], listed: list[str]) -> list[str]:
     """Repos we used to know that the listing no longer returns.
 
     The listing is filtered by the token's own visibility, so a repository the
     token lost access to simply disappears. Every name that disappeared is
-    probed once: readable means it is still ours (a `type=owner` nuance), a
-    refusal means it goes in `invisible` and the index can say so.
+    probed once: `readable` means it is still ours (a `type=owner` nuance) and
+    it is put back in the plan, `refused` means it goes in `invisible` so the
+    index can say why its site is frozen, and `gone` means it is forgotten —
+    404 is a deletion or a rename, and repeating "not readable by the token"
+    about a repository that no longer exists is worse than saying nothing.
     """
     known = {repo_of(key) for key in state["refs"] if isinstance(key, str)}
     known.update(state.get("invisible") or [])
@@ -1690,7 +1753,7 @@ def resolve_invisible(state: dict[str, Any], listed: list[str]) -> list[str]:
 
     for name in vanished:
         try:
-            usable = probe_repo(name)
+            answer = probe_repo(name)
         except (GithubError, ConfigError) as exc:
             # A rate limit or an outage says nothing about the token's visibility,
             # so the previous classification is kept. An unusable name should
@@ -1701,13 +1764,16 @@ def resolve_invisible(state: dict[str, Any], listed: list[str]) -> list[str]:
             if name in (state.get("invisible") or []):
                 invisible.append(name)
             continue
-        if usable:
+        if answer == "readable":
             readable_again.append(name)
+        elif answer == "gone":
+            forget_repo(state, name)
         else:
             invisible.append(name)
 
     state["invisible"] = sorted(invisible)
     return readable_again
+
 
 
 # --------------------------------------------------------------------------- #
