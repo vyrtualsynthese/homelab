@@ -1,23 +1,216 @@
-# Default values for home.
-# This is a YAML-formatted file.
-# Declare variables to be passed into your templates.
+# Default values for qbittorrent.
+# Built against the contract in docs/charts/README.md; `autobrr` is the worked
+# example it was reshaped from. What this chart adds on top is a privileged
+# WireGuard sidecar and three claims, only one of which it owns.
+
+# -- Override the chart name.
+nameOverride: ""
+# -- Override the generated release name.
+fullnameOverride: ""
 
 replicaCount: 1
 
+# -- Deployment strategy. `Recreate` is required: the config and downloads
+# claims are ReadWriteOnce and cannot attach to an old and a new pod at once.
+strategy: Recreate
+
 image:
   repository: ghcr.io/linuxserver/qbittorrent
-  pullPolicy: IfNotPresent
-  # Overrides the image tag whose default is the chart appVersion.
+  # -- Pin the tag. Never `latest`. Renovate manages this row.
   tag: 5.3.0
+  pullPolicy: IfNotPresent
 
+# The name is historical: Renovate tracks this block as it stands, and renaming
+# the key is how an image silently stops being updated.
 vpnimage:
   repository: ghcr.io/linuxserver/wireguard
-  pullPolicy: IfNotPresent
-  # Overrides the image tag whose default is the chart appVersion.
+  # -- Pin the tag. Never `latest`. Renovate manages this row.
   tag: 1.0.20260223
+  pullPolicy: IfNotPresent
 
-# The alternative WebUI. qBittorrent serves VueTorrent's static files from the
-# config claim (`WebUI\RootFolder=/config/ui`), and the `init-qbittorrent`
+imagePullSecrets: []
+
+serviceAccount:
+  # -- Create a dedicated ServiceAccount. qBittorrent never talks to the
+  # Kubernetes API, so it gets no mounted token either.
+  create: true
+  automount: false
+  # -- Defaults to the fullname.
+  name: ""
+  annotations: {}
+
+# -- Annotations added to the pod. `setGateway` predates this rebuild and is kept
+# as it was found; nothing in this repo reads it.
+podAnnotations:
+  setGateway: "true"
+podLabels: {}
+
+# Pod-level security. `fsGroup` is deliberately NOT set: two of the three claims
+# are NFS and the third is hostPath-backed local-path, so the kubelet would not
+# apply it to either.
+podSecurityContext:
+  seccompProfile:
+    type: RuntimeDefault
+
+# Container-level security for qBittorrent itself.
+#
+# `runAsNonRoot` is not an option: the LinuxServer image starts as root, prepares
+# `/config` and `/downloads` through s6, then drops to `PUID`/`PGID` 1100. The
+# capabilities are therefore kept as the image expects them, and only privilege
+# escalation is refused.
+securityContext:
+  allowPrivilegeEscalation: false
+
+# The WireGuard sidecar. It owns the pod's network namespace, so it is the
+# container the tunnel is built in. `privileged` plus NET_ADMIN/SYS_MODULE is the
+# image's documented requirement, not a shortcut: creating the interface and
+# loading wireguard need both, and `/dev/net/tun` must be mounted.
+vpn:
+  # -- Host device the sidecar mounts. Required by the LinuxServer image.
+  tunDevice: /dev/net/tun
+  securityContext:
+    privileged: true
+    capabilities:
+      add:
+        - NET_ADMIN
+        - SYS_MODULE
+    # Privileged containers are not confined by seccomp; saying so explicitly
+    # stops the pod-level RuntimeDefault from being read as applying here.
+    seccompProfile:
+      type: Unconfined
+  # Measured 2026-11-18 over 5 days: p95 15Mi, peak 22Mi. The tunnel's buffers
+  # live in the kernel and are not charged to the container, so 64Mi is already
+  # 2.9x the peak.
+  resources:
+    requests:
+      cpu: 10m
+      memory: 16Mi
+    limits:
+      memory: 64Mi
+
+service:
+  type: ClusterIP
+  # The qBittorrent WebUI listens on 8080. This one value drives the container
+  # port, the Service and the IngressRoute target.
+  port: 8080
+  # -- Name of the Service port, reused by the container port and the probes.
+  portName: torrent-webui
+
+torrent:
+  # -- Announce and peer port opened on the container as TCP and UDP. The tunnel
+  # forwards it; nothing in the cluster reaches it, so it is not on the Service.
+  port: 18515
+
+container:
+  # -- Container port. Defaults to `service.port`; set it only when the app
+  # listens on a different port than the Service exposes.
+  port: null
+
+# The pod runs with `dnsPolicy: None` and public resolvers on purpose: the
+# torrent client's DNS must not depend on the cluster's. The cost is that cluster
+# names do not resolve, which is why the post-download hook gets one hostAlias
+# below instead of a DNS route.
+dns:
+  policy: None
+  nameservers:
+    - 1.1.1.1
+    - 1.0.0.1
+  # The post-download hook calls cross-seed by name. This is the cross-seed
+  # Service ClusterIP; update it if that Service is recreated.
+  crossSeedServiceIP: "10.43.104.9"
+
+ingressRoute:
+  # -- Render the IngressRoutes. Traefik CRDs only: this chart never renders a
+  # networking.k8s.io/v1 Ingress.
+  enabled: true
+  # -- API group. `traefik.containo.us/v1alpha1` is what the cluster's Traefik
+  # 2.x watches today; flip this to `traefik.io/v1alpha1` when v3 lands.
+  apiVersion: traefik.containo.us/v1alpha1
+  # -- Traefik entry points. `websecure` carries the route; `web` only redirects.
+  entryPoints:
+    - websecure
+  host: qbittorrent.kub.local
+  # -- Path prefix. `/` matches everything.
+  pathPrefix: /
+  # -- Render the plain-HTTP mirror router.
+  redirectToHttps: true
+  # -- Middlewares, rendered as `<namespace>-<name>@kubernetescrd`, in order.
+  # --
+  # -- `lan-only` is the network floor shared with every non-public route, and it
+  # -- runs first: an outside request is refused before the forward-auth round trip.
+  # --
+  # -- `authentik-forwardauth` is the gate. Its authentik side is
+  # -- `cluster/helm/authentik/files/app-qbittorrent.yaml`: a `forward_single` proxy
+  # -- provider for this host, bound to the `authentik Admins` group, so a signed-in
+  # -- non-admin is answered 403 instead of being shown this app's page.
+  # --
+  # -- No `/api` exemption, unlike the *arrs: nothing in the cluster reaches this
+  # -- host. cross-seed drives the API at `http://qbittorrent:8080` (its log names
+  # -- the client as `@qbittorrent:8080`), `qbittorrent-exporter` uses the same
+  # -- Service, and every URL autobrr logs is a Service name as well
+  # -- (`radarr:7878`, `sonarr-anime:8989`), with no `kub.local` host anywhere in its
+  # -- logs. API clients never cross Traefik, so an `/api` rule would open a hole
+  # -- nothing needs. Revisit if a client is ever pointed at the hostname.
+  # --
+  # -- The WebUI's own login is bypassed for the pod network, not disabled: since
+  # -- 2026-11-18 `bypass_auth_subnet_whitelist_enabled=true` with
+  # -- `bypass_auth_subnet_whitelist=10.42.0.0/16`, so a browser arriving through
+  # -- Traefik (whose pod address qBittorrent sees) lands straight in the WebUI and
+  # -- this gate is the only prompt, and the only control for anything else on the
+  # -- pod network. Those two preferences live in `qBittorrent.conf` on the config
+  # -- claim, not in this file: re-apply them on a rebuilt volume.
+  # --
+  # -- `bypass_local_auth` stays false, so `kubectl port-forward svc/qbittorrent
+  # -- 8080:8080` still asks for the password. That is the break-glass while
+  # -- authentik is down. Do not remove the gate without restoring the login first.
+  middlewares:
+    - name: lan-only
+      namespace: kube-system
+    - name: authentik-forwardauth
+      namespace: kube-system
+  labels: {}
+  annotations: {}
+  # -- Extra middleware set for an `/api` rule at `priority: 100`. Empty here on
+  # purpose: the paragraphs above are the reason there is no exemption.
+  apiBypassMiddlewares: []
+  tls:
+    # -- Send the router over TLS, from the cluster default certificate
+    # -- (`kube-system/local-cert`). See docs/runbooks/internal-ca.md.
+    enabled: true
+    # -- Use a pre-existing certificate instead of the cluster default.
+    secretName: ""
+    # -- Traefik ACME resolver name, for example `myresolver`.
+    certResolver: ""
+    # -- TLSOption from the `traefik-gate` chart.
+    options: internal-tls
+    # -- Namespace of that TLSOption.
+    optionsNamespace: kube-system
+
+# Three claims, and this chart owns exactly one of them.
+storage:
+  # qBittorrent's own settings, including `qBittorrent.conf` and the VueTorrent
+  # tree under `ui/`. Provisioned by the `nfs-qbittorrent-config` Application, not
+  # by this chart: the name is the live claim, and renaming it is data loss.
+  config:
+    existingClaim: pvc-nfs-qbittorrent-config-nfs-subdir-external-provisioner
+    mountPath: /config
+  # The download export. Same ownership, same warning.
+  downloads:
+    existingClaim: pvc-nfs-qbittorrent-download-nfs-subdir-external-provisioner
+    mountPath: /downloads
+  # The WireGuard keys and `wg_confs/`. This one the chart creates. Left empty,
+  # the name is `<fullname>-vpn-config`, which is the claim the live pod mounts,
+  # so the default is also the no-data-move answer.
+  vpn:
+    claimName: ""
+    className: local-path
+    accessModes:
+      - ReadWriteOnce
+    size: 128Mi
+    mountPath: /config
+
+# The post-start installer for the WebUI. qBittorrent serves VueTorrent's static
+# files from the config claim (`WebUI\RootFolder=/config/ui`), and this init
 # container puts them there: it downloads the release asset only when the
 # `version.txt` sitting in `/config/ui` differs from `version` below, so an
 # ordinary pod restart installs nothing and needs no network.
@@ -72,124 +265,6 @@ vueTorrent:
     limits:
       memory: 64Mi
 
-# The post-download hook calls cross-seed by name. The pod runs with
-# dnsPolicy: None and public resolvers on purpose, so cluster names do not
-# resolve; this alias maps the one name the hook needs without routing the
-# torrent client's DNS through the cluster. It is the cross-seed Service
-# ClusterIP; update it if that Service is recreated.
-crossSeedServiceIP: "10.43.104.9"
-
-imagePullSecrets: []
-nameOverride: ""
-fullnameOverride: ""
-
-serviceAccount:
-  # Specifies whether a service account should be created
-  create: false
-  # Annotations to add to the service account
-  annotations: {}
-  # The name of the service account to use.
-  # If not set and create is true, a name is generated using the fullname template
-  name: ""
-
-podAnnotations:
-  setGateway: "true"
-
-podSecurityContext: {}
-# fsGroup: 2000
-
-securityContext:
-  {}
-  # capabilities:
-  #   drop:
-  #   - ALL
-  # readOnlyRootFilesystem: true
-# runAsNonRoot: true
-# runAsUser: 1000
-
-service:
-  type: ClusterIP
-  # The qBittorrent WebUI listens on 8080, which is also the container port the
-  # Deployment opens and the port the IngressRoute targets by name. This value
-  # was 32400 (Plex's port, left over from the scaffold) and the Service template
-  # ignored it, so the two could disagree without anyone noticing.
-  port: 8080
-
-ingress:
-  # -- Render the two IngressRoutes. Traefik CRDs only: this chart never renders a
-  # networking.k8s.io/v1 Ingress, and the host is not templated because the route
-  # has always had exactly one.
-  enabled: true
-  host: qbittorrent.kub.local
-  # -- Traefik entry points. `websecure` carries the route; `web` only redirects.
-  entryPoints:
-    - websecure
-  # -- Render the plain-HTTP mirror router.
-  redirectToHttps: true
-  # -- Middlewares, rendered as `<namespace>-<name>@kubernetescrd`, in order.
-  # -- `lan-only` is the network floor shared with every non-public route, and it
-  # -- runs first: an outside request is refused before the forward-auth round trip.
-  # --
-  # -- `authentik-forwardauth` is the gate. Its authentik side is
-  # -- `cluster/helm/authentik/files/app-qbittorrent.yaml`: a `forward_single` proxy
-  # -- provider for this host, bound to the `authentik Admins` group, so a signed-in
-  # -- non-admin is answered 403 instead of being shown this app's page.
-  # --
-  # -- No `/api` exemption, unlike the *arrs: nothing in the cluster reaches this
-  # -- host. cross-seed drives the API at `http://qbittorrent:8080` (its log names
-  # -- the client as `@qbittorrent:8080`), `qbittorrent-exporter` uses the same
-  # -- Service, and every URL autobrr logs is a Service name as well
-  # -- (`radarr:7878`, `sonarr-anime:8989`), with no `kub.local` host anywhere in its
-  # -- logs. API clients never cross Traefik, so an `/api` rule would open a hole
-  # -- nothing needs. Revisit if a client is ever pointed at the hostname.
-  # --
-  # -- The WebUI's own login is bypassed for the pod network, not disabled: since
-  # -- 2026-11-18 `bypass_auth_subnet_whitelist_enabled=true` with
-  # -- `bypass_auth_subnet_whitelist=10.42.0.0/16`, so a browser arriving through
-  # -- Traefik (whose pod address qBittorrent sees) lands straight in the WebUI and
-  # -- this gate is the only prompt, and the only control for anything else on the
-  # -- pod network. Those two preferences live in `qBittorrent.conf` on the config
-  # -- claim, not in this file: re-apply them on a rebuilt volume.
-  # --
-  # -- `bypass_local_auth` stays false, so `kubectl port-forward svc/qbittorrent
-  # -- 8080:8080` still asks for the password. That is the break-glass while
-  # -- authentik is down. Do not remove the gate without restoring the login first.
-  middlewares:
-    - name: lan-only
-      namespace: kube-system
-    - name: authentik-forwardauth
-      namespace: kube-system
-  annotations: {}
-  tls:
-    # -- Send the router over TLS, from the cluster default certificate
-    # -- (`kube-system/local-cert`). See docs/runbooks/internal-ca.md.
-    enabled: true
-    # -- TLSOption from the `traefik-gate` chart.
-    options: internal-tls
-    optionsNamespace: kube-system
-# Re-measured 2026-11-18 over the 5 days Prometheus retains: p95 9726Mi, peak 12256Mi
-# (working set, page cache included).
-# The request stays at RSS, not p95: the rest is download page cache.
-resources:
-  requests:
-    cpu: 100m
-    memory: 6Gi
-  limits:
-    memory: 12Gi
-
-# WireGuard in kernel mode: the tunnel's buffers live in the kernel, not in
-# this container. Measured peak is 4MiB memory and 0.02m CPU, so the previous
-# 256Mi/50m reservation was pure over-reservation.
-# Measured 2026-11-18 over 5 days: p95 15Mi, peak 22Mi. The tunnel's buffers
-# live in the kernel and are not charged to the container, so 64Mi is already
-# 2.9x the peak.
-vpnresources:
-  requests:
-    cpu: 10m
-    memory: 16Mi
-  limits:
-    memory: 64Mi
-
 # qBittorrent drops torrents it cannot restore ("Failed to restore torrent")
 # when it starts before the NFS downloads volume answers. Two restarts earlier
 # today lost 8 and 14 torrent entries that way. This init container waits for
@@ -206,14 +281,58 @@ waitForDownloads:
     limits:
       memory: 32Mi
 
-autoscaling:
-  enabled: false
-  minReplicas: 1
-  maxReplicas: 100
-  targetCPUUtilizationPercentage: 80
-  # targetMemoryUtilizationPercentage: 80
+# -- Environment variables, rendered inline into both containers. Changing a
+# value changes the pod template, so the Deployment rolls by itself.
+env:
+  TZ: "Europe/Paris"
+  PUID: "1100"
+  PGID: "1100"
+
+# -- Variables sourced from a Secret, as `{ name, valueFrom }`. Empty: the WebUI
+# credentials live in `qBittorrent.conf` on the config claim, not in a Secret.
+extraEnv: []
+
+# -- Bulk `envFrom` sources. Empty: this chart has no secret to hand the app.
+envFrom: []
+
+# -- Additional volumes, rendered verbatim into the pod spec.
+volumes: []
+
+# -- Additional volume mounts, rendered verbatim into the app container.
+volumeMounts: []
+
+# Re-measured 2026-11-18 over the 5 days Prometheus retains: p95 9726Mi, peak
+# 12256Mi (working set, page cache included).
+# The request stays at RSS, not p95: the rest is download page cache.
+resources:
+  requests:
+    cpu: 100m
+    memory: 6Gi
+  limits:
+    memory: 12Gi
+
+# Probes. qBittorrent exposes **no unauthenticated health endpoint**: the only
+# public API path is `auth/login`, everything else answers 403 without a session,
+# and the auth bypass in `qBittorrent.conf` covers the pod network only — the
+# kubelet's own source address is not guaranteed to be inside it. An HTTP probe
+# would therefore either fail forever or silently start relying on that bypass.
+#
+# The liveness probe is a TCP connect to the WebUI port instead: it fails when the
+# listener is gone, which is what a restart can fix. There is no readiness probe:
+# the process has no dependency that can fail while it answers — the NFS mounts are
+# checked by `wait-for-downloads` at startup, and the torrent session has no status
+# endpoint. The chart README records the same decision in prose.
+probes:
+  liveness:
+    enabled: true
+    port: torrent-webui
+    initialDelaySeconds: 30
+    periodSeconds: 30
+    timeoutSeconds: 5
+    failureThreshold: 3
 
 nodeSelector:
+  # -- Every workload is pinned to a named node; the local-path claim is node-bound.
   kubernetes.io/hostname: streaming
 
 tolerations: []

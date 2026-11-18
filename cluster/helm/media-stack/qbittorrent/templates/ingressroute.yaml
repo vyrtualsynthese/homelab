@@ -1,0 +1,87 @@
+{{- if .Values.ingressRoute.enabled }}
+apiVersion: {{ .Values.ingressRoute.apiVersion }}
+kind: IngressRoute
+metadata:
+  name: {{ include "app.fullname" . }}
+  labels:
+    {{- include "app.labels" . | nindent 4 }}
+    {{- with .Values.ingressRoute.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- with .Values.ingressRoute.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  entryPoints:
+    {{- toYaml .Values.ingressRoute.entryPoints | nindent 4 }}
+  routes:
+    - kind: Rule
+      match: Host(`{{ .Values.ingressRoute.host }}`){{- if ne .Values.ingressRoute.pathPrefix "/" }} && PathPrefix(`{{ .Values.ingressRoute.pathPrefix }}`){{- end }}
+      {{- with .Values.ingressRoute.middlewares }}
+      middlewares:
+        {{- range . }}
+        - name: {{ printf "%s-%s@kubernetescrd" .namespace .name }}
+        {{- end }}
+      {{- end }}
+      services:
+        - name: {{ include "app.fullname" . }}
+          port: {{ .Values.service.port }}
+    {{- with .Values.ingressRoute.apiBypassMiddlewares }}
+    # API path, deliberately without the forward-auth middleware: API clients send
+    # an API key, not a browser session, and cannot complete a sign-in redirect.
+    # Higher priority so it wins over the route above; keep `lan-only` here or the
+    # API becomes reachable from outside the LAN.
+    - kind: Rule
+      match: Host(`{{ $.Values.ingressRoute.host }}`) && PathPrefix(`/api`)
+      priority: 100
+      middlewares:
+        {{- range . }}
+        - name: {{ printf "%s-%s@kubernetescrd" .namespace .name }}
+        {{- end }}
+      services:
+        - name: {{ include "app.fullname" $ }}
+          port: {{ $.Values.service.port }}
+    {{- end }}
+  {{- if .Values.ingressRoute.tls.enabled }}
+  tls:
+    {{- with .Values.ingressRoute.tls.secretName }}
+    secretName: {{ . }}
+    {{- end }}
+    {{- with .Values.ingressRoute.tls.certResolver }}
+    certResolver: {{ . }}
+    {{- end }}
+    {{- with .Values.ingressRoute.tls.options }}
+    options:
+      name: {{ . }}
+      namespace: {{ $.Values.ingressRoute.tls.optionsNamespace | default $.Release.Namespace }}
+    {{- end }}
+  {{- end }}
+{{- if .Values.ingressRoute.redirectToHttps }}
+---
+{{- /* Plain-HTTP mirror: `lan-only` then a permanent redirect. The authentik gate
+lives on the TLS router, not here: this route only answers a redirect, so a
+forward-auth round trip in front of it would cost a hop and change nothing. */}}
+apiVersion: {{ .Values.ingressRoute.apiVersion }}
+kind: IngressRoute
+metadata:
+  name: {{ include "app.fullname" . }}-redirect
+  labels:
+    {{- include "app.labels" . | nindent 4 }}
+    {{- with .Values.ingressRoute.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  entryPoints:
+    - web
+  routes:
+    - kind: Rule
+      match: Host(`{{ .Values.ingressRoute.host }}`){{- if ne .Values.ingressRoute.pathPrefix "/" }} && PathPrefix(`{{ .Values.ingressRoute.pathPrefix }}`){{- end }}
+      middlewares:
+        - name: kube-system-lan-only@kubernetescrd
+        - name: kube-system-redirect-to-https@kubernetescrd
+      services:
+        - name: {{ include "app.fullname" . }}
+          port: {{ .Values.service.port }}
+{{- end }}
+{{- end }}
