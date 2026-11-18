@@ -7,11 +7,11 @@ its replica data is gone; no volume below holds anything worth rescuing, by oper
 The storage driver and its custom resources are already uninstalled, so nothing removes the last
 objects on its own: their finalizers name controllers that no longer exist.
 
-> **Where this stands.** The operator ran phases 1, 3 and 4 on 2026-11-18. Twenty volumes and three
-> claims were cleared, and `longhorn-system` is gone. **What remains is the three claims of phase 2**
-> — `n8n-2`, `syncthing-conf`, `thelounge-volume` — which stay until those three applications are
-> rebuilt off Longhorn. The tables below are the inventory taken before that run, kept as the record
-> of what was removed.
+> **Where this stands.** The operator ran phases 1, 3 and 4 on 2026-11-18. Twenty-three volumes and
+> three claims were cleared, and `longhorn-system` is gone. **What remains is the three claims of
+> phase 2** — `n8n-2`, `syncthing-conf`, `thelounge-volume` — which stay until those three
+> applications are rebuilt off Longhorn. The tables below are the inventory taken before that run,
+> kept as the record of what was removed.
 
 > **Agents cannot run these steps.** The agent's cluster access is read-only and shell `kubectl` is
 > denied, so every cluster-side command here is for the operator. Repo-side items are already merged.
@@ -45,8 +45,9 @@ Deleting the claim object does not stop the running process, but the application
 its next restart and will not start again. They are rebuilt on `local-path` first (Wave A), then
 their claims can go in the same way as the first three.
 
-**This contradicts AGENTS.md §7.4**, which said every application had already been rebuilt. It has
-not: n8n, syncthing and thelounge were never migrated, and nothing else mounts a Longhorn claim.
+AGENTS.md §7.4 said until 2026-11-18 that every application had been rebuilt. It had not: n8n,
+syncthing and thelounge were never migrated, and nothing else mounts a Longhorn claim. §7.4 says so
+now, so the two documents agree.
 
 ### The twenty-six volumes
 
@@ -86,7 +87,9 @@ Every one carries `external-attacher/driver-longhorn-io`. The six `Bound` ones a
 A `Released` volume has no claim left: nothing references it, and clearing it changes nothing at
 runtime.
 
-## Where the eleven affected applications stand
+## Where the ten affected applications stand
+
+The plan calls this list "eleven", but its own table and this one both hold ten.
 
 | Application | Planned disposition | State on 2026-11-18 |
 |---|---|---|
@@ -131,8 +134,9 @@ for ref in media-stack/filebrowser-config media-stack/filebrowser-db-2 monitorin
 done
 ```
 
-If a PV still shows `Terminating` after its claim is gone, it is holding `kubernetes.io/pv-protection`:
-run the same `kubectl patch pv` line once more.
+If a PV is still listed after its claim is gone, read its finalizers before touching it again:
+`kubectl get pv <name> -o jsonpath='{.metadata.finalizers}'`. The patch sets them to nothing, so a
+name that reappears has been re-created, not re-blocked.
 
 Expected: `NotFound` for each volume, and no Longhorn claim left. Match on the storage class, not on
 the name — the rebuilt `filebrowser` application has a `filebrowser-config` claim of its own, on
@@ -147,7 +151,7 @@ The second command prints only the three claims of phase 2.
 
 ### Phase 2 — the three claims still in use: deferred
 
-`n8n-2`, `syncthing-conf` and `thelounge-volume` are mounted by running packs. Do not patch them
+`n8n-2`, `syncthing-conf` and `thelounge-volume` are mounted by running pods. Do not patch them
 here. Rebuild each application on `local-path` (Wave A), confirm the new pod runs on the new claim,
 then run the Phase 1 loop with those three names. Their PVs stay `Bound` until then, which is correct.
 
@@ -185,7 +189,8 @@ kubectl get ns | grep -ci longhorn
 ```
 
 Expected: `3`, `3` and `0`. The two threes are the deferred claims of Phase 2 and their volumes —
-they stay until those applications are rebuilt. Anything counting six means Phase 3 did not run. A
+they stay until those applications are rebuilt. A `6` or `23` on either line means a phase did not
+run — `23` is what the volume count reads when phase 1 worked and phase 3 did not. A
 `1` on the last line is the terminating namespace still in the list; wait and re-run.
 
 ## Found on the way, outside this cleanup
@@ -196,9 +201,12 @@ recipe:
 - **Four externally-provisioned NFS volumes carry a deletion timestamp while still in use**:
   `pv-traefik-nfs` (mounted by `kube-system/traefik-nfs-c8ff497b8-jdgml` and holding the ACME
   certificate store), `pv-plex-media`, `pv-stash-nfs-nfs-stash` and
-  `pv-nfs-qbittorrent-download-nfs-subdir-external-provisioner`. Their claims are `Bound` and pods
-  are reading them now. They have no CSI driver finalizer — only `kubernetes.io/pv-protection` — so
-  a patch that looks identical would delete a live mount. They need their own investigation.
+  `pv-nfs-qbittorrent-download-nfs-subdir-external-provisioner`. Their claims are `Bound` and pods are
+  reading them now. They were asked to delete in December 2023 and are held only by
+  `kubernetes.io/pv-protection` — the guard that every in-use volume carries — and their
+  `spec.csi` is empty, which is the one thing that keeps the phase 3 filter from selecting them.
+  Patch their finalizers away and the live mount goes with the object. They need their own
+  investigation before anyone touches them.
 - **Four `local-path` volumes are `Released`** and hold no claim: `pvc-51a71183…`
   (`calibre-web-automated-config`), `pvc-61023024…` (`pgadmin-config`), `pvc-76b5d66d…`
   (`cross-seed2`), `pvc-801276ae…` (`plex-transcode`). Deleting the objects is safe; the directories
