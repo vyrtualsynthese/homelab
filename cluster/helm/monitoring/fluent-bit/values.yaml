@@ -50,6 +50,20 @@ fluent-bit:
           Keep_Log Off
           K8S-Logging.Parser On
           K8S-Logging.Exclude On
+    # What Loki stores is what a panel reads, and Fluent Bit's default line is the
+    # whole record as JSON. Measured on 2026-11-18: 63 % of every line was that
+    # `kubernetes` block, repeating labels Loki already holds as stream labels
+    # (`labels` 258 B, `annotations` 134 B, `container_hash` 98 B, `docker_id`
+    # 66 B), and another 9 % was the CRI `time`, `stream` and `_p` fields, which
+    # duplicate the record timestamp and the container name. Messages were 26 %.
+    #
+    # `Remove_Keys` strips those from the line only. Labels and structured
+    # metadata are resolved from the record *before* the line is packed —
+    # `pack_labels()` runs ahead of `pack_record()` in the loki output — so
+    # `namespace`, `container`, `node` and `pod` below still resolve. Then
+    # `Drop_Single_Key raw` sends the app's own message unquoted when `log` is
+    # all that is left, while a pod that logs JSON keeps its JSON and Loki keeps
+    # reading its `level` field.
     outputs: |
       [OUTPUT]
           Name loki
@@ -57,6 +71,8 @@ fluent-bit:
           Host loki.monitoring.svc.cluster.local
           Port 3100
           Line_Format json
+          Remove_Keys kubernetes, stream, time, _p
+          Drop_Single_Key raw
           Compress gzip
           Retry_Limit no_limits
           Labels job=fluent-bit, namespace=$kubernetes['namespace_name'], container=$kubernetes['container_name'], node=$kubernetes['host']
