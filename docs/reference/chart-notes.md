@@ -100,7 +100,11 @@ LAN ranges trusted, which is the sonarr pair's setting. `authenticationMethod: n
 turn the login off — `AuthenticationRequired` is checked independently, so `enabled` demands a login
 that no method can satisfy, and Radarr shows its Authentication Required form with no way to fill it.
 Both instances moved from `6.4.4.10685-ls326` to `7.0.3.10918-ls328` on 2026-11-18; the `/api/v3`
-prefix is unchanged in v7, so `exportarr` and the `/api` exemption keep working.
+prefix is unchanged in v7, so `exportarr` and the `/api` exemption keep working. v7 reports one health
+warning per instance, `AllowedHostsCheck`: `0.0.0.0` is a bind address ("every host") and the check
+wants a hostname list whenever `authenticationRequired` is not `Enabled`. It is left as is — a strict
+list would have to name the pod IP the readiness probe sends as its `Host`, and those move with every
+restart.
 
 ### lidarr
 
