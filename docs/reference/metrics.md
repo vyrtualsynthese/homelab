@@ -38,6 +38,35 @@ and image hashes). Log panels unwrap it in the query:
 Labels are `job=fluent-bit`, `namespace`, `container`, `node`; the pod name is
 structured metadata, not a label.
 
+**The media stack's exporters** — the `exportarr` sidecars on `sonarr`,
+`sonarr-anime`, `radarr`, `radarr-anime`, `lidarr` and `prowlarr`, plus
+`qbittorrent-exporter`, the Plex sidecar and FlareSolverr's built-in exporter.
+Measured 2026-11-18: ten targets, 979 series, of which the Media board read 15
+names. Eight of the ten now carry `prometheus.io/scrape_slow` and are scraped
+every 5 minutes; Prometheus drops 731 series at the scrape (see the comment on
+`kubernetes-pods` in `cluster/helm/monitoring/prometheus/values.yaml`). What a
+person needs to know to add a panel:
+
+- **One series per thing, in four of these exporters.** `lidarr_artists_genres_total`
+  is a series per genre (224); Prowlarr publishes ten families per indexer, 20
+  indexers each; qBittorrent writes one series per category (17) and per tag
+  (34); Plex writes one per library item for its top-item, watch-age,
+  resolution and codec families. Those are the dropped ones. The per-app
+  totals (`*_missing_total`, `*_queue_total`, `*_system_health_issues`,
+  `plex_library_items`, `plex_library_storage_bytes`, the four
+  `qbittorrent_global_*` ones the board reads) are single series and stay.
+- **`exportarr` logs one line per API call at INFO**, and a scrape is a dozen
+  calls: 6–14 MB a day per sidecar, the largest log writer in the namespace
+  after `unpackerr`. The sidecar sets `LOG_LEVEL=warn`; a stale API key still
+  shows there as a 500 on `/metrics`, which is what the target's `up` reports.
+- **`plex_session_bandwidth_kbps` exists only while something is playing**, and
+  it is per session (`session`, `user`, `location` labels), which is why the
+  Media board's playback panel is blank at idle. It is not a broken exporter.
+- **FlareSolverr keeps its exporter** even though no panel reads it: its
+  `LOG_LEVEL=warning` costs the per-request log lines, and
+  `flaresolverr_request_total{result="solved"}` is the only numeric record
+  left of what the solver did. 15 series, scraped every 5 minutes.
+
 **qBittorrent** (`martabal/qbittorrent-exporter`, metrics `qbittorrent_*`):
 qBittorrent 5.2 answers `/api/v2/auth/login` with `204 No Content` and sets a
 `QBT_SID_<webui port>` cookie, so the exporter needs
