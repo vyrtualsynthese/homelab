@@ -31,7 +31,7 @@ PersistentVolumeClaim (`sonarr-anime-config`) and one IngressRoute (`sonarr-anim
 |---|---|---|
 | `sonarr-config` | **`sonarr-anime-config`** | Derived from the release name, so the two instances never share a database |
 | `sonarr.kub.local` | **`sonarr-anime.kub.local`** | One host per instance |
-| request `256Mi`, limit `768Mi` | **request `384Mi`, limit `1Gi`** | This library is larger: 302Mi average, 380Mi peak over 30 days |
+| request `256Mi`, limit `768Mi` | **request `1.125Gi`, limit `3Gi`** | This library is larger: p95 1109Mi, peak 1911Mi over the five days Prometheus retains |
 | Secret `sonarr` | **Secret `sonarr-anime`** | Separate API key, separate exporter identity |
 
 The media claims are shared with `sonarr`: both instances import from

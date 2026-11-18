@@ -61,6 +61,8 @@ spec:
           securityContext:
             runAsUser: 1100
             runAsGroup: 1100
+          resources:
+            {{- toYaml .Values.waitForDownloads.resources | nindent 12 }}
           command:
             - sh
             - -c
@@ -82,6 +84,8 @@ spec:
         {{- end }}
         - name: init-qbittorrent
           image: "alpine:{{ .Values.vueTorrent.initTag }}"
+          resources:
+            {{- toYaml .Values.vueTorrent.resources | nindent 12 }}
           env:
             - name: VUETORRENT_REPOSITORY
               value: {{ .Values.vueTorrent.repository | quote }}

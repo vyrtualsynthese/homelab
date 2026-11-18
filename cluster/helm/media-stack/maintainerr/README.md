@@ -43,7 +43,7 @@ helm template maintainerr cluster/helm/media-stack/maintainerr --namespace media
 | `nodeSelector` | Node pin. Every workload is pinned. | `kubernetes.io/hostname: streaming` |
 | `probes.{startup,liveness,readiness}` | HTTP probes on `/api/health/live` and `/api/health/ready`. | enabled |
 | `securityContext` | Container hardening for an image that already runs non-root. | UID/GID 1000, `ALL` dropped, no privilege escalation |
-| `resources` | Scheduler reservation and memory limit. No CPU limit. | `25m`/`256Mi` request, `1Gi` memory limit |
+| `resources` | Scheduler reservation and memory limit. No CPU limit. | `25m`/`352Mi` request, `1.25Gi` memory limit |
 
 ## Image
 

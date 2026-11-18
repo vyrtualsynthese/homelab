@@ -97,13 +97,14 @@ serviceAccount:
   # If not set and create is true, a name is generated using the fullname template
   name:
 
-resources: {}
-  # limits:
-  #  cpu: 100m
-  #  memory: 128Mi
-  # requests:
-  #  cpu: 100m
-  #  memory: 128Mi
+# Measured 2026-11-18 over 5 days, across the provisioners in media-stack:
+# p95 49Mi, peak 99Mi (working set). No CPU limit, per the house rule.
+resources:
+  requests:
+    cpu: 10m
+    memory: 64Mi
+  limits:
+    memory: 192Mi
 
 nodeSelector:
   kubernetes.io/hostname: streaming

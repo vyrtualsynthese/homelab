@@ -74,6 +74,9 @@ securityContext:
 # -- The Go exporter is roughly 20 times smaller than the Java one it replaces,
 # which peaked at 113 MiB. Re-measure after the switch and lower the limit if it
 # stays near the request.
+# Re-measured 2026-11-18 over the 5 days Prometheus retains: p95 16Mi, peak 86Mi
+# (working set, page cache included).
+# 86Mi peak, inside the 128Mi limit; the request and limit stay as they are.
 resources:
   requests:
     cpu: 10m

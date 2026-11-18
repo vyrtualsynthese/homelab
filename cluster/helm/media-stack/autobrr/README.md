@@ -37,7 +37,7 @@ helm template autobrr cluster/helm/media-stack/autobrr --namespace media-stack
 | `nodeSelector` | Node pin. Every workload is pinned. | `kubernetes.io/hostname: streaming` |
 | `probes.{startup,liveness,readiness}` | HTTP probes on autobrr's own endpoints, which live under `/api`. The startup probe gates the other two through a slow first boot. | enabled; startup 5s × 30, liveness 20s delay, readiness 10s delay |
 | `securityContext` | Runs as 1100, drops all capabilities, no privilege escalation. | non-root |
-| `resources` | Scheduler reservation and memory limit, sized from Prometheus. No CPU limit. | `10m`/`192Mi` request, `768Mi` memory limit |
+| `resources` | Scheduler reservation and memory limit, measured on 2026-11-18. No CPU limit. | `10m`/`448Mi` request, `1Gi` memory limit |
 | `podAnnotations` | Extra pod annotations. Carries the Prometheus scrape annotations. | scrape on port 9074, path `/metrics` |
 
 The memory limit is a ceiling, not a target: autobrr holds ~155 MiB and peaks near

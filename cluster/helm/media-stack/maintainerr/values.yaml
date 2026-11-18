@@ -221,12 +221,14 @@ affinity: {}
 # the real ceiling. The 25m request is only there so the scheduler places the pod.
 # Sized from Prometheus on 2026-11-13 over the 39h it holds: 190Mi average and
 # 230Mi peak, against a 512Mi request that reserved twice the app.
+# Re-measured 2026-11-18 over the 5 days Prometheus retains: p95 325Mi, peak 702Mi
+# (working set, page cache included).
 resources:
   requests:
     cpu: 25m
-    memory: 256Mi
+    memory: 352Mi
   limits:
-    memory: 1Gi
+    memory: 1.25Gi
 
 # Probes. This app is the first in the media stack whose health endpoints map
 # cleanly onto the kubelet's two questions, so readiness is real rather than an

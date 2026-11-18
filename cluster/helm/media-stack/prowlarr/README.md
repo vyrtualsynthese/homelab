@@ -38,7 +38,7 @@ helm template prowlarr cluster/helm/media-stack/prowlarr --namespace media-stack
 | `nodeSelector` | Node pin. Every workload is pinned. | `kubernetes.io/hostname: streaming` |
 | `probes.{startup,liveness,readiness}` | HTTP probes on `/ping`. Startup gates the other two through a first start after an upgrade. | enabled; startup 5s × 30, liveness 20s delay, readiness 10s delay |
 | `securityContext` | Container hardening that does not break the LinuxServer init. | no privilege escalation |
-| `resources` | Scheduler reservation and memory limit, sized from Prometheus. No CPU limit. | `10m`/`256Mi` request, `1Gi` memory limit |
+| `resources` | Scheduler reservation and memory limit, sized from Prometheus. No CPU limit. | `10m`/`352Mi` request, `1Gi` memory limit |
 | `exportarr.*` | The metrics sidecar: image, port, API-key Secret reference and resources. See **Metrics** for rotation. | enabled on port 9707 |
 
 ## LinuxServer image and the UID trap

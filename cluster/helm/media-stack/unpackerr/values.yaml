@@ -157,14 +157,16 @@ affinity: {}
 
 # Sized from Prometheus on 2026-11-13 over the 39h it holds: 30Mi average and
 # 460Mi peak — the peak is the extraction children unpacking a large archive,
-# not steady state, and it filled the 512Mi limit to 92%. The limit is now 1Gi so
-# a big archive finishes instead of being killed halfway through.
+# not steady state. The limit is 768Mi, 1.5x the 472Mi peak, so a big archive
+# finishes instead of being killed halfway through.
+# Re-measured 2026-11-18 over the 5 days Prometheus retains: p95 34Mi, peak 472Mi
+# (working set, page cache included).
 resources:
   requests:
     cpu: 10m
     memory: 64Mi
   limits:
-    memory: 1Gi
+    memory: 768Mi
 
 probes:
   liveness:

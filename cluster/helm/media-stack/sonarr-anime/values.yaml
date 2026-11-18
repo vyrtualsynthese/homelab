@@ -207,12 +207,14 @@ exportarr:
     # `sonarr-anime` Secret in the media-stack namespace.
     secretName: ""
     secretKey: secret
+  # Re-measured 2026-11-18 over 5 days, across the eight sidecars: p95 26Mi,
+  # peak 38Mi. 32Mi request, 64Mi limit (peak x 1.5 rounded up).
   resources:
     requests:
       cpu: 2m
-      memory: 56Mi
+      memory: 32Mi
     limits:
-      memory: 112Mi
+      memory: 64Mi
 
 nodeSelector:
   # -- Every workload is pinned to a named node; local-path claims are node-bound.
@@ -234,15 +236,17 @@ affinity: {}
 # capacity is the real ceiling. The 10m request is only there so the scheduler
 # places the pod.
 #
-# The memory limit is about 2.5x the observed peak. The request is above the
+# The memory limit is 1.5x the 2026-11-18 peak. The request is above the
 # average rather than below it, so the scheduler reserves what the app actually
 # holds.
+# Re-measured 2026-11-18 over the 5 days Prometheus retains: p95 1109Mi, peak 1911Mi
+# (working set, page cache included).
 resources:
   requests:
     cpu: 10m
-    memory: 512Mi
+    memory: 1.125Gi
   limits:
-    memory: 2Gi
+    memory: 3Gi
 
 # Probes. `/ping` is Sonarr's own unauthenticated health endpoint and answers
 # `{"status":"OK"}` as soon as the web stack is serving. The API's `/health`

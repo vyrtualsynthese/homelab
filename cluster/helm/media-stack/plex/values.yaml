@@ -182,12 +182,14 @@ metrics:
     capabilities:
       drop:
         - ALL
+  # Re-measured 2026-11-18 over 5 days: p95 19Mi, peak 37Mi. 32Mi request,
+  # 64Mi limit (peak x 1.5 rounded up).
   resources:
     requests:
       cpu: 10m
-      memory: 64Mi
+      memory: 32Mi
     limits:
-      memory: 128Mi
+      memory: 64Mi
 
 ingress:
   # -- Render the public Traefik routes. This is the lab's only internet-facing
@@ -289,6 +291,9 @@ affinity: {}
 # The request is what the scheduler reserves, so it follows the measured steady
 # state (2GiB), not the limit. CPU has no limit: the node has 25GiB free and a
 # limit would throttle a library scan without protecting anything.
+# Re-measured 2026-11-18 over the 5 days Prometheus retains: p95 1792Mi, peak 1932Mi
+# (working set, page cache included).
+# Kept at the 30-day figures above: that window is the better evidence, so neither number moves.
 resources:
   requests:
     cpu: 100m

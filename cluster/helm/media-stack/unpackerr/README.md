@@ -44,7 +44,7 @@ helm lint cluster/helm/media-stack/unpackerr --namespace media-stack
 | `instances.*` | four blocks | Starr instances, one block per app and index. |
 | `downloads.existingClaim` | qBittorrent's NFS claim | Where completed downloads live. The chart does not create it. |
 | `downloads.mountPath` | `/downloads` | Must match the paths the *arr apps report. |
-| `resources.*` | `10m`/`64Mi` request, `1Gi` limit | See [Resources](#resources). |
+| `resources.*` | `10m`/`64Mi` request, `768Mi` limit | See [Resources](#resources). |
 | `probes.liveness` | enabled, `GET /` | Process check, see [Probes](#probes). |
 | `probes.readiness` | disabled | See [Probes](#probes). |
 | `securityContext` | UID/GID 1100, no escalation, all caps dropped | See [Security](#security). |
@@ -183,9 +183,9 @@ extraction matters, check the queue rather than grepping for it.
 
 ## Resources
 
-Measured on 2026-11-13: 15 MiB idle and about 0.02m CPU, with a 460 MiB burst while the extraction
-children ran. The request (`64Mi`, `10m`) covers idle plus margin; the `1Gi` limit leaves room over
-that burst, because 92 % of the old `512Mi` limit risked killing a large archive.
+Measured on 2026-11-18 over the five days Prometheus retains: p95 34Mi, peak 472Mi, the peak being
+the extraction children unpacking a large archive. The request (`64Mi`, `10m`) covers idle plus
+margin; the `768Mi` limit is peak x 1.5, so a big archive finishes instead of being killed halfway.
 
 Check `kubectl top pod` during a real extraction burst and adjust if it climbs. Any non-zero request
 also keeps the pod out of the `BestEffort` class, where it spent its first 60 days — `BestEffort` pods

@@ -104,10 +104,12 @@ nodeSelector:
 tolerations: []
 affinity: {}
 
+# Re-measured 2026-11-18 over the 5 days Prometheus retains: p95 130Mi, peak 323Mi
+# (working set, page cache included).
 resources:
   requests:
     cpu: 50m
-    memory: 128Mi
+    memory: 160Mi
   limits:
     # No CPU limit, so torrent parsing is never throttled.
     memory: 512Mi

@@ -109,15 +109,15 @@ debugging, then put it back.
 
 ## Resources
 
-Sized from Prometheus, 30 days on `streaming`:
+Sized from Prometheus on 2026-11-18, over the five days it retains:
 
 | Measure | Value |
 |---|---|
-| memory working set | p50 322MiB, p95 325MiB, max 336MiB |
-| CPU (5m rate) | p95 1m, max 5m |
+| memory working set | p95 286MiB, max 733MiB |
+| CPU (5m rate) | p95 1m, max 23m |
 
 Requests are 10m CPU and 320Mi memory, following the measured steady state. The memory limit is
-512Mi — about 1.5× the observed peak, with the file cache as the first thing the kernel reclaims.
+1.25Gi — peak x 1.5, with the file cache as the first thing the kernel reclaims.
 There is no CPU limit: a limit would throttle a poster burst or a library scan without protecting
 anything. The app has never been OOM-killed.
 

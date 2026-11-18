@@ -198,12 +198,14 @@ exportarr:
     # the `prowlarr` Secret in the media-stack namespace.
     secretName: ""
     secretKey: secret
+  # Re-measured 2026-11-18 over 5 days, across the eight sidecars: p95 26Mi,
+  # peak 38Mi. 32Mi request, 64Mi limit (peak x 1.5 rounded up).
   resources:
     requests:
       cpu: 2m
-      memory: 56Mi
+      memory: 32Mi
     limits:
-      memory: 112Mi
+      memory: 64Mi
 
 nodeSelector:
   # -- Every workload is pinned to a named node; local-path claims are node-bound.
@@ -222,12 +224,14 @@ affinity: {}
 # short burst this app needs during an indexer sync, and the node's capacity is
 # the real ceiling. The 10m request is only there so the scheduler places the pod.
 #
-# The memory limit is roughly 4x the observed peak — headroom for a large indexer
+# The memory limit is 1.5x the 2026-11-18 peak — headroom for a large indexer
 # sync, with file cache as the first thing the kernel reclaims under pressure.
+# Re-measured 2026-11-18 over the 5 days Prometheus retains: p95 339Mi, peak 678Mi
+# (working set, page cache included).
 resources:
   requests:
     cpu: 10m
-    memory: 256Mi
+    memory: 352Mi
   limits:
     memory: 1Gi
 

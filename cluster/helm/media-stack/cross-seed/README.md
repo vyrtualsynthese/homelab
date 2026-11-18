@@ -48,7 +48,7 @@ helm template cross-seed cluster/helm/media-stack/cross-seed --namespace media-s
 | `storage.*` | The config claim: class, size, mount path, or reuse an existing claim. | `local-path`, `128Mi`, `/config` |
 | `configFile.*` | The Secret holding `config.js`, its key, and where it mounts. | Secret `cross-seed`, key `config.js`, `/config/config.js` |
 | `probes.*` | Liveness on `/api/ping`; readiness disabled on purpose. | liveness on, 20s/30s |
-| `resources.*` | Requests and limits. There is a memory limit but no CPU limit, so torrent parsing is never throttled. | `50m`/`128Mi` request, `512Mi` limit |
+| `resources.*` | Requests and limits. There is a memory limit but no CPU limit, so torrent parsing is never throttled. | `50m`/`160Mi` request, `512Mi` limit |
 | `securityContext` | Runs as UID/GID 1100, drops all capabilities, no privilege escalation. | non-root |
 | `podSecurityContext` | `seccompProfile: RuntimeDefault`. No `fsGroup`: it does nothing on a hostPath-backed claim. | seccomp default |
 | `nodeSelector` | Node pin. Every workload is pinned. | `kubernetes.io/hostname: streaming` |

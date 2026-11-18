@@ -204,15 +204,17 @@ affinity: {}
 # ceiling. Reserving a token 10m is enough for the scheduler to place the pod
 # honestly; the app is idle the rest of the day.
 #
-# The memory limit is roughly 2.5x the observed peak on purpose — headroom for
+# The memory limit is 1.5x the 2026-11-18 peak on purpose — headroom for
 # a large announce burst or a database rebuild, with the file cache as the first
 # thing the kernel reclaims under pressure.
+# Re-measured 2026-11-18 over the 5 days Prometheus retains: p95 417Mi, peak 681Mi
+# (working set, page cache included).
 resources:
   requests:
     cpu: 10m
-    memory: 192Mi
+    memory: 448Mi
   limits:
-    memory: 768Mi
+    memory: 1Gi
 
 # Probes. The paths include the /api prefix — autobrr serves them under /api,
 # and a probe without it returns 404 and restarts the pod forever.

@@ -139,12 +139,14 @@ affinity: {}
 # Each challenge starts one Chromium process, so the ceiling is a browser peak and
 # not the idle footprint (about 130Mi). One request at a time fits comfortably; two
 # overlapping requests need more headroom than this limit.
+# Re-measured 2026-11-18 over the 5 days Prometheus retains: p95 382Mi, peak 912Mi
+# (working set, page cache included).
 resources:
   requests:
     cpu: 10m
-    memory: 256Mi
+    memory: 416Mi
   limits:
-    memory: 1Gi
+    memory: 1.5Gi
 
 # Probes. `/health` is FlareSolverr's own health endpoint: it answers 200 while the
 # process is serving. Unlike `/`, it is not written to the log, so a 30s liveness

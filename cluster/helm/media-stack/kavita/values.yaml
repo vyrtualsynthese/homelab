@@ -181,12 +181,14 @@ affinity: {}
 # short burst this app needs while generating a chapter's page cache, and the
 # node's capacity is the real ceiling. The 15m request is only there so the
 # scheduler places the pod.
+# Re-measured 2026-11-18 over the 5 days Prometheus retains: p95 550Mi, peak 954Mi
+# (working set, page cache included).
 resources:
   requests:
     cpu: 15m
-    memory: 256Mi
+    memory: 576Mi
   limits:
-    memory: 1Gi
+    memory: 1.5Gi
 
 # Probes. `/api/health` is Kavita's unauthenticated health endpoint and answers
 # as soon as the web stack is serving; `/` would answer too but redirects into

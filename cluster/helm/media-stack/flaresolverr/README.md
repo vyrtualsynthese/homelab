@@ -53,7 +53,7 @@ It renders three objects: the Deployment, a ClusterIP Service on port 8191, and 
 | `env` | Non-secret variables, rendered **inline** into the container. Changing one rolls the pod. | `TZ`, `LOG_LEVEL: warning` |
 | `extraEnv` | Variables sourced from a Secret, as `{ name, valueFrom }`. | `[]` |
 | `nodeSelector` | Node pin. Every workload is pinned. | `kubernetes.io/hostname: streaming` |
-| `resources` | Memory request and limit. | `256Mi` request, `1Gi` limit |
+| `resources` | Memory request and limit. | `416Mi` request, `1.5Gi` limit |
 | `probes.{liveness,readiness}` | HTTP probes on `/health`. | enabled |
 | `serviceAccount.{create,automount}` | Dedicated account, no mounted token. | `true`, `false` |
 | `securityContext`, `podSecurityContext` | Non-root UID 1000, capabilities dropped, no privilege escalation, seccomp `RuntimeDefault`, `fsGroup` for the `/tmp` volume. See **Hardening**. | pinned |

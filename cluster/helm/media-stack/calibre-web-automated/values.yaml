@@ -196,12 +196,14 @@ probes:
 # purpose: a PDF-to-EPUB conversion runs Calibre and Ghostscript at once, and that
 # is the peak. There is no CPU limit, per the house rule — the node's capacity is
 # the real ceiling — and the small request exists so the scheduler places the pod.
+# Re-measured 2026-11-18 over the 5 days Prometheus retains: p95 465Mi, peak 789Mi
+# (working set, page cache included).
 resources:
   requests:
     cpu: 25m
-    memory: 512Mi
+    memory: 480Mi
   limits:
-    memory: 2Gi
+    memory: 1.25Gi
 
 nodeSelector:
   # -- Every workload is pinned to a named node; local-path claims are node-bound
