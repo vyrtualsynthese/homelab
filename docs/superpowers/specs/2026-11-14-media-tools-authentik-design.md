@@ -358,13 +358,11 @@ Consequence to accept: every client needs the private root installed, and anythi
 ### 12.5 What is finished and what is not
 
 Finished and verified live: sonarr, radarr, lidarr, prowlarr, bazarr, bazarr-anime, tautulli,
-maintainerr, autobrr (OIDC), calibre (OIDC over TLS, signed in from the button on 2026-11-15) and kavita
-(OIDC) — with the two bazarrs exempting `/api`.
+maintainerr, autobrr (OIDC), calibre (OIDC over TLS, signed in from the button on 2026-11-15), kavita
+(OIDC) and qBittorrent (§12.6) — with the two bazarrs exempting `/api`.
 
 Not finished:
 
-- **qbittorrent** is not gated. Its `templates/ingress.yaml` is hand-written rather than the shared
-  `ingressroute.yaml`, so a middleware list must be added there before the values can carry one.
 - **tautulli** still asks for its own login. Its web auth has no API command; it is a UI toggle
   under Settings → Web Interface.
 - ~~The other six tools' APIs are still gated.~~ **Done on 2026-11-15**: every chart on the shared
@@ -376,3 +374,22 @@ Not finished:
 
 The operational detail — recipes, recovery, and the seven traps that cost the most time — is in
 `docs/runbooks/authentik-apps.md`, section "Media tools behind the gate".
+
+### 12.6 qBittorrent joined the gated set, without an `/api` exemption (2026-11-18)
+
+The last ungated entry in §12.5. The design's premise was out of date: `templates/ingress.yaml` has
+rendered `ingress.middlewares` since the TLS work, so the change was two lines in `values.yaml` —
+`authentik-forwardauth` after `lan-only` — plus the comment that had recorded the old decision. The
+authentik side needed nothing: `files/app-qbittorrent.yaml` already defined the `forward_single`
+provider for `https://qbittorrent.kub.local` and bound the application to the `authentik Admins` group,
+and the embedded outpost already listed the provider.
+
+No `apiBypassMiddlewares` block, and the reason is evidence rather than preference: no client in the
+cluster reaches this host. cross-seed drives the WebUI API at `http://qbittorrent:8080` and names its
+client as `@qbittorrent:8080` in its own log; `qbittorrent-exporter` uses the same Service; every URL
+autobrr logs is a Service name (`radarr:7878`, `sonarr-anime:8989`) and no `kub.local` host appears
+anywhere in its log. An `/api` rule would have opened a path that nothing walks.
+
+qBittorrent keeps its own WebUI login on purpose: behind the gate it is a second prompt for an admin,
+and it is the way in while authentik is down. Turning it off (Preferences → Web UI) is a later,
+deliberate step, taken once this route is proven.
