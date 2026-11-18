@@ -223,34 +223,45 @@ the VueTorrent installer's traps are recorded above its values block.
 
 ### ashuvidz-website
 
-As of 2026-11-18: the public site, and the one public chart taken through the pass — its routes were
-left byte for byte, which is the rule for a public-facing chart: ingress, TLS and auth belong to W5
-and W7, and a contract pass is not permission to redesign them.
+As of 2026-11-18: the public site, the one public chart taken through the pass, and the one that went
+from a wrapper to a hand-written chart inside the same day. Its routes were left byte for byte, which
+is the rule for a public-facing chart: ingress, TLS and auth belong to W5 and W7, and a contract pass
+is not permission to redesign them.
 
-It is a wrapper (pattern D) around the Bitnami `nginx` chart, so seven objects render and only two
-templates are written here, the pair of IngressRoutes. Everything else — Deployment, Service,
-ServiceAccount, NetworkPolicy, PodDisruptionBudget — comes from upstream values. That buys the one
-mechanism a static site needs and would otherwise be hand-written: an init container that clones the
-content repository into an `emptyDir`, and a sidecar that `git pull`s it every 60 seconds. A content
-push to `vyrtualsynthese/ashuvidz-website` is live in about a minute, with no build, no image and no
-sync. The chart README carries that flow, because "someone built it once" was the state the card
-found.
+**Why it stopped wrapping.** The chart was pattern D around `bitnamicharts/nginx`, and that chart
+pins `bitnami/nginx:1.28.0-debian-12-r0`. Bitnami then moved every versioned tag to the frozen
+`bitnamilegacy/*` namespace and publishes only `latest` under `bitnami/*`, so the tag stopped
+resolving. The failure stayed invisible while the only pod that needed the image was on `nas`, which
+had it cached since before the move; pinning the pod to `nuc0` is what exposed it, as
+`Init:ImagePullBackOff`. Repointing at `bitnamilegacy` restored service, but that archive takes no
+security fixes, and this is a public web server. The chart now owns its Deployment: six objects
+render from five templates, and `helm dependency build` is no longer part of rendering it.
 
-What the pass changed: `resourcesPreset: nano` became an explicit block measured against 5 days of
-Prometheus — nginx 24Mi p95, 24Mi peak, and the git syncer 21Mi / 25Mi — with the nginx limit left at
-128Mi because the same block also covers a `git clone` init container too short-lived to be scraped,
-and `ephemeral-storage` kept because `/app` is a clone on disk and one bad clone should not fill the
-node; the pod is pinned
-to `nuc0`, where the other small front ends live; `appVersion` now matches the image tag; and the
-leftover `metrics.serviceMonitor` / `metrics.prometheusRule` flags, true while the exporter was off
-and no Prometheus Operator exists, are false.
+**What it is now.** `nginxinc/nginx-unprivileged:1.31.7-alpine` — the nginx team's non-root build on
+8080 — plus `alpine/git` for the two containers that move content: an init container that clones
+`vyrtualsynthese/ashuvidz-website` into an `emptyDir` at `/site`, and a sidecar that pulls it every
+60 s with `--ff-only`. A content push is live in about a minute, with no build, no image and no sync.
+The chart's own `nginx.conf` is in a ConfigMap, mounted with `subPath` and hashed into a
+`checksum/config` annotation so an edit rolls the pod.
 
-Probes are the honest pair for files: readiness on `/`, which *is* the site, and liveness on a TCP
-connect to the HTTP port. A bad content push leaves the pod `0/1 Ready` instead of restarting it.
+Probes are the honest pair for files, and now both endpoints are the chart's to choose: liveness on
+`/healthz`, a `return 200` in the config, so a half-finished clone can never restart nginx; readiness
+on `/`, which *is* the site, so a failed clone leaves the pod `0/1 Ready`. The init container also
+fails when `index.html` is missing, so a blank site never presents as healthy.
 
-Debt: the exporter stays off, since exporters are turned on one chart at a time; and nginx's access
-log runs at its default level — no value in the wrapped chart exposes it — so per-request lines still
-reach Loki. Both are recorded in the chart README rather than invented away.
+Hardening is total because the image allows it: UID 101 for all three containers, `fsGroup` on two
+`emptyDir`s (where the kubelet does apply it, unlike `local-path`), dropped capabilities, no privilege
+escalation, `RuntimeDefault` seccomp, read-only root filesystem with nginx's temp paths moved into an
+`emptyDir`, `/site` mounted read-only into nginx, dotfiles denied so `/.git` is not downloadable, and
+no ServiceAccount token.
+
+Sizing carried over: nginx 24Mi p95 / 24Mi peak from the 5-day window, request 32Mi, limit 128Mi
+because the clone init container has no sample to size from; the content containers take the
+displaced syncer's 21Mi / 25Mi as their stand-in. The pod stays on `nuc0`.
+
+Debt: the access log is on — on a public host the request record is the only evidence of what
+arrived, and the error log is the part that runs at `warn` — and there is no metrics exporter, which
+is the chart-at-a-time metrics work the repo has not reached here.
 
 ## Charts still to align
 

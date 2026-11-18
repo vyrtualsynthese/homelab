@@ -19,6 +19,16 @@
       "matchStrings": [
         "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)\\n\\s*(?:version|initTag): \"?(?<currentValue>[^\"\\n]+?)\"?\\s*\\n"
       ]
+    },
+    {
+      "customType": "regex",
+      "description": "The ashuvidz-website chart pins its two images (nginx and the git helper) under a `tag:` key in values.yaml, which Renovate's docker manager does not read from Helm values.",
+      "fileMatch": [
+        "^cluster/helm/ashuvidz-website/values\\.yaml$"
+      ],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)\\n\\s*tag: \"?(?<currentValue>[^\"\\n]+?)\"?\\s*\\n"
+      ]
     }
   ],
   "argocd": {

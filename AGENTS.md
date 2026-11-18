@@ -165,7 +165,7 @@ done
 
 Charts that need `helm dependency build`: `monitoring/prometheus`, `monitoring/grafana`,
 `monitoring/loki`, `monitoring/fluent-bit`, `authentik`, `dashy`, `filebrowser`,
-`ashuvidz-website`, `databases/pgadmin`, `discourse`.
+`databases/pgadmin`, `discourse`.
 
 Check that ArgoCD references resolve (CRLF-safe):
 

@@ -1,0 +1,69 @@
+{{- if .Values.ingressRoute.enabled }}
+apiVersion: {{ .Values.ingressRoute.apiVersion }}
+kind: IngressRoute
+metadata:
+  name: {{ default .Release.Name .Values.ingressRoute.name }}
+  labels:
+    {{- include "app.labels" . | nindent 4 }}
+    {{- with .Values.ingressRoute.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- with .Values.ingressRoute.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  entryPoints:
+    {{- toYaml .Values.ingressRoute.entryPoints | nindent 4 }}
+  routes:
+    - kind: Rule
+      match: Host(`{{ .Values.ingressRoute.host }}`) && PathPrefix(`{{ .Values.ingressRoute.pathPrefix }}`)
+      {{- with .Values.ingressRoute.middlewares }}
+      middlewares:
+        {{- range . }}
+        - name: {{ .name }}
+          namespace: {{ .namespace }}
+        {{- end }}
+      {{- end }}
+      services:
+        - name: {{ include "app.fullname" . }}
+          port: {{ .Values.service.port }}
+  {{- with .Values.ingressRoute.tls }}
+  tls:
+    {{- with .certResolver }}
+    certResolver: {{ . }}
+    {{- end }}
+    {{- with .secretName }}
+    secretName: {{ . }}
+    {{- end }}
+  {{- end }}
+{{- if .Values.ingressRoute.redirectToHttps }}
+---
+{{- /* Plain-HTTP router, kept as the cluster already ran it: Traefik's no-op
+service sends the answer back as a redirect from the `redirect-https`
+middleware, so nothing is proxied and no backend has to be up. */}}
+apiVersion: {{ .Values.ingressRoute.apiVersion }}
+kind: IngressRoute
+metadata:
+  name: {{ default .Release.Name .Values.ingressRoute.name }}-redirect
+  labels:
+    {{- include "app.labels" . | nindent 4 }}
+    {{- with .Values.ingressRoute.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  entryPoints:
+    - web
+  routes:
+    - kind: Rule
+      match: Host(`{{ .Values.ingressRoute.host }}`)
+      middlewares:
+        {{- range .Values.ingressRoute.redirect.middlewares }}
+        - name: {{ .name }}
+          namespace: {{ .namespace }}
+        {{- end }}
+      services:
+        - kind: TraefikService
+          name: noop@internal
+{{- end }}
+{{- end }}
