@@ -22,6 +22,30 @@ vpnimage:
 # `version.txt` sitting in `/config/ui` differs from `version` below, so an
 # ordinary pod restart installs nothing and needs no network.
 #
+# The pairing with qBittorrent is not optional and nothing enforces it: the app
+# serves `<RootFolder>/public`, so `WebUI\RootFolder` must stay `/config/ui`, the
+# folder this installer fills. When that file is missing, qBittorrent answers the
+# next request for `index.html` by writing `AlternativeUIEnabled=false` to its own
+# config and serving the stock WebUI (`webapplication.cpp`, the `INDEX_HTML`
+# branch). That is how a hand-flattened tree on 2026-11-18 silently reverted to the
+# default UI while the files were perfectly fine.
+#
+# Two traps in one, both paid for that day: the names in `qBittorrent.conf` are not
+# the names the WebUI API takes, and `setPreferences` answers `200` to a name it
+# does not know, so a wrong guess reads like success.
+#
+#     qBittorrent.conf                  API JSON
+#     WebUI\AlternativeUIEnabled        alternative_webui_enabled
+#     WebUI\RootFolder                  alternative_webui_path
+#     WebUI\AuthSubnetWhitelistEnabled  bypass_auth_subnet_whitelist_enabled
+#     WebUI\AuthSubnetWhitelist         bypass_auth_subnet_whitelist
+#
+# Recovery, run from the pod's own address so the auth whitelist covers it, then
+# read back with `GET /api/v2/app/preferences` rather than trusting the `200`:
+#
+#     curl -X POST "http://$(hostname -i):8080/api/v2/app/setPreferences" \
+#       --data-urlencode 'json={"alternative_webui_enabled":true,"alternative_webui_path":"/config/ui"}'
+#
 # Renovate reads the two `# renovate:` annotations: the first moves `version`,
 # the second keeps the installer's Alpine base off a floating tag. Each
 # `depName` must stay equal to the value on the line under it.
