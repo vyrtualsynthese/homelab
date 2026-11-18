@@ -73,16 +73,14 @@ kubectl -n argocd annotate application argocd-root argocd.argoproj.io/refresh=no
 (read-only). Today it is Calibre alone.
 
 **Links that will break.** Anything pointing at `https://calibre.kub.local` stops working, and the
-old UI is gone at the same time. Dashy's configuration lives in a Secret, not in git:
+old UI is gone at the same time. The Dashy tile is in git: `cluster/helm/dashy/files/conf.yml`,
+rendered into the `dashy-conf` Secret by `templates/secret-config.yaml`. Never edit the Secret in the
+cluster — ArgoCD owns it and `selfHeal` reverts the change. Change the tile in that file and bump
+`dashy.kub.local/config` in `cluster/helm/dashy/values.yaml` in the same commit; the Secret is
+mounted with `subPath`, so without the bump the running page keeps serving the old config.
 
-```bash
-kubectl -n dashy get secret dashy-conf \
-  -o go-template='{{range $k, $v := .data}}{{$k}}={{$v | base64decode}}{{"\n"}}{{end}}' \
-  | grep -n calibre
-```
-
-Expect one tile, on `https://calibre.kub.local`. Change it to `http://calibre.kub.local` now or in
-Dashy's UI after the switch; also check phone home-screen shortcuts. The `calibre-gui.kub.local`
+Expect one tile on `https://calibre.kub.local`; change it to `http://calibre.kub.local` now, and
+check phone home-screen shortcuts. The `calibre-gui.kub.local`
 host disappears with the old Ingress and has no replacement: the KasmVNC desktop is the thing being
 retired.
 
