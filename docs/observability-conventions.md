@@ -122,9 +122,10 @@ Grafana's own data: where they live, and what that costs, is in
   (Docker). They carry no `node` label, only `instance`, so dashboards label
   them by IP or map the IP to a name.
 - **Loki and Grafana are static jobs too**, `loki.monitoring.svc:3100` and
-  `grafana.monitoring.svc:3000`, added on 2026-11-18. They publish the stack's
+  `grafana.monitoring.svc:80`, added on 2026-11-18. They publish the stack's
   own health (`loki_*` push failures, `grafana_*` rule-evaluation failures),
-  which nothing scraped before.
+  which nothing scraped before. Scrape the **Service** port: Grafana listens on
+  3000 in the container but its Service exposes only 80, so `:3000` times out.
 - **mktxp is annotation discovery**, like the in-cluster exporters: one pod with
   `prometheus.io/scrape` on port 49090, and 838 series for the two switches on
   2026-11-18. An unreachable switch publishes nothing rather than `up == 0`.
