@@ -112,9 +112,10 @@ in the `lidarr` Secret is stale or the pod has not been restarted since it was p
 
 ## Resources, measured
 
-Measured against Prometheus on 2026-11-13: a 930 MiB peak, which filled the old 1 GiB limit to 93 %.
-The request is `10m` CPU and `512Mi` memory, the limit `2Gi`, so a full library scan has headroom.
-Re-measure when the image or the library changes; the record is `docs/reference/chart-sizing.md`.
+Measured against Prometheus on 2026-11-18 over the five days it retains: memory p95 1104Mi, peak
+1836Mi. The request is `10m` CPU and `1.125Gi` memory, the limit `2.75Gi` — peak x 1.5. The 2026-11-13
+pass, on a shorter window, had recorded a 930Mi peak; the library scan now reaches further. Re-measure
+when the image or the library changes; the record is `docs/reference/chart-sizing.md`.
 
 ## Upgrading and rolling back
 

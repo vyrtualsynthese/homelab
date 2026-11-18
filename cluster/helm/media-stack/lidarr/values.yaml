@@ -209,12 +209,14 @@ exportarr:
     # `lidarr` Secret in the media-stack namespace.
     secretName: ""
     secretKey: secret
+  # Re-measured 2026-11-18 over 5 days, across the eight sidecars: p95 26Mi,
+  # peak 38Mi. 32Mi request, 64Mi limit (peak x 1.5 rounded up).
   resources:
     requests:
       cpu: 2m
-      memory: 56Mi
+      memory: 32Mi
     limits:
-      memory: 112Mi
+      memory: 64Mi
 
 nodeSelector:
   # -- Every workload is pinned to a named node; local-path claims are node-bound.
@@ -237,12 +239,14 @@ affinity: {}
 # short burst this app needs during an import or a library scan, and the node's
 # capacity is the real ceiling. The 10m request is only there so the scheduler
 # places the pod.
+# Re-measured 2026-11-18 over the 5 days Prometheus retains: p95 1104Mi, peak 1836Mi
+# (working set, page cache included).
 resources:
   requests:
     cpu: 10m
-    memory: 512Mi
+    memory: 1.125Gi
   limits:
-    memory: 2Gi
+    memory: 2.75Gi
 
 # Probes. `/ping` is Lidarr's own unauthenticated health endpoint. It is a
 # stronger check than a plain process ping: PingController reads the config

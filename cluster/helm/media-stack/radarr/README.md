@@ -67,7 +67,7 @@ rendering.
 | `env` | Non-secret variables, rendered inline into the container. Changing one rolls the pod. | `TZ`, `PUID`, `PGID`, log level |
 | `exportarr.*` | The metrics sidecar. See **Metrics**. | enabled on port 9707 |
 | `probes.{startup,liveness,readiness}` | HTTP probes on `/ping`. | enabled; startup 5s × 60, liveness 20s delay, readiness 10s delay |
-| `resources.*` | Scheduler reservation and memory limit, sized from Prometheus. No CPU limit. | `10m`/`256Mi` request, `1Gi` memory limit |
+| `resources.*` | Scheduler reservation and memory limit, measured on 2026-11-18. No CPU limit. | `10m`/`288Mi` request, `768Mi` memory limit |
 | `securityContext` | Container hardening that does not break the LinuxServer init. | no privilege escalation |
 | `nodeSelector` | Node pin. Every workload is pinned, and the config claim is node-bound. | `kubernetes.io/hostname: streaming` |
 

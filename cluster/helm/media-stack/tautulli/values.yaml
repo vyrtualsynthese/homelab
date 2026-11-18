@@ -184,10 +184,12 @@ affinity: {}
 # real ceiling. The 10m request is only there so the scheduler places the pod.
 # Sized from Prometheus on 2026-11-13 over the 39h it holds: 120Mi average and
 # 120Mi peak, against a 256Mi request and a 1Gi limit.
+# Re-measured 2026-11-18 over the 5 days Prometheus retains: p95 135Mi, peak 334Mi
+# (working set, page cache included).
 resources:
   requests:
     cpu: 10m
-    memory: 128Mi
+    memory: 160Mi
   limits:
     memory: 512Mi
 

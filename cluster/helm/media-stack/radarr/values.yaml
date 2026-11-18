@@ -163,12 +163,14 @@ exportarr:
     # -- Secret holding Radarr's API key. Empty means the fullname.
     secretName: ""
     secretKey: secret
+  # Re-measured 2026-11-18 over 5 days, across the eight sidecars: p95 26Mi,
+  # peak 38Mi. 32Mi request, 64Mi limit (peak x 1.5 rounded up).
   resources:
     requests:
       cpu: 2m
-      memory: 56Mi
+      memory: 32Mi
     limits:
-      memory: 112Mi
+      memory: 64Mi
 
 nodeSelector:
   # -- Every workload is pinned; local-path claims are node-bound.
@@ -179,14 +181,15 @@ affinity: {}
 
 # Sized from Prometheus over 30 days: 257Mi peak working set, 20m peak CPU.
 # No CPU limit, here or anywhere in this cluster: a limit throttles the short
-# burst an import or a library scan needs. The memory limit is about 4x the
-# observed peak.
+# burst an import or a library scan needs. The memory limit is 1.6x the 2026-11-18 peak.
+# Re-measured 2026-11-18 over the 5 days Prometheus retains: p95 276Mi, peak 477Mi
+# (working set, page cache included).
 resources:
   requests:
     cpu: 10m
-    memory: 256Mi
+    memory: 288Mi
   limits:
-    memory: 1Gi
+    memory: 768Mi
 
 # Probes on `/ping`, Radarr's own unauthenticated health endpoint.
 # Liveness and readiness share it on purpose: the only dependency is the SQLite

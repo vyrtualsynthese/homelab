@@ -51,7 +51,7 @@ the redirect Middleware (`kavita-redirect-https`) and the TLSOption (`kavita-tls
 | `nodeSelector` | Node pin. Every workload is pinned. | `kubernetes.io/hostname: streaming` |
 | `probes.{startup,liveness,readiness}` | HTTP probes on `/api/health`. Startup gates liveness through a first boot on a fresh `/config`. | enabled; startup 10s × 60, liveness 20s delay, readiness **disabled** |
 | `securityContext` | Container hardening, including the capability set the LinuxServer init needs and the read-only root filesystem. | no privilege escalation, not privileged, `ALL` dropped except `CHOWN`/`SETUID`/`SETGID`, read-only root filesystem with `emptyDir` at `/run` and `/tmp` |
-| `resources` | Scheduler reservation and memory limit. No CPU limit. | `15m`/`256Mi` request, `1Gi` memory limit |
+| `resources` | Scheduler reservation and memory limit. No CPU limit. | `15m`/`576Mi` request, `1.5Gi` memory limit |
 
 ## Image
 
