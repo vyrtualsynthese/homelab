@@ -1,0 +1,202 @@
+/* AshuLab identity for every documentation site the builder renders.
+ *
+ * Palette and mark come from assets/branding/ashulab/ in the homelab repository:
+ *   navy #0B1220, cyan #2DD4FF, deep cyan #0E7490, paper #E8EEF5.
+ * No magenta and no orange: those belong to Ashuvidz.
+ *
+ * The builder publishes this file at /brand/ashulab.css and every page links it,
+ * whether the site was rendered from the shared template (which lists it under
+ * extra_css) or from a repository's own mkdocs.yml (where the builder injects the
+ * link). It must therefore style both the theme and the branch bar, and assume
+ * nothing about the repository's own configuration.
+ */
+
+:root {
+  --ashu-navy: #0b1220;
+  --ashu-navy-deep: #070c16;
+  --ashu-navy-raised: #111b2e;
+  --ashu-cyan: #2dd4ff;
+  --ashu-cyan-soft: #8fe9ff;
+  --ashu-cyan-deep: #0e7490;
+  --ashu-paper: #e8eef5;
+  --ashu-muted: #93a3b8;
+  --ashu-line: rgba(45, 212, 255, 0.14);
+}
+
+[data-md-color-scheme="slate"] {
+  /* The header is the brand field, the page is the same navy one step darker. */
+  --md-primary-fg-color: var(--ashu-navy);
+  --md-primary-fg-color--light: #16233c;
+  --md-primary-fg-color--dark: var(--ashu-navy-deep);
+  --md-primary-bg-color: var(--ashu-paper);
+  --md-default-bg-color: #0a101c;
+  --md-default-fg-color: var(--ashu-paper);
+  --md-default-fg-color--light: #b9c6d6;
+  --md-default-fg-color--lighter: #8fa0b5;
+  --md-code-bg-color: #101a2b;
+  --md-footer-bg-color: var(--ashu-navy-deep);
+  --md-accent-fg-color: var(--ashu-cyan);
+  --md-typeset-a-color: var(--ashu-cyan);
+}
+
+/* A light scheme, if a repository ever enables one: deep cyan is the only accent
+ * that keeps its contrast on white. */
+[data-md-color-scheme="default"] {
+  --md-primary-fg-color: var(--ashu-navy);
+  --md-primary-bg-color: var(--ashu-paper);
+  --md-accent-fg-color: var(--ashu-cyan-deep);
+  --md-typeset-a-color: var(--ashu-cyan-deep);
+}
+
+.md-typeset a:hover,
+.md-nav__link:hover {
+  color: var(--ashu-cyan-soft);
+}
+
+[data-md-color-scheme="default"] .md-typeset a:hover,
+[data-md-color-scheme="default"] .md-nav__link:hover {
+  color: var(--ashu-navy);
+}
+
+.md-header {
+  box-shadow: 0 1px 0 var(--ashu-line);
+}
+
+.md-header__title {
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.md-header__button.md-logo img,
+.md-header__button.md-logo svg {
+  height: 1.5rem;
+  width: 1.5rem;
+}
+
+.md-tabs {
+  background-color: var(--ashu-navy);
+  border-bottom: 1px solid var(--ashu-line);
+}
+
+.md-typeset h1,
+.md-typeset h2 {
+  color: var(--ashu-paper);
+  letter-spacing: -0.01em;
+}
+
+.md-typeset code {
+  border: 1px solid rgba(147, 163, 184, 0.12);
+}
+
+.md-typeset table:not([class]) th {
+  background-color: var(--ashu-navy-raised);
+  color: var(--ashu-paper);
+}
+
+/* ------------------------------------------------------------------------- *
+ * The branch bar
+ *
+ * One row under the header, on every page: the way home, the repository this
+ * page belongs to, and the branch being read. Injected by the builder, so the
+ * markup is the same on a site built from the shared template and on one built
+ * from its own mkdocs.yml.
+ * ------------------------------------------------------------------------- */
+
+.ashulab-refbar {
+  background: var(--ashu-navy-deep);
+  border-bottom: 1px solid var(--ashu-line);
+  font-size: 0.72rem;
+  line-height: 1.4;
+  position: relative;
+  z-index: 1;
+}
+
+.ashulab-refbar__inner {
+  align-items: center;
+  display: flex;
+  gap: 0.6rem;
+  margin: 0 auto;
+  max-width: 61rem;
+  padding: 0.35rem 0.8rem;
+}
+
+.ashulab-refbar__home {
+  align-items: center;
+  color: var(--ashu-paper);
+  display: inline-flex;
+  font-weight: 600;
+  gap: 0.35rem;
+  letter-spacing: 0.02em;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.ashulab-refbar__home:hover {
+  color: var(--ashu-cyan);
+}
+
+.ashulab-refbar__home::before {
+  background: var(--ashu-cyan);
+  border-radius: 50%;
+  content: "";
+  height: 0.4rem;
+  width: 0.4rem;
+}
+
+.ashulab-refbar__repo {
+  color: var(--ashu-muted);
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ashulab-refbar__repo::before {
+  color: var(--ashu-muted);
+  content: "/";
+  margin-right: 0.6rem;
+  opacity: 0.6;
+}
+
+.ashulab-refbar__refs {
+  align-items: center;
+  display: inline-flex;
+  gap: 0.2rem;
+  margin-left: auto;
+}
+
+.ashulab-refbar__label {
+  color: var(--ashu-muted);
+  font-size: 0.6rem;
+  letter-spacing: 0.09em;
+  margin-right: 0.2rem;
+  text-transform: uppercase;
+}
+
+.ashulab-refbar__ref {
+  border: 1px solid transparent;
+  border-radius: 999px;
+  color: var(--ashu-muted);
+  padding: 0.12rem 0.55rem;
+  text-decoration: none;
+}
+
+.ashulab-refbar__ref:hover {
+  border-color: var(--ashu-cyan-deep);
+  color: var(--ashu-cyan);
+}
+
+.ashulab-refbar__ref[aria-current="true"] {
+  background: var(--ashu-cyan);
+  color: var(--ashu-navy);
+  font-weight: 600;
+}
+
+@media screen and (max-width: 30em) {
+  .ashulab-refbar__word {
+    display: none;
+  }
+  .ashulab-refbar__label {
+    display: none;
+  }
+}
