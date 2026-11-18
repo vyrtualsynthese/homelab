@@ -81,28 +81,40 @@ prometheus:
   # discovery can never find them. Ports: 9100 node-exporter, 9902 smartctl,
   # 9323 Docker.
   #
-  # kubernetes-api-servers is half the series in this cluster: 35.9k of 65.8k
-  # measured on 2026-11-12, almost all of it histogram buckets that no
-  # dashboard reads. The counters stay, so request rate and error rate are
-  # still visible; the buckets are dropped before they reach the head.
+  # kubernetes-api-servers is half the series in this cluster, and almost all of
+  # it is histogram buckets that no dashboard and no alert rule reads. The
+  # sums and counts stay, so request rate, error rate and an average latency
+  # are still visible; the buckets are dropped before they reach the head.
+  # Measured 2026-11-18: 26,118 series leave this job, 19,368 of them
+  # etcd_request_duration_seconds_bucket alone. Buckets were once dropped for
+  # apiserver_* only, which left the largest family behind.
   scrapeConfigs:
     kubernetes-api-servers:
       metric_relabel_configs:
         - action: drop
           source_labels:
             - __name__
-          regex: "apiserver_.*_bucket"
+          regex: "(apiserver|etcd|workqueue|scheduler|storage_operation|kubelet|rest_client).*_bucket"
     # K3s runs the API server, etcd, scheduler and kubelet in one process, so
     # every control-plane node's kubelet endpoint republishes the whole control
     # plane: 102.6k of this cluster's 196k series, ~93% of them duplicated
     # three times over and already collected by the job above. Keep the kubelet
     # and volume families this job exists for.
+    #
+    # The kubelet's own histograms go the same way as the control plane's: no
+    # panel and no rule reads one, and 4,450 of this job's 7,520 series are
+    # buckets. kubelet_volume_stats_* is untouched — the NFS claim panels and
+    # PVCFillingUp read it.
     kubernetes-nodes:
       metric_relabel_configs:
         - action: drop
           source_labels:
             - __name__
           regex: "apiserver_.*|etcd_.*|scheduler_.*|controller_.*|workqueue_.*|rest_client_.*|go_.*|process_.*|apiextensions_.*|aggregator_.*|authentication_.*|authorization_.*|field_validation_.*|watch_cache_.*|node_authorizer_.*|kubernetes_feature_enabled"
+        - action: drop
+          source_labels:
+            - __name__
+          regex: "(kubelet|storage_operation|volume_operation|kubeproxy).*_bucket"
     rbp0:
       enabled: true
       static_configs:
