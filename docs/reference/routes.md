@@ -60,7 +60,7 @@ own certificate on a `*.kub.home.ashudev.com` or `*.ashudev.com` name.
 | `maintainerr.kub.local` | Maintainerr | `media-stack` | forward-auth; `lan-only` alone on `/api` | internal CA | no |
 | `n8n.kub.home.ashudev.com` | n8n | `n8n` | **none** | Let's Encrypt | no |
 | `prowlarr.kub.local` | Prowlarr | `media-stack` | forward-auth; `lan-only` alone on `/api` | internal CA | no |
-| `qbittorrent.kub.local` | qBittorrent | `media-stack` | forward-auth; no `/api` exemption | internal CA | no |
+| `qbittorrent.kub.local` | qBittorrent | `media-stack` | forward-auth; the app's own login is bypassed for the pod network; no `/api` exemption | internal CA | no |
 | `radarr.kub.local` | Radarr | `media-stack` | `lan-only`; OIDC in the app, `/api` on `lan-only` alone | internal CA | no |
 | `radarr-anime.kub.local` | Radarr (anime) | `media-stack` | `lan-only`; OIDC in the app, `/api` on `lan-only` alone | internal CA | no |
 | `sonarr.kub.local` | Sonarr | `media-stack` | forward-auth; `lan-only` alone on `/api` | internal CA | no |
