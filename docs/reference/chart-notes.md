@@ -93,7 +93,10 @@ instance also moved off `PUID 0`, which is the chown runbook the contract's UID 
 Both exporter sidecars still answer 401 until the operator patches the stale keys in Secrets
 `radarr` and `radarr-anime`. Since 2026-11-15 `radarr`'s `/api` is exempt from the gate (a
 `priority: 100` rule carrying `lan-only` alone), because `/api/v3` requires `X-Api-Key` on every
-request; `radarr-anime` has no gate, so it carries no exemption either.
+request. Since 2026-11-18 `radarr-anime` carries the same gate and the same `/api` exemption. Both
+instances now run with `authenticationMethod: none` in Radarr's own settings, so the gate is the only
+door: `disabledForLocalAddresses` was the first attempt, but Radarr's validator rejects a `0.0.0.0/0`
+trusted-network list and a narrower list leaves the login prompt up for addresses it does not trust.
 
 ### lidarr
 
