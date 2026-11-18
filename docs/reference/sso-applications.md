@@ -6,7 +6,7 @@
 > adding a tool.
 >
 > **Use it when** an application's sign-in surprises you, you are choosing how to protect a new one,
-> or a hostname answers 404 from authentik · **Verified** 2026-11-17 · **Kind:** living page
+> or a hostname answers 404 from authentik · **Verified** 2026-11-18 · **Kind:** living page
 
 What the mechanisms themselves prove — OIDC, proxy auth, the gate, `lan-only` — is
 [how-it-works/identity.md](../how-it-works/identity.md). Hostnames, TLS and whether a name answers
@@ -42,7 +42,7 @@ absent from this table has no single sign-on at all — no provider, no gate —
 | Prowlarr | forward-auth gate | configured; its own login is off; `/api` exempt; its probes carry a `Host` header | `prowlarr.kub.local` |
 | Sonarr | forward-auth gate | configured; its own login is off; `/api` exempt | `sonarr.kub.local` |
 | Tautulli | none | by decision: no gate and no authentik object; `lan-only` stays, and Tautulli's own login is the gate because a gate would collapse per-user history | `tautulli.kub.local` |
-| Dashy | none | **fix** — no gate and no `lan-only` live: it names `kube-system-authentik`, which is headers, not a gate. The chart already emits `lan-only` and the live object predates that rule, so a sync closes the gap | `dashy.ashudev.com` |
+| Dashy | forward-auth gate | configured 2026-11-18 — blueprint `app-dashy`, Admins only | `dashy.kub.local` |
 | qBittorrent | forward-auth gate | configured 2026-11-18 — blueprint `app-qbittorrent`, Admins only; its own login is bypassed for the pod network so the gate is the only prompt, and port-forward still asks (the break-glass); no `/api` exemption because every API client uses the Service name | `qbittorrent.kub.local` |
 | Sonarr (anime) | forward-auth gate | configured 2026-11-18; its own login is off; `/api` exempt | `sonarr-anime.kub.local` |
 | Plex | none | no gate and no `lan-only`: Plex clients cannot complete a browser sign-in, so the host answers the internet and Plex login is the gate | `plex.kub.home.ashudev.com` |
