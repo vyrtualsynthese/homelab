@@ -49,7 +49,7 @@ helm template radarr-anime cluster/helm/media-stack/radarr-anime --namespace med
 
 | Value | Purpose | Default |
 |---|---|---|
-| `image.repository`, `image.tag` | Image and pinned tag. | `lscr.io/linuxserver/radarr`, `6.4.4.10685-ls326` |
+| `image.repository`, `image.tag` | Image and pinned tag. | `lscr.io/linuxserver/radarr`, `7.0.3.10918-ls328` |
 | `strategy` | Deployment strategy. Must stay `Recreate` with a config volume. | `Recreate` |
 | `service.port` | Port the Service exposes, and what the IngressRoute points at. | `7878` |
 | `container.port` | Only set when the container listens on a different port than the Service. | `null` (falls back to `service.port`) |
