@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Stop Prometheus collecting 66,391 series (44 % of its head) that no dashboard and no alert rule reads, without changing any panel or rule.
+**Goal:** Stop Prometheus collecting 66,471 series (45 % of its head) that no dashboard and no alert rule reads, without changing any panel or rule.
 
-**Architecture:** Seven `metric_relabel_configs` drop rules in `cluster/helm/monitoring/prometheus/values.yaml`, one per scrape job, rendered into the chart's ConfigMap and reloaded by Prometheus' config-reloader. Each rule lists the families it drops so the next audit can check one line instead of re-deriving a regex.
+**Architecture:** Ten `metric_relabel_configs` drop rules in `cluster/helm/monitoring/prometheus/values.yaml` — one regex replaced on `kubernetes-api-servers`, nine added across `kubernetes-nodes` (a second entry), `kubernetes-nodes-cadvisor`, `kubernetes-service-endpoints` and its `-slow` twin, `kubernetes-pods` and its `-slow` twin, and `grafana`/`loki`/`prometheus` — rendered into the chart's ConfigMap and reloaded by Prometheus' config-reloader. Each rule lists the families it drops so the next audit can check one line instead of re-deriving a regex.
 
 **Tech Stack:** Helm wrapper chart (`prometheus` 29.47.2, pattern D), Prometheus 3.16.0, annotation-based scraping, ArgoCD GitOps on `develop`.
 
@@ -22,8 +22,8 @@
 
 ## Review Focus
 
-- **A regex that matches nothing.** A typo in a drop regex renders fine and removes nothing; the cost is a silent no-op, and the reader believes the load is gone. Pinned by Step 3 of each task: the rendered regex is grepped and compared to the intended text, and Task 6 asserts the family count is 0 after the sync.
-- **A drop that misses a `-slow` job.** `kubernetes-pods-slow` and `kubernetes-service-endpoints-slow` carry their own `metric_relabel_configs`, and a target annotated `prometheus.io/scrape_slow` is scraped only there, so the drop on the fast job would not reach it. Today no target carries that annotation; pinned by Task 4 Step 4, which fails the task if one appears.
+- **A regex that matches nothing.** A typo in a drop regex renders fine and removes nothing; the cost is a silent no-op, and the reader believes the load is gone. Pinned twice: Step 3 of each task greps the rendered regex against the intended text, and Task 6 Step 4 runs one `count()` per rule against the head after the sync and expects an empty result — the only check that can tell a working regex from a plausible-looking one.
+- **A drop that misses a `-slow` job.** `kubernetes-pods-slow` and `kubernetes-service-endpoints-slow` carry their own `metric_relabel_configs`, and a target annotated `prometheus.io/scrape_slow` is scraped only there, so the drop on the fast job would not reach it. Closed rather than pinned: Tasks 3 and 4 add the same rule to the slow twin, which costs nothing today (no target carries the annotation) and cannot be reopened by an annotation added later.
 - **Prometheus rejecting the whole config.** A malformed scrape config leaves Prometheus running its previous config and answers `reloadConfigSuccess: false`; the cluster looks healthy and collects everything. Pinned by Task 6 Step 2.
 - **A family dropped that a *rule* reads.** The reader check in the spec covers the 35 current rules; a rule added between the audit and the merge would not be covered. Pinned by Task 6 Step 3, which re-reads the rule expressions before the measurement is accepted.
 - **The qBittorrent exporter's own cardinality.** Dropping `qbittorrent_torrent_*` at scrape leaves the exporter computing 365 torrents per scrape for nothing. Expected: acceptable in stage 1 (the exporter is 32Mi), and named in the card as the follow-up if its CPU shows up.
@@ -296,7 +296,8 @@ git commit -m "🚀 feat(monitoring): drop the stack's own histogram buckets"
 - [ ] **Step 1: Confirm the config that is live is the config in git**
 
 Run: `curl -s http://prometheus.kub.local/api/v1/status/config | grep -c 'kube_secret_'`
-Expected: `1`, and the job it sits in is `kubernetes-service-endpoints`.
+Expected: `2` — the rule sits in `kubernetes-service-endpoints` and in its `-slow` twin. A `1`
+means the slow job's copy did not reach the cluster.
 
 - [ ] **Step 2: Confirm Prometheus accepted it**
 
@@ -305,13 +306,13 @@ Expected: `True` with a timestamp after the merge. `False` means Prometheus kept
 
 - [ ] **Step 3: Re-read the rule expressions before trusting the drop**
 
-Run the Grafana API call from the spec (`GET /api/v1/provisioning/alert-rules`) and grep the expressions for the dropped prefixes (`kube_secret_`, `kube_replicaset_`, `container_tasks_state`, `qbittorrent_torrent_`, `traefik_`, `n8n_http`).
+Run the Grafana API call from the spec (`GET /api/v1/provisioning/alert-rules`) and grep the expressions for the dropped prefixes (`kube_secret_`, `kube_replicaset_`, `container_tasks_state`, `qbittorrent_torrent_`, `traefik_`, `n8n_`).
 Expected: no match. A match means a rule was added after the audit; stop and restore that family.
 
 - [ ] **Step 4: Confirm every dropped group is empty, by query, not by reading the config**
 
-One call per rule; each must print `0`. A group that still returns rows is a regex that matches
-nothing, and the rendered config cannot tell you that — only the head can.
+One call per rule; each must print `EMPTY`. A group that still returns a number is a regex that
+matches nothing, and the rendered config cannot tell you that — only the head can.
 
 ```bash
 for expr in \
@@ -319,7 +320,7 @@ for expr in \
   'count({job="kubernetes-nodes", __name__=~"(kubelet|storage_operation|volume_operation|kubeproxy).*_bucket"})' \
   'count({job="kubernetes-nodes-cadvisor", __name__=~"container_(tasks_state|memory_failures_total|memory_failcnt|memory_max_usage_bytes|memory_mapped_file|memory_swap|memory_kernel_usage|memory_cache|blkio_device_usage_total|fs_reads_total|fs_writes_total|cpu_load_average_10s|file_descriptors|processes|sockets|threads|threads_max)"})' \
   'count({__name__=~"kube_secret_.*|kube_pod_tolerations|kube_replicaset_.*|kube_pod_status_qos_class"})' \
-  'count({job="kubernetes-pods", __name__=~"qbittorrent_torrent_.*|n8n_.*_bucket|traefik_.*_bucket"})' \
+  'count({job=~"kubernetes-pods(-slow)?", __name__=~"qbittorrent_torrent_.*|n8n_.*_bucket|traefik_.*_bucket"})' \
   'count({job=~"grafana|loki|prometheus", __name__=~".*_bucket"})' \
 ; do
   curl -sG http://prometheus.kub.local/api/v1/query --data-urlencode "query=$expr" \
@@ -339,7 +340,7 @@ curl -s http://prometheus.kub.local/api/v1/query --data-urlencode 'query=sum by 
 curl -s http://prometheus.kub.local/api/v1/query --data-urlencode 'query=quantile_over_time(0.95, container_memory_working_set_bytes{namespace="monitoring",pod=~"prometheus-server-.*"}[1h])'
 ```
 
-Expected, against the 151,103 / 2,230 s⁻¹ / 1,456 MiB baseline: head series near 85,000, sample rate near 1,120 s⁻¹, and a fall in the memory figure. Record the four numbers whatever they are; a number that does not move is a finding, not a failure to hide.
+Expected, against the 151,103 / 2,230 s⁻¹ / 1,456 MiB audit baseline: head series near 79,000, sample rate near 1,150 s⁻¹, and a fall in the memory figure. The head moves between 127k and 153k within a day on its own, so compare the shape, not the exact number. Record the four numbers whatever they are; a number that does not move is a finding, not a failure to hide.
 
 - [ ] **Step 6: Confirm every panel still returns rows**
 

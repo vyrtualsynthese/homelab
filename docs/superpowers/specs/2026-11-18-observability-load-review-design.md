@@ -13,14 +13,14 @@ Measured on 2026-11-18 against the live cluster, before any change:
 
 | Component | Load | p95 working set | Request | Limit |
 |---|---|---|---|---|
-| Prometheus | 151,103 head series, 2,230 samples/s | 1,456 MiB | 1Gi | 2Gi |
+| Prometheus | 151,103 head series (127k–153k over the day, pod churn), 2,230 samples/s | 1,456 MiB | 1Gi | 2Gi |
 | Loki | 1.6 GB/day, 1.55 M lines/day | 377 MiB | 256Mi | 1Gi |
 | Grafana | 35 rules @60 s, 8 dashboards | 391 MiB | 256Mi | 768Mi |
 | Fluent Bit | 4 pods | 37 MiB each | 32Mi | 64Mi |
 
 Three findings follow from that measurement, and each becomes one stage:
 
-1. **66,391 of the 151,103 series (44 %) are written and never read.** No dashboard and no alert rule
+1. **66,471 of the head's series (45 %) are written and never read.** No dashboard and no alert rule
    reads a histogram bucket on the control-plane jobs, 17 of the 76 cAdvisor families, the
    kube-state-metrics Secret/ReplicaSet/Toleration families, the qBittorrent per-torrent families, or
    the observability stack's own `/metrics` histograms.
@@ -115,17 +115,15 @@ pulled from the Grafana API. None of them appears in either.
 
 | Job | Family | Series | Reader today |
 |---|---|---|---|
-| `kubernetes-api-servers` | `etcd_request_duration_seconds_bucket` | 28,892 | none; `_sum`/`_count` stay and the Platform panel uses those |
-| `kubernetes-api-servers` | `workqueue_*_bucket` | 3,278 | none |
-| `kubernetes-api-servers` | `scheduler_plugin_execution_duration_seconds_bucket` | 1,218 | none |
-| `kubernetes-api-servers` | `storage_operation`, `kubelet_runtime_operations`, `rest_client` `_bucket` | 2,254 | none |
+| `kubernetes-api-servers` | `etcd_request_duration_seconds_bucket` | 19,488 | none; `_sum`/`_count` stay and the Platform panel uses those |
+| `kubernetes-api-servers` | every other bucket under the rule's prefixes: `workqueue_*` 3,278, `scheduler_*` 1,648, `rest_client_*` 1,497, `kubelet_*` 2,035, `storage_operation` 994, `etcd_lease_object_counts` 24 | 9,476 | none |
 | `kubernetes-nodes` | `kubelet_*`, `storage_operation`, `volume_operation`, `kubeproxy_*` `_bucket` | 4,932 | none; `kubelet_volume_stats_*` and every `_sum`/`_count` stay |
 | `kubernetes-nodes-cadvisor` | 17 unused `container_*` families (`tasks_state`, `memory_failures_total`, `memory_failcnt`, `memory_max_usage_bytes`, `memory_mapped_file`, `memory_swap`, `memory_kernel_usage`, `memory_cache`, `blkio_device_usage_total`, `fs_reads_total`, `fs_writes_total`, `cpu_load_average_10s`, `file_descriptors`, `processes`, `sockets`, `threads`, `threads_max`) | 10,058 | the Applications board reads `container_cpu_usage_seconds_total` and `container_memory_working_set_bytes` only |
-| `kubernetes-service-endpoints` | `kube_secret_*`, `kube_pod_tolerations`, `kube_replicaset_*`, `kube_pod_status_qos_class` | 6,148 | none; Deployments and StatefulSets carry the replica panels |
-| `kubernetes-pods` | `qbittorrent_torrent_*` | 6,240 | the Media board reads four `qbittorrent_global_*` totals |
-| `kubernetes-pods` | `qbittorrent_torrent_*`, `n8n_*_bucket` (three families), `traefik_*_bucket` (two) | 9,393 | none |
+| `kubernetes-service-endpoints` | `kube_secret_*`, `kube_pod_tolerations`, `kube_replicaset_*`, `kube_pod_status_qos_class` | 6,156 | none; Deployments and StatefulSets carry the replica panels |
+| `kubernetes-pods` | `qbittorrent_torrent_*` — 17 fields × 365 torrents | 6,240 | the Media board reads four `qbittorrent_global_*` totals |
+| `kubernetes-pods` | `n8n_*_bucket` (three families, 1,648) and `traefik_*_bucket` (two families, 1,505) | 3,153 | none |
 | `grafana`, `loki`, `prometheus` | each job's own `_bucket` families | 6,968 | the rules read counters (`loki_request_duration_seconds_count`, `grafana_alerting_rule_evaluation_failures_total`) |
-| **Total** | | **66,391** | 44 % of head series, ~1,107 of 2,230 samples/s |
+| **Total** | | **66,471** | 45 % of head series, ~1,108 of 2,254 samples/s |
 
 The shape of the change is ten `metric_relabel_configs` entries: one regex replaced on
 `kubernetes-api-servers`, and nine added. Two of the nine are on `kubernetes-pods-slow` and
