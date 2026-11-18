@@ -83,11 +83,11 @@ stall above.
 
 Every route but the two public ones below carries `lan-only`, then one of three things:
 
-- **OIDC in the application** — autobrr, Calibre-Web Automated, Kavita. The app holds the identity; a
-  gate on top would mean two logins.
-- **The forward-auth gate** — Sonarr, Sonarr Anime, Radarr, Radarr Anime, Lidarr, Prowlarr, both
-  Bazzars, Tautulli, Maintainerr. The app behind it cannot tell its users apart; `maintainerr` checks
-  no key of its own, so its `/api` exemption leaves `lan-only` as the only control.
+- **OIDC in the application** — autobrr, Calibre-Web Automated, Kavita, and since 2026-11-18 Radarr and
+  Radarr Anime (Radarr 7). The app holds the identity; a gate on top would mean two logins.
+- **The forward-auth gate** — Sonarr, Sonarr Anime, Lidarr, Prowlarr, both Bazzars, Tautulli,
+  Maintainerr. The app behind it cannot tell its users apart; `maintainerr` checks no key of its own,
+  so its `/api` exemption leaves `lan-only` as the only control.
 - **LAN only, by decision** — qBittorrent, with its own login.
 
 **Plex** and **Seerr** are those two: no `lan-only`, no gate, only their own account model, because Plex
