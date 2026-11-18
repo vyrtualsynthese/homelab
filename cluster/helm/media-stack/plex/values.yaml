@@ -139,6 +139,9 @@ env:
   # -- NVENC through the NVIDIA runtime.
   NVIDIA_VISIBLE_DEVICES: "all"
   NVIDIA_DRIVER_CAPABILITIES: "compute,video,utility"
+  # No LOG_LEVEL: Plex has no supported environment knob, and the level lives in
+  # the server's preferences on the config claim. The README records this as the
+  # chart's third contract exception.
 
 # -- Variables sourced from a Secret, as `{ name, valueFrom }`.
 extraEnv:

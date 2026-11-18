@@ -147,6 +147,10 @@ env:
   # at the real library. With it off, the path is set once in
   # `/admin/dbconfig` and kept in `app.db` on the config claim.
   DISABLE_LIBRARY_AUTOMOUNT: "true"
+  # No LOG_LEVEL: the documented environment carries no logger knob. The only
+  # level is the app's own Log Level setting in the WebUI, which governs its
+  # logfiles and lives in its database rather than in this chart. Accepted debt;
+  # the README's Log-level debt section names the records that replace the lines.
 
 # -- Variables sourced from a Secret, as `{ name, valueFrom }`. Kept separate so
 # a secret can never be pasted into the plain map above by accident. CWA binds no

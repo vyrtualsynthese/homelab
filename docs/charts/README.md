@@ -137,6 +137,11 @@ something breaks.
 - **Whatever the level hides must be countable elsewhere:** a Prometheus counter, the app's own
   database, its UI. If there is no other record of an outcome, log that outcome at `warning` rather
   than dropping it silently.
+- **When the app offers no knob, say so where the knob would go.** Write the answer next to `env` in
+  the chart's values and explain it in the chart's README: what the default level is, what it costs in
+  Loki, and which other record carries the outcome. `bazarr`, `kavita`, `plex`, `qbittorrent`,
+  `tautulli`, `calibre-web-automated` and `cross-seed` are the seven that carry it today. Silence in
+  both places reads as an oversight, and the next reader adds a variable that does nothing.
 
 `flaresolverr` is the first chart to follow this: `LOG_LEVEL: warning`, with the counters carrying
 the challenge outcomes the log no longer prints.

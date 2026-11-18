@@ -149,6 +149,9 @@ env:
   # no manual chown on the node is needed.
   PUID: "1100"
   PGID: "1100"
+  # No LOG_LEVEL. Tautulli's console handler runs at INFO on stdout and WARNING on
+  # stderr, with no level to set between them; `--quiet` would silence the errors
+  # as well. The README's Logs section records the exception.
 
 # -- Variables sourced from a Secret, as `{ name, valueFrom }`. Kept separate so
 # a secret can never be pasted into the plain map above by accident.

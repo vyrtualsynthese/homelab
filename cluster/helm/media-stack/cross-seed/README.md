@@ -154,6 +154,20 @@ alive but temporarily unable to reach qBittorrent does not need to be pulled out
 There is deliberately no readiness values block: no unauthenticated dependency-aware endpoint exists,
 and the Service carries no user traffic.
 
+## Logs
+
+**No level knob, and that is the whole answer.** cross-seed's logger has two ordinary levels, `info`
+(default) and `verbose`, and one switch selects the second: the `--verbose` daemon flag, which only
+raises. The configuration file has no logging key — the project's options page lists every one it
+accepts, from `delay` to `blockList`, and none of them sets a level — so there is no `LOG_LEVEL` to
+set. The chart therefore sets nothing and the container logs at `info`.
+
+What `info` costs here: the scheduler announces each job ("starting job: rss", "RSS scan complete —
+checked 24 new candidates"), about 270 lines and 226 KB a day. That is the only record that a scan ran
+and how much it found, so it stays. `--verbose` belongs in `args` while debugging a match, and the
+daemon writes its verbose log to `logs/verbose.current.log` on the claim whether or not the flag is
+set.
+
 ## Running as UID 1100
 
 The image runs as root by default. This chart runs it as UID/GID 1100, matching the `PUID`/`PGID` the

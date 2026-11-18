@@ -287,6 +287,9 @@ env:
   TZ: "Europe/Paris"
   PUID: "1100"
   PGID: "1100"
+  # No LOG_LEVEL, and nothing a variable could set: qBittorrent has no verbosity
+  # setting, only file-logging on and off in the WebUI. The README's Metrics and
+  # logs section records what the fixed level costs.
 
 # -- Variables sourced from a Secret, as `{ name, valueFrom }`. Empty: the WebUI
 # credentials live in `qBittorrent.conf` on the config claim, not in a Secret.

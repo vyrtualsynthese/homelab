@@ -20,7 +20,9 @@ As of 2026-11-12: four objects render, no ingress because the UI is not exposed,
 `configFile` and `torrents` values instead of raw pod spec, liveness only, claim name derived from
 the release. It shares the naming helpers and the generic Service, ServiceAccount and claim
 templates with `autobrr`; the Deployment and the values are built around cross-seed's read-only
-config file, its NFS torrent directory and its liveness-only probe.
+config file, its NFS torrent directory and its liveness-only probe. Its logger has two ordinary
+levels and one switch: `info` is the default and `--verbose` only raises, so there is no level for
+the chart to set. The chart says so next to `env` and the README says what `info` costs.
 
 ### flaresolverr
 
@@ -65,7 +67,9 @@ The CronJob's schedule, timezone, concurrency policy and deadlines are values; t
 `recyclarr.yml` is mounted read-only at `/config/recyclarr.yml` instead of being copied into the claim
 by an init container; the claim is derived from the release and stays on `nuc0`, where its PV lives.
 It runs as UID 1000, the image's own default and the claim's existing owner, so enabling non-root cost
-no node-side `chown` and needs no runbook.
+no node-side `chown` and needs no runbook. Since 2026-11-19 `args` carries `--log warn`: a redirected
+stdout switches recyclarr to log mode at `info` by itself, and a run's progress lines are not worth
+the volume. The Job status and the arr settings the sync changes carry the outcome.
 
 ### tautulli
 
@@ -77,7 +81,9 @@ so readiness is disabled rather than pointed at liveness. Its image starts as ro
 `PUID`/`PGID`, so the capability set is `ALL` dropped plus the three calls that init makes. Since
 2026-11-18 the route carries `lan-only` and no authentik gate, by decision: the gate cannot carry an
 identity into the app, so every browser would share one Tautulli account and per-user watch history
-would collapse. Tautulli's own login is the gate, and it keeps the login it had; the Plex-only toggle
+would collapse. The console handler has no level either — INFO on stdout, WARNING on stderr, with
+`--quiet` as the only other switch and it hides the errors too — so the chart sets nothing.
+Tautulli's own login is the gate, and it keeps the login it had; the Plex-only toggle
 from v2.19.0 is not in the official docs, so the chart does not set it. With no gate there is no
 `/api` exemption to render either; `lan-only` covers the whole host. The chart
 creates the config claim: the previous one was a Longhorn volume that vanished in 2026, which is why
@@ -194,7 +200,9 @@ the only authority on reading position. It serves a single public hostname:
 `kavita.kub.home.ashudev.com` over TLS on `websecure`, with a plain-HTTP router that redirects, and
 no LAN route by decision. Readiness is disabled for the shared reason — a database it cannot open
 stops the process from starting, so there is no dependency that can fail while the process stays
-healthy.
+healthy. The log level is debt of `bazarr`'s kind with a specific cause: `Program.cs` clears its
+configuration sources and loads only `appsettings.json`, so no environment variable reaches Serilog
+and the level stays at `Information`.
 
 ### qbittorrent
 
