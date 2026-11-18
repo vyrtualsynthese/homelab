@@ -1,8 +1,14 @@
 dashy:
   image:
     repository: ghcr.io/lissy93/dashy
-    # Overrides the image tag whose default is the chart appVersion.
-    tag: latest
+    # Pinned: Renovate bumps this. Dashy rebuilds its static bundle at container start.
+    tag: "4.9.19"
+
+  podAnnotations:
+    # The config Secret is mounted with subPath, so an update to `files/conf.yml`
+    # changes nothing inside the running container until the pod is replaced.
+    # Bump this value in the same commit as any config change.
+    dashy.kub.local/config: "1"
 
   serviceAccount:
     # Specifies whether a service account should be created
@@ -43,16 +49,8 @@ dashy:
     limits:
       memory: 1Gi
 
-  affinity:
-    nodeAffinity:
-      requiredDuringSchedulingIgnoredDuringExecution:
-        nodeSelectorTerms:
-          - matchExpressions:
-              - key: node-type
-                operator: In
-                values:
-                  - general
-                  - small
+  nodeSelector:
+    kubernetes.io/hostname: nuc0
 
   env:
     NODE_ENV: "production"
