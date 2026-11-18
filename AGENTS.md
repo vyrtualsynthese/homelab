@@ -198,9 +198,10 @@ are in `docs/superpowers/plans/`.
    resources and the `longhorn-system` namespace are gone, and every application that was on it runs on
    `local-path` or one of the NFS classes — except three: **`n8n`, `syncthing` and `thelounge` still
    mount their Longhorn claims** from before the failure. What survives is those three PVs and their
-   three PVCs, stuck `Terminating` since 2026-08-28 (twenty other volumes and three claims were cleared
-   on 2026-11-18). Their contents were abandoned by decision, and **they will never clear on their
-   own**: the finalizers name the Longhorn CSI driver
+   three PVCs, stuck `Terminating` since 2026-08-28. Twenty-three of the twenty-six volumes and three
+   of the six claims were cleared on 2026-11-18, and the namespace is gone. Their contents were
+   abandoned by decision, and **they will never clear on their own**: the finalizers name the
+   Longhorn CSI driver
    (`external-attacher/driver-longhorn-io`), which no longer exists to remove itself, and the bound
    ones also carry `kubernetes.io/pv-protection` until the matching claim goes.
 
