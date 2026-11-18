@@ -1,78 +1,84 @@
-image:
-  # -- Registry to pull image from
-  registry: ghcr.io
-  # -- Image name to pull
-  repository: renovatebot/renovate
-  # -- Renovate image tag to pull
-  tag: 43.288.0
-  # -- "IfNotPresent" to pull the image if no image with the specified tag exists on the node, "Always" to always pull the image or "Never" to try and use pre-pulled images
-  pullPolicy: IfNotPresent
-
-# -- Secret to use to pull the image from the repository
-imagePullSecrets: {}
+# Values for the upstream Renovate chart, pulled as a dependency by the chart
+# one directory up (see Chart.yaml). Only what this cluster changes is here;
+# every other key is the upstream default.
 
 renovate:
-  # -- Custom exiting global renovate config
-  existingConfigFile: ''
-  # -- Inline global renovate config.json
-  config: |
-     {
-     }
-  # See https://docs.renovatebot.com/self-hosted-configuration
-  # config: |
-  #   {
-  #     "platform": "gitlab",
-  #     "endpoint": "https://gitlab.example.com/api/v4",
-  #     "token": "your-gitlab-renovate-user-token",
-  #     "autodiscover": "false",
-  #     "dryRun": true,
-  #     "printConfig": true,
-  #     "repositories": ["username/repo", "orgname/repo"]
-  #   }
+  # -- The release is named for the Application; pinning the full name keeps the
+  # ConfigMap `renovate-config` and the CronJob `renovate` stable if the
+  # Application is ever renamed.
+  fullnameOverride: renovate
 
-  # -- Use the Helm tpl function on your configuration. See README for how to use this value
-  configEnableHelmTpl: false
+  image:
+    registry: ghcr.io
+    repository: renovatebot/renovate
+    # -- Pinned, and kept equal to `appVersion` in Chart.yaml. Renovate's own
+    # docker manager updates this tag; bump `appVersion` with it so the two
+    # numbers never disagree.
+    tag: "44.251.0"
+    # -- The tag is pinned, so pulling on every run buys nothing.
+    pullPolicy: IfNotPresent
 
-  # -- Use this to create the renovate-config as a secret instead of a configmap
-  configIsSecret: false
+  # -- The GitHub token. The chart exports every key of this Secret as an
+  # environment variable, so the key is `RENOVATE_TOKEN`. The Secret is listed
+  # in docs/secrets.md; docs/runbooks/renovate.md covers the rotation.
+  existingSecret: renovate
 
-# -- Specify resource limits and requests for the renovate container
-resources: {}
-  # We usually recommend not to specify default resources and to leave this as a conscious
-  # choice for the user. This also increases chances charts run on environments with little
-  # resources, such as Minikube. If you do want to specify resources, uncomment the following
-  # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
-  # limits:
-  #  cpu: 100m
-  #  memory: 128Mi
-  # requests:
-  #  cpu: 100m
-#  memory: 128Mi
+  # Schedule. The CronJob controller runs in UTC, and an unqualified schedule
+  # silently changes its local meaning when the offset does, so the timezone is
+  # explicit. 03:00 Paris is after the *arrs' midnight housekeeping and before
+  # the 04:30 database dump; a run takes about 40 minutes.
+  cronjob:
+    schedule: "0 3 * * *"
+    timeZone: Europe/Paris
+    # -- One run at a time: a second start would race the first on the same
+    # branches.
+    concurrencyPolicy: Forbid
+    # -- One retry, then fail. A GitHub outage must not become a retry loop.
+    jobBackoffLimit: 1
+    # -- Longer than the longest observed run (39 minutes).
+    activeDeadlineSeconds: 5400
+    # -- Completed Jobs are the record of a night. Three days covers a weekend,
+    # then the TTL controller deletes the pods, so the failed ones do not pile up.
+    successfulJobsHistoryLimit: 3
+    failedJobsHistoryLimit: 1
+    ttlSecondsAfterFinished: 259200
 
-existingSecret: 'renovate'
+  # -- The node the last pods ran on; the job keeps no state, so nothing ties it
+  # to the node beyond staying off the control-plane Pis.
+  nodeSelector:
+    kubernetes.io/hostname: nas
 
-# -- Override hostname resolution
-hostAliases: []
-# See: https://kubernetes.io/docs/tasks/network/customize-hosts-file-for-pods/
-# hostAliases:
-#   - ip: "your-ip"
-#     hostnames:
-#       - "your-hostname"
+  # Unmeasured: a run is shorter than Prometheus's scrape interval, so there is
+  # no steady state to size from. The request is the image's own footprint and
+  # the limit a protection ceiling, not a measured peak.
+  resources:
+    requests:
+      cpu: 50m
+      memory: 256Mi
+    limits:
+      memory: 1Gi
 
-# -- Pod-level security-context
-securityContext: {}
+  # Pod-level hardening. The image's own user is already non-root; naming it
+  # makes that a precondition the kubelet enforces.
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 12021
+    seccompProfile:
+      type: RuntimeDefault
 
-# -- Select the node using labels to specify where the cronjob pod should run on
-nodeSelector: {}
-# See: https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/
-# renovate: true
-
-# -- Configure the pod(Anti)Affinity and/or node(Anti)Affinity
-affinity:
-  requiredDuringSchedulingIgnoredDuringExecution:
-    nodeSelectorTerms:
-      - matchExpressions:
-          - key: node-type
-            operator: In
-            values:
-              - general
+  # The upstream chart keeps its own settings under a second `renovate:` key,
+  # so this one nests inside the dependency's root.
+  renovate:
+    # -- Self-hosted configuration, deliberately empty: what gets updated is
+    # decided by each repository's `.github/renovate.json`, and this repo's
+    # copy is the authority on that. The upstream chart has no default and
+    # refuses to render without one.
+    config: |
+      {}
+    # -- Container-level hardening. The image runs as UID 12021 and needs no
+    # Linux capability to clone repositories and open pull requests.
+    securityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+          - ALL

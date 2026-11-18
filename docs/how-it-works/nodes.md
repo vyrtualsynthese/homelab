@@ -47,8 +47,8 @@ home; the affinity is on the PV, under `spec.nodeAffinity` (`kubectl get pv <pv>
 
 Older charts are the exception: they still ask for the retired `node-type` label through
 `nodeAffinity` rather than a hostname pin. That label still constrains scheduling: the chart makes it
-a required term, not a hint, but the live object can lag the chart until ArgoCD reconciles it, so
-`renovate` asks for `general` (on `nuc0`) and its last pods ran on `nas`.
+a required term, not a hint, but the live object can lag the chart until ArgoCD reconciles it, so a
+chart that asks for `general` and a pod that last ran elsewhere is not a contradiction.
 [applications.md](applications.md) records which charts these are and the node each pod was
 observed on.
 

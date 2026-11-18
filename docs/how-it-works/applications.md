@@ -78,7 +78,7 @@ belong to is [media.md](media.md).
 | `prometheus` | `monitoring` | nas | D | the metrics database and its scrape configuration |
 | `n8n` | `n8n` | nuc0 | A | workflow automation |
 | `news-freshrss` | `news` | Pending | A | RSS reader |
-| `renovate` | `renovate` | nas | B | nightly pull requests that bump dependencies |
+| `renovate` | `renovate` | nas | D | nightly pull requests that bump dependencies |
 | `syncthing` | `syncthing` | nuc0 | A | file sync between devices, with a restic backup job |
 | `thelounge` | `thelounge` | nuc0 | A | web IRC client |
 | `vikunja` | `vikunja` | nuc0 | D | the task board, where the state of every ticket lives |
@@ -108,12 +108,11 @@ they are what everything above stands on.
 Most charts pin their pod with `nodeSelector: kubernetes.io/hostname`. The older ones were written
 before that rule and are still configured to select the retired `node-type` label instead, which
 matches `nuc0` today. They are `koillection`, `mktxp`, `pihole-exporter`, `n8n`, `news-freshrss`,
-`renovate`, `syncthing`,
+`syncthing`,
 `thelounge`, and the `books-media`, `nfs-audio`, `nfs-syncthing`, `stash-nfs` and `traefik-nfs`
 provisioners. This is what each chart asks
-for, not a statement about where its pod is: `renovate` selects `general` yet its last pods ran on
-`nas`, and the Node column shows where they actually were. Moving them onto hostname pins is chart
-work.
+for, not a statement about where its pod is: the Node column shows where the pods actually were.
+Moving them onto hostname pins is chart work.
 
 ## Provisioner Applications that no longer render
 
