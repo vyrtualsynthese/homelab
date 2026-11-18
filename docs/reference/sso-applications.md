@@ -78,8 +78,9 @@ Three traps this table exists to prevent:
 3. **Expect one re-apply on a brand-new app.** The first sync creates that app's blueprint instance
    in the same discovery pass that applies `outpost-embedded.yaml`, so the outpost's `!Find` can run
    before the provider exists, the file rolls back, and the new host answers `404` while every other
-   provider keeps working. Press Apply on `ashulab-outpost-embedded` (or make any later change to that
-   file) and it attaches. `sonarr-anime` hit this on 2026-11-18.
+   provider keeps working. Re-apply that blueprint instance — `POST /api/v3/blueprints/instances/{pk}/apply/`
+   with `AUTHENTIK_TOKEN`, the pk from `GET /api/v3/blueprints/instances/?search=outpost` — or make
+   any later change to the file; either attaches it. `sonarr-anime` hit this on 2026-11-18.
 4. In the tool's chart values, put `authentik-forwardauth` after `lan-only` in the middleware list.
 5. Bump both chart versions, open one PR, sync `authentik` and the tool.
 

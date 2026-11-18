@@ -181,6 +181,45 @@ operator to run `kubectl -n media-stack exec deploy/sonarr -- env | grep -i url`
 Leaving it in `Doing` is not a soft `Done`, and it is not a reason to move it back to `Backlog`:
 `Backlog` means nobody has started, and somebody has.
 
+## Do it yourself: the API is the operator's mouse
+
+An agent that hands the operator a click has usually not looked for a token. Nearly everything the
+protocol asks for — a setting, a provider, a blueprint re-apply, a board move — has an endpoint, and
+the endpoint leaves a record the UI click does not.
+
+| Target | Endpoint | Credential |
+|---|---|---|
+| the *arr tools, Bazarr, Tautulli, Seerr, qBittorrent, autobrr, Kavita | each app's own REST API; `GET`/`PUT /api/v3/config/host` for the *arr settings | `<APP>_API_KEY` in `~/.config/secrets/homelab.env` |
+| authentik | `https://authentik.kub.home.ashudev.com/api/v3/` — providers, applications, tokens, `POST /blueprints/instances/{pk}/apply/` | `AUTHENTIK_TOKEN` |
+| Vikunja | `https://vikunja.kub.local/api/v2` | `VIKUNJA_API_TOKEN` |
+| Kubernetes reads | the MCP server | its ServiceAccount |
+
+Three specimens from one session, in the order they cost time:
+
+- **The setting.** `authenticationMethod` on two Radarr instances, changed twice, each attempt a
+  `PUT /api/v3/config/host` with the whole object. The response said `202`, and reading the object
+  back proved what had landed. The UI would have shown a form, not a value.
+- **The cleanup.** Two orphaned authentik proxy providers, deleted with
+  `DELETE /api/v3/providers/proxy/{pk}/` after checking that both applications already pointed at
+  their replacements and that no outpost listed them. Asked to do it by hand, the operator answered
+  that the token existed — it did, in the same env file as every other key.
+- **The re-apply.** A blueprint whose first sync rolled back is fixed by
+  `POST /blueprints/instances/{pk}/apply/`, or by any later commit that changes the file. "Press
+  Apply in the UI" is a sentence for the operator's own console, not for an agent to end its turn
+  on.
+
+What stays human, and only this:
+
+- **a Secret value the agent has never read.** `view` RBAC excludes Secrets; ask for the key and the
+  Secret by name, then continue.
+- **a browser sign-in.** An OIDC flow needs one person at one keyboard; verify everything up to the
+  redirect and ask for the click.
+- **a merge.** The branch and the PR are the agent's; the merge is the operator's.
+
+When no token exists, name the endpoint that would have done the work and file the gap as a card —
+an agent that says "no token for Argo CD, so the sync waits for the merge and the poll" is doing the
+protocol; one that says "sync it in the UI" is handing back its own turn.
+
 ## Where the board is, and what it is not
 
 - **`homelab` and `config` are boarded.** `ashuvidz-website`, `ashudev-website`,
