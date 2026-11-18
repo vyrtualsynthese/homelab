@@ -278,3 +278,28 @@ as the **read-only** ServiceAccount `kube-system/opencode-mcp`, using `~/.kube/m
   covers the live stack, how to query Prometheus/Loki/Grafana without cluster access, the
   dashboards, the alert set and its known holes. Dashboards and alert rules are in Grafana's
   database, never in git.
+
+### Configure through the API, not the operator's mouse
+
+**Before asking a person to click something, look for a token.** App configuration, provider
+cleanup, a blueprint re-apply and a sync trigger are all reachable over an HTTP API; handing them to
+the operator wastes their turn and leaves no record of what changed.
+
+| Target | Endpoint | Credential |
+|---|---|---|
+| Radarr, Sonarr, Lidarr, Prowlarr, Bazarr, Tautulli, Seerr, qBittorrent, autobrr, Kavita | each app's own REST API (`/api/v3/config/host` for the *arr settings, `/api/v1` on Prowlarr) | `<APP>_API_KEY` in `~/.config/secrets/homelab.env` |
+| authentik | `https://authentik.kub.home.ashudev.com/api/v3/` — providers, applications, api tokens, blueprint apply | `AUTHENTIK_TOKEN` |
+| Traefik, Grafana, anything the MCP exposes | the Kubernetes API or the app's API, read-only | the MCP ServiceAccount |
+| Vikunja | `https://vikunja.kub.local/api/v2` | `VIKUNJA_API_TOKEN` |
+
+- **State the call in the report**, with the endpoint and the result code, so the next agent can
+  repeat it instead of re-deriving it.
+- **A secret value is the exception**: `view` RBAC excludes Secrets, so a value the agent has never
+  seen has to come from the operator. Say which key and which Secret, and stop there.
+- **A browser sign-in is the other exception.** An OIDC flow needs the human once; verify everything
+  up to the redirect and ask for the click.
+- **If no token exists, say which endpoint would have done it** and file that gap as a card. Argo CD
+  is the current example: the API would sync an Application, but no token has been issued, so a sync
+  waits on the merge plus the poll.
+
+Long form, with the specimens: [`docs/agent-protocol.md`](docs/agent-protocol.md).
