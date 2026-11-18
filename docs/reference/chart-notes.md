@@ -221,10 +221,43 @@ exporter and autobrr all use `http://qbittorrent:8080`. The log level is worse o
 qBittorrent has no verbosity setting at all, only file-logging on/off, so the chart sets nothing, and
 the VueTorrent installer's traps are recorded above its values block.
 
+### ashuvidz-website
+
+As of 2026-11-18: the public site, and the one public chart taken through the pass — its routes were
+left byte for byte, which is the rule for a public-facing chart: ingress, TLS and auth belong to W5
+and W7, and a contract pass is not permission to redesign them.
+
+It is a wrapper (pattern D) around the Bitnami `nginx` chart, so seven objects render and only two
+templates are written here, the pair of IngressRoutes. Everything else — Deployment, Service,
+ServiceAccount, NetworkPolicy, PodDisruptionBudget — comes from upstream values. That buys the one
+mechanism a static site needs and would otherwise be hand-written: an init container that clones the
+content repository into an `emptyDir`, and a sidecar that `git pull`s it every 60 seconds. A content
+push to `vyrtualsynthese/ashuvidz-website` is live in about a minute, with no build, no image and no
+sync. The chart README carries that flow, because "someone built it once" was the state the card
+found.
+
+What the pass changed: `resourcesPreset: nano` became an explicit block measured against 5 days of
+Prometheus — nginx 24Mi p95, 24Mi peak, and the git syncer 21Mi / 25Mi — with the nginx limit left at
+128Mi because the same block also covers a `git clone` init container too short-lived to be scraped,
+and `ephemeral-storage` kept because `/app` is a clone on disk and one bad clone should not fill the
+node; the pod is pinned
+to `nuc0`, where the other small front ends live; `appVersion` now matches the image tag; and the
+leftover `metrics.serviceMonitor` / `metrics.prometheusRule` flags, true while the exporter was off
+and no Prometheus Operator exists, are false.
+
+Probes are the honest pair for files: readiness on `/`, which *is* the site, and liveness on a TCP
+connect to the HTTP port. A bad content push leaves the pod `0/1 Ready` instead of restarting it.
+
+Debt: the exporter stays off, since exporters are turned on one chart at a time; and nginx's access
+log runs at its default level — no value in the wrapped chart exposes it — so per-request lines still
+reach Loki. Both are recorded in the chart README rather than invented away.
+
 ## Charts still to align
 
 Only non-public apps with hand-maintained charts are in scope for now. Public-facing apps wait,
-because their ingress, TLS and auth wiring is what changes first in W5 and W7.
+because their ingress, TLS and auth wiring is what changes first in W5 and W7; `ashuvidz-website` is
+the exception, aligned on 2026-11-18 with its routes untouched because its card asked for exactly
+that.
 
 Metrics count as debt of the same kind. The rule above is recorded now and applied one chart at a
 time; `flaresolverr` is the first, and the rest are not aligned yet.
