@@ -1,8 +1,10 @@
 apiVersion: v2
 name: ashuvidz-website
-description: Ashuvidz
+description: ashuvidz.com - the public site, static files served by nginx and pulled from its own git repository
 type: application
-version: 0.1.0
+version: 0.2.0
+# Matches the nginx image tag in values.yaml (nginx.image.tag), as the chart contract requires.
+appVersion: "1.28.0"
 dependencies:
   - name: nginx
     version: 23.0.6
