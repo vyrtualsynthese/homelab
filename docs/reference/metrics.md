@@ -47,6 +47,42 @@ cannot log in at all. Tracker collection costs one Web API call per distinct
 tracker — about 40 here — which pushed the collection past Prometheus's 10 s
 scrape timeout on 2026-11-13; the chart turns it off.
 
+**MikroTik switches** (`ghcr.io/akpw/mktxp`, metrics `mktxp_*`, on `nuc0`):
+
+- Two devices, and their labels disagree on purpose. `routerboard_name` is the
+  model (`CR5326` for the CRS326, `CRS309`); `name` on
+  `mktxp_system_identity_info` is the router's own identity string — `CR326`, a
+  typo in the device config, and the untouched default `MikroTik`. Chart by
+  `routerboard_name` or map `routerboard_address` to a name; never by `name`.
+- The CRS326 (`192.168.1.11`) publishes 26 ports with status (27 interfaces with
+  the bridge) and one populated SFP+ (`sfp-sfpplus2`, copper DAC). The CRS309
+  (`192.168.1.43`) publishes 9 ports with status and four SFP+ (`sfp-sfpplus1`
+  is 10G-SR at 850 nm; the other three are copper DACs). 838 series on
+  2026-11-18: 576 and 262.
+- Throughput is `mktxp_interface_{rx,tx}_byte_total`, a counter; `_rate` is the
+  negotiated **link speed** in Mbit/s, not bytes moved. Errors and drops have
+  their own counters, and `mktxp_link_downs_total` counts link transitions, so
+  a flapping cable shows there and not in the error counters.
+- Optical health is three families: `mktxp_interface_sfp_rx_loss` and
+  `_tx_fault` are 0/1 per port, `mktxp_interface_sfp_info` carries vendor, part
+  number and connector type as labels, and `mktxp_interface_sfp_wavelength`
+  exists only for optics that report one. A blank wavelength is correct for a
+  copper DAC, not a missing scrape.
+- An unreachable device publishes no `up == 0`; its series simply stop. That is
+  why the `SwitchDown` rule uses `absent()` per address instead of `1 - up`.
+- `mktxp_interface_comment_info` is empty here: neither switch has port
+  descriptions, so a port table cannot show a human label for a cable.
+- Ports with no cable report `mktxp_interface_status == 0`. That is normal on
+  both switches (17 of the CRS326's 26 ports and 5 of the CRS309's 9), so the
+  alert rules watch SFP faults and link flaps, never a bare "port down".
+
+**Self-monitoring**: Loki and Grafana publish their own `/metrics`, scraped by
+two static jobs added on 2026-11-18. Without them the stack watched every
+application but not itself: `loki_request_duration_seconds_count` on the push
+route is the only evidence that Fluent Bit writes are being rejected, and
+`grafana_alerting_rule_evaluation_failures_total` is the only evidence that the
+single alert evaluator stopped evaluating rules.
+
 **Temperature**: `node_hwmon_chip_names` carries the driver name for each hwmon
 `chip`, and the `chip` label itself is a device path — `k10temp` on `streaming`
 appears as `pci0000:00_0000:00:18_3`, which looks like a motherboard sensor and
@@ -103,6 +139,16 @@ its SSD.
 | Prometheus TSDB | `monitoring/prometheus-server` | 25 GiB | `90d`, hard cap `20GiB` (`retention.size`) |
 | Grafana database | `monitoring/grafana` | 5 GiB | n/a |
 | Loki chunks + index | `monitoring/storage-loki-0` | 20 GiB | `720h` via the compactor |
+
+**Loki fills slowly.** Measured on 2026-11-18: about 1.6 GB/day pushed before
+compression, at an average chunk compression ratio of 21×, so roughly
+**77 MB/day** and **2.3 GB** for the full 30-day retention against a 20 GiB
+claim. argocd is the loudest namespace (685k lines/day, 40 % of all lines, most
+of it the application and notifications controllers), followed by n8n (259k)
+and monitoring (125k). The throughput limit is 4 MB/s against an average of
+about 19 KB/s, so the ingestion limits are not the constraint either. Log
+volume needs no tuning; the panels that show these numbers are in
+[`dashboards.md`](dashboards.md).
 
 Verify rather than trust:
 
