@@ -19,7 +19,7 @@ image:
   # PUID/PGID through s6, so the securityContext cannot use runAsNonRoot.
   repository: lscr.io/linuxserver/radarr
   # -- Pin the tag. Never `latest`. Renovate manages this.
-  tag: "6.4.4.10685-ls326"
+  tag: "7.0.3.10918-ls328"
   pullPolicy: IfNotPresent
 
 imagePullSecrets: []
