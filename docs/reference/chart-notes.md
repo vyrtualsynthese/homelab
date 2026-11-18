@@ -136,6 +136,9 @@ that removes the walk (`DISABLE_EPISODE_METRICS`) is unreleased. No scrape annot
 the block is off, so Bazarr is absent from the target list rather than present and down. Bazarr's
 logger has only INFO and DEBUG and no variable selects either, so the chart sets no log level and
 records the INFO volume as accepted debt instead of inventing a warning level that does not exist.
+The API does reach one switch — `general.debug` in `/api/system/settings` — but it is two-state and
+only makes the log louder, so it cannot meet the warning rule either; a pod writing it on every
+rollout would also overwrite whatever the operator chose by hand.
 Both charts keep the `pvc-plex-media` mount read-write because subtitle files are written next to the
 videos, and both keep the LinuxServer root-then-`PUID`/`PGID` init.
 
@@ -214,7 +217,8 @@ Probes are the deliberate narrow case: qBittorrent publishes only `auth/login` w
 liveness is a TCP connect to the WebUI port and readiness is off — an `httpGet` probe would either fail
 forever or silently depend on the `10.42.0.0/16` auth bypass. The route keeps the authentik gate and
 carries **no** `/api` exemption, because nothing in the cluster reaches the hostname: cross-seed, the
-exporter and autobrr all use `http://qbittorrent:8080`. The log level is debt of `bazarr`'s kind, and
+exporter and autobrr all use `http://qbittorrent:8080`. The log level is worse off than `bazarr`'s:
+qBittorrent has no verbosity setting at all, only file-logging on/off, so the chart sets nothing, and
 the VueTorrent installer's traps are recorded above its values block.
 
 ## Charts still to align
