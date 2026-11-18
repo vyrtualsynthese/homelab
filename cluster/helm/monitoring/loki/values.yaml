@@ -100,3 +100,9 @@ loki:
       delete_request_store: filesystem
     limits_config:
       retention_period: 720h
+    # Measured 2026-11-18: Loki wrote 77k-287k lines/day (107 MB), nearly all of
+    # it one `caller=metrics.go` line per query per component at info, which is
+    # the stack narrating the dashboards' own reads. `warn` keeps the storage and
+    # query-path warnings; per-query latency is on the metrics, not the log.
+    server:
+      log_level: warn
