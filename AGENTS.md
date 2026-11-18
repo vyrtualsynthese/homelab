@@ -243,8 +243,9 @@ are in `docs/superpowers/plans/`.
     `networking.k8s.io/v1` Ingress, against the Traefik-CRD-only rule in §4. Both were retired, so no
     chart in the repo breaks that rule; the live `discourse` Ingress comes from its vendored upstream
     chart, not from a template here.
-12. Floating `latest` tags in `dashy`, `mktxp`, `minecraft`, `local-path`, and `alpine:latest` at
-    `media-stack/qbittorrent/templates/deployment.yaml:50`.
+12. Floating `latest` tags in `dashy`, `mktxp`, `minecraft` and `local-path`. (`alpine:latest` in
+    qBittorrent's VueTorrent installer was pinned on 2026-11-18: `vueTorrent.initTag` plus a
+    `# renovate: datasource=docker` annotation.)
 
 **Ingress**
 

@@ -9,6 +9,18 @@
   ],
   "prConcurrentLimit": 0,
   "prHourlyLimit": 0,
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Pins annotated with '# renovate:' in chart values, for dependencies that are not an image block: qBittorrent's VueTorrent installer reads its release tag and Alpine base this way.",
+      "fileMatch": [
+        "^cluster/helm/media-stack/qbittorrent/values\\.yaml$"
+      ],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)\\n\\s*(?:version|initTag): \"?(?<currentValue>[^\"\\n]+?)\"?\\s*\\n"
+      ]
+    }
+  ],
   "argocd": {
     "fileMatch": [
       "\\.yaml$"
