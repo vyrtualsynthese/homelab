@@ -71,6 +71,31 @@ no node-side `chown` and needs no runbook. Since 2026-11-19 `args` carries `--lo
 stdout switches recyclarr to log mode at `info` by itself, and a run's progress lines are not worth
 the volume. The Job status and the arr settings the sync changes carry the outcome.
 
+### renovate
+
+As of 2026-11-19: the second batch-job case, and the first wrapper chart over a chart whose values
+name their own root. Two objects — ConfigMap `renovate-config` and CronJob `renovate` — no listener,
+no probes, no Service, no ingress; the exit status and the run's log are the health signal. The
+wrapper pins upstream `renovate` 46.443.0 and the image at 44.251.0, which is also its `appVersion`.
+The chart version now lives in `Chart.yaml`'s dependency and nowhere else; the Application points at
+the directory, so Renovate's `helmv3` manager owns the chart and its `docker` manager owns the tag.
+
+The bug that kept it `OutOfSync` was not the version: the values carried an `affinity` block one
+level too high, without `nodeAffinity:` above it, and the API server pruned it to `affinity: {}` on
+every sync. That block also asked for the retired `node-type: general` label. Both are gone; the pod
+is pinned to `nas` with `nodeSelector`.
+
+It runs at 03:00 Europe/Paris — after the *arrs' midnight housekeeping, before the 04:30 database
+dump — with `Forbid`, `backoffLimit: 1`, a 90-minute deadline and three days of finished Jobs. It
+takes the batch exception on probes and readiness, and its image already runs as UID 12021, so
+non-root, `allowPrivilegeEscalation: false`, `drop: [ALL]` and the runtime seccomp profile cost
+nothing. **Log level is a deliberate divergence:** the contract asks for `warning`, but the nightly
+log is about 100 lines and 4.5 KB, it is the only per-repository record of what was scanned, and
+`recyclarr` — the other batch job — keeps `info` too. Resources are a protection ceiling (256Mi
+requested, 1Gi limited), not a measurement: a run is shorter than the scrape interval. It still runs
+under the namespace's `default` ServiceAccount, which mounts a token Renovate never uses; the
+upstream chart cannot turn that off without an `extraObjects` manifest.
+
 ### tautulli
 
 As of 2026-11-13: the first chart in the media stack with **no public route at all**. One

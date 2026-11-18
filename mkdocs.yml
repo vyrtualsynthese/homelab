@@ -102,6 +102,7 @@ nav:
       - Add a database: runbooks/postgres-add-database.md
       - Restore a database: runbooks/postgres-restore.md
       - The alert relay: runbooks/alert-relay.md
+      - Renovate: runbooks/renovate.md
       - The board's database: runbooks/vikunja-database.md
       - First start of the board: runbooks/vikunja-first-start.md
       - Shape the board: runbooks/vikunja-board-seed.md

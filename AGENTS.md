@@ -73,10 +73,10 @@ spec:
       ref: values
 ```
 
-The repo directory then holds only `values.yaml` (no `Chart.yaml`). Examples: postgres, pgadmin,
-renovate, local-path, books-media, nfs-audio.
+The repo directory then holds only `values.yaml` (no `Chart.yaml`). Examples: local-path,
+books-media, nfs-audio.
 
-Not the way to add an external chart: new work uses pattern D, and these six are converted
+Not the way to add an external chart: new work uses pattern D, and these three are converted
 separately.
 
 ### C. Vendored upstream chart
@@ -165,7 +165,7 @@ done
 
 Charts that need `helm dependency build`: `monitoring/prometheus`, `monitoring/grafana`,
 `monitoring/loki`, `monitoring/fluent-bit`, `authentik`, `dashy`, `filebrowser`,
-`databases/pgadmin`, `discourse`.
+`databases/pgadmin`, `discourse`, `renovate`.
 
 Check that ArgoCD references resolve (CRLF-safe):
 
