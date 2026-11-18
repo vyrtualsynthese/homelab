@@ -390,6 +390,17 @@ client as `@qbittorrent:8080` in its own log; `qbittorrent-exporter` uses the sa
 autobrr logs is a Service name (`radarr:7878`, `sonarr-anime:8989`) and no `kub.local` host appears
 anywhere in its log. An `/api` rule would have opened a path that nothing walks.
 
-qBittorrent keeps its own WebUI login on purpose: behind the gate it is a second prompt for an admin,
-and it is the way in while authentik is down. Turning it off (Preferences → Web UI) is a later,
-deliberate step, taken once this route is proven.
+The WebUI's own login was bypassed on 2026-11-18, once the route was proven, by setting
+`bypass_auth_subnet_whitelist_enabled=true` and `bypass_auth_subnet_whitelist=10.42.0.0/16` through
+`/api/v2/app/setPreferences` from inside the pod. Three details matter for the next reader:
+
+- the keys are `bypass_auth_subnet_whitelist*`. A `web_ui_auth_subnet_whitelist*` payload is answered
+  `200` and silently ignored, which reads like success;
+- `bypass_local_auth` stays `false`, so a port-forward to the Service still asks for the password and
+  remains the break-glass while authentik is down;
+- the setting lives in `qBittorrent.conf` on the config claim, not in git, so a rebuilt volume loses
+  it. The chart's `values.yaml` comment carries both keys and the range.
+
+Verification, unauthenticated: `GET /api/v2/app/version` against the pod's own address answered
+`Forbidden` / `403` before and `v5.2.3` / `200` after, and `qbittorrent-exporter` stayed `up` with
+248 torrents throughout.

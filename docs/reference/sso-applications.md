@@ -43,7 +43,7 @@ absent from this table has no single sign-on at all — no provider, no gate —
 | Sonarr | forward-auth gate | configured; its own login is off; `/api` exempt | `sonarr.kub.local` |
 | Tautulli | none | by decision: no gate and no authentik object; `lan-only` stays, and Tautulli's own login is the gate because a gate would collapse per-user history | `tautulli.kub.local` |
 | Dashy | none | **fix** — no gate and no `lan-only` live: it names `kube-system-authentik`, which is headers, not a gate. The chart already emits `lan-only` and the live object predates that rule, so a sync closes the gap | `dashy.ashudev.com` |
-| qBittorrent | forward-auth gate | configured 2026-11-18 — blueprint `app-qbittorrent`, Admins only; its own login stays as break-glass; no `/api` exemption because every API client uses the Service name | `qbittorrent.kub.local` |
+| qBittorrent | forward-auth gate | configured 2026-11-18 — blueprint `app-qbittorrent`, Admins only; its own login is bypassed for the pod network so the gate is the only prompt, and port-forward still asks (the break-glass); no `/api` exemption because every API client uses the Service name | `qbittorrent.kub.local` |
 | Sonarr (anime) | forward-auth gate | configured 2026-11-18; its own login is off; `/api` exempt | `sonarr-anime.kub.local` |
 | Plex | none | no gate and no `lan-only`: Plex clients cannot complete a browser sign-in, so the host answers the internet and Plex login is the gate | `plex.kub.home.ashudev.com` |
 | Seerr | none | no gate and no `lan-only`; Plex login is the gate, and local sign-in is off | `seerr.kub.home.ashudev.com` |
@@ -184,7 +184,7 @@ session.
 | tautulli | `https://tautulli.kub.local` | **no gate** since 2026-11-18; `lan-only` alone | its own login; the Plex-only toggle is not in the official docs |
 | maintainerr | `https://maintainerr.kub.local` | forward-auth; **`/api` exempt** (`lan-only` only) since 2026-11-15 | none exists |
 | autobrr | `https://autobrr.kub.local` | **OIDC, no gate** | replaced by OIDC |
-| qbittorrent | `https://qbittorrent.kub.local` | forward-auth since 2026-11-18, no `/api` exemption | its own login, kept as break-glass |
+| qbittorrent | `https://qbittorrent.kub.local` | forward-auth since 2026-11-18, no `/api` exemption | bypassed for `10.42.0.0/16` the same day; still asked on localhost, so port-forward is the break-glass |
 | sonarr-anime | `https://sonarr-anime.kub.local` | forward-auth; **`/api` exempt** since 2026-11-18 | off |
 | radarr-anime | `https://radarr-anime.kub.local` | **OIDC, no gate** since 2026-11-18; **`/api` exempt** | OIDC; password login off |
 
@@ -444,10 +444,13 @@ table of `/config/app.db` on the config claim; `0` is standard, `2` is OAuth.
 
 ## Still open
 
-- **qbittorrent** is gated since 2026-11-18 and keeps its own login as break-glass: an admin sees
-  authentik first, then the WebUI login, and the WebUI login is the way in while authentik is down.
-  Turning it off is a UI toggle for a later, deliberate step. No `/api` exemption is needed because
-  cross-seed, `qbittorrent-exporter` and autobrr all reach it by Service name.
+- **qbittorrent** is gated since 2026-11-18 and its own login was bypassed the same day:
+  `bypass_auth_subnet_whitelist_enabled=true` with `bypass_auth_subnet_whitelist=10.42.0.0/16` in
+  `qBittorrent.conf`. A browser through the gate lands in the WebUI with no second prompt, so the
+  gate is the only control for anything reaching it over the pod network. `bypass_local_auth` stays
+  false, so `kubectl port-forward svc/qbittorrent 8080:8080` still asks for the password and is the
+  way in while authentik is down. No `/api` exemption, because cross-seed, `qbittorrent-exporter` and
+  autobrr all reach it by Service name.
 - **tautulli** has no gate since 2026-11-18 and keeps its own login. Plex-only sign-in exists as a UI
   toggle in v2.19.0, but `docs.tautulli.com` documents neither it nor a procedure for it, so the
   chart leaves the login alone.
