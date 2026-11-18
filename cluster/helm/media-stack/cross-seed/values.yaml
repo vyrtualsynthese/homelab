@@ -66,6 +66,9 @@ env:
   # -- The image already sets this; stated so the mount path is explicit.
   # Must match storage.mountPath: they are the same /config directory.
   CONFIG_DIR: "/config"
+  # No LOG_LEVEL: `--verbose` is the only switch cross-seed offers and it only
+  # raises. The README's Logs section records what INFO costs and why the
+  # scheduler lines stay.
 
 extraEnv: []
 envFrom: []
