@@ -58,3 +58,23 @@ rasteriser rounding, not drift.
 The lockups set their text in Ubuntu Sans. On a machine without it the SVG falls back to DejaVu
 Sans and the wordmark will not match the exports; the PNGs are the definitive rendering, and the
 SVG is meant to be opened where the font exists or converted to outlines before shipping.
+
+## The copies the documentation site serves
+
+The docs site wears this identity, and a Helm chart can only read files inside its own directory,
+so `cluster/helm/docs-site/files/` holds two byte copies:
+
+| Copy | Master |
+|---|---|
+| `ashulab-badge.svg` | this directory, same name (favicon and the landing page icon link) |
+| `ashulab-badge-transparent.svg` | this directory, same name (the header logo) |
+
+`ashulab.css` next to them is hand-written, not generated: it maps this palette onto the MkDocs
+Material theme and styles the branch bar the builder adds to every page.
+
+When the mark changes, rebuild here and copy the two SVGs over. Nothing else has to be bumped: the
+builder's page stamp includes these files, so the next run restamps every page and the served copies
+follow the chart.
+
+If the mark ever needs the light-background form as the header logo, `ashulab-badge-mono-navy.svg`
+is the one to copy instead — the current header is navy, so the cyan mark is the right one.
