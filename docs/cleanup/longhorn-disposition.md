@@ -5,9 +5,13 @@ its replica data is gone; no volume below holds anything worth rescuing, by oper
 (`docs/superpowers/specs/2026-11-10-homelab-stabilisation-design.md` §9 W0).
 
 The storage driver and its custom resources are already uninstalled, so nothing removes the last
-objects on its own: their finalizers name controllers that no longer exist. This page records the
-live set — **verified 2026-11-18** through the read-only Kubernetes API — and the exact steps that
-clear it.
+objects on its own: their finalizers name controllers that no longer exist.
+
+> **Where this stands.** The operator ran phases 1, 3 and 4 on 2026-11-18. Twenty volumes and three
+> claims were cleared, and `longhorn-system` is gone. **What remains is the three claims of phase 2**
+> — `n8n-2`, `syncthing-conf`, `thelounge-volume` — which stay until those three applications are
+> rebuilt off Longhorn. The tables below are the inventory taken before that run, kept as the record
+> of what was removed.
 
 > **Agents cannot run these steps.** The agent's cluster access is read-only and shell `kubectl` is
 > denied, so every cluster-side command here is for the operator. Repo-side items are already merged.
@@ -130,12 +134,16 @@ done
 If a PV still shows `Terminating` after its claim is gone, it is holding `kubernetes.io/pv-protection`:
 run the same `kubectl patch pv` line once more.
 
-Expected afterwards, for these three only: no line.
+Expected: `NotFound` for each volume, and no Longhorn claim left. Match on the storage class, not on
+the name — the rebuilt `filebrowser` application has a `filebrowser-config` claim of its own, on
+`local-path`, and a name-only grep finds it instead.
 
 ```bash
 kubectl get pv filebrowser-config filebrowser-db-2 prometheus-data 2>&1
-kubectl get pvc -A | grep -E 'filebrowser-(config|db-2)|prometheus-data'
+kubectl get pvc -A | grep longhorn
 ```
+
+The second command prints only the three claims of phase 2.
 
 ### Phase 2 — the three claims still in use: deferred
 
@@ -161,9 +169,12 @@ kubectl delete namespace longhorn-system --wait=false
 kubectl get ns longhorn-system 2>&1
 ```
 
-Expected: `Error from server (NotFound)`. The namespace holds only `kube-root-ca.crt`, so it goes on
-the first try; a `Terminating` that persists means something still points into it — report the
-condition instead of clearing it blind.
+Expected: `namespace "longhorn-system" deleted` at once, then `NotFound` within a few seconds. With
+`--wait=false` the delete returns while the namespace is still `Terminating`, so `kubectl get ns
+longhorn-system` can answer `Terminating` on the first look — that is the normal race, not a stuck
+namespace. The namespace holds only `kube-root-ca.crt`, so it goes without a patch; a `Terminating`
+that still stands after a minute means something points into it — report the condition instead of
+clearing it blind.
 
 ### Phase 5 — verify
 
@@ -174,7 +185,8 @@ kubectl get ns | grep -ci longhorn
 ```
 
 Expected: `3`, `3` and `0`. The two threes are the deferred claims of Phase 2 and their volumes —
-they stay until those applications are rebuilt. Anything counting six means Phase 3 did not run.
+they stay until those applications are rebuilt. Anything counting six means Phase 3 did not run. A
+`1` on the last line is the terminating namespace still in the list; wait and re-run.
 
 ## Found on the way, outside this cleanup
 
