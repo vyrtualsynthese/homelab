@@ -6,9 +6,12 @@ replicaCount: 1
 
 image:
   repository: ghcr.io/akpw/mktxp
-  pullPolicy: Always
-  # Overrides the image tag whose default is the chart appVersion.
-  tag: latest
+  pullPolicy: IfNotPresent
+  # renovate: datasource=docker depName=ghcr.io/akpw/mktxp
+  # Explicit tag, not latest: two switches are the only devices this exporter
+  # reads, so a silent image change is one restart away from a blank Network
+  # dashboard with nothing in the cluster recording what it was before.
+  tag: v2.1.0
 
 imagePullSecrets: []
 nameOverride: ""
@@ -65,16 +68,12 @@ resources:
   #   cpu: 100m
   #   memory: 128Mi
 
-nodeSelector: {}
+# Pinned the way every other workload is. The old affinity required
+# `node-type=general`, a label the repo retired and a new node would not carry;
+# mktxp only scheduled because nuc0 still has it.
+nodeSelector:
+  kubernetes.io/hostname: nuc0
 
 tolerations: {}
 
-affinity:
-  nodeAffinity:
-    requiredDuringSchedulingIgnoredDuringExecution:
-      nodeSelectorTerms:
-        - matchExpressions:
-            - key: node-type
-              operator: In
-              values:
-                - general
+affinity: {}

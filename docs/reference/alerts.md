@@ -13,7 +13,7 @@ The overview — what runs where, its sizing, and how to query the stack:
 ## Alerting
 
 Grafana unified alerting, folder `Homelab`, rule group `homelab-core`,
-evaluation interval **60 s**. **29 rules**, one contact point, two routes by
+evaluation interval **60 s**. **35 rules**, one contact point, two routes by
 severity.
 
 **Delivery**: contact point `discord-homelab` (type `discord`).
@@ -56,6 +56,12 @@ webhook exists only in that contact point.
 | `PodPending` | Pending, created <2 h ago | 15m | warning | **firing** on `databases/pgadmin-67c5f5c85` (missing Secret, 2026-11-14) |
 | `PodNotStarting` | Scheduled, container still not started, older than 2 h | 5m | warning | **firing, silenced** (the abandoned `nfs-ssd` provisioner) |
 | `LokiSilent` | no Fluent Bit lines in 10 min (`noDataState: Alerting`) | 10m | warning | inactive |
+| `SwitchDown` | `absent()` of the identity metric for either switch | 5m | critical | inactive |
+| `SwitchSfpDegraded` | SFP+ receive loss or transmit fault | 10m | warning | inactive |
+| `SwitchTemperatureHigh` | switch CPU >80 °C | 15m | warning | inactive |
+| `SwitchLinkFlapping` | >5 link-down events in 1 h on a port | 10m | warning | inactive |
+| `LokiWriteFailing` | sustained 5xx on the Loki push route | 10m | warning | inactive |
+| `GrafanaAlertEvaluationFailing` | sustained rule-evaluation errors | 10m | warning | inactive |
 
 **`JobFailed`** is the batch-workload rule. Its expression is
 `((kube_job_status_failed > 0) unless on(namespace, job_name) (kube_job_status_succeeded > 0)) and on(namespace, job_name) ((time() - kube_job_status_start_time) < 7200)`:
@@ -104,6 +110,27 @@ also covers the edge Pis' SMART (`:9902`) and Docker (`:9323`) exporters, which
 `NodeDown` does not watch — that rule only sees their node exporter on `:9100`.
 Those targets are static, so the alert names the instance IP rather than a host
 label.
+
+**Six rules added on 2026-11-18 watch data the cluster already had but nobody
+alerted on.**
+
+`SwitchDown` cannot use `1 - up`: mktxp is one exporter for two devices, and an
+unreachable device simply stops publishing its series.
+The rule wraps `absent()` once per `routerboard_address` and labels each term
+with the switch name. That also covers mktxp itself dying: a vanished scrape
+target produces no `up == 0` to alert on, so this rule is the only one that
+notices. The three port rules read the same 838 series: `SwitchSfpDegraded`
+fires on the 0/1 `rx_loss`/`tx_fault` bits, `SwitchTemperatureHigh` at 80 °C
+(the fanless CRS326 sits in the high sixties, so 80 is the fault line, not the
+normal), and `SwitchLinkFlapping` only when a port moves more than five
+link-down events in an hour. A port with no cable is normal on both switches
+(17 of the CRS326's 26 ports) and is never alerted on.
+
+`LokiWriteFailing` and `GrafanaAlertEvaluationFailing` watch the observability
+stack itself, which needed two scrape jobs that did not exist before that day.
+Both use a 5-minute rate rather than `increase`, so a single rejected write or
+one bad evaluation is not a page; `LokiSilent` remains the rule for total
+silence.
 
 `noDataState` is `OK` on every rule **except `LokiSilent`**, which is `Alerting`
 on no data: its expression returns an empty vector when no lines arrive, and that
@@ -191,8 +218,17 @@ reports `firing` on the Health dashboard.
 - **Alerting is a single point of failure**: Grafana evaluates and delivers. If
   Grafana, Prometheus or `nas` goes down, no message is sent. The operator
   accepts this risk (watchdog declined on 2026-11-12).
-- No metrics for the NFS provisioners or the Pi-hole resolver itself (only its
+- **No metrics for the NFS provisioners or the Pi-hole resolver itself** (only its
   exporter).
+- **Two switches are covered, and their identity strings are wrong.** The CRS326
+  calls itself `CR326` and the CRS309 keeps the default `MikroTik`, so the rules
+  and the Network dashboard map `routerboard_address`, not the identity. Any
+  other MikroTik device is missing from mktxp's config, which is a Secret: adding
+  one is a Secret edit, not a chart edit.
+- **Fluent Bit's own retry and error counters are not scraped.** The Service on
+  `:2020` exists, but only Loki's push replies are watched. A Fluent Bit that
+  retries forever without Loki ever answering 5xx is seen only when
+  `LokiSilent` fires, ten minutes later.
 - Dashboards and rules are not in git and are not backed up.
 
 ## Changing things
