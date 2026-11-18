@@ -194,12 +194,13 @@ are in `docs/superpowers/plans/`.
    SQLite file on an etcd cluster; the NAS script backs up a MinIO path deleted in July 2024; and the
    k3s and NAS hosts have had a daily cron since 2024 pointing at a script that was never deployed
    to them. See `docs/audit/ansible-hosts.md`.
-4. **Longhorn is gone, but it cannot bury its dead.** The driver, its StorageClasses and its custom
-   resources are uninstalled, and every application that was on it runs on `local-path` or one of the
-   NFS classes — except three: **`n8n`, `syncthing` and `thelounge` still mount their Longhorn claims**
-   from before the failure. What survives is 26 PVs and 6 PVCs stuck `Terminating` since 2026-08-28
-   (verified 2026-11-18). Their contents were abandoned by decision, and **they will never clear on
-   their own**: the finalizers name the Longhorn CSI driver
+4. **Longhorn is gone, but it cannot bury its dead.** The driver, its StorageClasses, its custom
+   resources and the `longhorn-system` namespace are gone, and every application that was on it runs on
+   `local-path` or one of the NFS classes — except three: **`n8n`, `syncthing` and `thelounge` still
+   mount their Longhorn claims** from before the failure. What survives is those three PVs and their
+   three PVCs, stuck `Terminating` since 2026-08-28 (twenty other volumes and three claims were cleared
+   on 2026-11-18). Their contents were abandoned by decision, and **they will never clear on their
+   own**: the finalizers name the Longhorn CSI driver
    (`external-attacher/driver-longhorn-io`), which no longer exists to remove itself, and the bound
    ones also carry `kubernetes.io/pv-protection` until the matching claim goes.
 
