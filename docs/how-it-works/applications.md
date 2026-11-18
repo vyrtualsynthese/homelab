@@ -39,7 +39,7 @@ belong to is [media.md](media.md).
 
 | Application | Namespace | Node | Chart | What it is |
 |---|---|---|---|---|
-| `ashuvidz` | `ashuvidz` | streaming | D | the `ashuvidz.com` site: the nginx that serves it, its hostnames and its redirect |
+| `ashuvidz` | `ashuvidz` | nuc0 | A | the `ashuvidz.com` site: the nginx that serves it, the git sidecar that refreshes the content, its hostnames and its redirect |
 | `authentik` | `authentik` | nuc0 | D | the identity provider: one sign-in for the gated apps |
 | `dashy` | `dashy` | nuc0 | D | the start page: links to every application |
 | `pgadmin` | `databases` | nuc0 | D | the web console for the shared PostgreSQL |

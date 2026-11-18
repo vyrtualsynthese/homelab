@@ -1,123 +1,129 @@
 # ashuvidz-website
 
 `ashuvidz.com`, the public site: nginx serving static files that are pulled from the site's own git
-repository at runtime. The chart is a wrapper (pattern D) around the Bitnami `nginx` chart, so the
-Deployment, Service, ServiceAccount, NetworkPolicy and PodDisruptionBudget come from upstream and
-this directory owns the values plus the two Traefik routes.
+repository at runtime. The chart is hand-written against the contract in
+[`docs/charts/README.md`](../../../docs/charts/README.md) — it used to wrap the Bitnami `nginx`
+chart, and no longer does: Bitnami stopped publishing the versioned tags that chart pins, and the
+site was one reschedule away from `ImagePullBackOff`. See the history at the end.
 
 ## Upstream
 
-- Chart: https://github.com/bitnami/charts/tree/main/bitnami/nginx, pinned to `23.0.6` in
-  `Chart.yaml`
-- Image: `docker.io/bitnamilegacy/nginx:1.28.0-debian-12-r0` — the **frozen** copy of the tag. On
-  2026-11-18 `bitnami/*` publishes only `latest`: every versioned tag moved to `bitnamilegacy/*`, and
-  a pod that had to pull the old name failed with `not found`. The pinned name here is a stopgap;
-  see the debt list.
-- Content: https://github.com/vyrtualsynthese/ashuvidz-website, branch `main`
+- Image: `nginxinc/nginx-unprivileged:1.31.7-alpine` — the nginx team's non-root build, listening on
+  8080, so no process in the pod is root.
+- Content helper: `alpine/git`, pinned, used by the init container and the sidecar.
+- Content: https://github.com/vyrtualsynthese/ashuvidz-website, branch `main`.
 
 ## How this chart is deployed here
 
 Not with `helm install`. ArgoCD renders it from `cluster/argocd/projects/ashuvidz.yaml` into the
-`ashuvidz` namespace, release name `ashuvidz`, so every object is named `ashuvidz-nginx` after the
-wrapped chart's fullname.
-
-`charts/` and `Chart.lock` are gitignored: ArgoCD runs `helm dependency build` at sync time, so a
-local render needs the same step first.
+`ashuvidz` namespace, release name `ashuvidz`. There are no chart dependencies, so `helm dependency
+build` is no longer needed:
 
 ```bash
-helm dependency build cluster/helm/ashuvidz-website
 helm template ashuvidz cluster/helm/ashuvidz-website --namespace ashuvidz
 ```
 
 | File | Renders |
 |---|---|
-| `Chart.yaml` | the chart, `appVersion` matching the nginx image tag, the upstream dependency |
-| `values.yaml` | every knob for the wrapped chart: image, git source, resources, node pin, probes |
-| `templates/ingress.yaml` | the `websecure` IngressRoute on `ashuvidz.com` |
-| `templates/ingress-redirect.yaml` | the `web` IngressRoute that redirects to it |
-
-Everything else — Deployment, Service, ServiceAccount, NetworkPolicy, PodDisruptionBudget — is
-rendered by the wrapped chart. `values.yaml` is a full copy of that chart's defaults at `23.0.6`
-plus the overrides below, deliberately: a future release changing a default cannot change what runs
-here without the edit showing up in review.
+| `Chart.yaml` | the chart, `appVersion` matching the nginx image tag |
+| `values.yaml` | image, content source, resources, node pin, probes, routes |
+| `templates/deployment.yaml` | the Deployment: clone init container, nginx, git-sync sidecar |
+| `templates/configmap.yaml` | `nginx.conf` — the served root, `/healthz`, the `.git` deny, gzip |
+| `templates/service.yaml` | the ClusterIP Service on port 80 → the container's 8080 |
+| `templates/serviceaccount.yaml` | the ServiceAccount, with no API token mounted |
+| `templates/ingressroute.yaml` | the `websecure` IngressRoute and the `web` redirect |
+| `templates/NOTES.txt` | install notes |
 
 ## How a content change reaches the cluster
 
 There is no build step and no image: the content is the repository.
 
 1. Push to `main` on `vyrtualsynthese/ashuvidz-website`.
-2. Within about a minute the `git-repo-syncer` sidecar runs `git pull` in `/app` and the new files
+2. Within about a minute the `git-sync` sidecar runs `git -C /site pull --ff-only` and the new files
    are served. No commit here, no sync, no restart.
 
-`cloneStaticSiteFromGit` is what does it: an init container clones the repository into an `emptyDir`
-mounted at `/app`, and the sidecar repeats the pull every 60 seconds (`interval`). So:
+The content lives in an `emptyDir` mounted at `/site`:
 
-- The pod starts serving whatever `main` holds at that moment; a restart always re-clones.
-- A failed pull leaves the last good copy in place and the site keeps answering.
-- `/app` is `emptyDir`, so nothing survives a restart. The content is never stored in the cluster,
-  and the repository is the only copy.
-- Changing the site's repository or branch, or the pull cadence, is a chart change: it lands in
-  `values.yaml` and rolls the pod.
+- The init container `clone-content` clones `content.repository` at `content.ref` before nginx
+  starts, and fails the pod if `index.html` is not there — a blank site must not look healthy.
+- The sidecar repeats the pull every `content.intervalSeconds` (60). A failed pull is logged and the
+  previous content keeps being served.
+- Nothing survives a restart: the pod re-clones. The repository is the only copy.
+- `--ff-only` means an upstream force-push does not silently rewrite the served tree; it errors in
+  the sidecar log until the pod is recreated.
 
 ## Routing
 
-`ashuvidz.com` is on the cluster's public list, so the route carries **no** `lan-only` middleware
-and no authentik gate: it is reachable from the internet by design. TLS is
-`certResolver: myresolver` (Let's Encrypt); the only middleware is `kube-system/security`, which
-sets the headers (`strict-transport-security`, `x-frame-options` and the rest).
+`ashuvidz.com` is on the cluster's public list, so the route carries **no** `lan-only` middleware and
+no authentik gate: it is reachable from the internet by design. TLS is `certResolver: myresolver`
+(Let's Encrypt); the only middleware is `kube-system/security`, which sets the security headers.
 
-Both routes are unchanged from before this chart was aligned to the contract: `websecure` for the
-site, `web` for the redirect. `hack/check-exposure.sh --only ashuvidz` passes because a public host
-is allowed to be ungated.
+Both routes are unchanged from what the cluster already ran — same names (`ashuvidz`,
+`ashuvidz-redirect`), same `websecure`/`web` pair, the `security` headers and the `redirect-https`
+middleware on Traefik's no-op service. `hack/check-exposure.sh --only ashuvidz` passes because a
+public host is allowed to be ungated.
+
+The object names are the ones the cluster already holds, too: `nameOverride: nginx` makes
+`app.fullname` build `ashuvidz-nginx`, which is the Service the two routes already point at. That is
+deliberate — `spec.selector` on a Deployment is immutable, so renaming would mean a deleted and
+recreated Deployment and a 503 for as long as the new pod takes to clone. The routes are the one
+place the release name is used instead (`ingressRoute.name`), for the same reason: a renamed
+IngressRoute leaves the host unrouted until the new object is applied.
 
 ## Probes, resources, placement
 
 | Setting | Value | Why |
 |---|---|---|
-| liveness | TCP connect to the `http` port (8080), 30s delay | It answers whether nginx is alive, not whether the content is right |
-| readiness | `GET /` | `/` is `index.html`, so a failed clone or a missing tree takes the pod out of the Service instead of restarting it |
-| nginx resources | requests 10m CPU / 32Mi, limit 128Mi | Measured 2026-11-18 over the 5 days Prometheus retains: p95 23.8Mi, peak 23.9Mi. The limit is above 1.5× that because the same block covers the `git clone` init container, which runs too briefly to be scraped |
-| git-syncer resources | requests 10m CPU / 32Mi, limit 64Mi | Same window, `container=git-repo-syncer`: p95 21.2Mi, peak 25Mi |
-| ephemeral-storage | requests 50Mi, limit 2Gi, both containers | `/app` holds the clone on disk; without a limit one bad clone fills the node |
-| node | `nas` → **`nuc0`**, via `nodeSelector` | The site keeps no state, and `nuc0` is where the other small front ends live (`authentik`, `filebrowser`, `vikunja`) |
+| liveness | `GET /healthz` | A `return 200` in the chart's `nginx.conf`: it answers "is nginx up", never "is the clone right" |
+| readiness | `GET /` | `/` is `index.html` out of the clone, so a failed clone takes the pod out of the Service instead of restarting it |
+| nginx resources | requests 10m CPU / 32Mi, limit 128Mi | Measured 2026-11-18 over the 5 days Prometheus retains: p95 23.8Mi, peak 23.9Mi. The limit is above 1.5× that because the clone init container has no sample to size from |
+| content resources | requests 10m CPU / 32Mi, limit 64Mi | The sidecar's stand-in measurement is the Bitnami syncer it replaces: p95 21.2Mi, peak 25Mi |
+| ephemeral-storage | requests 50Mi, limit 2Gi, all containers | `/site` is a clone on disk; without a limit one bad clone fills the node |
+| node | `kubernetes.io/hostname: nuc0` | The site keeps no state; `nuc0` is where the other small front ends live |
 
-The two probes are separate on purpose but share nothing with a dependency: a static site has no
-backend to interrogate, so readiness checks that the files are being served and liveness checks
-that the process is up. A crash loop from a bad content push is avoided this way — a broken tree
-shows as `0/1 Ready`, not as restarts.
+Because the probe answers live in the chart's own config, `/healthz` exists even while the clone is
+empty. That is the point: a broken content push shows as `0/1 Ready`, not as a restart loop.
 
-`helm template ... | kubeconform -strict` reports 7 objects, 5 valid and 2 skipped (the Traefik
-CRDs), 0 invalid.
+## Hardening
+
+- UID 101 everywhere (`runAsNonRoot`), the image's own user; `fsGroup: 101` on two `emptyDir`s, where
+  the kubelet does apply it — unlike `local-path`, which is why there is no claim here.
+- `allowPrivilegeEscalation: false`, all capabilities dropped, `seccompProfile: RuntimeDefault`,
+  `readOnlyRootFilesystem: true` (nginx's temp paths are moved into the `/tmp` `emptyDir`).
+- `/site` is mounted read-only into nginx. Dotfiles are denied in the config, so `/.git` is not
+  downloadable.
+- No ServiceAccount token is mounted: nothing here talks to the API.
 
 ## Known debt
 
-- **Both images are frozen.** `bitnamilegacy/nginx` and `bitnamilegacy/git` are a read-only archive
-  of the tags Bitnami deleted: they will never receive a security fix. That is tolerable for the
-  git helper, which only runs `git pull`, and not for the web server on a public host. The durable
-  fix is to drop the Bitnami chart for this app — an official `nginx` image plus a maintained git
-  sidecar — which is a chart rewrite, not a value change, so it was not done while this card was
-  about the contract. Until then, re-check this entry whenever nginx publishes a CVE fix.
-- **The exporter is off.** `metrics.enabled: false`. The image ships `nginx-exporter` as a sidecar
-  and the contract wants it scraped, but exporters are turned on one chart at a time in this repo
-  (`flaresolverr` was the first) and this pass did not take that on. The related
-  `metrics.serviceMonitor` and `metrics.prometheusRule` flags are set `false` as well: there is no
-  Prometheus Operator here, so both would render CRDs nobody reconciles.
-- **Per-request access lines still reach Loki.** nginx writes its access log at `notice`, and the
-  wrapped chart exposes no value for the log level. Nothing was invented to hide it; if the volume
-  matters, the lever is a `serverBlock` entry, which also removes the only record of who got what.
-- **The chart is a Bitnami wrapper.** The repository is exiting Bitnami charts (`prometheus`,
-  `grafana`, `postgres` are the named cases). This one keeps the wrapper because the static-site
-  clone-and-pull logic is exactly what the site needs and hand-writing it would be more code than
-  the chart.
-- **No CI on the content repository.** A pushed typo goes live within a minute; there is no
-  staging copy of the site.
+- **The access log is on.** On a public host the request record is the only evidence of what
+  arrived, so `access_log /dev/stdout` stays, and the lines reach Loki. The error log runs at
+  `warn`. If the volume becomes a problem, the lever is the log format, not the level.
+- **No metrics.** nginx exposes no Prometheus endpoint out of the box; adding one means a sidecar
+  exporter, which is the metrics work the repo does one chart at a time. The old chart had one
+  wired but disabled.
+- **No staging copy.** A pushed typo is live within a minute.
+
+## History
+
+Until 2026-11-18 this chart wrapped `bitnamicharts/nginx`. Bitnami then moved every versioned tag to
+the frozen `bitnamilegacy/*` namespace and publishes only `latest` under `bitnami/*`. The pinned
+`bitnami/nginx:1.28.0-debian-12-r0` stopped resolving, and the failure only showed when a pod landed
+on a node without the layer cached — which is what [PR
+#1205](https://github.com/vyrtualsynthese/homelab/pull/1205) caused by pinning the pod to `nuc0`.
+[#1206](https://github.com/vyrtualsynthese/homelab/pull/1206) repointed both images at
+`bitnamilegacy` to restore service; this chart removes the dependency instead. `bitnamilegacy` is a
+read-only archive with no security fixes, so it was never a home for a public web server.
 
 ## After a change lands on `develop`
 
-1. ArgoCD syncs the `ashuvidz` Application (auto-sync is per Application, in the UI, not in git).
-   The pod is replaced on `nuc0` — it moves off `nas` the first time — and the new pod re-clones the
-   site before it becomes ready.
-2. Nothing is lost: the content comes from the repository and `/app` was an `emptyDir` before.
-3. The certificate is untouched by this change; TLS stays `myresolver` on `websecure`.
-4. Check it: `curl -sSI https://ashuvidz.com/ | head -3` answers `200`, and
-   `kubectl -n ashuvidz logs deploy/ashuvidz-nginx -c git-repo-syncer --tail=5` shows the pull.
+1. ArgoCD syncs the `ashuvidz` Application (auto-sync is per Application, in the UI). The Deployment
+   `ashuvidz-nginx` is patched in place, so the rollout is a normal rolling update: the new pod
+   clones the site on `nuc0` before it is ready and the old pod keeps serving until it is. The
+   NetworkPolicy and PodDisruptionBudget the Bitnami chart rendered are pruned — the policy allowed
+   every source on the two HTTP ports, and the PDB had `maxUnavailable: 1` against one replica, so
+   neither did anything.
+2. No traffic gap: the Service, its port and both IngressRoutes keep their names.
+3. Nothing is lost: the content comes from the repository and `/site` was an `emptyDir` before.
+4. Check it: `curl -sSI https://ashuvidz.com/ | head -3` answers `200`;
+   `kubectl -n ashuvidz logs deploy/ashuvidz -c git-sync --tail=3` shows the pull.
