@@ -85,7 +85,7 @@ prometheus:
   # it is histogram buckets that no dashboard and no alert rule reads. The
   # sums and counts stay, so request rate, error rate and an average latency
   # are still visible; the buckets are dropped before they reach the head.
-  # Measured 2026-11-18: 26,118 series leave this job, 19,368 of them
+  # Measured 2026-11-18: 28,892 series match this rule, 19,368 of them
   # etcd_request_duration_seconds_bucket alone. Buckets were once dropped for
   # apiserver_* only, which left the largest family behind.
   scrapeConfigs:
@@ -102,8 +102,8 @@ prometheus:
     # and volume families this job exists for.
     #
     # The kubelet's own histograms go the same way as the control plane's: no
-    # panel and no rule reads one, and 4,450 of this job's 7,520 series are
-    # buckets. kubelet_volume_stats_* is untouched — the NFS claim panels and
+    # panel and no rule reads one, and 4,932 of this job's 7,520 stored series
+    # are buckets. kubelet_volume_stats_* is untouched — the NFS claim panels and
     # PVCFillingUp read it.
     kubernetes-nodes:
       metric_relabel_configs:
@@ -117,7 +117,7 @@ prometheus:
           regex: "(kubelet|storage_operation|volume_operation|kubeproxy).*_bucket"
     # cAdvisor publishes 76 families per container, and the Applications board
     # reads two of them: container_cpu_usage_seconds_total and
-    # container_memory_working_set_bytes. The 17 families below are 10,100 of
+    # container_memory_working_set_bytes. The 17 families below are 10,058 of
     # this job's 21,557 series and appear in no panel and no rule. The identity
     # and limit families (container_last_seen, container_start_time_seconds,
     # container_spec_memory_limit_bytes, container_oom_events_total) stay: they
@@ -128,13 +128,22 @@ prometheus:
           source_labels:
             - __name__
           regex: "container_(tasks_state|memory_failures_total|memory_failcnt|memory_max_usage_bytes|memory_mapped_file|memory_swap|memory_kernel_usage|memory_cache|blkio_device_usage_total|fs_reads_total|fs_writes_total|cpu_load_average_10s|file_descriptors|processes|sockets|threads|threads_max)"
-    # kube-state-metrics publishes 812 families because it publishes one per
-    # object. Four families here have no reader: every Secret in the cluster
+    # kube-state-metrics publishes one series per object across 812 families.
+    # Four of those families have no reader: every Secret in the cluster
     # (421 of them, names and type only), pod tolerations, ReplicaSets — the
     # replica panels read Deployments and StatefulSets — and the QoS class.
-    # Measured 2026-11-18: 5,739 series. kube_persistentvolume_status_phase
-    # stays: the Longhorn cleanup reads PV state.
+    # Measured 2026-11-18: 6,148 series match this rule. kube_persistentvolume_status_phase
+    # has no reader either and stays: PV state matters to the Longhorn cleanup.
     kubernetes-service-endpoints:
+      metric_relabel_configs:
+        - action: drop
+          source_labels:
+            - __name__
+          regex: "kube_secret_.*|kube_pod_tolerations|kube_replicaset_.*|kube_pod_status_qos_class"
+    # Same guard as the pods -slow job: this is where a Service annotated
+    # prometheus.io/scrape_slow is scraped, and the KSM families above would
+    # come back through it.
+    kubernetes-service-endpoints-slow:
       metric_relabel_configs:
         - action: drop
           source_labels:
@@ -143,15 +152,27 @@ prometheus:
     # The pod-scraped exporters publish what they publish: qBittorrent writes
     # one series per torrent per field, 6,240 series for 365 torrents, while the
     # Media board reads four qbittorrent_global_* totals. The n8n and Traefik
-    # histograms are 3,090 more with no panel and no rule. Measured 2026-11-18:
-    # 9,330 series from this job. container_* is not touched here; the cadvisor
-    # job owns those families.
+    # histograms are 3,153 more with no panel and no rule — n8n publishes three
+    # bucket families of its own, of which the HTTP one is 1,610 series.
+    # Measured 2026-11-18: 9,393 series from this job. container_* is not
+    # touched here; the cadvisor job owns those families.
     kubernetes-pods:
       metric_relabel_configs:
         - action: drop
           source_labels:
             - __name__
-          regex: "qbittorrent_torrent_.*|n8n_http_request_duration_seconds_bucket|traefik_.*_bucket"
+          regex: "qbittorrent_torrent_.*|n8n_.*_bucket|traefik_.*_bucket"
+    # The two -slow jobs scrape the targets that carry prometheus.io/scrape_slow
+    # instead of prometheus.io/scrape, so a drop on the fast job never reaches
+    # them. No target carries that annotation on 2026-11-18, which is exactly why
+    # the same rules are set here: one annotation added later would otherwise
+    # bring back up to 15k series with nothing to notice.
+    kubernetes-pods-slow:
+      metric_relabel_configs:
+        - action: drop
+          source_labels:
+            - __name__
+          regex: "qbittorrent_torrent_.*|n8n_.*_bucket|traefik_.*_bucket"
     rbp0:
       enabled: true
       static_configs:
