@@ -99,6 +99,8 @@ instances keep Radarr's own login switched off for the network Traefik forwards 
 LAN ranges trusted, which is the sonarr pair's setting. `authenticationMethod: none` is not the way to
 turn the login off — `AuthenticationRequired` is checked independently, so `enabled` demands a login
 that no method can satisfy, and Radarr shows its Authentication Required form with no way to fill it.
+Both instances moved from `6.4.4.10685-ls326` to `7.0.3.10918-ls328` on 2026-11-18; the `/api/v3`
+prefix is unchanged in v7, so `exportarr` and the `/api` exemption keep working.
 
 ### lidarr
 
