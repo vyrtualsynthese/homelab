@@ -35,7 +35,7 @@ three.**
 manager first.
 
 ```bash
-APP=firefly; APP_NS=firefly; APP_SECRET=firefly-db; APP_SECRET_KEY=DB_PASSWORD
+APP=koillection; APP_NS=koillection; APP_SECRET=koillection; APP_SECRET_KEY=DB_PASSWORD
 PW=$(openssl rand -hex 24)
 kubectl -n databases patch secret "pg-$APP" --type merge \
   -p "$(jq -n --arg p "$PW" '{stringData:{password:$p}}')"
@@ -43,7 +43,7 @@ kubectl -n "$APP_NS" patch secret "$APP_SECRET" --type merge \
   -p "$(jq -n --arg k "$APP_SECRET_KEY" --arg p "$PW" '{stringData:{($k):$p}}')"
 ```
 
-A merge patch replaces the named key and leaves the rest: firefly's `DB_DATABASE` survives.
+A merge patch replaces the named key and leaves the rest: koillection's `DB_NAME` and `DB_HOST` survive.
 `create` fails with `AlreadyExists`.
 
 The role, pasted interactively so it stays out of the shell history:
@@ -54,8 +54,8 @@ kubectl -n databases exec -it statefulset/postgres -c postgres -- psql -U postgr
 ```
 
 ```bash
-kubectl -n "$APP_NS" rollout restart deploy/<app>
-kubectl -n "$APP_NS" rollout status deploy/<app> --timeout=120s
+kubectl -n "$APP_NS" rollout restart deploy/$APP
+kubectl -n "$APP_NS" rollout status deploy/$APP --timeout=120s
 ```
 
 Between `ALTER ROLE` and the restart, connections holding the old environment are refused: a few

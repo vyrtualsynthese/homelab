@@ -1,12 +1,12 @@
 # Routes: every hostname, its gate and its certificate
 
-> **In one line.** Traefik answers the 40 hostnames in this table: five are public, thirty-one are
-> internal over TLS, four answer plain HTTP, and three more names exist only to redirect; the gate
+> **In one line.** Traefik answers the 34 hostnames in this table: four are public, twenty-six are
+> internal over TLS, four answer plain HTTP, and two more names exist only to redirect; the gate
 > column — not the address — is what decides who gets in.
 >
 > **Use it when** you need to know whether a hostname is reachable from outside, what stands in
 > front of an application before its own login, or which certificate a browser will be shown ·
-> **Verified** 2026-11-17 · **Kind:** living page
+> **Verified** 2026-11-18 · **Kind:** living page
 
 Read from the live cluster on 2026-11-17 through the read-only Kubernetes MCP: every
 `traefik.containo.us/v1alpha1` `IngressRoute` in every namespace, plus the `Middleware` objects in
@@ -25,7 +25,7 @@ the hostname is public or a `*.kub.home.ashudev.com` name the LAN resolves to `1
 
 ## Public
 
-These five are on the allowlist and are meant to answer the internet. None is gated: what sits on
+These four are on the allowlist and are meant to answer the internet. None is gated: what sits on
 them sets response headers and, for Plex and Seerr, a rate limit of 100 requests per second on
 average. Neither of those is authentication.
 
@@ -35,11 +35,10 @@ average. Neither of those is authentication.
 | `forum.ashuvidz.com` | Discourse | `discourse` | none — `security` headers | Let's Encrypt | yes |
 | `plex.kub.home.ashudev.com` | Plex | `media-stack` | none — `security` headers, rate limit (two `websecure` routers) | Let's Encrypt | yes |
 | `seerr.kub.home.ashudev.com` | Seerr | `media-stack` | none — `security` headers, rate limit | Let's Encrypt | yes |
-| `wiki.ashuvidz.com` | Wiki.js | `wiki` | none | Let's Encrypt | yes |
 
 ## Internal over TLS
 
-Thirty-one hostnames. Seventeen use the internal CA on a `*.kub.local` name; fourteen carry their
+Twenty-six hostnames. Seventeen use the internal CA on a `*.kub.local` name; nine carry their
 own certificate on a `*.kub.home.ashudev.com` or `*.ashudev.com` name.
 
 | Host | Application | Namespace | Gate | TLS | Public? |
@@ -53,17 +52,12 @@ own certificate on a `*.kub.home.ashudev.com` or `*.ashudev.com` name.
 | `dashy.ashudev.com` | Dashy | `dashy` | **none** — `authentik` headers only, which gate nothing | Let's Encrypt | no — reachable anyway |
 | `docs.kub.local` | the docs site | `docs` | `lan-only` then forward-auth | internal CA | no |
 | `filebrowser.kub.home.ashudev.com` | FileBrowser | `filebrowser` | `lan-only`; the app does its own sign-in | Let's Encrypt | no |
-| `firefly-importer.kub.home.ashudev.com` | Firefly III importer | `firefly` | basic auth — **no `lan-only`** | Let's Encrypt | no |
 | `freshrss.kub.home.ashudev.com` | FreshRSS | `news` | **none** | Let's Encrypt | no |
-| `ghostfolio.kub.home.ashudev.com` | Ghostfolio | `ghostfolio` | **none** | Let's Encrypt | no |
 | `grafana.kub.local` | Grafana | `monitoring` | `lan-only` | internal CA | no |
-| `guacamole.kub.home.ashudev.com` | Apache Guacamole | `guacamole` | **none** | Let's Encrypt | no |
 | `kavita.kub.home.ashudev.com` | Kavita | `media-stack` | `lan-only` | Let's Encrypt | no |
 | `koillection.kub.home.ashudev.com` | Koillection | `koillection` | **none** | Let's Encrypt | no |
 | `lidarr.kub.local` | Lidarr | `media-stack` | forward-auth; `lan-only` alone on `/api` | internal CA | no |
-| `linkstack.kub.home.ashudev.com` | LinkStack | `linkstack` | **none** | Let's Encrypt | no |
 | `maintainerr.kub.local` | Maintainerr | `media-stack` | forward-auth; `lan-only` alone on `/api` | internal CA | no |
-| `monitorss.kub.home.ashudev.com` | Monitorss | `monitorss` | **none** | Let's Encrypt | no |
 | `n8n.kub.home.ashudev.com` | n8n | `n8n` | **none** | Let's Encrypt | no |
 | `prowlarr.kub.local` | Prowlarr | `media-stack` | forward-auth; `lan-only` alone on `/api` | internal CA | no |
 | `qbittorrent.kub.local` | qBittorrent | `media-stack` | `lan-only` | internal CA | no |
@@ -92,8 +86,8 @@ Four routes serve plain HTTP. The LAN allowlist or a password is all that stands
 **Redirect twins.** Every host in the first two tables also has a `web` router on the same name that
 only redirects to HTTPS, carrying `lan-only` and nothing else — `filebrowser` excepted, which has no
 plain-HTTP route at all. The four rows in the last table are served on `web` itself. Three hostnames
-exist only to redirect and are not rows in any table: `kub.home.ashudev.com` to Dashy,
-`discourse.kub.home.ashudev.com` to Forum, `wiki.kub.home.ashudev.com` to the wiki.
+exist only to redirect and are not rows in any table: `kub.home.ashudev.com` to Dashy and
+`discourse.kub.home.ashudev.com` to Forum.
 
 **`/api` exemptions.** Ten hosts — `bazarr`, `bazarr-anime`, `lidarr`, `maintainerr`, `prowlarr`,
 `radarr`, `radarr-anime`, `sonarr`, `sonarr-anime`, `tautulli` — carry a second rule on
@@ -101,12 +95,11 @@ exist only to redirect and are not rows in any table: `kub.home.ashudev.com` to 
 sends a key, not a browser session. `maintainerr` checks no key of its own, so on that host `lan-only`
 is the only control on `/api`.
 
-**Eleven routes carry no `lan-only`.** The ten rows whose gate reads **none**, plus
-`firefly-importer.kub.home.ashudev.com`, which has basic auth instead. All eleven are chart-first:
-the charts already emit `kube-system-lan-only@kubernetescrd` — for Dashy that is
+**Six routes carry no `lan-only`.** They are the six rows whose gate reads **none**. All six are
+chart-first: the charts already emit `kube-system-lan-only@kubernetescrd` — for Dashy that is
 `cluster/helm/dashy/templates/ingress.yaml`, where `values.yaml`'s `ingress.enabled: false` only
 switches off the *upstream* chart's own Ingress — the live objects predate the rule, and a sync
-closes the gap. `hack/check-exposure.sh` sees all eleven and passes.
+closes the gap. `hack/check-exposure.sh` sees all six and passes.
 
 **Two routers on Plex.** `plex.kub.home.ashudev.com` is claimed twice, both on `websecure`:
 `plex-public` (headers and rate limit) and a leftover `plex-media-public` from an older release with

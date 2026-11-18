@@ -31,8 +31,8 @@ flowchart LR
 `*.kub.local` is the internal space. The edge Pi-hole answers that whole wildcard with one address,
 `192.168.1.46`, and public DNS has no entry, so they never resolve for an off-LAN client.
 
-Five hostnames are public, and only these: `plex.kub.home.ashudev.com`, `seerr.kub.home.ashudev.com`,
-`ashuvidz.com`, `forum.ashuvidz.com`, `wiki.ashuvidz.com`.
+Four hostnames are public, and only these: `plex.kub.home.ashudev.com`, `seerr.kub.home.ashudev.com`,
+`ashuvidz.com`, `forum.ashuvidz.com`.
 
 The awkward middle is the rest of `*.kub.home.ashudev.com`: a real domain, publicly resolvable, which
 the Pi-hole overrides to `192.168.1.46` *on the LAN only*. A name under that suffix therefore answers

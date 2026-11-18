@@ -45,8 +45,9 @@ develop` and points at one chart, or at a values file for a remote chart.
 - **B — remote chart plus a values file.** Two sources: the upstream chart repository, and this
   repository as a values ref. Legacy; four files still use it — `local-path`,
   `nfs/books-media`, `nfs/nfs-audio` and `renovate`. (`AGENTS.md` §3 still names six; that list lags.)
-- **C — vendored upstream chart.** `postiz` commits the whole upstream chart and edits it in place.
-  Treat its files as vendored; move it to D when you next touch it.
+- **C — vendored upstream chart.** Committing the whole upstream chart and editing it in place. The
+  last chart built this way, `postiz`, was retired on 2026-11-18 and nothing uses the pattern now;
+  new external charts are D.
 - **D — wrapper chart.** A small chart here pins the official chart as a dependency at an exact
   version and pins every image it renders. The way new external charts are consumed: `monitoring/`,
   `authentik`, `dashy`, `filebrowser`.

@@ -64,7 +64,7 @@ kubectl -n databases exec dumps-ls -- ls -lt /dumps
 ```
 
 The newest file is the first line. Names are `<db>-<UTC>.dump`, for example
-`firefly-20261113T033002Z.dump`, so the timestamp in the name is the moment the dump was taken —
+`koillection-20261113T033002Z.dump`, so the timestamp in the name is the moment the dump was taken —
 `ls -lt` sorts by modification time, which is when the dump finished writing.
 
 Success: the list contains `<db>-<recent>.dump` and a few older ones. What a failure means:
