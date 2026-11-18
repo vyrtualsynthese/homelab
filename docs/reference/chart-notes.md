@@ -94,9 +94,11 @@ Both exporter sidecars still answer 401 until the operator patches the stale key
 `radarr` and `radarr-anime`. Since 2026-11-15 `radarr`'s `/api` is exempt from the gate (a
 `priority: 100` rule carrying `lan-only` alone), because `/api/v3` requires `X-Api-Key` on every
 request. Since 2026-11-18 `radarr-anime` carries the same gate and the same `/api` exemption. Both
-instances now run with `authenticationMethod: none` in Radarr's own settings, so the gate is the only
-door: `disabledForLocalAddresses` was the first attempt, but Radarr's validator rejects a `0.0.0.0/0`
-trusted-network list and a narrower list leaves the login prompt up for addresses it does not trust.
+instances keep Radarr's own login switched off for the network Traefik forwards from:
+`authenticationMethod: forms` with `authenticationRequired: disabledForLocalAddresses` and the three
+LAN ranges trusted, which is the sonarr pair's setting. `authenticationMethod: none` is not the way to
+turn the login off — `AuthenticationRequired` is checked independently, so `enabled` demands a login
+that no method can satisfy, and Radarr shows its Authentication Required form with no way to fill it.
 
 ### lidarr
 
