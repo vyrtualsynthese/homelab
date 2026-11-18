@@ -9,7 +9,10 @@ this directory owns the values plus the two Traefik routes.
 
 - Chart: https://github.com/bitnami/charts/tree/main/bitnami/nginx, pinned to `23.0.6` in
   `Chart.yaml`
-- Image: `docker.io/bitnami/nginx:1.28.0-debian-12-r0`
+- Image: `docker.io/bitnamilegacy/nginx:1.28.0-debian-12-r0` — the **frozen** copy of the tag. On
+  2026-11-18 `bitnami/*` publishes only `latest`: every versioned tag moved to `bitnamilegacy/*`, and
+  a pod that had to pull the old name failed with `not found`. The pinned name here is a stopgap;
+  see the debt list.
 - Content: https://github.com/vyrtualsynthese/ashuvidz-website, branch `main`
 
 ## How this chart is deployed here
@@ -88,6 +91,12 @@ CRDs), 0 invalid.
 
 ## Known debt
 
+- **Both images are frozen.** `bitnamilegacy/nginx` and `bitnamilegacy/git` are a read-only archive
+  of the tags Bitnami deleted: they will never receive a security fix. That is tolerable for the
+  git helper, which only runs `git pull`, and not for the web server on a public host. The durable
+  fix is to drop the Bitnami chart for this app — an official `nginx` image plus a maintained git
+  sidecar — which is a chart rewrite, not a value change, so it was not done while this card was
+  about the contract. Until then, re-check this entry whenever nginx publishes a CVE fix.
 - **The exporter is off.** `metrics.enabled: false`. The image ships `nginx-exporter` as a sidecar
   and the contract wants it scraped, but exporters are turned on one chart at a time in this repo
   (`flaresolverr` was the first) and this pass did not take that on. The related
