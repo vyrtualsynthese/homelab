@@ -21,8 +21,9 @@ database passwords.
 
 | Secret | Namespace | Keys and consumer |
 |---|---|---|
-| `sonarr`, `sonarr-anime`, `radarr`, `radarr-anime`, `lidarr`, `prowlarr` | `media-stack` | `secret` → exportarr APIKEY |
+| `sonarr`, `sonarr-anime`, `radarr`, `radarr-anime`, `lidarr`, `prowlarr` | `media-stack` | `secret` → exportarr APIKEY, and unpackerr's per-instance API key |
 | `bazarr`, `bazarr-anime` | `media-stack` | `secret` → exportarr APIKEY (only when `exportarr.enabled`; off until exportarr v3) |
+| `autobrr-oidc` | `media-stack` | `client-secret` → `AUTOBRR__OIDC_CLIENT_SECRET`, the authentik provider's client secret |
 | `plex` | `media-stack` | `plex_claim` |
 | `qbittorrent-exporter` | `media-stack` | `username`, `password` |
 | `cross-seed` | `media-stack` | mounted as a file (`conf.secretName`) |

@@ -208,7 +208,10 @@ Two habits follow:
 | `maintainerr` | yes, `/api/health/live` and `/api/health/ready` | capabilities dropped, seccomp, no privilege escalation, no API token | **yes — 1000**, the image's own UID; the claim is `0777` and owned by 1100 |
 | `calibre-web-automated` | startup and liveness only, both on `/` | capabilities dropped except `CHOWN`/`SETUID`/`SETGID`, which the LinuxServer init needs; seccomp; no privilege escalation; no API token; **no** read-only root filesystem — the image writes notices into `/app` | **no — the image starts as root, then drops to 1100**; config claim `10Gi`, not `128Mi` |
 | `kavita` | startup and liveness only, both on `/api/health` | capabilities dropped except `CHOWN`/`SETUID`/`SETGID`, which the LinuxServer init needs; seccomp; no privilege escalation; no API token; read-only root filesystem with `emptyDir` at `/run` and `/tmp`; public TLS route | **no — the image starts as root, then drops to 1100** |
-| everything else | no | no | no |
+| `plex` | yes, on `/identity` | capabilities dropped except `CHOWN`/`SETUID`/`SETGID`, which the image's root init needs; seccomp; no privilege escalation | **no — the image starts as root, then drops to 1100** |
+| `seerr` | yes, on `/api/v1/status/appdata` | capabilities dropped, seccomp, no privilege escalation | **yes — 1000**, the image's own UID |
+| `qbittorrent-exporter` | n/a (no HTTP listener of its own) | capabilities dropped, seccomp, no privilege escalation | **no — no `runAsUser` set** |
+| `qbittorrent` | **no** — the chart sets none | none on the app, and the WireGuard sidecar is `privileged` with `NET_ADMIN`/`SYS_MODULE` for `/dev/net/tun` | `PUID`/`PGID` 1100 through the image's own init |
 
 ## Checking a chart against this list
 

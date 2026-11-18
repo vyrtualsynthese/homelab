@@ -110,12 +110,11 @@ block. The metrics port is deliberately not on the Service: Prometheus scrapes t
 If the target is **down with HTTP 500**, exportarr is passing Lidarr's 401 through: the `secret` key
 in the `lidarr` Secret is stale or the pod has not been restarted since it was patched, not the chart.
 
-## Resources are unmeasured
+## Resources, measured
 
-Lidarr has not run since the 2026 disk failure, and Prometheus keeps no series for it. The values
-follow sonarr's measured profile (`10m` CPU, `256Mi` memory request) with a `1Gi` memory limit for the
-first full library scan. Replace both numbers from Prometheus after a week of real traffic; an OOM
-during a scan shows as a restarted container.
+Measured against Prometheus on 2026-11-13: a 930 MiB peak, which filled the old 1 GiB limit to 93 %.
+The request is `10m` CPU and `512Mi` memory, the limit `2Gi`, so a full library scan has headroom.
+Re-measure when the image or the library changes; the record is `docs/reference/chart-sizing.md`.
 
 ## Upgrading and rolling back
 

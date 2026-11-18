@@ -91,9 +91,10 @@ As of 2026-11-13: the same LinuxServer-plus-exporter pair as `sonarr` and
 for the database migration; `RADARR__LOG__LEVEL` and `RADARR__LOG__CONSOLELEVEL` are both at `warn`.
 Claim names already matched the derived `<fullname>-config`, so no data moved. The `radarr-anime`
 instance also moved off `PUID 0`, which is the chown runbook the contract's UID section describes.
-Both exporter sidecars still answer 401 until the operator patches the stale keys in Secrets
-`radarr` and `radarr-anime`. Since 2026-11-15 `radarr`'s `/api` is exempt from the sign-in (a
-`priority: 100` rule carrying `lan-only` alone), because `/api/v3` requires `X-Api-Key` on every
+Both exporter sidecars answered 401 until the operator patched the keys in Secrets `radarr` and
+`radarr-anime`; both targets read `up` in Prometheus on 2026-11-18. Since 2026-11-15 `radarr`'s
+`/api` is exempt from the sign-in (a `priority: 100` rule carrying `lan-only` alone), because
+`/api/v3` requires `X-Api-Key` on every
 request; `radarr-anime` has carried the same exemption since 2026-11-18.
 
 Both instances moved from `6.4.4.10685-ls326` to `7.0.3.10918-ls328` on 2026-11-18, and v7 is what
