@@ -39,6 +39,18 @@ cluster/helm/filebrowser/Chart.lock
 cluster/helm/vikunja/charts/
 cluster/helm/vikunja/Chart.lock
 
+# Built by ArgoCD at sync time
+cluster/helm/ashuvidz-website/charts/
+cluster/helm/ashuvidz-website/Chart.lock
+
+# Built by ArgoCD at sync time
+cluster/helm/dashy/charts/
+cluster/helm/dashy/Chart.lock
+
+# Built by ArgoCD at sync time
+cluster/helm/discourse/charts/
+cluster/helm/discourse/Chart.lock
+
 # Python bytecode from the hack/ checkers
 __pycache__/
 *.pyc
