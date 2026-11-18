@@ -194,22 +194,29 @@ are in `docs/superpowers/plans/`.
    SQLite file on an etcd cluster; the NAS script backs up a MinIO path deleted in July 2024; and the
    k3s and NAS hosts have had a daily cron since 2024 pointing at a script that was never deployed
    to them. See `docs/audit/ansible-hosts.md`.
-4. **Longhorn is gone, but it cannot bury its dead.** The `longhorn-system` namespace still exists
-   and is empty: no driver, no StorageClass, and every app was rebuilt on `local-path` or one of the
-   NFS classes. What survives is 38 PVs and 11 PVCs stuck `Terminating` (last counted 2026-11-13).
-   Their contents were abandoned by decision, and **they will never clear on their own**: the
-   finalizers name the Longhorn CSI driver (`external-attacher/driver-longhorn-io`), which no longer
-   exists to remove itself, and some also carry `kubernetes.io/pv-protection` until the matching
-   claim goes. Clearing one is a hand operation — patch the finalizers away, PV first and then the
-   PVC:
+4. **Longhorn is gone, but it cannot bury its dead.** The driver, its StorageClasses and its custom
+   resources are uninstalled, and every application that was on it runs on `local-path` or one of the
+   NFS classes — except three: **`n8n`, `syncthing` and `thelounge` still mount their Longhorn claims**
+   from before the failure. What survives is 26 PVs and 6 PVCs stuck `Terminating` since 2026-08-28
+   (verified 2026-11-18). Their contents were abandoned by decision, and **they will never clear on
+   their own**: the finalizers name the Longhorn CSI driver
+   (`external-attacher/driver-longhorn-io`), which no longer exists to remove itself, and the bound
+   ones also carry `kubernetes.io/pv-protection` until the matching claim goes.
+
+   The inventory, the three claims that must wait for a rebuild, and the exact patch loop are in
+   [`docs/cleanup/longhorn-disposition.md`](docs/cleanup/longhorn-disposition.md). Clearing one is a
+   hand operation — patch the finalizers away, PV first and then the PVC:
 
    ```bash
    kubectl patch pv <name> -p '{"metadata":{"finalizers":null}}' --type=merge
    kubectl -n <namespace> patch pvc <name> -p '{"metadata":{"finalizers":null}}' --type=merge
    ```
 
-   `maintainerr-anime-config` was cleared this way on 2026-11-13. The rest are inert: they hold no
-   data, block nothing, and show up only in `kubectl get pv` and in namespace health counts.
+   Never run that loop over the four externally-provisioned NFS volumes that also show a deletion
+   timestamp (`pv-traefik-nfs`, `pv-plex-media`, `pv-stash-nfs-nfs-stash`,
+   `pv-nfs-qbittorrent-download-nfs-subdir-external-provisioner`): they are live, and `pv-traefik-nfs`
+   holds the ACME certificate store. The rest are inert: they hold no data, block nothing, and show up
+   only in `kubectl get pv` and in namespace health counts.
 
 **Broken references**
 
@@ -228,8 +235,8 @@ are in `docs/superpowers/plans/`.
 9. `infrastructure/traefik/traefik-config.yaml:145`: `existingClaim` is over-indented, so YAML folds it
    into `persistence.name`. The live DaemonSet mounts `pvc-traefik-nfs`, which is the ACME store —
    reuse that claim or the certificate is re-issued.
-10. Two files under `cluster/infrastructure/storageclass/` both declare `metadata.name: lh-performance`.
-    Applied by hand, the class does not exist, and nothing reads them.
+10. **Resolved 2026-11-18:** the two duplicate `lh-performance` StorageClass files under
+    `cluster/infrastructure/storageclass/` are deleted with the rest of the Longhorn leftovers.
 11. **Resolved 2026-11-18:** `firefly` and `postiz` were the two charts that rendered a
     `networking.k8s.io/v1` Ingress, against the Traefik-CRD-only rule in §4. Both were retired, so no
     chart in the repo breaks that rule; the live `discourse` Ingress comes from its vendored upstream
