@@ -39,7 +39,7 @@ helm template tautulli cluster/helm/media-stack/tautulli --namespace media-stack
 | `nodeSelector` | Node pin. Every workload is pinned. | `kubernetes.io/hostname: streaming` |
 | `probes.{startup,liveness,readiness}` | HTTP probes on `/status`. Startup gates liveness through a first start after an upgrade. | enabled; startup 5s × 30, liveness 20s delay, readiness **disabled** |
 | `securityContext` | Container hardening that does not break the image's root init. | no privilege escalation, `ALL` dropped except `CHOWN`/`SETUID`/`SETGID` |
-| `resources` | Scheduler reservation and memory limit. No CPU limit. | `10m`/`256Mi` request, `1Gi` memory limit |
+| `resources` | Scheduler reservation and memory limit. No CPU limit. | `10m`/`128Mi` request, `512Mi` memory limit |
 
 ## Image
 

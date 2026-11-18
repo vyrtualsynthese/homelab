@@ -117,6 +117,7 @@ nav:
       - Ansible and hosts: audit/ansible-hosts.md
       - ArgoCD and Helm: audit/argocd-helm.md
       - Observability and storage: audit/observability-storage.md
+      - Media stack (2026-11-18): audit/media-stack-2026-11-18.md
   - Agent work:
       - How to read a plan: agent-work.md
       - The board protocol: agent-protocol.md

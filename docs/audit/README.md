@@ -7,6 +7,9 @@
 > **Use it when** a plan or chart cites an audit, or you wonder why something was rebuilt ·
 > **Read** 2026-11-10 · **Kind:** snapshot (2026-11-10)
 
+Later single-subject reads join the table below with their own date in their banner. The three
+cluster-wide pages keep the 2026-11-10 date; the media-stack page is a 2026-11-18 read.
+
 These pages are **history**. Each one describes the cluster and the repository on a single day,
 before the rebuild work started. None of them is maintained, and none of them is a statement
 about the cluster now. Where an audit and the cluster disagree, the cluster is right.
@@ -25,6 +28,7 @@ decision — the audit reads the same in all three cases.
 | [Ansible and the host layer](ansible-hosts.md) | The playbooks and what they cannot rebuild from this repository: the missing inventory, the backup scripts that have not run since 2024, the runner templates, and the staleness of the host configuration |
 | [ArgoCD and Helm drift](argocd-helm.md) | What ArgoCD actually manages, broken `path:` and `$values` references, the chart patterns and their versions, ingress, the secrets the charts expect, and the known chart defects |
 | [Observability and storage](observability-storage.md) | The Prometheus, Grafana, Loki and exporter inventory as it stood, the abandoned Longhorn layer and what the data loss took, the NFS provisioners, and the backup story |
+| [Media stack (2026-11-18)](media-stack-2026-11-18.md) | The 21 `media-stack` charts against the chart contract: gate coverage per route, probes, sizing, secrets, exporter health, and the stale documents the pass corrected |
 
 ## How to read one
 

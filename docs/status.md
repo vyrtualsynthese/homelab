@@ -155,7 +155,7 @@ Working, on the old chart shape. This is the queue for the chart work, not a def
 | `local-path` | default | 1/1 | OutOfSync; provisioner settings matter to every claim |
 | `renovate` | renovate | CronJob | OutOfSync; Application and values disagreed on the chart version |
 | `plex` | media-stack | 1/1 | Contract exceptions recorded in its README |
-| `qbittorrent` | media-stack | 1/1 | DNS fix applied; `alpine:latest` in the completion hook |
+| `qbittorrent` | media-stack | 1/1 | DNS fix applied; the VueTorrent installer's `alpine` base is pinned to `3.22` since 2026-11-18 |
 | `qbittorrent-exporter` | media-stack | 1/1 | Now on `v2.0.4`; the previous image could not log in at all |
 | `fluent-bit` | monitoring | 4/4 | DaemonSet, not pinned — it must run on every node |
 | `mktxp` | monitoring | 1/1 | `latest` tag; OutOfSync |
