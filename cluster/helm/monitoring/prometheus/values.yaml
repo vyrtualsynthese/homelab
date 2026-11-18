@@ -117,3 +117,15 @@ prometheus:
             - 192.168.1.38:9100
             - 192.168.1.38:9902
             - 192.168.1.38:9323
+    # Loki and Grafana publish their own /metrics and nothing scraped them
+    # before 2026-11-18. Without these two jobs the stack watched every app
+    # but not itself: a Loki rejecting writes and a Grafana whose rules fail to
+    # evaluate both looked like silence. Both Services are in this namespace.
+    loki:
+      static_configs:
+        - targets:
+            - loki.monitoring.svc:3100
+    grafana:
+      static_configs:
+        - targets:
+            - grafana.monitoring.svc:3000

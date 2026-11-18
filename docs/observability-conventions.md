@@ -56,9 +56,12 @@ low because the cluster produces little log and query traffic: a 30-day Loki
 query or a compaction burst is the case the headroom exists for, so re-measure
 before lowering Loki further.
 
-Three older exporters live beside them unchanged: `mktxp` and `pihole-exporter`
+Three older exporters live beside them: `mktxp` and `pihole-exporter`
 on `nuc0`, and `prometheus-smartctl` as a DaemonSet (its pods on `nas`, `nuc0`,
-`streaming`, `rbp2`).
+`streaming`, `rbp2`). `mktxp` reads the CRS326 and CRS309 switches; since
+2026-11-18 its image is pinned to a release tag instead of `latest`, and it is
+scheduled by `nodeSelector` on `nuc0` rather than by the retired `node-type`
+label.
 
 ## How to query the stack
 
@@ -118,6 +121,13 @@ Grafana's own data: where they live, and what that costs, is in
   `rbp1` 192.168.1.38, ports 9100 (node-exporter), 9902 (smartctl), 9323
   (Docker). They carry no `node` label, only `instance`, so dashboards label
   them by IP or map the IP to a name.
+- **Loki and Grafana are static jobs too**, `loki.monitoring.svc:3100` and
+  `grafana.monitoring.svc:3000`, added on 2026-11-18. They publish the stack's
+  own health (`loki_*` push failures, `grafana_*` rule-evaluation failures),
+  which nothing scraped before.
+- **mktxp is annotation discovery**, like the in-cluster exporters: one pod with
+  `prometheus.io/scrape` on port 49090, and 838 series for the two switches on
+  2026-11-18. An unreachable switch publishes nothing rather than `up == 0`.
 - Prometheus is pinned to `nas`. Its memory limit is 2 GiB and the GC target
   follows the cgroup limit, so lowering it below the working set restarts the
   OOM loop of 2026-11-12.
