@@ -3,6 +3,13 @@ name: qbittorrent
 description: qBittorrent behind a WireGuard tunnel, with its WebUI on the LAN and VueTorrent installed by an init container.
 type: application
 # Chart version. Renovate bumps this when the image tag moves.
-version: 0.2.3
+version: 0.3.0
 # Must match image.tag in values.yaml.
 appVersion: "5.3.0"
+home: https://www.qbittorrent.org/
+sources:
+  - https://github.com/qbittorrent/qBittorrent
+keywords:
+  - torrent
+  - wireguard
+  - vpn
