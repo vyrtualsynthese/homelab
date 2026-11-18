@@ -32,7 +32,7 @@ database passwords.
 | `koillection` | `koillection` | `DB_NAME`, `DB_HOST`, `DB_USER`, `DB_PASSWORD` |
 | `syncthing-backup` | `syncthing` | `envFrom` (restic credentials) |
 | `authentik-env` | `authentik` | `envFrom` |
-| `dashy-conf` | `dashy` | external chart `existingSecret` |
+| `dashy-conf` | `dashy` | rendered by `cluster/helm/dashy/templates/secret-config.yaml` from `files/conf.yml`; holds no credentials |
 | `discourse` | `discourse` | `db-password`, `admin-db-password` for the database, `discourse-password` for the forum admin login |
 | `postgres-secrets` | `databases` | Bitnami PostgreSQL `existingSecret` |
 | `pgadmin` | `databases` | external chart `existingSecret` |
