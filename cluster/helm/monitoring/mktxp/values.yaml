@@ -6,12 +6,14 @@ replicaCount: 1
 
 image:
   repository: ghcr.io/akpw/mktxp
-  pullPolicy: IfNotPresent
-  # renovate: datasource=docker depName=ghcr.io/akpw/mktxp
-  # Explicit tag, not latest: two switches are the only devices this exporter
-  # reads, so a silent image change is one restart away from a blank Network
-  # dashboard with nothing in the cluster recording what it was before.
-  tag: v2.1.0
+  # latest is the only usable tag: ghcr.io/akpw/mktxp publishes no semver
+  # tags, only latest, stable-<timestamp> (last one 2024-08-21) and gha-<run>.
+  # Pinning v2.1.0, after the GitHub release name, put the pod in
+  # ImagePullBackOff and took both switches offline on 2026-11-18. Pull Always
+  # is what a floating tag needs; digest pinning is the real fix and is still
+  # outstanding.
+  pullPolicy: Always
+  tag: latest
 
 imagePullSecrets: []
 nameOverride: ""
