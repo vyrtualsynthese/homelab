@@ -36,13 +36,12 @@ Source: Prometheus on 2026-11-13, the 39 h of history it holds, `container_memor
 | `media-stack/tautulli` | 120Mi | 256Mi → **128Mi** | 1Gi → **512Mi** | both numbers were aspirational |
 | `dashy` | 270Mi | 500m CPU → **10m**, 512Mi → **256Mi** | 4Gi → **1Gi** | upstream defaults, never visited |
 | `monitoring/mktxp` | 30Mi | 128Mi → **64Mi** | 256Mi (unchanged) | 4× the app |
-| `firefly` | 80Mi | 258Mi → **128Mi** | 512Mi (unchanged) | 3× the app |
-| `guacamole` | 370Mi flat | none → **384Mi** | none → **768Mi** | had `resources: {}`, so it was unaccounted for by the scheduler |
 | `syncthing` | 110Mi | none → **128Mi** | none → **256Mi** | had `resources: {}` |
 | `databases/pgadmin` | 220Mi | none → **256Mi** | none → **384Mi** | had `resources: {}` |
 
-Net effect: about 1.25 GiB of reservation released, all eight tight limits given real headroom, and
-three workloads moved out of the unaccounted set.
+Net effect at the time: about 1.25 GiB of reservation released, all eight tight limits given real
+headroom, and three workloads moved out of the unaccounted set. Two rows of that pass are gone from
+this table because `firefly` and `guacamole` were retired on 2026-11-18.
 
 ## Verified adequate, unchanged
 
@@ -63,8 +62,7 @@ recorded so the next audit does not repeat the exercise.
 | `media-stack/flaresolverr` | 0.23Gi / 1Gi |
 | `media-stack/tautulli` | see above — adjusted |
 | `thelounge` | 0.07Gi / 128Mi (60 %) |
-| `monitorss` | 0.14Gi web, 0.04Gi bot / 256Mi |
-| `linkstack`, `qbittorrent-exporter` | under 0.02Gi |
+| `qbittorrent-exporter` | under 0.02Gi |
 | `monitoring/prometheus-smartctl`, `prometheus-node-exporter`, `fluent-bit` | under 0.03Gi |
 
 `recyclarr` is a CronJob: it has resources but no steady state to measure, so it is out of scope.

@@ -4,9 +4,9 @@
 > ran, how its chart is consumed, and one plain line on what it is.
 >
 > **Use it when** you are looking for the app behind a hostname, adding one, or wondering which
-> machine an application belongs to · **Verified** 2026-11-17 · **Kind:** living page
+> machine an application belongs to · **Verified** 2026-11-18 · **Kind:** living page
 
-This is a snapshot of the repository and of the cluster on 2026-11-17. Pod health and claim state move
+This is a snapshot of the repository and of the cluster on 2026-11-18. Pod health and claim state move
 daily; [status.md](../status.md) is the live answer for what is running, what is broken and why.
 
 ## How to read the tables
@@ -47,11 +47,7 @@ belong to is [media.md](media.md).
 | `discourse` | `discourse` | Pending | D | the community forum |
 | `docs-site` | `docs` | nuc0 | A | every repository's `docs/` folder, built on a schedule and served read-only |
 | `filebrowser` | `filebrowser` | nuc0 | D | web file browser over the media shares |
-| `firefly` | `firefly` | nuc0 | A | personal finance, with a data importer and a cron job |
-| `ghostfolio` | `ghostfolio` | nuc0 | A | investment and portfolio tracker |
-| `guacamole` | `guacamole` | nuc0 | A | remote desktop in the browser, through `guacd` |
 | `koillection` | `koillection` | Pending | A | catalogue for a collection of things |
-| `linkstack` | `linkstack` | nuc0 | A | a link-in-bio page |
 | `autobrr` | `media-stack` | streaming | A | grabs releases from IRC announcements, without a search |
 | `bazarr` | `media-stack` | streaming | A | subtitles for the television and film libraries |
 | `bazarr-anime` | `media-stack` | streaming | A | the same for the anime library |
@@ -80,15 +76,12 @@ belong to is [media.md](media.md).
 | `mktxp` | `monitoring` | nuc0 | A | metrics from the MikroTik router |
 | `pihole-exporter` | `monitoring` | nuc0 | A | metrics from Pi-hole |
 | `prometheus` | `monitoring` | nas | D | the metrics database and its scrape configuration |
-| `monitorss` | `monitorss` | nuc0 | A | Discord bot that posts new items from RSS feeds |
 | `n8n` | `n8n` | nuc0 | A | workflow automation |
 | `news-freshrss` | `news` | Pending | A | RSS reader |
-| `postiz` | `postiz` | Pending | C | schedules posts to social accounts |
 | `renovate` | `renovate` | nas | B | nightly pull requests that bump dependencies |
 | `syncthing` | `syncthing` | nuc0 | A | file sync between devices, with a restic backup job |
 | `thelounge` | `thelounge` | nuc0 | A | web IRC client |
 | `vikunja` | `vikunja` | nuc0 | D | the task board, where the state of every ticket lives |
-| `wiki` | `wiki` | nuc0 | A | Wiki.js, the wiki |
 
 ## The plumbing
 
@@ -114,10 +107,10 @@ they are what everything above stands on.
 
 Most charts pin their pod with `nodeSelector: kubernetes.io/hostname`. The older ones were written
 before that rule and are still configured to select the retired `node-type` label instead, which
-matches `nuc0` today (`dashy` also accepts the `small` label on `rbp2`). They are `dashy`, `firefly`,
-`ghostfolio`, `guacamole`, `koillection`, `linkstack`, `mktxp`, `pihole-exporter`, `monitorss`, `n8n`,
-`news-freshrss`, `postiz`, `renovate`, `syncthing`, `thelounge`, `wiki`, and the `books-media`,
-`nfs-audio`, `nfs-syncthing`, `stash-nfs` and `traefik-nfs` provisioners. This is what each chart asks
+matches `nuc0` today (`dashy` also accepts the `small` label on `rbp2`). They are `dashy`,
+`koillection`, `mktxp`, `pihole-exporter`, `n8n`, `news-freshrss`, `renovate`, `syncthing`,
+`thelounge`, and the `books-media`, `nfs-audio`, `nfs-syncthing`, `stash-nfs` and `traefik-nfs`
+provisioners. This is what each chart asks
 for, not a statement about where its pod is: `renovate` selects `general` yet its last pods ran on
 `nas`, and the Node column shows where they actually were. Moving them onto hostname pins is chart
 work.

@@ -126,9 +126,6 @@ invalid PromQL and never evaluated.
 
 **Silences** (each has an expiry and a comment):
 
-- Until 2026-12-12: `pod=~"ghostfolio-.*|wiki-app-.*|monitorss-bot-.*"` — three
-  apps crash-looping since the Longhorn loss. They still show `firing`; only the
-  notification is suppressed.
 - Until 2027-03-01: `host="streaming"`, `severity="warning"`,
   `__alert_rule_uid__="cg433wfzcwiyob"` — the node runs at its thermal ceiling and
   the cooling fix is deferred

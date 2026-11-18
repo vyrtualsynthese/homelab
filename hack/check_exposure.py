@@ -17,7 +17,6 @@ PUBLIC_HOSTS = frozenset(
         "seerr.kub.home.ashudev.com",
         "ashuvidz.com",
         "forum.ashuvidz.com",
-        "wiki.ashuvidz.com",
     }
 )
 
