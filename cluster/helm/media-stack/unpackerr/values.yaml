@@ -72,6 +72,11 @@ env:
   UN_RETRY_DELAY: "5m"
   UN_MAX_RETRIES: "10"
   UN_PARALLEL: "1"
+  # The `Queue:`/`Totals:` counters, one pair a minute: 2,876 lines a day
+  # measured on 2026-11-18, for a number nobody watches at that resolution.
+  # Every ten minutes is the same information at a tenth of the lines, and it
+  # changes no behaviour: the poll interval above is what picks up downloads.
+  UN_LOG_QUEUES: "10m"
   UN_FILE_MODE: "0644"
   UN_DIR_MODE: "0755"
   # The web server is the liveness target. `noauth` stops v1 from generating a
@@ -79,7 +84,6 @@ env:
   # publishes this port, so it is reachable by pod IP and port-forward only.
   UN_WEBSERVER_UI_PASSWORD: "noauth"
   # UN_DEBUG: "false"
-  # UN_LOG_QUEUES: "5m"
   # UN_PROGRESS: "1m"
 
 # -- Starr instances. The key names the app and the index that appears in the
