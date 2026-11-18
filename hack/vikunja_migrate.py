@@ -22,6 +22,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 import urllib.error
 import urllib.request
@@ -59,6 +60,24 @@ def site_url(docs: str) -> str | None:
     return f"{SITE_BASE}{docs[len('docs/'):-len('.md')]}/"
 
 
+def docs_label(docs: str) -> str:
+    """The name a ``docs:`` link carries: the target, not the path.
+
+    The protocol asks for *Plan — media dashboard*, not the file path. A plan is
+    ``Plan — ``, a spec is ``Design — ``, and any other page is its own file name;
+    a plan's leading date is dropped because it says nothing to the reader.
+    """
+    stem = re.sub(r"^\d{4}-\d{2}-\d{2}-", "",
+                  docs[len("docs/"):-len(".md")].rsplit("/", 1)[-1])
+    stem = stem.replace("-", " ")
+    stem = stem[:1].upper() + stem[1:]
+    for prefix, kind in (("docs/superpowers/plans/", "Plan — "),
+                         ("docs/superpowers/specs/", "Design — ")):
+        if docs.startswith(prefix):
+            return kind + stem
+    return stem
+
+
 def render_description(docs: str, branch: str, pr: str, body: str,
                        commit: str = "none", on_develop: bool = True) -> str:
     """The fixed block every ticket opens with, then the body, if any.
@@ -67,20 +86,22 @@ def render_description(docs: str, branch: str, pr: str, body: str,
     ``develop``, so a ``docs:`` path that only exists on a feature branch renders
     nowhere and its ``site:`` line says ``none`` instead of pointing at a 404.
     """
-    lines = [
-        f"repo: {REPO}",
-        f"docs: {DOCS_BASE}{docs}" if docs and docs != "none" else "docs: none",
-    ]
+    lines = [f"repo: [{REPO}](https://github.com/{REPO})"]
+    lines.append(f"docs: [{docs_label(docs)}]({DOCS_BASE}{docs})"
+                 if docs and docs != "none" else "docs: none")
     # A labelled link, never a bare URL: the protocol treats a bare URL as a card defect.
     site = site_url(docs)
     if site is not None:
         lines.append(f"site: [Rendered page]({site})" if on_develop else "site: none")
-    lines.extend([
-        f"branch: {branch or 'none'}",
-        f"pr: {pr or 'none'}",
-    ])
-    if commit and commit != "none":
-        lines.append(f"commit: https://github.com/{REPO}/commit/{commit}")
+    lines.append(f"branch: {branch or 'none'}")
+    # A change that landed without a pull request carries a commit in its place,
+    # not under it: the protocol's block has one line for "where this landed".
+    if pr and pr != "none":
+        lines.append(f"pr: {pr}")
+    elif commit and commit != "none":
+        lines.append(f"commit: [{commit}](https://github.com/{REPO}/commit/{commit})")
+    else:
+        lines.append("pr: none")
     block = "\n".join(lines)
     if body:
         return f"{block}\n\n{body}"

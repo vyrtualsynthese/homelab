@@ -40,33 +40,43 @@ class DescriptionTests(unittest.TestCase):
     def test_block_with_no_pr(self):
         self.assertEqual(
             m.render_description("docs/x.md", "none", "none", ""),
-            "repo: vyrtualsynthese/homelab\n"
-            "docs: https://github.com/vyrtualsynthese/homelab/blob/develop/docs/x.md\n"
+            "repo: [vyrtualsynthese/homelab](https://github.com/vyrtualsynthese/homelab)\n"
+            "docs: [X](https://github.com/vyrtualsynthese/homelab/blob/develop/docs/x.md)\n"
             "site: [Rendered page](https://docs.kub.local/homelab/develop/x/)\n"
             "branch: none\npr: none")
 
     def test_body_is_kept_under_its_heading(self):
         got = m.render_description("docs/x.md", "feature/a", "#7", "What changed\n- one")
-        self.assertTrue(got.startswith("repo: vyrtualsynthese/homelab\n"))
+        self.assertTrue(got.startswith(
+            "repo: [vyrtualsynthese/homelab](https://github.com/vyrtualsynthese/homelab)\n"))
         self.assertTrue(got.endswith("branch: feature/a\npr: #7\n\nWhat changed\n- one"))
 
     def test_commit_stands_in_when_there_is_no_pull_request(self):
         got = m.render_description("docs/x.md", "none", "none", "", commit="0c83219c")
         self.assertTrue(got.endswith(
-            "pr: none\ncommit: https://github.com/vyrtualsynthese/homelab/commit/0c83219c"))
+            "branch: none\ncommit: [0c83219c]"
+            "(https://github.com/vyrtualsynthese/homelab/commit/0c83219c)"))
+        self.assertNotIn("pr:", got)
 
     def test_the_site_line_sits_directly_after_docs(self):
         text = m.render_description("docs/status.md", "none", "none", "")
         self.assertEqual(text.splitlines()[:3], [
-            "repo: vyrtualsynthese/homelab",
-            "docs: https://github.com/vyrtualsynthese/homelab/blob/develop/docs/status.md",
+            "repo: [vyrtualsynthese/homelab](https://github.com/vyrtualsynthese/homelab)",
+            "docs: [Status](https://github.com/vyrtualsynthese/homelab/blob/develop/docs/status.md)",
             "site: [Rendered page](https://docs.kub.local/homelab/develop/status/)",
         ])
+
+    def test_a_plan_is_named_not_pathed(self):
+        plan = "docs/superpowers/plans/2026-11-17-docs-for-the-operator.md"
+        text = m.render_description(plan, "none", "none", "")
+        self.assertEqual(
+            text.splitlines()[1],
+            f"docs: [Plan — Docs for the operator](https://github.com/{m.REPO}/blob/develop/{plan})")
 
     def test_no_docs_means_no_site_line(self):
         text = m.render_description("none", "none", "none", "")
         self.assertEqual(text.splitlines()[:2], [
-            "repo: vyrtualsynthese/homelab",
+            "repo: [vyrtualsynthese/homelab](https://github.com/vyrtualsynthese/homelab)",
             "docs: none",
         ])
         self.assertNotIn("site:", text)
