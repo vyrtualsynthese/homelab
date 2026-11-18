@@ -193,6 +193,30 @@ no LAN route by decision. Readiness is disabled for the shared reason — a data
 stops the process from starting, so there is no dependency that can fail while the process stays
 healthy.
 
+### qbittorrent
+
+As of 2026-11-18: the last media-stack chart to go through the contract pass, and the only one with a
+privileged sidecar. Six objects render — Deployment, Service, ServiceAccount, the WireGuard claim and
+the two IngressRoutes — with the API group in a value, every name derived from the release, and
+`/config` and `/downloads` as named mounts of two NFS claims this chart does **not** own (both created
+by their own `nfs-qbittorrent-*` Applications). The one claim it does create is
+`qbittorrent-vpn-config`, defaulted to `<fullname>-vpn-config`, which is the name the live pod already
+mounted, so nothing moved.
+
+The tunnel decides the security context: `ghcr.io/linuxserver/wireguard` needs `privileged`, adds
+`NET_ADMIN`/`SYS_MODULE` and mounts `/dev/net/tun`, with seccomp `Unconfined` stated explicitly so the
+pod-level `RuntimeDefault` is not read as applying to it. qBittorrent itself takes
+`allowPrivilegeEscalation: false` and the pod-level seccomp profile, and keeps the default capability
+set: the LinuxServer image starts as root, prepares both NFS mounts through s6, then drops to
+`PUID`/`PGID` 1100, the same position as `sonarr` and `prowlarr`.
+
+Probes are the deliberate narrow case: qBittorrent publishes only `auth/login` without a session, so
+liveness is a TCP connect to the WebUI port and readiness is off — an `httpGet` probe would either fail
+forever or silently depend on the `10.42.0.0/16` auth bypass. The route keeps the authentik gate and
+carries **no** `/api` exemption, because nothing in the cluster reaches the hostname: cross-seed, the
+exporter and autobrr all use `http://qbittorrent:8080`. The log level is debt of `bazarr`'s kind, and
+the VueTorrent installer's traps are recorded above its values block.
+
 ## Charts still to align
 
 Only non-public apps with hand-maintained charts are in scope for now. Public-facing apps wait,

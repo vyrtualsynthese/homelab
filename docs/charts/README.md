@@ -211,7 +211,7 @@ Two habits follow:
 | `plex` | yes, on `/identity` | capabilities dropped except `CHOWN`/`SETUID`/`SETGID`, which the image's root init needs; seccomp; no privilege escalation | **no — the image starts as root, then drops to 1100** |
 | `seerr` | yes, on `/api/v1/status/appdata` | capabilities dropped, seccomp, no privilege escalation | **yes — 1000**, the image's own UID |
 | `qbittorrent-exporter` | n/a (no HTTP listener of its own) | capabilities dropped, seccomp, no privilege escalation | **no — no `runAsUser` set** |
-| `qbittorrent` | **no** — the chart sets none | none on the app, and the WireGuard sidecar is `privileged` with `NET_ADMIN`/`SYS_MODULE` for `/dev/net/tun` | `PUID`/`PGID` 1100 through the image's own init |
+| `qbittorrent` | liveness only, a TCP connect to the WebUI port — there is no unauthenticated HTTP endpoint to ask; readiness off | pod seccomp `RuntimeDefault` and `allowPrivilegeEscalation: false` on the app; the WireGuard sidecar is `privileged`, adds `NET_ADMIN`/`SYS_MODULE` and sets seccomp `Unconfined` for `/dev/net/tun` | **no — the image starts as root, then drops to 1100** |
 
 ## Checking a chart against this list
 
