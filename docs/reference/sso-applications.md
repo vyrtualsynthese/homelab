@@ -88,6 +88,28 @@ about a host authentik has never heard of, and authentik answers its own 404 pag
 is the fastest diagnostic — `404` means no provider for that host, `403` means the provider exists
 but its policy refuses, `302` to authentik means it works.
 
+## Adding a tool that speaks OIDC
+
+Radarr and Radarr Anime are the worked example (`app-radarr.yaml`) — the same shape as `autobrr`,
+minus the middleware. Five things differ from the proxy recipe above:
+
+1. **An OAuth2 provider, named apart.** `authentik_providers_oauth2.oauth2provider` with a name like
+   `radarr-oidc`, never `radarr`: a proxy provider *is* an OAuth2 provider underneath, so reusing the
+   name updates that object in place and keeps the forward-auth redirect URIs.
+2. **Grant types, explicitly.** A blueprint-created provider starts with none.
+3. **A strict redirect URI** naming the app's callback. Check what the app sends rather than guessing;
+   for an ASP.NET app with no `CallbackPath` override it is `https://<host>/signin-oidc`.
+4. **No gate in the chart.** Remove `authentik-forwardauth` from the route and keep `lan-only`; the
+   app prompts by itself, and a gate in front is a second prompt that still carries no identity.
+5. **`authenticationRequired: enabled` in the app, not `disabledForLocalAddresses`.** The local bypass
+   lets a request Traefik forwards in arrive as the admin user without passing authentik at all.
+
+**The user identifier is the hashed `sub`, not the email.** authentik sends no verified email, so an
+app that accepts "a verified email or the subject" (Radarr's `oidcUserIdentifier`) matches nothing and
+answers `Unable to sign in with your identity provider`. The app logs the identifier it saw at error
+level — `User '<64 hex characters>' is not authorized` — and that string is what goes in the setting.
+It is per account, not per provider, so the same value serves both Radarr instances.
+
 ## Migrating Vikunja to OIDC
 
 It is the only application here that supports OIDC and does not use it, and the board is where the
