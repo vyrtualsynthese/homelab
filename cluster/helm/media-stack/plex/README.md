@@ -38,7 +38,7 @@ Middlewares (redirect, security headers, rate limit) and one TLSOption.
 | Reference (autobrr) | Here | Why |
 |---|---|---|
 | `web` entry point, no TLS | **Secure route on `websecure` with ACME + TLSOption, plus a `web` → HTTPS redirect** | This is the only app exposed to the internet; Plex clients expect TLS |
-| No auth middleware | **No auth middleware here either, deliberately** | Plex clients cannot complete a forward-auth flow. The server's own account model is the gate |
+| No auth middleware | **No auth middleware here either, deliberately** | Plex clients cannot complete a forward-auth flow. Plex login is the gate |
 | One config claim | Config claim **plus two shared media claims** | `/media` and `/audio` come from NFS provisioner pools shared with sonarr, radarr, bazarr, lidarr and filebrowser |
 | No GPU | `runtimeClassName: nvidia`, `NVIDIA_*` variables | NVENC hardware transcoding. The Intel `/dev/dri` path is deliberately absent |
 | Exporter off | **Exporter sidecar on 9594** | The images ship no exporter; `cplieger/plex-exporter` is the maintained one |
@@ -110,8 +110,7 @@ watching the browser console against a staging host.
   dozen assets at startup and playback is a handful of long-lived requests; this is far above
   normal use and stops a request flood. Set `ingress.rateLimit.enabled: false` if a client ever
   trips it.
-- **No auth middleware:** Plex clients cannot complete a forward-auth flow. The server's own
-  account model is the gate.
+- **No auth middleware:** Plex clients cannot complete a forward-auth flow. Plex login is the gate.
 
 ## Upgrading and rolling back
 

@@ -137,7 +137,7 @@ the repo has one public-route dialect:
 - **Rate limit:** 100 requests/second per source IP, burst 200. Seerr's UI loads a few dozen assets
   at once and the rest is API traffic; this is far above normal use. Set
   `ingress.rateLimit.enabled: false` if a client ever trips it.
-- **No auth Middleware:** Seerr's login is the gate, and the same host serves its API clients.
+- **No auth Middleware:** Plex login is the gate, and the same host serves its API clients.
 - **No Content Security Policy:** the Next.js UI loads inline scripts. The value exists and is
   empty; populate it only after watching the browser console against a staging host.
 
