@@ -81,8 +81,42 @@ spec:
               mountPath: /downloads
         {{- end }}
         - name: init-qbittorrent
-          image: alpine:latest
-          command: [ 'sh', '-c', "apk update && apk add unzip && wget https://github.com/WDaan/VueTorrent/releases/download/v2.35.0/vuetorrent.zip && unzip vuetorrent.zip && cp -r vuetorrent /config/ui" ]
+          image: "alpine:{{ .Values.vueTorrent.initTag }}"
+          env:
+            - name: VUETORRENT_REPOSITORY
+              value: {{ .Values.vueTorrent.repository | quote }}
+            - name: VUETORRENT_VERSION
+              value: {{ .Values.vueTorrent.version | quote }}
+          command:
+            - sh
+            - -c
+            - |
+              set -eu
+              # A `v`-prefixed value is accepted too: the release tag carries one,
+              # the values file does not have to.
+              want="${VUETORRENT_VERSION#v}"
+              installed="$(cat /config/ui/version.txt 2>/dev/null || true)"
+              if [ "$installed" = "$want" ]; then
+                echo "VueTorrent $want already installed, nothing to do"
+                exit 0
+              fi
+              apk add --no-cache unzip >/dev/null
+              tmp="$(mktemp -d)"
+              url="https://github.com/${VUETORRENT_REPOSITORY}/releases/download/v${want}/vuetorrent.zip"
+              echo "installing VueTorrent $want from $url"
+              wget -q -O "$tmp/vuetorrent.zip" "$url"
+              unzip -q "$tmp/vuetorrent.zip" -d "$tmp"
+              # Stage the new UI next to the old one and swap at the end: a failed
+              # download or a truncated zip leaves the working UI untouched.
+              rm -rf /config/ui.next
+              cp -a "$tmp/vuetorrent" /config/ui.next
+              if [ -d /config/ui ]; then
+                rm -rf /config/ui.prev
+                mv /config/ui /config/ui.prev
+              fi
+              mv /config/ui.next /config/ui
+              rm -rf /config/ui.prev "$tmp"
+              echo "VueTorrent $want installed"
           volumeMounts:
             - name: qbittorrent-config-volume
               mountPath: /config

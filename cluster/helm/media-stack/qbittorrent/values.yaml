@@ -16,6 +16,29 @@ vpnimage:
   # Overrides the image tag whose default is the chart appVersion.
   tag: 1.0.20260223
 
+# The alternative WebUI. qBittorrent serves VueTorrent's static files from the
+# config claim (`WebUI\RootFolder=/config/ui`), and the `init-qbittorrent`
+# container puts them there: it downloads the release asset only when the
+# `version.txt` sitting in `/config/ui` differs from `version` below, so an
+# ordinary pod restart installs nothing and needs no network.
+#
+# Renovate reads the two `# renovate:` annotations: the first moves `version`,
+# the second keeps the installer's Alpine base off a floating tag. Each
+# `depName` must stay equal to the value on the line under it.
+vueTorrent:
+  # -- Repo that publishes the release asset `vuetorrent.zip`. The project moved
+  # -- from `WDaan/VueTorrent`, which now redirects here; the old URL still
+  # -- answers, so a stale name fails quietly rather than loudly.
+  repository: VueTorrent/VueTorrent
+  # -- Release to install, without the `v` its tag carries. The template re-adds
+  # -- it, so a value written either way produces the same URL.
+  # renovate: datasource=github-releases depName=VueTorrent/VueTorrent
+  version: "2.37.0"
+  # -- Tag of the `alpine` image the installer runs in. It is pinned because the
+  # -- installer needs `apk`, which `busybox` does not carry.
+  # renovate: datasource=docker depName=alpine
+  initTag: "3.22"
+
 # The post-download hook calls cross-seed by name. The pod runs with
 # dnsPolicy: None and public resolvers on purpose, so cluster names do not
 # resolve; this alias maps the one name the hook needs without routing the
