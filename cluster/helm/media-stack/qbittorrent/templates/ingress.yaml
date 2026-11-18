@@ -35,8 +35,9 @@ spec:
   {{- end }}
 {{- if .Values.ingress.redirectToHttps }}
 ---
-{{- /* Plain-HTTP mirror: `lan-only` then a permanent redirect. The gate — if one is
-ever added to this route — belongs on the TLS router, not here. */}}
+{{- /* Plain-HTTP mirror: `lan-only` then a permanent redirect. The authentik gate
+lives on the TLS router, not here: this route only answers a redirect, so a
+forward-auth round trip in front of it would cost a hop and change nothing. */}}
 apiVersion: traefik.containo.us/v1alpha1
 kind: IngressRoute
 metadata:

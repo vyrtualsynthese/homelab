@@ -71,11 +71,29 @@ ingress:
   # -- Render the plain-HTTP mirror router.
   redirectToHttps: true
   # -- Middlewares, rendered as `<namespace>-<name>@kubernetescrd`, in order.
-  # -- No authentik gate: qBittorrent keeps its own login, cross-seed drives its API
-  # -- with credentials, and adding the gate would need an `/api` exemption anyway.
-  # -- `lan-only` is the network floor, shared with every non-public route.
+  # -- `lan-only` is the network floor shared with every non-public route, and it
+  # -- runs first: an outside request is refused before the forward-auth round trip.
+  # --
+  # -- `authentik-forwardauth` is the gate. Its authentik side is
+  # -- `cluster/helm/authentik/files/app-qbittorrent.yaml`: a `forward_single` proxy
+  # -- provider for this host, bound to the `authentik Admins` group, so a signed-in
+  # -- non-admin is answered 403 instead of being shown this app's page.
+  # --
+  # -- No `/api` exemption, unlike the *arrs: nothing in the cluster reaches this
+  # -- host. cross-seed drives the API at `http://qbittorrent:8080` (its log names
+  # -- the client as `@qbittorrent:8080`), `qbittorrent-exporter` uses the same
+  # -- Service, and every URL autobrr logs is a Service name as well
+  # -- (`radarr:7878`, `sonarr-anime:8989`), with no `kub.local` host anywhere in its
+  # -- logs. API clients never cross Traefik, so an `/api` rule would open a hole
+  # -- nothing needs. Revisit if a client is ever pointed at the hostname.
+  # --
+  # -- qBittorrent keeps its own WebUI login as break-glass: behind the gate it is a
+  # -- second prompt for an admin, and the way in while authentik is down. Turn it
+  # -- off only after this route is proven, and only on purpose.
   middlewares:
     - name: lan-only
+      namespace: kube-system
+    - name: authentik-forwardauth
       namespace: kube-system
   annotations: {}
   tls:
