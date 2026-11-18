@@ -1,10 +1,11 @@
 # Metrics: what the exporters publish and what was measured
 
-> **In one line.** The metric side of the `monitoring` stack: the traps in each exporter, how long
-> data is kept, and the numbers taken from the live cluster on 2026-11-13.
+> **In one line.** The metric side of the `monitoring` stack: the traps in each exporter, what
+> Prometheus throws away before storing, how long data is kept, and the numbers taken from the live
+> cluster on 2026-11-18.
 >
 > **Use it when** a panel is blank or a metric reads wrong, before trusting a series count or a
-> retention claim, or before proposing a new metric · **Verified** 2026-11-17 · **Kind:** living page
+> retention claim, or before proposing a new metric · **Verified** 2026-11-18 · **Kind:** living page
 
 The overview — what runs where, its sizing, and how to query the stack:
 [`observability-conventions.md`](../observability-conventions.md).
@@ -115,7 +116,10 @@ two static jobs added on 2026-11-18. Without them the stack watched every
 application but not itself: `loki_request_duration_seconds_count` on the push
 route is the only evidence that Fluent Bit writes are being rejected, and
 `grafana_alerting_rule_evaluation_failures_total` is the only evidence that the
-single alert evaluator stopped evaluating rules.
+single alert evaluator stopped evaluating rules. Both jobs publish histogram
+buckets that Prometheus drops at the scrape (see
+[below](#what-prometheus-throws-away-before-storing)); the counters the rules
+read are kept.
 
 **Temperature**: `node_hwmon_chip_names` carries the driver name for each hwmon
 `chip`, and the `chip` label itself is a device path — `k10temp` on `streaming`
@@ -165,6 +169,55 @@ the node is `nuc0`. `nuc0` therefore falls back to
 `/opt/local-path-provisioner` on its root filesystem instead of `/mnt/ssd0`.
 Harmless today (the root disk is monitored), wrong if that node is meant to use
 its SSD.
+
+## What Prometheus throws away before storing
+
+A scrape returns everything an exporter publishes; Prometheus stores what something reads. Since
+2026-11-18 ten `metric_relabel_configs` entries in `cluster/helm/monitoring/prometheus/values.yaml`
+— one regex widened, nine added — drop the rest at the scrape, so those series never reach the
+head, the WAL or the SSD. Every family below was checked against the eight dashboards' PromQL and
+the 35 alert rules' expressions first; none of them appears in either.
+
+| Job | Dropped | Series | Why it has no reader |
+|---|---|---|---|
+| `kubernetes-api-servers` | every histogram bucket (`apiserver_*`, `etcd_*`, `workqueue_*`, `scheduler_*`, `storage_operation_*`, `kubelet_*`, `rest_client_*`) | 28,964 | the Platform panel divides `_sum` by `_count`; a bucket is never touched |
+| `kubernetes-nodes` | the same treatment for the kubelet's own histograms | 4,932 | no panel reads a kubelet duration; `kubelet_volume_stats_*` is kept |
+| `kubernetes-nodes-cadvisor` | 17 `container_*` families (`tasks_state`, `memory_failures_total`, `memory_failcnt`, `memory_max_usage_bytes`, `memory_mapped_file`, `memory_swap`, `memory_kernel_usage`, `memory_cache`, `blkio_device_usage_total`, `fs_reads_total`, `fs_writes_total`, `cpu_load_average_10s`, `file_descriptors`, `processes`, `sockets`, `threads`, `threads_max`) | 10,058 | the Applications board reads CPU and memory only; the identity and limit families stay |
+| `kubernetes-service-endpoints` | `kube_secret_*`, `kube_pod_tolerations`, `kube_replicaset_*`, `kube_pod_status_qos_class` | 6,156 | one series per object: 421 Secrets, and the replica panels read Deployments and StatefulSets |
+| `kubernetes-pods` | `qbittorrent_torrent_*` (17 fields × 365 torrents), `n8n_*_bucket` and `traefik_*_bucket` | 9,393 | the Media board reads the four `qbittorrent_global_*` totals |
+| `grafana`, `loki`, `prometheus` | each job's own histogram buckets | 6,968 | the two stack rules read counters, which are kept |
+
+`kubernetes-pods-slow` and `kubernetes-service-endpoints-slow` carry the same two rules as their
+fast twins, and that is not hypothetical: on 2026-11-18 the media-stack pods carrying
+`prometheus.io/scrape_slow` — the `*arr` exporters among them — are scraped only by the slow pod
+job, at a 5-minute cadence, because the fast job drops a pod with that annotation outright. None of
+them publishes a dropped family, so those rules remove nothing there; they exist so that a pod
+carrying both annotations cannot bring the families back by the side door.
+
+**Measured on 2026-11-18, before the drop:** 151,103 head series, 2,230 samples/s, p95 working set
+1,456 MiB. **Two hours after** (config reloaded 21:18Z, measured 23:22Z): **73,835 head series, 1,151
+samples/s**, and a working set that has not moved — 1,195 MiB p95 over the half hour after the change
+against 1,185 MiB over the 24 hours before it, with the Go heap in use going from 964 to 899 MiB.
+
+That is the honest result: the drop halves what is stored and written, and does not fix the memory.
+Prometheus requests 1 GiB and uses about 1.2; removing 72,000 series moved the Go heap by 7 %, so the
+head was not what filled the process. The request is a sizing question with its own method
+([`chart-sizing.md`](chart-sizing.md)), not a scrape-config one; do not expect a drop rule to buy
+memory here.
+
+Two things this page teaches by being measured rather than assumed:
+
+- **`scrape_samples_scraped` is not a series count.** It reports what the target exposed, before
+  these rules run, so it kept showing the dropped families after the drop was live. Count what is
+  stored with `count by (job) ({__name__!=""})` or `prometheus_tsdb_head_series`.
+- **A regex that matches nothing looks exactly like one that works** in the rendered config. Only
+  the head can tell the difference:
+
+```bash
+curl -sG http://prometheus.kub.local/api/v1/query --data-urlencode \
+  'query=count({job="kubernetes-nodes-cadvisor", __name__=~"container_(tasks_state|threads|file_descriptors)"})'
+# no result = the drop is working; a number = the regex matches nothing
+```
 
 ## Storage and retention
 

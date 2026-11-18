@@ -118,8 +118,14 @@ Grafana's own data: where they live, and what that costs, is in
 - **K3s runs the whole control plane in one process.** Each control-plane node's
   kubelet endpoint republishes apiserver, etcd, scheduler and workqueue metrics,
   three times over. The `kubernetes-nodes` job drops those families and keeps
-  kubelet/volume/storage; `kubernetes-api-servers` drops `apiserver_*_bucket`.
-  Without both trims Prometheus needs ~196k series and OOMs at 2 GiB.
+  kubelet/volume/storage; `kubernetes-api-servers` keeps the counters and sums and
+  drops every histogram bucket. Without both trims Prometheus needs ~196k series
+  and OOMs at 2 GiB.
+- **Five more drop rules follow the same principle**: nothing is kept that no panel
+  and no rule reads. The list, with the series each one removes, is in
+  [`reference/metrics.md#what-prometheus-throws-away-before-storing`](reference/metrics.md#what-prometheus-throws-away-before-storing).
+  A family with no reader is dropped at the scrape rather than dropped from a
+  dashboard later: the write is what costs.
 - **The two edge Pis are static jobs**, not discovery: `rbp0` 192.168.1.22 and
   `rbp1` 192.168.1.38, ports 9100 (node-exporter), 9902 (smartctl), 9323
   (Docker). They carry no `node` label, only `instance`, so dashboards label
@@ -136,12 +142,15 @@ Grafana's own data: where they live, and what that costs, is in
   follows the cgroup limit, so lowering it below the working set restarts the
   OOM loop of 2026-11-12.
 
-**Measured on 2026-11-13:** 121,431 head series, ~1,980 samples/s, every scrape
-target up. Series by job: `kubernetes-api-servers` 49 243,
-`kubernetes-service-endpoints` 27 748, `kubernetes-nodes-cadvisor` 22 105,
-`kubernetes-pods` 8 841, `kubernetes-nodes` 7 207, `rbp0` 1 343, `rbp1` 1 341,
-`prometheus` 1 309. The `kubernetes-pods` growth is the exportarr sidecars and
-the Plex, autobrr, n8n and qBittorrent exporters.
+**Measured on 2026-11-18**, after the drop rules landed (the 2026-11-13 figures in brackets):
+**73,835 head series** (121,431), **1,151 samples/s** (1,980), 52 scrape targets. Series by
+job: `kubernetes-api-servers` 22,160 (49,243), `kubernetes-service-endpoints` 19,574 (27,748),
+`kubernetes-nodes-cadvisor` 11,628 (22,105), `kubernetes-pods` 6,413 (8,841), `kubernetes-nodes`
+2,590 (7,207), `grafana` 2,283 (new), `rbp0` 1,343, `rbp1` 1,341, `loki` 979 (new), `prometheus` 895
+(1,309). The working set did not follow the series count down: 1,195 MiB p95 in the half hour after
+the change against 1,185 MiB over the 24 hours before it. The request is still 1 GiB against a
+working set above it — a sizing question, not a scrape one; the detail is in
+[`reference/metrics.md`](reference/metrics.md#what-prometheus-throws-away-before-storing).
 
 **Measured on 2026-11-18, after the media trim:** the media stack's ten targets
 were 979 of `kubernetes-pods`' 6,429 live series and wrote 16.3 samples/s. They
