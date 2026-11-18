@@ -366,8 +366,13 @@ are untouched until step 5.
 **Phase 4 — supply chain (3-5 days)**
 
 1. Implement the deferred vulnerability-alerting design, scoped to `media-stack` first.
-2. Pin images by digest in `values.yaml`, and remove the `alpine:latest` init that downloads and
-   unzips VueTorrent from GitHub on every pod start; bake it into a pinned image or a claim.
+2. Pin images by digest in `values.yaml`. **Partly done on 2026-11-18 for the VueTorrent installer:**
+   its `alpine:latest` became a pinned `initTag` that Renovate tracks, the release tag moved into
+   `values.yaml` behind a `# renovate: datasource=github-releases` annotation (on the new
+   `VueTorrent/VueTorrent` name), and the download now runs only when `/config/ui/version.txt` differs
+   from that tag — an ordinary pod restart installs nothing and needs no network. What remains of the
+   original point: a first install still fetches from GitHub at pod start, so a cold cluster with no
+   internet boots qBittorrent without its alternative UI.
 3. Ensure Renovate covers every media-stack chart; close the `latest` tags that remain.
 4. Plan the FileBrowser exit: archived upstream, running `v2.63.23`. Its own login (not forward
    auth) is the gate; the LAN allowlist is the network boundary.
