@@ -69,25 +69,21 @@ ingressRoute:
   # -- Render the plain-HTTP mirror router that redirects to this one.
   redirectToHttps: true
   # -- Middlewares, rendered as `<namespace>-<name>@kubernetescrd`.
-  # Example: [{ name: lan-only, namespace: kube-system }]
-  # The LAN gate runs first: an outside request is rejected before the
-  # forward-auth round trip.
-  # No strip-authentik-header on purpose: Radarr trusts no X-authentik-* header.
+  # The LAN gate runs first: an outside request is rejected before anything else.
+  # No authentik forward-auth here: Radarr 7 signs users in with OIDC itself
+  # (Settings -> General -> Authentication = OIDC), so a gate in front would be a
+  # second prompt and would still carry no identity into the app.
   middlewares:
     - name: lan-only
-      namespace: kube-system
-    - name: authentik-forwardauth
       namespace: kube-system
   # -- Middlewares for the `/api` rule, rendered as a second, higher-priority route
   # on the same host. Empty means `/api` is gated like the rest of the app; here it
   # is set to `lan-only` alone so scripts can call the API without a browser session.
   #
   # Radarr's API is not part of the browser session: every `/api/v3` request must
-  # carry `X-Api-Key`, and one without it gets `401` from Radarr itself. Exempting
-  # `/api` swaps the authentik gate for the app's own key check; it does not remove
-  # the last control. `lan-only` stays, so the API answers the LAN, WireGuard and
-  # the pod network that middleware already allows, never the internet, and the UI
-  # route above keeps its gate.
+  # carry `X-Api-Key`, and one without it gets `401` from Radarr itself. `lan-only`
+  # stays, so the API answers the LAN, WireGuard and the pod network that middleware
+  # already allows, never the internet, and the UI route above keeps its OIDC sign-in.
   apiBypassMiddlewares:
     - name: lan-only
       namespace: kube-system
@@ -200,12 +196,22 @@ probes:
   startup:
     enabled: true
     path: /ping
+    # -- Host header the probe sends. Allowed Hosts names real hostnames, and the
+    # kubelet would otherwise send the pod IP, which no list can contain.
+    httpHeaders:
+      - name: Host
+        value: radarr.kub.local
     periodSeconds: 5
     timeoutSeconds: 5
     failureThreshold: 60
   liveness:
     enabled: true
     path: /ping
+    # -- Host header the probe sends. Allowed Hosts names real hostnames, and the
+    # kubelet would otherwise send the pod IP, which no list can contain.
+    httpHeaders:
+      - name: Host
+        value: radarr.kub.local
     initialDelaySeconds: 20
     periodSeconds: 30
     timeoutSeconds: 5
@@ -213,6 +219,11 @@ probes:
   readiness:
     enabled: true
     path: /ping
+    # -- Host header the probe sends. Allowed Hosts names real hostnames, and the
+    # kubelet would otherwise send the pod IP, which no list can contain.
+    httpHeaders:
+      - name: Host
+        value: radarr.kub.local
     initialDelaySeconds: 10
     periodSeconds: 15
     timeoutSeconds: 5
