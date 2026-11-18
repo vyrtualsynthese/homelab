@@ -156,23 +156,142 @@ prometheus:
     # bucket families of its own, of which the HTTP one is 1,610 series.
     # Measured 2026-11-18: 9,393 series from this job. container_* is not
     # touched here; the cadvisor job owns those families.
+    #
+    # The media stack's ten targets are 979 of those series and nothing reads
+    # 746 of them: the five *arr sidecars publish one series per indexer,
+    # genre, quality, tag and library item, and every exporter that is not the
+    # qBittorrent one publishes its own Go or Python runtime counters. The
+    # Media board reads fifteen names in total, listed on each rule below.
+    # Everything else the media exporters publish is dropped at the scrape, so
+    # it is never written to the head. Measured 2026-11-18: 979 series across
+    # ten targets, 731 matched by these seven rules. The sample rate those
+    # targets wrote falls from 16.3 to 1.6 samples/s, because eight of the ten
+    # carry prometheus.io/scrape_slow and are scraped every 5 minutes instead of
+    # every minute.
+    #
+    # Scoped by namespace, not by container: a name that a future version of an
+    # exporter renames would otherwise come back silently. Other namespaces keep
+    # their own go_* and process_*.
     kubernetes-pods:
       metric_relabel_configs:
         - action: drop
           source_labels:
             - __name__
           regex: "qbittorrent_torrent_.*|n8n_.*_bucket|traefik_.*_bucket"
+        # Runtime counters: no panel and no rule reads one. A pod's CPU and
+        # memory are cAdvisor's `container_*` families, not the exporter's own.
+        - action: drop
+          source_labels:
+            - namespace
+            - __name__
+          separator: ";"
+          regex: "media-stack;(go_.*|process_.*|python_.*)"
+        # lidarr_artists_genres_total: one series per genre, 224 of them, read
+        # by nothing. The album counts the Media board shows are single series.
+        - action: drop
+          source_labels:
+            - namespace
+            - __name__
+          separator: ";"
+          regex: "media-stack;lidarr_artists_genres_total"
+        # Prowlarr's per-indexer stats: 20 series each for eight families the
+        # Media board does not chart. `prowlarr_indexer_unavailable` and
+        # `prowlarr_indexer_failed_queries_total` stay — the first says an
+        # indexer is down, the second is what the board's "failed 1 h" column
+        # increases.
+        - action: drop
+          source_labels:
+            - namespace
+            - __name__
+          separator: ";"
+          regex: "media-stack;prowlarr_indexer_(auth_queries_total|average_response_time_ms|failed_auth_queries_total|failed_grabs_total|failed_rss_queries_total|grabs_total|queries_total|rss_queries_total)|media-stack;prowlarr_user_agent_(grabs|queries)_total"
+        # qBittorrent's per-category and per-tag counters: 17 categories and 34
+        # tags. The board reads four `qbittorrent_global_*` totals.
+        - action: drop
+          source_labels:
+            - namespace
+            - __name__
+          separator: ";"
+          regex: "media-stack;qbittorrent_global_(categories|tags)"
+        # Plex's per-item families, one per library item: top item, watch age,
+        # resolution, codec, recent additions. `plex_library_items` and
+        # `plex_library_storage_bytes` are the two the board reads, and both
+        # stay, as do the session families behind "Plex now".
+        - action: drop
+          source_labels:
+            - namespace
+            - __name__
+          separator: ";"
+          regex: "media-stack;plex_(library_(top_item_bytes|top_item_last_played_timestamp_seconds|recent_item_added_timestamp_seconds|resolution_bytes|codec_bytes|watch_age_bytes|watch_age_items|added_items|duration_milliseconds|last_scan_timestamp_seconds|extra_version_bytes|multi_version_items|newest_item_added_timestamp_seconds|unsized_items|walk_duration_seconds|walk_last_success_timestamp_seconds|walkable)|exporter_errors_total|refresh_deadline_exceeded_total|history_read_status)"
+        # One series per quality profile and per tag, on both Radarrs.
+        - action: drop
+          source_labels:
+            - namespace
+            - __name__
+          separator: ";"
+          regex: "media-stack;radarr_movie_(quality|tag)_total"
+        # autobrr's per-channel and per-feed timestamps, one per IRC channel
+        # and feed. The board reads the push counters and the connected total.
+        - action: drop
+          source_labels:
+            - namespace
+            - __name__
+          separator: ";"
+          regex: "media-stack;autobrr_(feed_(last_run|next_run)_timestamp_seconds|irc_channel_.*)"
     # The two -slow jobs scrape the targets that carry prometheus.io/scrape_slow
     # instead of prometheus.io/scrape, so a drop on the fast job never reaches
-    # them. No target carries that annotation on 2026-11-18, which is exactly why
-    # the same rules are set here: one annotation added later would otherwise
-    # bring back up to 15.5k series with nothing to notice.
+    # them. The exportarr sidecars and autobrr carry that annotation since
+    # 2026-11-18 (their numbers move in minutes, and no rule reads them), which
+    # makes the media rules below load-bearing rather than a guard: the same
+    # five are repeated here so a target moving between jobs keeps its trim.
     kubernetes-pods-slow:
       metric_relabel_configs:
         - action: drop
           source_labels:
             - __name__
           regex: "qbittorrent_torrent_.*|n8n_.*_bucket|traefik_.*_bucket"
+        - action: drop
+          source_labels:
+            - namespace
+            - __name__
+          separator: ";"
+          regex: "media-stack;(go_.*|process_.*|python_.*)"
+        - action: drop
+          source_labels:
+            - namespace
+            - __name__
+          separator: ";"
+          regex: "media-stack;lidarr_artists_genres_total"
+        - action: drop
+          source_labels:
+            - namespace
+            - __name__
+          separator: ";"
+          regex: "media-stack;prowlarr_indexer_(auth_queries_total|average_response_time_ms|failed_auth_queries_total|failed_grabs_total|failed_rss_queries_total|grabs_total|queries_total|rss_queries_total)|media-stack;prowlarr_user_agent_(grabs|queries)_total"
+        - action: drop
+          source_labels:
+            - namespace
+            - __name__
+          separator: ";"
+          regex: "media-stack;qbittorrent_global_(categories|tags)"
+        - action: drop
+          source_labels:
+            - namespace
+            - __name__
+          separator: ";"
+          regex: "media-stack;plex_(library_(top_item_bytes|top_item_last_played_timestamp_seconds|recent_item_added_timestamp_seconds|resolution_bytes|codec_bytes|watch_age_bytes|watch_age_items|added_items|duration_milliseconds|last_scan_timestamp_seconds|extra_version_bytes|multi_version_items|newest_item_added_timestamp_seconds|unsized_items|walk_duration_seconds|walk_last_success_timestamp_seconds|walkable)|exporter_errors_total|refresh_deadline_exceeded_total|history_read_status)"
+        - action: drop
+          source_labels:
+            - namespace
+            - __name__
+          separator: ";"
+          regex: "media-stack;radarr_movie_(quality|tag)_total"
+        - action: drop
+          source_labels:
+            - namespace
+            - __name__
+          separator: ";"
+          regex: "media-stack;autobrr_(feed_(last_run|next_run)_timestamp_seconds|irc_channel_.*)"
     rbp0:
       enabled: true
       static_configs:

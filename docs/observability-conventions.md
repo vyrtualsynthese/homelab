@@ -111,7 +111,10 @@ Grafana's own data: where they live, and what that costs, is in
 - Scraping is **annotation-based only** (`prometheus.io/scrape`). There is no
   Prometheus Operator, no `ServiceMonitor`, and the CRDs are not installed. A new
   exporter needs the annotation, not a chart change.
-- Global scrape interval is **1 minute** (a few jobs use 5 m).
+- Global scrape interval is **1 minute** (a few jobs use 5 m). Since 2026-11-18 the media
+  stack's exporters are on the 5-minute jobs: they carry `prometheus.io/scrape_slow` in
+  addition to `prometheus.io/scrape`, which is how the two `-slow` jobs are found and how
+  the fast job refuses them. Their numbers — queue depth, library counts — move in hours.
 - **K3s runs the whole control plane in one process.** Each control-plane node's
   kubelet endpoint republishes apiserver, etcd, scheduler and workqueue metrics,
   three times over. The `kubernetes-nodes` job drops those families and keeps
@@ -139,6 +142,12 @@ target up. Series by job: `kubernetes-api-servers` 49 243,
 `kubernetes-pods` 8 841, `kubernetes-nodes` 7 207, `rbp0` 1 343, `rbp1` 1 341,
 `prometheus` 1 309. The `kubernetes-pods` growth is the exportarr sidecars and
 the Plex, autobrr, n8n and qBittorrent exporters.
+
+**Measured on 2026-11-18, after the media trim:** the media stack's ten targets
+were 979 of `kubernetes-pods`' 6,429 live series and wrote 16.3 samples/s. They
+now hold 248 series and write 1.6 samples/s, because 731 are dropped at the
+scrape and eight of the ten targets moved to the 5-minute jobs
+([`reference/metrics.md#exporter-quirks`](reference/metrics.md#exporter-quirks)).
 
 ## Where the detail lives
 
