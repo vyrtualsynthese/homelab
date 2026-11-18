@@ -85,7 +85,7 @@ prometheus:
   # it is histogram buckets that no dashboard and no alert rule reads. The
   # sums and counts stay, so request rate, error rate and an average latency
   # are still visible; the buckets are dropped before they reach the head.
-  # Measured 2026-11-18: 28,892 series match this rule, 19,368 of them
+  # Measured 2026-11-18: 28,964 series match this rule, 19,488 of them
   # etcd_request_duration_seconds_bucket alone. Buckets were once dropped for
   # apiserver_* only, which left the largest family behind.
   scrapeConfigs:
@@ -132,7 +132,7 @@ prometheus:
     # Four of those families have no reader: every Secret in the cluster
     # (421 of them, names and type only), pod tolerations, ReplicaSets — the
     # replica panels read Deployments and StatefulSets — and the QoS class.
-    # Measured 2026-11-18: 6,148 series match this rule. kube_persistentvolume_status_phase
+    # Measured 2026-11-18: 6,156 series match this rule. kube_persistentvolume_status_phase
     # has no reader either and stays: PV state matters to the Longhorn cleanup.
     kubernetes-service-endpoints:
       metric_relabel_configs:
@@ -166,7 +166,7 @@ prometheus:
     # instead of prometheus.io/scrape, so a drop on the fast job never reaches
     # them. No target carries that annotation on 2026-11-18, which is exactly why
     # the same rules are set here: one annotation added later would otherwise
-    # bring back up to 15k series with nothing to notice.
+    # bring back up to 15.5k series with nothing to notice.
     kubernetes-pods-slow:
       metric_relabel_configs:
         - action: drop
