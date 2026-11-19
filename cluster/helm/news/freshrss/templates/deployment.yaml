@@ -54,7 +54,7 @@ spec:
               containerPort: {{ include "app.containerPort" . }}
               protocol: TCP
           {{- if .Values.probes.startup.enabled }}
-          # A TCP connect: the question is whether PHP-FPM is listening, not
+          # A TCP connect: the question is whether Apache is listening, not
           # whether the database is ready. /i/ would answer that, and a failing
           # readiness should keep the pod out of the Service, not restart it.
           startupProbe:
@@ -74,9 +74,9 @@ spec:
             failureThreshold: {{ .Values.probes.liveness.failureThreshold }}
           {{- end }}
           {{- if .Values.probes.readiness.enabled }}
-          # Booting /i/ runs any pending migration and queries the user table, so
-          # this fails when the SQLite file under /config is unusable — the one
-          # dependency that can fail while the process stays up.
+          # With OIDC on, /i/ answers 302 to authentik; a probe counts 3xx as
+          # ready. It still boots Apache and PHP, so a dead worker fails here
+          # while the TCP check would pass.
           readinessProbe:
             httpGet:
               path: {{ .Values.probes.readiness.path }}
