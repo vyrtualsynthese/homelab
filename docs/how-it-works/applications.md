@@ -76,7 +76,7 @@ belong to is [media.md](media.md).
 | `pihole-exporter` | `monitoring` | nuc0 | A | metrics from Pi-hole |
 | `prometheus` | `monitoring` | nas | D | the metrics database and its scrape configuration |
 | `n8n` | `n8n` | nuc0 | A | workflow automation |
-| `news-freshrss` | `news` | Pending | A | RSS reader |
+| `news-freshrss` | `news` | nuc0 | A | RSS reader, on a claim the chart creates |
 | `renovate` | `renovate` | nas | D | nightly pull requests that bump dependencies |
 | `syncthing` | `syncthing` | nuc0 | A | file sync between devices, with a restic backup job |
 | `thelounge` | `thelounge` | nuc0 | A | web IRC client |
