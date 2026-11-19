@@ -45,10 +45,6 @@
     </outline>
     <outline text="Veille" title="Veille">
       <outline type="rss" text="selfh.st" title="selfh.st" xmlUrl="https://selfh.st/rss/" frss:cssFullContent="article"/>
-      <outline type="rss" text="Phoronix" title="Phoronix" xmlUrl="https://www.phoronix.com/rss.php" frss:cssFullContent="article"/>
-      <outline type="rss" text="Simon Willison" title="Simon Willison" xmlUrl="https://simonwillison.net/atom/everything/"/>
-      <outline type="rss" text="Hacker News front page" title="Hacker News front page" xmlUrl="https://hnrss.org/frontpage"/>
-      <outline type="rss" text="Lobsters" title="Lobsters" xmlUrl="https://lobste.rs/rss"/>
     </outline>
   </body>
 </opml>
