@@ -1,10 +1,11 @@
 # Alerts: the rules, the silences and the gaps
 
-> **In one line.** Every alert rule in Grafana's `homelab-core` group, what each one protects, why
-> five silences exist, the pattern a rule must follow to fire at all, and the holes nobody watches.
+> **In one line.** Every alert rule in Grafana's two `homelab-core` groups, what each one protects,
+> why five silences exist, the pattern a rule must follow to fire at all, and the holes nobody
+> watches.
 >
 > **Use it when** an alert fired and you want to know what it means, you are writing or editing a
-> rule, or you are asking whether something is monitored at all · **Verified** 2026-11-17 · **Kind:**
+> rule, or you are asking whether something is monitored at all · **Verified** 2026-11-19 · **Kind:**
 > living page
 
 The overview — what runs where, its sizing, and how to query the stack:
@@ -12,9 +13,21 @@ The overview — what runs where, its sizing, and how to query the stack:
 
 ## Alerting
 
-Grafana unified alerting, folder `Homelab`, rule group `homelab-core`,
-evaluation interval **60 s**. **35 rules**, one contact point, two routes by
-severity.
+Grafana unified alerting, folder `Homelab`, **two rule groups split by cadence
+on 2026-11-18**: `homelab-core-fast` at **60 s** (17 rules) and `homelab-core` at
+**300 s** (18 rules). **35 rules**, one contact point, two routes by severity.
+
+The split rule is the `for` duration: a rule sits in the fast group when its `for`
+is 5 minutes or less, or when it reports that something is down and its `for` is
+10 minutes (`NodeDown`, `KubeNodeNotReady`, `MonitoringDown`,
+`KubeStateMetricsDown`, `CoreDeploymentDown`, `CoreStatefulSetDown`,
+`CoreDaemonSetDown`, `MediaDeploymentDown`) — `ScrapeTargetDown` joins them
+because its whole job is noticing that data stopped arriving. Everything else is
+checked every five minutes: `CertificateExpiring` (`for: 1h`), the three disk-fill
+predictions (`for: 30m`), the temperature and SLO-ish checks (`for: 10m` and
+above). No rule is evaluated slower than a fifth of its own `for`, so no alert is
+delayed by more than a few minutes. Measured: 35.0 rule evaluations per minute
+before the split, 20.5 after.
 
 **Delivery**: contact point `discord-homelab` (type `discord`).
 `group_by [alertname, instance]`, `group_wait 30s`, `group_interval 5m`.
@@ -234,8 +247,10 @@ reports `firing` on the Health dashboard.
 ## Changing things
 
 - Alert rules: `GET/POST /api/v1/provisioning/alert-rules`, groups under
-  `/api/v1/provisioning/folder/homelab/rule-groups/homelab-core`. Delivery is
-  `/api/v1/provisioning/contact-points` and `/api/v1/provisioning/policies`.
+  `/api/v1/provisioning/folder/homelab/rule-groups/homelab-core-fast` and
+  `…/homelab-core`. A rule changes group with one `PUT` to its own endpoint,
+  carrying the new `ruleGroup`; the group endpoint then sets the interval.
+  Delivery is `/api/v1/provisioning/contact-points` and `/api/v1/provisioning/policies`.
 - Testing a contact point: use its **Test** button. Grafana 13 has no working
   HTTP test route for a receiver created through the provisioning API — the
   legacy paths return 404, and the `/apis/notifications.alerting.grafana.app`
