@@ -15,12 +15,17 @@ instead of re-deriving every chart and reporting the same findings again.
 is re-measured when the app itself changes (new image, new library, new feature) or when this table
 is more than six months old; not because someone noticed the number is round.
 
-Source for the 2026-11-18 pass: the **6 days of history Prometheus retains** (5 days queried, to
+Source for the 2026-11-18 pass: the **6 days of history Prometheus retained then** (5 days queried, to
 leave margin), `container_memory_working_set_bytes` (working set — file cache included — not RSS),
 p95 and max per container. The card that asked for this pass said 14 days; the retention is the
 limit, and the window is written into every chart's `values.yaml` so the next reader knows what the
-number covers. Method: **request = p95**, **limit = peak × 1.5**, CPU request 10–100m and no CPU
-limit.
+number covers. The 2026-11-18 drop left the TSDB with **7.7 days** of history by 2026-11-19, so the
+next pass can use a full week. Method: **request = p95**, **limit = peak × 1.5**, CPU request 10–100m
+and no CPU limit.
+
+The monitoring stack is sized in the same way but recorded with the rest of its facts, in
+[`observability-conventions.md#resource-sizing`](../observability-conventions.md#resource-sizing): it
+is one page per stack here, not two tables that can drift.
 
 ## Adjusted on 2026-11-18
 

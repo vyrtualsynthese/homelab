@@ -14,8 +14,10 @@ loki:
     kind: StatefulSet
     nodeSelector:
       kubernetes.io/hostname: nas
-    # Measured 2026-11-12 over 15 h: 134 MiB average, 166 MiB p95, 217 MiB peak.
-    # 1 GiB keeps 4.6x the observed peak for compaction and 30-day queries.
+    # Re-measured 2026-11-19 over 7 days: 144 MiB average, 193 MiB p95, 437 MiB
+    # peak (the 2026-11-18 compaction). The 256Mi request sits above the p95 over
+    # both the week and the last 24 h (216 MiB), so it stays; 1 GiB keeps 2.3x the
+    # observed peak for 30-day queries and compaction bursts.
     resources:
       requests:
         cpu: 100m
