@@ -81,9 +81,19 @@ Three traps this table exists to prevent:
 3. **Expect one re-apply on a brand-new app.** The first sync creates that app's blueprint instance
    in the same discovery pass that applies `outpost-embedded.yaml`, so the outpost's `!Find` can run
    before the provider exists, the file rolls back, and the new host answers `404` while every other
-   provider keeps working. Re-apply that blueprint instance — `POST /api/v3/blueprints/instances/{pk}/apply/`
-   with `AUTHENTIK_TOKEN`, the pk from `GET /api/v3/blueprints/instances/?search=outpost` — or make
-   any later change to the file; either attaches it. `sonarr-anime` hit this on 2026-11-18.
+   provider keeps working. Restart the worker so discovery runs again with the provider now present:
+
+   ```bash
+   kubectl -n authentik delete pod -l app.kubernetes.io/component=worker
+   ```
+
+   That is what the chart's PostSync hook does, and it is the reliable way. The blueprint API in
+   authentik 2026.8 no longer serves `/api/v3/blueprints/instances/` (404); the instance list is
+   `GET /api/v3/managed/blueprints/?search=outpost` and applying one is
+   `POST /api/v3/managed/blueprints/{pk}/apply/`. That apply returns `200` and changes nothing for a
+   mounted blueprint, because only the **worker** pod mounts the blueprints ConfigMap — the server pod
+   that answers the API cannot read the file. `sonarr-anime` hit this on 2026-11-18 and `syncthing` on
+   2026-11-19, where the outpost line was applied 60 ms before the provider was created.
 4. In the tool's chart values, put `authentik-forwardauth` after `lan-only` in the middleware list.
 5. Bump both chart versions, open one PR, sync `authentik` and the tool.
 
