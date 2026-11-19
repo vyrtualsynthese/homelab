@@ -12,7 +12,7 @@ shape is [`cluster/helm/media-stack/autobrr`](../media-stack/autobrr).
 | Deployment | `thelounge` | one replica, `Recreate`, pinned to `nuc0` |
 | Service | `thelounge` | one port, `9000` |
 | PersistentVolumeClaim | `thelounge-config` | `local-path`, `128Mi` |
-| ConfigMap | `thelounge` | `config.js`, mounted read-only with `subPath` |
+| ConfigMap | `thelounge` | `config.js`; an init container copies it into the claim as UID 1000 |
 | ServiceAccount | `thelounge` | its token is not mounted; the app never calls the API |
 | IngressRoute | `thelounge-public` | `websecure`, `lan-only` then `authentik-forwardauth` |
 | IngressRoute | `thelounge-public-redirect` | `web`, `lan-only` then the HTTPS redirect |
@@ -63,13 +63,21 @@ Recorded here so the next reader does not look for a knob that does not exist.
 
 ## Configuration
 
-`config.js` is a file the app reads at startup, so it lives in a ConfigMap and is mounted with
-`subPath`. A `subPath` mount does not see ConfigMap updates, so the Deployment carries a checksum of
-the ConfigMap: editing `config.js` and syncing rolls the pod, and the new file is read.
+`config.js` is a file the app reads at startup, so its source is a ConfigMap. It is not mounted over
+the app's home: an init container copies it into the claim as UID 1000 before the app starts. The
+reason is The Lounge's own check — `verifyFileOwner()` compares the owner of `<home>/config.js` with
+the UID the process runs as and warns when they differ, and every file a ConfigMap volume provides is
+owned by root. The copy is what keeps the file in git and the start free of that warning. It uses the
+app's own image, so there is no second tag to pin or pull.
 
-The app runs as UID 1000, the image's own `node` user. The claim is new and local-path creates new
-volumes world-writable (owned `1100:1100`), so no `chown` is needed. Do not set `fsGroup`: local-path
-is hostPath-backed and the kubelet does not apply it.
+The copy runs at every pod start, so the ConfigMap always wins: a change made with the CLI inside the
+claim does not survive the next pod. The Deployment carries a checksum of the ConfigMap, so editing
+`config.js` and syncing rolls the pod; without that annotation an edit would wait for a restart nobody
+planned.
+
+The app runs as UID 1000, the image's own `node` user. The claim is a local-path volume created
+world-writable (owned `1100:1100`), so no `chown` is needed. Do not set `fsGroup`: local-path is
+hostPath-backed and the kubelet does not apply it.
 
 ## Values that matter
 
