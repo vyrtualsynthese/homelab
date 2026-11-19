@@ -14,14 +14,16 @@ n8n:
   nameOverride: "n8n"
   fullnameOverride: "n8n"
 
-  # The claim is named n8n-config, not n8n-2, on purpose: the old Longhorn claim
-  # n8n-2 is still Terminating in the namespace and its name cannot be reused
-  # while the object exists. See docs/cleanup/longhorn-disposition.md.
+  # The claim is `<fullname>-config`, which renders as n8n-config, not n8n-2, on
+  # purpose: the old Longhorn claim n8n-2 is still Terminating in the namespace
+  # and its name cannot be reused while the object exists.
+  # 1Gi rather than the contract's 128Mi: the SQLite database holds the workflows
+  # and the execution history, which the contract's "config is small" rule does
+  # not cover. See docs/cleanup/longhorn-disposition.md.
   persistence:
     size: 1Gi
     storageClassName: local-path
     accessMode: ReadWriteOnce
-    claimName: n8n-config
 
   serviceAccount:
     # Specifies whether a service account should be created

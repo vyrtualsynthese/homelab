@@ -3,14 +3,14 @@ The config claim: the n8n database, the workflows and the credentials encrypted
 with them. Kept on purpose, so neither a release uninstall nor a prune that
 follows a chart change can delete the data by accident.
 
-The name comes from values (n8n-config), not from the old Longhorn claim n8n-2,
-whose name is still held by a Terminating object. See
+The name is `<fullname>-config` (n8n-config), not the old Longhorn claim n8n-2:
+that name is still held by a Terminating object. See
 docs/cleanup/longhorn-disposition.md.
 */}}
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: {{ .Values.n8n.persistence.claimName }}
+  name: {{ include "n8n.fullname" . }}-config
   namespace: {{ .Release.Namespace }}
   labels:
     {{- include "n8n.labels" . | nindent 4 }}
