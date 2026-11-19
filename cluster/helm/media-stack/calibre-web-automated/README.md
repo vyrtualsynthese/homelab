@@ -126,6 +126,27 @@ the NAS and, after the first metadata pass, carry their own titles, authors and 
 
 `CWA_WATCH_MODE=poll` forces polling on its own, but the mode above is the switch that matters here.
 
+### Claim ownership
+
+**The switch is global, the mounts are not.** The third item is the one that applies here, but the
+same variable also skips the recursive `chown` of `/config` and `/cwa-book-ingest`
+(`root/etc/s6-overlay/s6-rc.d/cwa-init/run`). Here only `/calibre-library` is NFS; the other two are
+`local-path`, where the `chown` works. Because it is skipped, the app starts as 1100 on claims whose
+files are not 1100's, and on 2026-11-18 that showed up three ways:
+
+```
+install: cannot change owner and permissions of '/config/processed_books/converted': Operation not permitted   (x8)
+Runtime error near line 1: attempt to write a readonly database (8)                                             (/config/app.db)
+AutoZipper could not be initiated ... attempt to write a readonly database                                       (every 23:59)
+```
+
+The `claimOwnership` init container in `values.yaml` does the `chown` the switch removed, as root
+with `CHOWN` and nothing else, before the app starts. It walks both local claims, so it costs a
+metadata-only pass over `/config` at every start — the same walk the app used to do itself. The
+library stays out of it: a `chown` on the share is the share's business. Turning `NETWORK_SHARE_MODE`
+off instead would put `metadata.db` in WAL mode on NFS, which is the one thing this mode exists to
+prevent.
+
 **The caveat, plainly:** upstream's wiki calls NFS unsupported and refuses to support it; upstream's
 release README documents this mode and says network shares are fully supported with it enabled. So
 this deployment is *expected* to work and is *not contractually supported*. What bounds the risk:
