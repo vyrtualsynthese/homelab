@@ -5,8 +5,8 @@ metadata:
   labels:
     {{- include "backup.labels" . | nindent 4 }}
 data:
-  {{- $files := .Files }}
-  {{- range tuple "backup.sh" }}
-  {{ . }}: |-
-  {{ tpl ($files.AsConfig) $ | indent 2 }}
-  {{- end }}
+  # One key, read from the file. The previous form dumped every file with
+  # `.Files.AsConfig` and then added backup.sh again, so the rendered ConfigMap
+  # carried the key twice and failed to parse.
+  backup.sh: |-
+{{ .Files.Get "backup.sh" | indent 4 }}

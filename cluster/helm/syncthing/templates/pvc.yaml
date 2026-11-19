@@ -1,0 +1,30 @@
+{{/*
+The config claim: the device identity, the folder definitions, the ignore
+patterns and Syncthing's index database. Its contents were abandoned with the
+Longhorn volume by operator decision, so this starts empty: the device has to be
+re-paired and each folder re-added with the ID its peers already use.
+
+The name is `<fullname>-config` (syncthing-config), not syncthing-conf: that name
+is still held by a Terminating Longhorn claim and cannot be reused while the
+object exists. See docs/cleanup/longhorn-disposition.md.
+
+`helm.sh/resource-policy: keep` so neither an uninstall nor an ArgoCD prune can
+delete the data by accident.
+*/}}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "app.fullname" . }}-config
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "app.labels" . | nindent 4 }}
+  annotations:
+    helm.sh/resource-policy: keep
+    argocd.argoproj.io/sync-options: Delete=false
+spec:
+  accessModes:
+    - {{ .Values.app.persistence.accessMode }}
+  storageClassName: {{ .Values.app.persistence.storageClassName }}
+  resources:
+    requests:
+      storage: {{ .Values.app.persistence.size }}
