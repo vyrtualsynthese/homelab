@@ -23,9 +23,9 @@ spec.loader.exec_module(mod)
 
 
 class ParseTests(unittest.TestCase):
-    def test_the_shipped_opml_yields_20_feeds_in_five_categories(self):
+    def test_the_shipped_opml_yields_18_feeds_in_five_categories(self):
         feeds = mod.parse_opml(OPML_PATH.read_text())
-        self.assertEqual(len(feeds), 20)
+        self.assertEqual(len(feeds), 18)
         self.assertEqual({f.category for f in feeds}, {"Jeux", "Dev", "IA", "Boutiques", "Veille"})
 
     def test_a_query_string_survives_parsing(self):
@@ -59,7 +59,7 @@ class ParseTests(unittest.TestCase):
 
     def test_a_full_content_selector_does_not_add_or_drop_a_feed(self):
         feeds = mod.parse_opml(OPML_PATH.read_text())
-        self.assertEqual(len(feeds), 20)
+        self.assertEqual(len(feeds), 18)
 
     def test_a_full_content_selector_reaches_the_feed_as_path_entries(self):
         feeds = mod.parse_opml(OPML_PATH.read_text())
