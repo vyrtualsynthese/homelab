@@ -1,6 +1,6 @@
 # FreshRSS native OIDC Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** FreshRSS signs users in through authentik with its own OIDC flow, replacing the form login.
 
@@ -42,7 +42,7 @@
 - Consumes: nothing.
 - Produces: the values keys `image.repository = freshrss/freshrss`, `image.tag = 1.30.4`, `env.DATA_PATH = /config/data`, `env.OIDC_ENABLED`, `env.OIDC_PROVIDER_METADATA_URL`, `env.OIDC_CLIENT_ID = freshrss`, `env.OIDC_REMOTE_USER_CLAIM = preferred_username`, `env.OIDC_SCOPES`, `env.OIDC_X_FORWARDED_HEADERS`, `extraEnv` with `OIDC_CLIENT_SECRET` and `OIDC_CLIENT_CRYPTO_KEY` from Secret `freshrss-oidc`. Task 2 names the same client id and the same Secret.
 
-- [ ] **Step 1: Write the failing render check**
+- [x] **Step 1: Write the failing render check**
 
 Run this block and expect the first grep to fail (the image is still LinuxServer):
 
@@ -56,11 +56,11 @@ grep -q 'name: OIDC_CLIENT_SECRET' <<<"$rendered" || echo "FAIL secret"
 grep -q 'mountPath: /config$' <<<"$rendered" || echo "FAIL mount"
 ```
 
-- [ ] **Step 2: Update `Chart.yaml`**
+- [x] **Step 2: Update `Chart.yaml`**
 
 `version: 1.1.0`, `appVersion: "1.30.4"`, and the description stays. Nothing else changes.
 
-- [ ] **Step 3: Update `values.yaml`**
+- [x] **Step 3: Update `values.yaml`**
 
 Image block: `repository: freshrss/freshrss`, `tag: 1.30.4`, and a comment naming the Debian x86_64 image as the one with `mod_auth_openidc`.
 
@@ -108,15 +108,15 @@ Update the acceptance rationale: keep `/i/` for readiness, and say that with OID
 
 `storage.mountPath` stays `/config`; the storage comment gains the `DATA_PATH` sentence.
 
-- [ ] **Step 4: Update `templates/deployment.yaml`**
+- [x] **Step 4: Update `templates/deployment.yaml`**
 
 Only comments: the readiness comment currently says `/i/` "runs any pending migration and queries the user table"; replace with the 3xx sentence. No template logic changes.
 
-- [ ] **Step 5: Update `templates/NOTES.txt`**
+- [x] **Step 5: Update `templates/NOTES.txt`**
 
 Say the app signs in through authentik, and that the setup wizard is reached after that sign-in.
 
-- [ ] **Step 6: Rewrite the README's changed sections**
+- [x] **Step 6: Rewrite the README's changed sections**
 
 - Upstream: image link becomes `https://hub.docker.com/r/freshrss/freshrss`.
 - The values table rows for image, env, storage.
@@ -124,11 +124,11 @@ Say the app signs in through authentik, and that the setup wizard is reached aft
 - Add a "First start after the swap" section with the operator steps: create `news/freshrss-oidc` and patch `authentik-sso` (Task 2 names the keys), sign in, set the default user `vyrtualsynthese` and HTTP authentication, set an API password, update `~/.config/secrets/homelab.env`, replay `hack/freshrss/feeds.opml`.
 - Note that the old LinuxServer tree stays at `/config/www` and is not read.
 
-- [ ] **Step 7: Run the render check from Step 1**
+- [x] **Step 7: Run the render check from Step 1**
 
 Expected: no `FAIL` line.
 
-- [ ] **Step 8: Run the chart and exposure checks**
+- [x] **Step 8: Run the chart and exposure checks**
 
 ```bash
 helm template news-freshrss cluster/helm/news/freshrss --namespace news >/dev/null && echo "render OK"
@@ -137,7 +137,7 @@ helm template news-freshrss cluster/helm/news/freshrss --namespace news >/dev/nu
 
 Expected: `render OK`, then `result: OK` with 2 routes.
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add cluster/helm/news/freshrss
@@ -159,7 +159,7 @@ git commit -m "🚀 feat(freshrss): run the official image with native OIDC"
 - Consumes: Task 1's `OIDC_CLIENT_ID = freshrss`, `OIDC_PROVIDER_METADATA_URL` slug `freshrss`, Secret `news/freshrss-oidc` keys `client-secret` and `client-crypto-key`.
 - Produces: the authentik provider `freshrss`, application slug `freshrss`, and the docs that name `authentik-sso` key `FRESHRSS_CLIENT_SECRET`.
 
-- [ ] **Step 1: Write the failing content check**
+- [x] **Step 1: Write the failing content check**
 
 ```bash
 grep -q 'name: freshrss$' cluster/helm/authentik/files/app-freshrss.yaml || echo "FAIL blueprint"
@@ -171,37 +171,37 @@ grep -q 'OIDC in the app' docs/reference/routes.md || echo "FAIL routes doc"
 
 Expected: every line prints `FAIL` before the work.
 
-- [ ] **Step 2: Create the blueprint**
+- [x] **Step 2: Create the blueprint**
 
 Copy the shape of `cluster/helm/authentik/files/app-radarr.yaml`, with these values: provider `freshrss` (no prior proxy provider exists, so the `-oidc` suffix the Radarr file needs is not needed), client id `freshrss`, secret `!Env FRESHRSS_CLIENT_SECRET`, redirect `https://freshrss.kub.home.ashudev.com:443/i/oidc/`, application name `FreshRSS`, slug `freshrss`, launch URL `https://freshrss.kub.home.ashudev.com/`, icon `https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/freshrss.png`, policy binding `authentik Admins`. Add a comment: FreshRSS protects `/i/` only, so the API keeps its own login and the route needs no `/api` rule.
 
-- [ ] **Step 3: Update `docs/secrets.md`**
+- [x] **Step 3: Update `docs/secrets.md`**
 
 Add `freshrss-oidc | news | client-secret → OIDC_CLIENT_SECRET, client-crypto-key → OIDC_CLIENT_CRYPTO_KEY — the authentik provider's client secret and the module's encryption key` to the application table, and name `FRESHRSS_CLIENT_SECRET` in the `authentik-sso` row (or the sentence that follows it) as one key per app.
 
-- [ ] **Step 4: Update `docs/reference/routes.md`**
+- [x] **Step 4: Update `docs/reference/routes.md`**
 
 The FreshRSS row's Gate becomes `` `lan-only`; OIDC in the app, `/api` on its own login ``.
 
-- [ ] **Step 5: Update `docs/reference/sso-applications.md`**
+- [x] **Step 5: Update `docs/reference/sso-applications.md`**
 
 Add a matrix row: `| FreshRSS | OIDC | configured 2026-11-19 — its own OIDC through the official image; gate absent, `/api` untouched | freshrss.kub.home.ashudev.com |`. Add a short `### FreshRSS: native OIDC needs the official image` subsection after the Radarr recipe: the LinuxServer image has no `mod_auth_openidc`, `DATA_PATH` points at `/config/data`, the callback is `/i/oidc/`, and only `/i/` is behind the module.
 
-- [ ] **Step 6: Update `docs/reference/chart-notes.md` and `docs/charts/README.md`**
+- [x] **Step 6: Update `docs/reference/chart-notes.md` and `docs/charts/README.md`**
 
 chart-notes: rewrite the freshrss section's hardening and storage paragraphs for the official image, `DATA_PATH`, and the 3xx readiness.
 
 charts/README row: image starts as root then runs Apache as `www-data`; same four capabilities for the entrypoint's chown; readiness `/i/` now answers 302; config claim 1Gi.
 
-- [ ] **Step 7: Update `docs/news-feeds.md`**
+- [x] **Step 7: Update `docs/news-feeds.md`**
 
 The log path at line 232 becomes `/config/data/users/<user>/log.txt`.
 
-- [ ] **Step 8: Run the content check from Step 1**
+- [x] **Step 8: Run the content check from Step 1**
 
 Expected: no `FAIL` line.
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add cluster/helm/authentik/files/app-freshrss.yaml docs
@@ -216,7 +216,7 @@ git commit -m "🚀 feat(authentik): add the FreshRSS OIDC provider"
 - Consumes: both earlier tasks.
 - Produces: the pushed branch and the pull request.
 
-- [ ] **Step 1: Rebase on the integration branch**
+- [x] **Step 1: Rebase on the integration branch**
 
 ```bash
 git fetch origin
@@ -225,7 +225,7 @@ git rebase origin/develop
 
 Expected: no conflict; the two commits on top.
 
-- [ ] **Step 2: Render every chart that can render**
+- [x] **Step 2: Render every chart that can render**
 
 ```bash
 for c in $(find cluster/helm -name Chart.yaml | xargs -n1 dirname); do
@@ -238,7 +238,7 @@ done
 
 Expected: no `FAIL` line.
 
-- [ ] **Step 3: Check ArgoCD references and exposure**
+- [x] **Step 3: Check ArgoCD references and exposure**
 
 ```bash
 while read -r p; do [ -d "$p" ] || echo "BROKEN PATH $p"; done < <(
@@ -248,7 +248,7 @@ while read -r p; do [ -d "$p" ] || echo "BROKEN PATH $p"; done < <(
 
 Expected: no `BROKEN` line, then `result: OK`.
 
-- [ ] **Step 4: Prove no secret value is in the tree**
+- [x] **Step 4: Prove no secret value is in the tree**
 
 ```bash
 git grep -nE 'OIDC_CLIENT_SECRET: *"?[A-Za-z0-9]{16,}|client-secret: *[A-Za-z0-9]{16,}' -- cluster docs || echo "no literal secret"
@@ -256,7 +256,7 @@ git grep -nE 'OIDC_CLIENT_SECRET: *"?[A-Za-z0-9]{16,}|client-secret: *[A-Za-z0-9
 
 Expected: `no literal secret`.
 
-- [ ] **Step 5: Push and open the pull request**
+- [x] **Step 5: Push and open the pull request**
 
 ```bash
 git push origin feature/freshrss-authentik
@@ -264,6 +264,6 @@ git push origin feature/freshrss-authentik
 
 Open the PR to `develop` with `github_create_pull_request`. The body carries the operator steps from Task 1 (Secrets, first sign-in, API password, feed replay) and the verification output above.
 
-- [ ] **Step 6: Move the board card to Validation**
+- [x] **Step 6: Move the board card to Validation**
 
 Update task `#411`'s description with the branch, the PR link and the verification output, then move it to the `Validation` column. ArgoCD is not token-authenticated, so the sync is the merge plus the poll; say so in the report.
