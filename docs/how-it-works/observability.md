@@ -4,7 +4,7 @@
 > draws both and decides to alert; the gaps matter as much as the components.
 >
 > **Use it when** you want to know whether a fault would be noticed, or where an alert came from ·
-> **Verified** 2026-11-17 · **Kind:** living page
+> **Verified** 2026-11-19 · **Kind:** living page
 
 ## What watches what
 
@@ -48,10 +48,11 @@ measured series and targets: [reference/metrics.md](../reference/metrics.md#expo
 ## How logs arrive
 
 Fluent Bit tails `/var/log/containers/*.log` on every node: container output only, no host logs, no
-systemd journal. Each line becomes one JSON envelope a query must unwrap. Labels are `job`,
-`namespace`, `container` and `node`; the pod name is metadata, because it changes on every restart.
-Envelope fields and the query that unwraps it:
-[reference/metrics.md](../reference/metrics.md#exporter-quirks).
+systemd journal. The line Loki stores is the application's own message: Fluent Bit strips its own
+envelope (the pod labels, ids and CRI fields it used to attach) before the write, because those are
+already stream labels or metadata. Labels are `job`, `namespace`, `container` and `node`; the pod
+name is metadata, because it changes on every restart. What a line looks like now, and what it cost
+before: [reference/metrics.md](../reference/metrics.md#exporter-quirks).
 
 ## What you look at
 

@@ -4,7 +4,7 @@
 > calls that change one.
 >
 > **Use it when** you need to know where to look, are adding or editing a panel, or are explaining why
-> a dashboard is not backed up · **Verified** 2026-11-17 · **Kind:** living page
+> a dashboard is not backed up · **Verified** 2026-11-19 · **Kind:** living page
 
 ## Dashboards
 
@@ -50,7 +50,7 @@ because Loki and Grafana only became scrape targets then, and the numbers answer
 whether the 20 GiB claim will hold the 30-day retention (it will, with room:
 [`metrics.md`](metrics.md#storage-and-retention)).
 
-All eight have a 30 s–1 m refresh and a 6 h–24 h default range. They are not
+All eight refresh every 1 m and hold a 6 h–24 h default range. They are not
 backed up: Grafana's 5 GiB claim is the only copy. A `docker save` of the
 dashboard JSON is not a backup either — the SQLite file is what would be lost.
 

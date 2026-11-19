@@ -79,9 +79,12 @@ Useful endpoints: `/api/v1/query`, `/api/v1/query_range`, `/api/v1/targets`,
 It holds **no alert rules and no Alertmanager** (`alertmanager.enabled: false`,
 `rule_files` empty): alerting lives entirely in Grafana.
 
-**Loki** — `http://loki.kub.local`, no authentication. Every line is a Fluent Bit
-JSON envelope; unwrap it in the query (see the exporter notes in
-[`reference/metrics.md`](reference/metrics.md#exporter-quirks)). The UI is at `/ui`.
+**Loki** — `http://loki.kub.local`, no authentication. The line is the
+application's own message, not a Fluent Bit envelope: the output strips the
+envelope before it is stored (see the exporter notes in
+[`reference/metrics.md`](reference/metrics.md#exporter-quirks)), so a query reads
+`{job="fluent-bit"} | detected_level="error"` with no parser in between. The UI is
+at `/ui`.
 
 **Grafana** — `https://grafana.kub.local`, served over the cluster's internal
 certificate (`*.kub.local` from the ashulab internal CA,
