@@ -43,8 +43,7 @@ develop` and points at one chart, or at a values file for a remote chart.
 - **A — local chart.** A chart under `cluster/helm/` that the Application names. Most applications.
   Example: `cluster/helm/media-stack/sonarr`.
 - **B — remote chart plus a values file.** Two sources: the upstream chart repository, and this
-  repository as a values ref. Legacy; three files still use it — `local-path`,
-  `nfs/books-media` and `nfs/nfs-audio`.
+  repository as a values ref. Legacy; one file still uses it — `local-path`.
 - **C — vendored upstream chart.** Committing the whole upstream chart and editing it in place. The
   last chart built this way, `postiz`, was retired on 2026-11-18 and nothing uses the pattern now;
   new external charts are D.
