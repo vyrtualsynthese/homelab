@@ -254,10 +254,11 @@ that outlives its reason.
 | Symptom | Cause | Fix |
 |---|---|---|
 | the app answers a callback error after authentik | the two Secrets hold different values, or the worker has not restarted since the patch | patch both from one value, restart the worker, restart the pod |
+| authentik answers *The client identifier (client_id) is missing or invalid* | the blueprint that creates the provider failed, so the application still points at an older provider — usually `!Env` resolved to nothing because the worker started before the key reached `authentik-sso` | restart the worker, re-apply the blueprint, confirm `providers/oauth2/?search=<app>` shows the expected `client_id`, and delete the stale provider once the application points at the new one |
 | every OIDC login is refused, the operator's included | the `groups` claim is missing or renamed, so `userGroups` matches nobody | re-enable the password method (§ Recovery), sign in, fix the profile scope mapping |
 | the operator signs in and the sidebar is empty | the account has no source scopes yet — administrators are not exempt | grant the sources in **Settings → User management** |
 | the pod stays in `ContainerCreating` | an export named in `nfsVolumes` is not served by the NAS | point that entry at an export the NAS actually serves; the mount error names the path |
-| reads work and uploads fail with permission denied | the NFS export refuses uid 1100 | change `securityContext.runAsUser`/`fsGroup` to the export's owner |
+| reads work but some folders are `permission denied` in the log | the assets export is a mergerfs pool, which sees only the container's **primary** gid; a group that is merely supplementary never reaches its permission check | set `securityContext.runAsGroup` to the folder's group, not `fsGroup` and not `supplementalGroups` |
 
 ### Accounts and folder scopes
 
