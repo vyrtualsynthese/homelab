@@ -111,14 +111,20 @@ when the backend is broken.
 ## Logs
 
 There is no log-level knob. FreshRSS writes its own log per user into `/config`
-(Administration → Logs), and PHP errors reach the container's stderr at the image's `php.ini`
-default. Neither is an environment variable, so the chart sets none — a `LOG_LEVEL` here would
-silently do nothing.
+(`data/users/<user>/log.txt`, shown in the UI under Administration → Logs), and the API writes its
+own under the pseudo-user `_` (`data/users/_/log_api.txt`). Neither is an environment variable, so
+the chart sets none — a `LOG_LEVEL` here would silently do nothing.
 
-What that costs: PHP's default is to report everything, and Fluent Bit ships every line to Loki with
-no filter. The feed-refresh cron the image runs every 15 minutes writes the output of
-`actualize_script.php` to `/tmp/FreshRSS.log` **inside the container**, which Fluent Bit does not
-read, so refresh failures are visible only with `kubectl exec`. That is debt, recorded below.
+PHP messages do **not** reach the container's stdout. nginx captures php-fpm's stderr and writes it
+to `/config/log/nginx/error.log` on the claim, next to its own errors, so a PHP notice or fatal is
+visible only with `kubectl exec ... tail /config/log/nginx/error.log`. The pod log holds the s6 init
+output and nothing else. Observed on 2026-11-19 while a feed subscription answered HTTP 500.
+
+What that costs: Fluent Bit ships only the container's stdout to Loki, so no PHP error and no
+application log is in Loki at all. The feed-refresh cron the image runs every 15 minutes writes the
+output of `actualize_script.php` to `/tmp/FreshRSS.log` **inside the container**, which Fluent Bit
+does not read either, so refresh failures are visible only with `kubectl exec`. That is debt,
+recorded below.
 
 ## Known debt
 
