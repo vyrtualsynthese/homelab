@@ -16,6 +16,9 @@ PUBLIC_HOSTS = frozenset(
         "plex.kub.home.ashudev.com",
         "seerr.kub.home.ashudev.com",
         "ashuvidz.com",
+        # The start page, gated by `authentik-forwardauth` rather than lan-only:
+        # it is meant to answer the internet, so the gate must not be the LAN.
+        "dashy.ashudev.com",
     }
 )
 
