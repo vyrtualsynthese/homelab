@@ -6,7 +6,7 @@
 >
 > **Use it when** you need to know whether a hostname is reachable from outside, what stands in
 > front of an application before its own login, or which certificate a browser will be shown ·
-> **Verified** 2026-11-18 · **Kind:** living page
+> **Verified** 2026-11-19 · **Kind:** living page
 
 Read from the live cluster on 2026-11-17 through the read-only Kubernetes MCP: every
 `traefik.containo.us/v1alpha1` `IngressRoute` in every namespace, plus the `Middleware` objects in
@@ -57,7 +57,7 @@ own certificate on a `*.kub.home.ashudev.com` or `*.ashudev.com` name.
 | `koillection.kub.home.ashudev.com` | Koillection | `koillection` | **none** | Let's Encrypt | no |
 | `lidarr.kub.local` | Lidarr | `media-stack` | forward-auth; `lan-only` alone on `/api` | internal CA | no |
 | `maintainerr.kub.local` | Maintainerr | `media-stack` | forward-auth; `lan-only` alone on `/api` | internal CA | no |
-| `n8n.kub.home.ashudev.com` | n8n | `n8n` | **none** | Let's Encrypt | no |
+| `n8n.kub.home.ashudev.com` | n8n | `n8n` | `lan-only` | Let's Encrypt | no |
 | `prowlarr.kub.local` | Prowlarr | `media-stack` | forward-auth; `lan-only` alone on `/api` | internal CA | no |
 | `qbittorrent.kub.local` | qBittorrent | `media-stack` | forward-auth; the app's own login is bypassed for the pod network; no `/api` exemption | internal CA | no |
 | `radarr.kub.local` | Radarr | `media-stack` | `lan-only`; OIDC in the app, `/api` on `lan-only` alone | internal CA | no |
