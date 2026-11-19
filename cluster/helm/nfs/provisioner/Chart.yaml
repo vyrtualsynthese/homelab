@@ -1,0 +1,10 @@
+apiVersion: v2
+name: nfs-provisioner
+description: NFS subdir external provisioners — one release per NAS export
+type: application
+version: 0.1.0
+appVersion: "4.0.2"
+dependencies:
+  - name: nfs-subdir-external-provisioner
+    version: 4.0.18
+    repository: https://kubernetes-sigs.github.io/nfs-subdir-external-provisioner
