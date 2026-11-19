@@ -179,6 +179,25 @@ class PlanTests(unittest.TestCase):
         self.assertEqual(p.to_subscribe, ())
         self.assertEqual(p.to_prune, ())
 
+    def test_a_second_row_for_the_same_address_is_reported_for_pruning(self):
+        """The instance can hold one feed twice, once with the fragment and once without.
+
+        The file names one address, so the spare row is an extra — and the row kept is the one that
+        spells the file's address exactly, because that is the row carrying `#force_feed`.
+        """
+        p = mod.plan([self.feed(url="https://a.test/rss#force_feed")],
+                     [("https://a.test/rss", ("Dev",)),
+                      ("https://a.test/rss#force_feed", ("Dev",))])
+        self.assertEqual(p.to_prune, (("https://a.test/rss", ("Dev",)),))
+        self.assertEqual(p.unchanged, (self.feed(url="https://a.test/rss#force_feed"),))
+
+    def test_a_duplicate_without_an_exact_match_keeps_the_first_row(self):
+        p = mod.plan([self.feed(url="https://a.test/rss")],
+                     [("https://a.test/rss", ("Dev",)),
+                      ("https://a.test/rss#force_feed", ("Dev",))])
+        self.assertEqual(p.to_prune, (("https://a.test/rss#force_feed", ("Dev",)),))
+        self.assertEqual(p.unchanged, (self.feed(url="https://a.test/rss"),))
+
     def test_freshrss_own_release_feed_is_not_reported_as_an_extra(self):
         """The instance subscribes itself to its release feed; the file can never list it."""
         p = mod.plan([], [("https://github.com/FreshRSS/FreshRSS/releases.atom",
@@ -417,6 +436,22 @@ class CliTests(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertIn("bad.test", errors.getvalue())
         self.assertNotIn("https://good.test/feed", [s[0] for s in t.subs])
+
+    def test_drop_unsubscribes_every_row_the_address_answers_to(self):
+        """A per-feed setting applies at creation, so the row has to go before an import."""
+        t = FakeTransport(subs=[("https://a.test/rss", "A", "Dev"),
+                                ("https://a.test/rss#force_feed", "A again", "Dev"),
+                                ("https://b.test/feed", "B", "Dev")])
+        with contextlib.redirect_stdout(io.StringIO()) as out:
+            code = mod.main(["drop", "https://a.test/rss"], transport=t, env=self.ENV)
+        self.assertEqual(code, 0)
+        self.assertEqual([s[0] for s in t.subs], ["https://b.test/feed"])
+        self.assertIn("dropped 2", out.getvalue())
+
+    def test_drop_without_an_address_is_a_usage_error(self):
+        with contextlib.redirect_stderr(io.StringIO()):
+            code = mod.main(["drop"], transport=FakeTransport(), env=self.ENV)
+        self.assertEqual(code, 2)
 
     def test_apply_cleans_the_stale_label_a_moved_feed_keeps(self):
         """A feed can report a label besides its category; apply takes it back off."""

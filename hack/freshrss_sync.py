@@ -9,6 +9,8 @@
                                   or holds a feed whose content selectors differ from the file
     verify                        fetch every URL; exit 1 when a feed answers badly or a
                                   full-content selector extracts nothing
+    drop <url>…                   unsubscribe those addresses so an OPML import can create them
+                                  again with the settings the file carries
 
 `check` does not fail on a feed the instance holds and the file does not: apply never removes one
 without --prune, so an extra is not drift, and it is printed instead. The instance's own release feed
@@ -164,25 +166,47 @@ def plan(local: Sequence[Feed], remote: Sequence[tuple[str, Sequence[str]]]) -> 
     Entries whose id is not a URL are FreshRSS's own internal feeds (its release feed is `1`); the
     file can never list them, so they are not drift and must never be pruned. INSTANCE_FEEDS is the
     other shape that answer takes: one of those feeds carries a real address.
+
+    One address can answer twice, once with `#force_feed` and once without — an OPML import adds a
+    row without looking for one that differs only in the fragment, so a stale import leaves both.
+    The file names one address, so the spare row is an extra for `to_prune`, and the row kept is the
+    one that spells the file's address exactly: the fragment is an instruction, and the row without
+    it is the one that fails on a feed whose Content-Type is wrong.
     """
     own = {normalize_url(url) for url in INSTANCE_FEEDS}
     remote = [(url, (labels,) if isinstance(labels, str) else tuple(labels))
               for url, labels in remote
               if "://" in url and normalize_url(url) not in own]
     by_url = {normalize_url(f.url): f for f in local}
-    remote_by_url = {normalize_url(url): labels for url, labels in remote}
+
+    kept: dict[str, tuple[str, tuple[str, ...]]] = {}
+    extras: list[tuple[str, tuple[str, ...]]] = []
+    for url, labels in remote:
+        key = normalize_url(url)
+        feed = by_url.get(key)
+        current = kept.get(key)
+        if feed is None or (current is not None and current[0] == url):
+            extras.append((url, labels))
+        elif current is None:
+            kept[key] = (url, labels)
+        elif url == feed.url:
+            extras.append(current)
+            kept[key] = (url, labels)
+        else:
+            extras.append((url, labels))
+
+    remote_by_url = {key: labels for key, (_, labels) in kept.items()}
 
     def in_place(feed: Feed) -> bool:
         return feed.category in remote_by_url.get(normalize_url(feed.url), ())
 
     to_subscribe = tuple(f for f in local if not in_place(f))
-    to_prune = tuple((url, labels) for url, labels in remote if normalize_url(url) not in by_url)
+    to_prune = tuple(extras)
     unchanged = tuple(f for f in local if in_place(f))
 
     def stale_labels(feed: Feed) -> tuple[str, tuple[str, ...]]:
-        url = next(url for url, _ in remote if normalize_url(url) == normalize_url(feed.url))
-        return url, tuple(label for label in remote_by_url[normalize_url(feed.url)]
-                          if label != feed.category)
+        url, labels = kept[normalize_url(feed.url)]
+        return url, tuple(label for label in labels if label != feed.category)
 
     to_clean = tuple((feed, *stale_labels(feed)) for feed in unchanged
                      if any(label != feed.category
@@ -193,6 +217,23 @@ def plan(local: Sequence[Feed], remote: Sequence[tuple[str, Sequence[str]]]) -> 
 
 class AuthError(Exception):
     """The instance refused the credentials in the environment."""
+
+
+def drop(urls: Sequence[str], client: "Client") -> tuple[tuple[str, tuple[str, ...]], ...]:
+    """Unsubscribe every row that answers to the given addresses, and say what went.
+
+    A per-feed setting is stored with the feed row and applied only when the feed is created, so a
+    row has to go before an OPML import can put the file's setting in place. An address is matched
+    the way `plan` matches one, without the fragment, so the `#force_feed` row and a plain twin both
+    go: two rows for one address are one feed the instance cannot keep straight.
+    """
+    wanted = {normalize_url(url) for url in urls}
+    gone = []
+    for url, labels in client.subscriptions():
+        if normalize_url(url) in wanted:
+            client.unsubscribe(url)
+            gone.append((url, labels))
+    return tuple(gone)
 
 
 class NoFormLogin(Exception):
@@ -898,6 +939,10 @@ USAGE = """usage: freshrss_sync.py <apply|check|verify> [--prune] [--dry-run]
   verify   fetch every URL and print status, items and newest date; a feed with a full-content
            selector also has its newest article read through that selector;
            exit 1 when a feed answers badly or a selector extracts nothing
+  drop <url>…
+           unsubscribe those addresses so an OPML import can create them again with the
+           settings the file carries: a selector, a poll interval and `#force_feed` are
+           stored with the feed and applied only when it is created
 
 FRESHRSS_USER and FRESHRSS_API_PASSWORD are read from the environment,
 FRESHRSS_WEB_PASSWORD opens the web UI for the per-feed settings (without
@@ -927,7 +972,7 @@ def main(argv: list[str] | None = None,
          web_transport: Callable[..., tuple[int, str, dict]] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
     env = dict(os.environ) if env is None else env
-    if not args or args[0] not in ("apply", "check", "verify"):
+    if not args or args[0] not in ("apply", "check", "verify", "drop"):
         print(USAGE, file=sys.stderr)
         return 2
     command, flags = args[0], {a for a in args[1:] if a.startswith("-")}
@@ -949,6 +994,17 @@ def main(argv: list[str] | None = None,
 
     base = env.get("FRESHRSS_BASE", DEFAULT_BASE)
     client = Client(base, user, password, transport)
+
+    if command == "drop":
+        addresses = [a for a in args[1:] if not a.startswith("-")]
+        if not addresses:
+            print("drop needs at least one address", file=sys.stderr)
+            return 2
+        gone = drop(addresses, client)
+        for url, labels in gone:
+            print(f"- {url} ({', '.join(labels)})")
+        print(f"dropped {len(gone)} feed(s); import the OPML to put the file's settings back")
+        return 0
 
     def settings_pass(apply: bool) -> tuple[int, bool]:
         """Read every feed's settings page; print what differs, and fix it when apply is set.
