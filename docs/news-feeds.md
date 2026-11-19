@@ -21,6 +21,7 @@ python3 hack/freshrss_sync.py apply --dry-run   # show what would change
 python3 hack/freshrss_sync.py apply             # subscribe what the file lists
 python3 hack/freshrss_sync.py check             # exit 1 when a listed feed is missing
 python3 hack/freshrss_sync.py verify            # fetch every URL, check each full-content selector
+python3 hack/freshrss_sync.py drop <url>…       # unsubscribe, so an import can re-create with settings
 ```
 
 `apply` and `check` also cover the per-feed settings the file carries: the CSS selector that pulls
@@ -33,10 +34,12 @@ skipped the same way, with the reason printed. See "The settings the API cannot 
 `check` fails on three things: a feed the file lists and the instance lacks, a listed feed sitting in
 another category, and a listed feed whose content selectors differ from the file. A feed the instance
 holds and the file does not is printed with a `-` and does not fail the run: `apply` never removes
-one without `--prune`, so an extra is not drift. A label counts as in place when it is one of the
-labels the instance reports, so a feed that also carries a second, stale label is not drift either.
-Two things are left out of the comparison: an address is compared without its fragment, so the
-`#force_feed` marker is not a different feed, and the instance's own release feed
+one without `--prune`, so an extra is not drift. A second row for an address the file already lists
+is an extra too — the instance can hold one feed twice, once with `#force_feed` and once without,
+and only the row that spells the file's address exactly is kept. A label counts as in place when it
+is one of the labels the instance reports, so a feed that also carries a second, stale label is not
+drift either. Two things are left out of the comparison: an address is compared without its
+fragment, so the `#force_feed` marker is not a different feed, and the instance's own release feed
 (`https://github.com/FreshRSS/FreshRSS/releases.atom`), which FreshRSS subscribes itself to and the
 file can never list.
 Exit codes are `0` clean, `1` any of the above, `2` credentials missing or refused — which includes
@@ -273,10 +276,12 @@ Three get nothing, and the reason is the source rather than a missing setting:
 | Star Citizen comm-link | the article is built by JavaScript, so the HTML the fetcher receives is empty |
 | Mistral | served as `text/plain`, so the URL needs the force-feed marker; the publisher's summary is the whole article |
 
-On the live instance the eleven feeds exist already, and the OPML import skips a feed it already
-holds, so the selectors do not reach them that way. `apply` is what writes them: it puts the file's
-`frss:cssFullContent` into the feed's *Retrieve full content* field, so a selector edited in the
-file reaches the feed on the next run instead of needing a delete and a re-import.
+On the instance the eleven feeds carry these selectors, and its copy of them came from the
+LinuxServer data root rather than from the file. `apply` used to be what wrote them — it put the
+file's `frss:cssFullContent` into the feed's *Retrieve full content* field — but it cannot since the
+app moved behind OIDC: that form sits behind a login the script no longer has, and an OPML import
+skips a feed it already holds. A selector edited in the file now reaches the instance through a
+delete and an import; see "Re-applying a setting after the OIDC switch" below.
 
 ## The settings the API cannot reach
 
@@ -297,8 +302,40 @@ subscription half behaves as before.
 Under OIDC the form login is not there to open: `auth_type` is `http_auth` and the app trusts the
 identity its proxy hands it, so `?c=auth&a=formLogin` answers a redirect or a refusal rather than the
 form. The script treats that as a normal state, prints `settings: not checked` with the reason, and
-carries on with the subscriptions. Per-feed selectors then get set by hand in the web UI, or by
-importing the OPML, which carries them.
+carries on with the subscriptions.
+
+### Re-applying a setting after the OIDC switch
+
+Four things live on the feed row and nowhere else: the XPath expressions of an HTML+XPath feed, the
+CSS selector of the article body, the poll interval (`frss:ttl`), and the `#force_feed` marker a
+wrong `Content-Type` needs. The GReader API sets none of them, and OPML import sets all of them **but
+only for a feed it does not already hold** — `addFeedObject` returns as soon as the address matches.
+So a setting that changes in the file reaches an existing feed by neither route.
+
+The way through is to remove the row and let an import create it again:
+
+```bash
+python3 hack/freshrss_sync.py drop https://www.elitedangerous.com/news
+kubectl -n news exec -i deploy/news-freshrss -- sh -c 'cat > /tmp/feeds.opml' < hack/freshrss/feeds.opml
+kubectl -n news exec deploy/news-freshrss -- su www-data -s /bin/sh -c \
+  'php /var/www/FreshRSS/cli/import-for-user.php --user vyrtualsynthese --filename /tmp/feeds.opml'
+```
+
+- `drop` unsubscribes every row whose address matches, fragment included, so it also clears a
+  duplicate. What goes with the row is that feed's entries: the database is a cache of the file, and
+  a re-created feed starts empty.
+- The import must run as `www-data`. As root it leaves the SQLite file root-owned, and every later
+  Apache request fails to write.
+- The file has to be the current one. Importing a stale checkout is how the instance came to hold
+  twenty feeds, a duplicate Mistral row and the old `#content` selector on 2026-11-19. A stale file
+  also adds a second row for a feed whose address differs only by `#force_feed`, since the import
+  matches on the address it is given; `check` reports the spare row as an extra and `apply --prune`
+  removes it.
+
+Three specimens from that day. Mistral is served as `text/plain`, so its address carries
+`#force_feed` and a row without it answers "A feed could not be found". KBDfans answers HTTP 429 when
+polled every cycle, which `frss:ttl="21600"` (six hours) prevents. Elite Dangerous moved its article
+body out of `#content`; the file's `main` reads it.
 
 ## Feeds the instance cannot fetch
 
