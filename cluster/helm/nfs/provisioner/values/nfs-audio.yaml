@@ -1,0 +1,9 @@
+# Music. Mounted by plex and lidarr.
+nfs-subdir-external-provisioner:
+  fullnameOverride: nfs-audio-nfs-subdir-external-provisioner
+  nfs:
+    path: /mnt/storage/nfs/audio
+    volumeName: nfs-audio
+  storageClass:
+    name: nfs-audio
+    accessModes: ReadWriteMany

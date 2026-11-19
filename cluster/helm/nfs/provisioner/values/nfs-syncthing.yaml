@@ -1,0 +1,9 @@
+# Syncthing's folder. Mounted by both syncthing deployments.
+nfs-subdir-external-provisioner:
+  nameOverride: nfs-syncthing
+  fullnameOverride: nfs-syncthing
+  nfs:
+    path: /mnt/storage/nfs/syncthing
+    volumeName: nfs-syncthing
+  storageClass:
+    name: nfs-syncthing

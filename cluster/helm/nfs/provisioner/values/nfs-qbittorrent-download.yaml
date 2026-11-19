@@ -1,0 +1,8 @@
+# qBittorrent's output on the NAS SSD. Mounted by qbittorrent, unpackerr and the *arr Applications.
+nfs-subdir-external-provisioner:
+  fullnameOverride: nfs-qbittorrent-download-nfs-subdir-external-provisioner
+  nfs:
+    path: /mnt/ultrafaststorage/nfs
+    volumeName: qbittorrent-download
+  storageClass:
+    name: qbittorrent-download
