@@ -4,8 +4,11 @@
 `hack/freshrss/feeds.opml` is the source of truth; the FreshRSS database is a cache of it.
 
     apply [--prune] [--dry-run]   subscribe what the file lists, and nothing else
-    check                         exit 1 when the instance and the file disagree
-    verify                        fetch every URL and print what came back today
+    check                         exit 1 when the instance is missing a feed the file lists
+    verify                        fetch every URL; exit 1 when a native feed answers badly
+
+`check` does not fail on a feed the instance holds and the file does not: apply never removes one
+without --prune, so an extra is not drift, and it is printed instead.
 
 Credentials come from FRESHRSS_USER and FRESHRSS_API_PASSWORD in the environment.
 """
@@ -187,9 +190,19 @@ class Client:
                 "T": self.token(),
             })
         except RuntimeError:
-            # The instance answers 500 for a feed it already holds. It is only an error if the
-            # feed is not there afterwards.
-            if normalize_url(feed.url) in {normalize_url(u) for u, _ in self.subscriptions()}:
+            # The instance answers 500 for a feed it already holds, and a second subscribe does
+            # not move it between categories. Look at what it actually holds before giving up.
+            held = {normalize_url(u): cat for u, cat in self.subscriptions()}
+            current = held.get(normalize_url(feed.url))
+            if current == feed.category:
+                return
+            if current is not None:
+                self._post("/reader/api/0/subscription/edit", {
+                    "ac": "edit",
+                    "s": "feed/" + feed.url,
+                    "a": "user/-/label/" + feed.category,
+                    "T": self.token(),
+                })
                 return
             raise
 
@@ -253,9 +266,13 @@ def verify(feeds: Sequence[Feed],
 USAGE = """usage: freshrss_sync.py <apply|check|verify> [--prune] [--dry-run]
 
   apply    subscribe every feed the OPML lists; --prune also drops the extras
-  check    exit 1 when the instance and the file disagree
-  verify   fetch every URL and print status, items and newest date
-"""
+  check    exit 1 when the instance is missing a feed the file lists
+  verify   fetch every URL and print status, items and newest date;
+           exit 1 when a native feed answers badly
+
+FRESHRSS_USER and FRESHRSS_API_PASSWORD are read from the environment, and
+FRESHRSS_BASE overrides the instance URL (default %s).
+""" % DEFAULT_BASE
 
 
 def main(argv: list[str] | None = None,
@@ -271,9 +288,13 @@ def main(argv: list[str] | None = None,
     feeds = parse_opml(OPML_PATH.read_text())
 
     if command == "verify":
-        for status, title, items, last in verify(feeds, transport):
+        rows = verify(feeds, transport)
+        failed = 0
+        for (status, title, items, last), feed in zip(rows, feeds):
             print(f"{status:9} {title:28} {items:4} {last}")
-        return 0
+            if feed.kind == "native" and status != "OK":
+                failed += 1
+        return 1 if failed else 0
 
     user = env.get("FRESHRSS_USER", "")
     password = env.get("FRESHRSS_API_PASSWORD", "")
@@ -286,6 +307,9 @@ def main(argv: list[str] | None = None,
         diff = plan(feeds, client.subscriptions())
     except AuthError as error:
         print(str(error), file=sys.stderr)
+        return 2
+    except (RuntimeError, OSError) as error:
+        print(f"the instance did not answer: {error}", file=sys.stderr)
         return 2
 
     for feed in diff.to_subscribe:
@@ -304,14 +328,19 @@ def main(argv: list[str] | None = None,
     if "--dry-run" in flags:
         return 0
 
+    refused = []
     for feed in diff.to_subscribe:
         if feed.kind == "xpath":
             continue
-        client.subscribe(feed)
+        try:
+            client.subscribe(feed)
+        except (RuntimeError, OSError) as error:
+            print(f"! {feed.category}/{feed.title}: {error}", file=sys.stderr)
+            refused.append(feed)
     if "--prune" in flags:
         for url, _ in diff.to_prune:
             client.unsubscribe(url)
-    return 0
+    return 1 if refused else 0
 
 
 if __name__ == "__main__":
