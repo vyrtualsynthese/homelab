@@ -10,6 +10,56 @@
 Status: **proved 2026-11-19** — the hand-triggered run described below is its first execution: Job
 `renovate-manual-20261119-0114`, 18 minutes, exit code 0, no error line in 347.
 
+## What it updates
+
+Renovate reads `.github/renovate.json` and looks for pins with a set of managers. Each one owns a
+different place where a version is written:
+
+| Manager | What it reads | Scope, 2026-11-19 |
+|---|---|---|
+| `helm-values` | every `cluster/helm/**/values.yaml`: an `image:` block, and a single-string `image: repo:tag` | 79 images |
+| custom regex, values | a `# renovate: datasource=… depName=…` line above a `version`, `appVersion`, `initTag` or `dockerTag` key | qBittorrent's VueTorrent release and the Alpine base of its installer |
+| custom regex, templates | a literal `image: repo:tag` under `cluster/helm/**/templates/**` | five init containers and Authentik's kubectl hook |
+| `helmv3` | `dependencies:` in every `Chart.yaml` | 11 chart versions |
+| `argocd` | `targetRevision:` on a `chart:` in the Applications | the NFS provisioner chart, in two Applications |
+| `docker-compose` | the edge Pis' `docker-compose.yml` under `ansible/` | 9 images |
+| `kubernetes` | `image:` in the hand-applied manifests under `kubectl/` and `cluster/infrastructure/` | one `latest` scratch pod, nothing to update |
+
+Three of the rules in that file exist because of a failure, and they read as arbitrary without it:
+
+- **LinuxServer tags.** The publisher writes the image build after the app version (`1.30.4-ls332`),
+  and Docker's default versioning reads `-ls332` as a compatibility suffix. Renovate never crosses
+  from one suffix to another, because that is how it avoids moving an `-alpine` image onto `-debian`.
+  The effect was that every LinuxServer pin ending in `-ls<N>` was frozen at its release: Freshrss
+  1.25 was blind to 1.30, and a Sonarr pin on `-ls4` was blind to `-ls329`. The `versioning` regex on those
+  packages folds the build into the number (`1.30.4-ls332` is read as `1.30.4.332`), which is what
+  makes those updates visible at all.
+- **LinuxServer majors wait on a tick in the dependency dashboard.** The publisher still republishes
+  a legacy base tag next to each release, and `qbittorrent:20.04.1` reads as a major bump. Without
+  the gate it became a nightly pull request that would have replaced 5.3.0 with a 2020 Ubuntu image.
+  The real majors (Prowlarr 2.x → 3.x) stay on the dashboard, one click away.
+- **The repository's own `develop` reference is disabled.** All 56 Applications pin
+  `targetRevision: develop` on this repository. There is no version to move to, and a tag written
+  there would stop the GitOps sync, so renaming it a dependency only invented 56 rows on the
+  dashboard.
+
+## Where the configuration lives, and when a change takes effect
+
+`.github/renovate.json`, in this repository. Renovate reads it from the **default branch**, which is
+`main`, not `develop`. An edit merged to `develop` changes nothing until the next `develop` → `main`
+release lands; only then does the nightly run pick it up. The pull requests themselves still target
+`develop`, because the file sets `baseBranchPatterns`.
+
+Validate a change before committing it (this is the same Renovate version the cluster runs):
+
+```bash
+npx --yes --package renovate@44.251.0 renovate-config-validator .github/renovate.json
+```
+
+The validator catches a removed or renamed key and prints the migration for it. It does not catch a
+`packageRules` entry that matches nothing, so a rule that stops working can fail silently: the
+dependency dashboard issue is the place a coverage regression shows up as a pin that never moves.
+
 ## The token
 
 | Property | Value |

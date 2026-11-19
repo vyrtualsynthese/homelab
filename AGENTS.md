@@ -264,8 +264,12 @@ are in `docs/superpowers/plans/`.
 16. **Resolved for the monitoring charts:** the vendored `prometheus` 14.8.0 and `grafana` 6.52.5 are
     replaced by wrapper charts on current upstream versions. No vendored charts are to be added;
     migrate the remaining ones on their next touch.
-17. `renovate.json` ignores `cluster/infrastructure/**`, `kubectl/**` and `ansible/**` — those are
-    bumped by hand.
+17. `.github/renovate.json` is read from `main`, the default branch, so an edit merged to `develop`
+    only takes effect after the next release lands on `main`. Its pull requests target `develop`.
+    `ansible/` is covered (the edge Pis' compose stacks); `kubectl/**` and
+    `cluster/infrastructure/**` are scanned by the Kubernetes manager but hold no version pin worth
+    updating, the only image being a `latest` scratch pod. `docs/runbooks/renovate.md` has the
+    manager-by-manager coverage.
 
 ## 8. Rules
 

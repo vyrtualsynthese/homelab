@@ -21,8 +21,8 @@ strategy: RollingUpdate
 image:
   repository: nginxinc/nginx-unprivileged
   # -- The nginx team's non-root build: the master runs as UID 101, so no process
-  # in this pod is ever root. Pin the tag; never `latest`. Renovate manages it.
-  # renovate: datasource=docker depName=nginxinc/nginx-unprivileged
+  # in this pod is ever root. Pin the tag; never `latest`. Renovate reads the
+  # `image.repository`/`tag` pair itself, so this needs no annotation.
   tag: "1.31.7-alpine"
   pullPolicy: IfNotPresent
 
@@ -35,7 +35,6 @@ content:
   intervalSeconds: 60
   image:
     repository: alpine/git
-    # renovate: datasource=docker depName=alpine/git
     tag: "2.54.1"
     pullPolicy: IfNotPresent
 

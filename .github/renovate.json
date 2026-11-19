@@ -1,62 +1,119 @@
 {
-  "baseBranches": [
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": "Nightly dependency pull requests for every pin this repository carries: images in Helm values, image literals in chart templates, annotated pins that are not an image block, Helm chart dependencies, ArgoCD chart versions and the edge nodes' compose stacks. The CronJob and its token are documented in docs/runbooks/renovate.md.",
+  "baseBranchPatterns": [
     "develop"
   ],
   "extends": [
     "config:recommended",
-    ":dependencyDashboard",
     "docker:enableMajor"
   ],
   "prConcurrentLimit": 0,
   "prHourlyLimit": 0,
+
+  "argocd": {
+    "description": "Only the Applications. The default pattern (`\\.yaml$`) walks every YAML in the repository, including 52 charts of templates and the docs fixtures, and finds nothing there.",
+    "managerFilePatterns": [
+      "/^cluster\\/argocd\\/.+\\.ya?ml$/"
+    ]
+  },
+
+  "kubernetes": {
+    "description": "Plain manifests that no chart renders. Renovate disables this manager by default, so it is switched on for the two hand-applied directories: the only pin it finds today is the `latest` scratch pod under `kubectl/test-pod`, but a real pin added there tomorrow is seen without another config edit.",
+    "managerFilePatterns": [
+      "/^kubectl\\/.+\\.ya?ml$/",
+      "/^cluster\\/infrastructure\\/.+\\.ya?ml$/"
+    ]
+  },
+
   "customManagers": [
     {
       "customType": "regex",
-      "description": "Pins annotated with '# renovate:' in chart values, for dependencies that are not an image block: qBittorrent's VueTorrent installer reads its release tag and Alpine base this way.",
-      "fileMatch": [
-        "^cluster/helm/media-stack/qbittorrent/values\\.yaml$"
+      "description": "A pin in a chart's values.yaml that is not an `image:` block, written as `# renovate: datasource=<ds> depName=<package>` on the line above the value. Today that is qBittorrent's VueTorrent release and the Alpine base of its installer. The key list is deliberately narrow: an `image:` block's `tag:` is already read by the helm-values manager, and annotating it here would extract the same pin twice.",
+      "managerFilePatterns": [
+        "/^cluster\\/helm\\/.+\\/values\\.ya?ml$/"
       ],
       "matchStrings": [
-        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)\\n\\s*(?:version|initTag): \"?(?<currentValue>[^\"\\n]+?)\"?\\s*\\n"
+        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)\\n\\s*(?:version|appVersion|initTag|dockerTag):\\s*\"?(?<currentValue>[^\"\\n]+?)\"?\\s*\\n"
       ]
     },
     {
       "customType": "regex",
-      "description": "The ashuvidz-website chart pins its two images (nginx and the git helper) under a `tag:` key in values.yaml, which Renovate's docker manager does not read from Helm values.",
-      "fileMatch": [
-        "^cluster/helm/ashuvidz-website/values\\.yaml$"
+      "description": "An image pinned literally in a chart template, as `image: repository:tag`. Five containers do this (four init containers and Authentik's kubectl hook) and nothing in values.yaml would let Renovate see them. Lines whose tag is a template expression (`image: \"{{ .Values... }}\"`) do not match, because the package name cannot contain a brace.",
+      "managerFilePatterns": [
+        "/^cluster\\/helm\\/.+\\/templates\\/.+\\.ya?ml$/"
       ],
       "matchStrings": [
-        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)\\n\\s*tag: \"?(?<currentValue>[^\"\\n]+?)\"?\\s*\\n"
-      ]
+        "\\n[ \\t]*(?:-[ \\t]*)?image:[ \\t]*\"?(?<depName>[a-zA-Z0-9][a-zA-Z0-9._/-]*):(?<currentValue>[a-zA-Z0-9._-]+)\"?"
+      ],
+      "datasourceTemplate": "docker"
     }
   ],
-  "argocd": {
-    "fileMatch": [
-      "\\.yaml$"
-    ]
-  },
-  "ignorePaths": [
-    "cluster/helm/_archive/**",
-    "kubectl/**",
-    "ansible/**",
-    "cluster/infrastructure/**"
-  ],
+
   "packageRules": [
     {
-      "matchCurrentValue": "/^(?<major>\\d+)(?:\\.(?<minor>\\d+)(?:\\.(?<patch>\\d+))?)?-(?<compatibility>.+)-(?<build>\\d+)(?:-r(?<revision>\\d+))?$/",
+      "description": "The Kubernetes manager reads each object's apiVersion/kind as a dependency on the Kubernetes API. That is useful for CRDs from a distribution and pure noise here: the two directories hold RBAC, a TLS store and a cron job, and the versions they name are the cluster's own.",
+      "matchDatasources": [
+        "kubernetes-api"
+      ],
+      "enabled": false
+    },
+    {
+      "description": "Every Application tracks this repository's own develop branch. There is no version to move to, and a tag written into targetRevision would stop the GitOps sync, so this self-reference is not a dependency.",
+      "matchDatasources": [
+        "git-tags"
+      ],
+      "matchPackageNames": [
+        "https://github.com/vyrtualsynthese/homelab.git"
+      ],
+      "enabled": false
+    },
+    {
+      "description": "LinuxServer puts the image build after the app version (`1.30.4-ls332`), and Docker's default versioning reads `-ls332` as a compatibility suffix. Renovate never crosses from one suffix to another, so every LinuxServer pin ending in `-ls<N>` was frozen at its release: Freshrss 1.25 was blind to 1.30. This versioning folds the app version and the `-ls` build into one ordered number (1.30.4-ls332 becomes 1.30.4.332), which drops the suffix rule and makes those updates visible again. Tags outside this shape, the `version-`, `amd64-`, `nightly-` and `development-` channels, stop being candidates.",
       "matchDatasources": [
         "docker"
       ],
       "matchPackageNames": [
-        "bitnami/**",
-        "docker.io/bitnami/**",
-        "gcr.io/bitnami-containers/**",
-        "lscr.io/linuxserver/**"
+        "lscr.io/linuxserver/**",
+        "ghcr.io/linuxserver/**",
+        "docker.io/linuxserver/**",
+        "linuxserver/**"
       ],
-      "versioning": "regex:^(?<major>\\d+)(?:\\.(?<minor>\\d+)(?:\\.(?<patch>\\d+))?)?(:?-(?<compatibility>.+)-(?<build>\\d+)(?:-r(?<revision>\\d+))?)?$"
+      "versioning": "regex:^v?(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)(?:\\.\\d+)?(?:_v\\d+\\.\\d+\\.\\d+)?(?:-r\\d+)?(?:-ls(?<build>\\d+))?$"
     },
     {
+      "description": "LinuxServer still republishes a legacy base tag next to each release (qBittorrent carries `20.04.1`), and the default and the versioning above both read that as a major bump. Majors of these images therefore wait for a tick in the dependency dashboard: the legacy tag cannot become a nightly pull request, and the real majors (Prowlarr 2.x to 3.x) stay visible.",
+      "matchDatasources": [
+        "docker"
+      ],
+      "matchPackageNames": [
+        "lscr.io/linuxserver/**",
+        "ghcr.io/linuxserver/**",
+        "docker.io/linuxserver/**",
+        "linuxserver/**"
+      ],
+      "matchUpdateTypes": [
+        "major"
+      ],
+      "dependencyDashboardApproval": true
+    },
+    {
+      "description": "One exportarr version serves eight charts (Radarr, Radarr Anime, Sonarr, Sonarr Anime, Lidarr, Prowlarr, Bazarr, Bazarr Anime). One pull request, not eight.",
+      "groupName": "exportarr",
+      "matchPackageNames": [
+        "ghcr.io/onedr0p/exportarr"
+      ]
+    },
+    {
+      "description": "The NFS provisioner is one upstream release used ten times over: the chart in two Applications and the image in nine values files. Grouping them keeps the chart version and the image tag moving together, which is the only way the override in values.yaml stays truthful.",
+      "groupName": "nfs-subdir-external-provisioner",
+      "matchPackageNames": [
+        "nfs-subdir-external-provisioner",
+        "registry.k8s.io/sig-storage/nfs-subdir-external-provisioner"
+      ]
+    },
+    {
+      "description": "The chart dependency and the server image are released together, so one pull request carries both.",
       "groupName": "authentik",
       "matchPackageNames": [
         "/authentik/"
