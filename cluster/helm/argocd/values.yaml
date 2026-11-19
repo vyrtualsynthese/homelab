@@ -134,4 +134,4 @@ argo-cd:
   redis:
     image:
       repository: ecr-public.aws.com/docker/library/redis
-      tag: 8.6.4-alpine
+      tag: 8.10.3-alpine
