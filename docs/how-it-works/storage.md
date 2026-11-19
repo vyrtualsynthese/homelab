@@ -29,22 +29,26 @@ GiB-sized guesses proved wrong. Two exceptions keep book-sized files in their ow
 ![Configuration on local-path per node, the media library on NFS classes from nas, and the Longhorn claims that remain](../assets/diagrams/storage.svg)
 
 The [stabilisation design](../superpowers/specs/2026-11-10-homelab-stabilisation-design.md#82-storage-classes)
-keeps a smaller named set and retires the rest; that sweep has not happened, so the last row is
-leftovers.
+keeps a smaller named set and retires the rest; the NFS tail of that sweep landed on 2026-11-19, and
+the classes below are what remains.
 
 | Class | Binding | Used by |
 |---|---|---|
 | `local-path` (default) | WaitForFirstConsumer | every configuration claim, on that node's own disk |
-| `nfs-plex` | Immediate | film and television |
+| `plex-media` | Immediate | film and television |
 | `nfs-audio` | Immediate | music |
 | `nfs-books` | Immediate | the books library |
 | `qbittorrent-download` | Immediate | qBittorrent's output |
+| `nfs-qbittorrent-config` | Immediate | qBittorrent's state directory |
 | `nfs-syncthing` | Immediate | Syncthing's folder |
-| `stash-nfs` | Immediate | assets and documents |
+| `stash-nfs` | Immediate | assets and documents, kept although nothing mounts it |
 | `traefik-nfs` | Immediate | Traefik's certificate store |
-| `plex-media`, `nfs-qbittorrent-config`, `nfs-ssd` | Immediate | **strays** — a duplicate, an unused leftover, and one whose export cannot be mounted; do not build on them |
 
-Every other class is an NFS claim onto a `nas` export, working or not.
+Every NFS class there is a directory on a `nas` export, declared by its own release of the wrapper
+chart at `cluster/helm/nfs/provisioner/`: one chart, eight releases, one values file each. Two more
+classes, `nfs-plex` and `nfs-ssd`, belong to provisioners that exist only in the cluster — no chart,
+no Application — and no claim uses either. They are owed for removal by hand:
+`helm uninstall nfs-hdd nfs-ssd -n default`.
 
 `local-path` is hostPath-backed: `fsGroup` does nothing, and `runAsUser` on a claim another UID wrote
 makes `/config` unreadable. The safe order is in the chart contract —

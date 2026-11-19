@@ -74,7 +74,7 @@ Commit to `develop` → the ArgoCD root app (`cluster/argocd/argocd-root.yaml`) 
 | Class | Use |
 |---|---|
 | `local-path` (default) | application configuration, node-bound |
-| `nfs-plex`, `nfs-audio`, `nfs-books`, `nfs-stash`, `nfs-downloads`, `nfs-syncthing` | media and data on the NAS |
+| `plex-media`, `nfs-audio`, `nfs-books`, `qbittorrent-download`, `nfs-qbittorrent-config`, `nfs-syncthing`, `stash-nfs`, `traefik-nfs` | media and data on the NAS, one class per export |
 
 `local-path` volumes are tied to one node. Every workload is pinned to a named node and its
 configuration volume lands on that same node; there is no failover, by design.
