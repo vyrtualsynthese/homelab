@@ -51,6 +51,7 @@ deserves to be tracked on its own becomes a card by hand.
 | `Idea` | `Shaping` | operator only | Decided it is worth doing |
 | `Shaping` | `Backlog` | operator or agent | Cut into tasks, each with a docs line, in reading order |
 | `Backlog` | `Doing` | agent | The session starts the task |
+| `Backlog` | `Validation` | agent | The work finished outside a session, or became moot, before anyone claimed it |
 | `Doing` | `Validation` | agent | The branch is pushed, the PR is open, the verification is in the description |
 | `Validation` | `Done` | **operator only** | The operator accepts the work |
 | `Validation` | `Doing` | **operator only** | The operator refuses it; the comment says why |
@@ -70,6 +71,14 @@ Rules that keep the columns honest:
   says the feature is finished.
 - **`Idea` is for thinking, not for stashing.** A card that is really a commitment belongs in
   `Shaping` or `Backlog`; a card that is not worth doing is deleted.
+- **Finished is `Validation`, even when nobody moved it there.** Work can land outside a session: the
+  operator syncs an Application, an uninstall runs, another change removes the need for the task. The
+  card still goes to `Validation`, with what was verified in its description. `Backlog` means "not
+  started", and a finished card sitting there misleads the next reader.
+- **Obsolete is deleted, not finished.** A card whose premise no longer exists has no work to accept,
+  so `Validation` would file a resolution for something nobody did. Trash it and purge it —
+  `DELETE /tasks/{id}`, then `DELETE /tasks/{id}/permanent` — because the question stopped being
+  asked. This is the one way a card leaves the board without a move.
 
 ## What a ticket carries
 
