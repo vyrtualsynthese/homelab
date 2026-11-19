@@ -97,7 +97,7 @@ The plan calls this list "eleven", but its own table and this one both hold ten.
 | calibre | rebuilt in Wave A | rebuilt as Calibre-Web Automated on `local-path` |
 | firefly | rebuilt in Wave A | retired 2026-11-18 |
 | linkstack | rebuilt in Wave A | retired 2026-11-18 |
-| n8n | rebuilt in Wave A | **not rebuilt**, still on `n8n-2` |
+| n8n | rebuilt in Wave A | **not yet rolled**: the chart creates `n8n-config` on `local-path`, and the live pod still mounts `n8n-2` until the next sync |
 | syncthing | rebuilt in Wave A | **not rebuilt**, still on `syncthing-conf` |
 | thelounge | rebuilt in Wave A | **not rebuilt**, still on `thelounge-volume` |
 | pgadmin | rebuilt in Wave A | rebuilt on `local-path` |

@@ -41,8 +41,12 @@ database passwords.
 | `grafana` | `monitoring` | `admin-user`, `admin-password` — required; the chart reads it via `admin.existingSecret` |
 | `local-cert` | `kube-system` | Traefik default TLS cert (`TLSStore`) |
 | `traefik-dashboard-auth` | `kube-system` | basicAuth for the dashboard |
+| `n8n` | `n8n` | `encryption-key` → `N8N_ENCRYPTION_KEY`, the key n8n encrypts stored credentials with |
 
-`n8n` references no pre-existing Secret. No chart templates a Secret of its own.
+`n8n` is the one application Secret that must exist **before** its first sync: the deployment reads
+`encryption-key` without `optional`, so a missing Secret is `CreateContainerConfigError`, not a pod
+that regenerates the key and silently makes every stored credential unreadable. Generate it once with
+`openssl rand -hex 32` and keep it in the password manager; changing it later costs the credentials.
 
 ## The PostgreSQL instance (`databases` namespace)
 
