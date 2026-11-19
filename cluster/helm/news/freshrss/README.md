@@ -155,3 +155,36 @@ read, so refresh failures are visible only with `kubectl exec`. That is debt, re
 4. Set the article retention policy, then re-import the OPML if a copy turns up outside the cluster.
 5. `freshrss.kub.home.ashudev.com` is reachable only from the LAN: the route carries
    `kube-system-lan-only`, and nothing in front of the app asks for a login beyond FreshRSS's own.
+
+## If the wizard wedges with "Error during context user init!"
+
+Every URL under `/i/`, including the wizard itself, answers `500` with that one line. Nothing in the
+container log explains it, because PHP writes its errors to `/config/log/php/error.log`.
+
+**Why it happens.** `p/i/index.php` loads `app/install.php` only while
+`data/applied_migrations.txt` is **absent**. The installer's last step writes that file. If it is
+reached before the admin account exists — the step is addressable directly (`/i/?step=5`, and the
+stepper links allow it) — then every later request takes the "already installed" branch, boots the
+app, and `FreshRSS_Context::initUser()` finds no user configuration to load. The wizard is
+unreachable from that point, because the branch that would render it is skipped.
+
+**Recovery.** Remove the half-written state; the claim is worthless until the wizard finishes, so
+nothing real is lost:
+
+```bash
+kubectl -n news exec deploy/news-freshrss -- sh -c '
+  rm -f  /config/www/freshrss/data/applied_migrations.txt \
+         /config/www/freshrss/data/config.php &&
+  rm -rf /config/www/freshrss/data/users/_'
+```
+
+`/config/www/freshrss/data` is the image's `DATA_PATH`, symlinked to `/app/www/data` by its s6 init;
+`users/_` is the placeholder user the aborted run created. Reload `/i/` and the wizard starts again at
+the language step.
+
+**Then finish it in one pass** — language, checks, SQLite, admin account. Do not stop between the
+database step and the admin step: the database step already writes `data/config.php`, and that is
+what lets a stray visit to the last step wedge the install.
+
+A completely fresh claim works too and is less fiddly, at the cost of a scale-down and a sync: delete
+the `news-freshrss-config` claim and the pod, and ArgoCD recreates both.
