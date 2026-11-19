@@ -305,19 +305,20 @@ collection on a rare poll.
 ### What the empty 500 hid
 
 The 500 carried no message because FreshRSS logs API errors to `data/users/_/log_api.txt`, and that
-directory was missing from the claim on 2026-11-19, although the image carries one. The logger's
+directory was missing from the data root on 2026-11-19, although the image carries one. The logger's
 write fails, throws, and PHP dies mid-request before the API can answer anything but an empty 500.
 
-Restore it and the API answers `400 Bad Request` instead, with the reason in that file:
+Restore it (the data root is `DATA_PATH`, `/config/data`) and the API answers `400 Bad Request`
+instead, with the reason in that file:
 
 ```bash
-kubectl -n news exec deploy/news-freshrss -- mkdir -p /config/www/freshrss/data/users/_
-kubectl -n news exec deploy/news-freshrss -- chown abc:abc /config/www/freshrss/data/users/_
+kubectl -n news exec deploy/news-freshrss -- mkdir -p /config/data/users/_
+kubectl -n news exec deploy/news-freshrss -- chown www-data:www-data /config/data/users/_
 ```
 
-Check for the directory after a claim is rebuilt, and run those two commands if it is missing. The
-PHP fatal that stands in for the message is in `/config/log/nginx/error.log` in the pod, which is
-where every PHP message lands — none of them reach the pod's stdout, and so none reach Loki.
+Check for the directory after the data root is rebuilt, and run those two commands if it is missing.
+The PHP fatal that stands in for the message is in the pod log: the official image's Apache sends its
+error log to stderr, so PHP messages reach stdout and Loki with everything else.
 
 ### Mistral: served as plain text
 
