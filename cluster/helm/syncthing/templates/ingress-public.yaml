@@ -22,8 +22,12 @@ spec:
   routes:
     - match: Host(`syncthing.kub.home.ashudev.com`)
       kind: Rule
+      {{- with .Values.app.ingress.middlewares }}
       middlewares:
-        - name: kube-system-lan-only@kubernetescrd
+        {{- range . }}
+        - name: {{ printf "%s-%s@kubernetescrd" .namespace .name }}
+        {{- end }}
+      {{- end }}
       services:
         - name: syncthing
           port: webui

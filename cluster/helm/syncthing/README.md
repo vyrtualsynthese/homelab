@@ -25,6 +25,24 @@ the folder re-created before sync resumes. See
 | `PUID`/`PGID` 1100, no `runAsUser` | The LinuxServer init writes `/config` as root and then drops. `runAsUser` would stop it from starting; a fresh `local-path` claim is created `0777` owned by `1100:1100`, so the app owns its own config |
 | No log level | Syncthing has no verbosity environment variable; the level lives in the GUI settings (`STTRACE` only raises). It logs at `info`, which is debt, and the WebUI is the other record |
 
+## The WebUI gate
+
+`syncthing.kub.home.ashudev.com` is gated by `kube-system-authentik-forwardauth`, after
+`kube-system-lan-only`: both middlewares are the `app.ingress.middlewares` list in `values.yaml`, and
+the authentik side is `cluster/helm/authentik/files/app-syncthing.yaml`, bound to `authentik Admins`.
+Syncthing has no native single sign-on, so this is the gate or nothing.
+
+The WebUI's own login is separate and lives on the `syncthing-config` claim. Clear it in
+**Settings → GUI** and tick **Insecure Admin Access** — without that tick Syncthing refuses the GUI to
+anything that is not localhost, which includes every browser arriving through Traefik. Do that
+**only after** the gate is proven in a browser; with no login and no gate, the WebUI is open to the
+LAN.
+
+**If authentik is down** the WebUI is unreachable; sync itself keeps running, since the sync and
+discovery ports do not cross Traefik. The way back is `kubectl -n syncthing port-forward
+svc/syncthing 8384:8384`, which reaches the GUI with the local login — that is the break-glass, and
+`kubectl` access is cluster-admin anyway.
+
 ## Backup
 
 `syncthing-backup` runs at 05:00, backs up `/data` (the `nfs-syncthing` export) with restic, then
