@@ -178,10 +178,12 @@ Chart 0.2.2."
 
 **Files:**
 - Create: `cluster/helm/authentik/files/app-syncthing.yaml`
+- Modify: `cluster/helm/authentik/files/outpost-embedded.yaml` (both lists)
+- Modify: `cluster/helm/authentik/Chart.yaml` (version bump)
 
 **Interfaces:**
 - Consumes: the host and the middleware name from Task 1 (`syncthing.kub.home.ashudev.com`, provider referenced by Traefik as `kube-system-authentik-forwardauth`).
-- Produces: the authentik objects behind that middleware — provider `syncthing`, application slug `syncthing`, group binding `authentik Admins`.
+- Produces: the authentik objects behind that middleware — provider `syncthing`, application slug `syncthing`, group binding `authentik Admins` — and the outpost listing that makes the provider actually serve.
 
 - [ ] **Step 1: Create the file, copying `app-qbittorrent.yaml`'s shape**
 
@@ -245,7 +247,31 @@ grep -n 'external_host:\|^      group:\|^      slug:' cluster/helm/authentik/fil
 
 Expected: `present`; `4`; one line each for `external_host: https://syncthing.kub.home.ashudev.com`, `group: !Find [authentik_core.group, [name, authentik Admins]]`, and `slug: syncthing` twice (application identifiers and attrs).
 
-- [ ] **Step 3: Prove the chart picks the file up**
+- [ ] **Step 3: List it in the embedded outpost, or the provider exists and serves nothing**
+
+`docs/reference/sso-applications.md` "Adding a tool" step 2 is the rule: the outpost sets its
+`providers` list whole, so a provider that is not in `cluster/helm/authentik/files/outpost-embedded.yaml`
+is created and then ignored — its host answers **404** while authentik is healthy.
+
+Append to the `metaapplyblueprint` list, after the `ashulab-app-thelounge` entry:
+
+```yaml
+  - model: authentik_blueprints.metaapplyblueprint
+    attrs:
+      identifiers:
+        name: ashulab-app-syncthing
+      required: true
+```
+
+and to the outpost's `providers` list, after the `thelounge` line:
+
+```yaml
+        - !Find [authentik_providers_proxy.proxyprovider, [name, syncthing]]
+```
+
+Bump `cluster/helm/authentik/Chart.yaml` `version:` (0.10.5 → 0.10.6).
+
+- [ ] **Step 4: Prove the chart picks both up**
 
 The authentik chart is a wrapper, so build its dependency first:
 
@@ -253,11 +279,16 @@ The authentik chart is a wrapper, so build its dependency first:
 helm dependency build cluster/helm/authentik >/dev/null
 helm template test cluster/helm/authentik --namespace authentik \
   | grep -c 'app-syncthing.yaml:'
+helm template test cluster/helm/authentik --namespace authentik \
+  | grep -c 'ashulab-app-syncthing'
+helm template test cluster/helm/authentik --namespace authentik \
+  | grep -c 'name, syncthing'
 ```
 
-Expected: `1` — the file is a key in the `authentik-blueprints` ConfigMap. `0` means the extension or the directory is wrong, and the sync would look healthy while creating nothing.
+Expected: `1`, `2` (the ConfigMap key and the metaapply entry), `1` (the outpost's `!Find`). A `0` on
+either of the last two means the host answers 404 at the browser and nothing else will complain.
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 5: Commit**
 
 ```bash
 git add cluster/helm/authentik/files/app-syncthing.yaml
@@ -347,10 +378,15 @@ Nothing in this task is a repo change. Steps 1–2 are read-only and can be done
 ```
 Application syncthing  → Synced / Healthy, revision = the merge commit
 kubectl -n authentik get cm authentik-blueprints -o jsonpath='{.data.app-syncthing\.yaml}' | head -3
+kubectl -n authentik get cm authentik-blueprints -o json \
+  | grep -o 'outpost-embedded.yaml' | head -1
 Route: kubectl -n syncthing get ingressroute syncthing-public -o jsonpath='{.spec.routes[0].middlewares}'
 ```
 
-Expected: the ConfigMap holds the blueprint, and the live route lists both middlewares.
+Expected: the ConfigMap holds the blueprint, and the live route lists both middlewares. Also read the
+blueprint instance: `GET /api/v3/blueprints/instances/?search=outpost-embedded` must be `successful`
+with its `providers` containing `syncthing`. The provider existing is **not** enough — an outpost that
+does not list it answers 404, and only the browser step below catches that.
 
 - [ ] **Step 2: Confirm authentik created the provider and the application**
 

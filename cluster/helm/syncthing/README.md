@@ -6,8 +6,9 @@ Traefik routes, the config claim, the backup CronJob and its script ConfigMap.
 ## Why this chart was rebuilt
 
 The config lived on a Longhorn volume that died with the driver in August 2026 and could never
-finish deleting. The claim `syncthing-conf` is still `Terminating`, so its name cannot be reused:
-the chart now creates `syncthing-config` on `local-path`, and the pod mounts that.
+finish deleting. That claim, `syncthing-conf`, held its name until the operator cleared it on
+2026-11-19 — the pod and the volume are gone — so the chart creates `syncthing-config` on
+`local-path`, and the pod mounts that.
 
 **The old config is gone by decision** — device identity, folder definitions, ignore patterns and
 the index database. The shared folder on `pvc-nfs-syncthing` is intact; only the config was lost.
@@ -19,7 +20,7 @@ the folder re-created before sync resumes. See
 
 | Thing | Why |
 |---|---|
-| Claim is `syncthing-config`, size `1Gi` | `syncthing-conf` is held by a Terminating object. 1Gi rather than the contract's `128Mi`: the index database for the media tree does not fit in 128Mi |
+| Claim is `syncthing-config`, size `1Gi` | `syncthing-conf` was held by a Terminating object until 2026-11-19, which is why the name changed. 1Gi rather than the contract's `128Mi`: the index database for the media tree does not fit in 128Mi |
 | Pod pinned to `nuc0` | `local-path` is hostPath-backed, so the claim lives on one node. `nuc0` is where the app already ran and where AGENTS.md places the general catalogue. The old `node-type: general` affinity is retired and matched no node, which is why a replacement pod sat `Pending` |
 | Probes on `/rest/noauth/health` | The one unauthenticated endpoint that reports the process is up and serving. Readiness shares it on purpose: a disconnected folder is a sync state, not a reason to stop routing to the WebUI — there is no dependency that can fail while the process stays healthy |
 | `PUID`/`PGID` 1100, no `runAsUser` | The LinuxServer init writes `/config` as root and then drops. `runAsUser` would stop it from starting; a fresh `local-path` claim is created `0777` owned by `1100:1100`, so the app owns its own config |
@@ -40,8 +41,9 @@ LAN.
 
 **If authentik is down** the WebUI is unreachable; sync itself keeps running, since the sync and
 discovery ports do not cross Traefik. The way back is `kubectl -n syncthing port-forward
-svc/syncthing 8384:8384`, which reaches the GUI with the local login — that is the break-glass, and
-`kubectl` access is cluster-admin anyway.
+svc/syncthing 8384:8384`. Before the click above it asks for the local login; afterwards it asks for
+nothing, which is deliberate: reaching it already requires `kubectl`, and that is cluster-admin. What
+it never is, is a route from the LAN.
 
 ## Backup
 
