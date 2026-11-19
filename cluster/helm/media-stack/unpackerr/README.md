@@ -174,12 +174,38 @@ monitoring stack. Until both exist, this chart announces nothing.
 unpackerr has no log level. v1 exposes `debug` and `quiet`, nothing in between, and `quiet` silences
 errors too, so it is not an option.
 
-`UN_ACTIVITY=true` removes the queue summary lines that report only zeros. What remains is one
-`Status:` line per tracked item per minute — measured at roughly 13k lines a day on 0.16.1, mostly
-`Imported, elapsed: N` — and that cannot be turned off without silencing everything.
+`UN_LOG_QUEUES=10m` cuts the `Queue:`/`Totals:` summaries from 1,440 lines a day to 144.
+`UN_ACTIVITY=true` removes the summaries that report only zeros. Neither touches the per-item lines,
+and on 2026-11-19 those were almost the whole volume: **~22,000 lines and 19 MB a day**, made of
+
+| Source | Lines/day |
+|---|---|
+| `Completed item still waiting` + `Status`, two lines a minute per tracked item, five items | 14,400 |
+| the webserver's access line for the liveness probe, one every 30 s | 2,880 |
+| `Totals:` / `Queue:` summaries | 144 |
+
+Those per-item lines are a **symptom, not a level problem**. Each one names an entry that is stuck in
+an *arr queue: four Sonarr downloads reported `Not an upgrade for existing episode file(s)`, which
+Sonarr neither imports nor drops by itself, and one Radarr download waiting on a manual import.
+unpackerr re-reports every tracked item on every poll, so the lines persist for as long as the queue
+does — `pkg/unpackerr/handlers.go` prints them with no switch in between.
+
+On 2026-11-19 the four Sonarr records were removed from that queue with
+`removeFromClient=false`, which deletes nothing from qBittorrent or from disk:
+
+```
+DELETE /api/v3/queue/{id}?removeFromClient=false&blocklist=false&skipRedownload=true
+```
+
+Measured again at 01:20 CET, the same query: **4 lines a minute, about 5,760 a day and 1 MB**,
+against 22,000 lines and 19 MB before. What remains is the Radarr item (the film has no file yet, so
+the download is wanted and has to be imported by hand) at 2,880 lines a day, and the probe access
+line at 2,880. Removing the probe would mean giving up liveness for a log count, so it stays; the
+floor of this chart is the probe's one line every 30 seconds.
 
 The v1 queue UI and the history file are the record for what the log cannot be quietened about. If an
-extraction matters, check the queue rather than grepping for it.
+extraction matters, check the queue rather than grepping for it — and if the queue count climbs
+without a matching download, look for an item the *arr refuses to import.
 
 ## Resources
 
