@@ -1,9 +1,13 @@
-apiVersion: traefik.containo.us/v1alpha1
+# Rendered because the cluster has it, not because a route uses it: no route in
+# this chart references `-security` today. Changing that is a routing decision
+# (which headers, on which rule), not part of rebuilding the chart — see the
+# README's known debt.
+apiVersion: {{ .Values.ingress.apiVersion }}
 kind: Middleware
 metadata:
-  name: {{ include "fullname" . }}-security
+  name: {{ include "app.fullname" . }}-security
   labels:
-    {{- include "labels" . | nindent 4 }}
+    {{- include "app.labels" . | nindent 4 }}
 spec:
   headers:
     frameDeny: true

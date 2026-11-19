@@ -1,0 +1,17 @@
+# Explicit claim name on purpose. The chart default would be pgadmin-pgadmin4,
+# which is a Terminating Longhorn claim in this namespace and cannot be created
+# again; a new name sidesteps its stuck finalizers.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pgadmin-config
+  labels:
+    app.kubernetes.io/name: {{ .Chart.Name }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: {{ .Values.pgadmin.persistentVolume.storageClass }}
+  resources:
+    requests:
+      storage: {{ .Values.pgadmin.persistentVolume.size }}

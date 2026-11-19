@@ -1,0 +1,176 @@
+# autobrr
+
+autobrr watches IRC announce channels and sends matching releases to your download client. It is the
+reference chart for the principles every hand-maintained chart follows — see
+[`docs/charts/README.md`](../../../../docs/charts/README.md) for the contract it satisfies.
+
+## Upstream
+
+- Website: https://autobrr.com/
+- Docs: https://autobrr.com/introduction
+- Source: https://github.com/autobrr/autobrr
+
+## How this chart is deployed here
+
+Not with `helm install`. ArgoCD renders it from
+`cluster/argocd/projects/media-stack/autobrr.yaml`, using the chart in this directory and
+`values.yaml` next to it. The release name is the Application name, `autobrr`, so every object lands
+on the `autobrr` / `autobrr-config` / `autobrr-env` names.
+
+```bash
+# what the cluster will render, exactly
+helm template autobrr cluster/helm/media-stack/autobrr --namespace media-stack
+```
+
+## What the values control
+
+| Value | Purpose | Default |
+|---|---|---|
+| `image.repository`, `image.tag` | Image. Tag is always pinned. | `ghcr.io/autobrr/autobrr`, `v1.90.0` |
+| `strategy` | Deployment strategy. Must stay `Recreate` with a config volume. | `Recreate` |
+| `service.port` | Port the Service exposes, and what the IngressRoute points at. | `7474` |
+| `container.port` | Only set when the app listens on a different port than the Service. | `null` (falls back to `service.port`) |
+| `ingressRoute.*` | Traefik CRD routing: host, entry points, middlewares, TLS. | `autobrr.kub.local`, `websecure`, TLS from the cluster default certificate; `web` redirects |
+| `storage.*` | The config claim: class, size, mount path, or reuse an existing claim. | `local-path`, `128Mi`, `/config` |
+| `env` | Non-secret variables, rendered **inline** into the container. Changing one rolls the pod. | `TZ`, `AUTOBRR__HOST`, `AUTOBRR__PORT` |
+| `extraEnv` | Variables sourced from a Secret, as `{ name, valueFrom }`. | `[]` |
+| `nodeSelector` | Node pin. Every workload is pinned. | `kubernetes.io/hostname: streaming` |
+| `probes.{startup,liveness,readiness}` | HTTP probes on autobrr's own endpoints, which live under `/api`. The startup probe gates the other two through a slow first boot. | enabled; startup 5s × 30, liveness 20s delay, readiness 10s delay |
+| `securityContext` | Runs as 1100, drops all capabilities, no privilege escalation. | non-root |
+| `resources` | Scheduler reservation and memory limit, measured on 2026-11-18. No CPU limit. | `10m`/`448Mi` request, `1Gi` memory limit |
+| `podAnnotations` | Extra pod annotations. Carries the Prometheus scrape annotations. | scrape on port 9074, path `/metrics` |
+
+The memory limit is a ceiling, not a target: autobrr holds ~155 MiB and peaks near
+290 MiB in normal use, so 768 MiB leaves room for a large announce burst or a database
+rebuild. There is deliberately **no CPU limit** — a limit would throttle the short burst this
+app needs at startup, and the node's capacity is the real ceiling. A 10m request is only
+there so the scheduler knows the pod exists.
+
+To re-measure before changing these numbers (Prometheus is on `nas`):
+
+```bash
+curl -sG http://prometheus.kub.local/api/v1/query --data-urlencode \
+  'query=max_over_time(container_memory_working_set_bytes{namespace="media-stack",pod=~"autobrr-.*",container="autobrr"}[1h])/2^20'
+curl -sG http://prometheus.kub.local/api/v1/query --data-urlencode \
+  'query=rate(container_cpu_usage_seconds_total{namespace="media-stack",pod=~"autobrr-.*",container="autobrr"}[5m])'
+```
+
+The history begins on 2026-11-12, when the monitoring stack was rebuilt, so the first sizing
+rests on one day of data. Widen the window to two weeks before tightening anything.
+
+The container runs as **UID/GID 1100**, matching the `PUID`/`PGID` the rest of the stack uses. That only
+works because the config volume was chowned to 1100:1100 on the node first.
+
+`local-path` is hostPath-backed, so the kubelet does **not** apply `fsGroup` ownership — which is why
+`fsGroup` is absent rather than set to something plausible. Two consequences to remember:
+
+- **A newly provisioned claim starts root-owned.** The provisioner runs its setup script as root, so
+  the first restart after recreating the claim will fail on permissions. Re-chown, or set
+  `userPattern`/`groupPattern` on the local-path provisioner so new volumes are born with the right
+  owner.
+- **`reclaimPolicy: Retain`.** Deleting the claim leaves the old directory on `/mnt/ssd0`; it is not
+  the one the new claim gets.
+
+To change the UID on another chart: read `id` and `ls -ln /config` in a running pod first, chown the
+volume directory on its node with the deployment scaled to zero, then set the UID.
+
+## Probes
+
+autobrr exposes two endpoints under `/api`, and they are not interchangeable:
+
+| Probe | Path | Behaviour |
+|---|---|---|
+| startup | `/api/healthz/liveness` | Runs before the other two; 5s × 30 = 150s budget |
+| liveness | `/api/healthz/liveness` | 200 while the process is alive |
+| readiness | `/api/healthz/readiness` | 500 when the database is unreachable |
+
+Using readiness for liveness would turn a database blip into a restart loop, so they stay separate.
+The paths must keep the `/api` prefix: without it Traefik is not involved and autobrr answers 404,
+which the kubelet treats as a failed probe.
+
+The startup probe exists because of a measured cold start, not as a precaution: the first boot after
+the v1.90.0 upgrade took 83s to bind port 7474 (~52s on the previous image, while the new version
+read the old version's database). Liveness alone allows ~110s (20s delay plus 3 failures every 30s),
+so an 83s start leaves barely half a minute of margin — and a start slower than the budget gets a
+healthy pod killed, restarted, and killed again, which is a crash loop caused by the probe. The
+startup probe holds liveness and readiness until the app answers once, with a 150s budget.
+
+It probes the liveness endpoint rather than readiness on purpose: during a cold start the database
+is legitimately not ready, so a readiness-based startup probe would never pass.
+
+## Metrics
+
+autobrr exports Prometheus metrics itself, on a listener that is separate from the web UI and
+disabled upstream by default. The chart turns it on with three variables in `env` and three
+annotations in `podAnnotations`; there is no exporter, sidecar or Service involved.
+
+| Variable | Value | Why |
+|---|---|---|
+| `AUTOBRR__METRICS_ENABLED` | `true` | Upstream default is `false` |
+| `AUTOBRR__METRICS_HOST` | `0.0.0.0` | Upstream default is `127.0.0.1`, which no other pod can reach |
+| `AUTOBRR__METRICS_PORT` | `9074` | The listener's own port, not `service.port` |
+
+Prometheus scrapes it through the `kubernetes-pods-slow` job, which keeps pods annotated
+`prometheus.io/scrape_slow: "true"` and reads the port and path from the other annotations. That is
+the whole contract: a new exporter in this cluster needs the annotation, not a scrape config. The
+slow job scrapes every 5 minutes, which is enough for a one-hour increase and a connected count.
+
+The endpoint is unauthenticated. That is accepted because it is only reachable inside the cluster
+(the Service is `ClusterIP` and nothing routes port 9074); it costs release counters and IRC/feed
+state, not credentials. Basic auth exists at the app level (`AUTOBRR__METRICS_BASIC_AUTH_USERS`) but
+the annotation-based job cannot send credentials, so enabling it would mean a static job and a
+Secret in the Prometheus chart instead.
+
+To check it after a deploy:
+
+```bash
+curl -sG http://prometheus.kub.local/api/v1/query --data-urlencode \
+  'query=up{job="kubernetes-pods",pod=~"autobrr-.*"}'
+```
+
+## Ingress
+
+Always a Traefik `IngressRoute`, never `networking.k8s.io/v1` Ingress. The API group is a value
+(`ingressRoute.apiVersion`) so the Traefik v3 migration becomes a values edit rather than a template
+edit. It must stay `traefik.containo.us/v1alpha1` while the cluster runs Traefik 2.x.
+
+`kub.local` hosts are served over TLS since 2026-11-15, from the cluster default certificate, with `web` redirecting; they resolve through the Pi-hole wildcard
+record. Hosts under `kub.home.ashudev.com` use `websecure` with `certResolver: myresolver`.
+
+## Using this chart as a reference
+
+Read the contract, then build the chart the image needs. Take from this chart:
+
+- the naming helpers (`app.fullname`, `app.labels`, `app.selectorLabels`);
+- the claim name derived from the release;
+- values-driven routing, when the app is exposed at all;
+- the probe rule: liveness on the app's own health endpoint, readiness only when it says something
+  different.
+
+Adapt everything else to the image. Add named values for the app's own mounts and configuration
+sources instead of hiding them in raw pod spec. Leave out what the app does not need; `cross-seed`
+has no IngressRoute because its UI is not exposed.
+
+Do not copy this directory byte for byte. A chart that shares this chart's text but not its app's
+requirements is harder to maintain than one that shares only the contract.
+
+## Files
+
+| File | Renders |
+|---|---|
+| `templates/deployment.yaml` | the Deployment, including the env variables inline |
+| `templates/service.yaml` | the ClusterIP Service |
+| `templates/serviceaccount.yaml` | the ServiceAccount |
+| `templates/persistentvolumeclaim.yaml` | the config claim, only when `storage.enabled` and no `existingClaim` |
+| `templates/ingressroute.yaml` | the Traefik IngressRoute |
+| `templates/NOTES.txt` | the install notes |
+
+There is deliberately no ConfigMap: this app takes its configuration from environment variables only.
+A chart for an app that reads a file adds a ConfigMap, or mounts a Secret when the file contains
+credentials, and documents whether a change needs a restart — see the rule in
+[`docs/charts/README.md`](../../../../docs/charts/README.md).
+
+## Uninstalling
+
+The config claim is created by this chart, so deleting the release deletes the claim. Take a copy
+first if it holds anything you want.

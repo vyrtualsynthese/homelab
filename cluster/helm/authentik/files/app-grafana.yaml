@@ -1,0 +1,60 @@
+version: 1
+metadata:
+  name: ashulab-app-grafana
+entries:
+  # Level groups come from ashulab-groups; blueprint order is not guaranteed,
+  # so require that file first.
+  - model: authentik_blueprints.metaapplyblueprint
+    attrs:
+      identifiers:
+        name: ashulab-groups
+      required: true
+  - model: authentik_providers_oauth2.oauth2provider
+    id: grafana-provider
+    identifiers:
+      name: grafana
+    attrs:
+      name: grafana
+      client_type: confidential
+      # Blueprint-created providers start with no grant types, unlike the UI
+      # wizard which preselects these two; without them the authorize endpoint
+      # answers "Invalid grant_type for provider".
+      grant_types:
+        - authorization_code
+        - refresh_token
+      client_id: grafana
+      client_secret: !Env GRAFANA_CLIENT_SECRET
+      authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
+      invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
+      signing_key: !Find [authentik_crypto.certificatekeypair, [name, authentik Self-signed Certificate]]
+      redirect_uris:
+        - matching_mode: strict
+          redirect_uri_type: authorization
+          url: https://grafana.kub.local/login/generic_oauth
+      property_mappings:
+        - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-openid]]
+        - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-email]]
+        - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-profile]]
+
+  - model: authentik_core.application
+    id: grafana-app
+    identifiers:
+      slug: grafana
+    attrs:
+      name: Grafana
+      slug: grafana
+      provider: !KeyOf grafana-provider
+      meta_launch_url: https://grafana.kub.local/
+      # Official logo, served from the dashboard-icons set. The browser
+      # loads it, so the grid needs internet; swap to `fa://fa-<name>`
+      # if it ever has to work offline.
+      meta_icon: https://raw.githubusercontent.com/grafana/grafana/main/public/img/grafana_icon.svg
+      policy_engine_mode: any
+
+  - model: authentik_policies.policybinding
+    identifiers:
+      target: !KeyOf grafana-app
+      order: 0
+    attrs:
+      # Admin level only: this application has no user surface.
+      group: !Find [authentik_core.group, [name, authentik Admins]]

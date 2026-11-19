@@ -1,0 +1,17 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: ashuvidz
+  namespace: argocd
+spec:
+  destination:
+    namespace: ashuvidz
+    server: https://kubernetes.default.svc
+  project: default
+  source:
+    repoURL: 'https://github.com/vyrtualsynthese/homelab.git'
+    targetRevision: develop
+    path: cluster/helm/ashuvidz-website
+    helm:
+      valueFiles:
+        - values.yaml

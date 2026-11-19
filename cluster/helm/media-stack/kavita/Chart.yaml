@@ -1,24 +1,17 @@
 apiVersion: v2
 name: kavita
-description: A Helm chart for Kubernetes
-
-# A chart can be either an 'application' or a 'library' chart.
-#
-# Application charts are a collection of templates that can be packaged into versioned archives
-# to be deployed.
-#
-# Library charts provide useful utilities or functions for the chart developer. They're included as
-# a dependency of application charts to inject those utilities and functions into the rendering
-# pipeline. Library charts do not define any templates and therefore cannot be deployed.
+description: Kavita is a self-hosted manga, comic and ebook reader. It serves the library Calibre-Web Automated writes and syncs reading progress across its own apps and OPDS clients.
 type: application
-
-# This is the chart version. This version number should be incremented each time you make changes
-# to the chart and its templates, including the app version.
-# Versions are expected to follow Semantic Versioning (https://semver.org/)
-version: 0.1.0
-
-# This is the version number of the application being deployed. This version number should be
-# incremented each time you make changes to the application. Versions are not expected to
-# follow Semantic Versioning. They should reflect the version the application is using.
-# It is recommended to use it with quotes.
-appVersion: "1.0.0"
+# Chart version. Renovate bumps this when the image tag moves.
+version: 1.0.0
+# Must match image.tag in values.yaml.
+appVersion: "v0.9.1.4-ls132"
+home: https://www.kavitareader.com/
+sources:
+  - https://github.com/Kareadita/Kavita
+keywords:
+  - manga
+  - comics
+  - ebooks
+  - opds
+  - reader

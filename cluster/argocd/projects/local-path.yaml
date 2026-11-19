@@ -1,0 +1,24 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: local-path
+  namespace: argocd
+spec:
+  project: default
+  destination:
+    server: "https://kubernetes.default.svc"
+    namespace: default
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=true
+  sources:
+    - repoURL: "https://github.com/rancher/local-path-provisioner.git"
+      targetRevision: master
+      path: deploy/chart/local-path-provisioner
+      helm:
+        valueFiles:
+          - $values/cluster/helm/local-path/values.yaml
+    - repoURL: "https://github.com/vyrtualsynthese/homelab.git"
+      targetRevision: develop
+      ref: values
+  revisionHistoryLimit: 3

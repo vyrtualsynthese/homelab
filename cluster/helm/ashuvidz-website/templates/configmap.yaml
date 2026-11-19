@@ -1,0 +1,72 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "app.fullname" . }}
+  labels:
+    {{- include "app.labels" . | nindent 4 }}
+data:
+  # A file nginx reads on disk, so a ConfigMap is the right tool here — not an
+  # indirection for settings that could be environment variables. It is mounted
+  # with subPath, which does not refresh on change: a config edit needs the pod
+  # replaced, and the Deployment carries a checksum annotation so it happens.
+  nginx.conf: |
+    worker_processes auto;
+    error_log /dev/stderr warn;
+    pid /tmp/nginx.pid;
+
+    events {
+      worker_connections 1024;
+    }
+
+    http {
+      include /etc/nginx/mime.types;
+      default_type application/octet-stream;
+
+      sendfile on;
+      tcp_nopush on;
+      keepalive_timeout 65;
+      server_tokens off;
+
+      # The unprivileged image cannot write the image's own temp directories on a
+      # read-only root filesystem, so every temp path is moved into the emptyDir
+      # mounted at /tmp.
+      client_body_temp_path /tmp/client_temp;
+      proxy_temp_path /tmp/proxy_temp;
+      fastcgi_temp_path /tmp/fastcgi_temp;
+      uwsgi_temp_path /tmp/uwsgi_temp;
+      scgi_temp_path /tmp/scgi_temp;
+
+      # Kept on, and the reason is in the chart README: on a public host the
+      # request record is the only evidence of what arrived. The error log is the
+      # part that runs at `warn`, not `info`.
+      access_log /dev/stdout;
+
+      gzip on;
+      gzip_min_length 512;
+      gzip_types text/plain text/css application/javascript application/json image/svg+xml;
+
+      server {
+        listen 8080;
+        server_name _;
+        root /site;
+        index index.html;
+
+        # Liveness only. Answering here says the process is up; it says nothing
+        # about the clone, which is what `/` answers.
+        location = /healthz {
+          access_log off;
+          default_type text/plain;
+          return 200 "ok\n";
+        }
+
+        # The tree is a git clone: never serve `.git`, or the repository's config
+        # and history are downloadable.
+        location ~ /\. {
+          deny all;
+        }
+
+        location / {
+          try_files $uri $uri/ =404;
+        }
+      }
+    }

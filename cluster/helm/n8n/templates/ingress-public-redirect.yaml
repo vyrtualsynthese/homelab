@@ -26,5 +26,6 @@ spec:
         - name: n8n
           port: n8n
       middlewares:
+        - name: kube-system-lan-only@kubernetescrd
         - name: {{ include "n8n.fullname" . }}-redirect-https
 {{- end }}

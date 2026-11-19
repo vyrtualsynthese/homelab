@@ -41,8 +41,8 @@
       ansible.builtin.lineinfile:
         path: /etc/environment
         state: present
-        regexp: '^RESTIC_REPOSITORY="s3:http://minio.api.kub.local/{{ inventory_hostname }}backup"'
-        line: 'RESTIC_REPOSITORY="s3:http://minio.api.kub.local/{{ inventory_hostname }}backup"'
+        regexp: '^RESTIC_REPOSITORY="s3:s3.amazonaws.com/ashudev-homelab-{{ inventory_hostname }}-backup"'
+        line: 'RESTIC_REPOSITORY="s3:s3.amazonaws.com/ashudev-homelab-{{ inventory_hostname }}-backup"'
 
     - name: Check if repo already configured
       ansible.builtin.command: restic snapshots
@@ -52,15 +52,6 @@
     - name: Setup restic repository Backup
       ansible.builtin.command: sudo restic init
       when: repoCheckReturn.rc != 0
-
-    - name: Import backup script for nas
-      ansible.builtin.copy:
-        src: "scripts/backup-scripts/nas/backup.sh"
-        dest: "/home/vronteix/scripts/"
-        owner: "{{ ansible_ssh_user }}"
-        group: "{{ ansible_ssh_user }}"
-        mode: '0550'
-      when: inventory_hostname == "nas"
 
     - name: Import backup script for runners
       ansible.builtin.copy:

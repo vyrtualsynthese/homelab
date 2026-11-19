@@ -1,0 +1,109 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "docs-site.fullname" . }}-build
+  labels:
+    {{- include "docs-site.labels" . | nindent 4 }}
+spec:
+  schedule: {{ .Values.schedule | quote }}
+  # A merge during a build must not start a second builder on the same volume.
+  # The script tolerates losing the race, but not running it at all is better.
+  concurrencyPolicy: Forbid
+  # Short of the one-minute interval, so a run that was missed while the
+  # controller was down is dropped rather than queued up as a burst.
+  startingDeadlineSeconds: 55
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 0 # a failed run is reported, not retried into a loop
+      activeDeadlineSeconds: 900
+      template:
+        metadata:
+          labels:
+            {{- include "docs-site.selectorLabels" . | nindent 12 }}
+        spec:
+          restartPolicy: Never
+          # The builder never talks to the cluster, and the pod runs repository
+          # code (`hooks:` in a checkout's mkdocs.yml). No service-account token,
+          # so that code has nothing to reach the API server with.
+          automountServiceAccountToken: false
+          nodeSelector:
+            kubernetes.io/hostname: {{ .Values.node }}
+          containers:
+            - name: builder
+              image: {{ .Values.builder.image }}
+              imagePullPolicy: IfNotPresent
+              # `-u`: stdout is block-buffered when it is a pipe, which made
+              # `kubectl logs -f` look dead for the length of a build.
+              command: ["python3", "-u", "/opt/builder/build.py"]
+              # The image's own working directory is read-only in spirit; every
+              # temporary lives under /tmp, which the container can write.
+              workingDir: /tmp
+              env:
+                - name: GITHUB_TOKEN
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ .Values.secret.name }}
+                      key: {{ .Values.secret.key }}
+                - name: REPO_OWNER
+                  value: {{ .Values.repoOwner | quote }}
+                - name: REFS
+                  value: {{ join "," .Values.refs | quote }}
+                - name: FULL_REBUILD_AGE
+                  value: {{ .Values.fullRebuildAge | quote }}
+                # Printed on the index page, so the page cannot claim a cadence
+                # the CronJob does not run at.
+                - name: SCHEDULE
+                  value: {{ .Values.schedule | quote }}
+                # Part of the builder's identity in its state: a manifest-only
+                # change (capabilities, mounts, image) has to retry the pairs the
+                # previous pod failed, exactly like a change to the script.
+                - name: BUILDER_REVISION
+                  value: {{ .Values.builder.revision | quote }}
+                - name: SITE_ROOT
+                  value: /data/site
+                - name: STATE
+                  value: /data/state.json
+              volumeMounts:
+                # One mount at /data, no subPath: Kubernetes does not create a
+                # subPath directory, so a subPath mount fails on the very first
+                # run, before anything exists to create it.
+                - name: site
+                  mountPath: /data
+                - name: builder
+                  mountPath: /opt/builder
+                  readOnly: true
+              resources:
+                {{- toYaml .Values.builder.resources | nindent 16 }}
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop:
+                    - ALL
+                  # The build runs as `nobody` so a repository's `hooks:` code
+                  # cannot read the token out of this process's /proc/1/environ.
+                  # Three capabilities come back, and only these:
+                  #
+                  # - SETUID, SETGID: without them a root process cannot call
+                  #   setuid at all, so the drop would fail with EPERM.
+                  # - DAC_OVERRIDE: the parent has to finish what the child
+                  #   produced — write the landing page into the built tree,
+                  #   park a failed build, delete the work tree. Those files
+                  #   belong to `nobody` and are 0755, and root without this
+                  #   capability is a normal user as far as the kernel is
+                  #   concerned (2026-11-17: every pair failed on
+                  #   "cannot write the landing page … Permission denied").
+                  #
+                  # `nobody` inherits none of them, so a hook gains nothing.
+                  add:
+                    - SETUID
+                    - SETGID
+                    - DAC_OVERRIDE
+          volumes:
+            - name: site
+              persistentVolumeClaim:
+                claimName: {{ include "docs-site.fullname" . }}-site
+            - name: builder
+              configMap:
+                name: {{ include "docs-site.fullname" . }}-builder

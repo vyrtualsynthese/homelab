@@ -1,0 +1,27 @@
+{{ include "app.fullname" . }} has been deployed to namespace {{ .Release.Namespace }}.
+
+{{- if .Values.ingressRoute.enabled }}
+
+URL:
+  {{ if .Values.ingressRoute.tls.enabled }}https{{ else }}http{{ end }}://{{ .Values.ingressRoute.host }}{{ .Values.ingressRoute.pathPrefix }}
+{{- if not .Values.ingressRoute.tls.enabled }}
+
+The router uses the `web` entry point, so the host must resolve internally.
+That is the Pi-hole wildcard record for `kub.local`, not public DNS.
+{{- end }}
+{{- else }}
+
+The IngressRoute is disabled. Reach it with a port-forward:
+
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "app.fullname" . }} {{ .Values.service.port }}:{{ .Values.service.port }}
+{{- end }}
+
+{{- if .Values.storage.enabled }}
+Configuration is stored in the claim {{ include "app.configClaimName" . }}.
+{{- if not .Values.storage.existingClaim }}
+
+That claim is created by this chart, so deleting the release deletes it too.
+{{- end }}
+{{- else }}
+This release renders no config claim.
+{{- end }}

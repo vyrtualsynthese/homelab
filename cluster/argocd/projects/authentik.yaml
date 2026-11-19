@@ -1,0 +1,17 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: authentik
+  namespace: argocd
+spec:
+  project: default
+  destination:
+    server: "https://kubernetes.default.svc"
+    namespace: authentik
+  source:
+    repoURL: "https://github.com/vyrtualsynthese/homelab.git"
+    targetRevision: develop
+    path: cluster/helm/authentik
+    helm:
+      valueFiles:
+        - values.yaml

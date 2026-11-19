@@ -1,0 +1,25 @@
+{{ include "app.fullname" . }} has been deployed to namespace {{ .Release.Namespace }}.
+
+{{- if .Values.ingressRoute.enabled }}
+
+URL:
+  https://{{ .Values.ingressRoute.host }}{{ .Values.ingressRoute.pathPrefix }}
+
+The route is gated twice: `kube-system-lan-only` refuses anything off the LAN,
+then `kube-system-authentik-forwardauth` asks for an authentik sign-in. The WebUI's
+own login is bypassed for the pod network only, so a port-forward still asks for
+the password:
+
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "app.fullname" . }} {{ .Values.service.port }}:{{ .Values.service.port }}
+{{- else }}
+
+The IngressRoute is disabled. Reach it with a port-forward:
+
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "app.fullname" . }} {{ .Values.service.port }}:{{ .Values.service.port }}
+{{- end }}
+
+Volumes, and who owns them:
+
+  {{ .Values.storage.config.mountPath }}     {{ .Values.storage.config.existingClaim }} (external, not deleted with this release)
+  {{ .Values.storage.downloads.mountPath }}  {{ .Values.storage.downloads.existingClaim }} (external, not deleted with this release)
+  {{ .Values.storage.vpn.mountPath }} (vpn)  {{ include "app.vpnClaimName" . }} (created by this chart — deleting the release deletes the WireGuard keys)

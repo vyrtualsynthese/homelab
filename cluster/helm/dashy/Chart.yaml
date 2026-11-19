@@ -1,0 +1,9 @@
+apiVersion: v2
+name: dashy
+description: Dashy - Mon déploiement custom
+type: application
+version: 0.1.0
+dependencies:
+  - name: dashy
+    version: 1.0.0           # Version du chart open-source que tu veux utiliser
+    repository: https://vyrtualsynthese.github.io/selfhosted-helmcharts/

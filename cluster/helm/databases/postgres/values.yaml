@@ -1,0 +1,63 @@
+image:
+  repository: postgres
+  tag: "18.7"
+  digest: "sha256:9f4fd4aa918f52ae3d6f3b687f1de90d8f867cd4d520021545a9a50c120eae3b"
+
+nodeSelector:
+  kubernetes.io/hostname: nas
+
+data:
+  size: 20Gi
+  # local-path is hostPath-backed: the pod's fsGroup: 999 (kept for consistency) does
+  # not manage ownership here. Writability rests on the provisioner creating the
+  # volume directory 0777 and on PGDATA being the nested "pgdata" subdirectory that
+  # initdb owns at 0700; a tighter provisioner mode would break initdb.
+  storageClassName: local-path
+
+dumps:
+  size: 20Gi
+  storageClassName: local-path
+  schedule: "30 3 * * *"
+  retentionDays: 14
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 512Mi
+  limits:
+    cpu: "1"
+    memory: 1Gi
+
+postgresql:
+  shared_buffers: 256MB
+  effective_cache_size: 768MB
+  max_connections: 60
+  work_mem: 8MB
+  maintenance_work_mem: 64MB
+  log_min_duration_statement: 1000
+
+networkPolicy:
+  # Off, and this is a finding, not a preference (2026-11-13).
+  #
+  # On this cluster any NetworkPolicy selecting the database pod isolates it: the
+  # default-drop is installed and the allow rules are never translated, so even a
+  # one-rule policy naming a single namespace refuses every connection. Verified
+  # with the full policy, then with a minimal one, then with no policy at all
+  # (which connects). Until the platform can enforce NetworkPolicy, a policy in
+  # git means an unreachable database, so the chart ships it switched off.
+  #
+  # The database is still not reachable from outside the cluster: the Service is
+  # ClusterIP, there is no ingress for 5432, and CONNECT is revoked from PUBLIC on
+  # every database. Re-enable this once enforcement is known to work, and prove it
+  # with a denied connection from a namespace that is not in the list.
+  enabled: false
+  consumerNamespaces:
+    - authentik
+    - koillection
+
+exporter:
+  repository: prometheuscommunity/postgres-exporter
+  tag: "v0.17.1"
+  # Pinned like the postgres image: the tag is the readable version, the digest is
+  # the identity. Index digest of v0.17.1 (multi-arch, linux/amd64 on nas).
+  digest: "sha256:38606faa38c54787525fb0ff2fd6b41b4cfb75d455c1df294927c5f611699b17"

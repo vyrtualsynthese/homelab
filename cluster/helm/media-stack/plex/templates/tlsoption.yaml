@@ -1,0 +1,15 @@
+{{- if and .Values.ingress.enabled .Values.ingress.tls.enabled .Values.ingress.tls.options.enabled }}
+apiVersion: {{ .Values.ingress.apiVersion }}
+kind: TLSOption
+metadata:
+  name: {{ include "app.fullname" . }}-tlsoption
+  labels:
+    {{- include "app.labels" . | nindent 4 }}
+spec:
+  minVersion: {{ .Values.ingress.tls.options.minVersion }}
+  sniStrict: {{ .Values.ingress.tls.options.sniStrict }}
+  cipherSuites:
+    {{- toYaml .Values.ingress.tls.options.cipherSuites | nindent 4 }}
+  curvePreferences:
+    {{- toYaml .Values.ingress.tls.options.curvePreferences | nindent 4 }}
+{{- end }}

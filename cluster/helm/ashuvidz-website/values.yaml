@@ -1,0 +1,171 @@
+# Default values for ashuvidz-website.
+# The chart is hand-written against the contract in docs/charts/README.md;
+# media-stack/autobrr is the reference it was shaped from.
+
+# -- `nginx`, so the helpers build the names the cluster already holds:
+# `app.fullname` becomes `ashuvidz-nginx` (release `ashuvidz` + this name), the
+# Service keeps the name the two IngressRoutes already point at, and the
+# Deployment keeps the selector it was created with — `spec.selector` is
+# immutable, so changing it would mean ArgoCD deleting and recreating the
+# Deployment, and the site would answer 503 for the length of a crawl.
+# The label `app.kubernetes.io/name: nginx` is also true: nginx is what serves.
+nameOverride: nginx
+fullnameOverride: ""
+
+replicaCount: 1
+
+# -- No config volume, so no Recreate: two pods can hold the same emptyDir content
+# at once, and a rolling update keeps the old pod serving until the new one clones.
+strategy: RollingUpdate
+
+image:
+  repository: nginxinc/nginx-unprivileged
+  # -- The nginx team's non-root build: the master runs as UID 101, so no process
+  # in this pod is ever root. Pin the tag; never `latest`. Renovate reads the
+  # `image.repository`/`tag` pair itself, so this needs no annotation.
+  tag: "1.31.7-alpine"
+  pullPolicy: IfNotPresent
+
+content:
+  # -- The site's source of truth. Nothing is built: the repository holds the files
+  # nginx serves, and a push to `ref` is live after one sync interval.
+  repository: https://github.com/vyrtualsynthese/ashuvidz-website.git
+  ref: main
+  # -- How often the sidecar pulls. 60s is what this site has always had.
+  intervalSeconds: 60
+  image:
+    repository: alpine/git
+    tag: "2.54.1"
+    pullPolicy: IfNotPresent
+
+serviceAccount:
+  create: true
+  # -- The pod never talks to the Kubernetes API, so no token is mounted.
+  automount: false
+  name: ""
+  annotations: {}
+
+# -- Pod-level security. The content and temp volumes are emptyDirs, where the
+# kubelet does apply fsGroup, so 101 can write them and nginx can read them.
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 101
+  runAsGroup: 101
+  fsGroup: 101
+  fsGroupChangePolicy: OnRootMismatch
+  seccompProfile:
+    type: RuntimeDefault
+
+# -- Container-level security, applied to all three containers.
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 101
+  runAsGroup: 101
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+  readOnlyRootFilesystem: true
+
+service:
+  type: ClusterIP
+  port: 80
+
+container:
+  # -- nginx listens on 8080 because the unprivileged image cannot bind 80. One
+  # -- value, three consumers: the container port, the Service targetPort and the
+  # -- probes all read it.
+  port: 8080
+
+ingressRoute:
+  enabled: true
+  # -- API group. `traefik.containo.us/v1alpha1` is what the cluster's Traefik 2.x
+  # -- watches today; flip this to `traefik.io/v1alpha1` when Traefik v3 lands.
+  apiVersion: traefik.containo.us/v1alpha1
+  # -- Route name, defaulting to the release name (`ashuvidz`) — not the fullname.
+  # -- That is the name Traefik already serves, and a rename leaves the host with
+  # -- no router until the new object is applied.
+  name: ""
+  # -- Public host. It is on the cluster's public list, so there is no `lan-only`
+  # -- middleware here, by design.
+  host: ashuvidz.com
+  pathPrefix: /
+  entryPoints:
+    - websecure
+  middlewares:
+    - name: security
+      namespace: kube-system
+  labels: {}
+  annotations: {}
+  tls:
+    # -- Let's Encrypt through Traefik's ACME resolver.
+    certResolver: myresolver
+  # -- The plain-HTTP router. It answers on `web` and hands back a redirect; the
+  # -- live route used Traefik's no-op service for that, and this chart keeps it.
+  redirectToHttps: true
+  redirect:
+    middlewares:
+      - name: redirect-https
+        namespace: kube-system
+
+nodeSelector:
+  # -- Every workload is pinned to a named node. The site keeps no state, so the
+  # -- pin costs nothing; nuc0 is where the other small front ends live.
+  kubernetes.io/hostname: nuc0
+
+tolerations: []
+
+affinity: {}
+
+# Sizing comes from Prometheus, not from a template comment:
+#   nginx         measured 2026-11-18 over the 5 days Prometheus retains,
+#                 container_memory_working_set_bytes: p95 23.8Mi, peak 23.9Mi
+#   git clone     runs for seconds, shorter than the scrape interval, so there is
+#                 no sample; the sidecar below stands in for it at 21.2Mi p95,
+#                 25Mi peak
+# The nginx limit is 128Mi rather than 1.5x the measured peak because the init
+# container that clones the site has no measurement to size from and a failed
+# clone is a site that cannot start.
+#
+# No CPU limits, here or anywhere in this cluster: a limit throttles exactly the
+# burst the app needs and protects nothing, so the requests are token-sized.
+resources:
+  requests:
+    cpu: 10m
+    memory: 32Mi
+    ephemeral-storage: 50Mi
+  limits:
+    memory: 128Mi
+    ephemeral-storage: 2Gi
+
+# -- Resources for the init container that clones the content and the sidecar that
+# pulls it. Separate from the nginx block because a `git pull` and a web server
+# have nothing in common but the pod.
+contentResources:
+  requests:
+    cpu: 10m
+    memory: 32Mi
+    ephemeral-storage: 50Mi
+  limits:
+    memory: 64Mi
+    ephemeral-storage: 2Gi
+
+probes:
+  # -- Liveness asks the process, not the content: `/healthz` is a `return 200` in
+  # the chart's nginx.conf, so a half-finished clone can never restart nginx.
+  liveness:
+    enabled: true
+    path: /healthz
+    initialDelaySeconds: 5
+    periodSeconds: 20
+    timeoutSeconds: 3
+    failureThreshold: 3
+  # -- Readiness asks the site: `/` is `index.html` out of the cloned tree, so a
+  # failed clone takes the pod out of the Service without a restart loop.
+  readiness:
+    enabled: true
+    path: /
+    initialDelaySeconds: 2
+    periodSeconds: 10
+    timeoutSeconds: 3
+    failureThreshold: 3

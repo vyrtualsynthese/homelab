@@ -1,0 +1,97 @@
+# Traefik objects the wrapper renders itself. The subchart's own Ingress stays
+# off: the repo uses Traefik CRDs only (never networking.k8s.io).
+traefik:
+  apiVersion: traefik.containo.us/v1alpha1
+
+ingress:
+  host: pgadmin.kub.local
+  # Rendered Service of the subchart (pinned by fullnameOverride above), port 80.
+  service: pgadmin
+  port: 80
+
+pgadmin:
+  # Freeze the rendered names; the IngressRoute points at this Service.
+  fullnameOverride: pgadmin
+  replicaCount: 1
+
+  strategy:
+    type: Recreate
+
+  # Chart 1.72.0 appVersion is 9.19. Pinned here so an upstream bump cannot
+  # move the image silently.
+  image:
+    repository: dpage/pgadmin4
+    tag: "9.19"
+    pullPolicy: IfNotPresent
+
+  # Web login. Only the password is read from the Secret (key below); the email
+  # is not a secret, so it lives here.
+  existingSecret: pgadmin
+  secretKeys:
+    pgadminPasswordKey: password
+  env:
+    email: valentin.ronteix@ashudev.com
+
+  # The wrapper creates this claim in templates/pvc.yaml. The chart default name
+  # is pgadmin-pgadmin4, which still exists in the namespace as a Terminating
+  # Longhorn claim and cannot be created again.
+  persistentVolume:
+    enabled: true
+    size: 10Gi
+    storageClass: local-path
+    existingClaim: pgadmin-config
+
+  # Sized from the measured peaks on develop (commit 5a5432a0), not guessed: an idle
+  # admin UI needs almost no CPU, and it is a browser session, not a batch job.
+  resources:
+    requests:
+      cpu: 10m
+      memory: 256Mi
+    limits:
+      memory: 384Mi
+
+  # An admin tool, not storage-bound.
+  nodeSelector:
+    kubernetes.io/hostname: nuc0
+
+  # The PostgreSQL NetworkPolicy selects this label to let the pod reach 5432.
+  podLabels:
+    app: pgadmin
+
+  # Access control is the Traefik allowlist plus the PostgreSQL policy.
+  networkPolicy:
+    enabled: false
+
+  ingress:
+    enabled: false
+
+  # OIDC settings live in a Secret, mounted as pgAdmin's config_local.py: the
+  # file holds the client secret, so it cannot be a ConfigMap and cannot be in
+  # git. The Secret is created by the operator; see docs/runbooks/authentik-apps.md.
+  extraSecretMounts:
+    - name: oidc-config
+      secret: pgadmin-oidc
+      subPath: config_local.py
+      mountPath: /pgadmin4/config_local.py
+
+  # Imported only when the configuration database is first created.
+  serverDefinitions:
+    enabled: true
+    resourceType: ConfigMap
+    servers:
+      postgres-admin:
+        Name: "postgres (admin)"
+        Group: "Servers"
+        Username: "postgres"
+        Host: "postgres.databases.svc.cluster.local"
+        Port: "5432"
+        SSLMode: "prefer"
+        MaintenanceDB: "postgres"
+      postgres-readonly:
+        Name: "postgres (read-only)"
+        Group: "Servers"
+        Username: "backup"
+        Host: "postgres.databases.svc.cluster.local"
+        Port: "5432"
+        SSLMode: "prefer"
+        MaintenanceDB: "postgres"

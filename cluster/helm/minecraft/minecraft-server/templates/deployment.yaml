@@ -6,8 +6,6 @@ metadata:
     {{- include "mc.labels" . | nindent 4 }}
 spec:
   replicas: 1
-  strategy:
-    type: Recreate
   selector:
     matchLabels:
       {{- include "mc.selectorLabels" . | nindent 6 }}
@@ -25,7 +23,7 @@ spec:
       volumes:
         - name: minecraft-server-volume
           persistentVolumeClaim:
-            claimName: minecraft-lh
+            claimName: minecraft-lh-2
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
@@ -43,13 +41,13 @@ spec:
             - name: EULA
               value: "TRUE"
             - name: ONLINE_MODE
-              value: "FALSE"
+              value: "TRUE"
             - name: OPS
               value: "vsynthese"
             - name: MAX_WORLD_SIZE
               value: "12500"
             - name: VERSION
-              value: "1.20.4"
+              value: "26.2"
             - name: ANNOUNCE_PLAYER_ACHIEVEMENTS
               value: "FALSE"
             - name: MODE
@@ -57,11 +55,9 @@ spec:
             - name: PVP
               value: "TRUE"
             - name: SERVER_NAME
-              value: "ashulab-1.19"
+              value: "ashulab"
             - name: VIEW_DISTANCE
               value: "10"
-            - name: MEMORY
-              value: ""
             - name: TYPE
               value: "PAPER"
             - name: MAX_TICK_TIME
@@ -70,16 +66,20 @@ spec:
             #  value: "true"
             #- name: JMX_HOST
             #  value: "0.0.0.0"
-            - name: USE_AIKAR_FLAGS
+            - name: USE_MEOWICE_FLAGS
               value: "true"
-            - name: JVM_XX_OPTS
-              value: "-XX:MaxRAMPercentage=75"
+            - name: USE_MEOWICE_GRAALVM_FLAGS
+              value: "true"
             - name: STOP_SERVER_ANNOUNCE_DELAY
               value: "30"
             - name: ENABLE_ROLLING_LOGS
               value: "true"
+            - name: INIT_MEMORY
+              value: "1G"
+            - name: MAX_MEMORY
+              value: "6G"
             - name: MODS
-              value: "https://dev.bukkit.org/projects/multiverse-core/files/3462546/download,https://dev.bukkit.org/projects/multiverse-netherportals/files/3687506/download,https://dev.bukkit.org/projects/multiverse-portals/files/3113114/download"
+              value: "https://github.com/Multiverse/Multiverse-Core/releases/download/5.8.1/multiverse-core-5.8.1.jar,https://github.com/Multiverse/Multiverse-Portals/releases/download/5.3.0/multiverse-portals-5.3.0.jar,https://github.com/Multiverse/Multiverse-NetherPortals/releases/download/5.1.0/multiverse-netherportals-5.1.0.jar,https://download.luckperms.net/1668/bukkit/loader/LuckPerms-Bukkit-5.5.81.jar"
           ports:
             - name: mc
               containerPort: 25565

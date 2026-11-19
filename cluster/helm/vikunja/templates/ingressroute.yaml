@@ -1,0 +1,75 @@
+{{- if .Values.ingressRoute.enabled }}
+{{- $svc := .Values.ingressRoute.service }}
+{{- $port := .Values.ingressRoute.port }}
+{{- /* TLS router. No secretName and no certResolver on purpose: the cluster's
+internal certificate is the Traefik default (TLSStore in kube-system), and the
+policy object `kube-system-internal-tls` is applied here. */}}
+apiVersion: {{ .Values.ingressRoute.apiVersion }}
+kind: IngressRoute
+metadata:
+  name: {{ include "vikunja.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: {{ .Chart.Name }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - kind: Rule
+      match: Host(`{{ .Values.ingressRoute.host }}`)
+      middlewares:
+        {{- range .Values.ingressRoute.uiMiddlewares }}
+        - name: {{ printf "%s-%s@kubernetescrd" .namespace .name }}
+        {{- end }}
+      services:
+        - name: {{ $svc }}
+          port: {{ $port }}
+    {{- /* API path, deliberately without the forward-auth middleware: an API
+    client sends a token, not a browser session, and cannot complete a sign-in
+    redirect. Higher priority so it wins over the route above; keep `lan-only`
+    here or the API becomes reachable from outside the LAN. */}}
+    - kind: Rule
+      match: Host(`{{ .Values.ingressRoute.host }}`) && PathPrefix(`{{ .Values.ingressRoute.apiPathPrefix }}`)
+      priority: 100
+      middlewares:
+        {{- range .Values.ingressRoute.apiMiddlewares }}
+        - name: {{ printf "%s-%s@kubernetescrd" .namespace .name }}
+        {{- end }}
+      services:
+        - name: {{ $svc }}
+          port: {{ $port }}
+  {{- if .Values.ingressRoute.tls.enabled }}
+  tls:
+    options:
+      name: {{ .Values.ingressRoute.tls.options }}
+      namespace: {{ .Values.ingressRoute.tls.optionsNamespace | default .Release.Namespace }}
+  {{- end }}
+{{- if .Values.ingressRoute.redirectToHttps }}
+---
+{{- /* Plain-HTTP mirror: redirect to the TLS router, `lan-only` and nothing
+else. Redirecting must not send the browser through Authentik first — an
+off-LAN request is refused here instead, and the TLS router runs the gate once
+the browser is on https. */}}
+apiVersion: {{ .Values.ingressRoute.apiVersion }}
+kind: IngressRoute
+metadata:
+  name: {{ include "vikunja.fullname" . }}-redirect
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: {{ .Chart.Name }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  entryPoints:
+    - web
+  routes:
+    - kind: Rule
+      match: Host(`{{ .Values.ingressRoute.host }}`)
+      middlewares:
+        - name: kube-system-lan-only@kubernetescrd
+        - name: kube-system-redirect-to-https@kubernetescrd
+      services:
+        - name: {{ $svc }}
+          port: {{ $port }}
+{{- end }}
+{{- end }}

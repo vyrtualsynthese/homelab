@@ -26,5 +26,6 @@ spec:
         - name: syncthing
           port: webui
       middlewares:
+        - name: kube-system-lan-only@kubernetescrd
         - name: {{ include "app.fullname" . }}-redirect-https
 {{- end }}

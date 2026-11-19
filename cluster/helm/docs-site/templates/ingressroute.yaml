@@ -1,0 +1,53 @@
+{{- $svc := .Values.traefik.service | default (include "docs-site.fullname" .) }}
+{{- /* TLS router. No secretName and no certResolver on purpose: the cluster's
+internal certificate is Traefik's default (TLSStore in kube-system), so every
+internal app answers on the same certificate. */}}
+apiVersion: {{ .Values.traefik.apiVersion }}
+kind: IngressRoute
+metadata:
+  name: {{ include "docs-site.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "docs-site.labels" . | nindent 4 }}
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - kind: Rule
+      match: Host(`{{ .Values.traefik.host }}`)
+      middlewares:
+        {{- range .Values.traefik.middlewares }}
+        - name: {{ printf "%s-%s@kubernetescrd" .namespace .name }}
+        {{- end }}
+      services:
+        - name: {{ $svc }}
+          port: {{ .Values.traefik.port }}
+  tls:
+    options:
+      name: {{ .Values.traefik.tls.options }}
+      namespace: {{ .Values.traefik.tls.optionsNamespace | default .Release.Namespace }}
+{{- if .Values.traefik.redirectToHttps }}
+---
+{{- /* Plain-HTTP mirror: `lan-only` and then the redirect, nothing else. An
+off-LAN request is refused here rather than redirected, and the TLS router
+above is where the middleware list lives. */}}
+apiVersion: {{ .Values.traefik.apiVersion }}
+kind: IngressRoute
+metadata:
+  name: {{ include "docs-site.fullname" . }}-redirect
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "docs-site.labels" . | nindent 4 }}
+spec:
+  entryPoints:
+    - web
+  routes:
+    - kind: Rule
+      match: Host(`{{ .Values.traefik.host }}`)
+      middlewares:
+        - name: kube-system-lan-only@kubernetescrd
+        - name: kube-system-redirect-to-https@kubernetescrd
+      services:
+        - name: {{ $svc }}
+          port: {{ .Values.traefik.port }}
+{{- end }}

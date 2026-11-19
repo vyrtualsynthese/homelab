@@ -1,0 +1,15 @@
+{{- if .Values.app.storage.uploads.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ .Values.app.storage.uploads.claimName }}
+  labels:
+    {{- include "app.labels" . | nindent 4 }}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: {{ .Values.app.storage.uploads.className }}
+  resources:
+    requests:
+      storage: {{ .Values.app.storage.uploads.size }}
+{{- end }}

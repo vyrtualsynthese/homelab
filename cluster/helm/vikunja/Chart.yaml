@@ -1,0 +1,11 @@
+apiVersion: v2
+name: vikunja
+description: Vikunja task board — the only place task state lives
+type: application
+version: 0.1.0
+appVersion: "2.8.0"
+
+dependencies:
+  - name: vikunja
+    version: 2.6.0
+    repository: oci://ghcr.io/go-vikunja/helm-chart

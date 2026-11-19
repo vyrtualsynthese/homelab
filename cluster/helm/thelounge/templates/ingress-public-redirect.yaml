@@ -25,5 +25,6 @@ spec:
         - name: thelounge
           port: web
       middlewares:
+        - name: kube-system-lan-only@kubernetescrd
         - name: {{ include "fullname" . }}-redirect-https
 {{- end }}

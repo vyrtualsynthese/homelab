@@ -1,0 +1,14 @@
+apiVersion: traefik.containo.us/v1alpha1
+kind: IngressRoute
+metadata:
+  name: mixed
+  namespace: media-stack
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - kind: Rule
+      match: Host(`plex.kub.home.ashudev.com`) || Host(`sonarr.kub.local`)
+      services:
+        - name: app
+          port: 80

@@ -1,16 +1,16 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "fullname" . }}
+  name: {{ include "app.fullname" . }}
   labels:
-    {{- include "labels" . | nindent 4 }}
+    {{- include "app.labels" . | nindent 4 }}
 spec:
-  replicas: 1
+  replicas: {{ .Values.replicaCount }}
   strategy:
-    type: Recreate
+    type: {{ .Values.strategy }}
   selector:
     matchLabels:
-      {{- include "selectorLabels" . | nindent 6 }}
+      {{- include "app.selectorLabels" . | nindent 6 }}
   template:
     metadata:
       {{- with .Values.podAnnotations }}
@@ -18,90 +18,233 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       labels:
-        {{- include "selectorLabels" . | nindent 8 }}
+        {{- include "app.labels" . | nindent 8 }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
     spec:
-      dnsPolicy: "None"
+      # Public resolvers on purpose: the torrent client's DNS must not depend on
+      # the cluster. Cluster names are resolved through the single hostAlias below.
+      dnsPolicy: {{ .Values.dns.policy }}
       dnsConfig:
         nameservers:
-          - 1.1.1.1
-          - 1.0.0.1
-      volumes:
-        - name: qbittorrent-vpn-config-volume
-          persistentVolumeClaim:
-            claimName: qbittorrent-vpn-config
-        - name: qbittorrent-config-volume
-          persistentVolumeClaim:
-            claimName: pvc-nfs-qbittorrent-config-nfs-subdir-external-provisioner
-        - name: qbittorrent-download-volume
-          persistentVolumeClaim:
-            claimName: pvc-nfs-qbittorrent-download-nfs-subdir-external-provisioner
-        - name: "dev-tun" # Needed for VPN
-          hostPath:
-            path: "/dev/net/tun"
+          {{- toYaml .Values.dns.nameservers | nindent 10 }}
+      {{- with .Values.dns.crossSeedServiceIP }}
+      hostAliases:
+        - ip: {{ . | quote }}
+          hostnames:
+            - cross-seed
+      {{- end }}
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      serviceAccountName: {{ include "serviceAccountName" . }}
+      serviceAccountName: {{ include "app.serviceAccountName" . }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       initContainers:
-        - name: init-qbittorrent
-          image: alpine:latest
-          command: [ 'sh', '-c', "apk update && apk add unzip && wget https://github.com/WDaan/VueTorrent/releases/download/v0.19.1/vuetorrent.zip && unzip vuetorrent.zip && cp -r vuetorrent /config/ui" ]
+        {{- if .Values.waitForDownloads.enabled }}
+        # Runs as the same uid as qBittorrent (PUID) so the probe sees exactly
+        # what the main container will see on the NFS export. Bounded wait:
+        # after 2 minutes it proceeds and lets qBittorrent start anyway.
+        - name: wait-for-downloads
+          image: {{ .Values.waitForDownloads.image }}
+          securityContext:
+            runAsUser: 1100
+            runAsGroup: 1100
+          resources:
+            {{- toYaml .Values.waitForDownloads.resources | nindent 12 }}
+          command:
+            - sh
+            - -c
+            - |
+              i=0
+              until touch /downloads/.mount-probe 2>/dev/null; do
+                i=$((i+1))
+                if [ "$i" -ge 60 ]; then
+                  echo "downloads volume still not writable after 120s, proceeding"
+                  exit 0
+                fi
+                sleep 2
+              done
+              rm -f /downloads/.mount-probe
+              echo "downloads volume ready"
           volumeMounts:
-            - name: qbittorrent-config-volume
-              mountPath: /config
+            - name: downloads
+              mountPath: {{ .Values.storage.downloads.mountPath }}
+        {{- end }}
+        {{- with .Values.vpn.clusterRoutes }}
+        # The sidecar sends everything but the pod's own subnet into the tunnel,
+        # which is what a kill switch is meant to do and also what swallowed
+        # ClusterIP traffic. This puts the cluster ranges into the pod's main
+        # table first: the sidecar's `suppress_prefixlength 0` rule prefers a
+        # specific route there, so those ranges never enter the tunnel.
+        # NET_ADMIN only — no privileged flag, no device, no host namespace.
+        - name: vpn-cluster-routes
+          image: {{ $.Values.vpn.routeFix.image }}
+          securityContext:
+            runAsUser: 0
+            runAsGroup: 0
+            allowPrivilegeEscalation: false
+            capabilities:
+              add:
+                - NET_ADMIN
+              drop:
+                - ALL
+          resources:
+            {{- toYaml $.Values.vpn.routeFix.resources | nindent 12 }}
+          command:
+            - sh
+            - -c
+            - |
+              gw="$(ip route show default | awk '/^default/ {for (i=1;i<=NF;i++) if ($i=="via") {print $(i+1); exit}}')"
+              if [ -z "$gw" ]; then
+                echo "no default gateway to route through, leaving the table alone"
+                exit 0
+              fi
+              for cidr in {{ join " " . }}; do
+                # A CNI that already routes the range is not an error: say so
+                # and keep the pod booting rather than fail on "File exists".
+                if ip route add "$cidr" via "$gw" 2>/dev/null; then
+                  echo "added $cidr via $gw"
+                else
+                  echo "$cidr is already routed, leaving it"
+                fi
+              done
+        {{- end }}
+        - name: init-qbittorrent
+          image: "alpine:{{ .Values.vueTorrent.initTag }}"
+          resources:
+            {{- toYaml .Values.vueTorrent.resources | nindent 12 }}
+          env:
+            - name: VUETORRENT_REPOSITORY
+              value: {{ .Values.vueTorrent.repository | quote }}
+            - name: VUETORRENT_VERSION
+              value: {{ .Values.vueTorrent.version | quote }}
+          command:
+            - sh
+            - -c
+            - |
+              set -eu
+              # A `v`-prefixed value is accepted too: the release tag carries one,
+              # the values file does not have to.
+              want="${VUETORRENT_VERSION#v}"
+              installed="$(cat /config/ui/version.txt 2>/dev/null || true)"
+              if [ "$installed" = "$want" ]; then
+                echo "VueTorrent $want already installed, nothing to do"
+                exit 0
+              fi
+              apk add --no-cache unzip >/dev/null
+              tmp="$(mktemp -d)"
+              url="https://github.com/${VUETORRENT_REPOSITORY}/releases/download/v${want}/vuetorrent.zip"
+              echo "installing VueTorrent $want from $url"
+              wget -q -O "$tmp/vuetorrent.zip" "$url"
+              unzip -q "$tmp/vuetorrent.zip" -d "$tmp"
+              # Stage the new UI next to the old one and swap at the end: a failed
+              # download or a truncated zip leaves the working UI untouched.
+              rm -rf /config/ui.next
+              cp -a "$tmp/vuetorrent" /config/ui.next
+              if [ -d /config/ui ]; then
+                rm -rf /config/ui.prev
+                mv /config/ui /config/ui.prev
+              fi
+              mv /config/ui.next /config/ui
+              rm -rf /config/ui.prev "$tmp"
+              echo "VueTorrent $want installed"
+          volumeMounts:
+            - name: config
+              mountPath: {{ .Values.storage.config.mountPath }}
       containers:
         - name: {{ .Chart.Name }}-vpn
           securityContext:
-            capabilities: # Needed for VPN
-              add:
-                - NET_ADMIN
-                - SYS_MODULE
-            privileged: true
-          image: "{{ .Values.vpnimage.repository }}:{{ .Values.vpnimage.tag | default .Chart.AppVersion }}"
+            {{- toYaml .Values.vpn.securityContext | nindent 12 }}
+          image: "{{ .Values.vpnimage.repository }}:{{ .Values.vpnimage.tag }}"
           imagePullPolicy: {{ .Values.vpnimage.pullPolicy }}
+          {{- $env := list }}
+          {{- range $name, $value := .Values.env }}
+          {{- $env = append $env (dict "name" $name "value" ($value | toString)) }}
+          {{- end }}
+          {{- $env = concat $env (.Values.extraEnv | default list) }}
+          {{- with $env }}
           env:
-            - name: "PUID"
-              value: "1100"
-            - name: "PGID"
-              value: "1100"
-            - name: "TZ"
-              value: "Europe/Paris"
-          volumeMounts:
-            - name: "dev-tun"
-              mountPath: "/dev/net/tun"
-            - name: qbittorrent-vpn-config-volume
-              mountPath: /config
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.envFrom }}
+          envFrom:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           resources:
-            {{- toYaml .Values.vpnresources | nindent 12 }}
+            {{- toYaml .Values.vpn.resources | nindent 12 }}
+          volumeMounts:
+            - name: dev-tun
+              mountPath: {{ .Values.vpn.tunDevice }}
+            - name: vpn-config
+              mountPath: {{ .Values.storage.vpn.mountPath }}
         - name: {{ .Chart.Name }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- $env := list }}
+          {{- range $name, $value := .Values.env }}
+          {{- $env = append $env (dict "name" $name "value" ($value | toString)) }}
+          {{- end }}
+          {{- $env = concat $env (.Values.extraEnv | default list) }}
+          {{- with $env }}
           env:
-            - name: "TZ"
-              value: "Europe/Paris"
-            - name: "PUID"
-              value: "1100"
-            - name: "PGID"
-              value: "1100"
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.envFrom }}
+          envFrom:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          ports:
+            - name: {{ .Values.service.portName }}
+              containerPort: {{ include "app.containerPort" . }}
+              protocol: TCP
+            - name: torrent
+              containerPort: {{ .Values.torrent.port }}
+              protocol: TCP
+            - name: torrent-udp
+              containerPort: {{ .Values.torrent.port }}
+              protocol: UDP
+          {{- with .Values.probes.liveness }}
+          {{- if .enabled }}
+          livenessProbe:
+            tcpSocket:
+              port: {{ .port }}
+            initialDelaySeconds: {{ .initialDelaySeconds }}
+            periodSeconds: {{ .periodSeconds }}
+            timeoutSeconds: {{ .timeoutSeconds }}
+            failureThreshold: {{ .failureThreshold }}
+          {{- end }}
+          {{- end }}
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
           volumeMounts:
-            - name: qbittorrent-config-volume
-              mountPath: /config
-            - name: qbittorrent-download-volume
-              mountPath: /downloads
-          ports:
-            - name: torrent-webui
-              containerPort: 8080
-            - name: torrent
-              containerPort: 19691
-              protocol: TCP
-            - name: torrent-udp
-              containerPort: 19691
-              protocol: UDP
+            - name: config
+              mountPath: {{ .Values.storage.config.mountPath }}
+            - name: downloads
+              mountPath: {{ .Values.storage.downloads.mountPath }}
+            {{- with .Values.volumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+      volumes:
+        - name: vpn-config
+          persistentVolumeClaim:
+            claimName: {{ include "app.vpnClaimName" . }}
+        - name: config
+          persistentVolumeClaim:
+            claimName: {{ required "storage.config.existingClaim is required" .Values.storage.config.existingClaim }}
+        - name: downloads
+          persistentVolumeClaim:
+            claimName: {{ required "storage.downloads.existingClaim is required" .Values.storage.downloads.existingClaim }}
+        - name: dev-tun
+          hostPath:
+            path: {{ .Values.vpn.tunDevice }}
+        {{- with .Values.volumes }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

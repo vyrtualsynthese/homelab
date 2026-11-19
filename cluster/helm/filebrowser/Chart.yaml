@@ -1,0 +1,10 @@
+apiVersion: v2
+name: filebrowser
+description: FileBrowser - media file browser, own namespace
+type: application
+version: 0.1.0
+appVersion: "2.63.23"
+dependencies:
+  - name: filebrowser
+    version: 0.1.2
+    repository: https://vyrtualsynthese.github.io/selfhosted-helmcharts/

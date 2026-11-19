@@ -1,0 +1,31 @@
+apiVersion: traefik.containo.us/v1alpha1
+kind: IngressRoute
+metadata:
+  name: plex-public
+  namespace: media-stack
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - kind: Rule
+      match: Host(`plex.kub.home.ashudev.com`)
+      middlewares:
+        - name: kube-system-lan-only@kubernetescrd
+      services:
+        - name: plex
+          port: 32400
+---
+apiVersion: traefik.containo.us/v1alpha1
+kind: IngressRoute
+metadata:
+  name: seerr-public
+  namespace: media-stack
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - kind: Rule
+      match: Host(`seerr.kub.home.ashudev.com`)
+      services:
+        - name: seerr
+          port: 5055

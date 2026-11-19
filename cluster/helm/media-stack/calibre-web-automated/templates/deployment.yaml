@@ -1,0 +1,197 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "app.fullname" . }}
+  labels:
+    {{- include "app.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  strategy:
+    type: {{ .Values.strategy }}
+  selector:
+    matchLabels:
+      {{- include "app.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "app.labels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "app.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      # This chart owns two claims, and `app.configClaimName` covers only one, so
+      # both names are derived here and in persistentvolumeclaim.yaml instead.
+      {{- $configClaim := default (printf "%s-config" (include "app.fullname" .)) .Values.storage.config.existingClaim }}
+      {{- $ingestClaim := default (printf "%s-ingest" (include "app.fullname" .)) .Values.storage.ingest.existingClaim }}
+      {{- with .Values.claimOwnership }}
+      {{- if .enabled }}
+      initContainers:
+        # `NETWORK_SHARE_MODE` is one switch over three mounts and only the
+        # library is a network share. Upstream skips the recursive chown of
+        # `/config` and `/cwa-book-ingest` because of it, so on this deployment
+        # the app starts as 1100 on claims whose files are not 1100's: eight
+        # `install: cannot change owner ... Operation not permitted` lines, then
+        # `attempt to write a readonly database` for `app.db`, and an AutoZipper
+        # that cannot start. This does the chown the switch removed.
+        #
+        # CHOWN changes the owner; DAC_OVERRIDE is what lets root walk into the
+        # directories the app creates as 0700 and 1100. The first rollout added
+        # CHOWN alone and stopped on eight of them with `Permission denied`.
+        - name: fix-claim-ownership
+          image: {{ .image }}
+          securityContext:
+            runAsUser: 0
+            runAsGroup: 0
+            allowPrivilegeEscalation: false
+            capabilities:
+              add:
+                - CHOWN
+                - DAC_OVERRIDE
+              drop:
+                - ALL
+          resources:
+            {{- toYaml .resources | nindent 12 }}
+          command:
+            - sh
+            - -c
+            - |
+              if chown -R {{ .uid }}:{{ .gid }} {{ .paths | join " " }}; then
+                echo "claims now owned by {{ .uid }}:{{ .gid }}"
+              else
+                # Not fatal: the app can run with part of the tree owned by
+                # another uid, and failing here would keep the WebUI down. Say
+                # so loudly instead of letting the app discover it.
+                echo "WARNING: chown did not cover every path (see above); /config may still be partly owned by another uid"
+              fi
+          volumeMounts:
+            {{- if $.Values.storage.config.enabled }}
+            - name: config
+              mountPath: {{ $.Values.storage.config.mountPath }}
+            {{- end }}
+            {{- if $.Values.storage.ingest.enabled }}
+            - name: ingest
+              mountPath: {{ $.Values.storage.ingest.mountPath }}
+            {{- end }}
+      {{- end }}
+      {{- end }}
+      containers:
+        - name: {{ .Chart.Name }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- $env := list }}
+          {{- range $name, $value := .Values.env }}
+          {{- $env = append $env (dict "name" $name "value" ($value | toString)) }}
+          {{- end }}
+          {{- $env = concat $env (.Values.extraEnv | default list) }}
+          {{- with $env }}
+          env:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.envFrom }}
+          envFrom:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          ports:
+            - name: http
+              containerPort: {{ include "app.containerPort" . }}
+              protocol: TCP
+          {{- with .Values.probes.startup }}
+          {{- if .enabled }}
+          startupProbe:
+            httpGet:
+              path: {{ .path }}
+              port: http
+            periodSeconds: {{ .periodSeconds }}
+            timeoutSeconds: {{ .timeoutSeconds }}
+            failureThreshold: {{ .failureThreshold }}
+          {{- end }}
+          {{- end }}
+          {{- with .Values.probes.liveness }}
+          {{- if .enabled }}
+          livenessProbe:
+            httpGet:
+              path: {{ .path }}
+              port: http
+            initialDelaySeconds: {{ .initialDelaySeconds }}
+            periodSeconds: {{ .periodSeconds }}
+            timeoutSeconds: {{ .timeoutSeconds }}
+            failureThreshold: {{ .failureThreshold }}
+          {{- end }}
+          {{- end }}
+          {{- with .Values.probes.readiness }}
+          {{- if .enabled }}
+          readinessProbe:
+            httpGet:
+              path: {{ .path }}
+              port: http
+            initialDelaySeconds: {{ .initialDelaySeconds }}
+            periodSeconds: {{ .periodSeconds }}
+            timeoutSeconds: {{ .timeoutSeconds }}
+            failureThreshold: {{ .failureThreshold }}
+          {{- end }}
+          {{- end }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            {{- if .Values.storage.config.enabled }}
+            - name: config
+              mountPath: {{ .Values.storage.config.mountPath }}
+            {{- end }}
+            {{- if .Values.storage.ingest.enabled }}
+            - name: ingest
+              mountPath: {{ .Values.storage.ingest.mountPath }}
+            {{- end }}
+            - name: library
+              mountPath: {{ .Values.storage.library.mountPath }}
+              readOnly: {{ .Values.storage.library.readOnly }}
+            {{- if .Values.securityContext.readOnlyRootFilesystem }}
+            # The root filesystem is read-only, so the two paths the image writes
+            # to at runtime get their own empty volumes. Removing the setting above
+            # removes these with it.
+            - name: run
+              mountPath: /run
+            - name: tmp
+              mountPath: /tmp
+            {{- end }}
+      volumes:
+        {{- if .Values.storage.config.enabled }}
+        - name: config
+          persistentVolumeClaim:
+            claimName: {{ $configClaim }}
+        {{- end }}
+        {{- if .Values.storage.ingest.enabled }}
+        - name: ingest
+          persistentVolumeClaim:
+            claimName: {{ $ingestClaim }}
+        {{- end }}
+        - name: library
+          persistentVolumeClaim:
+            claimName: {{ .Values.storage.library.claim }}
+        {{- if .Values.securityContext.readOnlyRootFilesystem }}
+        - name: run
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}
+        {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

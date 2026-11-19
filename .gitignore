@@ -17,5 +17,38 @@ build
 secret.yml
 secret.yaml
 providers.yaml
-!cluster/helm/monitoring/grafana/templates/secret.yaml
 *.env
+
+# Built by ArgoCD at sync time; never committed (see the observability design §5.1)
+cluster/helm/monitoring/*/charts/
+cluster/helm/monitoring/*/Chart.lock
+
+# Built by ArgoCD at sync time (see the PostgreSQL design §6.11)
+cluster/helm/databases/pgadmin/charts/
+cluster/helm/databases/pgadmin/Chart.lock
+
+# Built by ArgoCD at sync time
+cluster/helm/authentik/charts/
+cluster/helm/authentik/Chart.lock
+
+# Built by ArgoCD at sync time
+cluster/helm/filebrowser/charts/
+cluster/helm/filebrowser/Chart.lock
+
+# Built by ArgoCD at sync time
+cluster/helm/vikunja/charts/
+cluster/helm/vikunja/Chart.lock
+
+# Built by ArgoCD at sync time
+cluster/helm/dashy/charts/
+cluster/helm/dashy/Chart.lock
+
+# Built by ArgoCD at sync time
+cluster/helm/renovate/charts/
+cluster/helm/renovate/Chart.lock
+cluster/helm/argocd/charts/
+cluster/helm/argocd/Chart.lock
+
+# Python bytecode from the hack/ checkers
+__pycache__/
+*.pyc

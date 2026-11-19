@@ -1,0 +1,47 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "postgres.name" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "postgres.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  # On the first sync, Job/postgres-bootstrap must reach the database before the
+  # pod is Ready: the roles it creates do not exist yet, so the exporter sidecar
+  # cannot authenticate and the pod never becomes Ready. The Job finds the server
+  # through this Service, so the address has to be published while the pod is
+  # still not ready; otherwise the endpoint list stays empty, the Job cannot
+  # connect, and the first sync deadlocks. The same applies while any container
+  # of the pod is crash-looping: the address must stay published so the server
+  # remains reachable. Consequence: a consumer connecting during startup may see
+  # connection-refused rather than a held connection, and must retry.
+  publishNotReadyAddresses: true
+  selector:
+    app: {{ include "postgres.name" . }}
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: postgres
+      protocol: TCP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "postgres.name" . }}-headless
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "postgres.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  clusterIP: None
+  # Same reason as Service/postgres: a not-ready endpoint must still resolve, so
+  # nothing that reaches the pod only through DNS can stall the first sync.
+  publishNotReadyAddresses: true
+  selector:
+    app: {{ include "postgres.name" . }}
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: postgres
+      protocol: TCP

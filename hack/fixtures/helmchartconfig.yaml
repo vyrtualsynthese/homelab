@@ -1,0 +1,29 @@
+apiVersion: helm.cattle.io/v1
+kind: HelmChartConfig
+metadata:
+  name: traefik
+  namespace: kube-system
+spec:
+  valuesContent: |-
+    ingressRoute:
+      dashboard:
+        enabled: true
+        middlewares:
+          - name: traefik-dashboard
+            namespace: kube-system
+---
+apiVersion: helm.cattle.io/v1
+kind: HelmChartConfig
+metadata:
+  name: traefik-gated
+  namespace: kube-system
+spec:
+  valuesContent: |-
+    ingressRoute:
+      dashboard:
+        enabled: true
+        middlewares:
+          - name: traefik-dashboard
+            namespace: kube-system
+          - name: lan-only
+            namespace: kube-system

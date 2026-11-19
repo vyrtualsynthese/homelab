@@ -6,8 +6,13 @@ replicaCount: 1
 
 image:
   repository: ghcr.io/akpw/mktxp
+  # latest is the only usable tag: ghcr.io/akpw/mktxp publishes no semver
+  # tags, only latest, stable-<timestamp> (last one 2024-08-21) and gha-<run>.
+  # Pinning v2.1.0, after the GitHub release name, put the pod in
+  # ImagePullBackOff and took both switches offline on 2026-11-18. Pull Always
+  # is what a floating tag needs; digest pinning is the real fix and is still
+  # outstanding.
   pullPolicy: Always
-  # Overrides the image tag whose default is the chart appVersion.
   tag: latest
 
 imagePullSecrets: []
@@ -46,10 +51,12 @@ ingress:
   className: ""
   annotations: {}
 
+# Sized from Prometheus on 2026-11-13 over the 39h it holds: 30Mi average and
+# 30Mi peak. The 128Mi request was four times the app.
 resources:
   requests:
     cpu: 1m
-    memory: 128Mi
+    memory: 64Mi
   limits:
     memory: 256Mi
   # We usually recommend not to specify default resources and to leave this as a conscious
@@ -63,16 +70,12 @@ resources:
   #   cpu: 100m
   #   memory: 128Mi
 
-nodeSelector: {}
+# Pinned the way every other workload is. The old affinity required
+# `node-type=general`, a label the repo retired and a new node would not carry;
+# mktxp only scheduled because nuc0 still has it.
+nodeSelector:
+  kubernetes.io/hostname: nuc0
 
 tolerations: {}
 
-affinity:
-  nodeAffinity:
-    requiredDuringSchedulingIgnoredDuringExecution:
-      nodeSelectorTerms:
-        - matchExpressions:
-            - key: node-type
-              operator: In
-              values:
-                - general
+affinity: {}

@@ -1,0 +1,25 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "docs-site.fullname" . }}-builder
+  labels:
+    {{- include "docs-site.labels" . | nindent 4 }}
+data:
+  # The builder is a ConfigMap rather than a baked image: there is no registry
+  # build in this repo, and a change to the script should reach the cluster by
+  # the same commit that changes the chart.
+  build.py: |
+{{ .Files.Get "files/build.py" | indent 4 }}
+  mkdocs.yml.tpl: |
+{{ .Files.Get "files/mkdocs.yml.tpl" | indent 4 }}
+  # The identity, served to every site at /brand/. The two SVGs are copies of
+  # assets/branding/ashulab/ in this repository, because Helm reads only files
+  # inside the chart; refresh them when the master mark changes. The keys are
+  # flat because a ConfigMap mounts them as files in one directory, which is
+  # also where the builder looks for them.
+  ashulab.css: |
+{{ .Files.Get "files/ashulab.css" | indent 4 }}
+  ashulab-badge.svg: |
+{{ .Files.Get "files/ashulab-badge.svg" | indent 4 }}
+  ashulab-badge-transparent.svg: |
+{{ .Files.Get "files/ashulab-badge-transparent.svg" | indent 4 }}

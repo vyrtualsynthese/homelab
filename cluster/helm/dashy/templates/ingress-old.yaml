@@ -1,0 +1,20 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/datreeio/CRDs-catalog/refs/heads/main/traefik.containo.us/ingressroute_v1alpha1.json
+apiVersion: traefik.containo.us/v1alpha1
+kind: IngressRoute
+metadata:
+  name: redirect-kub-to-dashy
+  namespace: dashy
+spec:
+  entryPoints:
+    - web
+  routes:
+    - match: Host(`kub.home.ashudev.com`)
+      kind: Rule
+      middlewares:
+        - name: lan-only
+          namespace: kube-system
+        - name: redirect-to-dashy
+          namespace: dashy
+      services:
+        - name: noop@internal
+          kind: TraefikService

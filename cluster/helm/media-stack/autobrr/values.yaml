@@ -1,120 +1,259 @@
-# Default values for dashy.
-# This is a YAML-formatted file.
-# Declare variables to be passed into your templates.
+# Default values for autobrr.
+# This chart is the reference every other hand-maintained chart is copied from:
+# see docs/charts/README.md for the contract it is expected to satisfy.
+
+# -- Override the chart name.
+nameOverride: ""
+# -- Override the generated release name.
+fullnameOverride: ""
 
 replicaCount: 1
 
+# -- Deployment strategy. `Recreate` is required for anything with a config volume:
+# ReadWriteOnce volumes cannot be attached to an old and a new pod at the same time.
+strategy: Recreate
+
 image:
   repository: ghcr.io/autobrr/autobrr
+  # -- Pin the tag. Never `latest`. Renovate manages this.
+  tag: "v1.90.0"
   pullPolicy: IfNotPresent
-  # Overrides the image tag whose default is the chart appVersion.
-  tag: "v1.43.0"
-
-# Choose deployment strategy type
-strategyType: Recreate
 
 imagePullSecrets: []
-nameOverride: ""
-fullnameOverride: ""
 
 serviceAccount:
-  # Specifies whether a service account should be created
+  # -- Create a dedicated ServiceAccount for the pod.
   create: true
-  # Automatically mount a ServiceAccount's API credentials?
   automount: true
-  # Annotations to add to the service account
-  annotations: {}
-  # The name of the service account to use.
-  # If not set and create is true, a name is generated using the fullname template
+  # -- Defaults to the fullname.
   name: ""
+  annotations: {}
 
-podAnnotations: {}
+# -- Annotations added to the pod. `checksum/env` is added automatically.
+# The three `prometheus.io/*` keys put the pod in Prometheus's annotation-based
+# `kubernetes-pods` job: that job keeps only pods carrying `scrape: "true"` and
+# builds the address from the port annotation, so the metrics listener below is
+# reachable without a Service, a sidecar or a scrape config. The path is
+# explicit because the job falls back to `/metrics` and the failure mode of a
+# wrong default is an empty target, not an error.
+podAnnotations:
+  prometheus.io/scrape: "true"
+  # Also match the 5-minute job, which takes the target off the 60-second one.
+  # The Media board reads one 1-hour increase and one connected count; no rule
+  # reads autobrr at all.
+  prometheus.io/scrape_slow: "true"
+  prometheus.io/port: "9074"
+  prometheus.io/path: "/metrics"
 podLabels: {}
 
-podSecurityContext: {}
-# fsGroup: 2000
+# Pod-level security. `fsGroup` is deliberately NOT set: local-path volumes are
+# hostPath-backed, and the kubelet does not apply fsGroup ownership to them, so
+# setting it would look meaningful and do nothing.
+podSecurityContext:
+  seccompProfile:
+    type: RuntimeDefault
 
-securityContext: {}
-  # capabilities:
-  #   drop:
-  #   - ALL
-  # readOnlyRootFilesystem: true
-# runAsNonRoot: true
-# runAsUser: 1000
+# Container-level security.
+#
+# The config volume was chowned to 1100:1100 on the node before this was enabled.
+# That step is required: local-path volumes are hostPath-backed, so the kubelet does
+# not apply fsGroup and will not fix ownership on its own. A newly provisioned claim
+# starts root-owned again — re-chown it, or set userPattern/groupPattern on the
+# local-path provisioner so new volumes are created with the right owner.
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 1100
+  runAsGroup: 1100
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
 
 service:
   type: ClusterIP
   port: 7474
 
-ingress:
-  enabled: true
-  className: ""
-  annotations:
-    traefik.ingress.kubernetes.io/router.entrypoints: "web,websecure"
-    traefik.ingress.kubernetes.io/router.middlewares: "kube-system-redirect-https@kubernetescrd"
-  hosts:
-    - host: autobrr.kub.local
-      paths:
-        - path: /
-          pathType: Prefix
-  tls: []
-  #  - secretName: chart-example-tls
-  #    hosts:
-  #      - chart-example.local
+container:
+  # -- Container port. Defaults to `service.port` when left empty; set it only
+  # when the app listens on a different port than the Service exposes.
+  port: null
 
-resources:
-  requests:
-    cpu: 5m
-    memory: 128Mi
-  limits:
-    memory: 512Mi
-  # We usually recommend not to specify default resources and to leave this as a conscious
-  # choice for the user. This also increases chances charts run on environments with little
-  # resources, such as Minikube. If you do want to specify resources, uncomment the following
-  # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
-  # limits:
-  #   cpu: 100m
-  #   memory: 128Mi
-  # requests:
-  #   cpu: 100m
-#   memory: 128Mi
+ingressRoute:
+  # -- Render a Traefik IngressRoute. This repo never uses
+  # networking.k8s.io/v1 Ingress.
+  enabled: true
+  # -- API group. `traefik.containo.us/v1alpha1` is what the cluster's Traefik
+  # 2.x watches today; flip this to `traefik.io/v1alpha1` when Traefik v3 lands.
+  apiVersion: traefik.containo.us/v1alpha1
+  # -- Traefik entry points. `web` is plain HTTP on kub.local; `websecure` is TLS.
+  entryPoints:
+    - websecure
+  # -- Single host. For a second host, copy the chart.
+  host: autobrr.kub.local
+  # -- Path prefix. `/` matches everything.
+  pathPrefix: /
+  # -- Render the plain-HTTP mirror router that redirects to this one.
+  redirectToHttps: true
+  # -- Middlewares, rendered as `<namespace>-<name>@kubernetescrd`.
+  # Example: [{ name: lan-only, namespace: kube-system }]
+  # No authentik-forwardauth here on purpose: autobrr speaks OIDC natively, so
+  # the app is its own gate. Putting the proxy gate in front as well would mean
+  # two authentik applications for one tool and a second redirect for nothing.
+  middlewares:
+    - name: lan-only
+      namespace: kube-system
+  labels: {}
+  annotations: {}
+  tls:
+    # -- Send the router over TLS. On: the cluster serves `*.kub.local` from the
+    # -- default certificate (`kube-system/local-cert`), and the `web` router only
+    # -- redirects here. See docs/runbooks/internal-ca.md.
+    enabled: true
+    # -- Use a pre-existing certificate instead of asking Traefik to issue one.
+    secretName: ""
+    # -- Traefik ACME resolver name, for example `myresolver`.
+    certResolver: ""
+    # -- TLSOption resource name, from the `traefik-gate` chart.
+    options: internal-tls
+    # -- Namespace of that TLSOption.
+    optionsNamespace: kube-system
 
 storage:
-  class: ~
-  accessModes: ReadWriteOnce
-  dataSize: 5Gi
-  # -- Use an existing PersistentVolumeClaim, overrides values above
-  existingClaim: "autobrr-config2"
+  # -- Render the config PersistentVolumeClaim. Set to false only when the app
+  # genuinely keeps no state.
+  enabled: true
+  # -- Use an existing claim instead of the one this chart creates.
+  existingClaim: ""
+  className: local-path
+  accessModes:
+    - ReadWriteOnce
+  # -- Config volumes hold settings, not media. 128Mi is the house standard.
+  size: 128Mi
+  # -- Where the config volume is mounted inside the container.
+  mountPath: /config
 
-# Additional volumes on the output Deployment definition.
-volumes: []
-
-# Additional volumeMounts on the output Deployment definition.
-volumeMounts: []
-
-nodeSelector: {}
-
-tolerations: []
-
-affinity:
-  nodeAffinity:
-    requiredDuringSchedulingIgnoredDuringExecution:
-      nodeSelectorTerms:
-        - matchExpressions:
-            - key: node-type
-              operator: In
-              values:
-                - general
-
+# -- Environment variables, rendered inline into the container spec. Changing a
+# value changes the pod template, so the Deployment rolls by itself. Prefer this
+# for every non-secret value.
 env:
   TZ: "Europe/Paris"
   AUTOBRR__HOST: "0.0.0.0"
   AUTOBRR__PORT: "7474"
-  #AUTOBRR__BASE_URL: ""
-  #AUTOBRR__LOG_LEVEL: ""
-  #AUTOBRR__LOG_PATH: ""
-  #AUTOBRR__LOG_MAX_SIZE: ""
-  #AUTOBRR__LOG_MAX_BACKUPS: ""
-  #AUTOBRR__SESSION_SECRET: ""
-  #AUTOBRR__CUSTOM_DEFINITIONS: ""
-  #AUTOBRR__CHECK_FOR_UPDATES: ""
+  # Only warnings and errors reach stdout, and therefore Loki. autobrr's
+  # default is INFO, which logs a line per HTTP request and per announce —
+  # at ~1,200 releases/hour that is almost all noise. Raise to INFO or DEBUG
+  # temporarily when troubleshooting; the release history in the UI/DB is the
+  # operational record, not the logs.
+  AUTOBRR__LOG_LEVEL: "WARN"
+  # Prometheus metrics. autobrr serves them on a listener of its own, not on
+  # the web UI port, and they are off by default. The host must be 0.0.0.0:
+  # the upstream default is 127.0.0.1, which only the pod itself can reach, and
+  # the symptom is a target that never comes up rather than an error.
+  AUTOBRR__METRICS_ENABLED: "true"
+  AUTOBRR__METRICS_HOST: "0.0.0.0"
+  AUTOBRR__METRICS_PORT: "9074"
+  # AUTOBRR__BASE_URL: ""
+  # AUTOBRR__SESSION_SECRET: ""
+  # OIDC, using authentik directly. The client secret comes from the
+  # `autobrr-oidc` Secret through extraEnv below, never from this file.
+  AUTOBRR__OIDC_ENABLED: "true"
+  AUTOBRR__OIDC_ISSUER: "https://authentik.kub.home.ashudev.com/application/o/autobrr/"
+  AUTOBRR__OIDC_CLIENT_ID: "autobrr"
+  # Must match the provider's registered redirect exactly, scheme included: the
+  # route is TLS on `websecure`, and autobrr builds this from X-Forwarded-Proto.
+  AUTOBRR__OIDC_REDIRECT_URL: "https://autobrr.kub.local/api/auth/oidc/callback"
+  # autobrr keeps the password form whenever a user exists in its database, so
+  # it has to be switched off explicitly to get one login.
+  AUTOBRR__OIDC_DISABLE_BUILT_IN_LOGIN: "true"
+  # Send unauthenticated visitors straight to authentik, so no button press.
+  AUTOBRR__OIDC_AUTO_REDIRECT: "true"
+
+# -- Variables sourced from a Secret, as `{ name, valueFrom }`. Kept separate so
+# a secret can never be pasted into the plain map above by accident.
+extraEnv:
+  - name: AUTOBRR__OIDC_CLIENT_SECRET
+    valueFrom:
+      secretKeyRef:
+        name: autobrr-oidc
+        key: client-secret
+
+# -- Bulk `envFrom` sources, usually `secretRef`. Rarely needed: prefer
+# `extraEnv` so each secret key is explicit in the manifest.
+envFrom: []
+
+# -- Additional volumes, rendered verbatim into the pod spec.
+volumes: []
+
+# -- Additional volume mounts, rendered verbatim into the container.
+volumeMounts: []
+
+nodeSelector:
+  # -- Every workload is pinned to a named node; local-path claims are node-bound.
+  kubernetes.io/hostname: streaming
+
+tolerations: []
+
+affinity: {}
+
+# Sizing comes from Prometheus, not from a template comment. Measured over the
+# first day on `streaming` (see the chart README for the queries):
+#   memory in use (working set)  175-290Mi steady, 481Mi peak in the first
+#                                minutes after start — mostly file cache, the
+#                                process itself holds ~155Mi
+#   CPU                          5m at p95, 23m at peak, ~580m for the first
+#                                minute after start
+#
+# No CPU limit, here or anywhere in this cluster: a limit throttles exactly the
+# short burst this app needs at startup, and the node's capacity is the real
+# ceiling. Reserving a token 10m is enough for the scheduler to place the pod
+# honestly; the app is idle the rest of the day.
+#
+# The memory limit is 1.5x the 2026-11-18 peak on purpose — headroom for
+# a large announce burst or a database rebuild, with the file cache as the first
+# thing the kernel reclaims under pressure.
+# Re-measured 2026-11-18 over the 5 days Prometheus retains: p95 417Mi, peak 681Mi
+# (working set, page cache included).
+resources:
+  requests:
+    cpu: 10m
+    memory: 448Mi
+  limits:
+    memory: 1Gi
+
+# Probes. The paths include the /api prefix — autobrr serves them under /api,
+# and a probe without it returns 404 and restarts the pod forever.
+#
+# The startup probe runs first and holds liveness and readiness until the app
+# answers. autobrr's first start after an upgrade is slow: measured 83s on
+# 2026-11-12 (v1.85 -> v1.90, database read by a new version), against ~52s on
+# the previous image. The liveness budget below is only ~110s (20s delay + 3
+# failures every 30s), so without this gate a slower start gets a healthy pod
+# killed mid-startup, restarted, and killed again — a crash loop made by the
+# probe rather than the app. 30 failures x 5s gives 150s, about 1.8x the
+# measured start.
+probes:
+  startup:
+    enabled: true
+    # Same endpoint as liveness: the question is "is the process up", not "is
+    # the database ready" — readiness answers the latter and would never pass
+    # while the database is still loading.
+    path: /api/healthz/liveness
+    periodSeconds: 5
+    timeoutSeconds: 5
+    failureThreshold: 30
+  liveness:
+    enabled: true
+    path: /api/healthz/liveness
+    initialDelaySeconds: 20
+    periodSeconds: 30
+    timeoutSeconds: 5
+    failureThreshold: 3
+  readiness:
+    enabled: true
+    # Reports 500 when the database is unreachable, so it is a real readiness
+    # check rather than a liveness one. Do not swap the two.
+    path: /api/healthz/readiness
+    initialDelaySeconds: 10
+    periodSeconds: 15
+    timeoutSeconds: 5
+    failureThreshold: 3

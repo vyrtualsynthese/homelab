@@ -1,0 +1,109 @@
+# The NAS exports FileBrowser browses. Templates/nfs-volumes.yaml renders one PV +
+# one pre-bound claim per entry, and the filebrowser subchart mounts them.
+nfsServer: 192.168.1.41
+nfsMountOptions:
+  - nfsvers=4.2
+  - rsize=1048576
+  - wsize=1048576
+  - nolock
+  - async
+
+nfsVolumes:
+  - claim: filebrowser-stash
+    pv: pv-filebrowser-stash
+    path: /mnt/storage/nfs/stash
+    accessMode: ReadWriteOnce
+  - claim: filebrowser-audio
+    pv: pv-filebrowser-audio
+    path: /mnt/storage/nfs/audio
+    accessMode: ReadWriteMany
+  - claim: filebrowser-download
+    pv: pv-filebrowser-download
+    path: /mnt/ultrafaststorage/nfs
+    accessMode: ReadWriteOnce
+
+filebrowser:
+  fullnameOverride: filebrowser
+  replicaCount: 1
+
+  image:
+    repository: filebrowser/filebrowser
+    # 2.63.23 is the last published 2.63.x; it also carries the fix that stopped
+    # auto-provisioned users receiving the server root.
+    tag: v2.63.23
+    pullPolicy: IfNotPresent
+
+  strategyType: Recreate
+
+  podAnnotations:
+    setGateway: "true"
+
+  # The repo uses Traefik CRDs only; templates/ingressroute.yaml renders the route.
+  ingress:
+    enabled: false
+
+  service:
+    type: ClusterIP
+    port: 80
+
+  resources:
+    requests:
+      cpu: 1m
+      memory: 64Mi
+    limits:
+      memory: 256Mi
+
+  storage:
+    config:
+      class: local-path
+      accessModes: ReadWriteOnce
+      dataSize: 1Gi
+      existingClaim: ""
+    database:
+      class: local-path
+      accessModes: ReadWriteOnce
+      dataSize: 1Gi
+      subPath: ""
+      existingClaim: ""
+
+  volumes:
+    - name: stash-volume
+      persistentVolumeClaim:
+        claimName: filebrowser-stash
+    - name: audio-volume
+      persistentVolumeClaim:
+        claimName: filebrowser-audio
+    - name: qbittorrent-download-volume
+      persistentVolumeClaim:
+        claimName: filebrowser-download
+
+  volumeMounts:
+    - name: stash-volume
+      mountPath: /srv/various
+    - name: audio-volume
+      mountPath: /srv/audio
+    - name: qbittorrent-download-volume
+      mountPath: /srv/torrent
+
+  # The Secret carries FB_CONFIG and FB_DATABASE too; the subchart renders no ConfigMap.
+  env:
+    existingSecret: filebrowser
+
+  nodeSelector:
+    kubernetes.io/hostname: nuc0
+
+  tolerations: []
+  affinity: {}
+
+traefik:
+  apiVersion: traefik.containo.us/v1alpha1
+  host: filebrowser.kub.home.ashudev.com
+  certResolver: myresolver
+  tlsOption: filebrowser-tlsoption
+  service: filebrowser
+  port: 80
+  middlewares:
+    - namespace: kube-system
+      name: lan-only
+    - namespace: kube-system
+      name: security

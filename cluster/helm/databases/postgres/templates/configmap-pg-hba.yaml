@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-pg-hba
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "postgres.labels" . | nindent 4 }}
+data:
+  # Explicit host-based authentication. The file shipped with the image is
+  # replaced so that nothing in the cluster connects without a password: the
+  # local entry covers only the postgres superuser on the unix socket, every
+  # network client must present a SCRAM password.
+  pg_hba.conf: |
+    # TYPE  DATABASE  USER  ADDRESS  METHOD
+    local   all       postgres                 peer
+    host    all       all   0.0.0.0/0          scram-sha-256
+    host    all       all   ::/0               scram-sha-256

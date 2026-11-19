@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-config
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "postgres.labels" . | nindent 4 }}
+data:
+  postgresql.conf: |
+    # Generated from .Values.postgresql by the chart.
+    # log_min_duration_statement is a duration in milliseconds.
+    #
+    # Not a tunable: the official image patches listen_addresses='*' into the
+    # config sample it generates, and this ConfigMap replaces that file. Without
+    # this line PostgreSQL would listen on the pod's loopback only and every
+    # consumer would get connection refused.
+    listen_addresses = '*'
+    {{- range $key, $value := .Values.postgresql }}
+    {{ $key }} = {{ $value }}
+    {{- end }}

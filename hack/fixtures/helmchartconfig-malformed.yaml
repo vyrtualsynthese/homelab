@@ -1,0 +1,36 @@
+apiVersion: helm.cattle.io/v1
+kind: HelmChartConfig
+metadata:
+  name: traefik
+  namespace: kube-system
+spec:
+  valuesContent: |-
+    # The live file has a mis-indented key that no YAML parser accepts.
+    deployment:
+      persistence:
+        existingClaim: "traefik-pvc"
+      broken: "unterminated
+    ingressRoute:
+      dashboard:
+        middlewares:
+          - name: traefik-dashboard
+            namespace: kube-system
+---
+apiVersion: helm.cattle.io/v1
+kind: HelmChartConfig
+metadata:
+  name: traefik-gated
+  namespace: kube-system
+spec:
+  valuesContent: |-
+    deployment:
+      persistence:
+        existingClaim: "traefik-pvc"
+      broken: "unterminated
+    ingressRoute:
+      dashboard:
+        middlewares:
+          - name: traefik-dashboard
+            namespace: kube-system
+          - name: lan-only
+            namespace: kube-system

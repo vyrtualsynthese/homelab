@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1124 440" width="1124" height="440">
+  <g transform="translate(40,40)">
+    <circle cx="180" cy="180" r="180" fill="#0B1220"/>
+    <g transform="scale(0.70312)">
+  <g transform="translate(0.50,-3.00) translate(256,256) scale(1.100) translate(-256,-256)" stroke="#2DD4FF" stroke-width="28" stroke-linecap="round" stroke-linejoin="round" fill="none">
+      <line x1="256" y1="146" x2="146" y2="372"/>
+      <line x1="256" y1="146" x2="366" y2="372"/>
+      <line x1="185.9" y1="290" x2="326.1" y2="290"/>
+    </g>
+    <g transform="translate(0.50,-3.00) translate(256,256) scale(1.100) translate(-256,-256)" fill="#2DD4FF">
+      <circle cx="256" cy="146" r="26"/>
+      <circle cx="146" cy="372" r="26"/>
+      <circle cx="366" cy="372" r="26"/>
+    </g>
+    </g>
+  </g>
+  <g transform="translate(0,-11.50)"><text x="464.0" y="292.0" font-family="Ubuntu Sans, DejaVu Sans, sans-serif" font-size="158" font-weight="400" fill="#0B1220">Ashu<tspan font-weight="700" fill="#0E7490">Lab</tspan></text></g>
+</svg>

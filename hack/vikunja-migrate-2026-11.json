@@ -1,0 +1,803 @@
+{
+  "features": [
+    {
+      "key": "w0-cleanup",
+      "title": "W0 \u2014 Longhorn Cleanup",
+      "position": 100,
+      "docs": "docs/superpowers/plans/2026-11-10-w0-cleanup.md",
+      "why": "Remove every Longhorn object from the cluster and the repository, and leave a written record of which applications now need a fresh configuration."
+    },
+    {
+      "key": "w5-platform",
+      "title": "W5 \u2014 Platform Upgrades",
+      "position": 200,
+      "docs": "docs/superpowers/plans/2026-11-11-w5-platform.md",
+      "why": "Move the cluster from K3s 1.30.1 and Traefik 2.9.4 to K3s 1.36.x and Traefik v3, through a rehearsed procedure, with the same ACME certificate and no unplanned ingress outage."
+    },
+    {
+      "key": "postgresql-w2",
+      "title": "PostgreSQL W2",
+      "position": 300,
+      "docs": "docs/superpowers/plans/2026-11-13-postgresql-w2.md",
+      "why": "Replace the dead Bitnami PostgreSQL and the broken pgAdmin with an owned chart running PostgreSQL 18 on local-path, a network policy, nightly dumps, and a LAN-only pgAdmin \u2014 with no application database created ahead of need."
+    },
+    {
+      "key": "ashulab-logo",
+      "title": "AshuLab Logo",
+      "position": 400,
+      "docs": "docs/superpowers/plans/2026-11-14-ashulab-logo.md",
+      "why": "Produce the AshuLab mark \u2014 three nodes in a triangle whose top node forms the crossbar of an \"A\", on a round badge \u2014 as a vector master plus the PNG exports the login page, Discord server and favicon need."
+    },
+    {
+      "key": "authentik-phase1-repave",
+      "title": "Authentik phase 1 \u2014 repave the instance",
+      "position": 500,
+      "docs": "docs/superpowers/plans/2026-11-14-authentik-phase1-repave.md",
+      "why": "Authentik runs on chart 2026.8.5 with an empty, dedicated database, serves its hostname with a valid certificate, applies its configuration from blueprints in git, and the operator can sign in as the local administrator."
+    },
+    {
+      "key": "authentik-phase2-sources",
+      "title": "Authentik phase 2 \u2014 Discord and Plex as sign-in sources",
+      "position": 600,
+      "docs": "docs/superpowers/plans/2026-11-14-authentik-phase2-sources.md",
+      "why": "A person can sign in to authentik with Discord or Plex. Discord admits only members of the homelab server; Plex admits the owner and anyone the AshuFlex server is shared with. Both land in users."
+    },
+    {
+      "key": "authentik-phase3-apps",
+      "title": "Authentik phase 3 \u2014 Argo CD, Grafana, pgAdmin, Kavita",
+      "position": 700,
+      "docs": "docs/superpowers/plans/2026-11-14-authentik-phase3-apps.md",
+      "why": "These four applications authenticate through authentik, and only people in users get in. Discord and Plex remain the ways to sign in to authentik itself."
+    },
+    {
+      "key": "bazarr-chart-refactor",
+      "title": "Bazarr chart refactor",
+      "position": 800,
+      "docs": "docs/superpowers/plans/2026-11-13-bazarr-chart-refactor.md",
+      "why": "Replace the two dead Bazarr instances' stalled remote chart with two local charts that follow the repo contract, switch both ArgoCD Applications to them, and record the two API keys in homelab.env for the day the exporter is enabled."
+    },
+    {
+      "key": "books-library",
+      "title": "Books library (CWA + Kavita)",
+      "position": 900,
+      "docs": "docs/superpowers/plans/2026-11-13-books-library.md",
+      "why": "Replace the Calibre desktop container with Calibre-Web Automated (CWA) as the single library UI, and rebuild the Kavita chart so the reader runs again on 0.9.1, both over the existing NFS library."
+    },
+    {
+      "key": "cross-seed-chart-refactor",
+      "title": "Cross-seed chart refactor",
+      "position": 1000,
+      "docs": "docs/superpowers/plans/2026-11-12-cross-seed-chart-refactor.md",
+      "why": "Rebuild the cross-seed Helm chart around the image's actual needs, using the repo chart contract and the autobrr chart as a reference for principles, then correct the documentation so the reference is no longer presented as a directory to copy."
+    },
+    {
+      "key": "docs-site",
+      "title": "Documentation site",
+      "position": 1100,
+      "docs": "docs/superpowers/plans/2026-11-15-docs-site.md",
+      "why": "One internal hostname, docs.kub.local, serving every repository's docs/ folder for main and develop, rebuilt within a minute of a merge, with no commit to maintain and no GitHub Actions minute spent."
+    },
+    {
+      "key": "filebrowser-namespace",
+      "title": "FileBrowser Namespace Move",
+      "position": 1200,
+      "docs": "docs/superpowers/plans/2026-11-14-filebrowser-namespace.md",
+      "why": "Move FileBrowser from media-stack to its own filebrowser namespace, rebuilt as a local wrapper chart with fresh local-path config/database, the same three NFS media exports, and its own login."
+    },
+    {
+      "key": "lidarr-chart-refactor",
+      "title": "Lidarr chart refactor",
+      "position": 1300,
+      "docs": "docs/superpowers/plans/2026-11-13-lidarr-chart-refactor.md",
+      "why": "Rebuild the Lidarr Helm chart on the repo's contract so the app starts on a working config claim, exports metrics, and keeps its LAN-only route."
+    },
+    {
+      "key": "maintainerr-chart-refactor",
+      "title": "Maintainerr chart refactor",
+      "position": 1400,
+      "docs": "docs/superpowers/plans/2026-11-13-maintainerr-chart-refactor.md",
+      "why": "Rebuild the Maintainerr Helm chart on the repo's contract so the app starts on a claim the chart creates, is reachable on the LAN only, and reports its health honestly."
+    },
+    {
+      "key": "media-dashboard",
+      "title": "Media dashboard",
+      "position": 1500,
+      "docs": "docs/superpowers/plans/2026-11-13-media-dashboard.md",
+      "why": "Add a Homelab \u00b7 Media dashboard to Grafana that answers \"what is the media stack doing, and where is it stuck?\" from the exporters enabled on 2026-11-13."
+    },
+    {
+      "key": "media-stack-security-phase0",
+      "title": "Media stack security \u2014 Phase 0",
+      "position": 1600,
+      "docs": "docs/superpowers/plans/2026-11-14-media-stack-security-phase0.md",
+      "why": "Stop every non-public route in the cluster from answering the internet, and make a future route that forgets the gate fail a repository check."
+    },
+    {
+      "key": "media-tools-authentik",
+      "title": "Media tools behind authentik",
+      "position": 1700,
+      "docs": "docs/superpowers/plans/2026-11-14-media-tools-authentik.md",
+      "why": "Put authentik's forward-auth gate in front of autobrr, bazarr, sonarr, lidarr, radarr, qbittorrent, maintainerr, prowlarr and tautulli, one application at a time, starting with Sonarr."
+    },
+    {
+      "key": "observability-post-repair",
+      "title": "Observability after the media chart repairs \u2014 follow-up plan",
+      "position": 1800,
+      "docs": "docs/superpowers/plans/2026-11-13-observability-post-repair.md",
+      "why": "Close the four findings from the 2026-11-13 observability inspection that are not already fixed: the unverified streaming temperature alert, the missing workload-down alert for media-stack, the qBittorrent DNS gap that breaks the cross-seed hook, and the app-side misconfigurations the rebuilt charts expose."
+    },
+    {
+      "key": "observability-stack",
+      "title": "Observability stack",
+      "position": 1900,
+      "docs": "docs/superpowers/plans/2026-11-12-observability-stack.md",
+      "why": "Replace the broken vendored Prometheus and Grafana charts and the never-deployed Loki directory with four owned wrapper charts, each taking the project's current official chart as a pinned dependency, exposing Grafana, Prometheus and Loki on .kub.local and shipping container logs with Fluent Bit."
+    },
+    {
+      "key": "radarr-chart-refactor",
+      "title": "Radarr and radarr-anime chart refactor",
+      "position": 2000,
+      "docs": "docs/superpowers/plans/2026-11-12-radarr-chart-refactor.md",
+      "why": "Rebuild the radarr and radarr-anime charts to the hand-maintained chart contract, on the prowlarr shape, with named media mounts, /ping probes, warn logging, correct sizing, a working exportarr wiring, and radarr-anime no longer running its app as root."
+    },
+    {
+      "key": "recyclarr-chart-refactor",
+      "title": "Recyclarr chart refactor",
+      "position": 2100,
+      "docs": "docs/superpowers/plans/2026-11-13-recyclarr-chart-refactor.md",
+      "why": "Rebuild the recyclarr Helm chart as a contract-compliant CronJob: values that drive the render, the Secret mounted where the app reads it, the existing config claim kept and named from the release, and documentation that records what is deliberately absent."
+    },
+    {
+      "key": "seerr-chart-refactor",
+      "title": "Seerr chart refactor",
+      "position": 2200,
+      "docs": "docs/superpowers/plans/2026-11-13-seerr-chart-refactor.md",
+      "why": "Rebuild cluster/helm/media-stack/seerr on the repo chart contract and the Plex public-route shape, preserving every live object name."
+    },
+    {
+      "key": "sonarr-chart-refactor",
+      "title": "Sonarr and sonarr-anime chart refactor",
+      "position": 2300,
+      "docs": "docs/superpowers/plans/2026-11-12-sonarr-chart-refactor.md",
+      "why": "Rebuild the sonarr and sonarr-anime charts on the repo chart contract, bump Sonarr to 4.0.20.3014-ls4, size memory from measurement, add warn logging and /ping probes, and fix the exporter target that has pointed at port 7878 since it was written."
+    },
+    {
+      "key": "sso-access-model",
+      "title": "SSO access model",
+      "position": 2400,
+      "docs": "docs/superpowers/plans/2026-11-14-sso-access-model.md",
+      "why": "Give the homelab three access levels (admin, user, guest) enforced by authentik groups, one capability-gated application (FileBrowser folder access), and optional MFA that actually applies on Discord and Plex logins."
+    },
+    {
+      "key": "tautulli-chart-refactor",
+      "title": "Tautulli chart refactor",
+      "position": 2500,
+      "docs": "docs/superpowers/plans/2026-11-13-tautulli-chart-refactor.md",
+      "why": "Rebuild the Tautulli Helm chart on the repo's contract so the app starts on a working config claim and is reachable on the LAN only."
+    },
+    {
+      "key": "unpackerr-chart-refactor",
+      "title": "Unpackerr chart refactor",
+      "position": 2600,
+      "docs": "docs/superpowers/plans/2026-11-13-unpackerr-chart-refactor.md",
+      "why": "Rebuild the unpackerr Helm chart to the repo chart contract, take the image from 0.16.1 to v1.0.1, and remove the four API keys from git."
+    },
+    {
+      "key": "vikunja-board",
+      "title": "Vikunja task board",
+      "position": 2700,
+      "docs": "docs/superpowers/plans/2026-11-15-vikunja-board.md",
+      "why": "Stand up Vikunja in the cluster as the single place task state lives, wire it to the agents over its own MCP endpoint, and make the operator's only job a review queue."
+    }
+  ],
+  "tasks": [
+    {
+      "id": 3,
+      "kind": "task",
+      "title": "Inventory and dispositions",
+      "feature": "w0-cleanup",
+      "column": "Backlog",
+      "docs": "docs/superpowers/plans/2026-11-10-w0-cleanup.md",
+      "branch": "none",
+      "pr": "none",
+      "body": "",
+      "commit": "none"
+    },
+    {
+      "id": 4,
+      "kind": "task",
+      "title": "Stop the workloads and clear the claims",
+      "feature": "w0-cleanup",
+      "column": "Backlog",
+      "docs": "docs/superpowers/plans/2026-11-10-w0-cleanup.md",
+      "branch": "none",
+      "pr": "none",
+      "body": "",
+      "commit": "none"
+    },
+    {
+      "id": 5,
+      "kind": "task",
+      "title": "Delete Longhorn from the cluster and the repository",
+      "feature": "w0-cleanup",
+      "column": "Backlog",
+      "docs": "docs/superpowers/plans/2026-11-10-w0-cleanup.md",
+      "branch": "none",
+      "pr": "none",
+      "body": "",
+      "commit": "none"
+    },
+    {
+      "id": 6,
+      "kind": "task",
+      "title": "Pre-flight capture",
+      "feature": "w5-platform",
+      "column": "Backlog",
+      "docs": "docs/superpowers/plans/2026-11-11-w5-platform.md",
+      "branch": "none",
+      "pr": "none",
+      "body": "",
+      "commit": "none"
+    },
+    {
+      "id": 7,
+      "kind": "task",
+      "title": "Throwaway test cluster on `nas`",
+      "feature": "w5-platform",
+      "column": "Backlog",
+      "docs": "docs/superpowers/plans/2026-11-11-w5-platform.md",
+      "branch": "none",
+      "pr": "none",
+      "body": "",
+      "commit": "none"
+    },
+    {
+      "id": 8,
+      "kind": "task",
+      "title": "Rehearse the etcd snapshot and restore",
+      "feature": "w5-platform",
+      "column": "Backlog",
+      "docs": "docs/superpowers/plans/2026-11-11-w5-platform.md",
+      "branch": "none",
+      "pr": "none",
+      "body": "",
+      "commit": "none"
+    },
+    {
+      "id": 9,
+      "kind": "task",
+      "title": "The official Traefik values file",
+      "feature": "w5-platform",
+      "column": "Backlog",
+      "docs": "docs/superpowers/plans/2026-11-11-w5-platform.md",
+      "branch": "none",
+      "pr": "none",
+      "body": "",
+      "commit": "none"
+    },
+    {
+      "id": 10,
+      "kind": "task",
+      "title": "Rehearse the Traefik cutover on the test cluster",
+      "feature": "w5-platform",
+      "column": "Backlog",
+      "docs": "docs/superpowers/plans/2026-11-11-w5-platform.md",
+      "branch": "none",
+      "pr": "none",
+      "body": "",
+      "commit": "none"
+    },
+    {
+      "id": 11,
+      "kind": "task",
+      "title": "Production Traefik cutover to 2.11",
+      "feature": "w5-platform",
+      "column": "Backlog",
+      "docs": "docs/superpowers/plans/2026-11-11-w5-platform.md",
+      "branch": "none",
+      "pr": "none",
+      "body": "",
+      "commit": "none"
+    },
+    {
+      "id": 12,
+      "kind": "task",
+      "title": "Rename the CRD API group",
+      "feature": "w5-platform",
+      "column": "Backlog",
+      "docs": "docs/superpowers/plans/2026-11-11-w5-platform.md",
+      "branch": "none",
+      "pr": "none",
+      "body": "",
+      "commit": "none"
+    },
+    {
+      "id": 13,
+      "kind": "task",
+      "title": "Traefik v3",
+      "feature": "w5-platform",
+      "column": "Backlog",
+      "docs": "docs/superpowers/plans/2026-11-11-w5-platform.md",
+      "branch": "none",
+      "pr": "none",
+      "body": "",
+      "commit": "none"
+    },
+    {
+      "id": 14,
+      "kind": "task",
+      "title": "K3s 1.31",
+      "feature": "w5-platform",
+      "column": "Backlog",
+      "docs": "docs/superpowers/plans/2026-11-11-w5-platform.md",
+      "branch": "none",
+      "pr": "none",
+      "body": "",
+      "commit": "none"
+    },
+    {
+      "id": 15,
+      "kind": "task",
+      "title": "GPU validation on `streaming`, every step",
+      "feature": "w5-platform",
+      "column": "Backlog",
+      "docs": "docs/superpowers/plans/2026-11-11-w5-platform.md",
+      "branch": "none",
+      "pr": "none",
+      "body": "",
+      "commit": "none"
+    },
+    {
+      "id": 16,
+      "kind": "task",
+      "title": "Destroy the test cluster and publish the runbook",
+      "feature": "w5-platform",
+      "column": "Backlog",
+      "docs": "docs/superpowers/plans/2026-11-11-w5-platform.md",
+      "branch": "none",
+      "pr": "none",
+      "body": "",
+      "commit": "none"
+    },
+    {
+      "id": 18,
+      "kind": "task",
+      "title": "Rebuild the cross-seed chart",
+      "feature": "cross-seed-chart-refactor",
+      "column": "Done",
+      "docs": "docs/superpowers/plans/2026-11-12-cross-seed-chart-refactor.md",
+      "branch": "none",
+      "pr": "none",
+      "body": "Landed by commit 0c83219c on 2026-11-12: \u267b\ufe0f refactor(cross-seed): rebuild chart around the image's needs",
+      "commit": "0c83219c"
+    },
+    {
+      "id": 48,
+      "kind": "task",
+      "title": "Kavita chart rebuild",
+      "feature": "books-library",
+      "column": "Done",
+      "docs": "docs/superpowers/plans/2026-11-13-books-library.md",
+      "branch": "none",
+      "pr": "none",
+      "body": "Landed by commit 722d1501 on 2026-11-13: \u267b\ufe0f refactor(kavita): rebuild on the chart contract, run 0.9.1",
+      "commit": "722d1501"
+    },
+    {
+      "id": 50,
+      "kind": "task",
+      "title": "Cutover runbook",
+      "feature": "books-library",
+      "column": "Done",
+      "docs": "docs/superpowers/plans/2026-11-13-books-library.md",
+      "branch": "none",
+      "pr": "none",
+      "body": "Landed by commit 3e97286d on 2026-11-13: \ud83d\udcdd docs: guard the books claim and the recovery copy in the cutover runbook",
+      "commit": "3e97286d"
+    },
+    {
+      "id": 60,
+      "kind": "task",
+      "title": "Record the baseline each panel must reproduce",
+      "feature": "media-dashboard",
+      "column": "Backlog",
+      "docs": "docs/superpowers/plans/2026-11-13-media-dashboard.md",
+      "branch": "none",
+      "pr": "none",
+      "body": "",
+      "commit": "none"
+    },
+    {
+      "id": 61,
+      "kind": "task",
+      "title": "Build and save the dashboard",
+      "feature": "media-dashboard",
+      "column": "Backlog",
+      "docs": "docs/superpowers/plans/2026-11-13-media-dashboard.md",
+      "branch": "none",
+      "pr": "none",
+      "body": "",
+      "commit": "none"
+    },
+    {
+      "id": 62,
+      "kind": "task",
+      "title": "Record the dashboard and refresh the stale facts",
+      "feature": "media-dashboard",
+      "column": "Backlog",
+      "docs": "docs/superpowers/plans/2026-11-13-media-dashboard.md",
+      "branch": "none",
+      "pr": "none",
+      "body": "",
+      "commit": "none"
+    },
+    {
+      "id": 73,
+      "kind": "task",
+      "title": "PgAdmin wrapper chart, admin login, LAN-only ingress",
+      "feature": "postgresql-w2",
+      "column": "Done",
+      "docs": "docs/superpowers/plans/2026-11-13-postgresql-w2.md",
+      "branch": "none",
+      "pr": "none",
+      "body": "Landed by commit 9ed81099 on 2026-11-13: \u2728 feat(pgadmin): wrap the upstream chart with an admin login and LAN-only ingress",
+      "commit": "9ed81099"
+    },
+    {
+      "id": 74,
+      "kind": "task",
+      "title": "Secrets inventory and the two runbooks",
+      "feature": "postgresql-w2",
+      "column": "Done",
+      "docs": "docs/superpowers/plans/2026-11-13-postgresql-w2.md",
+      "branch": "none",
+      "pr": "none",
+      "body": "Landed by commit 0ea6a7e8 on 2026-11-13: \ud83d\udcdd docs(postgres): secrets inventory and the add-database, restore runbooks",
+      "commit": "0ea6a7e8"
+    },
+    {
+      "id": 86,
+      "kind": "task",
+      "title": "Move the image to v1.0.1 and fix the chart metadata",
+      "feature": "unpackerr-chart-refactor",
+      "column": "Done",
+      "docs": "docs/superpowers/plans/2026-11-13-unpackerr-chart-refactor.md",
+      "branch": "none",
+      "pr": "none",
+      "body": "Landed by commit 6c5197c1 on 2026-11-13: \u2b06\ufe0f upgrade(unpackerr): move the image to v1.0.1 and fix chart metadata",
+      "commit": "6c5197c1"
+    },
+    {
+      "id": 87,
+      "kind": "task",
+      "title": "Rebuild the chart around the app's needs",
+      "feature": "unpackerr-chart-refactor",
+      "column": "Done",
+      "docs": "docs/superpowers/plans/2026-11-13-unpackerr-chart-refactor.md",
+      "branch": "none",
+      "pr": "none",
+      "body": "Landed by commit 656d12e2 on 2026-11-13: \u267b\ufe0f refactor(unpackerr): rebuild chart around the app's needs",
+      "commit": "656d12e2"
+    },
+    {
+      "id": 110,
+      "kind": "task",
+      "title": "NFS media volumes",
+      "feature": "filebrowser-namespace",
+      "column": "Done",
+      "docs": "docs/superpowers/plans/2026-11-14-filebrowser-namespace.md",
+      "branch": "none",
+      "pr": "none",
+      "body": "Landed by commit 7b88c612 on 2026-11-15: \ud83d\ude80 feat(filebrowser): declare the NFS media volumes",
+      "commit": "7b88c612"
+    },
+    {
+      "id": 116,
+      "kind": "task",
+      "title": "Refresh the status snapshot (follow-up PR)",
+      "feature": "filebrowser-namespace",
+      "column": "Done",
+      "docs": "docs/superpowers/plans/2026-11-14-filebrowser-namespace.md",
+      "branch": "none",
+      "pr": "#1110",
+      "body": "",
+      "commit": "none"
+    },
+    {
+      "id": 128,
+      "kind": "task",
+      "title": "Gate Sonarr",
+      "feature": "media-tools-authentik",
+      "column": "Done",
+      "docs": "docs/superpowers/plans/2026-11-14-media-tools-authentik.md",
+      "branch": "none",
+      "pr": "none",
+      "body": "Landed by commit 0c7f5930 on 2026-11-15: \ud83d\ude80 feat(media-stack): gate sonarr behind authentik",
+      "commit": "0c7f5930"
+    },
+    {
+      "id": 129,
+      "kind": "task",
+      "title": "The remaining eight applications",
+      "feature": "media-tools-authentik",
+      "column": "Done",
+      "docs": "docs/superpowers/plans/2026-11-14-media-tools-authentik.md",
+      "branch": "none",
+      "pr": "#1108",
+      "body": "",
+      "commit": "none"
+    },
+    {
+      "id": 130,
+      "kind": "task",
+      "title": "Gate the remaining eight",
+      "feature": "media-tools-authentik",
+      "column": "Done",
+      "docs": "docs/superpowers/plans/2026-11-14-media-tools-authentik.md",
+      "branch": "none",
+      "pr": "#1111",
+      "body": "",
+      "commit": "none"
+    },
+    {
+      "id": 131,
+      "kind": "task",
+      "title": "Documentation",
+      "feature": "media-tools-authentik",
+      "column": "Done",
+      "docs": "docs/superpowers/plans/2026-11-14-media-tools-authentik.md",
+      "branch": "none",
+      "pr": "#1123",
+      "body": "",
+      "commit": "none"
+    },
+    {
+      "id": 136,
+      "kind": "task",
+      "title": "Retire the old groups",
+      "feature": "sso-access-model",
+      "column": "Done",
+      "docs": "docs/superpowers/plans/2026-11-14-sso-access-model.md",
+      "branch": "none",
+      "pr": "none",
+      "body": "Landed by commit 97501c7a on 2026-11-14: \u267b\ufe0f refactor(sso): retire the users and apps groups",
+      "commit": "97501c7a"
+    },
+    {
+      "id": 140,
+      "kind": "task",
+      "title": "Optional MFA that applies to source logins",
+      "feature": "sso-access-model",
+      "column": "Done",
+      "docs": "docs/superpowers/plans/2026-11-14-sso-access-model.md",
+      "branch": "none",
+      "pr": "none",
+      "body": "Landed by commit f509bdf6 on 2026-11-14: \ud83d\ude80 feat(sso): offer optional MFA on password and source logins",
+      "commit": "f509bdf6"
+    },
+    {
+      "id": 148,
+      "kind": "task",
+      "title": "Database, namespace and credential",
+      "feature": "vikunja-board",
+      "column": "Done",
+      "docs": "docs/superpowers/plans/2026-11-15-vikunja-board.md",
+      "branch": "none",
+      "pr": "#1134",
+      "body": "",
+      "commit": "none"
+    },
+    {
+      "id": 149,
+      "kind": "task",
+      "title": "The wrapper chart and its Application",
+      "feature": "vikunja-board",
+      "column": "Done",
+      "docs": "docs/superpowers/plans/2026-11-15-vikunja-board.md",
+      "branch": "none",
+      "pr": "#1134",
+      "body": "",
+      "commit": "none"
+    },
+    {
+      "id": 150,
+      "kind": "task",
+      "title": "First start",
+      "feature": "vikunja-board",
+      "column": "Done",
+      "docs": "docs/superpowers/plans/2026-11-15-vikunja-board.md",
+      "branch": "none",
+      "pr": "#1134",
+      "body": "",
+      "commit": "none"
+    },
+    {
+      "id": 151,
+      "kind": "task",
+      "title": "Seed the boards",
+      "feature": "vikunja-board",
+      "column": "Done",
+      "docs": "docs/superpowers/plans/2026-11-15-vikunja-board.md",
+      "branch": "none",
+      "pr": "#1134",
+      "body": "",
+      "commit": "none"
+    },
+    {
+      "id": 152,
+      "kind": "task",
+      "title": "Agent access over MCP",
+      "feature": "vikunja-board",
+      "column": "Done",
+      "docs": "docs/superpowers/plans/2026-11-15-vikunja-board.md",
+      "branch": "none",
+      "pr": "#1134",
+      "body": "",
+      "commit": "none"
+    },
+    {
+      "id": 153,
+      "kind": "task",
+      "title": "The protocol",
+      "feature": "vikunja-board",
+      "column": "Done",
+      "docs": "docs/superpowers/plans/2026-11-15-vikunja-board.md",
+      "branch": "none",
+      "pr": "#1137",
+      "body": "",
+      "commit": "none"
+    },
+    {
+      "id": 154,
+      "kind": "task",
+      "title": "Acceptance, once, end to end",
+      "feature": "vikunja-board",
+      "column": "Done",
+      "docs": "docs/superpowers/plans/2026-11-15-vikunja-board.md",
+      "branch": "none",
+      "pr": "#1134",
+      "body": "",
+      "commit": "none"
+    }
+  ],
+  "backfill": [
+    {
+      "title": "Keep every non-public route on the LAN",
+      "feature": "media-stack-security-phase0",
+      "pr": "#1109",
+      "merged": "2026-11-14"
+    },
+    {
+      "title": "Give the probes the route's own Host header",
+      "feature": "media-tools-authentik",
+      "pr": "#1113",
+      "merged": "2026-11-15"
+    },
+    {
+      "title": "Sign in with authentik over OIDC",
+      "feature": "media-tools-authentik",
+      "pr": "#1114",
+      "merged": "2026-11-15"
+    },
+    {
+      "title": "Give autobrr a real OAuth2 provider, not the old proxy one",
+      "feature": "media-tools-authentik",
+      "pr": "#1115",
+      "merged": "2026-11-15"
+    },
+    {
+      "title": "Let cluster workloads reach routes on their public hostnames",
+      "feature": "media-stack-security-phase0",
+      "pr": "#1116",
+      "merged": "2026-11-15"
+    },
+    {
+      "title": "Put authentik in front of Calibre-Web",
+      "feature": "books-library",
+      "pr": "#1117",
+      "merged": "2026-11-15"
+    },
+    {
+      "title": "Keep the API reachable without a browser session",
+      "feature": "media-tools-authentik",
+      "pr": "#1118",
+      "merged": "2026-11-15"
+    },
+    {
+      "title": "Gate the UI, keep the API on the LAN only",
+      "feature": "media-tools-authentik",
+      "pr": "#1119",
+      "merged": "2026-11-15"
+    },
+    {
+      "title": "Give bazarr-anime its authentik application",
+      "feature": "media-tools-authentik",
+      "pr": "#1120",
+      "merged": "2026-11-15"
+    },
+    {
+      "title": "Give every application its official logo",
+      "feature": "sso-access-model",
+      "pr": "#1121",
+      "merged": "2026-11-15"
+    },
+    {
+      "title": "Point the blank logos at the projects' own repositories",
+      "feature": "sso-access-model",
+      "pr": "#1122",
+      "merged": "2026-11-15"
+    },
+    {
+      "title": "Sign in with authentik over OIDC",
+      "feature": "books-library",
+      "pr": "#1124",
+      "merged": "2026-11-15"
+    },
+    {
+      "title": "Serve the library over TLS so OIDC can hold a session",
+      "feature": "books-library",
+      "pr": "#1125",
+      "merged": "2026-11-15"
+    },
+    {
+      "title": "Give the internal CA a runbook, with its backup and restore drill",
+      "feature": "w5-platform",
+      "pr": "#1126",
+      "merged": "2026-11-15"
+    },
+    {
+      "title": "Replace local-cert by delete and create, not apply",
+      "feature": "w5-platform",
+      "pr": "#1127",
+      "merged": "2026-11-15"
+    },
+    {
+      "title": "Record calibre verified, and the three traps it cost",
+      "feature": "sso-access-model",
+      "pr": "#1128",
+      "merged": "2026-11-15"
+    },
+    {
+      "title": "Serve every kub.local route over TLS",
+      "feature": "w5-platform",
+      "pr": "#1129",
+      "merged": "2026-11-15"
+    },
+    {
+      "title": "Let the Servarr apps trust X-Forwarded-Proto",
+      "feature": "w5-platform",
+      "pr": "#1130",
+      "merged": "2026-11-15"
+    },
+    {
+      "title": "Exempt maintainerr's /api from the authentik gate",
+      "feature": "media-tools-authentik",
+      "pr": "#1131",
+      "merged": "2026-11-15"
+    },
+    {
+      "title": "Exempt every keyed API from the authentik gate",
+      "feature": "media-tools-authentik",
+      "pr": "#1132",
+      "merged": "2026-11-15"
+    },
+    {
+      "title": "Record Kavita as wired, with the payload that wired it",
+      "feature": "sso-access-model",
+      "pr": "#1133",
+      "merged": "2026-11-15"
+    },
+    {
+      "title": "Serve the server over TLS so sign-in is accepted",
+      "feature": "sso-access-model",
+      "pr": "#1135",
+      "merged": "2026-11-16"
+    },
+    {
+      "title": "Forward-auth provider for vikunja.kub.local",
+      "feature": "vikunja-board",
+      "pr": "#1136",
+      "merged": "2026-11-16"
+    }
+  ]
+}

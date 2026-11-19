@@ -1,0 +1,148 @@
+# Wrapper values for the upstream vikunja chart (2.6.0), which renders through the
+# bjw-s `common` library chart it ships (1.5.1).
+#
+# Why the double `vikunja: vikunja:` nesting: the outer key is the parent→subchart
+# scope, as for any dependency. The upstream chart's own templates/vikunja.yaml
+# then copies its `.Values.vikunja` default block *over* the top-level values
+# (`mergeOverwrite`), so anything written at the outer level only is silently
+# reset to the chart defaults. Values under the inner key are promoted to the
+# top-level common schema and win. Keep every override in the inner block.
+#
+# The chart's hardcoded base (not ours to set) already provides the Service on
+# port 3456, the config mounted at /etc/vikunja/config.yml, probes on
+# /api/v1/info and podSecurityContext.fsGroup 1000. `ingressRoute:` is our own
+# template, so it stays outside `vikunja:`.
+vikunja:
+  vikunja:
+    image:
+      repository: vikunja/vikunja
+      tag: "2.8.0" # the MCP endpoint needs >= 2.7.0; never pin below it
+      pullPolicy: IfNotPresent
+
+    env:
+      VIKUNJA_DATABASE_TYPE: postgres
+      VIKUNJA_DATABASE_HOST: postgres.databases.svc.cluster.local
+      VIKUNJA_DATABASE_DATABASE: vikunja
+      VIKUNJA_DATABASE_USER: vikunja
+      VIKUNJA_DATABASE_PASSWORD:
+        secretKeyRef:
+          name: vikunja-db
+          key: VIKUNJA_DATABASE_PASSWORD
+      # OIDC, so the board knows who is writing. forward-auth hands every browser
+      # the same identity, which is why attribution needed bots before this.
+      # The client secret is the only part that is not public: it comes from a
+      # Secret the operator creates (docs/runbooks/authentik-apps.md).
+      # No password form: the only way in is authentik. The operator's account is
+      # already an SSO account (users.issuer != local), so this closes the page
+      # rather than removing an identity that was still in use. Bots and the MCP
+      # are API tokens, not logins, and are checked after any change to this key.
+      VIKUNJA_AUTH_LOCAL_ENABLED: "false"
+      VIKUNJA_AUTH_OPENID_ENABLED: "true"
+      VIKUNJA_AUTH_OPENID_REDIRECTURL: "https://vikunja.kub.local/auth/openid/"
+      VIKUNJA_AUTH_OPENID_PROVIDERS_AUTHENTIK_NAME: "authentik"
+      VIKUNJA_AUTH_OPENID_PROVIDERS_AUTHENTIK_CLIENTID: "eqfj9awPPBaZSDan6HikbXBYSJgh1nok8ahhVKG4"
+      VIKUNJA_AUTH_OPENID_PROVIDERS_AUTHENTIK_AUTHURL: "https://authentik.kub.home.ashudev.com/application/o/vikunja-oidc/"
+      VIKUNJA_AUTH_OPENID_PROVIDERS_AUTHENTIK_SCOPES: "openid profile email"
+      VIKUNJA_AUTH_OPENID_PROVIDERS_AUTHENTIK_CLIENTSECRET:
+        secretKeyRef:
+          name: vikunja-oidc
+          key: CLIENTSECRET
+
+    controller:
+      strategy: Recreate
+
+    nodeSelector:
+      kubernetes.io/hostname: nuc0
+
+    resources:
+      requests:
+        cpu: 50m
+        memory: 128Mi
+      limits:
+        memory: 512Mi
+
+    securityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+          - ALL
+      readOnlyRootFilesystem: false # the image writes a cache under /tmp
+
+    podAnnotations:
+      prometheus.io/scrape: "true"
+      prometheus.io/port: "3456"
+      prometheus.io/path: /api/v1/metrics
+
+    # The upstream ingress is a networking.k8s.io/v1 Ingress; this cluster only
+    # speaks Traefik CRDs, so the route lives in templates/ingressroute.yaml.
+    ingress:
+      main:
+        enabled: false
+
+    persistence:
+      data:
+        enabled: true
+        storageClass: local-path
+        size: 5Gi
+        accessMode: ReadWriteOnce
+        # mountPath stays at the upstream default, /app/vikunja/files; `files.basepath`
+        # in config.yml below states the same path rather than inheriting it from the
+        # image's WORKDIR, so this claim is the one the board actually writes to.
+      database:
+        enabled: false # no SQLite: state lives in PostgreSQL
+
+    configMaps:
+      config:
+        data:
+          config.yml: |
+            service:
+              publicurl: "https://vikunja.kub.local"
+              enableregistration: false
+              interface: ":3456"
+              # Paris time, so due dates and reminders read the way the operator does.
+              timezone: "Europe/Paris"
+              maxitemsperpage: 100
+              # Off on purpose:
+              #  - caldav: no calendar client uses it, and it is another LAN-reachable surface;
+              #  - linksharing: a share link is an unauthenticated way into a private board;
+              #  - emailreminders: there is no mailer, so the setting can only fail silently.
+              enablecaldav: false
+              enablelinksharing: false
+              enableemailreminders: false
+              motd: "Board of record. Rules: homelab docs/agent-protocol.md"
+            defaultsettings:
+              timezone: "Europe/Paris"
+            webhooks:
+              # Nothing outbound is wanted from the board; webhooks would make it a client of
+              # arbitrary endpoints.
+              enabled: false
+            files:
+              basepath: /app/vikunja/files
+            metrics:
+              enabled: true
+            log:
+              level: INFO
+              format: text
+              http: stdout
+              database: off
+              events: off
+
+ingressRoute:
+  apiVersion: traefik.containo.us/v1alpha1
+  enabled: true
+  host: vikunja.kub.local
+  service: vikunja
+  port: 3456
+  apiPathPrefix: /api
+  # No forward-auth on the UI any more: the board authenticates with OIDC, so the
+  # gate would be a second redirect and a second identity. `lan-only` stays as the
+  # network floor, and `/api` was always outside the gate so tokens keep working.
+  uiMiddlewares:
+    - {name: lan-only, namespace: kube-system}
+  apiMiddlewares:
+    - {name: lan-only, namespace: kube-system}
+  tls:
+    enabled: true
+    options: internal-tls
+    optionsNamespace: kube-system
+  redirectToHttps: true

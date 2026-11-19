@@ -1,0 +1,70 @@
+{{/*
+The dump script, mounted into the CronJob from templates/cronjob-dump.yaml.
+
+Why it is shaped the way it is:
+
+- The host is the Service name "postgres", not 127.0.0.1: this pod is its own,
+  unlike the metrics exporter sidecar which shares the database pod's network
+  namespace.
+- The database list is queried, never hardcoded: a database added to the
+  instance is dumped the same night without touching this chart.
+- An empty list fails the run instead of exiting 0. A CronJob that reports
+  success while writing nothing is worse than a red one, because nobody looks.
+- Every dump is verified before the run is considered good: non-empty file and
+  a readable table of contents (pg_restore --list). That reads the archive's
+  table of contents, so it catches an empty or structurally broken dump, but not
+  truncation inside the data blocks. The restore drill is the real proof.
+- The dump is written to "<name>.partial" and only renamed once it passed both
+  checks, so a half-written file never carries a name that looks like a good
+  one. Leftover .partial files are removed at the start of each run.
+- Retention prunes BEFORE the dumps are taken. Deletion is by age, so it can
+  never reach the newest file, and pruning first means a volume that filled up
+  overnight is freed on the next run instead of making every later run fail on
+  a full disk for ever.
+  The price of that order, stated plainly: while dumping is broken for several
+  nights, the retained dumps keep ageing out, so dumps.retentionDays (14) is the
+  time from "dumps stopped working" to total loss of the dump history. That is
+  the trade chosen on purpose — a full volume heals by itself, without a human,
+  which is worth more than a longer tolerated outage of unknown length.
+- "fsGroup" is not a guarantee here: dumps is local-path, which is hostPath
+  backed, and the kubelet does not apply fsGroup to hostPath. Writability is
+  proved twice, in this order: a permission test that consumes no space, then a
+  real file creation. The permission test comes first so that a volume which is
+  full — cannot create a file, but is perfectly writable — still gets pruned
+  instead of being reported as an ownership problem.
+*/}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "postgres.name" . }}-dump-script
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "postgres.labels" . | nindent 4 }}
+data:
+  dump-all.sh: |
+    #!/usr/bin/env bash
+    set -euo pipefail
+    umask 077
+    [ -w /dumps ] || { echo "/dumps is not writable by uid $(id -u); fix the claim's ownership on nas" >&2; exit 1; }
+    find /dumps -maxdepth 1 -type f -name '*.partial' -delete
+    find /dumps -maxdepth 1 -name '*.dump' -type f -mtime +{{ .Values.dumps.retentionDays }} -delete
+    if ! touch /dumps/.write-test 2>/dev/null; then
+      echo "/dumps cannot create files (out of space or inodes); prune it or grow the claim" >&2
+      exit 1
+    fi
+    rm -f /dumps/.write-test
+    export PGPASSWORD="${BACKUP_PASSWORD:?}"
+    dbs_out=$(psql -h postgres -U backup -d postgres -At -c \
+      "SELECT datname FROM pg_database WHERE datistemplate = false AND datname <> 'postgres' ORDER BY 1")
+    mapfile -t dbs <<< "$dbs_out"
+    if [ "${#dbs[@]}" -eq 0 ] || [ -z "${dbs[0]}" ]; then
+      echo "no application databases exist; refusing to report success" >&2
+      exit 1
+    fi
+    for db in "${dbs[@]}"; do
+      out="/dumps/${db}-$(date -u +%Y%m%dT%H%M%SZ).dump"
+      pg_dump -h postgres -U backup -d "$db" -Fc -Z6 -f "${out}.partial"
+      [ -s "${out}.partial" ] || { echo "empty dump: ${out}.partial" >&2; exit 1; }
+      pg_restore --list "${out}.partial" > /dev/null
+      mv "${out}.partial" "$out"
+    done

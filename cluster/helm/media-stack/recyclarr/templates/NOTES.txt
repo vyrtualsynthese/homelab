@@ -1,0 +1,17 @@
+{{ include "app.fullname" . }} has been deployed as a CronJob, not a service. It
+runs `recyclarr sync` on the schedule {{ .Values.schedule }} ({{ .Values.timeZone }}).
+
+Run one sync now and read the result:
+
+  kubectl -n {{ .Release.Namespace }} create job --from=cronjob/{{ include "app.fullname" . }} {{ include "app.fullname" . }}-manual
+  kubectl -n {{ .Release.Namespace }} logs job/{{ include "app.fullname" . }}-manual
+
+Configuration is mounted read-only from Secret {{ .Values.configFile.secretName }}
+at {{ .Values.configFile.mountPath }}. The chart does not create or validate it.
+
+State (downloaded resources, logs and the state directory) lives in the claim
+{{ include "app.configClaimName" . }}.
+{{- if not .Values.storage.existingClaim }}
+
+That claim is created by this chart, so deleting the release deletes it too.
+{{- end }}

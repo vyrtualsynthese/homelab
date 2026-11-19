@@ -22,9 +22,11 @@ spec:
   routes:
     - match: Host(`koillection.kub.home.ashudev.com`)
       kind: Rule
+      middlewares:
+        - name: kube-system-lan-only@kubernetescrd
       services:
         - name: koillection-app
-          port: koillection
+          port: http
   tls:
     certResolver: myresolver
     options:
