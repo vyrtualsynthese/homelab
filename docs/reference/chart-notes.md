@@ -254,7 +254,8 @@ chart mounted and never created — fixed the other way round, because there was
 preserve. The old volume was on `longhorn-static`, its contents went with the storage in 2026-08, and
 its PV has since been cleared from the cluster, so this is a fresh start with no data to rescue. The
 chart creates `news-freshrss-config` on `local-path`, 1Gi: FreshRSS keeps its SQLite database *and*
-the article bodies it has fetched under `/config`, so the 128Mi settings-sized default would be full
+the article bodies it has fetched under the data root (`/config/data`), so the 128Mi settings-sized
+default would be full
 within days. The pod stays on `nuc0`, which is what the retired `node-type: general` label used to
 select.
 

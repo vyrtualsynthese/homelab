@@ -25,7 +25,7 @@ helm template news-freshrss cluster/helm/news/freshrss --namespace news
 | Object | Purpose |
 |---|---|
 | Deployment `news-freshrss` | one replica, `Recreate`, pinned to `nuc0` |
-| PersistentVolumeClaim `news-freshrss-config` | the data root, including the SQLite database and the cached articles |
+| PersistentVolumeClaim `news-freshrss-config` | the claim holding the data root, including the SQLite database and the cached articles |
 | Service `news-freshrss` | ClusterIP, port 80, port name `webui` |
 | ServiceAccount `news-freshrss` | token not mounted; the pod talks to no Kubernetes API |
 | IngressRoute `news-freshrss-public` (+ `-public-redirect`) | `freshrss.kub.home.ashudev.com`, TLS through `myresolver`, LAN allowlist only |
@@ -131,9 +131,17 @@ The data root is new, so this is the install wizard again. Order matters:
    first. In the wizard set the default user to **`vyrtualsynthese`** — the exact OIDC identity; a
    different name gets no administrator rights — choose HTTP authentication, and give the password
    field a random value it will not use. Finish the wizard in one pass.
-4. Set an API password in Settings, then update `FRESHRSS_USER` and `FRESHRSS_API_PASSWORD` in
+4. Make sure the API's log directory exists. A fresh data root does not have it, and without it every
+   API call answers an empty HTTP 500 (the logger cannot write; see `docs/news-feeds.md`):
+
+   ```bash
+   kubectl -n news exec deploy/news-freshrss -- mkdir -p /config/data/users/_
+   kubectl -n news exec deploy/news-freshrss -- chown www-data:www-data /config/data/users/_
+   ```
+
+5. Set an API password in Settings, then update `FRESHRSS_USER` and `FRESHRSS_API_PASSWORD` in
    `~/.config/secrets/homelab.env`.
-5. Replay the feed list: `python3 hack/freshrss_sync.py apply` (see `docs/news-feeds.md`).
+6. Replay the feed list: `python3 hack/freshrss_sync.py apply` (see `docs/news-feeds.md`).
 
 ## Known debt
 

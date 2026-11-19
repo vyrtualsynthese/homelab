@@ -119,7 +119,7 @@ volumeMounts: []
 service:
   type: ClusterIP
   # One value drives the container port, the Service port and every probe. The
-  # image's WebUI is port 80 (linuxserver/docker-freshrss) — it is not the
+  # image's WebUI is port 80 (freshrss/freshrss, Apache) — it is not the
   # upstream PHP-FPM dev port.
   port: 80
 
