@@ -23,17 +23,19 @@ prometheus:
       size: 25Gi
     nodeSelector:
       kubernetes.io/hostname: nas
-    # 1Gi was not enough: the server was OOM-killed ~50s after every start.
-    # Prometheus 3 sizes its own GC from the cgroup limit, so the limit has to
-    # cover the scrape head, not just the steady state.
-    # Measured 2026-11-12 over 15 h: 1.26 GiB average, 1.74 GiB p95, 1.76 GiB
-    # peak. The 2 GiB ceiling is kept because Prometheus sizes its GC target from
-    # the cgroup limit; 1 GiB OOM-killed it on 2026-11-12. The request tracks the
-    # steady state so the scheduler reserves what it actually holds.
+    # The limit is 2Gi because a 1Gi limit was OOM-killed ~50s after every
+    # start: Prometheus 3 sizes its own GC from the cgroup limit, so the ceiling
+    # has to cover the scrape head, not just the steady state.
+    # Re-measured 2026-11-19 over the 7.7 days the TSDB now retains, which the
+    # 2026-11-18 series drop made possible (it was 6 days before): 966 MiB
+    # average, 1,102 MiB p95, 1,618 MiB peak; the worst single day's p95 was
+    # 1,162 MiB. The request is 1.25Gi, the smallest size above every daily p95,
+    # not just the seven-day one, because the trend is upward (853 MiB on 11-12
+    # to 1,074 MiB on 11-19). The 2 GiB ceiling stays.
     resources:
       requests:
         cpu: 100m
-        memory: 1Gi
+        memory: 1.25Gi
       limits:
         memory: 2Gi
     image:
