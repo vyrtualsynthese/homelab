@@ -291,12 +291,17 @@ deployment mounted that path, and removing it is follow-up work rather than part
 running. The pod is pinned to `nuc0` by `nodeSelector`, replacing an `affinity` on the retired
 `node-type: general` label that matched no node at all.
 
-The first sync after the merge bound both claims and scheduled the pod on `nuc0`, and the pod then
-found the one thing the chart still had wrong: it ran as root with every capability dropped. The
-image has no `USER` instruction, so the default is root, and its entrypoint needs to write
-`/app/public`, which belongs to uid 1001 — root without `CAP_DAC_OVERRIDE` cannot. The chart now runs
-as 1001 itself, which is the image's own user: the entrypoint skips its user setup, nothing needs a
-capability, and the remaining failure is the one the operator owns — no database yet.
+The syncs after the merge bound both claims and scheduled the pod on `nuc0`, and then found the one
+thing the chart still had wrong. The image has no `USER` instruction and its entrypoint must be root:
+it writes `php.ini` under `/usr/local/etc`, `/app/public/.env.local` and the `/uploads` symlink
+**before** it rewrites its user and `setpriv`s away. Two attempts settled the shape. Root with every
+capability dropped cannot write `/app/public`, which belongs to uid 1001
+(`touch: cannot touch '/app/public/.env.local': Permission denied`). Running as 1001 passes that write
+and dies on `php.ini` (`Permission denied`), which it cannot skip. So the chart keeps the default
+capability set and sets only `allowPrivilegeEscalation: false` — `prowlarr`'s shape for a root init.
+Hardening that cannot start the app is not hardening, and leaving the level at `info` for a week
+while the pod crash-loops would have been worse than the two failed syncs were. The remaining failure
+is the one the operator owns: no database yet.
 
 ### qbittorrent
 
