@@ -7,9 +7,9 @@
 > ever been rehearsed · **Verified** 2026-11-17 · **Kind:** living page
 
 A runbook exists only after it has been performed at least once; a procedure nobody has run is a
-guess with a title. This page lists only files that exist. Six are procedures you can run today.
-Five are completed records — kept because each is the only write-up of something that happened once —
-and their status says so.
+guess with a title. This page lists only files that exist. Seven are procedures — four of them
+pending their first run — and five are completed records, kept because each is the only write-up of
+something that happened once; their status says so.
 
 ## Living procedures
 
@@ -17,6 +17,7 @@ and their status says so.
 |---|---|---|
 | [`authentik-apps.md`](authentik-apps.md) | proved 2026-11-15 | an application needs signing in through authentik: native OIDC where the app speaks it, the forward-auth gate where it does not. The matrix and the traps are in [`reference/sso-applications.md`](../reference/sso-applications.md). |
 | [`internal-ca.md`](internal-ca.md) | proved 2026-11-15; the restore drill is pending | a `*.kub.local` certificate fails to validate, the root must be minted again, or a leaf signed. |
+| [`argocd.md`](argocd.md) | pending — the rebuild has not been run | the controller is down, or Argo CD must be rebuilt from nothing since it became self-managed on 2026-11-19. |
 | [`postgres-add-database.md`](postgres-add-database.md) | proved 2026-11-13 (acceptance database) | an application is rebuilt and needs its own role, database and Secrets. |
 | [`postgres-restore.md`](postgres-restore.md) | pending — the dumps were verified 2026-11-13, the restore itself has not been run | a database is lost, or the drill that proves the dumps restore is due. |
 | [`alert-relay.md`](alert-relay.md) | pending — one synthetic alert through Grafana is its proof | Grafana alerts must reach the board, or the relay needs rebuilding. |

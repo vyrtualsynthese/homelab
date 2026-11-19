@@ -98,6 +98,7 @@ nav:
   - Runbooks:
       - runbooks/README.md
       - Wire an application to authentik: runbooks/authentik-apps.md
+      - The GitOps controller: runbooks/argocd.md
       - The internal CA: runbooks/internal-ca.md
       - Add a database: runbooks/postgres-add-database.md
       - Restore a database: runbooks/postgres-restore.md
