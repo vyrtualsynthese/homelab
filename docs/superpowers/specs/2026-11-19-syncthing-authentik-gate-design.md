@@ -63,11 +63,15 @@ its neighbours, and Syncthing is not.
 1. `cluster/helm/authentik/files/app-syncthing.yaml` — a `forward_single` proxy provider for
    `https://syncthing.kub.home.ashudev.com`, an application with the Syncthing icon, and a policy
    binding to `authentik Admins`, copying `app-qbittorrent.yaml`.
-2. `cluster/helm/syncthing/values.yaml` — a `middlewares` list under `app.ingress`, and the three
-   route templates read it instead of hardcoding. TLS router: `lan-only`, `authentik-forwardauth`.
-   The plain-HTTP router keeps `lan-only` and the redirect; adding a gate there would only add a
-   round trip before the redirect.
-3. Documentation: the routes table row, the SSO matrix row, the design paragraph in the
+2. `cluster/helm/syncthing/values.yaml` — a `middlewares` list under `app.ingress`, and the TLS
+   router reads it instead of hardcoding. TLS router: `lan-only`, `authentik-forwardauth`.
+   The plain-HTTP router keeps its hardcoded `lan-only` and the redirect: adding a gate there would
+   only add a round trip before the redirect.
+3. `cluster/helm/authentik/files/outpost-embedded.yaml` — the provider added to the outpost's
+   `providers` list and the blueprint to its `metaapplyblueprint` list. Without both, authentik
+   creates the provider and the outpost ignores it, so the host answers **404** while authentik is
+   healthy.
+4. Documentation: the routes table row, the SSO matrix row, the design paragraph in the
    media-tools security page if it carries one, and the chart README section on what breaks if the
    gate is removed.
 
