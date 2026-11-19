@@ -1,0 +1,48 @@
+# Shared by all eight exports. A release adds only what differs, in values/<release>.yaml.
+# Everything here is read by the subchart, so it stays under the dependency's name.
+nfs-subdir-external-provisioner:
+  replicaCount: 1
+  strategyType: Recreate
+
+  image:
+    repository: registry.k8s.io/sig-storage/nfs-subdir-external-provisioner
+    tag: v4.0.2
+    pullPolicy: IfNotPresent
+
+  nfs:
+    server: 192.168.1.41
+    # The subchart renders the static PV and PVC only when this list is non-empty.
+    # Emptying it deletes both objects on the next sync.
+    mountOptions:
+      - nfsvers=4.2
+      - rsize=1048576
+      - wsize=1048576
+      - nolock
+      - async
+    reclaimPolicy: Retain
+
+  storageClass:
+    create: true
+    defaultClass: false
+    allowVolumeExpansion: true
+    reclaimPolicy: Delete
+    archiveOnDelete: true
+    accessModes: ReadWriteOnce
+    volumeBindingMode: Immediate
+
+  podSecurityContext:
+    runAsUser: 1100
+    runAsGroup: 1100
+    fsGroup: 1100
+
+  # Measured 2026-11-18 over 5 days, across the provisioners in media-stack:
+  # p95 49Mi, peak 99Mi (working set). No CPU limit, per the house rule.
+  resources:
+    requests:
+      cpu: 10m
+      memory: 64Mi
+    limits:
+      memory: 192Mi
+
+  nodeSelector:
+    kubernetes.io/hostname: streaming
