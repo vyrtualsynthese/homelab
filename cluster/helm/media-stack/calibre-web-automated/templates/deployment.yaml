@@ -31,6 +31,47 @@ spec:
       # both names are derived here and in persistentvolumeclaim.yaml instead.
       {{- $configClaim := default (printf "%s-config" (include "app.fullname" .)) .Values.storage.config.existingClaim }}
       {{- $ingestClaim := default (printf "%s-ingest" (include "app.fullname" .)) .Values.storage.ingest.existingClaim }}
+      {{- with .Values.claimOwnership }}
+      {{- if .enabled }}
+      initContainers:
+        # `NETWORK_SHARE_MODE` is one switch over three mounts and only the
+        # library is a network share. Upstream skips the recursive chown of
+        # `/config` and `/cwa-book-ingest` because of it, so on this deployment
+        # the app starts as 1100 on claims whose files are not 1100's: seven
+        # `install: cannot change owner ... Operation not permitted` lines, then
+        # `attempt to write a readonly database` for `app.db`, and an AutoZipper
+        # that cannot start. This does the chown the switch removed. Root only
+        # for the syscall; CHOWN is the only capability it keeps.
+        - name: fix-claim-ownership
+          image: {{ .image }}
+          securityContext:
+            runAsUser: 0
+            runAsGroup: 0
+            allowPrivilegeEscalation: false
+            capabilities:
+              add:
+                - CHOWN
+              drop:
+                - ALL
+          resources:
+            {{- toYaml .resources | nindent 12 }}
+          command:
+            - sh
+            - -c
+            - |
+              chown -R {{ .uid }}:{{ .gid }} {{ .paths | join " " }}
+              echo "claims now owned by {{ .uid }}:{{ .gid }}"
+          volumeMounts:
+            {{- if $.Values.storage.config.enabled }}
+            - name: config
+              mountPath: {{ $.Values.storage.config.mountPath }}
+            {{- end }}
+            {{- if $.Values.storage.ingest.enabled }}
+            - name: ingest
+              mountPath: {{ $.Values.storage.ingest.mountPath }}
+            {{- end }}
+      {{- end }}
+      {{- end }}
       containers:
         - name: {{ .Chart.Name }}
           securityContext:
