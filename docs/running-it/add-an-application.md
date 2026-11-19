@@ -63,8 +63,8 @@ A Traefik `IngressRoute`, with its API group in a value — never a `networking.
 route that is not on the public list carries `kube-system-lan-only@kubernetescrd`.
 
 Then pick the sign-in in this order: the app's own OIDC first, as `autobrr` does; proxy auth where the
-app is built for it, as `filebrowser` is; `authentik-forwardauth` for an app that only knows a local
-login; `lan-only` alone only with the reason written beside the middleware list. A path leaves the gate
+app is built for it, which no chart currently uses; `authentik-forwardauth` for an app that only knows
+a local login; `lan-only` alone only with the reason written beside the middleware list. A path leaves the gate
 only when it demands a key of its own — an API client cannot follow a sign-in redirect.
 
 ## 5. The secret

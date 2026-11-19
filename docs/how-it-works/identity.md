@@ -32,8 +32,8 @@ is unreachable; a Plex sign-in does not.
 Enrolment writes into `homelab-guests`; promoting somebody is adding them to `homelab-users` in the
 UI. Group membership is not in git: it is an access decision, not configuration. Removing them takes
 their applications away at their next sign-in without stopping them signing in.
-`filebrowser-editors` is a *capability group*, adding one specific thing on top of a level; unused
-until FileBrowser is wired. One admin group serves both because one person runs both, as reasoned in
+`filebrowser-editors` is a *capability group*, adding one specific thing on top of a level: it admits
+its members to FileBrowser, which then decides which folders each of them sees. One admin group serves both because one person runs both, as reasoned in
 the [SSO access-model design](../superpowers/specs/2026-11-14-sso-access-model-design.md#51-three-levels-and-the-admin-level-is-authentiks-own).
 
 ## Choosing how an app is protected
@@ -56,7 +56,7 @@ flowchart TD
   the app holds the identity: it shows the username, attributes a change to a person, and maps groups
   onto its own roles.
 - **Proxy auth** is for an app built to take the username from a header rather than speak OIDC;
-  FileBrowser is the case, deferred.
+  no application uses it today. FileBrowser was the intended case, and it now speaks OIDC itself.
 - **The gate** is `kube-system-authentik-forwardauth`, a Traefik middleware that asks authentik about
   every request. It is the fallback: everything behind it arrives as the same anonymous visitor.
 - **`lan-only` alone** is last, and the chart must say why beside the middleware list.
