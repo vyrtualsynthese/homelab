@@ -101,8 +101,9 @@ app:
   # and Syncthing's index database. 1Gi rather than the contract's 128Mi because
   # the index database for the media tree does not fit in 128Mi; the previous
   # Longhorn claim was 1Gi for the same reason. The name is `<fullname>-config`
-  # (syncthing-config), not syncthing-conf: that name is still held by a
-  # Terminating Longhorn claim. See docs/cleanup/longhorn-disposition.md.
+  # (syncthing-config), not syncthing-conf: that name was held by a Terminating
+  # Longhorn claim when the rebuild created this one, and the config now lives
+  # here. See docs/cleanup/longhorn-disposition.md.
   persistence:
     size: 1Gi
     storageClassName: local-path
