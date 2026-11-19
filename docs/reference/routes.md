@@ -52,7 +52,7 @@ own certificate on a `*.kub.home.ashudev.com` or `*.ashudev.com` name.
 | `calibre.kub.local` | Calibre-Web Automated | `media-stack` | `lan-only` | internal CA | no |
 | `docs.kub.local` | the docs site | `docs` | `lan-only` then forward-auth | internal CA | no |
 | `filebrowser.kub.home.ashudev.com` | FileBrowser | `filebrowser` | `lan-only`; the app does its own sign-in | Let's Encrypt | no |
-| `freshrss.kub.home.ashudev.com` | FreshRSS | `news` | `lan-only` | Let's Encrypt | no |
+| `freshrss.kub.home.ashudev.com` | FreshRSS | `news` | `lan-only`; OIDC in the app, the API keeps its own login | Let's Encrypt | no |
 | `grafana.kub.local` | Grafana | `monitoring` | `lan-only` | internal CA | no |
 | `kavita.kub.home.ashudev.com` | Kavita | `media-stack` | `lan-only` | Let's Encrypt | no |
 | `koillection.kub.home.ashudev.com` | Koillection | `koillection` | **none** | Let's Encrypt | no |

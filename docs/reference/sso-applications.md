@@ -6,7 +6,7 @@
 > adding a tool.
 >
 > **Use it when** an application's sign-in surprises you, you are choosing how to protect a new one,
-> or a hostname answers 404 from authentik · **Verified** 2026-11-18 · **Kind:** living page
+> or a hostname answers 404 from authentik · **Verified** 2026-11-19 · **Kind:** living page
 
 What the mechanisms themselves prove — OIDC, proxy auth, the gate, `lan-only` — is
 [how-it-works/identity.md](../how-it-works/identity.md). Hostnames, TLS and whether a name answers
@@ -27,6 +27,7 @@ absent from this table has no single sign-on at all — no provider, no gate —
 | Argo CD | OIDC, through the Dex broker it bundles | configured; `admin.enabled: "false"` | `argocd.kub.local` |
 | autobrr | OIDC | configured | `autobrr.kub.local` |
 | Calibre-Web Automated | OIDC | configured, verified live 2026-11-15; its own password kept as break-glass | `calibre.kub.local` |
+| FreshRSS | OIDC | configured 2026-11-19 — its own OIDC through the official image; no gate, `/api` keeps its own login | `freshrss.kub.home.ashudev.com` |
 | Grafana | OIDC | configured; every sign-in lands as a **Viewer** | `grafana.kub.local` |
 | Kavita | OIDC | configured 2026-11-15; password login disabled | `kavita.kub.home.ashudev.com` |
 | pgAdmin | OIDC | configured; no local login left | `pgadmin.kub.local` |
@@ -111,6 +112,23 @@ app that accepts "a verified email or the subject" (Radarr's `oidcUserIdentifier
 answers `Unable to sign in with your identity provider`. The app logs the identifier it saw at error
 level — `User '<64 hex characters>' is not authorized` — and that string is what goes in the setting.
 It is per account, not per provider, so the same value serves both Radarr instances.
+
+### FreshRSS: native OIDC needs the official image
+
+FreshRSS implements OIDC with the Apache module `mod_auth_openidc`. Only its **official**
+`freshrss/freshrss` image carries it (Debian, x86_64); the LinuxServer image the chart used to run is
+nginx and cannot. So the chart swapped images, which is the reason this app, unlike Radarr, has no
+`-oidc` suffix on its provider name: there was never a proxy provider under `freshrss` to collide
+with.
+
+Two details differ from the Radarr recipe. The callback is `https://freshrss.kub.home.ashudev.com:443/i/oidc/`,
+with the port spelled out because `mod_auth_openidc` builds it from `X-Forwarded-Port` and authentik
+compares the whole string. And the app protects **`/i/` only**, so `/p/api/` keeps its own login; the
+route needs no `/api` rule for that, unlike an app whose whole surface sits behind its sign-in.
+
+Its data root is `DATA_PATH=/config/data`, a subdirectory of the claim: the claim root was chowned to
+uid 1100 by the previous image and the container can change a file's group but not its mode, so a
+data root there could not be written by the Apache worker.
 
 ## Migrating Vikunja to OIDC
 
