@@ -1,0 +1,25 @@
+{{ include "app.fullname" . }} has been deployed to namespace {{ .Release.Namespace }}.
+
+{{- if .Values.ingressRoute.enabled }}
+
+URL:
+  https://{{ .Values.ingressRoute.host }}{{ .Values.ingressRoute.pathPrefix }}
+
+The route runs behind authentik forward auth and the LAN allowlist. The app then
+asks for its own account: it has no OIDC support.
+{{- else }}
+
+The IngressRoute is disabled. Reach it with a port-forward:
+
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "app.fullname" . }} {{ .Values.service.port }}:{{ .Values.service.port }}
+{{- end }}
+
+State lives in the claim {{ include "app.configClaimName" . }}.
+{{- if and .Values.storage.enabled (not .Values.storage.existingClaim) }}
+
+That claim is new and starts empty: the accounts and networks from the old
+Longhorn claim were abandoned. Re-create them, then restart the pod and confirm
+they survive.
+{{- end }}
+
+`config.js` is mounted with subPath: editing it and syncing restarts the pod.
