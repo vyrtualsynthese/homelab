@@ -22,14 +22,34 @@ differences this app needed are below.
 | `affinity.nodeAffinity` on the retired `node-type: general` label | `nodeSelector: kubernetes.io/hostname: nuc0` | `node-type` no longer exists anywhere, so the old affinity matched no node |
 | `service.port: 5432` (a PostgreSQL copy-paste) | `80`, one value for container port, Service and both probes | The image serves on :80 (`FRANKENPHP_SERVER_NAME=":80"`) |
 | No probes | A startup probe and a liveness probe on `/`; no readiness probe | The image's own `HEALTHCHECK` is `curl --fail http://localhost:80/`. Koillection publishes no health route, and nothing unauthenticated reports whether the database is up, so readiness would only duplicate liveness |
-| No `securityContext` | seccomp `RuntimeDefault`, no privilege escalation, all capabilities dropped, running as the image's own uid 1001 | The image ships no `USER` instruction and its entrypoint handles both cases: as root it rewrites its user and chowns `/uploads`, as anyone else it skips that. Root without privileges cannot write `/app/public` (owned by 1001) — the first sync after the merge proved it — so the chart runs as 1001 instead |
+| No `securityContext` | seccomp `RuntimeDefault`, no privilege escalation, capabilities kept, root then dropping to `PUID`/`PGID` 1100 | The entrypoint must be root: it writes `php.ini` under `/usr/local/etc`, `/app/public/.env.local` and the `/uploads` symlink, rewrites its user, chowns `/uploads`, then `setpriv`s to 1100. Two live attempts pin the shape down — see "The init needs root" below |
 | `limits.memory: 256Mi`, `requests.cpu: 1m` | request 128Mi / 10m, limit 512Mi | See "Sizing" below |
-| Boilerplate `Chart.yaml` (`appVersion` 1.0.0, a description nobody read) | `version` 0.2.0, `appVersion` 1.8.6 matching `image.tag` | Three numbers that disagree are worse than one number that is wrong |
+| Boilerplate `Chart.yaml` (`appVersion` 1.0.0, a description nobody read) | `version` 0.2.2, `appVersion` 1.8.6 matching `image.tag` | Three numbers that disagree are worse than one number that is wrong |
 
 The route is untouched: `koillection.kub.home.ashudev.com`, `websecure` with the `myresolver`
 certificate resolver, the chart's own `TLSOption`, `lan-only` only. This is a public chart, and
 rebuilding it is not permission to redesign the certificate or the gate. The only edit inside those
 templates is the Service port name (`koillection` → `http`), to match the renamed Service port.
+
+## The init needs root
+
+Two syncs settled this, and both failures are worth keeping.
+
+The image has no `USER` instruction, so it starts as root, and its entrypoint writes
+`/usr/local/etc/php/conf.d/php.ini`, `/app/public/.env.local` and the `/uploads` symlink before it does
+anything else. It then rewrites the `koillection` user to `PUID`/`PGID`, chowns `/uploads` and
+`setpriv`s to that user for migrations and the server.
+
+1. **Root with every capability dropped** fails at its first write: `/app/public` belongs to uid 1001,
+   and root without `CAP_DAC_OVERRIDE` cannot write another uid's directory —
+   `touch: cannot touch '/app/public/.env.local': Permission denied`.
+2. **Running as uid 1001** gets past that and dies on `php.ini`:
+   `/usr/local/etc/php/conf.d/php.ini: Permission denied`, because that file is root-owned and the
+   entrypoint cannot skip it.
+
+So the chart keeps the default capability set and sets only `allowPrivilegeEscalation: false`, the
+same shape `prowlarr` uses for its LinuxServer init. Hardening that cannot start the app is not
+hardening.
 
 ## Where the volume class came from
 
