@@ -19,7 +19,9 @@ instance can report several.
 
 Credentials come from FRESHRSS_USER and FRESHRSS_API_PASSWORD in the environment. The per-feed
 settings are behind the web login, which the API password does not open: set FRESHRSS_WEB_PASSWORD
-too and the selectors are checked with the rest, left out and the settings half is skipped.
+too and the selectors are checked with the rest, left out and the settings half is skipped. An
+instance behind OIDC serves no form login at all, so its settings half is skipped as well and the run
+still passes; the selectors of such an instance are set by hand or by importing the OPML.
 """
 
 from __future__ import annotations
@@ -191,6 +193,15 @@ def plan(local: Sequence[Feed], remote: Sequence[tuple[str, Sequence[str]]]) -> 
 
 class AuthError(Exception):
     """The instance refused the credentials in the environment."""
+
+
+class NoFormLogin(Exception):
+    """The web UI serves no form login, so there is no settings page to read.
+
+    With `auth_type: http_auth` the instance trusts the identity its reverse proxy hands it and has
+    no login form at all: the gate in front of the app answers the request instead. That is a normal
+    state, not a failure, and the per-feed settings are simply out of reach of this script.
+    """
 
 
 def http(method: str, url: str, headers: dict[str, str] | None = None,
@@ -525,7 +536,10 @@ class WebClient:
     def login(self) -> None:
         # Every POST is refused with [CSRF] unless it carries the session's token, the login too,
         # and the only place that hands it out is a page whose form embeds it.
-        login_page = self.get(WEB + "/?c=auth&a=formLogin")
+        status, login_page = self._request("GET", WEB + "/?c=auth&a=formLogin")
+        if status != 200:
+            raise NoFormLogin(
+                f"the web UI has no form login ({WEB}/?c=auth&a=formLogin answered {status})")
         token = form_with(login_page, "_csrf").value("_csrf") or ""
         status, body = self._request(
             "GET", WEB + "/?c=javascript&a=nonce&user=" + urllib.parse.quote(self.user))
@@ -887,8 +901,8 @@ USAGE = """usage: freshrss_sync.py <apply|check|verify> [--prune] [--dry-run]
 
 FRESHRSS_USER and FRESHRSS_API_PASSWORD are read from the environment,
 FRESHRSS_WEB_PASSWORD opens the web UI for the per-feed settings (without
-it the settings half is skipped), and FRESHRSS_BASE overrides the instance
-URL (default %s).
+it, or on an instance behind OIDC that serves no form login, the settings
+half is skipped), and FRESHRSS_BASE overrides the instance URL (default %s).
 
 Exit codes: 0 clean, 1 drift or a failed feed, 2 credentials missing or
 refused, including the web login.
@@ -952,6 +966,10 @@ def main(argv: list[str] | None = None,
         try:
             web.login()
             ids = client.feed_ids()
+        except NoFormLogin as error:
+            # OIDC: the instance trusts the proxy identity, so there is no form to read.
+            print(f"settings: not checked ({error})")
+            return 0, False
         except AuthError as error:
             print(str(error), file=sys.stderr)
             return 0, True

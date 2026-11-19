@@ -27,7 +27,8 @@ python3 hack/freshrss_sync.py verify            # fetch every URL, check each fu
 the whole article, an XPath feed's selectors and kind, and a poll interval (`frss:ttl`, in seconds)
 where a host must not be asked often. Those live behind the web login, so they are only checked when
 `FRESHRSS_WEB_PASSWORD` is set; without it the run prints `settings: not checked` and does the rest.
-See "The settings the API cannot reach" below.
+An instance that signs in through OIDC has no form login to open at all, and its settings half is
+skipped the same way, with the reason printed. See "The settings the API cannot reach" below.
 
 `check` fails on three things: a feed the file lists and the instance lacks, a listed feed sitting in
 another category, and a listed feed whose content selectors differ from the file. A feed the instance
@@ -58,7 +59,8 @@ category, leaves the feed with the one label the file gives it; a feed the file 
 never touched that way. A feed that has just been subscribed with a different category gets its stale
 labels cleared on the next run, not the same one.
 Credentials are `FRESHRSS_USER` and `FRESHRSS_API_PASSWORD` from
-`~/.config/secrets/homelab.env`, plus `FRESHRSS_WEB_PASSWORD` for the settings half.
+`~/.config/secrets/homelab.env`, plus `FRESHRSS_WEB_PASSWORD` for the settings half — which an
+OIDC-signed-in instance does not have, so there the run covers subscriptions only.
 
 `verify` fetches each URL from the machine that runs it, not from inside the cluster, so a 403 or
 429 there can be the runner's IP rather than the feed being broken.
@@ -291,6 +293,12 @@ reads the feed id from the subscription list, opens the feed's settings page, re
 with the file's values, and reads the page back to confirm; a field that still differs is printed
 and the run exits 1. Without `FRESHRSS_WEB_PASSWORD` the settings half is skipped and the
 subscription half behaves as before.
+
+Under OIDC the form login is not there to open: `auth_type` is `http_auth` and the app trusts the
+identity its proxy hands it, so `?c=auth&a=formLogin` answers a redirect or a refusal rather than the
+form. The script treats that as a normal state, prints `settings: not checked` with the reason, and
+carries on with the subscriptions. Per-feed selectors then get set by hand in the web UI, or by
+importing the OPML, which carries them.
 
 ## Feeds the instance cannot fetch
 
