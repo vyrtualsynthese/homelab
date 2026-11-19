@@ -175,21 +175,28 @@ the XPath fields are submitted together.
 | Star Citizen comm-link | `//a[contains(@href,'/comm-link/transmission/')]` | `normalize-space(.)` | `@href` |
 | Final Fantasy XIV | `//a[contains(@href,'/lodestone/news/detail/')]` | `normalize-space(.)` | `@href` |
 | Elite Dangerous | `//*[contains(@class,'__article-info')]//a[starts-with(@href,'/news/') and not(contains(@href,'/news/updates/'))]` | `normalize-space(.)` | `@href` |
-| Anthropic / Claude | `//a[starts-with(@href,'/news/')]` | `normalize-space(.)` | `@href` |
+| Anthropic / Claude | `//li[@data-listing-row]//a[contains(@class,'_title-link')]` | `normalize-space(.)` | `@href` |
 
 Counts observed on 2026-11-19, from the live pages: Star Citizen 9, Final Fantasy XIV 9, Elite
-Dangerous 12, Anthropic 26.
+Dangerous 12, Anthropic 24.
 
-Elite Dangerous needs the longer rule because its news page prints the same story up to six times —
-a top ticker, a featured block, a card, a picture-only link and a "read more". A selector over every
-`/news/` link therefore returned each story several times; the picture-only links carry no text, so
-FreshRSS fell back to the item id and showed `urn:sha1:…` as the title, which it also counted as
-invalid GUIDs in its log. Taking only the links inside the card's `__article-info` block gives one
-entry per story, with its title. The same rule drops `/news/updates/`, the patch notes the
-blog-and-news-only rule excludes.
+Both news pages print the same story several times, so neither can be read with "every link that
+looks like an article":
 
-That expression is outside the two forms `verify` reads, so its line ends `sel … unchecked` and the
-folder needs a look after a redesign.
+- **Elite Dangerous** repeats a story up to six times — a top ticker, a featured block, a card, a
+  picture-only link and a "read more". The picture-only links carry no text, so FreshRSS fell back to
+  the item id and showed `urn:sha1:…` as the title; it logged 19 invalid GUIDs. Taking only the links
+  inside the card's `__article-info` block gives one entry per story, with its title, and the same
+  rule drops `/news/updates/`, the patch notes the blog-and-news-only rule excludes.
+- **Anthropic** repeats each card as a title link, a summary link, a category link and a duplicate
+  title inside the collapsed details, and one picture-only link had no text (87 invalid GUIDs in the
+  log). It also files the product announcement posts at the site root — `/claude-haiku-5-5`,
+  `/claude-sonnet-5-5` — so a rule over `/news/` links dropped them without saying so. Each story is
+  one `<li data-listing-row>`, and its title link is the only `_title-link` inside it: 24 stories,
+  all of them, once each.
+
+Neither expression is one of the two forms `verify` reads, so both lines end `sel … unchecked` and
+those two folders need a look after a redesign.
 
 These are the brittle part of the set: a redesign empties them quietly, and `check` cannot see that —
 the selector still matches the file. `verify` follows the first link the item expression picks and
@@ -213,8 +220,8 @@ target one element — `.entry-content` means "the element carrying the `entry-c
 selector travels in the OPML as `frss:cssFullContent`, so a rebuilt instance gets it from the file.
 
 Twelve feeds carry a selector. The column is what `verify` printed on 2026-11-19, read from the
-newest article of each feed; Elite Dangerous is the exception, read by hand the same way, because
-`verify` cannot evaluate its item expression (see "XPath selectors").
+newest article of each feed; Elite Dangerous and Anthropic are the exceptions, read by hand the same
+way, because `verify` cannot evaluate their item expressions (see "XPath selectors").
 
 | Feed | Selector | Text taken from one article (characters) |
 |---|---|---|
@@ -229,7 +236,7 @@ newest article of each feed; Elite Dangerous is the exception, read by hand the 
 | Phoronix | `article` | 1522 |
 | Final Fantasy XIV | `article` | 1435 |
 | Elite Dangerous | `main` | 2348 |
-| Anthropic / Claude | `article` | 11174 |
+| Anthropic / Claude | `article` | 1952 |
 
 What it costs: one extra request per new article, made by the pod, so the source sees the cluster's
 address rather than yours. What it breaks on: a redesign makes the selector match nothing, and the
