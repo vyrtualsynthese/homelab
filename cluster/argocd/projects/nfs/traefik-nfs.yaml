@@ -11,4 +11,8 @@ spec:
   source:
     repoURL: 'https://github.com/vyrtualsynthese/homelab.git'
     targetRevision: develop
-    path: cluster/helm/nfs/traefik-nfs
+    path: cluster/helm/nfs/provisioner
+    helm:
+      releaseName: traefik-nfs
+      valueFiles:
+        - values/traefik-nfs.yaml
