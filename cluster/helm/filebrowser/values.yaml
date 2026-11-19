@@ -148,7 +148,8 @@ traefik:
   service: filebrowser-filebrowser-quantum
   port: 8080
   middlewares:
-    - namespace: kube-system
-      name: lan-only
+    # Public on purpose: the editor signs in from outside, and share links go to
+    # people with no account at all. The gate is the app's own authentik OIDC
+    # session; `lan-only` here would make both unreachable.
     - namespace: kube-system
       name: security

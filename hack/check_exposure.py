@@ -22,6 +22,9 @@ PUBLIC_HOSTS = frozenset(
         # The sign-in page of the gate above. It has to answer the same internet
         # the dashboard does, or a public page behind the gate cannot be opened.
         "authentik.kub.home.ashudev.com",
+        # FileBrowser: the app signs in through authentik, and the normal share
+        # links it mints are opened by people with no account.
+        "filebrowser.kub.home.ashudev.com",
     }
 )
 
