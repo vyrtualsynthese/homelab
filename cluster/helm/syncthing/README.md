@@ -32,6 +32,12 @@ runs `forget --keep-within-daily 7d --keep-within-weekly 1m --prune`. Credential
 `syncthing-backup` Secret. The container runs as root to read files written by older UIDs; it drops
 all capabilities and refuses privilege escalation.
 
+**A failed run fails the Job.** The script runs under `set -euo pipefail` and has no `exit 0`, so a
+repository that cannot be opened, or a backup that aborts, leaves the Job `Failed` instead of
+`Complete`. The 2026-11-19 05:00 run was `Complete` while restic was printing `Fatal: unable to open
+config file: The specified bucket does not exist` — that is what the masking `exit 0` cost. A Job is
+only evidence of a backup when its log ends with a snapshot line.
+
 ## After the first sync
 
 The claim only binds once a pod schedules, and the chart does not create the folder for you:
