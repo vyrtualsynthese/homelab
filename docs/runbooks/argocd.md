@@ -15,9 +15,10 @@
 | the chart | `cluster/helm/argocd/`, a wrapper on `argo-cd` `10.4.1` |
 | namespace | `argocd` |
 
-Helm is **not** an owner. The release record was deleted when the Application took over, so
-`helm -n argocd list` should answer `no deployed releases`. If it lists `argocd`, something has
-re-created the record and a `helm upgrade` would fight Argo CD for the same objects.
+Helm is **not** an owner. The release record is deleted on adoption; until that step,
+`helm -n argocd list` still shows `argocd`, and after it the command answers `no deployed releases`.
+If it lists `argocd` after adoption, something has re-created the record and a `helm upgrade` would
+fight Argo CD for the same objects.
 
 ## Rebuild from nothing
 
@@ -35,8 +36,16 @@ The chart carries its CRDs in `templates/`, so the apply creates them too; no `-
 separate `kubectl apply -k` are needed. Expected: `argocd-server`, `argocd-repo-server`,
 `argocd-redis`, `argocd-dex-server`, `argocd-notifications-controller` and
 `argocd-applicationset-controller` as Deployments, `argocd-application-controller` as a StatefulSet,
-all `1/1` once the rollout finishes. Sign in at `https://argocd.kub.local`; the Applications the
-root app syncs reappear on their own.
+all `1/1` once the rollout finishes. Sign in at `https://argocd.kub.local`.
+
+On a cluster where the root Application is also gone, recreate it once — nothing else re-creates it,
+and without it no application comes back:
+
+```bash
+kubectl apply -f cluster/argocd/argocd-root.yaml
+```
+
+Then the Applications the root app syncs reappear on their own.
 
 Why by hand: the thing that would restore Argo CD is Argo CD.
 

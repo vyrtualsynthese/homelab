@@ -13,9 +13,9 @@ Everything below was derived from the repo; items marked **[verify]** need clust
 A single K3s homelab managed by ArgoCD (GitOps) plus Ansible for host prep.
 
 - GitOps branch: `develop` (every Application pins `targetRevision: develop`).
-- 55 ArgoCD `Application` objects in `cluster/argocd/projects/**/*.yaml`. The old `calibre` Application
+- 56 ArgoCD `Application` objects in `cluster/argocd/projects/**/*.yaml`. The old `calibre` Application
   and its chart were retired once Calibre-Web Automated had the collection.
-- 51 Helm charts under `cluster/helm/`.
+- 53 Helm charts under `cluster/helm/`.
 - No CI. Renovate updates images/chart versions; nothing runs on PR.
 - Secrets are never committed. See §5.
 
@@ -188,7 +188,7 @@ are in `docs/superpowers/plans/`.
    UI — faster than a commit when debugging a pod. **No Application file records
    `syncPolicy.automated`**, and a PR that adds it is a regression: a root-app sync rewrites the
    Application to match git, which silently switches automation off until the operator re-enables it
-   in the UI. None of the 55 carries it (§8.4 of the design).
+   in the UI. None of the 56 carries it (§8.4 of the design).
 2. `cluster/infrastructure/**` is outside GitOps (§2).
 3. **Backups do not work.** The only offsite target is an AWS S3 bucket. The k3s script dumps a
    SQLite file on an etcd cluster; the NAS script backs up a MinIO path deleted in July 2024; and the

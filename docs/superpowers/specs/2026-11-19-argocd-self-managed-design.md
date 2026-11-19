@@ -84,12 +84,14 @@ name: argocd
 description: Argo CD - the cluster's GitOps controller
 type: application
 version: 0.1.0
-appVersion: "3.5.2"
 dependencies:
   - name: argo-cd
     version: 10.4.1
     repository: https://argoproj.github.io/argo-helm
 ```
+
+The wrapper carries no `appVersion`: the controller's image tag is the dependency's `appVersion`, so
+a value here could only drift from what runs.
 
 `cluster/helm/argocd/README.MD` is deleted: it is a copy of the upstream chart's README and says
 nothing about this install.
