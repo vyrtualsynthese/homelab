@@ -8,7 +8,7 @@ app:
     repository: lscr.io/linuxserver/syncthing
     pullPolicy: IfNotPresent
     # Overrides the image tag whose default is the chart appVersion.
-    tag: v2.0.11-ls200
+    tag: v2.1.7-ls237
 
   imagePullSecrets: []
   nameOverride: "syncthing"
