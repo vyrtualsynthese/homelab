@@ -313,6 +313,46 @@ the operator's: the `koillection` Secret still named the retired Bitnami Service
 not exist. Both were fixed by hand on 2026-11-19 and the app runs 1/1 on its own claims, with the
 account created and the API answering.
 
+### thelounge
+
+As of 2026-11-19: the last application still mounting a claim that could never clear, and the one
+whose route was ungated — `routes.md` recorded `none` while the checked-in chart already asked for
+`lan-only`, which is half of why the Application had been `OutOfSync` since the Longhorn failure.
+
+The old chart mounted `thelounge-volume`, a 20 GiB `longhorn-static` claim `Terminating` since
+2026-08-28 and held only by the running pod. Twenty gigabytes was a guess for what is a
+`users.json`, a log directory and per-network settings. The rebuild creates `thelounge-config`,
+`128Mi` on `local-path`, mounted at `/var/opt/thelounge` — the image's own `THELOUNGE_HOME`. The
+contents of the old claim were abandoned by decision on 2026-11-13 and are not migrated: first start
+is empty, and the accounts and networks are re-created by hand. The old claim and its volume are
+cleared with the disposition loop once the pod that held the mount is gone.
+
+The image ends its Dockerfile with `USER node:node`, so the chart runs as UID 1000 rather than the
+house 1100. A new `local-path` volume arrives world-writable, so the claim needed no `chown`; the
+chart must not set `fsGroup`, which the kubelet never applies on hostPath-backed volumes. The old
+`affinity` on the retired `node-type: general` label is replaced by `nodeSelector` on `nuc0`.
+
+The probes are the narrow pair. The image has no health endpoint: `/` returns the login page with a
+200 whether or not an IRC network is reachable, so liveness is a TCP connect on 9000 and readiness
+is off, with the reason next to the values. `config.js` is a file, so it lives in a ConfigMap mounted
+with `subPath`; the Deployment hashes it into `checksum/config` because a `subPath` mount never sees
+the update on its own. The init container that copied the file into the claim on every start is gone,
+and with it `busybox:1.35`.
+
+The gate is forward auth, not OIDC: The Lounge has none, and the LDAP provider its own integration
+guide uses needs an LDAP outpost this cluster does not run. So the route is `lan-only` then
+`authentik-forwardauth` (blueprint `app-thelounge`, `homelab-users`), and the app still asks for its
+own account behind it — the two sign-ins are the known cost of the mechanism, not an oversight. The
+two chart-local Middlewares (`thelounge-security`, `thelounge-redirect-https`) are replaced by the
+shared `kube-system-*` copies; the `TLSOption` stays per-app, because it belongs to the
+`*.kub.home.ashudev.com` certificate, not to the internal `*.kub.local` policy.
+
+Sizing came from the pod that had run 98 days: p95 76Mi, peak 81Mi working set, CPU peak 2m. Request
+64Mi → 80Mi, limit 128Mi unchanged. There is no log-level knob — console output follows the `debug`
+object in `config.js`, both keys off — so the chart sets nothing and says so next to `env`.
+
+Debt: no metrics exporter in the image, and the LDAP path to one sign-in is a follow-up card.
+
 ### qbittorrent
 
 As of 2026-11-18: the last media-stack chart to go through the contract pass, and the only one with a
