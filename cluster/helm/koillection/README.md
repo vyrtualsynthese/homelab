@@ -51,6 +51,21 @@ So the chart keeps the default capability set and sets only `allowPrivilegeEscal
 same shape `prowlarr` uses for its LinuxServer init. Hardening that cannot start the app is not
 hardening.
 
+## What the Secret must contain
+
+The chart reads four keys from the `koillection` Secret in its own namespace and creates none of
+them:
+
+| Key | Value |
+|---|---|
+| `DB_NAME` | `koillection` |
+| `DB_HOST` | `postgres.databases.svc.cluster.local` — **not** `postgres-postgresql…`, the Bitnami Service that was retired on 2026-11-13. A stale value here fails at step 4 of the entrypoint with `could not translate host name`, which looks like a chart fault and is not |
+| `DB_USER` | `koillection` |
+| `DB_PASSWORD` | the value the role holds; `runbooks/postgres-add-database.md` |
+
+The namespace is already in the instance's `networkPolicy.consumerNamespaces`, so the only other
+precondition is the role and database themselves.
+
 ## Where the volume class came from
 
 Uploads are 20 GiB of item photos and documents, so they do not belong on a node disk. Of the NFS
