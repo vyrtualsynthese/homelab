@@ -37,11 +37,14 @@ spec:
         # `NETWORK_SHARE_MODE` is one switch over three mounts and only the
         # library is a network share. Upstream skips the recursive chown of
         # `/config` and `/cwa-book-ingest` because of it, so on this deployment
-        # the app starts as 1100 on claims whose files are not 1100's: seven
+        # the app starts as 1100 on claims whose files are not 1100's: eight
         # `install: cannot change owner ... Operation not permitted` lines, then
         # `attempt to write a readonly database` for `app.db`, and an AutoZipper
-        # that cannot start. This does the chown the switch removed. Root only
-        # for the syscall; CHOWN is the only capability it keeps.
+        # that cannot start. This does the chown the switch removed.
+        #
+        # CHOWN changes the owner; DAC_OVERRIDE is what lets root walk into the
+        # directories the app creates as 0700 and 1100. The first rollout added
+        # CHOWN alone and stopped on eight of them with `Permission denied`.
         - name: fix-claim-ownership
           image: {{ .image }}
           securityContext:
@@ -51,6 +54,7 @@ spec:
             capabilities:
               add:
                 - CHOWN
+                - DAC_OVERRIDE
               drop:
                 - ALL
           resources:
@@ -59,8 +63,14 @@ spec:
             - sh
             - -c
             - |
-              chown -R {{ .uid }}:{{ .gid }} {{ .paths | join " " }}
-              echo "claims now owned by {{ .uid }}:{{ .gid }}"
+              if chown -R {{ .uid }}:{{ .gid }} {{ .paths | join " " }}; then
+                echo "claims now owned by {{ .uid }}:{{ .gid }}"
+              else
+                # Not fatal: the app can run with part of the tree owned by
+                # another uid, and failing here would keep the WebUI down. Say
+                # so loudly instead of letting the app discover it.
+                echo "WARNING: chown did not cover every path (see above); /config may still be partly owned by another uid"
+              fi
           volumeMounts:
             {{- if $.Values.storage.config.enabled }}
             - name: config
