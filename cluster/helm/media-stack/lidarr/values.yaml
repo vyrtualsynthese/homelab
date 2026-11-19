@@ -25,7 +25,7 @@ image:
   repository: lscr.io/linuxserver/lidarr
   # -- Pin the full release tag. `3.1.6` is the series tag and moves; this one
   # does not. Must equal Chart.yaml's appVersion.
-  tag: "3.1.6.5079-ls48"
+  tag: "3.1.6.5079-ls49"
   pullPolicy: IfNotPresent
 
 imagePullSecrets: []
