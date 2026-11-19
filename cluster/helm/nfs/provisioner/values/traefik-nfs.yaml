@@ -1,0 +1,9 @@
+# Traefik's ACME certificate store. Live: never recreate this claim.
+nfs-subdir-external-provisioner:
+  nameOverride: traefik-nfs
+  fullnameOverride: traefik-nfs
+  nfs:
+    path: /mnt/storage/traefik
+    volumeName: traefik-nfs
+  storageClass:
+    name: traefik-nfs
