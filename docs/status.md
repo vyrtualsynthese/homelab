@@ -146,7 +146,7 @@ Working, on the old chart shape. This is the queue for the chart work, not a def
 | Application | Namespace | Replicas | Note |
 |---|---|---|---|
 | `ashuvidz` | ashuvidz | 1/1 | |
-| `dashy` | dashy | 1/1 | `latest` tag and OutOfSync at the snapshot; repaired 2026-11-18 — image pinned, route internal and gated |
+| `dashy` | dashy | 1/1 | `latest` tag and OutOfSync at the snapshot; repaired 2026-11-18 — image pinned. Served publicly at `dashy.ashudev.com` since 2026-11-19, behind the admins-only forward-auth gate; the old names redirect to it |
 | `firefly` | firefly | 3/3 | OutOfSync; now on the `Bound` claim `firefly-config-2` |
 | `guacamole` | guacamole | 2/2 | OutOfSync |
 | `linkstack` | linkstack | 1/1 | **Borrowed volume**; `latest` tag |
