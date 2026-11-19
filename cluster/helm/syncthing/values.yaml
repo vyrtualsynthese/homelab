@@ -58,6 +58,26 @@ app:
     enabled: true
     className: ""
     annotations: {}
+    # Middlewares for the TLS router, rendered as `<namespace>-<name>@kubernetescrd`
+    # in this order.
+    #
+    # `lan-only` is the network floor every non-public route carries, and it runs
+    # first: an outside request is refused before the forward-auth round trip.
+    #
+    # `authentik-forwardauth` is the gate. Its authentik side is
+    # `cluster/helm/authentik/files/app-syncthing.yaml`: a `forward_single` proxy
+    # provider for this host, bound to the `authentik Admins` group. The WebUI keeps
+    # its own login as break-glass until the operator removes it in Settings → GUI
+    # (and turns on Insecure Admin Access) once the gate is proven.
+    #
+    # The plain-HTTP router in `ingress-public-redirect.yaml` reads none of this: it
+    # keeps `lan-only` and the redirect, so a plain-HTTP visit costs no round trip
+    # before the 301.
+    middlewares:
+      - name: lan-only
+        namespace: kube-system
+      - name: authentik-forwardauth
+        namespace: kube-system
 
   # Sized from Prometheus on 2026-11-13 over the 39h it holds: 60Mi average and
   # 110Mi peak. It had no request and no limit at all, so the scheduler
