@@ -5,8 +5,9 @@ Longhorn volume by operator decision, so this starts empty: the device has to be
 re-paired and each folder re-added with the ID its peers already use.
 
 The name is `<fullname>-config` (syncthing-config), not syncthing-conf: that name
-is still held by a Terminating Longhorn claim and cannot be reused while the
-object exists. See docs/cleanup/longhorn-disposition.md.
+was held by a Terminating Longhorn claim when this claim was created, so the
+rebuild took a new one and the config now lives here. See
+docs/cleanup/longhorn-disposition.md.
 
 `helm.sh/resource-policy: keep` so neither an uninstall nor an ArgoCD prune can
 delete the data by accident.
