@@ -25,7 +25,7 @@
                frss:cssFullContent="#content"/>
     </outline>
     <outline text="Dev" title="Dev">
-      <outline type="rss" text="Docker blog" title="Docker blog" xmlUrl="https://www.docker.com/blog/feed/" frss:cssFullContent=".entry-content"/>
+      <outline type="rss" text="Docker blog" title="Docker blog" xmlUrl="https://www.docker.com/feed/" frss:cssFullContent=".entry-content"/>
       <outline type="rss" text="Kubernetes blog" title="Kubernetes blog" xmlUrl="https://kubernetes.io/feed.xml" frss:cssFullContent="main"/>
       <outline type="rss" text="WSL2" title="WSL2" xmlUrl="https://devblogs.microsoft.com/commandline/feed/" frss:cssFullContent=".entry-content"/>
       <outline type="rss" text="Logseq blog" title="Logseq blog" xmlUrl="https://blog.logseq.com/rss/" frss:cssFullContent="article"/>
