@@ -71,6 +71,14 @@ An API client sends a key, not a session, so it cannot complete a sign-in; a gat
 `/api` where the tool's own API checks that key. The pattern and its cost are in
 [network.md](network.md).
 
+## The worker runs one task at a time
+
+Blueprint applies and outpost updates are carried out by one worker process, and it runs them
+serially: a second task reconciling the permission tables at the same moment deadlocks, fails,
+retries and takes the queue down with it. For the same reason a rollout stops the old worker before
+starting the new one, instead of running both. The incident, the measurements and the recovery steps
+are in [authentik worker deadlocks](../authentik-worker-deadlocks.md).
+
 ## Break-glass
 
 Every app that closed its own login keeps a way back — a git change or a documented command, never a
