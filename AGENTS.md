@@ -198,17 +198,19 @@ are in `docs/superpowers/plans/`.
    to them. See `docs/audit/ansible-hosts.md`.
 4. **Longhorn is gone, but it cannot bury its dead.** The driver, its StorageClasses, its custom
    resources and the `longhorn-system` namespace are gone, and every application that was on it runs on
-   `local-path` or one of the NFS classes — except two: **`syncthing` and `thelounge` still mount
-   their Longhorn claims** from before the failure. What survives is those two PVs and their two
-   PVCs, stuck `Terminating` since 2026-08-28. Twenty-three of the twenty-six volumes and three
-   of the six claims were cleared on 2026-11-18; `n8n` was rebuilt on `local-path` and its claim and
-   volume cleared on 2026-11-19; the namespace is gone. Their contents were
+   `local-path` or one of the NFS classes. What survives is **one** PV and its PVC, `syncthing-conf`,
+   stuck `Terminating` since 2026-08-28. Twenty-three of the twenty-six volumes and three
+   of the six claims were cleared on 2026-11-18; `n8n`, `thelounge` and `syncthing` were rebuilt on
+   `local-path` on 2026-11-19, and the first two were cleared the same day. The namespace is gone.
+   Those contents were
    abandoned by decision, and **they will never clear on their own**: the finalizers name the
    Longhorn CSI driver
    (`external-attacher/driver-longhorn-io`), which no longer exists to remove itself, and the bound
-   ones also carry `kubernetes.io/pv-protection` until the matching claim goes.
+   ones also carry `kubernetes.io/pv-protection` until the matching claim goes. `syncthing` no longer
+   mounts its claim — only the dead pod `syncthing-75bc646f6b-b8cmq` does, and the running app is on
+   `syncthing-config`.
 
-   The inventory, the two claims that must wait for a rebuild, and the exact patch loop are in
+   The inventory and the exact patch loop are in
    [`docs/cleanup/longhorn-disposition.md`](docs/cleanup/longhorn-disposition.md). Clearing one is a
    hand operation — the pod holding the mount cannot finish its own teardown, because the driver that
    would unmount it is gone, so force-delete it first, then patch the finalizers away, PV first and

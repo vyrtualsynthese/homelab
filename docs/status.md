@@ -151,8 +151,8 @@ Working, on the old chart shape. This is the queue for the chart work, not a def
 | `guacamole` | guacamole | 2/2 | OutOfSync |
 | `linkstack` | linkstack | 1/1 | **Borrowed volume**; `latest` tag |
 | `n8n` | n8n | 1/1 | **Borrowed volume** at the snapshot; rebuilt on `local-path` on 2026-11-19 |
-| `syncthing` | syncthing | 1/1 | **Borrowed volume**; OutOfSync |
-| `thelounge` | thelounge | 1/1 | **Borrowed volume**; OutOfSync |
+| `syncthing` | syncthing | 1/1 | **Borrowed volume** at the snapshot; rebuilt on `local-path` on 2026-11-19 (`syncthing-config`, pod on `nuc0`). Only the dead pod and its Longhorn claim remain |
+| `thelounge` | thelounge | 1/1 | **Borrowed volume** at the snapshot; rebuilt on `local-path` on 2026-11-19 (`thelounge-config`); its Longhorn claim is gone |
 | `local-path` | default | 1/1 | OutOfSync; provisioner settings matter to every claim |
 | `renovate` | renovate | CronJob | OutOfSync; Application and values disagreed on the chart version |
 | `plex` | media-stack | 1/1 | Contract exceptions recorded in its README |
@@ -174,15 +174,18 @@ are reported that way while serving their claims normally. That state is ArgoCD'
 
 ## Running on a borrowed volume
 
-`linkstack`, `n8n`, `syncthing` and `thelounge` mount claims that are already stuck `Terminating` —
-the Longhorn volumes the 2026 disk failure orphaned. Their pods keep running because the volume is
+`linkstack`, `n8n`, `syncthing` and `thelounge` mounted claims that were already stuck `Terminating` —
+the Longhorn volumes the 2026 disk failure orphaned. Their pods kept running because the volume was
 still attached and the deletion is blocked by a finalizer no driver can remove any more.
 
-The consequence matters for W0, the volume-cleanup workstream: clearing those finalizers **stops
+The consequence mattered for W0, the volume-cleanup workstream: clearing those finalizers **stops
 these apps and destroys their config**. Do not treat "1/1 ready" as "safe" for them. Twelve
 claims were stuck `Terminating` at the snapshot, not the nine the previous page recorded; `firefly`
-has since moved to a `Bound` claim and left this list, and `n8n` followed on 2026-11-19 when it was
-rebuilt on `local-path`. `kubectl get pvc -A` shows the current set.
+has since moved to a `Bound` claim and left this list, `n8n` followed on 2026-11-19 when it was
+rebuilt on `local-path`, and `syncthing` and `thelounge` followed the same day. **One claim is left
+in this state**: `syncthing/syncthing-conf`, held by the force-deletable pod
+`syncthing-75bc646f6b-b8cmq`; the running app no longer mounts it, so clearing it loses nothing.
+`kubectl get pvc -A | grep Terminating` shows the current set.
 
 ## ArgoCD cannot compare (2)
 
@@ -209,12 +212,12 @@ route refers to by name — the `lan-only` IP gate, the `redirect-to-https` midd
 under `cluster/infrastructure/` and are applied by hand. It is counted apart from the running apps
 because there is nothing to run.
 
-## Drift, not breakage (10)
+## Drift, not breakage (8)
 
-`dashy`, `firefly`, `guacamole`, `linkstack`, `local-path`, `mktxp`, `n8n`, `renovate`, `syncthing`
-and `thelounge` are `OutOfSync` while `Healthy`. That means git and the cluster disagree about
-something — often an image Renovate bumped, sometimes a UI edit. Not urgent; worth one look each
-when its chart is touched.
+`dashy`, `firefly`, `guacamole`, `linkstack`, `local-path`, `mktxp`, `n8n` and `renovate` are
+`OutOfSync` while `Healthy`. That means git and the cluster disagree about something — often an
+image Renovate bumped, sometimes a UI edit. Not urgent; worth one look each when its chart is
+touched. `syncthing` and `thelounge` left this list on 2026-11-19, when their rebuilds synced.
 
 ## Faults this page does not fix
 
