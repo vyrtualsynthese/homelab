@@ -47,7 +47,7 @@ limit.
 | `media-stack/unpackerr` | 34Mi / 472Mi | 64Mi (unchanged) | 1Gi → **768Mi** | 768Mi is still 1.6× the extraction peak |
 | `exportarr` sidecars (8) | 26Mi / 38Mi | 56Mi → **32Mi** | 112Mi → **64Mi** | Reserved twice what the sidecar holds |
 | `media-stack/plex` exporter sidecar | 19Mi / 37Mi | 64Mi → **32Mi** | 128Mi → **64Mi** | Same |
-| `nfs-*` provisioners (9) | 49Mi / 99Mi | none → **64Mi** | none → **192Mi** | `resources: {}` since they were vendored |
+| NFS provisioners (8 releases of `nfs/provisioner`, measured 2026-11-18) | 49Mi / 99Mi | none → **64Mi** | none → **192Mi** | `resources: {}` while they were vendored charts |
 | `media-stack/qbittorrent` vpn sidecar | 15Mi / 22Mi | 64Mi → **16Mi** | 128Mi → **64Mi** | Kernel tunnel buffers are not charged to the container |
 
 Two init containers in `qbittorrent` (`wait-for-downloads`, `init-qbittorrent`) run for seconds,

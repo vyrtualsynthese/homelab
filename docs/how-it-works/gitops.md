@@ -49,10 +49,11 @@ develop` and points at one chart, or at a values file for a remote chart.
   new external charts are D.
 - **D — wrapper chart.** A small chart here pins the official chart as a dependency at an exact
   version and pins every image it renders. The way new external charts are consumed: `monitoring/`,
-  `authentik`, `dashy`, `filebrowser`.
+  `authentik`, `dashy`, `filebrowser`, and `nfs/provisioner`, whose one chart serves all eight NFS
+  exports with a values file each.
 
-Some Application files under `projects/nfs/` point at a path that does not exist; `AGENTS.md` §7
-keeps that list.
+An Application that points at a path with no chart renders nothing and still reports `Synced`, which
+is how the NFS provisioners sat broken until 2026-11-19. `AGENTS.md` §7 keeps the resolved list.
 
 ## Why auto-sync is not in git
 
