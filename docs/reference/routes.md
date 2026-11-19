@@ -25,11 +25,10 @@ the hostname is public or a `*.kub.home.ashudev.com` name the LAN resolves to `1
 
 ## Public
 
-These five are on the allowlist and are meant to answer the internet. Two carry no gate at all: what
-sits on them sets response headers and, for Plex and Seerr, a rate limit of 100 requests per second
-on average, and neither of those is authentication. Dashy is the exception — it is the one public
-application behind the forward-auth gate, and the authentik page it signs in through is public for
-that reason.
+These five are on the allowlist and are meant to answer the internet. Only Dashy carries a gate; the
+other four set response headers — and, for Plex and Seerr, a rate limit of 100 requests per second on
+average — and neither of those is authentication. The authentik page Dashy signs in through is
+public for that reason.
 
 | Host | Application | Namespace | Gate | TLS | Public? |
 |---|---|---|---|---|---|
@@ -41,7 +40,7 @@ that reason.
 
 ## Internal over TLS
 
-Twenty-four hostnames. Sixteen use the internal CA on a `*.kub.local` name; eight carry their
+Twenty-four hostnames. Seventeen use the internal CA on a `*.kub.local` name; seven carry their
 own certificate on a `*.kub.home.ashudev.com` or `*.ashudev.com` name.
 
 | Host | Application | Namespace | Gate | TLS | Public? |
@@ -98,9 +97,11 @@ path and query kept.
 sends a key, not a browser session. `maintainerr` checks no key of its own, so on that host `lan-only`
 is the only control on `/api`.
 
-**Five routes carry no `lan-only`.** They are the five rows whose gate reads **none**. All five are
-chart-first: the charts already emit `kube-system-lan-only@kubernetescrd`, the live objects predate
-the rule, and a sync closes the gap. `hack/check-exposure.sh` sees all five and passes.
+**Three routes carry no `lan-only` yet.** They are the rows whose gate reads **none** —
+`koillection`, `syncthing` and `thelounge`. All three are chart-first and drift, not design: their
+charts already emit `kube-system-lan-only@kubernetescrd`, the live objects predate the rule, and a
+sync closes the gap. The five public hosts above carry no `lan-only` by design instead, which is the
+other case `hack/check-exposure.sh` allows; it passes on both.
 
 **Two routers on Plex.** `plex.kub.home.ashudev.com` is claimed twice, both on `websecure`:
 `plex-public` (headers and rate limit) and a leftover `plex-media-public` from an older release with

@@ -30,6 +30,9 @@ spec:
           port: 8080
   tls:
     certResolver: myresolver
+    options:
+      name: dashy-tlsoption
+      namespace: {{ .Release.Namespace }}
 ---
 # Plain-HTTP mirror: one redirect to TLS, nothing proxied, and no gate. A gate
 # here would answer the off-LAN browser with a 403 before it ever asked for the
