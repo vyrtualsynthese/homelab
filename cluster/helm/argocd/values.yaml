@@ -23,6 +23,13 @@ argo-cd:
       controller.log.level: warn
       reposerver.log.level: warn
       notificationscontroller.log.level: warn
+      # Measured 2026-11-19, after the three above went to `warn`: the API server
+      # was then the loudest thing left in argocd at 12.9 MB/day of `info`, almost
+      # all of it `invalidated cache for resource` and a started/finished pair per
+      # gRPC call from the UI. `warn` keeps the two lines a human acts on — the
+      # `token does not have jti or uti claim` warning and any auth failure — and
+      # repo-server's manifest errors are already at error level and unaffected.
+      server.log.level: warn
     cm:
       # Must be exactly the URL the browser uses, scheme included. Argo CD checks
       # the SSO return URL against this value and answers `Invalid redirect URL:
