@@ -7,6 +7,11 @@ import pathlib
 import sys
 import unittest
 
+try:
+    import bcrypt
+except ImportError:  # the login tests need it; the rest of the suite does not
+    bcrypt = None
+
 HACK = pathlib.Path(__file__).resolve().parents[1]
 SYNC = HACK / "freshrss_sync.py"
 OPML_PATH = HACK / "freshrss" / "feeds.opml"
@@ -55,6 +60,26 @@ class ParseTests(unittest.TestCase):
     def test_a_full_content_selector_does_not_add_or_drop_a_feed(self):
         feeds = mod.parse_opml(OPML_PATH.read_text())
         self.assertEqual(len(feeds), 20)
+
+    def test_a_full_content_selector_reaches_the_feed_as_path_entries(self):
+        feeds = mod.parse_opml(OPML_PATH.read_text())
+        docker = next(f for f in feeds if f.title == "Docker blog")
+        self.assertEqual(dict(docker.settings), {"path_entries": ".entry-content"})
+
+    def test_an_xpath_feed_carries_its_selectors_as_form_fields(self):
+        feeds = mod.parse_opml(OPML_PATH.read_text())
+        anth = next(f for f in feeds if f.title == "Anthropic / Claude")
+        self.assertEqual(dict(anth.settings), {
+            "path_entries": "article",
+            "xPathItem": "//a[starts-with(@href,'/news/')]",
+            "xPathItemTitle": "normalize-space(.)",
+            "xPathItemUri": "@href",
+        })
+
+    def test_a_feed_without_frss_attributes_carries_no_settings(self):
+        feeds = mod.parse_opml(OPML_PATH.read_text())
+        steam = next(f for f in feeds if f.title == "Steam")
+        self.assertEqual(steam.settings, ())
 
     def test_normalize_url_strips_one_trailing_slash_and_keeps_the_query(self):
         self.assertEqual(mod.normalize_url("https://a.test/feed/"), "https://a.test/feed")
@@ -271,3 +296,257 @@ class CliTests(unittest.TestCase):
             return 200, rss.decode()
         with contextlib.redirect_stdout(io.StringIO()):
             self.assertEqual(mod.main(["verify"], transport=transport, env={}), 0)
+
+
+def settings_page(feed_id, fields=None):
+    """One feed's settings page, shaped like the one FreshRSS 1.30 renders."""
+    fields = fields or {}
+
+    def text(name):
+        return fields.get(name, "")
+
+    def select(name, options, default):
+        chosen = str(fields.get(name, default))
+        return "".join(
+            '<option value="%s"%s>%s</option>'
+            % (value, ' selected="selected"' if value == chosen else "", value)
+            for value in options)
+
+    return f"""<html><body>
+<form method="post" action="/i/?c=feed&amp;a=clearCache&amp;id={feed_id}">
+  <input type="hidden" name="_csrf" value="CSRF" />
+  <input type="hidden" name="id" value="{feed_id}" />
+</form>
+<form method="post" action="/i/?c=subscription&amp;a=feed&amp;id={feed_id}" enctype="multipart/form-data">
+  <input type="hidden" name="_csrf" value="CSRF" />
+  <input type="hidden" name="id" value="{feed_id}" />
+  <input type="hidden" name="from" value="subscription" />
+  <select name="feed_kind">{select("feed_kind", ("0", "10"), "0")}</select>
+  <select name="ttl">{select("ttl", ("0", "1800"), "1800")}</select>
+  <input type="checkbox" name="mute" value="1" checked="checked" />
+  <input type="checkbox" name="clear_cache" value="1" />
+  <textarea name="path_entries_conditions">{text("path_entries_conditions")}</textarea>
+  <input type="text" name="path_entries" value="{text("path_entries")}" />
+  <input type="text" name="xPathItem" value="{text("xPathItem")}" />
+  <input type="text" name="xPathItemTitle" value="{text("xPathItemTitle")}" />
+  <input type="text" name="xPathItemUri" value="{text("xPathItemUri")}" />
+</form>
+</body></html>"""
+
+
+class FormTests(unittest.TestCase):
+    def test_the_settings_form_is_the_one_carrying_path_entries(self):
+        form = mod.settings_form(settings_page(5, {"path_entries": ".entry-content"}))
+        self.assertIn("id=5", form.action)
+        self.assertEqual(form.value("path_entries"), ".entry-content")
+
+    def test_a_checked_box_is_sent_and_an_unchecked_one_is_not(self):
+        form = mod.settings_form(settings_page(5))
+        self.assertEqual(form.value("mute"), "1")
+        self.assertIsNone(form.value("clear_cache"))
+
+    def test_a_select_sends_its_selected_option(self):
+        form = mod.settings_form(settings_page(5))
+        self.assertEqual(form.value("ttl"), "1800")
+
+    def test_a_textarea_sends_its_text(self):
+        form = mod.settings_form(settings_page(5, {"path_entries_conditions": "a\nb"}))
+        self.assertEqual(form.value("path_entries_conditions"), "a\nb")
+
+    def test_a_page_without_a_settings_form_is_an_error(self):
+        with self.assertRaises(RuntimeError):
+            mod.settings_form("<html><body>nothing</body></html>")
+
+    def test_the_form_whose_action_is_the_feed_route_wins(self):
+        page = """<html><body>
+        <form action="/i/?c=feed&amp;a=preview&amp;id=5">
+          <input type="text" name="path_entries" value="article" />
+        </form>
+        <form action="/i/?c=subscription&amp;a=feed&amp;id=5">
+          <input type="text" name="path_entries" value="#content" />
+        </form>
+        </body></html>"""
+        self.assertEqual(mod.settings_form(page).value("path_entries"), "#content")
+
+
+class DriftTests(unittest.TestCase):
+    def test_a_differing_selector_is_drift(self):
+        form = mod.settings_form(settings_page(5, {"path_entries": "#content"}))
+        self.assertEqual(mod.settings_drift(form, {"path_entries": ".entry-content"}),
+                         {"path_entries": ("#content", ".entry-content")})
+
+    def test_a_matching_selector_is_not_drift(self):
+        form = mod.settings_form(settings_page(5, {"path_entries": ".entry-content"}))
+        self.assertEqual(mod.settings_drift(form, {"path_entries": ".entry-content"}), {})
+
+
+class TransportTests(unittest.TestCase):
+    def test_the_cookie_keeping_transport_can_be_built(self):
+        self.assertTrue(callable(mod.cookied_transport()))
+
+
+class FakeWeb:
+    """The FreshRSS web UI: the nonce endpoint, the login form, and the feed pages."""
+
+    def __init__(self, password="pw", fields=None, login_status=200, store=True):
+        self.calls = []
+        self.logged_in = False
+        self.nonce = "N0NCE123"
+        self.login_status = login_status
+        self.store = store
+        self.password_hash = bcrypt.hashpw(password.encode(), bcrypt.gensalt(rounds=4)).decode()
+        self.fields = {k: dict(v) for k, v in (fields or {}).items()}
+
+    def __call__(self, method, url, headers=None, data=None):
+        self.calls.append((method, url, headers or {}, data))
+        query = urllib.parse.parse_qs(urllib.parse.urlparse(url).query)
+        if query.get("a") == ["nonce"]:
+            return 200, json.dumps({"salt1": self.password_hash[:29], "nonce": self.nonce}), {}
+        if query.get("a") == ["formLogin"]:
+            sent = dict(urllib.parse.parse_qsl((data or b"").decode()))
+            self.logged_in = self._challenge_ok(sent)
+            if self.logged_in:
+                return 200, "<html>ok</html>", {}
+            if self.login_status != 200:
+                return self.login_status, "<html>invalid login</html>", {}
+            return 200, self.login_page(), {}
+        if not self.logged_in:
+            return 200, self.login_page(), {}
+        feed_id = (query.get("id") or [""])[0]
+        if query.get("a") == ["feed"]:
+            if method == "POST" and self.store:
+                sent = dict(urllib.parse.parse_qsl((data or b"").decode()))
+                self.fields[feed_id] = {**self.fields.get(feed_id, {}), **sent}
+            return 200, settings_page(feed_id, self.fields.get(feed_id, {})), {}
+        return 404, "", {}
+
+    @staticmethod
+    def login_page():
+        return '<html><form method="post" action="/i/?c=auth&amp;a=formLogin"></form></html>'
+
+    def _challenge_ok(self, sent):
+        try:
+            return (sent.get("username") == "u" and
+                    bcrypt.checkpw((self.password_hash + self.nonce).encode(),
+                                   sent.get("challenge", "").encode()))
+        except ValueError:
+            return False
+
+    def posts(self):
+        return [c for c in self.calls if c[0] == "POST" and "a=feed" in c[1]]
+
+
+@unittest.skipIf(bcrypt is None, "the login needs the bcrypt package")
+class WebLoginTests(unittest.TestCase):
+    def test_login_asks_for_the_nonce_under_the_app_root(self):
+        web = FakeWeb()
+        mod.WebClient("https://x.test", "u", "pw", transport=web).login()
+        self.assertIn("/i/?c=javascript&a=nonce", web.calls[0][1])
+
+    def test_login_solves_the_nonce_challenge(self):
+        web = FakeWeb()
+        mod.WebClient("https://x.test", "u", "pw", transport=web).login()
+        self.assertTrue(web.logged_in)
+
+    def test_a_wrong_password_raises_auth_error(self):
+        web = FakeWeb()
+        with self.assertRaises(mod.AuthError):
+            mod.WebClient("https://x.test", "u", "wrong", transport=web).login()
+
+    def test_a_login_answer_that_is_not_a_page_raises_auth_error(self):
+        """The instance answers 403 with an error page when the challenge does not match."""
+        web = FakeWeb(login_status=403)
+        with self.assertRaises(mod.AuthError):
+            mod.WebClient("https://x.test", "u", "wrong", transport=web).login()
+
+
+@unittest.skipIf(bcrypt is None, "the login needs the bcrypt package")
+class SettingsCliTests(unittest.TestCase):
+    ENV = {"FRESHRSS_USER": "u", "FRESHRSS_API_PASSWORD": "p", "FRESHRSS_WEB_PASSWORD": "pw"}
+
+    def matching_web(self, feeds):
+        fields = {}
+        for i, feed in enumerate(feeds, start=1):
+            settings = dict(feed.settings)
+            settings["feed_kind"] = "10" if feed.kind == "xpath" else "0"
+            fields[str(i)] = settings
+        return FakeWeb(fields=fields)
+
+    def test_check_reports_a_differing_selector_and_exits_one(self):
+        feeds = mod.parse_opml(OPML_PATH.read_text())
+        t = FakeTransport(subs=[(f.url, f.title, f.category) for f in feeds])
+        with contextlib.redirect_stdout(io.StringIO()) as out:
+            code = mod.main(["check"], transport=t, env=self.ENV,
+                            web_transport=FakeWeb(fields={}))
+        self.assertEqual(code, 1)
+        self.assertIn("Docker blog", out.getvalue())
+
+    def test_check_exits_zero_when_every_selector_matches(self):
+        feeds = mod.parse_opml(OPML_PATH.read_text())
+        t = FakeTransport(subs=[(f.url, f.title, f.category) for f in feeds])
+        with contextlib.redirect_stdout(io.StringIO()):
+            code = mod.main(["check"], transport=t, env=self.ENV,
+                            web_transport=self.matching_web(feeds))
+        self.assertEqual(code, 0)
+
+    def test_apply_posts_the_whole_settings_form_with_the_file_selector(self):
+        feeds = mod.parse_opml(OPML_PATH.read_text())
+        t = FakeTransport(subs=[(f.url, f.title, f.category) for f in feeds])
+        web = FakeWeb(fields={})
+        with contextlib.redirect_stdout(io.StringIO()):
+            mod.main(["apply"], transport=t, env=self.ENV, web_transport=web)
+        docker = [c for c in web.posts() if b"path_entries=main" in (c[3] or b"")]
+        self.assertEqual(len(docker), 1)
+        body = urllib.parse.parse_qs(docker[0][3].decode())
+        self.assertEqual(body["_csrf"], ["CSRF"])
+        self.assertEqual(body["ttl"], ["1800"])
+        self.assertEqual(body["mute"], ["1"])
+
+    def test_apply_twice_posts_no_second_settings_form(self):
+        feeds = mod.parse_opml(OPML_PATH.read_text())
+        t = FakeTransport(subs=[(f.url, f.title, f.category) for f in feeds])
+        web = FakeWeb(fields={})
+        with contextlib.redirect_stdout(io.StringIO()):
+            mod.main(["apply"], transport=t, env=self.ENV, web_transport=web)
+            before = len(web.posts())
+            mod.main(["apply"], transport=t, env=self.ENV, web_transport=web)
+        self.assertEqual(len(web.posts()), before)
+
+    def test_apply_reports_what_the_instance_still_shows_when_a_post_does_not_take(self):
+        feeds = mod.parse_opml(OPML_PATH.read_text())
+        t = FakeTransport(subs=[(f.url, f.title, f.category) for f in feeds])
+        fields = {str(i + 1): {"path_entries": "old",
+                               "feed_kind": "10" if f.kind == "xpath" else "0"}
+                  for i, f in enumerate(feeds)}
+        web = FakeWeb(fields=fields, store=False)
+        with contextlib.redirect_stdout(io.StringIO()) as out:
+            code = mod.main(["apply"], transport=t, env=self.ENV, web_transport=web)
+        self.assertEqual(code, 1)
+        self.assertIn("path_entries old -> main", out.getvalue())
+
+    def test_a_dry_run_posts_nothing(self):
+        feeds = mod.parse_opml(OPML_PATH.read_text())
+        t = FakeTransport(subs=[(f.url, f.title, f.category) for f in feeds])
+        web = FakeWeb(fields={})
+        with contextlib.redirect_stdout(io.StringIO()):
+            mod.main(["apply", "--dry-run"], transport=t, env=self.ENV, web_transport=web)
+        self.assertEqual(web.posts(), [])
+
+    def test_without_the_web_password_settings_are_not_checked_and_the_run_still_passes(self):
+        feeds = mod.parse_opml(OPML_PATH.read_text())
+        t = FakeTransport(subs=[(f.url, f.title, f.category) for f in feeds])
+        web = FakeWeb(fields={})
+        env = {k: v for k, v in self.ENV.items() if k != "FRESHRSS_WEB_PASSWORD"}
+        with contextlib.redirect_stdout(io.StringIO()) as out:
+            code = mod.main(["check"], transport=t, env=env, web_transport=web)
+        self.assertEqual(code, 0)
+        self.assertIn("FRESHRSS_WEB_PASSWORD", out.getvalue())
+        self.assertEqual(web.calls, [])
+
+    def test_a_refused_web_login_exits_two(self):
+        feeds = mod.parse_opml(OPML_PATH.read_text())
+        t = FakeTransport(subs=[(f.url, f.title, f.category) for f in feeds])
+        env = dict(self.ENV, FRESHRSS_WEB_PASSWORD="wrong")
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+            code = mod.main(["check"], transport=t, env=env, web_transport=FakeWeb(fields={}))
+        self.assertEqual(code, 2)
