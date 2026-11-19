@@ -3,7 +3,7 @@ name: koillection
 description: Koillection catalogs a personal collection of books, films, games and their photos.
 type: application
 # Chart version. Renovate bumps this when the image tag moves.
-version: 0.2.0
+version: 0.2.1
 # Must match app.image.tag in values.yaml.
 appVersion: "1.8.6"
 home: https://koillection.github.io/
