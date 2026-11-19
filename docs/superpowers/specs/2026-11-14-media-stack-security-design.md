@@ -376,6 +376,13 @@ are untouched until step 5.
    and exits 0, so a cold cluster boots qBittorrent on its stock WebUI instead of the init container
    never finishing. Baking the files into a pinned image is still the phase-4 shape, if the UI must
    survive a boot with no internet at all.
+
+   **Digest pinning was rejected on 2026-11-19:** both shapes were weighed — the digest appended to
+   the tag (`tag@sha256:…`) and a separate `image.digest` rendered as `repository@digest` — and
+   neither was taken, so no chart gains a digest and Renovate's tag bumps stay the only control: a
+   re-pushed tag still changes what runs, unseen. The two charts this touched are settled in #321 and
+   #322.
+
 3. Ensure Renovate covers every media-stack chart; close the `latest` tags that remain.
 4. Plan the FileBrowser exit: archived upstream, running `v2.63.23`. Its own login (not forward
    auth) is the gate; the LAN allowlist is the network boundary.
