@@ -284,7 +284,7 @@ vueTorrent:
   # -- Tag of the `alpine` image the installer runs in. It is pinned because the
   # -- installer needs `apk`, which `busybox` does not carry.
   # renovate: datasource=docker depName=alpine
-  initTag: "3.22"
+  initTag: "3.24"
   # -- The installer runs for a few seconds at pod start, which is shorter than
   # the scrape interval, so there is no sample to size it from. These are a
   # protection ceiling, not a measurement: `apk add unzip` and one download.
