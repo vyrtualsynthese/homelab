@@ -31,7 +31,7 @@
       <outline type="rss" text="Logseq blog" title="Logseq blog" xmlUrl="https://blog.logseq.com/rss/" frss:cssFullContent="article"/>
     </outline>
     <outline text="IA" title="IA">
-      <outline type="rss" text="Mistral" title="Mistral" xmlUrl="https://mistral.ai/news/rss"/>
+      <outline type="rss" text="Mistral" title="Mistral" xmlUrl="https://mistral.ai/news/rss#force_feed"/>
       <outline type="HTML+XPath" text="Anthropic / Claude" title="Anthropic / Claude"
                xmlUrl="https://www.anthropic.com/news" htmlUrl="https://www.anthropic.com/news"
                frss:xPathItem="//a[starts-with(@href,'/news/')]"
