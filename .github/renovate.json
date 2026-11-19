@@ -29,12 +29,12 @@
   "customManagers": [
     {
       "customType": "regex",
-      "description": "A pin in a chart's values.yaml that is not an `image:` block, written as `# renovate: datasource=<ds> depName=<package>` on the line above the value. Today that is qBittorrent's VueTorrent release and the Alpine base of its installer. The key list is deliberately narrow: an `image:` block's `tag:` is already read by the helm-values manager, and annotating it here would extract the same pin twice.",
+      "description": "A pin in a chart's values.yaml that is not an `image:` block, written as `# renovate: datasource=<ds> depName=<package>` on the line above the value. Today that is qBittorrent's VueTorrent release, the Alpine base of its installer, and n8n's tag (read from GitHub releases because Docker Hub carries no prerelease flag). The key list is deliberately narrow: an `image:` block's `tag:` is already read by the helm-values manager, so a `tag:` only comes through here when it carries the annotation, and the packageRules switch the docker entry off.",
       "managerFilePatterns": [
         "/^cluster\\/helm\\/.+\\/values\\.ya?ml$/"
       ],
       "matchStrings": [
-        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)\\n\\s*(?:version|appVersion|initTag|dockerTag):\\s*\"?(?<currentValue>[^\"\\n]+?)\"?\\s*\\n"
+        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)[ \\t]*\\n[ \\t]*(?:version|appVersion|initTag|dockerTag|tag):[ \\t]*\"?(?<currentValue>[^\"\\n]+?)\"?[ \\t]*\\n"
       ]
     },
     {
@@ -65,6 +65,27 @@
       ],
       "matchPackageNames": [
         "https://github.com/vyrtualsynthese/homelab.git"
+      ],
+      "enabled": false
+    },
+    {
+      "description": "A GitHub release of n8n is tagged `n8n@2.48.6`, and the default versioning (semver-coerced) reads the letters in that prefix as the number 8, so every release looks like an unstable major jump and none is offered. extractVersion strips the prefix and semver compares the numbers; the same datasource carries each release's prerelease flag, which is what Docker Hub lacks.",
+      "matchDatasources": [
+        "github-releases"
+      ],
+      "matchPackageNames": [
+        "n8n-io/n8n"
+      ],
+      "versioning": "semver",
+      "extractVersion": "^n8n@(?<version>.+)$"
+    },
+    {
+      "description": "n8n publishes prerelease builds to Docker Hub as ordinary version tags (`3.3.0`), and only GitHub's release flag marks them unstable; Docker Hub has no such flag, so the docker datasource read a prerelease as an ordinary major upgrade (pull request #1001). The tag is read from GitHub releases through the annotation above it in cluster/helm/n8n/values.yaml, and this rule stops the docker lookup from offering the same pin a second time.",
+      "matchDatasources": [
+        "docker"
+      ],
+      "matchPackageNames": [
+        "n8nio/n8n"
       ],
       "enabled": false
     },
