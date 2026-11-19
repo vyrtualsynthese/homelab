@@ -1,0 +1,10 @@
+apiVersion: v2
+name: argocd
+description: Argo CD - the cluster's GitOps controller
+type: application
+version: 0.1.0
+appVersion: "3.5.2"
+dependencies:
+  - name: argo-cd
+    version: 10.4.1
+    repository: https://argoproj.github.io/argo-helm

@@ -1,117 +1,130 @@
-global:
-  # -- Default domain used by all components
-  ## Used for ingresses, certificates, SSO, notifications, etc.
-  domain: argocd.kub.local
-  image:
-    # -- If defined, a repository applied to all Argo CD deployments
-    repository: quay.io/argoproj/argocd
-    # -- Overrides the global Argo CD image tag whose default is the chart appVersion
-    tag: "v3.5.2"
-    # -- If defined, a imagePullPolicy applied to all Argo CD deployments
-    imagePullPolicy: IfNotPresent
-configs:
-  params:
-    server.insecure: true
-    # Measured 2026-11-18: these three wrote 747 MB/day between them, 49 % of the
-    # log pipeline. The application controller logs every reconcile step for every
-    # application, repo-server every gRPC call and cache hit, and the notifications
-    # controller a "Start processing"/"Processing completed" pair per notification.
-    # `warn` keeps a failed sync, a failed manifest generation and an auth error,
-    # which are the three a human acts on.
-    controller.log.level: warn
-    reposerver.log.level: warn
-    notificationscontroller.log.level: warn
-  cm:
-    # Must be exactly the URL the browser uses, scheme included. Argo CD checks
-    # the SSO return URL against this value and answers `Invalid redirect URL:
-    # the protocol and host (including port) must match` when they differ, so an
-    # `http` value on a browser that reaches the host over TLS rejects every
-    # sign-in before authentik is even contacted. Traefik terminates the TLS;
-    # the server itself stays plain HTTP behind it (`server.insecure`).
-    url: https://argocd.kub.local
-    # No local account: the built-in `admin` user is the only password login Argo
-    # CD offers, and authentik is the only identity source. Break-glass, if SSO is
-    # ever broken: kubectl -n argocd patch configmap argocd-cm --type merge -p
-    #   '{"data":{"admin.enabled":"true"}}' && kubectl -n argocd rollout restart
-    #   deploy/argocd-server, then sign in with the password in argocd-secret.
-    admin.enabled: "false"
-    # Dex trusts authentik as the only identity source. The client secret is
-    # not here: it comes from argocd-secret's dex.authentik.clientSecret, which
-    # carries the same value as ARGOCD_CLIENT_SECRET in the authentik-sso
-    # secret. `insecureEnableGroups` is required because Dex only forwards the
-    # groups claim for a non-TLS issuer otherwise.
-    dex.config: |
-      connectors:
-        - config:
-            issuer: https://authentik.kub.home.ashudev.com/application/o/argocd/
-            clientID: argocd
-            clientSecret: $dex.authentik.clientSecret
-            insecureEnableGroups: true
-            scopes: [openid, profile, email]
-          name: authentik
-          type: oidc
-          id: authentik
-  rbac:
-    # The admin level keeps the deployment control plane; the user level reads.
-    policy.csv: |
-      g, authentik Admins, role:admin
-      g, homelab-users, role:readonly
-## Server
-server:
-  metrics:
-    # -- Deploy metrics service
-    enabled: true
-    # Argo CD server ingress configuration
-    serviceMonitor:
-      # -- Enable a prometheus ServiceMonitor
+argo-cd:
+  global:
+    # -- Default domain used by all components
+    ## Used for ingresses, certificates, SSO, notifications, etc.
+    domain: argocd.kub.local
+    image:
+      # -- If defined, a repository applied to all Argo CD deployments
+      repository: quay.io/argoproj/argocd
+      # -- The image tag is the chart's appVersion. Argo CD upgrades itself with
+      # the dependency in Chart.yaml; a tag here would be a second version lever
+      # that can move apart from the chart (card 344, PR #966).
+      # -- If defined, a imagePullPolicy applied to all Argo CD deployments
+      imagePullPolicy: IfNotPresent
+  configs:
+    params:
+      server.insecure: true
+      # Measured 2026-11-18: these three wrote 747 MB/day between them, 49 % of the
+      # log pipeline. The application controller logs every reconcile step for every
+      # application, repo-server every gRPC call and cache hit, and the notifications
+      # controller a "Start processing"/"Processing completed" pair per notification.
+      # `warn` keeps a failed sync, a failed manifest generation and an auth error,
+      # which are the three a human acts on.
+      controller.log.level: warn
+      reposerver.log.level: warn
+      notificationscontroller.log.level: warn
+    cm:
+      # Must be exactly the URL the browser uses, scheme included. Argo CD checks
+      # the SSO return URL against this value and answers `Invalid redirect URL:
+      # the protocol and host (including port) must match` when they differ, so an
+      # `http` value on a browser that reaches the host over TLS rejects every
+      # sign-in before authentik is even contacted. Traefik terminates the TLS;
+      # the server itself stays plain HTTP behind it (`server.insecure`).
+      url: https://argocd.kub.local
+      # No local account: the built-in `admin` user is the only password login Argo
+      # CD offers, and authentik is the only identity source. Break-glass, if SSO is
+      # ever broken: kubectl -n argocd patch configmap argocd-cm --type merge -p
+      #   '{"data":{"admin.enabled":"true"}}' && kubectl -n argocd rollout restart
+      #   deploy/argocd-server, then sign in with the password in argocd-secret.
+      admin.enabled: "false"
+      # Dex trusts authentik as the only identity source. The client secret is
+      # not here: it comes from argocd-secret's dex.authentik.clientSecret, which
+      # carries the same value as ARGOCD_CLIENT_SECRET in the authentik-sso
+      # secret. `insecureEnableGroups` is required because Dex only forwards the
+      # groups claim for a non-TLS issuer otherwise.
+      dex.config: |
+        connectors:
+          - config:
+              issuer: https://authentik.kub.home.ashudev.com/application/o/argocd/
+              clientID: argocd
+              clientSecret: $dex.authentik.clientSecret
+              insecureEnableGroups: true
+              scopes: [openid, profile, email]
+            name: authentik
+            type: oidc
+            id: authentik
+    rbac:
+      # The admin level keeps the deployment control plane; the user level reads.
+      policy.csv: |
+        g, authentik Admins, role:admin
+        g, homelab-users, role:readonly
+  ## Server
+  server:
+    metrics:
+      # -- Deploy metrics service
       enabled: true
-  ingress:
-    # -- The chart's own `networking.k8s.io/v1` Ingress serves one router on every
-    # entry point it is given, so it cannot express this cluster's routing rules:
-    # the LAN gate, the default internal certificate and a plain-HTTP router that
-    # only redirects. Two Traefik IngressRoutes do it instead, in `extraObjects`.
-    enabled: false
+      # Argo CD server ingress configuration
+      serviceMonitor:
+        # -- Enable a prometheus ServiceMonitor
+        enabled: true
+    ingress:
+      # -- The chart's own `networking.k8s.io/v1` Ingress serves one router on every
+      # entry point it is given, so it cannot express this cluster's routing rules:
+      # the LAN gate, the default internal certificate and a plain-HTTP router that
+      # only redirects. Two Traefik IngressRoutes do it instead, in `extraObjects`.
+      enabled: false
 
-# Traefik IngressRoutes for the server, replacing the chart's core Ingress. The
-# TLS router sets neither `secretName` nor `certResolver` on purpose: Traefik then
-# serves it the cluster default certificate `kube-system/local-cert`, the
-# `*.kub.local` leaf signed by the ashulab internal CA. See
-# docs/runbooks/internal-ca.md.
-extraObjects:
-  - apiVersion: traefik.containo.us/v1alpha1
-    kind: IngressRoute
-    metadata:
-      name: argocd-server
-    spec:
-      entryPoints:
-        - websecure
-      routes:
-        - kind: Rule
-          match: Host(`{{ .Values.global.domain }}`)
-          middlewares:
-            - name: kube-system-lan-only@kubernetescrd
-          services:
-            - name: argocd-server
-              port: http
-      tls:
-        options:
-          name: internal-tls
-          namespace: kube-system
-  # Plain-HTTP mirror: the LAN gate first, then a permanent redirect, so an
-  # off-LAN request is refused with `403` rather than redirected.
-  - apiVersion: traefik.containo.us/v1alpha1
-    kind: IngressRoute
-    metadata:
-      name: argocd-server-redirect
-    spec:
-      entryPoints:
-        - web
-      routes:
-        - kind: Rule
-          match: Host(`{{ .Values.global.domain }}`)
-          middlewares:
-            - name: kube-system-lan-only@kubernetescrd
-            - name: kube-system-redirect-to-https@kubernetescrd
-          services:
-            - name: argocd-server
-              port: http
+  # Traefik IngressRoutes for the server, replacing the chart's core Ingress. The
+  # TLS router sets neither `secretName` nor `certResolver` on purpose: Traefik then
+  # serves it the cluster default certificate `kube-system/local-cert`, the
+  # `*.kub.local` leaf signed by the ashulab internal CA. See
+  # docs/runbooks/internal-ca.md.
+  extraObjects:
+    - apiVersion: traefik.containo.us/v1alpha1
+      kind: IngressRoute
+      metadata:
+        name: argocd-server
+      spec:
+        entryPoints:
+          - websecure
+        routes:
+          - kind: Rule
+            match: Host(`{{ .Values.global.domain }}`)
+            middlewares:
+              - name: kube-system-lan-only@kubernetescrd
+            services:
+              - name: argocd-server
+                port: http
+        tls:
+          options:
+            name: internal-tls
+            namespace: kube-system
+    # Plain-HTTP mirror: the LAN gate first, then a permanent redirect, so an
+    # off-LAN request is refused with `403` rather than redirected.
+    - apiVersion: traefik.containo.us/v1alpha1
+      kind: IngressRoute
+      metadata:
+        name: argocd-server-redirect
+      spec:
+        entryPoints:
+          - web
+        routes:
+          - kind: Rule
+            match: Host(`{{ .Values.global.domain }}`)
+            middlewares:
+              - name: kube-system-lan-only@kubernetescrd
+              - name: kube-system-redirect-to-https@kubernetescrd
+            services:
+              - name: argocd-server
+                port: http
+
+  # The argocd image tag follows the chart appVersion. dex and redis are separate
+  # software, so their tags are pinned here.
+  dex:
+    image:
+      repository: ghcr.io/dexidp/dex
+      tag: v2.45.1
+  redis:
+    image:
+      repository: ecr-public.aws.com/docker/library/redis
+      tag: 8.6.4-alpine

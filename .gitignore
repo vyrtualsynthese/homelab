@@ -50,6 +50,8 @@ cluster/helm/discourse/Chart.lock
 # Built by ArgoCD at sync time
 cluster/helm/renovate/charts/
 cluster/helm/renovate/Chart.lock
+cluster/helm/argocd/charts/
+cluster/helm/argocd/Chart.lock
 
 # Python bytecode from the hack/ checkers
 __pycache__/
