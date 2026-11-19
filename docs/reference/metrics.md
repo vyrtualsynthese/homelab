@@ -236,21 +236,21 @@ curl -sG http://prometheus.kub.local/api/v1/query --data-urlencode \
 | Grafana database | `monitoring/grafana` | 5 GiB | n/a |
 | Loki chunks + index | `monitoring/storage-loki-0` | 20 GiB | `720h` via the compactor |
 
-**Loki fills slowly.** Measured on 2026-11-19, once the pipeline stopped
-storing Fluent Bit's envelope: about **0.30 GB/day** pushed before compression,
-at **19×**, so roughly **16 MB/day** and **0.5 GB** for the full 30-day
-retention against a 20 GiB claim. The line fell from **1,013 to 223 bytes**;
-before the change the same six-hour average was 1.55 GB/day, and a busy hour
-reached 2.24 GB/day.
+**Loki fills slowly.** Measured on 2026-11-19, once the envelope was gone and the
+producers moved to `warn`: about **0.09 GB/day** pushed before compression, at
+**19×**, so roughly **5 MB/day** and **0.14 GB** for the full 30-day retention
+against a 20 GiB claim. The line fell from **1,013 to 137 bytes**. Before the
+change the same six-hour average was 1.55 GB/day and a busy hour reached
+2.24 GB/day — the pipeline writes about **25 times less** than it did.
 
-argocd is still the loudest namespace — 208 MB of the 298 MB — because its three
-controllers are still at `info`: their cut is in
-`cluster/helm/argocd/values.yaml` and waits for the hand-applied release
-(`helm -n argocd upgrade argocd <chart-ref> -f cluster/helm/argocd/values.yaml`).
-After that, authentik (24 MB) and n8n (23 MB) lead. n8n's share is a bug, not
-chatter: `Pruning failed` in a loop every second — card #381. The throughput
-limit is 4 MB/s against an average of about 4 KB/s, so the ingestion limits are
-not the constraint either. What the line looked like before, and why: the
+authentik (25 MB/day) and n8n (23 MB) now lead. n8n's share is a bug, not
+chatter: `Pruning failed` in a loop every second — card #381. argocd fell from
+208 MB/day to 1.4 MB/day when its three controllers moved to `warn`, and most of
+what is left there is repo-server reporting the same two manifest-generation
+errors — `cluster/helm/nfs/plex-media` and `cluster/helm/nfs/audio` do not exist
+— which the info noise used to bury. The throughput limit is 4 MB/s against an
+average of about 1 KB/s, so the ingestion limits are not the constraint either.
+What the line looked like before, and why: the
 [Fluent Bit note above](#exporter-quirks). The panels that show these numbers
 are in [`dashboards.md`](dashboards.md).
 
