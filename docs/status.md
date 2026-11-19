@@ -83,13 +83,12 @@ at all and is counted apart. Four of the working ones sit on a volume whose clai
 `Terminating` — they work today and will not survive the Longhorn cleanup (see **Running on a
 borrowed volume**).
 
-## Broken now (7)
+## Broken now (6)
 
 | Application | Namespace | Replicas | Cause |
 |---|---|---|---|
 | `discourse` | discourse | 0/1 | Pending: claim `discourse2` not found |
 | `minecraft-server` | minecraft | 0/1 | Pending: claim `minecraft-lh-2` not found |
-| `news-freshrss` | news | 0/1 | Pending: claim `freshrss-volume` not found |
 | `postiz` | postiz | 0/1 | Pending: claim `postiz-uploads` not found. Its Redis is up, but that claim (`redis-data-postiz-redis-master-0`) is now stuck `Terminating` too, so the pair would not survive a restart |
 | `monitorss` | monitorss | 0/2 | The Mongo pod is Pending on claim `monitorss-mongo`; the bot then crash-loops with no database, more than ten thousand restarts. Web and Redis are up |
 | `ghostfolio` | ghostfolio | 0/1 | Crash-loop, more than ten thousand restarts: resolves `postgres-postgresql.databases.svc.cluster.local`, the **retired Bitnami** Service name. The live one is `postgres.databases.svc.cluster.local` |

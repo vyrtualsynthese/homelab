@@ -142,6 +142,12 @@ read, so refresh failures are visible only with `kubectl exec`. That is debt, re
   that cloned it from `https://server/repo` — a placeholder that never resolved, so the init could
   only fail. It was removed; the extension can be installed from FreshRSS's own extension manager
   if it is wanted back.
+- **`/i` without the trailing slash redirects to plain HTTP.** `GET https://<host>/i` answers
+  `301 Location: http://<host>/i/`, because nginx builds its directory redirect from the scheme it
+  sees and Traefik terminated TLS upstream. The browser then has to be bounced back to HTTPS by the
+  `web` router. Links with the trailing slash never hit it; removing it needs `absolute_redirect
+  off` in the image's vhost, which is a ConfigMap over `/config/nginx/site-confs/default.conf`, not
+  a chart value.
 
 ## After the sync
 
