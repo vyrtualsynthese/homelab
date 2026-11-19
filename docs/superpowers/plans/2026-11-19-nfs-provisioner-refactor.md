@@ -6,7 +6,7 @@
 
 **Architecture:** `cluster/helm/nfs/provisioner` is a `v2` chart whose only dependency is upstream `nfs-subdir-external-provisioner` `4.0.18`. Shared settings live in its `values.yaml` under the dependency's key; `values/<release>.yaml` carries the four knobs that differ per export (path, `nameOverride`, `fullnameOverride`, StorageClass name or access mode). Each ArgoCD Application keeps its name, namespace and release identity and points at the one chart with its own values file.
 
-**Tech Stack:** Helm 4.3.1 (`helm dependency build`, `helm template`), ArgoCD Applications with `helm.valueFiles`, yq for assertions.
+**Tech Stack:** Helm 4.3.1 (`helm dependency update`, `helm template`), ArgoCD Applications with `helm.valueFiles`, yq for assertions.
 
 **Spec:** `docs/superpowers/specs/2026-11-19-nfs-provisioner-refactor-design.md`
 
@@ -131,7 +131,7 @@ cluster/helm/nfs/provisioner/Chart.lock
 
 Run:
 ```bash
-helm dependency build cluster/helm/nfs/provisioner
+helm dependency update ./cluster/helm/nfs/provisioner
 helm template test ./cluster/helm/nfs/provisioner | yq -r 'select(.kind=="StorageClass" or .kind=="PersistentVolume") | .kind + "/" + .metadata.name + " " + (.spec?.nfs?.path // .provisioner)'
 ```
 Expected: `StorageClass/nfs-client cluster.local/test-nfs-subdir-external-provisioner` and
@@ -146,7 +146,7 @@ stay non-empty or the PV/PVC are pruned, and that `charts/` is built at sync tim
 
 - [ ] **Step 7: Verify the build is reproducible and untracked**
 
-Run: `helm dependency build cluster/helm/nfs/provisioner && git status --short cluster/helm/nfs/provisioner`
+Run: `helm dependency update ./cluster/helm/nfs/provisioner && git status --short cluster/helm/nfs/provisioner`
 Expected: `helm dependency build` succeeds; `git status` lists only `Chart.yaml`, `values.yaml` and
 `README.md` — `charts/` and `Chart.lock` are ignored.
 
@@ -507,7 +507,7 @@ git commit -m "📝 docs(nfs): describe the wrapper chart instead of the nine co
 - [ ] **Step 1: Re-run the whole gate from a clean tree**
 
 ```bash
-helm dependency build cluster/helm/nfs/provisioner
+helm dependency update ./cluster/helm/nfs/provisioner
 bash /tmp/nfs-parity.sh
 hack/check-exposure.sh
 ```
