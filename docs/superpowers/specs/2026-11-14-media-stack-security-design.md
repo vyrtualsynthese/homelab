@@ -387,10 +387,10 @@ are untouched until step 5.
 
    **Closed for the media stack on 2026-11-19:** Renovate reads every pin there — the `image` blocks
    in `values.yaml`, the foreign values files, and the templates that carry an image literally — and
-   no `latest` tag is left anywhere under `cluster/helm/media-stack`. Three remain elsewhere in the
+   no `latest` tag is left anywhere under `cluster/helm/media-stack`. Four remain elsewhere in the
    repository: mktxp's image, which publishes no version tag and stays on `latest` with
-   `pullPolicy: Always` (#322), and the helper images of `local-path` and `minecraft` (`busybox` and
-   `mc-monitor`).
+   `pullPolicy: Always` (#322); the helper images of `local-path` and `minecraft` (`busybox` and
+   `mc-monitor`); and the scratch pod under `kubectl/test-pod`, which runs `alpine:latest`.
 
 4. Plan the FileBrowser exit: archived upstream, running `v2.63.23`. Its own login (not forward
    auth) is the gate; the LAN allowlist is the network boundary.
