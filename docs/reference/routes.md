@@ -1,7 +1,7 @@
 # Routes: every hostname, its gate and its certificate
 
-> **In one line.** Traefik answers the 34 hostnames in this table: four are public, twenty-six are
-> internal over TLS, four answer plain HTTP, and two more names exist only to redirect; the gate
+> **In one line.** Traefik answers the 33 hostnames in this table: three are public, twenty-six are
+> internal over TLS, four answer plain HTTP, and one more name exists only to redirect; the gate
 > column — not the address — is what decides who gets in.
 >
 > **Use it when** you need to know whether a hostname is reachable from outside, what stands in
@@ -25,14 +25,13 @@ the hostname is public or a `*.kub.home.ashudev.com` name the LAN resolves to `1
 
 ## Public
 
-These four are on the allowlist and are meant to answer the internet. None is gated: what sits on
+These three are on the allowlist and are meant to answer the internet. None is gated: what sits on
 them sets response headers and, for Plex and Seerr, a rate limit of 100 requests per second on
 average. Neither of those is authentication.
 
 | Host | Application | Namespace | Gate | TLS | Public? |
 |---|---|---|---|---|---|
 | `ashuvidz.com` | ashuvidz website (nginx) | `ashuvidz` | none — `security` headers | Let's Encrypt | yes |
-| `forum.ashuvidz.com` | Discourse | `discourse` | none — `security` headers | Let's Encrypt | yes |
 | `plex.kub.home.ashudev.com` | Plex | `media-stack` | none — `security` headers, rate limit (two `websecure` routers) | Let's Encrypt | yes |
 | `seerr.kub.home.ashudev.com` | Seerr | `media-stack` | none — `security` headers, rate limit | Let's Encrypt | yes |
 
@@ -85,9 +84,8 @@ Four routes serve plain HTTP. The LAN allowlist or a password is all that stands
 
 **Redirect twins.** Every host in the first two tables also has a `web` router on the same name that
 only redirects to HTTPS, carrying `lan-only` and nothing else — `filebrowser` excepted, which has no
-plain-HTTP route at all. The four rows in the last table are served on `web` itself. Three hostnames
-exist only to redirect and are not rows in any table: `kub.home.ashudev.com` to Dashy and
-`discourse.kub.home.ashudev.com` to Forum.
+plain-HTTP route at all. The four rows in the last table are served on `web` itself. One hostname
+exists only to redirect and is not a row in any table: `kub.home.ashudev.com` to Dashy.
 
 **`/api` exemptions.** Ten hosts — `bazarr`, `bazarr-anime`, `lidarr`, `maintainerr`, `prowlarr`,
 `radarr`, `radarr-anime`, `sonarr`, `sonarr-anime`, `tautulli` — carry a second rule on

@@ -171,7 +171,3 @@ sections:
         description: the site
         url: https://ashuvidz.com
         icon: favicon
-      - title: Forum
-        description: the community
-        url: https://forum.ashuvidz.com
-        icon: hl-discourse

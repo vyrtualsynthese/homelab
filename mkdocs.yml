@@ -114,6 +114,7 @@ nav:
       - nuc0 throttling: decisions/2026-11-13-nuc0-throttling-accepted.md
       - streaming overheating: decisions/2026-11-13-streaming-overheating-deferred.md
       - Retiring seven applications: decisions/2026-11-18-retire-seven-applications.md
+      - Retiring Discourse: decisions/2026-11-19-retire-discourse.md
       - Longhorn leftovers: cleanup/longhorn-disposition.md
       - Audits: audit/README.md
       - Ansible and hosts: audit/ansible-hosts.md

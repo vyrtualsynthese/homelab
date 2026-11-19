@@ -16,7 +16,6 @@ PUBLIC_HOSTS = frozenset(
         "plex.kub.home.ashudev.com",
         "seerr.kub.home.ashudev.com",
         "ashuvidz.com",
-        "forum.ashuvidz.com",
     }
 )
 
