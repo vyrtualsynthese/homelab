@@ -42,6 +42,12 @@ has **changed**:
   changed.
 - The pod filter prints rows. A row whose application is already on the status page is a fault you
   already own, not one you just found.
+- Four provisioners read `Progressing` while their pod is `1/1` ready: `plex-media`,
+  `nfs-qbittorrent-download`, `stash-nfs` and `traefik-nfs`. Each tracks a PersistentVolume that has
+  carried a deletion timestamp since 2023-12-06 while its claim stays `Bound`, and ArgoCD calls a
+  volume marked for deletion unfinished. They stay that way until those four volumes are dealt with —
+  [cleanup/longhorn-disposition.md](../cleanup/longhorn-disposition.md) — and none of the four is
+  broken storage.
 - On Health, everything firing is already known — an accepted fault below or a broken application the
   status page names. On Disks, every other drive has life left.
 
