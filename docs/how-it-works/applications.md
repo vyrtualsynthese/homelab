@@ -106,7 +106,7 @@ they are what everything above stands on.
 
 Most charts pin their pod with `nodeSelector: kubernetes.io/hostname`. The older ones were written
 before that rule and are still configured to select the retired `node-type` label instead, which
-matches `nuc0` today. They are `koillection`, `mktxp`, `pihole-exporter`, `n8n`, `news-freshrss`,
+matches `nuc0` today. They are `koillection`, `mktxp`, `pihole-exporter`, `news-freshrss`,
 `syncthing`,
 `thelounge`, and the `books-media`, `nfs-audio`, `nfs-syncthing`, `stash-nfs` and `traefik-nfs`
 provisioners. This is what each chart asks
