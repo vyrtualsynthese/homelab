@@ -785,11 +785,12 @@ class FakeWeb:
     """The FreshRSS web UI: the nonce endpoint, the login form, and the feed pages."""
 
     def __init__(self, password="pw", fields=None, login_status=200, store=True,
-                 relative_actions=False, salt1=None, after_post=None):
+                 relative_actions=False, salt1=None, after_post=None, page_status=200):
         self.calls = []
         self.logged_in = False
         self.nonce = "N0NCE123"
         self.login_status = login_status
+        self.page_status = page_status
         self.store = store
         self.relative_actions = relative_actions
         self.salt1 = salt1
@@ -805,7 +806,8 @@ class FakeWeb:
             return 200, json.dumps({"salt1": salt1, "nonce": self.nonce}), {}
         if query.get("a") == ["formLogin"]:
             if method == "GET":
-                return 200, self.login_page(), {}
+                # A gate in front of the app (OIDC) answers instead of the form.
+                return self.page_status, self.login_page() if self.page_status == 200 else "", {}
             sent = dict(urllib.parse.parse_qsl((data or b"").decode()))
             if sent.get("_csrf") != "CSRF-LOGIN":
                 return 403, "<html>[CSRF] Login</html>", {}
@@ -1000,6 +1002,16 @@ class SettingsCliTests(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertIn("FRESHRSS_WEB_PASSWORD", out.getvalue())
         self.assertEqual(web.calls, [])
+
+    def test_an_instance_without_a_form_login_is_not_checked_and_the_run_passes(self):
+        """Behind OIDC the app has no form login: nothing to read or write there."""
+        feeds = mod.parse_opml(OPML_PATH.read_text())
+        t = FakeTransport(subs=[(f.url, f.title, f.category) for f in feeds])
+        web = FakeWeb(fields={}, page_status=401)
+        with contextlib.redirect_stdout(io.StringIO()) as out:
+            code = mod.main(["check"], transport=t, env=self.ENV, web_transport=web)
+        self.assertEqual(code, 0)
+        self.assertIn("no form login", out.getvalue())
 
     def test_a_refused_web_login_exits_two(self):
         feeds = mod.parse_opml(OPML_PATH.read_text())
