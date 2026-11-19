@@ -67,7 +67,7 @@ webhook exists only in that contact point.
 | `CertificateExpiring` | newest Traefik cert per SAN <21 days | 1h | warning | inactive |
 | `PodCrashLooping` | CrashLoopBackOff | 15m | warning | **firing, silenced** ×3 |
 | `PodPending` | Pending, created <2 h ago | 15m | warning | **firing** on `databases/pgadmin-67c5f5c85` (missing Secret, 2026-11-14) |
-| `PodNotStarting` | Scheduled, container still not started, older than 2 h | 5m | warning | **firing, silenced** (the abandoned `nfs-ssd` provisioner) |
+| `PodNotStarting` | Scheduled, container still not started, older than 2 h | 5m | warning | inactive |
 | `LokiSilent` | no Fluent Bit lines in 10 min (`noDataState: Alerting`) | 10m | warning | inactive |
 | `SwitchDown` | `absent()` of the identity metric for either switch | 5m | critical | inactive |
 | `SwitchSfpDegraded` | SFP+ receive loss or transmit fault | 10m | warning | inactive |
@@ -182,12 +182,12 @@ invalid PromQL and never evaluated.
   labels — the drive is known dead
   ([`docs/audit/ansible-hosts.md`](../audit/ansible-hosts.md)) and waiting on a
   replacement. Only the notification is suppressed; the rule still fires.
-- Until 2026-12-12: `pod=~"nfs-ssd-nfs-subdir-external-provisioner-.*"` — this pod
-  has been unable to mount `192.168.1.41:/mnt/ssd0/nfs` since 2026-09-03, because
-  that export does not exist on `nas`. It belongs to no chart and no ArgoCD
-  Application; it is hand-applied drift, and `PodNotStarting` would report it
-  every few hours forever. Fix the export or delete the workload, then remove the
-  silence.
+- **Removed 2026-11-19 — the silence on `nfs-ssd` can go.** Until then one silence read
+  `pod=~"nfs-ssd-nfs-subdir-external-provisioner-.*"`: that pod could not mount
+  `192.168.1.41:/mnt/ssd0/nfs` because the export did not exist on `nas`, it belonged to no chart
+  and no ArgoCD Application, and `PodNotStarting` reported it every few hours. The workload was
+  uninstalled with `helm uninstall nfs-hdd nfs-ssd -n default` and its class is gone, so delete the
+  silence in Alertmanager rather than renewing it.
 
 The `alertname="ScrapeTargetDown", namespace="media-stack"` silence was **removed
 on 2026-11-13**, together with its narrow `pod=~"qbittorrent-exporter-.*"`
