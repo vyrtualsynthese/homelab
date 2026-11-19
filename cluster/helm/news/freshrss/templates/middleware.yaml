@@ -1,9 +1,9 @@
-apiVersion: traefik.containo.us/v1alpha1
+apiVersion: {{ .Values.ingress.apiVersion }}
 kind: Middleware
 metadata:
-  name: {{ include "fullname" . }}-redirect-https
+  name: {{ include "app.fullname" . }}-redirect-https
   labels:
-    {{- include "labels" . | nindent 4 }}
+    {{- include "app.labels" . | nindent 4 }}
 spec:
   redirectScheme:
     scheme: https

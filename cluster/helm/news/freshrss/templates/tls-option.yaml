@@ -1,9 +1,9 @@
-apiVersion: traefik.containo.us/v1alpha1
+apiVersion: {{ .Values.ingress.apiVersion }}
 kind: TLSOption
 metadata:
-  name: {{ include "fullname" . }}-tlsoption
+  name: {{ include "app.fullname" . }}-tlsoption
   labels:
-    {{- include "labels" . | nindent 4 }}
+    {{- include "app.labels" . | nindent 4 }}
 spec:
   minVersion: VersionTLS12
   cipherSuites:
