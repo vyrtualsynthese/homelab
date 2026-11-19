@@ -52,9 +52,9 @@ def serve(page=ARTICLE, fail=()):
 
 
 class ParseTests(unittest.TestCase):
-    def test_the_shipped_opml_yields_18_feeds_in_five_categories(self):
+    def test_the_shipped_opml_yields_19_feeds_in_five_categories(self):
         feeds = mod.parse_opml(OPML_PATH.read_text())
-        self.assertEqual(len(feeds), 18)
+        self.assertEqual(len(feeds), 19)
         self.assertEqual({f.category for f in feeds}, {"Jeux", "Dev", "IA", "Boutiques", "Veille"})
 
     def test_a_query_string_survives_parsing(self):
@@ -88,7 +88,7 @@ class ParseTests(unittest.TestCase):
 
     def test_a_full_content_selector_does_not_add_or_drop_a_feed(self):
         feeds = mod.parse_opml(OPML_PATH.read_text())
-        self.assertEqual(len(feeds), 18)
+        self.assertEqual(len(feeds), 19)
 
     def test_a_full_content_selector_reaches_the_feed_as_path_entries(self):
         feeds = mod.parse_opml(OPML_PATH.read_text())
@@ -109,6 +109,12 @@ class ParseTests(unittest.TestCase):
         feeds = mod.parse_opml(OPML_PATH.read_text())
         steam = next(f for f in feeds if f.title == "Steam")
         self.assertEqual(steam.settings, ())
+
+    def test_the_shipped_opml_pins_a_poll_interval_where_a_feed_asks_for_one(self):
+        """Only KBDfans carries a ttl today: its host rate-limits by address, so it is polled rarely."""
+        feeds = mod.parse_opml(OPML_PATH.read_text())
+        kbdfans = next(f for f in feeds if f.title == "KBDfans — new arrivals")
+        self.assertEqual(dict(kbdfans.settings), {"ttl": "21600"})
 
     def test_normalize_url_strips_one_trailing_slash_and_keeps_the_query(self):
         self.assertEqual(mod.normalize_url("https://a.test/feed/"), "https://a.test/feed")
@@ -688,7 +694,7 @@ def settings_page(feed_id, fields=None, action=None):
   <input type="hidden" name="id" value="{feed_id}" />
   <input type="hidden" name="from" value="subscription" />
   <select name="feed_kind">{select("feed_kind", ("0", "10"), "0")}</select>
-  <select name="ttl">{select("ttl", ("0", "1800"), "1800")}</select>
+  <select name="ttl">{select("ttl", ("0", "1800", "21600"), "1800")}</select>
   <input type="checkbox" name="mute" value="1" checked="checked" />
   <input type="checkbox" name="clear_cache" value="1" />
   <textarea name="path_entries_conditions">{text("path_entries_conditions")}</textarea>
@@ -752,6 +758,10 @@ class DriftTests(unittest.TestCase):
     def test_a_matching_selector_is_not_drift(self):
         form = mod.settings_form(settings_page(5, {"path_entries": ".entry-content"}))
         self.assertEqual(mod.settings_drift(form, {"path_entries": ".entry-content"}), {})
+
+    def test_a_differing_poll_interval_is_drift(self):
+        form = mod.settings_form(settings_page(5, {"ttl": "1800"}))
+        self.assertEqual(mod.settings_drift(form, {"ttl": "21600"}), {"ttl": ("1800", "21600")})
 
 
 class TransportTests(unittest.TestCase):
@@ -907,11 +917,13 @@ class SettingsCliTests(unittest.TestCase):
 
     def test_check_says_how_many_feeds_it_compared(self):
         feeds = mod.parse_opml(OPML_PATH.read_text())
+        with_settings = sum(1 for f in feeds if f.settings)
         t = FakeTransport(subs=[(f.url, f.title, f.category) for f in feeds])
         with contextlib.redirect_stdout(io.StringIO()) as out:
             mod.main(["check"], transport=t, env=self.ENV,
                      web_transport=self.matching_web(feeds))
-        self.assertIn("settings: 13 of 13 feeds match the file", out.getvalue())
+        self.assertIn(f"settings: {with_settings} of {with_settings} feeds match the file",
+                      out.getvalue())
 
     def test_check_says_when_a_feed_with_settings_is_not_on_the_instance(self):
         feeds = mod.parse_opml(OPML_PATH.read_text())
