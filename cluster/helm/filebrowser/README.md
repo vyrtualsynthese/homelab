@@ -46,10 +46,13 @@ first sign-in. Without it the editor would inherit every export on the NAS.
 Uploads run as uid/gid 1100 (`securityContext`). Reads succeed under almost any identity; the first
 upload is the real test of the export's ownership.
 
-`fsGroup` is **1000**, not 1100: the assets export carries directories owned by 1000 with mode
-`0750`, which uid 1100 cannot open — the video-project folders and four of the ROM sets. NFS volumes
-are not chowned, so `fsGroup` only puts 1000 in the process's group list, which makes those readable
-without touching the NAS. Writes stay with 1100, the owner of the download export (`0755`).
+Group **1000** is added through `supplementalGroups`, not through `fsGroup`: the assets export carries
+directories owned by 1000 with mode `0750`, which uid 1100 cannot open — the video-project folders and
+four of the ROM sets. `fsGroup` alone does not reach the process, because the kubelet propagates it to
+a container's group list only when a volume supports ownership management, and NFS and hostPath both
+declare they do not (verified on the live pod: the `permission denied` lines stayed with
+`fsGroup: 1000` in its spec). `supplementalGroups` is passed to the runtime verbatim, so group 1000
+reaches the NFS credentials. Writes stay with 1100, the owner of the download export (`0755`).
 
 That uid is also why `server.cacheDir` is set to `/data/cache`: the chart's default is the relative
 string `tmp`, resolved against the image's working directory, which 1100 cannot write, and the app

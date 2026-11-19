@@ -39,14 +39,17 @@ filebrowser-quantum:
     passwordOverride: "oidc-only-no-local-login"
 
   # PUID/PGID of the rest of the stack, and the uid that owns the download
-  # export (0755). fsGroup is 1000 rather than 1100 on purpose: the assets export
-  # holds directories outside the world-readable majority, owned by 1000 with
-  # mode 0750, which uid 1100 cannot open. NFS volumes are never chowned, so the
-  # only effect is that 1000 joins the process's group list and those
-  # directories become readable.
+  # export (0755). Group 1000 is added explicitly rather than through fsGroup:
+  # the assets export holds directories owned by 1000 with mode 0750, and the
+  # kubelet only propagates fsGroup to a container's group list when a volume
+  # supports ownership management. NFS and hostPath both declare they do not, so
+  # `fsGroup: 1000` left the live pod's errors unchanged. supplementalGroups is
+  # handed to the runtime verbatim, which is what actually reaches NFS.
   securityContext:
     runAsUser: 1100
     runAsNonRoot: true
+    supplementalGroups:
+      - 1000
     fsGroup: 1000
 
   resources:
