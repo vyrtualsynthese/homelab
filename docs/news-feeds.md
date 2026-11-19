@@ -66,7 +66,7 @@ picks items out of the HTML, with selectors that travel in the OPML (see "XPath 
 
 | Feed | How | URL |
 |---|---|---|
-| Docker blog | native | `https://www.docker.com/blog/feed/` |
+| Docker blog | native | `https://www.docker.com/feed/` |
 | Kubernetes blog | native | `https://kubernetes.io/feed.xml` |
 | WSL2 | native | `https://devblogs.microsoft.com/commandline/feed/` |
 | Logseq blog | native | `https://blog.logseq.com/rss/` |
@@ -81,9 +81,11 @@ project may resume; it costs one line in the folder.
 | Mistral | native | `https://mistral.ai/news/rss` |
 | Anthropic / Claude | XPath | `https://www.anthropic.com/news` |
 
-Mistral's feed answers `content-type: text/plain` and the instance refuses it at creation (HTTP
-500 from `subscription/edit`), while the same URL parses fine from a workstation. See "Refused by
-the instance" below.
+Mistral serves its feed as `content-type: text/plain`, and the parser FreshRSS uses refuses that
+content type before it looks at the body. The subscription therefore carries FreshRSS's force-feed
+marker: the file asks for `https://mistral.ai/news/rss#force_feed`, which tells the parser to read
+the body without the check. The plain URL is what returns nothing. See "Feeds the instance cannot
+fetch" below.
 
 OpenAI and ChatGPT were dropped by decision, not for lack of a feed: its official feed carries 1413
 items of backlog.
@@ -93,14 +95,9 @@ items of backlog.
 | Feed | How | URL |
 |---|---|---|
 | Rise of Gunpla — new kits | native | `https://riseofgunpla.com/feed?post_type=product` |
-| KBDfans — new arrivals | native | `https://kbdfans.com/collections/new-arrival.atom` |
-| KBDfans — restock | native | `https://kbdfans.com/collections/restock.atom` |
 
-The KBDfans collections rate-limit (HTTP 429) when polled hard. FreshRSS polls on a schedule, which
-is far below the limit; a `verify` run that reports 429 is the runner asking too often.
-
-Both KBDfans collections are refused by the instance today: `subscription/edit` answers 500 while
-the same URLs answer 200 from a workstation. See "Refused by the instance" below.
+Two KBDfans collections — new arrivals and restock — were in the set until 2026-11-19 and left it:
+the instance cannot fetch them, for the client-fingerprint reason in "KBDfans: left out" below.
 
 An old Rise of Gunpla kit coming back in stock is **not** covered. FreshRSS drops an item it
 already holds, so the same product cannot fire twice. That needs a change tracker, which is a
@@ -222,7 +219,7 @@ Five get nothing, and the reason is the source rather than a missing setting:
 | Star Citizen comm-link | the article is built by JavaScript, so the HTML the fetcher receives is empty |
 | Lobsters | the item is a link to someone else's site; fetching it would copy their page |
 | Hacker News | same |
-| Mistral, KBDfans ×2 | refused by the instance (see below), so there is no feed to attach a selector to |
+| Mistral | served as `text/plain`, so the URL needs the force-feed marker; the publisher's summary is the whole article |
 
 On the live instance the twelve feeds exist already, and the OPML import skips a feed it already
 holds, so the selectors do not reach them that way. `apply` is what writes them: it puts the file's
@@ -245,25 +242,67 @@ with the file's values, and reads the page back to confirm; a field that still d
 and the run exits 1. Without `FRESHRSS_WEB_PASSWORD` the settings half is skipped and the
 subscription half behaves as before.
 
-## Refused by the instance
+## Feeds the instance cannot fetch
 
-Three feeds are in the list and in the OPML, and the instance will not take them: `subscription/edit`
-answers HTTP 500 for each while the same URLs return a valid feed from a workstation on 2026-11-19.
+Three feeds answered a blank HTTP 500 from `subscription/edit` while the same URLs return a valid
+feed from a workstation. The 500 was not a refusal: it is what the API answers when its own logger
+cannot write. Behind it are two different problems, one solved and one that cost the two KBDfans
+collections their place in the set.
 
-| Feed | URL | Observed |
-|---|---|---|
-| Mistral | `https://mistral.ai/news/rss` | 94 items from a workstation; served as `text/plain`; instance answers 500 |
-| KBDfans — new arrivals | `https://kbdfans.com/collections/new-arrival.atom` | 200 from a workstation; instance answers 500 |
-| KBDfans — restock | `https://kbdfans.com/collections/restock.atom` | same |
+### What the empty 500 hid
 
-`check` reports them as missing, which is the truth: the file asks for them and the instance does
-not hold them. What was ruled out: rate limiting (KBDfans answered 200 at the time of the retry) and
-a typo (the URLs are the ones verified in the design). What was not checked: the pod's own log,
-because the read-only ServiceAccount cannot exec into it.
+The 500 carried no message because FreshRSS logs API errors to `data/users/_/log_api.txt`, and that
+directory was missing from the claim on 2026-11-19, although the image carries one. The logger's
+write fails, throws, and PHP dies mid-request before the API can answer anything but an empty 500.
 
-Next step when someone has cluster access: read
-`/config/www/freshrss/data/users/<user>/log.txt` in the `news` namespace for the 500, then set the
-per-feed user agent or the feed type in the UI accordingly.
+Restore it and the API answers `400 Bad Request` instead, with the reason in that file:
+
+```bash
+kubectl -n news exec deploy/news-freshrss -- mkdir -p /config/www/freshrss/data/users/_
+kubectl -n news exec deploy/news-freshrss -- chown abc:abc /config/www/freshrss/data/users/_
+```
+
+Check for the directory after a claim is rebuilt, and run those two commands if it is missing. The
+PHP fatal that stands in for the message is in `/config/log/nginx/error.log` in the pod, which is
+where every PHP message lands — none of them reach the pod's stdout, and so none reach Loki.
+
+### Mistral: served as plain text
+
+SimplePie, the parser FreshRSS fetches with, checks the response's `content-type` before parsing and
+rejects `text/plain` even when the body is valid RSS. Mistral serves its feed that way, which is why
+the same URL parses on a workstation and delivered nothing here. FreshRSS's escape is the
+`#force_feed` marker at the end of the URL: it tells the parser to read the body without the check,
+and the marker travels in the OPML, so a replay reproduces it. The subscription is
+`https://mistral.ai/news/rss#force_feed`, and it held 94 entries on 2026-11-19.
+
+### KBDfans: left out
+
+Both collections are valid Atom feeds and a workstation fetches them with `200`; the instance cannot
+have them. Cloudflare in front of kbdfans answers `429 local_rate_limited` — sometimes `403` — to the
+pod's requests, while the same request from a workstation on the same public IP is served `200`.
+The difference is the client, not the URL, the network or the polling cadence.
+
+Measured on 2026-11-19 from the pod, one request each, a minute apart:
+
+| Client | Answer |
+|---|---|
+| `curl` 8.23.0, the image's libcurl, which is what FreshRSS fetches with | `429 local_rate_limited` |
+| `openssl s_client`, same pod and same minute | `200 OK` |
+
+That points at the TLS fingerprint (the handshake details a bot filter matches against a list of
+known clients) rather than a header: the per-feed user agent the feed settings offer, set to a
+Chrome string and tried against the live feed, did not change the answer, and no feed setting
+touches the TLS stack or the HTTP version. So the two collections left the set on 2026-11-19: the
+file no longer lists them and the two empty subscriptions were removed from the instance.
+
+Re-test when the image's curl changes. `lscr.io/linuxserver/freshrss` moves its libcurl with each
+base image, and a client fingerprint Cloudflare tolerates is the whole requirement — the feeds are
+fine.
+
+One detail worth knowing if a shop feed is ever added again: after a `429` the instance stores a
+per-domain backoff (25 minutes by default) in `data/Retry-After/<domain>.txt` and refuses to touch
+that domain until it expires, logging `For that domain, will first retry after …`. A retry inside
+that window never reaches the site.
 
 ## Categories
 
