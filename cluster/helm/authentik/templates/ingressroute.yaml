@@ -10,13 +10,16 @@ spec:
   entryPoints:
     - websecure
   routes:
+    # Public on purpose: this is the sign-in page for `dashy.ashudev.com`, and a
+    # page behind the gate whose login lives on the LAN cannot be opened from
+    # the internet. `security` is the remaining middleware; authentik's own
+    # flows, rate limiting and policies are the control, not a network rule.
     - match: Host(`authentik.kub.home.ashudev.com`)
       kind: Rule
       services:
         - name: authentik-server
           port: http
       middlewares:
-        - name: kube-system-lan-only@kubernetescrd
         - name: kube-system-security@kubernetescrd
   tls:
     certResolver: myresolver
@@ -41,5 +44,4 @@ spec:
         - name: authentik-server
           port: http
       middlewares:
-        - name: kube-system-lan-only@kubernetescrd
         - name: kube-system-redirect-https@kubernetescrd
