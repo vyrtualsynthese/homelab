@@ -1,20 +1,16 @@
-The config claim changed names.
+The config claim was rebuilt on 2026-11-19.
 
-`syncthing-config` is new and empty: the old `syncthing-conf` volume was Longhorn's and its
-contents are gone by decision. The pod will not schedule until the old, stuck
-`syncthing-75bc646f6b-b8cmq` pod is force-deleted, because that pod still holds the dead claim.
+`syncthing-config` replaced Longhorn's `syncthing-conf`, the dead pod and the old claim are gone, and
+nothing here asks you to clear a finalizer — that work is finished
+(docs/cleanup/longhorn-disposition.md).
 
-After the pod is up:
+What is left is the app, not the volume:
 
-1. Finish first-run setup and record the new device ID.
+1. If the device is not paired yet, finish first-run setup and record the new device ID.
 2. Accept it on every peer, then re-add each folder with the ID the peers already use, at `/data`.
 3. Confirm a test file syncs both ways.
-4. Only then clear the old claim and volume (PV first), per
-   docs/cleanup/longhorn-disposition.md.
-
-5. Once the browser shows authentik before the WebUI, remove Syncthing's own login: Settings → GUI,
+4. Once the browser shows authentik before the WebUI, remove Syncthing's own login: Settings → GUI,
    clear the user and password, tick Insecure Admin Access, save. Do it in that order — the gate is
    the only thing left in front of the WebUI afterwards.
 
-The gate itself needs no restart: the route change applies on sync, so reload the page once ArgoCD
-has caught up.
+The gate needs no restart: the route applies on sync, so reload the page once ArgoCD has caught up.
