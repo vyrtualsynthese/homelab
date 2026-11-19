@@ -48,6 +48,14 @@ class ParseTests(unittest.TestCase):
         self.assertEqual(text.count("frss:xPathItem="), 4)
         self.assertIn('xmlns:frss="https://freshrss.org/opml"', text)
 
+    def test_twelve_feeds_carry_a_full_content_selector(self):
+        text = OPML_PATH.read_text()
+        self.assertEqual(text.count("frss:cssFullContent="), 12)
+
+    def test_a_full_content_selector_does_not_add_or_drop_a_feed(self):
+        feeds = mod.parse_opml(OPML_PATH.read_text())
+        self.assertEqual(len(feeds), 20)
+
     def test_normalize_url_strips_one_trailing_slash_and_keeps_the_query(self):
         self.assertEqual(mod.normalize_url("https://a.test/feed/"), "https://a.test/feed")
         self.assertEqual(mod.normalize_url("https://a.test/f?x=1&y=2"), "https://a.test/f?x=1&y=2")
