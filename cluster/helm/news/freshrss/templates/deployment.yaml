@@ -1,16 +1,16 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "fullname" . }}
+  name: {{ include "app.fullname" . }}
   labels:
-    {{- include "labels" . | nindent 4 }}
+    {{- include "app.labels" . | nindent 4 }}
 spec:
-  replicas: 1
+  replicas: {{ .Values.replicaCount }}
   strategy:
-    type: Recreate
+    type: {{ .Values.strategy }}
   selector:
     matchLabels:
-      {{- include "selectorLabels" . | nindent 6 }}
+      {{- include "app.selectorLabels" . | nindent 6 }}
   template:
     metadata:
       {{- with .Values.podAnnotations }}
@@ -18,47 +18,93 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       labels:
-        {{- include "selectorLabels" . | nindent 8 }}
+        {{- include "app.labels" . | nindent 8 }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
     spec:
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      serviceAccountName: {{ include "serviceAccountName" . }}
+      serviceAccountName: {{ include "app.serviceAccountName" . }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
-      volumes:
-        - name: freshrss-volume
-          persistentVolumeClaim:
-            claimName: freshrss-volume
-      initContainers:
-        - name: init-freshrss-extension
-          image: alpine/git:2.40.1
-          command: [ 'sh', '-c', "if cd /config/www/freshrss/extensions/FreshRSS-AutoTTL; then git config --global --add safe.directory /config/www/freshrss/extensions/FreshRSS-AutoTTL && git pull; else git clone https://server/repo repo; fi" ]
-          volumeMounts:
-            - name: freshrss-volume
-              mountPath: /config
       containers:
         - name: {{ .Chart.Name }}
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- $env := list }}
+          {{- range $name, $value := .Values.env }}
+          {{- $env = append $env (dict "name" $name "value" ($value | toString)) }}
+          {{- end }}
+          {{- $env = concat $env (.Values.extraEnv | default list) }}
+          {{- with $env }}
           env:
-            - name: "PUID"
-              value: "1000"
-            - name: "PGID"
-              value: "1000"
-            - name: "TZ"
-              value: "Etc/UTC"
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.envFrom }}
+          envFrom:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           ports:
-            - name: webui
-              containerPort: 80
-          volumeMounts:
-            - name: freshrss-volume
-              mountPath: /config
+            - name: http
+              containerPort: {{ include "app.containerPort" . }}
+              protocol: TCP
+          {{- if .Values.probes.startup.enabled }}
+          # A TCP connect: the question is whether PHP-FPM is listening, not
+          # whether the database is ready. /i/ would answer that, and a failing
+          # readiness should keep the pod out of the Service, not restart it.
+          startupProbe:
+            tcpSocket:
+              port: http
+            periodSeconds: {{ .Values.probes.startup.periodSeconds }}
+            timeoutSeconds: {{ .Values.probes.startup.timeoutSeconds }}
+            failureThreshold: {{ .Values.probes.startup.failureThreshold }}
+          {{- end }}
+          {{- if .Values.probes.liveness.enabled }}
+          livenessProbe:
+            tcpSocket:
+              port: http
+            initialDelaySeconds: {{ .Values.probes.liveness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.probes.liveness.periodSeconds }}
+            timeoutSeconds: {{ .Values.probes.liveness.timeoutSeconds }}
+            failureThreshold: {{ .Values.probes.liveness.failureThreshold }}
+          {{- end }}
+          {{- if .Values.probes.readiness.enabled }}
+          # Booting /i/ runs any pending migration and queries the user table, so
+          # this fails when the SQLite file under /config is unusable — the one
+          # dependency that can fail while the process stays up.
+          readinessProbe:
+            httpGet:
+              path: {{ .Values.probes.readiness.path }}
+              port: http
+            initialDelaySeconds: {{ .Values.probes.readiness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.probes.readiness.periodSeconds }}
+            timeoutSeconds: {{ .Values.probes.readiness.timeoutSeconds }}
+            failureThreshold: {{ .Values.probes.readiness.failureThreshold }}
+          {{- end }}
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            {{- if .Values.storage.enabled }}
+            - name: config
+              mountPath: {{ .Values.storage.mountPath }}
+            {{- end }}
+            {{- with .Values.volumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+      volumes:
+        {{- if .Values.storage.enabled }}
+        - name: config
+          persistentVolumeClaim:
+            claimName: {{ include "app.configClaimName" . }}
+        {{- end }}
+        {{- with .Values.volumes }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
