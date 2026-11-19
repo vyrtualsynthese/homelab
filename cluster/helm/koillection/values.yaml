@@ -1,89 +1,130 @@
-# Default values for home.
-# This is a YAML-formatted file.
-# Declare variables to be passed into your templates.
+# Default values for koillection.
+# Built against the contract in docs/charts/README.md; the worked example is
+# cluster/helm/media-stack/autobrr.
 
 replicaCount: 1
+
 app:
   image:
     repository: koillection/koillection
+    # Pinned. Renovate manages this tag; Chart.yaml's appVersion follows it.
+    tag: "1.8.6"
     pullPolicy: IfNotPresent
-    # Overrides the image tag whose default is the chart appVersion.
-    tag: 1.8.6
 
   imagePullSecrets: []
+
+  # Both claim names are fixed rather than derived from the release: the
+  # Deployment mounted exactly these two names before the Longhorn failure, and
+  # the Application's release name is not part of them. See README.md.
   nameOverride: "koillection-app"
   fullnameOverride: "koillection-app"
 
   serviceAccount:
-    # Specifies whether a service account should be created
     create: false
-    # Annotations to add to the service account
-    annotations: {}
-    # The name of the service account to use.
-    # If not set and create is true, a name is generated using the fullname template
     name: ""
 
   podAnnotations: {}
 
-  podSecurityContext: {}
-    # fsGroup: 2000
+  # Pod-level security. `fsGroup` is deliberately absent: the configuration
+  # claim is hostPath-backed local-path, where the kubelet does not apply it.
+  podSecurityContext:
+    seccompProfile:
+      type: RuntimeDefault
 
-  securityContext: {}
-    # capabilities:
-    #   drop:
-    #   - ALL
-    # readOnlyRootFilesystem: true
-    # runAsNonRoot: true
-    # runAsUser: 1000
+  # The image's entrypoint starts as root, rewrites the `koillection` user to
+  # PUID/PGID, chowns /uploads and then drops to that user with setpriv. CHOWN,
+  # SETUID and SETGID are what that init needs; everything else is dropped.
+  securityContext:
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop:
+        - ALL
+      add:
+        - CHOWN
+        - SETUID
+        - SETGID
 
+  # The image serves on :80 (frankenphp, FRANKENPHP_SERVER_NAME=":80"). This
+  # value drives the container port, the Service and both probes.
   service:
     type: ClusterIP
-    port: 5432
+    port: 80
 
+  storage:
+    # The 1.8.x image writes nothing to /conf: its only writable state is
+    # /uploads and the database. The claim and the mount are kept because the
+    # card that rebuilt this chart asks for both, and the old Deployment
+    # mounted this name there. Removing them is follow-up work, not part of a
+    # fix that has to get the pod running.
+    conf:
+      enabled: true
+      claimName: koillection-conf
+      className: local-path
+      size: 1Gi
+      mountPath: /conf
+    # Uploads are what the app actually persists: 20 GiB of item photos and
+    # documents, so they live on the NFS class for assets and documents rather
+    # than on a node disk (docs/how-it-works/storage.md).
+    uploads:
+      enabled: true
+      claimName: koillection-uploads
+      className: stash-nfs
+      size: 20Gi
+      mountPath: /uploads
+
+  # The image ships a HEALTHCHECK of `curl --fail http://localhost:80/`, and
+  # koillection exposes no health route of its own, so `/` is the only endpoint
+  # that answers without a session. `/` redirects to /login when signed out,
+  # and an HTTP probe treats 3xx as success.
+  #
+  # Readiness is deliberately not rendered: no unauthenticated endpoint reports
+  # whether the database is reachable, and pointing readiness at `/` would turn
+  # a database blip into a removal from the Service for no signal gained. See
+  # README.md and docs/charts/README.md (requirement 13).
+  probes:
+    startup:
+      enabled: true
+      periodSeconds: 5
+      timeoutSeconds: 3
+      failureThreshold: 60
+    liveness:
+      enabled: true
+      periodSeconds: 20
+      timeoutSeconds: 5
+      failureThreshold: 3
+    readiness:
+      enabled: false
+
+  # Unmeasured: the pod has not run since the Longhorn failure, so there is no
+  # sample to size from. PHP_MEMORY_LIMIT is 128M for the whole process; the
+  # limit leaves room for frankenphp's Caddy side and an image-handling spike.
+  # Send it through the 2026-11-18 method in docs/reference/chart-sizing.md
+  # once it has history.
+  resources:
+    requests:
+      cpu: 10m
+      memory: 128Mi
+    limits:
+      memory: 512Mi
+
+  # The catalogue apps live on nuc0 (docs/how-it-works/nodes.md).
+  nodeSelector:
+    kubernetes.io/hostname: nuc0
+
+  tolerations: []
+  affinity: {}
+
+  # Route values read by templates/ingress-public*.yaml. The route, its host,
+  # its TLS resolver and its middleware are kept exactly as they were: this is
+  # a public chart and rebuilding it is not permission to redesign the
+  # certificate or the gate.
   ingress:
     enabled: true
     className: ""
     annotations: {}
-      # kubernetes.io/ingress.class: nginx
-      # kubernetes.io/tls-acme: "true"
     hosts:
-      - host: chart-example.local
+      - host: koillection.kub.home.ashudev.com
         paths:
           - path: /
             pathType: ImplementationSpecific
     tls: []
-    #  - secretName: chart-example-tls
-    #    hosts:
-    #      - chart-example.local
-
-  resources:
-    limits:
-      memory: 256Mi
-    requests:
-      cpu: 1m
-      memory: 128Mi
-
-    # We usually recommend not to specify default resources and to leave this as a conscious
-    # choice for the user. This also increases chances charts run on environments with little
-    # resources, such as Minikube. If you do want to specify resources, uncomment the following
-    # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
-    # limits:
-    #   cpu: 100m
-    #   memory: 128Mi
-    # requests:
-    #   cpu: 100m
-    #   memory: 128Mi
-
-  nodeSelector: {}
-
-  tolerations: []
-
-  affinity:
-    nodeAffinity:
-      requiredDuringSchedulingIgnoredDuringExecution:
-        nodeSelectorTerms:
-          - matchExpressions:
-              - key: node-type
-                operator: In
-                values:
-                  - general

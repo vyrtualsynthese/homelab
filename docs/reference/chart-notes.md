@@ -247,6 +247,50 @@ healthy. The log level is debt of `bazarr`'s kind with a specific cause: `Progra
 configuration sources and loads only `appsettings.json`, so no environment variable reaches Serilog
 and the level stays at `Information`.
 
+### freshrss
+
+As of 2026-11-19: the same class of failure as `kavita` — a pod `Pending` for 77 days on a claim its
+chart mounted and never created — fixed the other way round, because there was nothing left to
+preserve. The old volume was on `longhorn-static`, its contents went with the storage in 2026-08, and
+its PV has since been cleared from the cluster, so this is a fresh start with no data to rescue. The
+chart creates `news-freshrss-config` on `local-path`, 1Gi: FreshRSS keeps its SQLite database *and*
+the article bodies it has fetched under `/config`, so the 128Mi settings-sized default would be full
+within days. The pod stays on `nuc0`, which is what the retired `node-type: general` label used to
+select.
+
+Two things make it unusual. **No health endpoint exists**, so the probes split the question: startup
+and liveness are a TCP connect (is PHP-FPM listening), while readiness is `GET /i/`, which boots PHP,
+runs pending migrations and reads the user table — a dead SQLite file fails there and passes the TCP
+check. `/` is never used: it is a 301 to `p/` and answers with a broken backend. And **there is no
+log-level variable**: FreshRSS logs per user into `/config` and leaves PHP errors on stderr at the
+`php.ini` default, so the chart sets nothing and the README says what that costs.
+
+Debt: the image's 15-minute refresh cron writes `actualize_script.php` output to `/tmp/FreshRSS.log`
+inside the container, which Fluent Bit does not read, so refresh failures are only visible with
+`kubectl exec`; the `security` middleware renders but no route lists it; and the sizing is unmeasured,
+because the app has no sample in the six days Prometheus keeps. The `FreshRSS-AutoTTL` init container
+is gone — it cloned from `https://server/repo`, a placeholder that could only fail.
+
+### koillection
+
+As of 2026-11-19: the third card of the same defect, and the same shape as `freshrss` — a pod
+`Pending` on claims its chart mounted and never created (`koillection-conf`, `koillection-uploads`),
+both PVs already cleared from the cluster, contents abandoned by decision. The chart now creates
+both: `koillection-conf`, 1Gi on `local-path` at `/conf`, and `koillection-uploads`, 20Gi on
+`stash-nfs` at `/uploads`. Nothing is lost that was not lost before — and nothing is restorable
+either: the shared instance was rebuilt empty on 2026-11-13, and its database log has no koillection
+row, so there is no database and no dump to restore. First start is empty, and the database has to be
+created by hand from `runbooks/postgres-add-database.md` before the app can answer a query.
+
+What the image actually needs is narrower than the old chart assumed. It serves on :80 (the values
+file claimed 5432, a PostgreSQL copy-paste), persists only `/uploads`, and declares its health in the
+Dockerfile as `curl --fail http://localhost:80/` — so the startup and liveness probes use `/`, and
+readiness is off, because nothing unauthenticated reports whether PostgreSQL is reachable. `/conf` is
+dead weight the image never writes to; it stays because the card asked for both claims and the
+deployment mounted that path, and removing it is follow-up work rather than part of getting the pod
+running. The pod is pinned to `nuc0` by `nodeSelector`, replacing an `affinity` on the retired
+`node-type: general` label that matched no node at all.
+
 ### qbittorrent
 
 As of 2026-11-18: the last media-stack chart to go through the contract pass, and the only one with a

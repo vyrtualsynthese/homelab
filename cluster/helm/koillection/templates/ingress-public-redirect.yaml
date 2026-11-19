@@ -24,7 +24,7 @@ spec:
       kind: Rule
       services:
         - name: koillection-app
-          port: koillection
+          port: http
       middlewares:
         - name: kube-system-lan-only@kubernetescrd
         - name: {{ include "app.fullname" . }}-redirect-https

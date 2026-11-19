@@ -5,7 +5,9 @@ metadata:
   labels:
     {{- include "app.labels" . | nindent 4 }}
 spec:
-  replicas: 1
+  replicas: {{ .Values.replicaCount }}
+  # Required: the configuration claim is ReadWriteOnce and cannot be attached to
+  # an old and a new pod at the same time.
   strategy:
     type: Recreate
   selector:
@@ -20,80 +22,135 @@ spec:
       labels:
         {{- include "app.selectorLabels" . | nindent 8 }}
     spec:
-      volumes:
-        - name: koillection-conf
-          persistentVolumeClaim:
-            claimName: koillection-conf
-        - name: koillection-uploads
-          persistentVolumeClaim:
-            claimName: koillection-uploads
+      serviceAccountName: {{ include "app.serviceAccountName" . }}
       {{- with .Values.app.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      serviceAccountName: {{ include "app.serviceAccountName" . }}
       securityContext:
         {{- toYaml .Values.app.podSecurityContext | nindent 8 }}
       containers:
-        - name: {{ .Chart.Name }}
-          image: "{{ .Values.app.image.repository }}:{{ .Values.app.image.tag | default .Chart.AppVersion }}"
+        - name: koillection
+          image: "{{ .Values.app.image.repository }}:{{ .Values.app.image.tag }}"
           imagePullPolicy: {{ .Values.app.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.app.securityContext | nindent 12 }}
+          # Plain values stay inline so a change rolls the Deployment by itself.
+          # Credentials come from the `koillection` Secret through secretKeyRef.
+          # The image writes all of these into /app/public/.env.local at start.
           env:
-            - name: "DB_DRIVER"
+            - name: DB_DRIVER
               value: "pdo_pgsql"
-            - name: "DB_NAME"
+            - name: DB_NAME
               valueFrom:
                 secretKeyRef:
+                  name: koillection
                   key: DB_NAME
-                  name: koillection
-            - name: "DB_HOST"
+            - name: DB_HOST
               valueFrom:
                 secretKeyRef:
+                  name: koillection
                   key: DB_HOST
-                  name: koillection
-            - name: "DB_PORT"
+            - name: DB_PORT
               value: "5432"
-            - name: "DB_USER"
+            - name: DB_USER
               valueFrom:
                 secretKeyRef:
+                  name: koillection
                   key: DB_USER
-                  name: koillection
-            - name: "DB_PASSWORD"
+            - name: DB_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  key: DB_PASSWORD
                   name: koillection
-            - name: "DB_VERSION"
+                  key: DB_PASSWORD
+            # Doctrine's declared feature level, not the server's version. The
+            # shared instance runs 18.7; declaring a lower level only narrows the
+            # SQL Doctrine emits, while declaring one above the server can
+            # produce statements the server rejects.
+            - name: DB_VERSION
               value: "16.3.0"
-            - name: "PHP_TZ"
+            - name: PHP_TZ
               value: "Europe/Paris"
-            - name: "HTTPS_ENABLED"
+            # TLS ends at Traefik and the pod is reached over plain HTTP, so the
+            # cookie is not marked secure. Unchanged from the previous chart.
+            - name: HTTPS_ENABLED
               value: "0"
-            - name: "UPLOAD_MAX_FILESIZE"
+            - name: UPLOAD_MAX_FILESIZE
               value: "100M"
-            - name: "PHP_MEMORY_LIMIT"
-              value: "100M"
-            - name: "COMPOSER_ALLOW_SUPERUSER"
-              value: "1"
+            # Per PHP process, so this is also the ceiling the container limit
+            # below is built around. FrankenPHP runs one process for the app.
+            - name: PHP_MEMORY_LIMIT
+              value: "128M"
+            # The entrypoint rewrites the image's user to these ids and chowns
+            # /uploads to it, then drops to it.
+            - name: PUID
+              value: "1100"
+            - name: PGID
+              value: "1100"
           ports:
-            - containerPort: 80
-              name: koillection
-          volumeMounts:
-            - name: koillection-conf
-              mountPath: /conf
-            - name: koillection-uploads
-              mountPath: /uploads
+            - name: http
+              containerPort: {{ .Values.app.service.port }}
+              protocol: TCP
+          {{- with .Values.app.probes }}
+          {{- if .startup.enabled }}
+          startupProbe:
+            httpGet:
+              path: /
+              port: http
+            periodSeconds: {{ .startup.periodSeconds }}
+            timeoutSeconds: {{ .startup.timeoutSeconds }}
+            failureThreshold: {{ .startup.failureThreshold }}
+          {{- end }}
+          {{- if .liveness.enabled }}
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            periodSeconds: {{ .liveness.periodSeconds }}
+            timeoutSeconds: {{ .liveness.timeoutSeconds }}
+            failureThreshold: {{ .liveness.failureThreshold }}
+          {{- end }}
+          {{- if .readiness.enabled }}
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          {{- end }}
+          {{- end }}
           resources:
             {{- toYaml .Values.app.resources | nindent 12 }}
+          volumeMounts:
+            {{- if .Values.app.storage.conf.enabled }}
+            - name: conf
+              mountPath: {{ .Values.app.storage.conf.mountPath }}
+            {{- end }}
+            {{- if .Values.app.storage.uploads.enabled }}
+            - name: uploads
+              mountPath: {{ .Values.app.storage.uploads.mountPath }}
+            {{- end }}
+      volumes:
+        {{- if .Values.app.storage.conf.enabled }}
+        - name: conf
+          persistentVolumeClaim:
+            claimName: {{ .Values.app.storage.conf.claimName }}
+        {{- end }}
+        {{- if .Values.app.storage.uploads.enabled }}
+        - name: uploads
+          persistentVolumeClaim:
+            claimName: {{ .Values.app.storage.uploads.claimName }}
+        {{- end }}
       {{- with .Values.app.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      {{- with .Values.app.affinity }}
-      affinity:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
       {{- with .Values.app.tolerations }}
       tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.app.affinity }}
+      affinity:
         {{- toYaml . | nindent 8 }}
       {{- end }}
