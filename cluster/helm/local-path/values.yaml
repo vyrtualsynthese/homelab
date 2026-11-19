@@ -74,8 +74,8 @@ storageClass:
 
   ## Set a permission pattern (string). Quote numeric modes to preserve leading zeros (e.g. '0700').
   ## Left empty deliberately. Empty keeps the 0777 mkdir, so any UID can still write.
-  ## Setting 0750 would break discourse's redis (uid 999), which shares this class.
-  ## Do it only once every workload on local-path runs as 1100.
+  ## Set it only once every workload on local-path runs as 1100: a stricter mode locks
+  ## out any image that writes as its own user.
   permPattern: ""
 
 # nodePathMap is the place user can customize where to store the data on each node.

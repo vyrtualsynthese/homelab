@@ -33,7 +33,6 @@ database passwords.
 | `syncthing-backup` | `syncthing` | `envFrom` (restic credentials) |
 | `authentik-env` | `authentik` | `envFrom` |
 | `dashy-conf` | `dashy` | rendered by `cluster/helm/dashy/templates/secret-config.yaml` from `files/conf.yml`; holds no credentials |
-| `discourse` | `discourse` | `db-password`, `admin-db-password` for the database, `discourse-password` for the forum admin login |
 | `postgres-secrets` | `databases` | Bitnami PostgreSQL `existingSecret` |
 | `pgadmin` | `databases` | external chart `existingSecret` |
 | `renovate` | `renovate` | external chart `existingSecret` |
@@ -90,7 +89,6 @@ beside the instance that creates the role, once beside the application that cons
 | `authentik-sso` | `authentik` | `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`, `PLEX_TOKEN`, `GRAFANA_CLIENT_SECRET`, `PGADMIN_CLIENT_SECRET`, `KAVITA_CLIENT_SECRET`, `ARGOCD_CLIENT_SECRET`, `CALIBRE_CLIENT_SECRET`, `RADARR_CLIENT_SECRET`, `RADARR_ANIME_CLIENT_SECRET`. Exported into the authentik server and worker with `envFrom`; the blueprint `!Env` tags read it | authentik server and worker | Source and provider client secrets, created by the operator. The same values are copied into each application's own Secret (`grafana-oidc`, `pgadmin-oidc`) or its UI (`calibre`, pasted into Calibre-Web's OAuth settings because it stores it in `app.db`), because Secrets do not cross namespaces |
 | `grafana-oidc` | `monitoring` | `GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET` | Grafana chart `envFromSecret`; `grafana.ini` reads it with `$__env{}` | Copy of `GRAFANA_CLIENT_SECRET` from `authentik-sso` |
 | `pgadmin-oidc` | `databases` | `config_local.py` | Mounted at `/pgadmin4/config_local.py` by the chart | Generated file holding `OAUTH2_CONFIG`, with the client secret copied from `authentik-sso` |
-| `discourse` | `discourse` | `db-password`, `admin-db-password`, and `discourse-password` for the forum admin login | `externalDatabase.existingSecret` (`db-password`, `admin-db-password`) and `auth.existingSecret` (`discourse-password`) | The existing Secret, with the database password replaced when the application moves onto this instance. |
 | `koillection` | `koillection` | `DB_NAME`, `DB_HOST`, `DB_USER`, `DB_PASSWORD` | The application pod's `env` | Existing Secret. `DB_HOST` is where the hostname moves; the file is also the documented rotation point for the password. |
 | `vikunja-db` | `vikunja` | `VIKUNJA_DATABASE_PASSWORD` | The board pod's environment; the key name is Vikunja's own variable, so the chart needs no mapping | Created by [`runbooks/vikunja-database.md`](runbooks/vikunja-database.md) with `openssl rand -base64 24`, so the value is 32 characters. Deliberately **no** `databases/pg-vikunja` copy: this Secret is the only one, and losing it is repaired with `ALTER ROLE` plus a new Secret. |
 
