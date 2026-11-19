@@ -19,6 +19,9 @@ PUBLIC_HOSTS = frozenset(
         # The start page, gated by `authentik-forwardauth` rather than lan-only:
         # it is meant to answer the internet, so the gate must not be the LAN.
         "dashy.ashudev.com",
+        # The sign-in page of the gate above. It has to answer the same internet
+        # the dashboard does, or a public page behind the gate cannot be opened.
+        "authentik.kub.home.ashudev.com",
     }
 )
 
