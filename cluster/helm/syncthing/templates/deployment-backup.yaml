@@ -24,7 +24,7 @@ spec:
                 name: {{ include "backup.fullname" . }}-backup
           initContainers:
             - name: init-syncthing-config
-              image: busybox:1.35
+              image: busybox:1.38
               command: [ 'sh', '-c', "cp /config/* /cache" ]
               volumeMounts:
                 - mountPath: /cache

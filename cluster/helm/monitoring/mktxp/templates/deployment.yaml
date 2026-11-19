@@ -35,7 +35,7 @@ spec:
           emptyDir: {}
       initContainers:
         - name: init-nextcloud-nginx-config
-          image: busybox:1.35
+          image: busybox:1.38
           command: [ 'sh', '-c', "cp /secret/* /mktxp" ]
           volumeMounts:
             - name: secret-volume
