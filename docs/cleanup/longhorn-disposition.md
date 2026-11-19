@@ -10,9 +10,11 @@ objects on its own: their finalizers name controllers that no longer exist.
 > **Where this stands.** The operator ran phases 1, 3 and 4 on 2026-11-18. Twenty-three volumes and
 > three claims were cleared, and `longhorn-system` is gone. `n8n` was rebuilt on `local-path` on
 > 2026-11-19, and its claim and volume followed the same day. **What remains is the two claims of
-> phase 2** — `syncthing-conf` and `thelounge-volume` — which stay until those two applications are
-> rebuilt off Longhorn. The tables below are the inventory taken before that run, kept as the record
-> of what was removed.
+> phase 2** — `syncthing-conf` and `thelounge-volume` — plus the `syncthing` and `thelounge` pods
+> still mount-read them. `syncthing` is rebuilt in the repository on 2026-11-19 (its chart creates
+> `syncthing-config` on `local-path`); its claim clears once the stuck pod is force-deleted, which is
+> operator work. The tables below are the inventory taken before the first run, kept as the record of
+> what was removed.
 
 > **Agents cannot run these steps.** The agent's cluster access is read-only and shell `kubectl` is
 > denied, so every cluster-side command here is for the operator. Repo-side items are already merged.
@@ -103,7 +105,7 @@ The plan calls this list "eleven", but its own table and this one both hold ten.
 | firefly | rebuilt in Wave A | retired 2026-11-18 |
 | linkstack | rebuilt in Wave A | retired 2026-11-18 |
 | n8n | rebuilt in Wave A | rebuilt 2026-11-19: pod 1/1 on `n8n-config` (`local-path`), old claim and volume cleared |
-| syncthing | rebuilt in Wave A | **not rebuilt**, still on `syncthing-conf` |
+| syncthing | rebuilt in Wave A | rebuilt in the repository 2026-11-19: chart creates `syncthing-config` (`local-path`), pod pinned to `nuc0`; old claim clears once the stuck pod is force-deleted |
 | thelounge | rebuilt in Wave A | **not rebuilt**, still on `thelounge-volume` |
 | pgadmin | rebuilt in Wave A | rebuilt on `local-path` |
 | prometheus | replaced wholesale in W6 | replaced on `local-path`; old claim orphaned |
@@ -156,11 +158,23 @@ The second command prints only the two claims of phase 2.
 
 ### Phase 2 — the two claims still in use: deferred
 
-`syncthing-conf` and `thelounge-volume` are mounted by running pods. Do not patch them
+`syncthing-conf` and `thelounge-volume` were mounted by running pods. Do not patch them
 here. Rebuild each application on `local-path` (Wave A), confirm the new pod runs on the new claim,
 force-delete the old pod (its teardown needs the driver that is gone), then run the Phase 1 loop with
 those two names. Their PVs stay `Bound` until then, which is correct. `n8n-2` was cleared this way on
 2026-11-19.
+
+For syncthing, the order matters and the concerns are separate: the chart change (new
+`syncthing-config` claim, pod pinned to `nuc0`) merges and syncs first, then the stuck
+`syncthing-75bc646f6b-b8cmq` pod is force-deleted so the new claim binds on `nuc0`, and only once
+the new pod runs does the loop below clear the claim and the volume — both are named
+`syncthing-conf`, PV first.
+
+```bash
+kubectl -n syncthing delete pod syncthing-75bc646f6b-b8cmq --force --grace-period=0
+kubectl patch pv syncthing-conf -p '{"metadata":{"finalizers":null}}' --type=merge
+kubectl -n syncthing patch pvc syncthing-conf -p '{"metadata":{"finalizers":null}}' --type=merge
+```
 
 ### Phase 3 — clear the twenty released volumes
 

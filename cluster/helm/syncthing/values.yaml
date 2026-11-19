@@ -25,39 +25,39 @@ app:
 
   podAnnotations: {}
 
+  # The LinuxServer init writes /config as root, then hands it to PUID/PGID.
+  # local-path does not apply fsGroup to a hostPath volume, so none is set and
+  # no runAsUser either: both look right and do nothing.
   podSecurityContext:
-    {}
-    # fsGroup: 2000
+    seccompProfile:
+      type: RuntimeDefault
 
+  # The s6 init chowns /config (CHOWN) then drops to 1100 (SETUID/SETGID);
+  # everything else stays dropped. `runAsNonRoot` is absent on purpose: the
+  # image starts as root and would refuse to start with it set.
   securityContext:
-    {}
-    # capabilities:
-    #   drop:
-    #   - ALL
-    # readOnlyRootFilesystem: true
-    # runAsNonRoot: true
-    # runAsUser: 1000
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop:
+        - ALL
+      add:
+        - CHOWN
+        - SETUID
+        - SETGID
 
   service:
     type: ClusterIP
-    port: 5432
+    # The WebUI. The sync ports are in the Service template.
+    port: 8384
 
+  # The routes are values-driven only in the switch and the annotations: the
+  # host and the TLS block are written in the four IngressRoute templates, the
+  # same way the other Legacy Traefik charts do it. `enabled` turns all four off
+  # at once.
   ingress:
     enabled: true
     className: ""
-    annotations:
-      {}
-      # kubernetes.io/ingress.class: nginx
-      # kubernetes.io/tls-acme: "true"
-    hosts:
-      - host: chart-example.local
-        paths:
-          - path: /
-            pathType: ImplementationSpecific
-    tls: []
-    #  - secretName: chart-example-tls
-    #    hosts:
-    #      - chart-example.local
+    annotations: {}
 
   # Sized from Prometheus on 2026-11-13 over the 39h it holds: 60Mi average and
   # 110Mi peak. It had no request and no limit at all, so the scheduler
@@ -69,19 +69,59 @@ app:
     limits:
       memory: 256Mi
 
-  nodeSelector: {}
+  # Plain values, inline in the Deployment: changing one rolls the pod.
+  # PUID/PGID 1100 is the stack convention, and a fresh claim on local-path is
+  # created 0777 owned by 1100:1100, so the app owns its own config.
+  env:
+    PUID: "1100"
+    PGID: "1100"
+    TZ: Europe/Paris
+
+  # The config claim: device identity, folder definitions, the ignore patterns
+  # and Syncthing's index database. 1Gi rather than the contract's 128Mi because
+  # the index database for the media tree does not fit in 128Mi; the previous
+  # Longhorn claim was 1Gi for the same reason. The name is `<fullname>-config`
+  # (syncthing-config), not syncthing-conf: that name is still held by a
+  # Terminating Longhorn claim. See docs/cleanup/longhorn-disposition.md.
+  persistence:
+    size: 1Gi
+    storageClassName: local-path
+    accessMode: ReadWriteOnce
+
+  # `/rest/noauth/health` answers 200 with {"status":"OK"} and needs no API key.
+  # Readiness shares it: Syncthing stays healthy while a folder is disconnected,
+  # and that is a sync state, not a reason to stop routing to the WebUI.
+  probes:
+    startup:
+      enabled: true
+      path: /rest/noauth/health
+      periodSeconds: 5
+      timeoutSeconds: 3
+      failureThreshold: 30
+    liveness:
+      enabled: true
+      path: /rest/noauth/health
+      initialDelaySeconds: 20
+      periodSeconds: 30
+      timeoutSeconds: 3
+      failureThreshold: 3
+    readiness:
+      enabled: true
+      path: /rest/noauth/health
+      initialDelaySeconds: 5
+      periodSeconds: 10
+      timeoutSeconds: 3
+      failureThreshold: 3
+
+  # Pinned, not affinity: local-path is hostPath-backed, so the claim exists on
+  # one node only and the pod cannot follow a reschedule. nuc0 is where the
+  # application already ran and where AGENTS.md places the general catalogue.
+  # The old `node-type: general` affinity is retired and matched no node, which
+  # left the replacement pod Pending.
+  nodeSelector:
+    kubernetes.io/hostname: nuc0
 
   tolerations: []
-
-  affinity:
-    nodeAffinity:
-      requiredDuringSchedulingIgnoredDuringExecution:
-        nodeSelectorTerms:
-          - matchExpressions:
-              - key: node-type
-                operator: In
-                values:
-                  - general
 
 backup:
   image:
@@ -105,61 +145,37 @@ backup:
 
   podAnnotations: {}
 
-  podSecurityContext: {}
-  # fsGroup: 2000
+  podSecurityContext:
+    seccompProfile:
+      type: RuntimeDefault
 
+  # restic reads the NFS export, which is 1100:1100 like the rest of the stack.
+  # It stays root only because the export can also hold files from older UIDs;
+  # restic needs to read them, not to own them.
   securityContext:
     runAsUser: 0
     runAsGroup: 0
-    # capabilities:
-    #   drop:
-    #   - ALL
-    # readOnlyRootFilesystem: true
-  # runAsNonRoot: true
-  # runAsUser: 1000
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop:
+        - ALL
 
-  service:
-    type: ClusterIP
-    port: 80
-
-  ingress:
-    enabled: false
-    className: ""
-    annotations: {}
-    # kubernetes.io/ingress.class: nginx
-    # kubernetes.io/tls-acme: "true"
-    hosts:
-      - host: chart-example.local
-        paths:
-          - path: /
-            pathType: ImplementationSpecific
-    tls: []
-    #  - secretName: chart-example-tls
-    #    hosts:
-    #      - chart-example.local
-
+  # Unmeasured: the job runs five minutes a day, so there is no working set to
+  # read from Prometheus. restic holds its index in memory, which grows with the
+  # tree, so the limit is roomy rather than tight.
   resources:
-    {}
-    #requests:
-    #  cpu: 5m
-    #  memory: 16Mi
-    #limits:
-    #  memory: 128Mi
-    # We usually recommend not to specify default resources and to leave this as a conscious
-    # choice for the user. This also increases chances charts run on environments with little
-    # resources, such as Minikube. If you do want to specify resources, uncomment the following
-    # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
-    # limits:
-    #   cpu: 100m
-    #   memory: 128Mi
-    # requests:
-    #   cpu: 100m
-  #   memory: 128Mi
+    requests:
+      cpu: 5m
+      memory: 64Mi
+    limits:
+      memory: 512Mi
 
   nodeSelector: {}
 
   tolerations: []
 
+  # Follows the app, so the run does not compete with a job the pod is holding
+  # the volume for.
   affinity:
     podAffinity:
       requiredDuringSchedulingIgnoredDuringExecution:

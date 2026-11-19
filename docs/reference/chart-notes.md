@@ -476,6 +476,28 @@ router, so the router's port closure is the only thing keeping it off the intern
 lives in `/data/config/log4j2.xml`, which the image generates and the chart does not own, so `info`
 reaches Loki until a later change takes that file. Heap, memory reservation and the Meowice JVM flags
 are unmeasured.
+### syncthing
+
+Rebuilt on 2026-11-19 off the dead Longhorn claim. The chart now creates its own config claim,
+`syncthing-config` on `local-path`, because `syncthing-conf` is held by a `Terminating` object whose
+name cannot be reused. 1Gi rather than `128Mi`: the index database for the media tree does not fit
+in 128Mi, and the old claim was the same size.
+
+The pod is pinned to `nuc0` — where the app already ran, and where AGENTS.md places the general
+catalogue — instead of carrying the retired `node-type: general` affinity, which matched no node and
+left the replacement pod `Pending`. The claim is `WaitForFirstConsumer`, so it binds to whichever
+node schedules first: the stuck old pod has to be force-deleted before the first sync, or the claim
+binds to a node the new pod cannot use.
+
+Probes sit on `/rest/noauth/health`, the one unauthenticated endpoint. Readiness shares it: a
+disconnected folder is a sync state, not a dependency failure, and the process is the only thing
+that can fail. `PUID`/`PGID` moved from `0` to `1100` with `TZ` from `Etc/CEST` to `Europe/Paris`;
+`runAsUser` stays absent because the LinuxServer init starts as root and drops, and a fresh
+`local-path` claim is already owned by 1100.
+
+Debt: no log level. Syncthing has no verbosity variable (`STTRACE` only raises), so it runs at
+`info` and the GUI is the other record. The nightly restic CronJob's 512Mi limit is unmeasured: a
+five-minute job leaves no working set in Prometheus.
 
 ## Charts still to align
 

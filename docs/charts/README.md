@@ -230,6 +230,7 @@ Two habits follow:
 | `qbittorrent` | liveness only, a TCP connect to the WebUI port — there is no unauthenticated HTTP endpoint to ask; readiness off | pod seccomp `RuntimeDefault` and `allowPrivilegeEscalation: false` on the app; the WireGuard sidecar is `privileged`, adds `NET_ADMIN`/`SYS_MODULE` and sets seccomp `Unconfined` for `/dev/net/tun` | **no — the image starts as root, then drops to 1100** |
 | `minecraft-server` | startup, readiness and liveness are all a **TCP connect** to the game port; readiness shares it because the server has no second endpoint that reports dependency health | capabilities dropped except `CHOWN`/`SETUID`/`SETGID`, which the entrypoint's chown and `gosu` need; seccomp; no privilege escalation; no API token | **no — the image starts as root, then drops to 1000** |
 | `thelounge` | liveness only, a TCP connect to the web port — `/` answers the login page with a 200 either way; readiness off, no endpoint reports the IRC connections | capabilities dropped, seccomp, no privilege escalation | **yes — 1000**, the image's own `node` user; the claim is new, so no `chown` |
+| `syncthing` | startup, liveness and readiness, all on `/rest/noauth/health`; readiness shares it because a disconnected folder is a sync state, not a failed dependency | capabilities dropped except `CHOWN`/`SETUID`/`SETGID`, which the LinuxServer init needs; seccomp; no privilege escalation | **no — the image starts as root, then drops to 1100**; config claim `1Gi` on `local-path`, not `128Mi` |
 
 ## Checking a chart against this list
 
