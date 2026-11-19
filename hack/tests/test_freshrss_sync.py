@@ -100,7 +100,7 @@ class ParseTests(unittest.TestCase):
         anth = next(f for f in feeds if f.title == "Anthropic / Claude")
         self.assertEqual(dict(anth.settings), {
             "path_entries": "article",
-            "xPathItem": "//a[starts-with(@href,'/news/')]",
+            "xPathItem": "//li[@data-listing-row]//a[contains(@class,'_title-link')]",
             "xPathItemTitle": "normalize-space(.)",
             "xPathItemUri": "@href",
         })

@@ -34,7 +34,7 @@
       <outline type="rss" text="Mistral" title="Mistral" xmlUrl="https://mistral.ai/news/rss#force_feed"/>
       <outline type="HTML+XPath" text="Anthropic / Claude" title="Anthropic / Claude"
                xmlUrl="https://www.anthropic.com/news" htmlUrl="https://www.anthropic.com/news"
-               frss:xPathItem="//a[starts-with(@href,'/news/')]"
+               frss:xPathItem="//li[@data-listing-row]//a[contains(@class,'_title-link')]"
                frss:xPathItemTitle="normalize-space(.)"
                frss:xPathItemUri="@href"
                frss:cssFullContent="article"/>
