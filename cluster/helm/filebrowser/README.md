@@ -46,6 +46,11 @@ first sign-in. Without it the editor would inherit every export on the NAS.
 Uploads run as uid/gid 1100 (`securityContext`). Reads succeed under almost any identity; the first
 upload is the real test of the export's ownership.
 
+That uid is also why `server.cacheDir` is set to `/data/cache`: the chart's default is the relative
+string `tmp`, resolved against the image's working directory, which 1100 cannot write, and the app
+dies at startup with `mkdir tmp: permission denied`. `/data` is the claim the chart already mounts for
+this, and `cacheDirMaxSizeMB: 700` keeps the preview cache inside the 1 Gi claim.
+
 ## Login
 
 Namespace `filebrowser` has one OAuth2 client, id `filebrowser`, secret in Secret `filebrowser-oidc`

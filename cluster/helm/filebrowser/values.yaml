@@ -98,6 +98,13 @@ filebrowser-quantum:
 
   config:
     server:
+      # The chart's default is the relative string "tmp", resolved against the
+      # image's working directory, which uid 1100 cannot write: the app dies at
+      # startup with `mkdir tmp: permission denied`. /data is the claim the chart
+      # mounts for this purpose. The size cap keeps the preview cache inside the
+      # 1 Gi claim instead of filling it.
+      cacheDir: /data/cache
+      cacheDirMaxSizeMB: 700
       sources:
         - path: /srv/various
           name: various
