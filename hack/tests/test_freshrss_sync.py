@@ -40,6 +40,11 @@ class ParseTests(unittest.TestCase):
         self.assertEqual(len(feeds), 1)
         self.assertEqual(feeds[0].category, "Jeux")
 
+    def test_the_xpath_feeds_carry_their_selectors_for_import(self):
+        text = OPML_PATH.read_text()
+        self.assertEqual(text.count("frss:xPathItem="), 4)
+        self.assertIn('xmlns:frss="https://freshrss.org/opml"', text)
+
     def test_normalize_url_strips_one_trailing_slash_and_keeps_the_query(self):
         self.assertEqual(mod.normalize_url("https://a.test/feed/"), "https://a.test/feed")
         self.assertEqual(mod.normalize_url("https://a.test/f?x=1&y=2"), "https://a.test/f?x=1&y=2")

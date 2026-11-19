@@ -115,8 +115,14 @@ that trade is worth it.
 
 ## XPath selectors
 
-Set once per feed in FreshRSS: Feed management → the feed → *Advanced* → feed type `HTML + XPath`.
-The item selector picks one article; title and link are read relative to it.
+The four XPath feeds carry their selectors in the OPML itself, as `frss:xPathItem*` attributes —
+the format FreshRSS writes on export and reads on import. So they are configured by one import, not
+by four visits to the feed settings.
+
+In the web UI: *Subscription management* → *Import / export* → *OPML* → choose
+`hack/freshrss/feeds.opml` → *Upload*. Feeds already present are skipped, which is also the catch:
+changing a selector in the file does not reach an existing feed. Delete that feed first, then
+import again.
 
 | Feed | Item | Title | Link |
 |---|---|---|---|

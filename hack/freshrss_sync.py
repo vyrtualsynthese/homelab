@@ -52,18 +52,21 @@ def parse_opml(text: str) -> list[Feed]:
 
     def walk(node: ET.Element, category: str) -> None:
         for child in node.findall("outline"):
-            if child.get("type") == "rss":
-                url = child.get("xmlUrl") or child.get("htmlUrl") or ""
+            url = child.get("xmlUrl") or child.get("htmlUrl") or ""
+            if url:
                 key = normalize_url(url)
-                if not url or key in seen:
+                if key in seen:
                     continue
                 seen.add(key)
+                kind = "xpath" if (
+                    child.get("kind") == "xpath" or "xpath" in (child.get("type") or "").lower()
+                ) else "native"
                 feeds.append(
                     Feed(
                         category=category,
                         title=child.get("text") or child.get("title") or url,
                         url=url,
-                        kind=child.get("kind") or "native",
+                        kind=kind,
                     )
                 )
             else:
