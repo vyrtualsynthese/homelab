@@ -11,6 +11,11 @@ spec:
   concurrencyPolicy: Forbid
   jobTemplate:
     spec:
+      # A repository that cannot be reached retries with backoff for minutes per
+      # attempt. Bound it so one broken run cannot hold the CronJob's `Forbid`
+      # slot (and every later run) forever.
+      backoffLimit: 1
+      activeDeadlineSeconds: 7200
       template:
         spec:
           securityContext:
