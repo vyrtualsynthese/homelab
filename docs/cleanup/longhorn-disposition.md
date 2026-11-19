@@ -9,12 +9,11 @@ objects on its own: their finalizers name controllers that no longer exist.
 
 > **Where this stands.** The operator ran phases 1, 3 and 4 on 2026-11-18. Twenty-three volumes and
 > three claims were cleared, and `longhorn-system` is gone. `n8n` was rebuilt on `local-path` on
-> 2026-11-19, and its claim and volume followed the same day. **What remains is the two claims of
-> phase 2** — `syncthing-conf` and `thelounge-volume` — plus the `syncthing` and `thelounge` pods
-> still mount-read them. `syncthing` is rebuilt in the repository on 2026-11-19 (its chart creates
-> `syncthing-config` on `local-path`); its claim clears once the stuck pod is force-deleted, which is
-> operator work. The tables below are the inventory taken before the first run, kept as the record of
-> what was removed.
+> 2026-11-19 and its claim and volume followed; `thelounge` and `syncthing` were rebuilt the same day,
+> and `thelounge`'s claim and volume are gone too. **One claim is left**: `syncthing-conf`, held by the
+> force-deletable pod `syncthing-75bc646f6b-b8cmq`; the running app is on `syncthing-config` and no
+> longer mounts it, so clearing it loses nothing. The tables below are the inventory taken before the
+> first run, kept as the record of what was removed.
 
 > **Agents cannot run these steps.** The agent's cluster access is read-only and shell `kubectl` is
 > denied, so every cluster-side command here is for the operator. Repo-side items are already merged.
