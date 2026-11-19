@@ -1,11 +1,11 @@
 # Metrics: what the exporters publish and what was measured
 
-> **In one line.** The metric side of the `monitoring` stack: the traps in each exporter, what
-> Prometheus throws away before storing, how long data is kept, and the numbers taken from the live
-> cluster on 2026-11-18.
+> **In one line.** The metric and log side of the `monitoring` stack: the traps in each exporter, what
+> Prometheus and Fluent Bit throw away before storing, how long data is kept, and the numbers taken
+> from the live cluster on 2026-11-19.
 >
-> **Use it when** a panel is blank or a metric reads wrong, before trusting a series count or a
-> retention claim, or before proposing a new metric · **Verified** 2026-11-18 · **Kind:** living page
+> **Use it when** a panel is blank or a metric reads wrong, before trusting a series or volume count
+> or a retention claim, or before proposing a new metric · **Verified** 2026-11-19 · **Kind:** living page
 
 The overview — what runs where, its sizing, and how to query the stack:
 [`observability-conventions.md`](../observability-conventions.md).
@@ -28,16 +28,25 @@ The overview — what runs where, its sizing, and how to query the stack:
   `streaming` 2, `rbp2` 1, `rbp0` 1 and `rbp1` 1. The two edge Pi drives carry
   no `node` label; use `instance` to name them.
 
-**Fluent Bit** writes `Line_Format json`, so every Loki line is an envelope
-(`time`, `stream`, `log`, and a ~1 KB `kubernetes` block of labels, annotations
-and image hashes). Log panels unwrap it in the query:
+**Fluent Bit** writes the message and nothing else. Since 2026-11-18 the Loki
+output carries `Remove_Keys kubernetes,stream,time,_p` and `Drop_Single_Key raw`,
+so a text log arrives as the app's own message, unquoted, and a pod that logs
+JSON arrives as that JSON. Labels and structured metadata are read from the
+record *before* the line is packed — `pack_labels()` runs ahead of
+`pack_record()` in the output plugin — so `namespace`, `container`, `node` and
+`pod` all still resolve. **No query unwraps anything.**
 
-```
-{job="fluent-bit"} | json | line_format "{{if .log}}{{.log}}{{else}}{{__line__}}{{end}}"
-```
+Measured on 2,000 lines the day it changed: the message was 26 % of the line;
+63 % was the `kubernetes` block (pod labels 258 B, annotations 134 B, container
+hash 98 B, docker id 66 B) repeating what Loki already holds as stream labels;
+and 9 % was the CRI `time`, `stream` and `_p` fields, duplicating the timestamp
+and the container name.
 
 Labels are `job=fluent-bit`, `namespace`, `container`, `node`; the pod name is
-structured metadata, not a label.
+structured metadata, not a label. Loki computes `detected_level` from the line
+it stores, so `{job="fluent-bit"} | detected_level="error"` keeps working on
+both shapes: it reads a `level` field when the line is JSON, and sniffs the text
+otherwise.
 
 **The media stack's exporters** — the `exportarr` sidecars on `sonarr`,
 `sonarr-anime`, `radarr`, `radarr-anime`, `lidarr` and `prowlarr`, plus
@@ -227,15 +236,23 @@ curl -sG http://prometheus.kub.local/api/v1/query --data-urlencode \
 | Grafana database | `monitoring/grafana` | 5 GiB | n/a |
 | Loki chunks + index | `monitoring/storage-loki-0` | 20 GiB | `720h` via the compactor |
 
-**Loki fills slowly.** Measured on 2026-11-18: about 1.6 GB/day pushed before
-compression, at an average chunk compression ratio of 21×, so roughly
-**77 MB/day** and **2.3 GB** for the full 30-day retention against a 20 GiB
-claim. argocd is the loudest namespace (685k lines/day, 40 % of all lines, most
-of it the application and notifications controllers), followed by n8n (259k)
-and monitoring (125k). The throughput limit is 4 MB/s against an average of
-about 19 KB/s, so the ingestion limits are not the constraint either. Log
-volume needs no tuning; the panels that show these numbers are in
-[`dashboards.md`](dashboards.md).
+**Loki fills slowly.** Measured on 2026-11-19, once the pipeline stopped
+storing Fluent Bit's envelope: about **0.30 GB/day** pushed before compression,
+at **19×**, so roughly **16 MB/day** and **0.5 GB** for the full 30-day
+retention against a 20 GiB claim. The line fell from **1,013 to 223 bytes**;
+before the change the same six-hour average was 1.55 GB/day, and a busy hour
+reached 2.24 GB/day.
+
+argocd is still the loudest namespace — 208 MB of the 298 MB — because its three
+controllers are still at `info`: their cut is in
+`cluster/helm/argocd/values.yaml` and waits for the hand-applied release
+(`helm -n argocd upgrade argocd <chart-ref> -f cluster/helm/argocd/values.yaml`).
+After that, authentik (24 MB) and n8n (23 MB) lead. n8n's share is a bug, not
+chatter: `Pruning failed` in a loop every second — card #381. The throughput
+limit is 4 MB/s against an average of about 4 KB/s, so the ingestion limits are
+not the constraint either. What the line looked like before, and why: the
+[Fluent Bit note above](#exporter-quirks). The panels that show these numbers
+are in [`dashboards.md`](dashboards.md).
 
 Verify rather than trust:
 
