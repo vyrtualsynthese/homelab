@@ -23,7 +23,7 @@ spec:
       volumes:
         - name: syncthing-conf
           persistentVolumeClaim:
-            claimName: syncthing-conf
+            claimName: {{ include "app.fullname" . }}-config
         - name: syncthing-data
           persistentVolumeClaim:
             claimName: pvc-nfs-syncthing
@@ -36,15 +36,15 @@ spec:
         {{- toYaml .Values.app.podSecurityContext | nindent 8 }}
       containers:
         - name: {{ .Chart.Name }}
+          securityContext:
+            {{- toYaml .Values.app.securityContext | nindent 12 }}
           image: "{{ .Values.app.image.repository }}:{{ .Values.app.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.app.image.pullPolicy }}
           env:
-            - name: "PUID"
-              value: "0"
-            - name: "PGID"
-              value: "0"
-            - name: "TZ"
-              value: "Etc/CEST"
+            {{- range $name, $value := .Values.app.env }}
+            - name: {{ $name }}
+              value: {{ $value | quote }}
+            {{- end }}
           ports:
             - containerPort: 8384
               name: webui
@@ -63,6 +63,41 @@ spec:
               mountPath: /config
             - name: syncthing-data
               mountPath: /data
+          {{- with .Values.app.probes.startup }}
+          {{- if .enabled }}
+          startupProbe:
+            httpGet:
+              path: {{ .path }}
+              port: webui
+            periodSeconds: {{ .periodSeconds }}
+            timeoutSeconds: {{ .timeoutSeconds }}
+            failureThreshold: {{ .failureThreshold }}
+          {{- end }}
+          {{- end }}
+          {{- with .Values.app.probes.liveness }}
+          {{- if .enabled }}
+          livenessProbe:
+            httpGet:
+              path: {{ .path }}
+              port: webui
+            initialDelaySeconds: {{ .initialDelaySeconds }}
+            periodSeconds: {{ .periodSeconds }}
+            timeoutSeconds: {{ .timeoutSeconds }}
+            failureThreshold: {{ .failureThreshold }}
+          {{- end }}
+          {{- end }}
+          {{- with .Values.app.probes.readiness }}
+          {{- if .enabled }}
+          readinessProbe:
+            httpGet:
+              path: {{ .path }}
+              port: webui
+            initialDelaySeconds: {{ .initialDelaySeconds }}
+            periodSeconds: {{ .periodSeconds }}
+            timeoutSeconds: {{ .timeoutSeconds }}
+            failureThreshold: {{ .failureThreshold }}
+          {{- end }}
+          {{- end }}
           resources:
             {{- toYaml .Values.app.resources | nindent 12 }}
       {{- with .Values.app.nodeSelector }}

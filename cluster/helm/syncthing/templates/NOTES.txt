@@ -1,0 +1,13 @@
+The config claim changed names.
+
+`syncthing-config` is new and empty: the old `syncthing-conf` volume was Longhorn's and its
+contents are gone by decision. The pod will not schedule until the old, stuck
+`syncthing-75bc646f6b-b8cmq` pod is force-deleted, because that pod still holds the dead claim.
+
+After the pod is up:
+
+1. Finish first-run setup and record the new device ID.
+2. Accept it on every peer, then re-add each folder with the ID the peers already use, at `/data`.
+3. Confirm a test file syncs both ways.
+4. Only then clear the old claim and volume (PV first), per
+   docs/cleanup/longhorn-disposition.md.

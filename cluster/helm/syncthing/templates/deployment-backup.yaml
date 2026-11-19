@@ -13,6 +13,8 @@ spec:
     spec:
       template:
         spec:
+          securityContext:
+            {{- toYaml .Values.backup.podSecurityContext | nindent 12 }}
           volumes:
             - name: syncthing-data-volume
               persistentVolumeClaim:
@@ -26,6 +28,12 @@ spec:
             - name: init-syncthing-config
               image: busybox:1.38
               command: [ 'sh', '-c', "cp /config/* /cache" ]
+              resources:
+                requests:
+                  cpu: 1m
+                  memory: 16Mi
+                limits:
+                  memory: 64Mi
               volumeMounts:
                 - mountPath: /cache
                   name: script-cache-volume
@@ -38,6 +46,8 @@ spec:
               #args: [ "-c", "sleep 60m" ]
               image: "{{ .Values.backup.image.repository }}:{{ .Values.backup.image.tag | default .Chart.AppVersion }}"
               imagePullPolicy: {{ .Values.backup.image.pullPolicy }}
+              securityContext:
+                {{- toYaml .Values.backup.securityContext | nindent 16 }}
               resources:
                 {{- toYaml .Values.backup.resources | nindent 16 }}
               envFrom:
@@ -49,15 +59,15 @@ spec:
                 - mountPath: /config
                   name: script-cache-volume
           restartPolicy: OnFailure
-          {{- with .Values.app.nodeSelector }}
+          {{- with .Values.backup.nodeSelector }}
           nodeSelector:
-            {{- toYaml . | nindent 8 }}
+            {{- toYaml . | nindent 12 }}
           {{- end }}
-          {{- with .Values.app.affinity }}
+          {{- with .Values.backup.affinity }}
           affinity:
-            {{- toYaml . | nindent 8 }}
+            {{- toYaml . | nindent 12 }}
           {{- end }}
-          {{- with .Values.app.tolerations }}
+          {{- with .Values.backup.tolerations }}
           tolerations:
-            {{- toYaml . | nindent 8 }}
+            {{- toYaml . | nindent 12 }}
           {{- end }}
