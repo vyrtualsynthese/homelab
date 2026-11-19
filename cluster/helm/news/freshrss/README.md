@@ -68,8 +68,13 @@ first start. Removing the capability means fixing the claim's ownership by hand 
 
 `DATA_PATH=/config/data`, not the claim root. The entrypoint creates that directory as root, so it
 owns it and can give it the group write that the Apache worker needs; the claim root, owned by 1100,
-cannot be relied on for that. The LinuxServer tree still sits at `/config/www` and is not read.
-Removing it frees a few megabytes and is a destructive hand operation, so the chart does not do it.
+cannot be relied on for that.
+
+The LinuxServer image kept its data at `/config/www/freshrss/data`, and that tree is still there. On
+2026-11-19 it was copied into `/config/data` rather than abandoned, which is what made the swap keep
+the subscriptions and the read state — see "Carrying the old data root over" below. Removing
+`/config/www` afterwards frees a few megabytes and is a destructive hand operation, so the chart
+does not do it.
 
 Size: `1Gi`, not the 128Mi house default. FreshRSS keeps its SQLite database *and* the bodies of the
 articles it has fetched under the data root, so the volume grows with the reading, not with the
@@ -118,20 +123,58 @@ Bit ships every line with no filter. The feed-refresh cron enabled by `CRON_MIN`
 `actualize_script.php` to `/tmp/FreshRSS.log` **inside the container**, which Fluent Bit does not
 read, so refresh failures are visible only with `kubectl exec`. That is debt, recorded below.
 
-## First start after the image swap
+## Carrying the old data root over
 
-The data root is new, so this is the install wizard again. Order matters:
+Two Secrets must exist before the sync that rolls the Deployment and applies the blueprint, because
+the blueprint reads `!Env`:
 
-1. Generate one client secret and one crypto key. Put them in the `news` Secret `freshrss-oidc`
-   (`client-secret`, `client-crypto-key`) and the client secret in the authentik Secret
-   `authentik-sso` as `FRESHRSS_CLIENT_SECRET`. The blueprint reads `!Env`, so it must exist before
-   the sync that applies it.
-2. Let ArgoCD sync the Deployment and the blueprint.
-3. Open `https://freshrss.kub.home.ashudev.com/i/` from the LAN. authentik asks for the sign-in
+- `news/freshrss-oidc` with `client-secret` and `client-crypto-key`;
+- `authentik-sso` with `FRESHRSS_CLIENT_SECRET`, the same client secret.
+
+Then, once the pod is up, the old data root is copied into place. Three things bite:
+
+```bash
+kubectl -n news exec -i deploy/news-freshrss -- sh -s <<'SH'
+set -u
+mv /config/data /config/data.fresh-before-restore
+cp -a /config/www/freshrss/data /config/data
+# the directory name is the username, and under OIDC the username is the claim
+mv /config/data/users/<old-user> /config/data/users/vyrtualsynthese
+sed -i "s/'auth_type' => '[^']*'/'auth_type' => 'http_auth'/" /config/data/config.php
+sed -i "s/'default_user' => '[^']*'/'default_user' => 'vyrtualsynthese'/" /config/data/config.php
+chown -R www-data:www-data /config/data
+SH
+kubectl -n news rollout restart deploy/news-freshrss
+```
+
+- **`cp -a` exits 1 and still copies.** The old tree belongs to uid 1100 and the container has
+  `CHOWN` but not `FOWNER`, so it can set the owner and then cannot set the mode on a file it no
+  longer owns. One `Operation not permitted` line per file, on stderr, and a non-zero exit; a script
+  with `set -e` stops there. The `chown` at the end is what makes the result usable.
+- **The user directory is the username.** With `auth_type: http_auth` FreshRSS looks up the account
+  named in `OIDC_REMOTE_USER_CLAIM`, so the old directory has to be renamed to the authentik
+  username or the app answers "user does not exist". There is no provisioning on first sign-in.
+- **`auth_type` must end at `http_auth`.** The wizard writes `form` unless it is told otherwise, and
+  a copied `config.php` carries whatever the LinuxServer install had. Left on `form`, the app asks
+  for its own password *after* authentik — two logins, only one of them OIDC.
+
+Finish with an API password (Settings → Profile), `FRESHRSS_USER` / `FRESHRSS_API_PASSWORD` in
+`~/.config/secrets/homelab.env`, then `python3 hack/freshrss_sync.py apply --prune` to make the
+instance match the file (see `docs/news-feeds.md`). Delete `/config/data.fresh-before-restore` once
+the restored root is proven.
+
+## First start on an empty data root
+
+The alternative, when there is nothing to carry over. Order matters:
+
+1. Create both Secrets as above, and let ArgoCD sync the Deployment and the blueprint.
+2. Open `https://freshrss.kub.home.ashudev.com/i/` from the LAN. authentik asks for the sign-in
    first. In the wizard set the default user to **`vyrtualsynthese`** — the exact OIDC identity; a
-   different name gets no administrator rights — choose HTTP authentication, and give the password
-   field a random value it will not use. Finish the wizard in one pass.
-4. Make sure the API's log directory exists. A fresh data root does not have it, and without it every
+   different name gets no administrator rights — set the authentication type to **HTTP
+   authentication**, and give the password field a random value it will not use. Finish the wizard
+   in one pass. The wizard offers the authentication type; left on its default it is `form`, and the
+   second login comes back. Administration → Authentication changes it afterwards.
+3. Make sure the API's log directory exists. A fresh data root does not have it, and without it every
    API call answers an empty HTTP 500 (the logger cannot write; see `docs/news-feeds.md`):
 
    ```bash
@@ -139,9 +182,9 @@ The data root is new, so this is the install wizard again. Order matters:
    kubectl -n news exec deploy/news-freshrss -- chown www-data:www-data /config/data/users/_
    ```
 
-5. Set an API password in Settings, then update `FRESHRSS_USER` and `FRESHRSS_API_PASSWORD` in
+4. Set an API password in Settings, then update `FRESHRSS_USER` and `FRESHRSS_API_PASSWORD` in
    `~/.config/secrets/homelab.env`.
-6. Replay the feed list: `python3 hack/freshrss_sync.py apply` (see `docs/news-feeds.md`).
+5. Replay the feed list: `python3 hack/freshrss_sync.py apply` (see `docs/news-feeds.md`).
 
 ## Known debt
 
@@ -161,7 +204,8 @@ The data root is new, so this is the install wizard again. Order matters:
   ```
 
 - **The old LinuxServer tree is still in the claim.** `/config/www` holds the database and users
-  directory the previous image wrote. Nothing reads it; deleting it is the operator's call.
+  directory the previous image wrote; `/config/data` is a copy of it and is what the app reads.
+  Deleting `/config/www` is the operator's call, and only once the copy has proven itself.
 
 ## If the wizard wedges with "Error during context user init!"
 
