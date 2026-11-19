@@ -22,7 +22,7 @@ image:
   # (see the chart README).
   repository: ghcr.io/linuxserver/sonarr
   # -- Pin the full release tag. `4.0.20` is the series tag and moves; this one does not.
-  tag: "4.0.20.3014-ls4"
+  tag: "4.0.20.3014-ls329"
   pullPolicy: IfNotPresent
 
 imagePullSecrets: []
