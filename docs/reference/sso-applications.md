@@ -42,7 +42,7 @@ absent from this table has no single sign-on at all — no provider, no gate —
 | Prowlarr | forward-auth gate | configured; its own login is off; `/api` exempt; its probes carry a `Host` header | `prowlarr.kub.local` |
 | Sonarr | forward-auth gate | configured; its own login is off; `/api` exempt | `sonarr.kub.local` |
 | Tautulli | none | by decision: no gate and no authentik object; `lan-only` stays, and Tautulli's own login is the gate because a gate would collapse per-user history | `tautulli.kub.local` |
-| The Lounge | forward-auth gate | blueprint `app-thelounge`, `homelab-users`; the app has no OIDC and keeps its own accounts behind the gate, so a second sign-in | `thelounge.kub.home.ashudev.com` |
+| The Lounge | forward-auth gate | blueprint `app-thelounge`, Admins only — `homelab-users` has no members, and a binding to an empty group denies the sign-in; the app has no OIDC and keeps its own accounts behind the gate, so a second sign-in | `thelounge.kub.home.ashudev.com` |
 | Dashy | forward-auth gate | configured 2026-11-18 — blueprint `app-dashy`, Admins only; the only application whose gate is the public sign-in page, since `dashy.ashudev.com` answers the internet | `dashy.ashudev.com` |
 | qBittorrent | forward-auth gate | configured 2026-11-18 — blueprint `app-qbittorrent`, Admins only; its own login is bypassed for the pod network so the gate is the only prompt, and port-forward still asks (the break-glass); no `/api` exemption because every API client uses the Service name | `qbittorrent.kub.local` |
 | Sonarr (anime) | forward-auth gate | configured 2026-11-18; its own login is off; `/api` exempt | `sonarr-anime.kub.local` |

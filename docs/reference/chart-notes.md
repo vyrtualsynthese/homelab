@@ -341,7 +341,8 @@ and with it `busybox:1.35`.
 
 The gate is forward auth, not OIDC: The Lounge has none, and the LDAP provider its own integration
 guide uses needs an LDAP outpost this cluster does not run. So the route is `lan-only` then
-`authentik-forwardauth` (blueprint `app-thelounge`, `homelab-users`), and the app still asks for its
+`authentik-forwardauth` (blueprint `app-thelounge`, Admins only for now — `homelab-users` has no
+members and an empty group denies the one human who signs in), and the app still asks for its
 own account behind it — the two sign-ins are the known cost of the mechanism, not an oversight. The
 two chart-local Middlewares (`thelounge-security`, `thelounge-redirect-https`) are replaced by the
 shared `kube-system-*` copies; the `TLSOption` stays per-app, because it belongs to the

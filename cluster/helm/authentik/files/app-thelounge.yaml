@@ -44,12 +44,12 @@ entries:
       meta_icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/thelounge.svg
       policy_engine_mode: any
 
-  # Members only. `homelab-guests` signs in and reaches nothing, which is the
-  # point of that group; narrowing this to `authentik Admins` is a binding
-  # change, not a chart change.
+  # Admins only, like dashy and docs, because `homelab-users` has no members
+  # yet: a binding to an empty group denies the one human who signs in. A
+  # non-admin tier is a second binding for `homelab-users`, nothing in the chart.
   - model: authentik_policies.policybinding
     identifiers:
       target: !KeyOf thelounge-app
       order: 0
     attrs:
-      group: !Find [authentik_core.group, [name, homelab-users]]
+      group: !Find [authentik_core.group, [name, authentik Admins]]

@@ -41,7 +41,7 @@ confirm they survive it. That restart is the test: everything The Lounge keeps l
 The Lounge has no OIDC support, so there is nothing native to wire to authentik. Its one built-in
 identity mechanism is LDAP, which needs an LDAP outpost that this cluster does not run. The gate is
 therefore the shared `kube-system-authentik-forwardauth` middleware, bound by the blueprint
-`cluster/helm/authentik/files/app-thelounge.yaml` to `homelab-users`.
+`cluster/helm/authentik/files/app-thelounge.yaml` to `authentik Admins`.
 
 The consequence is a second sign-in: the outpost proves the browser is signed in, but it cannot carry
 that identity into the app, which keeps its own accounts. Turning on the LDAP path later is a
