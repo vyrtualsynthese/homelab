@@ -245,6 +245,15 @@ storage:
 # `version.txt` sitting in `/config/ui` differs from `version` below, so an
 # ordinary pod restart installs nothing and needs no network.
 #
+# Nothing in the installer may fail the pod. The UI is an asset; the torrent
+# client is the workload, so a first boot with no route to github.com — a cold
+# cluster, a fresh claim, a GitHub outage — leaves `/config/ui` as it is, says
+# why in the pod's start log, and qBittorrent starts on its stock WebUI. One
+# consequence is worth knowing before it surprises someone: qBittorrent answers
+# a missing UI by writing `WebUI\AlternativeUIEnabled=false` to its own config,
+# so after that fallback a later successful install puts the files back while
+# the UI stays stock until the recovery command below is run.
+#
 # The pairing with qBittorrent is not optional and nothing enforces it: the app
 # serves `<RootFolder>/public`, so `WebUI\RootFolder` must stay `/config/ui`, the
 # folder this installer fills. When that file is missing, qBittorrent answers the
