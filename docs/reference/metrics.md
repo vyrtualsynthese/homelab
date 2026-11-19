@@ -236,34 +236,35 @@ curl -sG http://prometheus.kub.local/api/v1/query --data-urlencode \
 | Grafana database | `monitoring/grafana` | 5 GiB | n/a |
 | Loki chunks + index | `monitoring/storage-loki-0` | 20 GiB | `720h` via the compactor |
 
-**Loki fills slowly.** Measured on 2026-11-19 over the half hour after the last
-producer restarted with the new settings (00:29–00:59Z): about **0.15 GB/day**
-pushed before compression, at **19×**, so roughly **8 MB/day** and **0.23 GB**
-for the full 30-day retention against a 20 GiB claim. The line fell from **1,013
-to 190 bytes**. Before the change the same six-hour average was 1.55 GB/day and a
-busy hour reached 2.24 GB/day, so the pipeline writes **10 to 15 times less** than
-it did.
+**Loki fills slowly.** Measured on 2026-11-19 over a clean half hour
+(02:00–02:30Z, no pod starting inside it): about **0.09 GB/day** pushed before
+compression, at **19×**, so roughly **5 MB/day** and **0.14 GB** for the full
+30-day retention against a 20 GiB claim. The line fell from **1,013 to 207
+bytes**. Before the change the same six-hour average was 1.55 GB/day and a busy
+hour reached 2.24 GB/day, so the pipeline writes **17 to 25 times less** than it
+did.
 
-Quote the half hour, not the first minutes: six minutes after the restart the
-same query read 0.09 GB/day, and that window missed the traffic a warm stack
-generates. What is left of the 0.15 GB/day is mostly a symptom, not chatter:
+Quote a settled window and say which one: six minutes after the last restart the
+same query read 0.09 GB/day for a different reason (the stack was not warm), and a
+half hour that happened to contain two pod restarts read 0.11 GB/day on startup
+bursts alone. What is left of the 0.09 GB/day is mostly a symptom, not chatter:
 
-- **argocd, 34 MB/day** — its `server` still logs at `info` (15 MB: cache
-  invalidations, and a repeating `token does not have jti or uti claim` warning),
-  and repo-server's 14 MB is almost entirely the two manifest errors for paths
-  that do not exist, `cluster/helm/nfs/plex-media` and `cluster/helm/nfs/audio`
-  (#383). The three controllers are at `warn` and account for almost nothing.
-- **authentik, 29 MB/day** — request logs at `info`, one line per request,
-  including the health probes the kubelet sends.
-- **n8n, 23 MB/day** — `Pruning failed` in a loop every second; card #381.
+- **authentik, 22 MB/day** — request logs at `info`, one line per request
+  (server 12, worker 10), including the health probes the kubelet sends.
+- **argocd, 18 MB/day** — all but 1 MB of it repo-server repeating the two
+  manifest errors for paths that do not exist, `cluster/helm/nfs/plex-media` and
+  `cluster/helm/nfs/audio` (#383). The server joined the controllers at `warn` on
+  2026-11-19 and fell from 12.9 MB/day to 1.
 - **monitoring, 14 MB** — `prometheus-smartctl`, which is talking about the
   failing `nas` drive.
-- **vikunja, 13 MB** — request logs at `info`, again including health probes.
-- **kube-system, 9 MB** — traefik errors saying `koillection` and
-  `news/freshrss` have no running endpoints, which they have not for 21 hours and
-  77 days respectively.
+- **kube-system, 6 MB** — traefik errors, now only `koillection`: it has a claim
+  and a running neighbour but crash-loops on a database host that does not exist
+  (#386).
+- **vikunja, 5 MB** — request logs at `info`, again including health probes.
+- **n8n, 3 MB** — the `Pruning failed` loop stopped when the app was rebuilt on
+  `local-path`; what is left is a telemetry retry that cannot connect.
 
-The throughput limit is 4 MB/s against an average of about 2 KB/s, so the
+The throughput limit is 4 MB/s against an average of about 1 KB/s, so the
 ingestion limits are not the constraint either. What the line looked like before,
 and why: the [Fluent Bit note above](#exporter-quirks). The panels that show
 these numbers are in [`dashboards.md`](dashboards.md).
