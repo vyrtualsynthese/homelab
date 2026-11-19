@@ -1,0 +1,45 @@
+version: 1
+metadata:
+  name: ashulab-app-syncthing
+entries:
+  - model: authentik_blueprints.metaapplyblueprint
+    attrs:
+      identifiers:
+        name: ashulab-groups
+      required: true
+
+  # Forward auth: no internal host and no client secret. Syncthing has no native
+  # single sign-on, so this gate is the only user check in front of the WebUI once
+  # its own login is removed. The application is bound to `authentik Admins` alone:
+  # this is an administration surface, not a shared tool.
+  - model: authentik_providers_proxy.proxyprovider
+    id: syncthing-provider
+    identifiers:
+      name: syncthing
+    attrs:
+      name: syncthing
+      mode: forward_single
+      # Scheme must match the browser: the route is on `websecure`, and the outpost
+      # takes the session cookie's Secure flag from this scheme.
+      external_host: https://syncthing.kub.home.ashudev.com
+      authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
+      invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
+
+  - model: authentik_core.application
+    id: syncthing-app
+    identifiers:
+      slug: syncthing
+    attrs:
+      name: Syncthing
+      slug: syncthing
+      provider: !KeyOf syncthing-provider
+      meta_launch_url: https://syncthing.kub.home.ashudev.com/
+      meta_icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/syncthing.png
+      policy_engine_mode: any
+
+  - model: authentik_policies.policybinding
+    identifiers:
+      target: !KeyOf syncthing-app
+      order: 0
+    attrs:
+      group: !Find [authentik_core.group, [name, authentik Admins]]
