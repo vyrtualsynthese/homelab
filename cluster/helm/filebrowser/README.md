@@ -43,16 +43,20 @@ Every source sets `defaultEnabled: false`. A brand-new OIDC user therefore start
 sidebar, **administrators included**: grant the sources in **Settings → User management** after the
 first sign-in. Without it the editor would inherit every export on the NAS.
 
-Uploads run as uid/gid 1100 (`securityContext`). Reads succeed under almost any identity; the first
-upload is the real test of the export's ownership.
+Uploads run as uid **1100** with **primary group 1000** (`securityContext`). Reads succeed under almost
+any identity; the first upload is the real test of the export's ownership.
 
-Group **1000** is added through `supplementalGroups`, not through `fsGroup`: the assets export carries
-directories owned by 1000 with mode `0750`, which uid 1100 cannot open — the video-project folders and
-four of the ROM sets. `fsGroup` alone does not reach the process, because the kubelet propagates it to
-a container's group list only when a volume supports ownership management, and NFS and hostPath both
-declare they do not (verified on the live pod: the `permission denied` lines stayed with
-`fsGroup: 1000` in its spec). `supplementalGroups` is passed to the runtime verbatim, so group 1000
-reaches the NFS credentials. Writes stay with 1100, the owner of the download export (`0755`).
+The primary group has to be 1000, and it has to be the *primary* one, because the assets export is a
+**mergerfs pool** — several disks presented as one folder — served through FUSE, and a FUSE request
+carries only the caller's uid and primary gid. mergerfs checks the underlying disk as that pair, so a
+group that is merely supplementary never reaches the check: the container's `id` lists 1000 either way,
+and the `0750` directories (owner `1000:1000`, group `r-x`) stay unreadable. That is why `fsGroup` and
+then `supplementalGroups` changed nothing on the live pod while the same credentials tested directly on
+the NAS — uid 1100, primary gid 0 denied, primary gid 1000 allowed — settled it.
+
+`supplementalGroups: [1000]` stays for any volume that never passes through mergerfs, where ordinary
+NFS group checks apply. Both groups are read-only on those directories; writes stay with uid 1100, the
+owner of the download export (`0755`).
 
 That uid is also why `server.cacheDir` is set to `/data/cache`: the chart's default is the relative
 string `tmp`, resolved against the image's working directory, which 1100 cannot write, and the app
