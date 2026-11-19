@@ -48,6 +48,29 @@ helm template news-freshrss cluster/helm/news/freshrss --namespace news
 | `nodeSelector` | Node pin. A `local-path` claim is bound to it. | `kubernetes.io/hostname: nuc0` |
 | `ingress.*` | Host, API group, middlewares and TLS for the two IngressRoutes. | kept from the live routes |
 
+## Hardening, and the one capability the other LinuxServer charts do not add
+
+`allowPrivilegeEscalation: false`, seccomp `RuntimeDefault`, and `drop: [ALL]` with four capabilities
+put back: `CHOWN`, `SETUID` and `SETGID` for the s6 init, plus **`DAC_OVERRIDE`**.
+
+That fourth one is not decoration and not copy-paste. This image's nginx and php-fpm **masters** start
+as root and then read and write files under `/config` that the init has chowned to `abc` (1100) — the
+TLS key the image generates in `/config/keys`, and `/config/log/php/error.log`. With `drop: [ALL]` and
+no `DAC_OVERRIDE`, root is subject to those file modes like any other user, and the first start on
+2026-11-19 failed exactly there:
+
+```
+ERROR: failed to open error_log (/config/log/php/error.log): Permission denied (13)
+[emerg] cannot load certificate key "/config/keys/cert.key": ... Permission denied
+```
+
+The pod sat `Running`, never ready, with the startup probe answering `connection refused` — nothing
+was listening, because nginx had exited. `kavita`, `plex`, `tautulli` and the other LinuxServer charts
+do not need this: their apps run as `abc` and never ask root to read a 1100-owned file. Keep the
+capability while those two masters run as root; removing it means running the whole image as 1100,
+which this image does not support.
+
+
 ## The claim this chart creates
 
 The chart mounts the claim it creates — that is the whole point of this rebuild. Before it, the
