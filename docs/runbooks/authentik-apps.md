@@ -256,7 +256,7 @@ that outlives its reason.
 | the app answers a callback error after authentik | the two Secrets hold different values, or the worker has not restarted since the patch | patch both from one value, restart the worker, restart the pod |
 | every OIDC login is refused, the operator's included | the `groups` claim is missing or renamed, so `userGroups` matches nobody | re-enable the password method (§ Recovery), sign in, fix the profile scope mapping |
 | the operator signs in and the sidebar is empty | the account has no source scopes yet — administrators are not exempt | grant the sources in **Settings → User management** |
-| the pod stays in `ContainerCreating` | `/mnt/storage/nfs/creator` is not exported | create the export, or point `nfsVolumes[].path` at the real folder |
+| the pod stays in `ContainerCreating` | an export named in `nfsVolumes` is not served by the NAS | point that entry at an export the NAS actually serves; the mount error names the path |
 | reads work and uploads fail with permission denied | the NFS export refuses uid 1100 | change `securityContext.runAsUser`/`fsGroup` to the export's owner |
 
 ### Accounts and folder scopes
@@ -264,8 +264,14 @@ that outlives its reason.
 Who gets in is decided in authentik; **what each person sees is decided inside FileBrowser**, because
 authentik has no concept of a folder. Every source in the chart is `defaultEnabled: false`, so a
 brand-new OIDC user starts with an empty sidebar — administrators included. After the first sign-in,
-grant scopes in **Settings → User management → (the account) → Sources**: each source has its own
-access level and a `deny` / `read` / `create` / `modify` / `delete` set.
+grant scopes in **Settings → User management → (the account) → Sources**: each scope is a source plus
+a path inside it, and carries its own access level with a `deny` / `read` / `create` / `modify` /
+`delete` set.
+
+A scope on a **path**, not just on a source, is how one folder is granted without a dedicated NAS
+export: `various` with the path `creator` shows that subdirectory of the assets export and nothing
+else from it. The folder does not need its own volume, and adding one is what stalls the pod on a
+mount the NAS does not serve.
 
 The editor is a local authentik account in `filebrowser-editors` and `homelab-guests`, so nothing
 depends on the Discord guild or a Plex share. Create one with:

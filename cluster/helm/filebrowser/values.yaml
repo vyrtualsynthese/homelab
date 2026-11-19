@@ -21,10 +21,6 @@ nfsVolumes:
     pv: pv-filebrowser-download
     path: /mnt/ultrafaststorage/nfs
     accessMode: ReadWriteOnce
-  - claim: filebrowser-creator
-    pv: pv-filebrowser-creator
-    path: /mnt/storage/nfs/creator
-    accessMode: ReadWriteMany
 
 filebrowser-quantum:
   image:
@@ -81,9 +77,6 @@ filebrowser-quantum:
     - name: qbittorrent-download-volume
       persistentVolumeClaim:
         claimName: filebrowser-download
-    - name: creator-volume
-      persistentVolumeClaim:
-        claimName: filebrowser-creator
 
   extraVolumeMounts:
     - name: stash-volume
@@ -92,8 +85,6 @@ filebrowser-quantum:
       mountPath: /srv/audio
     - name: qbittorrent-download-volume
       mountPath: /srv/torrent
-    - name: creator-volume
-      mountPath: /srv/creator
 
   # The client id is public; the secret is the only value from a Secret.
   extraEnv:
@@ -118,10 +109,6 @@ filebrowser-quantum:
             defaultEnabled: false
         - path: /srv/torrent
           name: torrent
-          config:
-            defaultEnabled: false
-        - path: /srv/creator
-          name: creator
           config:
             defaultEnabled: false
     auth:
