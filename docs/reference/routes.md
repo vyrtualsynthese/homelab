@@ -56,7 +56,7 @@ own certificate on a `*.kub.home.ashudev.com` or `*.ashudev.com` name.
 | `freshrss.kub.home.ashudev.com` | FreshRSS | `news` | `lan-only`; OIDC in the app, the API keeps its own login | Let's Encrypt | no |
 | `grafana.kub.local` | Grafana | `monitoring` | `lan-only` | internal CA | no |
 | `kavita.kub.home.ashudev.com` | Kavita | `media-stack` | `lan-only` | Let's Encrypt | no |
-| `koillection.kub.home.ashudev.com` | Koillection | `koillection` | **none** | Let's Encrypt | no |
+| `koillection.kub.home.ashudev.com` | Koillection | `koillection` | `lan-only` | Let's Encrypt | no |
 | `lidarr.kub.local` | Lidarr | `media-stack` | forward-auth; `lan-only` alone on `/api` | internal CA | no |
 | `maintainerr.kub.local` | Maintainerr | `media-stack` | forward-auth; `lan-only` alone on `/api` | internal CA | no |
 | `n8n.kub.home.ashudev.com` | n8n | `n8n` | `lan-only` | Let's Encrypt | no |
@@ -98,12 +98,12 @@ are rows in no table: `kub.home.ashudev.com` and `dashy.kub.local`, both to
 sends a key, not a browser session. `maintainerr` checks no key of its own, so on that host `lan-only`
 is the only control on `/api`.
 
-**One route carries no `lan-only` yet.** It is the row whose gate reads **none**,
-`koillection`: its chart already emits `kube-system-lan-only@kubernetescrd`, the live object predates
-the rule, and a sync closes the gap. `thelounge` was the second until 2026-11-19, when its rebuild
-added the LAN gate and the authentik forward-auth in front of it, and `syncthing` followed on the same
-day. The six public hosts above carry no `lan-only` by design instead, which
-is the other case `hack/check-exposure.sh` allows; it passes on both.
+**No internal route is ungated any more.** `koillection` was the last one: its chart already emitted
+`kube-system-lan-only@kubernetescrd`, the live object predated the rule, and the sync that followed its
+claim rebuild closed the gap on 2026-11-19. `thelounge` was the second until the same day, when its
+rebuild added the LAN gate and the authentik forward-auth in front of it, and `syncthing` followed. The
+six public hosts above carry no `lan-only` by design instead, which is the other case
+`hack/check-exposure.sh` allows; it passes on both.
 
 **Two routers on Plex.** `plex.kub.home.ashudev.com` is claimed twice, both on `websecure`:
 `plex-public` (headers and rate limit) and a leftover `plex-media-public` from an older release with

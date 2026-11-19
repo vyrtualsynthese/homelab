@@ -8,6 +8,8 @@
 
 This is a snapshot of the repository and of the cluster on 2026-11-18. Pod health and claim state move
 daily; [status.md](../status.md) is the live answer for what is running, what is broken and why.
+Two rows were refreshed on 2026-11-20: `koillection` is scheduled again, and `minecraft-server` now
+renders its workload at `0` replicas by decision rather than waiting on a claim.
 
 ## How to read the tables
 
@@ -22,8 +24,9 @@ placement, not the chart's intent, so the two can disagree — see the `node-typ
 - **D** — a small chart of ours that depends on the upstream chart and pins its image.
 
 A chart can be both A and D: `ashuvidz` depends on the upstream `nginx` chart and adds its own route
-templates, so it is marked **D**. A `—` in Node means the Application runs no workload of its own
-(`traefik-gate`); every Application here now declares a chart.
+templates, so it is marked **D**. A `—` in Node means no pod is running: either the Application
+renders no workload of its own (`traefik-gate`) or it is held at `0` replicas on purpose
+(`minecraft-server`). Every Application here now declares a chart.
 
 What those four patterns cost you when you change something is [gitops.md](gitops.md), one page.
 
@@ -45,7 +48,7 @@ belong to is [media.md](media.md).
 | `postgres` | `databases` | nas | A | the shared PostgreSQL that holds the other apps' databases |
 | `docs-site` | `docs` | nuc0 | A | every repository's `docs/` folder, built on a schedule and served read-only |
 | `filebrowser` | `filebrowser` | any | D | web file browser over the media shares, FileBrowser Quantum, sign-in through authentik; the community chart exports no scheduling field, so the pod is not pinned |
-| `koillection` | `koillection` | Pending | A | catalogue for a collection of things |
+| `koillection` | `koillection` | nuc0 | A | catalogue for a collection of things |
 | `autobrr` | `media-stack` | streaming | A | grabs releases from IRC announcements, without a search |
 | `bazarr` | `media-stack` | streaming | A | subtitles for the television and film libraries |
 | `bazarr-anime` | `media-stack` | streaming | A | the same for the anime library |
@@ -67,7 +70,7 @@ belong to is [media.md](media.md).
 | `sonarr-anime` | `media-stack` | streaming | A | Sonarr for the anime library |
 | `tautulli` | `media-stack` | streaming | A | Plex viewing statistics |
 | `unpackerr` | `media-stack` | streaming | A | extracts packed downloads so the *arr apps can import them |
-| `minecraft-server` | `minecraft` | Pending | A | a Minecraft Java server |
+| `minecraft-server` | `minecraft` | — | A | a Minecraft Java server, held at `0` replicas until its anti-cheat, anti-grief and backup work lands |
 | `alert-relay` | `monitoring` | nas | A | turns Grafana alerts into cards on the alerts board |
 | `grafana` | `monitoring` | nas | D | the dashboards |
 | `loki` | `monitoring` | nas | D | the log store Fluent Bit writes into |
