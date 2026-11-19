@@ -33,6 +33,10 @@ another category, and a listed feed whose content selectors differ from the file
 holds and the file does not is printed with a `-` and does not fail the run: `apply` never removes
 one without `--prune`, so an extra is not drift. A label counts as in place when it is one of the
 labels the instance reports, so a feed that also carries a second, stale label is not drift either.
+Two things are left out of the comparison: an address is compared without its fragment, so the
+`#force_feed` marker is not a different feed, and the instance's own release feed
+(`https://github.com/FreshRSS/FreshRSS/releases.atom`), which FreshRSS subscribes itself to and the
+file can never list.
 Exit codes are `0` clean, `1` any of the above, `2` credentials missing or refused — which includes
 the web login.
 
@@ -46,7 +50,13 @@ its item expression picks and reads that page.
 `FRESHRSS_BASE` overrides the instance URL, which is how a scratch instance gets tested.
 
 `apply` never unsubscribes anything unless `--prune` is passed, so a feed added by hand in the web
-UI survives a replay. Credentials are `FRESHRSS_USER` and `FRESHRSS_API_PASSWORD` from
+UI survives a replay — and a prune the instance refuses is reported with a `!` and does not stop the
+prunes after it. It does remove a label a listed feed carries besides its category: the file gives
+each feed one, and a feed can report several. One `ac=edit` per stale label, named against the file's
+category, leaves the feed with the one label the file gives it; a feed the file does not list is
+never touched that way. A feed that has just been subscribed with a different category gets its stale
+labels cleared on the next run, not the same one.
+Credentials are `FRESHRSS_USER` and `FRESHRSS_API_PASSWORD` from
 `~/.config/secrets/homelab.env`, plus `FRESHRSS_WEB_PASSWORD` for the settings half.
 
 `verify` fetches each URL from the machine that runs it, not from inside the cluster, so a 403 or
