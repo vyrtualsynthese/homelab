@@ -25,7 +25,7 @@
 ## Review Focus
 
 1. **A values key placed at the wrapper's top level.** The subchart then renders its own defaults — path `/nfs-storage`, class `nfs-client`, empty server — and the sync creates a ninth StorageClass pointing nowhere. Pinned by Task 2's path and class assertions.
-2. **`mountOptions` emptied or unset.** PV and PVC disappear from the render, the sync prunes them, and the claim goes `Terminating` — this is how four pairs in this cluster were made. Pinned by Task 2 asserting both objects exist for all eight.
+2. **`mountOptions` emptied or unset.** PV and PVC disappear from the render and the sync prunes them, out from under any pod still mounting the claim. Pinned by Task 2 asserting both objects exist for all eight.
 3. **Name drift.** A wrong `nameOverride` fails the sync on an immutable selector; a wrong `fullnameOverride` creates a second claim and orphans a mounted one. Pinned by Task 2's exact-name and selector matrix.
 4. **CRLF lost on the eight Application files.** ArgoCD still parses them, so nothing complains, and the next edit produces a whole-file diff. Pinned by Task 3's `file` check.
 5. **A chart directory deleted while an Application still points at it.** ArgoCD reports Synced/Healthy deploying nothing — the exact bug being fixed. Pinned by Task 4's reference loop.
@@ -547,4 +547,5 @@ still owed by the operator.
 - [ ] **Step 6: Report**
 
 Say what the first sync will do (adopt the eight existing object sets by name, change nothing), what
-the operator must run, and that the four `Terminating` pairs were left alone on purpose.
+the operator must run, and that the four NFS volumes carrying a 2023 deletion timestamp were left
+alone on purpose — their claims are `Bound` and in use.
