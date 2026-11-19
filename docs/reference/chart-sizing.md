@@ -68,6 +68,12 @@ protection ceiling only, with the reason next to the values.
 | `media-stack/qbittorrent-exporter` | 32Mi / 128Mi | 86Mi peak sits inside the 128Mi limit; re-measure after the next image bump |
 | `media-stack/recyclarr` | 128Mi / 1Gi | A CronJob run is shorter than the scrape interval, so it has no steady state to measure |
 
+## Measured on 2026-11-19
+
+| Chart | p95 / peak | Request was → now | Limit was → now | Why |
+|---|---|---|---|---|
+| `thelounge` | 76Mi / 81Mi | 64Mi → **80Mi** | 128Mi (unchanged) | The request sat below the working set; the limit already covered 1.5× the peak. Measured on the pod that had run 98 days on `nuc0`, before its rebuild on a new claim |
+
 ## Enforced by the method, not by these numbers
 
 No CPU limit anywhere, and CPU requests stay at 10–100m. CPU is compressible: a limit throttles the

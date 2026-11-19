@@ -67,7 +67,7 @@ own certificate on a `*.kub.home.ashudev.com` or `*.ashudev.com` name.
 | `sonarr-anime.kub.local` | Sonarr (anime) | `media-stack` | forward-auth; `lan-only` alone on `/api` | internal CA | no |
 | `syncthing.kub.home.ashudev.com` | Syncthing | `syncthing` | **none** | Let's Encrypt | no |
 | `tautulli.kub.local` | Tautulli | `media-stack` | `lan-only`; no gate, its own login | internal CA | no |
-| `thelounge.kub.home.ashudev.com` | The Lounge | `thelounge` | **none** | Let's Encrypt | no |
+| `thelounge.kub.home.ashudev.com` | The Lounge | `thelounge` | `lan-only` then forward-auth | Let's Encrypt | no |
 | `vikunja.kub.local` | Vikunja | `vikunja` | `lan-only` | internal CA | no |
 
 ## Internal without TLS
@@ -97,11 +97,12 @@ path and query kept.
 sends a key, not a browser session. `maintainerr` checks no key of its own, so on that host `lan-only`
 is the only control on `/api`.
 
-**Three routes carry no `lan-only` yet.** They are the rows whose gate reads **none** —
-`koillection`, `syncthing` and `thelounge`. All three are chart-first and drift, not design: their
-charts already emit `kube-system-lan-only@kubernetescrd`, the live objects predate the rule, and a
-sync closes the gap. The five public hosts above carry no `lan-only` by design instead, which is the
-other case `hack/check-exposure.sh` allows; it passes on both.
+**Two routes carry no `lan-only` yet.** They are the rows whose gate reads **none** —
+`koillection` and `syncthing`. Both are chart-first and drift, not design: their charts already emit
+`kube-system-lan-only@kubernetescrd`, the live objects predate the rule, and a sync closes the gap.
+`thelounge` was the third until 2026-11-19, when its rebuild added the LAN gate and the authentik
+forward-auth in front of it. The five public hosts above carry no `lan-only` by design instead, which
+is the other case `hack/check-exposure.sh` allows; it passes on both.
 
 **Two routers on Plex.** `plex.kub.home.ashudev.com` is claimed twice, both on `websecure`:
 `plex-public` (headers and rate limit) and a leftover `plex-media-public` from an older release with
