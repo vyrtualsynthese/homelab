@@ -130,6 +130,12 @@ Its data root is `DATA_PATH=/config/data`, a subdirectory of the claim: the clai
 uid 1100 by the previous image and the container can change a file's group but not its mode, so a
 data root there could not be written by the Apache worker.
 
+One setting decides whether the app really signs in through authentik: **Authentication method must
+be HTTP authentication** (`auth_type: http_auth`). The module authenticates the request, but FreshRSS
+still asks for its own form login unless it is told to trust the identity Apache hands it; the
+install wizard defaults to `form` and offers the choice. The same mode looks the account up by name,
+so the FreshRSS user must be the authentik username — there is no provisioning on first sign-in.
+
 ## Migrating Vikunja to OIDC
 
 It is the only application here that supports OIDC and does not use it, and the board is where the
