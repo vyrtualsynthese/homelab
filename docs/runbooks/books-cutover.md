@@ -76,7 +76,7 @@ kubectl -n argocd annotate application argocd-root argocd.argoproj.io/refresh=no
 old UI is gone at the same time. The Dashy tile is in git: `cluster/helm/dashy/files/conf.yml`,
 rendered into the `dashy-conf` Secret by `templates/secret-config.yaml`. Never edit the Secret in the
 cluster — ArgoCD owns it and `selfHeal` reverts the change. Change the tile in that file and bump
-`dashy.kub.local/config` in `cluster/helm/dashy/values.yaml` in the same commit; the Secret is
+`dashy.ashudev.com/config` in `cluster/helm/dashy/values.yaml` in the same commit; the Secret is
 mounted with `subPath`, so without the bump the running page keeps serving the old config.
 
 Expect one tile on `https://calibre.kub.local`; change it to `http://calibre.kub.local` now, and
