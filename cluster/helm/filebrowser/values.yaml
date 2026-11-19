@@ -39,14 +39,23 @@ filebrowser-quantum:
     passwordOverride: "oidc-only-no-local-login"
 
   # PUID/PGID of the rest of the stack, and the uid that owns the download
-  # export (0755). Group 1000 is added explicitly rather than through fsGroup:
-  # the assets export holds directories owned by 1000 with mode 0750, and the
-  # kubelet only propagates fsGroup to a container's group list when a volume
-  # supports ownership management. NFS and hostPath both declare they do not, so
-  # `fsGroup: 1000` left the live pod's errors unchanged. supplementalGroups is
-  # handed to the runtime verbatim, which is what actually reaches NFS.
+  # export (0755).
+  #
+  # `runAsGroup` is what makes the assets export readable, and it has to be the
+  # *primary* group: that export is a mergerfs pool (several disks, one folder)
+  # served through FUSE, and a FUSE request carries only the caller's uid and
+  # primary gid. mergerfs checks the underlying disk as that pair, so a group
+  # that is only supplementary is invisible to it — the container's `id` lists
+  # 1000 either way. Proven on the NAS: uid 1100 with primary gid 0 was denied
+  # on `Games/PSP` while primary gid 1000 listed it.
+  #
+  # Directories outside the world-readable majority are 0750 owned by 1000:1000,
+  # so primary gid 1000 gets `r-x` and nothing more; writes stay with uid 1100,
+  # the owner of the download export. `supplementalGroups` is kept for volumes
+  # that never pass through mergerfs, where ordinary NFS group checks apply.
   securityContext:
     runAsUser: 1100
+    runAsGroup: 1000
     runAsNonRoot: true
     supplementalGroups:
       - 1000
