@@ -16,7 +16,7 @@ Dashy internal and drop the public name. The rest of that design stands: the con
 
 | Piece | State in git |
 |---|---|
-| `dashy.ashudev.com` | no router at all; the name is unresolvable outside the LAN by design |
+| `dashy.ashudev.com` | no router; the name resolves publicly through the `*.ashudev.com` zone, and nothing answers it |
 | `dashy.kub.local` | `websecure` (lan-only, authentik-forwardauth, security, internal certificate) and a plain-HTTP mirror |
 | `kub.home.ashudev.com` | `web` and `websecure` routers, both lan-only, both redirecting to `https://dashy.kub.local` |
 | authentik blueprint | proxy provider `dashy`, `external_host: https://dashy.kub.local`, bound to `authentik Admins` |
