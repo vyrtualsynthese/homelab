@@ -174,18 +174,28 @@ the XPath fields are submitted together.
 |---|---|---|---|
 | Star Citizen comm-link | `//a[contains(@href,'/comm-link/transmission/')]` | `normalize-space(.)` | `@href` |
 | Final Fantasy XIV | `//a[contains(@href,'/lodestone/news/detail/')]` | `normalize-space(.)` | `@href` |
-| Elite Dangerous | `//a[starts-with(@href,'/news/')]` | `normalize-space(.)` | `@href` |
+| Elite Dangerous | `//*[contains(@class,'__article-info')]//a[starts-with(@href,'/news/') and not(contains(@href,'/news/updates/'))]` | `normalize-space(.)` | `@href` |
 | Anthropic / Claude | `//a[starts-with(@href,'/news/')]` | `normalize-space(.)` | `@href` |
 
 Counts observed on 2026-11-19, from the live pages: Star Citizen 9, Final Fantasy XIV 9, Elite
-Dangerous 57, Anthropic 26.
+Dangerous 12, Anthropic 26.
 
-These are the brittle part of the set: a redesign empties them without an error, and `check` cannot
-see that — the selector still matches the file. `verify` follows the first link the item expression
-picks and reads that page through the full-content selector, so a dead selector shows as
-`sel … empty (path)`. When the expression stops matching links, the same check prints
-`sel … unchecked` instead of failing, so the item list itself still needs a look in the web UI after
-a redesign.
+Elite Dangerous needs the longer rule because its news page prints the same story up to six times —
+a top ticker, a featured block, a card, a picture-only link and a "read more". A selector over every
+`/news/` link therefore returned each story several times; the picture-only links carry no text, so
+FreshRSS fell back to the item id and showed `urn:sha1:…` as the title, which it also counted as
+invalid GUIDs in its log. Taking only the links inside the card's `__article-info` block gives one
+entry per story, with its title. The same rule drops `/news/updates/`, the patch notes the
+blog-and-news-only rule excludes.
+
+That expression is outside the two forms `verify` reads, so its line ends `sel … unchecked` and the
+folder needs a look after a redesign.
+
+These are the brittle part of the set: a redesign empties them quietly, and `check` cannot see that —
+the selector still matches the file. `verify` follows the first link the item expression picks and
+reads that page through the full-content selector, so a dead selector shows as `sel … empty (path)`.
+When the expression stops matching links, the same check prints `sel … unchecked` instead of
+failing, so the item list itself still needs a look in the web UI after a redesign.
 
 ## Images and full articles
 
@@ -203,7 +213,8 @@ target one element — `.entry-content` means "the element carrying the `entry-c
 selector travels in the OPML as `frss:cssFullContent`, so a rebuilt instance gets it from the file.
 
 Twelve feeds carry a selector. The column is what `verify` printed on 2026-11-19, read from the
-newest article of each feed:
+newest article of each feed; Elite Dangerous is the exception, read by hand the same way, because
+`verify` cannot evaluate its item expression (see "XPath selectors").
 
 | Feed | Selector | Text taken from one article (characters) |
 |---|---|---|
@@ -217,12 +228,14 @@ newest article of each feed:
 | selfh.st | `article` | 10899 |
 | Phoronix | `article` | 1522 |
 | Final Fantasy XIV | `article` | 1435 |
-| Elite Dangerous | `#content` | 538 |
+| Elite Dangerous | `main` | 2348 |
 | Anthropic / Claude | `article` | 11174 |
 
 What it costs: one extra request per new article, made by the pod, so the source sees the cluster's
-address rather than yours. What it breaks on: a redesign empties the article without an error, and
-`check` cannot see that — the selector still matches the file, it no longer matches the page.
+address rather than yours. What it breaks on: a redesign makes the selector match nothing, and the
+symptom is in the log rather than the UI — FreshRSS writes `CSS content retrieval matched no
+elements for feed …` once per article and stores the entry with an empty body. Elite Dangerous did
+exactly that: 48 such lines in one refresh, because its article pages have no `#content` element.
 `verify` is what catches it: it reads the newest article through the selector and exits 1 when the
 extraction is empty, naming the page it read.
 

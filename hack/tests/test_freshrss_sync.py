@@ -937,12 +937,16 @@ class SettingsCliTests(unittest.TestCase):
         web = FakeWeb(fields={})
         with contextlib.redirect_stdout(io.StringIO()):
             mod.main(["apply"], transport=t, env=self.ENV, web_transport=web)
-        docker = [c for c in web.posts() if b"path_entries=main" in (c[3] or b"")]
+        # Pick the feed by its id: a selector is not unique to one feed, and `main` already names
+        # two of them.
+        docker_id = next(i for i, f in enumerate(feeds, start=1) if f.title == "Docker blog")
+        docker = [c for c in web.posts() if f"id={docker_id}" in c[1]]
         self.assertEqual(len(docker), 1)
         body = urllib.parse.parse_qs(docker[0][3].decode())
         self.assertEqual(body["_csrf"], ["CSRF"])
         self.assertEqual(body["ttl"], ["1800"])
         self.assertEqual(body["mute"], ["1"])
+        self.assertEqual(body["path_entries"], [".entry-content"])
 
     def test_apply_twice_posts_no_second_settings_form(self):
         feeds = mod.parse_opml(OPML_PATH.read_text())
