@@ -7,8 +7,8 @@
 > **Use it when** Renovate has not opened its usual pull requests, its token has to be rotated, or
 > the nightly slot has to move · **Verified** 2026-11-19 · **Kind:** living page
 
-Status: **pending** — the procedure below has been read against the live object, but the
-hand-triggered run that proves it has not been done yet.
+Status: **proved 2026-11-19** — the hand-triggered run described below is its first execution: Job
+`renovate-manual-20261119-0114`, 18 minutes, exit code 0, no error line in 347.
 
 ## The token
 
@@ -28,7 +28,7 @@ The read-only cluster account cannot read Secrets, so the value is only ever see
 ## A run, by hand
 
 The scheduled run is `03:00 Europe/Paris` every day (`0 3 * * *`), under `Forbid` and with
-`backoffLimit: 1` — a failed run is retried once, then left failed. A run takes about 40 minutes.
+`backoffLimit: 1` — a failed run is retried once, then left failed. A run has taken 18 to 39 minutes.
 
 Trigger one now, without waiting for 03:00:
 
@@ -72,6 +72,22 @@ delete.
 | `Repository is disabled` for every repository | `renovate.json` is missing from that repository's default branch, or its `ignorePaths` no longer matches | check `.github/renovate.json` on `develop` |
 | Job failed with no renovate output | the container never started — image pull, missing Secret | `kubectl -n renovate describe pod <pod>` |
 
+## The first run, 2026-11-19
+
+The procedure's first execution, run against the wrapper chart on image `44.251.0`:
+
+```
+job renovate-manual-20261119-0114: Complete, 1/1, exit 0, 18 minutes
+15 repositories autodiscovered, 15 "Repository started" lines, 347 log lines
+no "Authentication failed", 401, 403 or stack trace
+homelab: argocd 56 files/59 deps, helm-values 56/79, helmv3 11/11
+Dependency Dashboard refreshed at 00:30 UTC; four pull requests updated
+```
+
+`helmv3 11/11` is the check that matters for the change that preceded this run: the wrapper's
+`Chart.yaml` dependency is now one of the eleven, so Renovate owns the chart version in the same file
+the image tag lives in.
+
 ## Rotating the token
 
 The pod reads environment variables at container start, so a patched Secret reaches the next run and
@@ -108,5 +124,13 @@ renovate:
 
 Keep the timezone explicit: the CronJob controller runs in UTC, so an unqualified schedule silently
 moves by an hour when the offset changes. Pick a slot that does not overlap the *arrs' midnight
-housekeeping or the 04:30 database dump — a run takes about 40 minutes. [`secrets.md`](../secrets.md) and the chart's
+housekeeping or the 04:30 database dump — a run has taken 18 to 39 minutes.
+
+**Expect one catch-up run when the slot moves.** The controller remembers the last scheduled time
+and creates a Job for a slot it missed. Moving from `0 1 * * *` (UTC) to `0 3 * * *` (Europe/Paris)
+on 2026-11-19 produced `renovate-29916120` with
+`batch.kubernetes.io/cronjob-scheduled-timestamp: 2026-11-18T03:00:00+01:00` — yesterday's slot under
+the new schedule. It is a one-off, but it runs beside whatever manual run you started, and two
+Renovate processes race each other on the same branches: delete the catch-up and keep the run you
+meant. [`secrets.md`](../secrets.md) and the chart's
 [`README.md`](../../cluster/helm/renovate/README.md) describe the rest of the chart.

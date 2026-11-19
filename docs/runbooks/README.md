@@ -21,7 +21,7 @@ something that happened once; their status says so.
 | [`postgres-add-database.md`](postgres-add-database.md) | proved 2026-11-13 (acceptance database) | an application is rebuilt and needs its own role, database and Secrets. |
 | [`postgres-restore.md`](postgres-restore.md) | pending — the dumps were verified 2026-11-13, the restore itself has not been run | a database is lost, or the drill that proves the dumps restore is due. |
 | [`alert-relay.md`](alert-relay.md) | pending — one synthetic alert through Grafana is its proof | Grafana alerts must reach the board, or the relay needs rebuilding. |
-| [`renovate.md`](renovate.md) | pending — one hand-triggered run is its proof | Renovate stopped opening pull requests, its token has to be rotated, or the nightly slot has to move. |
+| [`renovate.md`](renovate.md) | proved 2026-11-19 | Renovate stopped opening pull requests, its token has to be rotated, or the nightly slot has to move. |
 | [`vikunja-database.md`](vikunja-database.md) | completed record 2026-11-16 | the board's database is rebuilt. |
 | [`vikunja-first-start.md`](vikunja-first-start.md) | completed record 2026-11-16 | the board is built again from nothing, or you need what its first start checked. |
 | [`vikunja-board-seed.md`](vikunja-board-seed.md) | completed record 2026-11-16 | the boards' shape must be recreated from the tracked seed, after a loss. |
