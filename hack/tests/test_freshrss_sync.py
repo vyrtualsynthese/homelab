@@ -66,3 +66,59 @@ class PlanTests(unittest.TestCase):
     def test_a_remote_feed_absent_from_the_file_is_reported_for_pruning(self):
         p = mod.plan([], [("https://b.test/feed", "Dev")])
         self.assertEqual(p.to_prune, (("https://b.test/feed", "Dev"),))
+
+
+class FakeTransport:
+    def __init__(self, token="TOK", subs=None, login_body="SID=x\nLSID=y\nAuth=AUTH123\n"):
+        self.calls = []
+        self.token, self.subs, self.login_body = token, subs or [], login_body
+
+    def __call__(self, method, url, headers=None, data=None):
+        self.calls.append((method, url, headers or {}, data))
+        if url.endswith("/accounts/ClientLogin"):
+            return 200, self.login_body
+        if url.endswith("/reader/api/0/token"):
+            return 200, self.token
+        if "/subscription/list" in url:
+            return 200, json.dumps({"subscriptions": [
+                {"id": f"feed/{u}", "title": t, "categories": [{"label": c}]}
+                for u, t, c in self.subs]})
+        if "/subscription/edit" in url:
+            return 200, "OK"
+        return 404, ""
+
+
+class ClientTests(unittest.TestCase):
+    def test_login_posts_the_credentials_and_keeps_the_auth_line(self):
+        t = FakeTransport()
+        c = mod.Client(base="https://x.test", user="u", password="p", transport=t)
+        c.login()
+        method, url, _, data = t.calls[0]
+        self.assertEqual(method, "POST")
+        self.assertTrue(url.endswith("/accounts/ClientLogin"))
+        self.assertIn(b"Email=u", data)
+        self.assertIn(b"Passwd=p", data)
+        self.assertEqual(c.auth, "AUTH123")
+
+    def test_subscribe_sends_the_feed_its_label_and_a_write_token(self):
+        t = FakeTransport()
+        c = mod.Client(base="https://x.test", user="u", password="p", transport=t)
+        c.subscribe(mod.Feed(category="Boutiques", title="ROG",
+                             url="https://riseofgunpla.com/feed?post_type=product"))
+        edit = [call for call in t.calls if "/subscription/edit" in call[1]][-1]
+        body = edit[3].decode()
+        self.assertIn("ac=subscribe", body)
+        self.assertIn("T=TOK", body)
+        self.assertIn("riseofgunpla.com%2Ffeed%3Fpost_type%3Dproduct", body)
+        self.assertIn("label%2FBoutiques", body)
+
+    def test_subscriptions_returns_url_and_category_pairs(self):
+        t = FakeTransport(subs=[("https://a.test/feed", "A", "Dev")])
+        c = mod.Client(base="https://x.test", user="u", password="p", transport=t)
+        self.assertEqual(c.subscriptions(), [("https://a.test/feed", "Dev")])
+
+    def test_a_refused_login_raises_auth_error(self):
+        t = FakeTransport(login_body="Error=BadAuthentication\n")
+        c = mod.Client(base="https://x.test", user="u", password="p", transport=t)
+        with self.assertRaises(mod.AuthError):
+            c.login()
