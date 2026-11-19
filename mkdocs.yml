@@ -87,6 +87,7 @@ nav:
   - Reference:
       - reference/README.md
       - Routes: reference/routes.md
+      - News feeds: news-feeds.md
       - SSO applications: reference/sso-applications.md
       - Chart notes: reference/chart-notes.md
       - Chart sizing: reference/chart-sizing.md
