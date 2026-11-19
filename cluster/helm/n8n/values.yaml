@@ -10,7 +10,7 @@ n8n:
     # Overrides the image tag whose default is the chart appVersion.
     # 2.48.5 is the stable release — the `latest` Docker tag resolves to it.
     # 2.49.1 exists as a tag but is a GitHub prerelease, so it is not taken.
-    tag: 2.48.5
+    tag: 3.3.0
 
   imagePullSecrets: []
   nameOverride: "n8n"
