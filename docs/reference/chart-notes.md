@@ -181,6 +181,14 @@ keys from the per-app Secrets, and metrics deliberately off because v1 requires 
 `/metrics`. It is the worked example of the metrics rule's other half: when the exporter cannot be
 scraped by the annotation job, announce nothing rather than leave a target permanently down.
 
+2026-11-19: it was the loudest container in the namespace, ~22,000 lines and 19 MB a day. Two thirds
+of that was the per-item `still waiting`/`Status` pair, one per tracked item per minute, and every
+one of those items was an *arr queue entry Sonarr or Radarr refused to import. Four Sonarr
+`Not an upgrade` records were removed from the queue (`removeFromClient=false`, nothing deleted); one
+Radarr download stays because the film has no file and needs a manual import. The remaining floor is
+the liveness probe's access line, one every 30 seconds. The chart README carries the table and the
+rule: an item that keeps appearing in the log is a stuck queue entry, not a level to lower.
+
 ### maintainerr
 
 As of 2026-11-13: the first chart whose readiness probe is a real dependency check.
@@ -206,7 +214,12 @@ so the single-writer rule is enforced by the pod specs. Readiness is disabled, t
 that reports its health, so readiness on `/` would duplicate liveness and turn a share blip into a
 restart loop. The log level is debt of `bazarr`'s kind — no documented variable selects it, so the
 chart sets none, accepts default `INFO`, and leaves the activity view and the app database as the
-operational record. Its access control is the LAN allow list plus a sign-in: the UI can delete books and
+operational record. 2026-11-19 added the part that is not a level: `NETWORK_SHARE_MODE=true` is one
+switch over three mounts, and upstream skips the recursive `chown` of `/config` and
+`/cwa-book-ingest` because of it. Only `/calibre-library` is NFS, so the app was starting as 1100 on
+two `local-path` claims it did not own — `install: cannot change owner`, `attempt to write a readonly
+database`, an AutoZipper that never started. The `claimOwnership` init container now does that chown,
+as root with `CHOWN` only; turning the mode off instead would put `metadata.db` in WAL on NFS. Its access control is the LAN allow list plus a sign-in: the UI can delete books and
 rewrite files, and `calibre.kub.local` is only a DNS entry, so the shared `kube-system-lan-only`
 Middleware is what stops an outside request with `403` before the app sees it, and Calibre-Web asks
 authentik for a sign-in itself over OIDC (v4.0.8's generic provider, 2026-11-15). There is no proxy gate
@@ -253,6 +266,14 @@ carries **no** `/api` exemption, because nothing in the cluster reaches the host
 exporter and autobrr all use `http://qbittorrent:8080`. The log level is worse off than `bazarr`'s:
 qBittorrent has no verbosity setting at all, only file-logging on/off, so the chart sets nothing, and
 the VueTorrent installer's traps are recorded above its values block.
+
+2026-11-19: the sidecar's `AllowedIPs` is `0.0.0.0/0`, and wg-quick's local-access rule only spares
+prefixes the pod's main table knows specifically — which is its own subnet and a default route. So
+every ClusterIP went into the tunnel, and the post-download hook to `cross-seed:2468` died after the
+kernel's 127 s SYN retry budget, 154 times in 24 h. A `vpn-cluster-routes` init container now adds
+`10.42.0.0/16` and `10.43.0.0/16` to that table through the pod's gateway; the ranges are
+`vpn.clusterRoutes`, so a second in-cluster dependency is one line. The hook should also carry
+`--max-time 10`, which is an app preference, not a chart value.
 
 ### ashuvidz-website
 
