@@ -53,6 +53,21 @@ authentik:
         memory: 1Gi
 
   worker:
+    # One task at a time. Two threads is the upstream default, and two tasks
+    # that reconcile the guardian permission tables at the same time deadlock
+    # on guardian_roleobjectpermission / guardian_rolemodelpermission: each
+    # one holds a row the other is deleting. The task then fails, retries,
+    # collides again, and every other task queues behind it.
+    # Evidence and the runbook: docs/authentik-worker-deadlocks.md.
+    env:
+      - name: AUTHENTIK_WORKER__THREADS
+        value: "1"
+    # Recreate, not RollingUpdate. A rollout otherwise keeps the old worker
+    # next to the new one for a few minutes, which puts a second writer on
+    # the same tables and brings the deadlocks back for the length of the
+    # rollout. The worker serves no traffic, so the gap costs nothing.
+    deploymentStrategy:
+      type: Recreate
     resources:
       requests:
         cpu: 10m
