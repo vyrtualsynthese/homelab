@@ -1,4 +1,6 @@
 # yaml-language-server: $schema=https://raw.githubusercontent.com/datreeio/CRDs-catalog/refs/heads/main/traefik.containo.us/middleware_v1alpha1.json
+# Both retired Dashy names funnel here, path and query kept, one hop, permanent.
+# Only those two hosts match: an application's own hostname is never rewritten.
 apiVersion: traefik.containo.us/v1alpha1
 kind: Middleware
 metadata:
@@ -6,6 +8,6 @@ metadata:
   namespace: dashy
 spec:
   redirectRegex:
-    regex: "^https?://kub\\.home\\.ashudev\\.com/(.*)"
-    replacement: "https://dashy.kub.local/$1"
+    regex: "^https?://(?:dashy\\.kub\\.local|kub\\.home\\.ashudev\\.com)(/.*)?$"
+    replacement: "https://dashy.ashudev.com$1"
     permanent: true

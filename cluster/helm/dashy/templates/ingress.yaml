@@ -1,13 +1,14 @@
 # yaml-language-server: $schema=https://raw.githubusercontent.com/datreeio/CRDs-catalog/refs/heads/main/traefik.containo.us/ingressroute_v1alpha1.json
-# Internal only, on purpose: the page links to every application, so it is
-# reachable from the LAN and nowhere else. The old public-looking address is
-# retired. The gate is `authentik-forwardauth`, bound to `authentik Admins` by
+# Public on purpose: the start page is the one door into the lab from outside.
+# The gate is `authentik-forwardauth`, bound to `authentik Admins` by
 # cluster/helm/authentik/files/app-dashy.yaml; the plain `authentik`
 # middleware is headers and authenticates nothing.
 #
-# No secretName and no certResolver: the cluster's default certificate
-# (`kube-system/local-cert`, set by the TLSStore) answers, and the internal TLS
-# option in kube-system is what every internal app uses.
+# No `lan-only` here, and none may be added: a public host that is gated is
+# unreachable from the internet, and `hack/check_exposure.py` reports it.
+#
+# The certificate is Let's Encrypt (`myresolver`), because `ashudev.com` is a
+# public zone; the internal `*.kub.local` names below cannot have one.
 apiVersion: traefik.containo.us/v1alpha1
 kind: IngressRoute
 metadata:
@@ -17,11 +18,9 @@ spec:
   entryPoints:
     - websecure
   routes:
-    - match: Host(`dashy.kub.local`)
+    - match: Host(`dashy.ashudev.com`)
       kind: Rule
       middlewares:
-        - name: lan-only
-          namespace: kube-system
         - name: authentik-forwardauth
           namespace: kube-system
         - name: security
@@ -30,6 +29,25 @@ spec:
         - name: dashy
           port: 8080
   tls:
-    options:
-      name: internal-tls
-      namespace: kube-system
+    certResolver: myresolver
+---
+# Plain-HTTP mirror: one redirect to TLS, nothing proxied, and no gate. A gate
+# here would answer the off-LAN browser with a 403 before it ever asked for the
+# certificate.
+apiVersion: traefik.containo.us/v1alpha1
+kind: IngressRoute
+metadata:
+  name: dashy-public-redirect
+  namespace: dashy
+spec:
+  entryPoints:
+    - web
+  routes:
+    - match: Host(`dashy.ashudev.com`)
+      kind: Rule
+      middlewares:
+        - name: redirect-https
+          namespace: kube-system
+      services:
+        - name: noop@internal
+          kind: TraefikService
