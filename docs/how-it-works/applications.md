@@ -108,12 +108,13 @@ Application syncs. None of the eight selects the retired `node-type` label.
 
 ## The older charts still select the retired label
 
-Most charts pin their pod with `nodeSelector: kubernetes.io/hostname`. Three were written before that
-rule and still render a required node affinity on the retired `node-type` label:
-`monitoring/pihole-exporter`, `syncthing` and `thelounge`. `koillection`, `mktxp` and
-`news-freshrss` keep the same text in comments only and pin by hostname now. This is what each chart
-asks for, not a statement about where its pod is: the Node column shows where the pods actually were.
-Moving those three onto hostname pins is chart work.
+Most charts pin their pod with `nodeSelector: kubernetes.io/hostname`. One was written before that
+rule and still renders a required node affinity on the retired `node-type` label:
+`monitoring/pihole-exporter`. `syncthing` and `thelounge` were the other two until their 2026-11-19
+rebuilds moved them onto hostname pins; `koillection`, `mktxp` and `news-freshrss` keep the same text
+in comments only and pin by hostname now. This is what each chart asks for, not a statement about
+where its pod is: the Node column shows where the pods actually were. Moving `pihole-exporter` onto a
+hostname pin is chart work.
 
 ## Where to look next
 
