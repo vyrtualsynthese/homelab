@@ -397,6 +397,35 @@ Debt: the access log is on — on a public host the request record is the only e
 arrived, and the error log is the part that runs at `warn` — and there is no metrics exporter, which
 is the chart-at-a-time metrics work the repo has not reached here.
 
+### minecraft-server
+
+As of 2026-11-19: repaired but deliberately not running. Five objects render — Deployment, Service,
+ServiceAccount, the `-data` claim and the `IngressRouteTCP` — with `replicas: 0` until the
+anti-cheat, anti-grief and backup work lands. The old chart mounted `minecraft-lh-2`, a Longhorn claim
+that no longer exists, so the pod had been Pending since 2026-08-28; the replacement is
+`<fullname>-data`, `local-path` on `streaming`, `20Gi`. The claim name is `-data` rather than the
+contract's `-config` and the size is world-sized, both on purpose.
+
+Two changes there were corrections rather than copies. The exporter inherited the server's `12Gi`
+limit and `1000m` request for a sidecar that polls the server list ping; it now has `32Mi`/`64Mi`.
+And the plugin list was passed as `MODS`; on a plugin-only type the image copies either `MODS` or
+`PLUGINS` into `/data/plugins`, so the jars did install, but the chart now says `PLUGINS` and matches
+the image's own Paper documentation. Whether the previous world ever had Multiverse and LuckPerms is
+unverifiable: the server has not started since 2026-08-28.
+
+The image has no `USER` instruction: the entrypoint starts as root, rewrites its `minecraft` account,
+chowns `/data` and `gosu`s to uid 1000, so the server process itself is not root. The chart keeps
+`CHOWN`/`SETUID`/`SETGID` for that path and sets `allowPrivilegeEscalation: false` plus the runtime
+seccomp profile; it does not pin a UID, because running as 1000 directly depends on `HOME` being
+writable, which the image does not set, and no pod has run to prove it. The claim is fresh — the
+Longhorn claim was abandoned by decision, so a first start is an empty world. Probes are a TCP connect to the game
+port, shared between readiness and liveness because there is no second endpoint to ask. The TCP route
+is preserved verbatim (`mc` entryPoint, `HostSNI(*)`); an HTTP `lan-only` middleware cannot gate a TCP
+router, so the router's port closure is the only thing keeping it off the internet. Paper's log level
+lives in `/data/config/log4j2.xml`, which the image generates and the chart does not own, so `info`
+reaches Loki until a later change takes that file. Heap, memory reservation and the Meowice JVM flags
+are unmeasured.
+
 ## Charts still to align
 
 Only non-public apps with hand-maintained charts are in scope for now. Public-facing apps wait,

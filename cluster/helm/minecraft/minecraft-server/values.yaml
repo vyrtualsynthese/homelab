@@ -1,99 +1,171 @@
-# Default values for home.
-# This is a YAML-formatted file.
-# Declare variables to be passed into your templates.
+# Default values for minecraft-server.
+# Built against the contract in docs/charts/README.md; autobrr is the reference shape.
+
+# -- Override the chart name.
+nameOverride: ""
+# -- Override the generated release name.
+fullnameOverride: ""
+
+# The server is deliberately off until the security work in the programme lands:
+# a public game port with no anti-cheat, no anti-grief plugin and no backup has no
+# business answering the internet. Set this to 1 when that work is done.
+replicaCount: 0
+
+# -- Recreate is required: the world claim is ReadWriteOnce and must not attach to
+# an old and a new pod at the same time.
+strategy: Recreate
 
 image:
   repository: ghcr.io/itzg/minecraft-server
+  # -- Pin the tag. Never `latest`. Renovate manages this.
+  tag: "2026.11.0-java25-alpine"
   pullPolicy: IfNotPresent
-  # Overrides the image tag whose default is the chart appVersion.
-  tag: 2026.11.0-java25-alpine
 
 monitor:
   image:
     repository: itzg/mc-monitor
+    # -- Pin the tag. The image does not publish a `v` prefix on its tags.
+    tag: "1.21.0"
     pullPolicy: IfNotPresent
-    # Overrides the image tag whose default is the chart appVersion.
-    tag: latest
+  # -- The exporter is a static Go binary on `scratch`: no root, no capabilities.
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    runAsGroup: 1000
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop:
+        - ALL
 
 imagePullSecrets: []
-nameOverride: ""
-fullnameOverride: ""
 
 serviceAccount:
-  # Specifies whether a service account should be created
-  create: false
-  # Annotations to add to the service account
-  annotations: {}
-  # The name of the service account to use.
-  # If not set and create is true, a name is generated using the fullname template
+  # -- Create a dedicated ServiceAccount. The server never calls the API.
+  create: true
+  # -- Do not mount a token; there is nothing for it to do.
+  automount: false
+  # -- Defaults to the fullname.
   name: ""
+  annotations: {}
 
+# -- Annotations added to the pod. The four `prometheus.io/*` keys put the pod in
+# Prometheus's annotation-based `kubernetes-pods` job, which builds the address
+# from the port annotation. `path` is explicit because the job falls back to
+# `/metrics` only when the key is absent, and a wrong default is a silent miss.
 podAnnotations:
   prometheus.io/scrape: "true"
   prometheus.io/scheme: "http"
   prometheus.io/port: "8080"
+  prometheus.io/path: "/metrics"
+podLabels: {}
 
+# -- Pod-level security. `fsGroup` is deliberately NOT set: local-path volumes are
+# hostPath-backed, and the kubelet does not apply fsGroup ownership to them.
 podSecurityContext:
-  {}
-  # fsGroup: 2000
+  seccompProfile:
+    type: RuntimeDefault
 
+# -- Container-level security.
+#
+# The image's entrypoint starts as root, rewrites its own `minecraft` user to the
+# configured UID/GID, chowns `/data`, writes `/etc/nsswitch.conf`, then `gosu`s to
+# uid 1000. Running it as 1000 directly skips that path but depends on `HOME` being
+# a writable directory, which the image does not set — and the chart has never had
+# a running pod to prove it. So the entrypoint keeps the capabilities it uses:
+# CHOWN for `/data`, SETUID/SETGID for `gosu`. The server process itself is uid
+# 1000, the image's own account; verify it on the first start.
 securityContext:
-  {}
-  # capabilities:
-  #   drop:
-  #   - ALL
-  # readOnlyRootFilesystem: true
-  # runAsNonRoot: true
-  # runAsUser: 1000
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+    add:
+      - CHOWN
+      - SETUID
+      - SETGID
+
+# -- Server settings, passed as plain environment variables. Changing one changes
+# the pod template, so the Deployment rolls by itself.
+#
+# `PLUGINS`, not `MODS`: on a plugin-only server type the image copies either
+# variable into `/data/plugins`, so the old `MODS` did work — but it names the jar
+# list for what it is, and it follows the image's own Paper documentation.
+#
+# There is no environment variable for Paper's own log level: it lives in
+# `/data/config/log4j2.xml`, which the image generates on first start and the chart
+# does not own. The volume that file produces is recorded as debt in the README.
+env:
+  EULA: "TRUE"
+  TYPE: "PAPER"
+  VERSION: "26.2"
+  MODE: "survival"
+  SERVER_NAME: "ashulab"
+  ONLINE_MODE: "TRUE"
+  PVP: "TRUE"
+  OPS: "vsynthese"
+  MAX_WORLD_SIZE: "12500"
+  VIEW_DISTANCE: "10"
+  ANNOUNCE_PLAYER_ACHIEVEMENTS: "FALSE"
+  # -- Leaving the watchdog off lets a long GC pause pass without a restart. The
+  # performance work revisits this with measured tick times.
+  MAX_TICK_TIME: "-1"
+  # -- Meowice's Aikar-derived JVM flags. Unmeasured on this hardware; the
+  # performance task owns the measurement.
+  USE_MEOWICE_FLAGS: "true"
+  USE_MEOWICE_GRAALVM_FLAGS: "true"
+  # -- The server saves its world on SIGTERM; the pod gets ten minutes for it.
+  STOP_SERVER_ANNOUNCE_DELAY: "30"
+  ENABLE_ROLLING_LOGS: "true"
+  INIT_MEMORY: "1G"
+  # -- Heap. Keep it at least ~2 GiB below resources.limits.memory: the JVM also
+  # needs metaspace, direct buffers and off-heap structures.
+  MAX_MEMORY: "6G"
+  # -- Multiverse + LuckPerms. Pinned to exact release URLs so a first boot does
+  # not silently install a newer major. Renovate does not see these.
+  # One line on purpose: the image splits on commas, and a folded block would put a
+  # space at each line break, in front of the next URL.
+  PLUGINS: "https://github.com/Multiverse/Multiverse-Core/releases/download/5.8.1/multiverse-core-5.8.1.jar,https://github.com/Multiverse/Multiverse-Portals/releases/download/5.3.0/multiverse-portals-5.3.0.jar,https://github.com/Multiverse/Multiverse-NetherPortals/releases/download/5.1.0/multiverse-netherportals-5.1.0.jar,https://download.luckperms.net/1668/bukkit/loader/LuckPerms-Bukkit-5.5.81.jar"
 
 service:
-  nodeport:
-    type: NodePort
-    port: 31894
-  clusterip:
-    type: ClusterIP
-    port: 25565
+  # -- No NodePort and no LoadBalancer: the Traefik TCP route is the only way in.
+  type: ClusterIP
+  # -- One value drives the container port, the Service and the TCP route.
+  port: 25565
+
+storage:
+  # -- The chart owns its world claim.
+  enabled: true
+  # -- Use an existing claim instead of the generated one. The generated name is
+  # `<fullname>-data`.
+  existingClaim: ""
+  className: local-path
+  accessModes:
+    - ReadWriteOnce
+  # -- A vanilla world for ~10 players with a modest pregeneration radius fits in
+  # a few GiB; 20 GiB leaves room for region files and the world's own backups.
+  # `local-path` is hostPath-backed, so the world follows the `streaming` node.
+  size: 20Gi
+  mountPath: /data
 
 ingress:
+  # -- The TCP route is kept exactly as the live object has it: Traefik's `mc`
+  # entryPoint, HostSNI(*), pointing at this chart's Service. It does NOT make the
+  # game safe to publish; the security work decides whether the entryPoint stays
+  # reachable from the internet.
   enabled: true
-  className: ""
-  annotations:
-    {}
-    # kubernetes.io/ingress.class: nginx
-    # kubernetes.io/tls-acme: "true"
-  hosts:
-    - host: chart-example.local
-      paths:
-        - path: /
-          pathType: ImplementationSpecific
-  tls: []
-  #  - secretName: chart-example-tls
-  #    hosts:
-  #      - chart-example.local
+  # -- The Traefik entryPoint is defined in cluster/infrastructure/traefik/traefik-config.yaml.
+  entryPoint: mc
+  match: "HostSNI(`*`)"
+  annotations: {}
 
 resources:
   requests:
     cpu: 1000m
-    memory: 1Gi
+    # -- Unmeasured. The pod has never had a working claim since the Longhorn
+    # failure, so this is a reservation, not a measured working set. Heap is 6 GiB.
+    memory: 4Gi
   limits:
-    memory: 12Gi
-  # We usually recommend not to specify default resources and to leave this as a conscious
-  # choice for the user. This also increases chances charts run on environments with little
-  # resources, such as Minikube. If you do want to specify resources, uncomment the following
-  # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
-  # limits:
-  #   cpu: 100m
-  #   memory: 128Mi
-  # requests:
-  #   cpu: 100m
-  #   memory: 128Mi
-
-autoscaling:
-  enabled: false
-  minReplicas: 1
-  maxReplicas: 100
-  targetCPUUtilizationPercentage: 80
-  # targetMemoryUtilizationPercentage: 80
+    memory: 8Gi
 
 nodeSelector:
   kubernetes.io/hostname: streaming
