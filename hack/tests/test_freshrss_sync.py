@@ -298,9 +298,10 @@ class CliTests(unittest.TestCase):
             self.assertEqual(mod.main(["verify"], transport=transport, env={}), 0)
 
 
-def settings_page(feed_id, fields=None):
+def settings_page(feed_id, fields=None, action=None):
     """One feed's settings page, shaped like the one FreshRSS 1.30 renders."""
     fields = fields or {}
+    action = action or f"/i/?c=subscription&amp;a=feed&amp;id={feed_id}"
 
     def text(name):
         return fields.get(name, "")
@@ -317,7 +318,7 @@ def settings_page(feed_id, fields=None):
   <input type="hidden" name="_csrf" value="CSRF" />
   <input type="hidden" name="id" value="{feed_id}" />
 </form>
-<form method="post" action="/i/?c=subscription&amp;a=feed&amp;id={feed_id}" enctype="multipart/form-data">
+<form method="post" action="{action}" enctype="multipart/form-data">
   <input type="hidden" name="_csrf" value="CSRF" />
   <input type="hidden" name="id" value="{feed_id}" />
   <input type="hidden" name="from" value="subscription" />
@@ -359,7 +360,7 @@ class FormTests(unittest.TestCase):
 
     def test_the_form_whose_action_is_the_feed_route_wins(self):
         page = """<html><body>
-        <form action="/i/?c=feed&amp;a=preview&amp;id=5">
+        <form action="/i/?c=feed&amp;a=feed&amp;id=5">
           <input type="text" name="path_entries" value="article" />
         </form>
         <form action="/i/?c=subscription&amp;a=feed&amp;id=5">
@@ -367,6 +368,14 @@ class FormTests(unittest.TestCase):
         </form>
         </body></html>"""
         self.assertEqual(mod.settings_form(page).value("path_entries"), "#content")
+
+    def test_an_option_without_a_value_sends_its_text(self):
+        page = """<html><body>
+        <form action="/i/?c=subscription&amp;a=feed&amp;id=5">
+          <input type="text" name="path_entries" value="article" />
+          <select name="ttl"><option>0</option><option selected="selected">1800</option></select>
+        </form></body></html>"""
+        self.assertEqual(mod.settings_form(page).value("ttl"), "1800")
 
 
 class DriftTests(unittest.TestCase):
@@ -385,15 +394,31 @@ class TransportTests(unittest.TestCase):
         self.assertTrue(callable(mod.cookied_transport()))
 
 
+@unittest.skipIf(bcrypt is None, "the login needs the bcrypt package")
+class WebWriteTests(unittest.TestCase):
+    def test_a_relative_form_action_is_posted_under_the_app_root(self):
+        """The settings page posts to ./?c=subscription&a=feed&id=N; the app root is not the site root."""
+        web = FakeWeb(relative_actions=True)
+        client = mod.WebClient("https://x.test", "u", "pw", transport=web)
+        client.login()
+        client.set_settings(5, {"path_entries": "#content"})
+        self.assertEqual(web.posts()[-1][1],
+                         "https://x.test/i/?c=subscription&a=feed&id=5")
+
+
 class FakeWeb:
     """The FreshRSS web UI: the nonce endpoint, the login form, and the feed pages."""
 
-    def __init__(self, password="pw", fields=None, login_status=200, store=True):
+    def __init__(self, password="pw", fields=None, login_status=200, store=True,
+                 relative_actions=False, salt1=None, after_post=None):
         self.calls = []
         self.logged_in = False
         self.nonce = "N0NCE123"
         self.login_status = login_status
         self.store = store
+        self.relative_actions = relative_actions
+        self.salt1 = salt1
+        self.after_post = after_post or {}
         self.password_hash = bcrypt.hashpw(password.encode(), bcrypt.gensalt(rounds=4)).decode()
         self.fields = {k: dict(v) for k, v in (fields or {}).items()}
 
@@ -401,9 +426,14 @@ class FakeWeb:
         self.calls.append((method, url, headers or {}, data))
         query = urllib.parse.parse_qs(urllib.parse.urlparse(url).query)
         if query.get("a") == ["nonce"]:
-            return 200, json.dumps({"salt1": self.password_hash[:29], "nonce": self.nonce}), {}
+            salt1 = self.password_hash[:29] if self.salt1 is None else self.salt1
+            return 200, json.dumps({"salt1": salt1, "nonce": self.nonce}), {}
         if query.get("a") == ["formLogin"]:
+            if method == "GET":
+                return 200, self.login_page(), {}
             sent = dict(urllib.parse.parse_qsl((data or b"").decode()))
+            if sent.get("_csrf") != "CSRF-LOGIN":
+                return 403, "<html>[CSRF] Login</html>", {}
             self.logged_in = self._challenge_ok(sent)
             if self.logged_in:
                 return 200, "<html>ok</html>", {}
@@ -416,13 +446,18 @@ class FakeWeb:
         if query.get("a") == ["feed"]:
             if method == "POST" and self.store:
                 sent = dict(urllib.parse.parse_qsl((data or b"").decode()))
-                self.fields[feed_id] = {**self.fields.get(feed_id, {}), **sent}
-            return 200, settings_page(feed_id, self.fields.get(feed_id, {})), {}
+                self.fields[feed_id] = {**self.fields.get(feed_id, {}), **sent,
+                                        **self.after_post}
+            action = (f"./?c=subscription&a=feed&id={feed_id}" if self.relative_actions
+                      else None)
+            return 200, settings_page(feed_id, self.fields.get(feed_id, {}), action), {}
         return 404, "", {}
 
     @staticmethod
     def login_page():
-        return '<html><form method="post" action="/i/?c=auth&amp;a=formLogin"></form></html>'
+        return ('<html><form method="post" action="/i/?c=auth&amp;a=formLogin">'
+                '<input type="hidden" name="_csrf" value="CSRF-LOGIN" />'
+                '<input type="text" name="username" /></form></html>')
 
     def _challenge_ok(self, sent):
         try:
@@ -441,7 +476,15 @@ class WebLoginTests(unittest.TestCase):
     def test_login_asks_for_the_nonce_under_the_app_root(self):
         web = FakeWeb()
         mod.WebClient("https://x.test", "u", "pw", transport=web).login()
-        self.assertIn("/i/?c=javascript&a=nonce", web.calls[0][1])
+        self.assertIn("/i/?c=javascript&a=nonce", [c[1] for c in web.calls][1])
+
+    def test_login_reads_the_csrf_token_from_the_login_page_and_sends_it(self):
+        """Every POST is refused with [CSRF] without the session's token, the login included."""
+        web = FakeWeb()
+        mod.WebClient("https://x.test", "u", "pw", transport=web).login()
+        self.assertIn("/i/?c=auth&a=formLogin", web.calls[0][1])
+        posted = dict(urllib.parse.parse_qsl(web.calls[-1][3].decode()))
+        self.assertEqual(posted["_csrf"], "CSRF-LOGIN")
 
     def test_login_solves_the_nonce_challenge(self):
         web = FakeWeb()
@@ -458,6 +501,14 @@ class WebLoginTests(unittest.TestCase):
         web = FakeWeb(login_status=403)
         with self.assertRaises(mod.AuthError):
             mod.WebClient("https://x.test", "u", "wrong", transport=web).login()
+
+    def test_a_salt_that_is_not_bcrypt_raises_auth_error_not_a_traceback(self):
+        """An instance storing argon2, or answering an empty salt, must read as a credential problem."""
+        for salt in ("$argon2id$v=19$m=65536", ""):
+            with self.subTest(salt=salt):
+                with self.assertRaises(mod.AuthError):
+                    mod.WebClient("https://x.test", "u", "pw",
+                                  transport=FakeWeb(salt1=salt)).login()
 
 
 @unittest.skipIf(bcrypt is None, "the login needs the bcrypt package")
@@ -488,6 +539,32 @@ class SettingsCliTests(unittest.TestCase):
             code = mod.main(["check"], transport=t, env=self.ENV,
                             web_transport=self.matching_web(feeds))
         self.assertEqual(code, 0)
+
+    def test_check_says_how_many_feeds_it_compared(self):
+        feeds = mod.parse_opml(OPML_PATH.read_text())
+        t = FakeTransport(subs=[(f.url, f.title, f.category) for f in feeds])
+        with contextlib.redirect_stdout(io.StringIO()) as out:
+            mod.main(["check"], transport=t, env=self.ENV,
+                     web_transport=self.matching_web(feeds))
+        self.assertIn("settings: 13 of 13 feeds match the file", out.getvalue())
+
+    def test_check_says_when_a_feed_with_settings_is_not_on_the_instance(self):
+        feeds = mod.parse_opml(OPML_PATH.read_text())
+        docker = next(f for f in feeds if f.title == "Docker blog")
+        t = FakeTransport(subs=[(f.url, f.title, f.category) for f in feeds if f is not docker])
+        web = FakeWeb(fields={str(i + 1): dict(f.settings) for i, f in enumerate(feeds)})
+        with contextlib.redirect_stdout(io.StringIO()) as out:
+            mod.main(["check"], transport=t, env=self.ENV, web_transport=web)
+        self.assertIn("1 not on the instance", out.getvalue())
+
+    def test_apply_reports_a_field_the_submit_changed_behind_its_back(self):
+        feeds = mod.parse_opml(OPML_PATH.read_text())
+        t = FakeTransport(subs=[(f.url, f.title, f.category) for f in feeds])
+        web = FakeWeb(fields={}, after_post={"ttl": "0"})
+        with contextlib.redirect_stdout(io.StringIO()) as out:
+            code = mod.main(["apply"], transport=t, env=self.ENV, web_transport=web)
+        self.assertEqual(code, 1)
+        self.assertIn("ttl", out.getvalue())
 
     def test_apply_posts_the_whole_settings_form_with_the_file_selector(self):
         feeds = mod.parse_opml(OPML_PATH.read_text())

@@ -304,7 +304,8 @@ class _FormParser(HTMLParser):
         self.forms: list[dict] = []
         self._form: dict | None = None
         self._select: str | None = None
-        self._options: list[tuple[str, bool]] = []
+        self._options: list[dict] = []
+        self._option: dict | None = None
         self._textarea: str | None = None
         self._text: list[str] = []
 
@@ -332,16 +333,24 @@ class _FormParser(HTMLParser):
             self._select = attributes.get("name", "")
             self._options = []
         elif tag == "option" and self._select:
-            self._options.append((attributes.get("value", ""), "selected" in attributes))
+            self._option = {"value": attributes.get("value"), "text": [],
+                            "selected": "selected" in attributes}
+            self._options.append(self._option)
         elif tag == "textarea":
             self._textarea = attributes.get("name", "")
             self._text = []
 
     def handle_endtag(self, tag: str) -> None:
-        if tag == "select" and self._select and self._form is not None:
-            chosen = next((v for v, selected in self._options if selected),
-                          self._options[0][0] if self._options else "")
-            self._form["fields"].append((self._select, chosen))
+        if tag == "option":
+            self._option = None
+        elif tag == "select" and self._select and self._form is not None:
+            chosen = next((o for o in self._options if o["selected"]),
+                          self._options[0] if self._options else None)
+            value = ""
+            if chosen is not None:
+                # A browser sends the option's text when it carries no value attribute.
+                value = chosen["value"] if chosen["value"] is not None else "".join(chosen["text"]).strip()
+            self._form["fields"].append((self._select, value))
             self._select, self._options = None, []
         elif tag == "textarea" and self._textarea and self._form is not None:
             self._form["fields"].append((self._textarea, "".join(self._text)))
@@ -352,6 +361,19 @@ class _FormParser(HTMLParser):
     def handle_data(self, data: str) -> None:
         if self._textarea is not None:
             self._text.append(data)
+        elif self._option is not None:
+            self._option["text"].append(data)
+
+
+def form_with(html: str, field: str) -> Form:
+    """The first form on a page that carries a given field."""
+    parser = _FormParser()
+    parser.feed(html)
+    for collected in parser.forms:
+        form = Form(collected["action"], collected["fields"])
+        if form.value(field) is not None:
+            return form
+    raise RuntimeError(f"no form carrying {field} on the page")
 
 
 def settings_form(html: str) -> Form:
@@ -364,9 +386,15 @@ def settings_form(html: str) -> Form:
     if not candidates:
         raise RuntimeError("no feed settings form on the page")
     for form in candidates:
-        if "a=feed" in form.action:
+        if _is_feed_route(form.action):
             return form
     return candidates[0]
+
+
+def _is_feed_route(action: str) -> bool:
+    """True for the feed settings route, and not for a page that merely mentions it."""
+    query = urllib.parse.parse_qs(urllib.parse.urlparse(action).query)
+    return query.get("c") == ["subscription"] and query.get("a") == ["feed"]
 
 
 def settings_drift(form: Form, wanted: Mapping[str, str]) -> dict[str, tuple[str, str]]:
@@ -429,6 +457,10 @@ class WebClient:
         return body
 
     def login(self) -> None:
+        # Every POST is refused with [CSRF] unless it carries the session's token, the login too,
+        # and the only place that hands it out is a page whose form embeds it.
+        login_page = self.get(WEB + "/?c=auth&a=formLogin")
+        token = form_with(login_page, "_csrf").value("_csrf") or ""
         status, body = self._request(
             "GET", WEB + "/?c=javascript&a=nonce&user=" + urllib.parse.quote(self.user))
         if status != 200:
@@ -436,17 +468,23 @@ class WebClient:
         try:
             payload = json.loads(body)
             salt1, nonce = payload["salt1"], payload["nonce"]
-        except (ValueError, KeyError) as error:
+        except (ValueError, KeyError, TypeError) as error:
             raise RuntimeError(f"the nonce endpoint answered {body[:120]}") from error
+        if not (isinstance(salt1, str) and len(salt1) == 29 and salt1.startswith("$2")):
+            raise AuthError(f"the instance gave no bcrypt salt for {self.user}")
         try:
             import bcrypt
         except ImportError as error:  # the one dependency this script does not already carry
             raise RuntimeError("the web login needs the bcrypt package: pip install bcrypt") from error
-        salted = bcrypt.hashpw(self.password.encode(), salt1.encode())
-        challenge = bcrypt.hashpw(salted + nonce.encode(), bcrypt.gensalt(rounds=4)).decode()
+        try:
+            salted = bcrypt.hashpw(self.password.encode(), salt1.encode())
+            challenge = bcrypt.hashpw(salted + nonce.encode(), bcrypt.gensalt(rounds=4)).decode()
+        except ValueError as error:
+            raise AuthError(f"the challenge could not be built: {error}") from error
         status, body = self._request("POST", WEB + "/?c=auth&a=formLogin", {
             "username": self.user,
             "challenge": challenge,
+            "_csrf": token,
         })
         # The refusal is a 403 error page; a page that still carries the login form means the same.
         if status != 200 or "formLogin" in body:
@@ -461,10 +499,12 @@ class WebClient:
         Returns what still differs afterwards, as {field: (shown, wanted)}; empty means the page
         agrees with the file.
         """
+        page = f"{WEB}/?c=subscription&a=feed&id={feed_id}"
         form = self.feed_form(feed_id)
+        before = dict(form.fields)
         if not settings_drift(form, wanted):
             return {}
-        url = urllib.parse.urljoin(self.base + "/", form.action)
+        url = urllib.parse.urljoin(self.base + page, form.action)
         body = urllib.parse.urlencode(form.as_pairs(wanted)).encode()
         status, _, _ = self.transport("POST", url, {
             "Content-Type": "application/x-www-form-urlencoded",
@@ -472,7 +512,17 @@ class WebClient:
         }, body)
         if status not in (200, 302):
             raise RuntimeError(f"the settings page answered {status}")
-        return settings_drift(self.feed_form(feed_id), wanted)
+        after = self.feed_form(feed_id)
+        remaining = settings_drift(after, wanted)
+        # The form carries ttl, mute and the archiving rules too: a field the submit changed
+        # without being asked is the damage a partial or misparsed form would do, so report it.
+        for field, was in before.items():
+            if field in wanted or field == "_csrf":
+                continue  # the token is regenerated on every page, by design
+            now = after.value(field)
+            if now != was:
+                remaining[f"{field} (changed by the submit)"] = (was, now or "(empty)")
+        return remaining
 
 
 def _newest(root: ET.Element) -> str:
@@ -537,6 +587,9 @@ FRESHRSS_USER and FRESHRSS_API_PASSWORD are read from the environment,
 FRESHRSS_WEB_PASSWORD opens the web UI for the per-feed settings (without
 it the settings half is skipped), and FRESHRSS_BASE overrides the instance
 URL (default %s).
+
+Exit codes: 0 clean, 1 drift or a failed feed, 2 credentials missing or
+refused, including the web login.
 """ % DEFAULT_BASE
 
 
@@ -623,6 +676,10 @@ def main(argv: list[str] | None = None,
                 print(f"~ {feed.category}/{feed.title}: {field} {shown or '(empty)'} -> {value}")
             if drift:
                 differing += 1
+        checked = sum(1 for feed, _ in wanted if ids.get(normalize_url(feed.url)) is not None)
+        missing = len(wanted) - checked
+        note = f", {missing} not on the instance" if missing else ""
+        print(f"settings: {checked - differing} of {checked} feeds match the file{note}")
         return differing, False
 
     try:
