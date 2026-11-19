@@ -14,6 +14,15 @@ n8n:
   nameOverride: "n8n"
   fullnameOverride: "n8n"
 
+  # The claim is named n8n-config, not n8n-2, on purpose: the old Longhorn claim
+  # n8n-2 is still Terminating in the namespace and its name cannot be reused
+  # while the object exists. See docs/cleanup/longhorn-disposition.md.
+  persistence:
+    size: 1Gi
+    storageClassName: local-path
+    accessMode: ReadWriteOnce
+    claimName: n8n-config
+
   serviceAccount:
     # Specifies whether a service account should be created
     create: false
@@ -41,7 +50,7 @@ n8n:
 
   service:
     type: ClusterIP
-    port: 5432
+    port: 5678
 
   ingress:
     enabled: true
@@ -80,16 +89,35 @@ n8n:
     #   cpu: 100m
     #   memory: 128Mi
 
-  nodeSelector: {}
+  # n8n answers /healthz once it is up and its database is loaded. The startup
+  # probe holds the other two through a first start on an empty claim, when the
+  # database is migrated from scratch.
+  probes:
+    startup:
+      enabled: true
+      path: /healthz
+      periodSeconds: 5
+      timeoutSeconds: 5
+      failureThreshold: 30
+    liveness:
+      enabled: true
+      path: /healthz
+      initialDelaySeconds: 30
+      periodSeconds: 30
+      timeoutSeconds: 5
+      failureThreshold: 3
+    readiness:
+      enabled: true
+      path: /healthz
+      initialDelaySeconds: 10
+      periodSeconds: 10
+      timeoutSeconds: 5
+      failureThreshold: 3
+
+  # Pinned, not affinity: local-path is hostPath-backed, so the claim exists on one
+  # node only and the pod cannot follow a reschedule to another. nuc0 is where the
+  # application already runs and where AGENTS.md places the general catalogue.
+  nodeSelector:
+    kubernetes.io/hostname: nuc0
 
   tolerations: []
-
-  affinity:
-    nodeAffinity:
-      requiredDuringSchedulingIgnoredDuringExecution:
-        nodeSelectorTerms:
-          - matchExpressions:
-              - key: node-type
-                operator: In
-                values:
-                  - general
