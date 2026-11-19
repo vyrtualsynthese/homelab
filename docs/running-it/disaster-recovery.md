@@ -36,8 +36,12 @@ ends it.
 - **The dated records** — audits, designs, plans: the only description of the old configuration.
 - **The nightly `pg_dump`** on `postgres-dumps`: a guard against a dropped table, not a
   dead disk.
-- **Syncthing's restic CronJob**: `restic backup /data` daily, repository from the
-  `syncthing-backup` Secret, so the destination is outside git and its failure domain unknown.
+- **Syncthing's restic CronJob, and it has never written a snapshot.** `restic backup /data` runs daily
+  against `s3:s3.amazonaws.com/ashudev-homelab-syncthing-backup`, from the `syncthing-backup` Secret, and
+  that bucket does not exist: restic retries for half an hour, then fails. The Job reported `Complete`
+  until PR #1299 made a failed run fail. **Treat the folder as having no copy outside the NAS.** The
+  repository moves to OVHcloud object storage (card #349); this entry changes when a snapshot lands there
+  and a restore reads back, not before.
 - **The old host restic path**: the edge Pis into AWS S3, the only documented offsite copy,
   covering no cluster host
   ([ansible audit](../audit/ansible-hosts.md#4-backups-broken-since-2024-provably),
@@ -47,7 +51,7 @@ ends it.
 
 | Missing | Decided in |
 |---|---|
-| W4's offsite repository, schedule, retention, staleness alert, monthly drill | [W4](../superpowers/specs/2026-11-10-homelab-stabilisation-design.md#w4-offsite-domains-dns-and-backups) |
+| W4's offsite repository, schedule, retention, staleness alert, monthly drill. The object storage moves from AWS S3 to OVHcloud first (card #349) | [W4](../superpowers/specs/2026-11-10-homelab-stabilisation-design.md#w4-offsite-domains-dns-and-backups) |
 | The rewritten playbooks and the recovery runbook | [W8](../superpowers/specs/2026-11-10-homelab-stabilisation-design.md#w8-ansible-and-documentation) |
 | A restore anyone has performed: no dump, no claim, the etcd runbook pending | [`runbooks/README.md`](../runbooks/README.md) |
 | Anything in git that could rebuild a host | [`ansible-hosts.md` §7](../audit/ansible-hosts.md#7-what-a-rebuild-would-not-reproduce) |
