@@ -68,3 +68,25 @@ def parse_opml(text: str) -> list[Feed]:
 
     walk(root.find("body") if root.find("body") is not None else root, "Uncategorized")
     return feeds
+
+
+@dataclass(frozen=True)
+class Plan:
+    to_subscribe: tuple[Feed, ...]
+    to_prune: tuple[tuple[str, str], ...]
+    unchanged: tuple[Feed, ...]
+
+
+def plan(local: Sequence[Feed], remote: Sequence[tuple[str, str]]) -> Plan:
+    """Diff the file against what the instance reports, as (url, category) pairs."""
+    by_url = {normalize_url(f.url): f for f in local}
+    remote_by_url = {normalize_url(url): cat for url, cat in remote}
+
+    to_subscribe = tuple(
+        f for f in local if remote_by_url.get(normalize_url(f.url)) != f.category
+    )
+    to_prune = tuple((url, cat) for url, cat in remote if normalize_url(url) not in by_url)
+    unchanged = tuple(
+        f for f in local if remote_by_url.get(normalize_url(f.url)) == f.category
+    )
+    return Plan(to_subscribe=to_subscribe, to_prune=to_prune, unchanged=unchanged)

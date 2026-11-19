@@ -43,3 +43,26 @@ class ParseTests(unittest.TestCase):
     def test_normalize_url_strips_one_trailing_slash_and_keeps_the_query(self):
         self.assertEqual(mod.normalize_url("https://a.test/feed/"), "https://a.test/feed")
         self.assertEqual(mod.normalize_url("https://a.test/f?x=1&y=2"), "https://a.test/f?x=1&y=2")
+
+
+class PlanTests(unittest.TestCase):
+    def feed(self, url="https://a.test/feed", cat="Dev", title="A"):
+        return mod.Feed(category=cat, title=title, url=url)
+
+    def test_an_empty_instance_subscribes_everything_and_prunes_nothing(self):
+        p = mod.plan([self.feed()], [])
+        self.assertEqual(p.to_subscribe, (self.feed(),))
+        self.assertEqual(p.to_prune, ())
+
+    def test_a_matching_instance_is_unchanged(self):
+        p = mod.plan([self.feed()], [("https://a.test/feed/", "Dev")])
+        self.assertEqual(p.to_subscribe, ())
+        self.assertEqual(p.unchanged, (self.feed(),))
+
+    def test_a_moved_category_is_resubscribed(self):
+        p = mod.plan([self.feed(cat="Jeux")], [("https://a.test/feed", "Dev")])
+        self.assertEqual(p.to_subscribe, (self.feed(cat="Jeux"),))
+
+    def test_a_remote_feed_absent_from_the_file_is_reported_for_pruning(self):
+        p = mod.plan([], [("https://b.test/feed", "Dev")])
+        self.assertEqual(p.to_prune, (("https://b.test/feed", "Dev"),))
