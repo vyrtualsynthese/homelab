@@ -1,0 +1,9 @@
+# The books library. Mounted by calibre-web-automated and kavita.
+nfs-subdir-external-provisioner:
+  fullnameOverride: books-media-nfs-subdir-external-provisioner
+  nfs:
+    path: /mnt/storage/nfs/books
+    volumeName: nfs-books
+  storageClass:
+    name: nfs-books
+    accessModes: ReadWriteMany

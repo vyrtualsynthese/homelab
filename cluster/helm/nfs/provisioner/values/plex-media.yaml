@@ -1,0 +1,9 @@
+# Film and television. Mounted by plex, the four *arr Applications, both bazarrs and maintainerr.
+nfs-subdir-external-provisioner:
+  nameOverride: plex-media
+  fullnameOverride: plex-media
+  nfs:
+    path: /mnt/storage/nfs/plexmedia
+    volumeName: plex-media
+  storageClass:
+    name: plex-media

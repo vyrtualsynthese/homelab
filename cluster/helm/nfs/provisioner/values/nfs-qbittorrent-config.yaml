@@ -1,0 +1,9 @@
+# qBittorrent's state directory. Mounted by qbittorrent alone.
+nfs-subdir-external-provisioner:
+  fullnameOverride: nfs-qbittorrent-config-nfs-subdir-external-provisioner
+  nfs:
+    path: /mnt/storage/nfs/qbittorrent-config
+    volumeName: nfs-qbittorrent-config
+  storageClass:
+    name: nfs-qbittorrent-config
+    accessModes: ReadWriteMany
