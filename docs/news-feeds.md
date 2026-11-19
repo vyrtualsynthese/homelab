@@ -20,7 +20,7 @@ rebuilt instance gets the same set by replaying the file.
 python3 hack/freshrss_sync.py apply --dry-run   # show what would change
 python3 hack/freshrss_sync.py apply             # subscribe what the file lists
 python3 hack/freshrss_sync.py check             # exit 1 when a listed feed is missing
-python3 hack/freshrss_sync.py verify            # fetch every URL, print items and newest date
+python3 hack/freshrss_sync.py verify            # fetch every URL, check each full-content selector
 ```
 
 `apply` and `check` also cover the per-feed settings the file carries: the CSS selector that pulls
@@ -31,11 +31,17 @@ checked` and does the rest. See "The settings the API cannot reach" below.
 `check` fails on three things: a feed the file lists and the instance lacks, a listed feed sitting in
 another category, and a listed feed whose content selectors differ from the file. A feed the instance
 holds and the file does not is printed with a `-` and does not fail the run: `apply` never removes
-one without `--prune`, so an extra is not drift. Exit codes are `0` clean, `1` any of the above, `2`
-credentials missing or refused — which includes the web login.
+one without `--prune`, so an extra is not drift. A label counts as in place when it is one of the
+labels the instance reports, so a feed that also carries a second, stale label is not drift either.
+Exit codes are `0` clean, `1` any of the above, `2` credentials missing or refused — which includes
+the web login.
 
-`verify` fetches every URL and exits 1 when a native feed answers badly; an XPath feed reports
-`NOT-XML` by design, because the raw URL is a page.
+`verify` fetches every URL and exits 1 when a feed does not answer, or when a full-content selector
+picks nothing out of the newest article.
+
+A feed whose items come from an XPath expression is printed `OK` with no item count: its raw URL is
+a page, not a feed. When such a feed carries a full-content selector, `verify` follows the first link
+its item expression picks and reads that page.
 
 `FRESHRSS_BASE` overrides the instance URL, which is how a scratch instance gets tested.
 
@@ -167,10 +173,12 @@ the XPath fields are submitted together.
 Counts observed on 2026-11-19, from the live pages: Star Citizen 9, Final Fantasy XIV 9, Elite
 Dangerous 57, Anthropic 26.
 
-These are the brittle part of the set. A page redesign breaks them silently, and `verify` reports
-`NOT-XML` for an XPath feed because the raw URL is HTML — that is expected, not a failure. `check`
-can see a selector that no longer matches the file; it cannot see one that matches the file and no
-longer matches the page. Look at the folder in the web UI after a redesign.
+These are the brittle part of the set: a redesign empties them without an error, and `check` cannot
+see that — the selector still matches the file. `verify` follows the first link the item expression
+picks and reads that page through the full-content selector, so a dead selector shows as
+`sel … empty (path)`. When the expression stops matching links, the same check prints
+`sel … unchecked` instead of failing, so the item list itself still needs a look in the web UI after
+a redesign.
 
 ## Images and full articles
 
@@ -187,32 +195,43 @@ with the part of that page a CSS selector picks (a CSS selector is the rule a st
 target one element — `.entry-content` means "the element carrying the `entry-content` class"). The
 selector travels in the OPML as `frss:cssFullContent`, so a rebuilt instance gets it from the file.
 
-Twelve feeds carry a selector, each checked against the newest article on 2026-11-19:
+Twelve feeds carry a selector. The column is what `verify` printed on 2026-11-19, read from the
+newest article of each feed:
 
-| Feed | Selector | Text taken from one article |
+| Feed | Selector | Text taken from one article (characters) |
 |---|---|---|
-| Guild Wars 2 | `#content` | 3.4 kB |
-| Discord blog | `article` | 6.9 kB |
-| Docker blog | `.entry-content` | 13.9 kB |
-| Kubernetes blog | `main` | 9.9 kB |
-| WSL2 | `.entry-content` | 10.0 kB |
-| Logseq blog | `article` | 10.4 kB |
-| Rise of Gunpla — new kits | `.entry-content` | 4.0 kB |
-| selfh.st | `article` | 8.4 kB |
-| Phoronix | `article` | 5.3 kB |
-| Final Fantasy XIV | `article` | 5.4 kB |
-| Elite Dangerous | `#content` | 34.0 kB |
-| Anthropic / Claude | `article` | 3.4 kB |
+| Guild Wars 2 | `#content` | 2794 |
+| Discord blog | `article` | 2106 |
+| Docker blog | `.entry-content` | 20013 |
+| Kubernetes blog | `main` | 9336 |
+| WSL2 | `.entry-content` | 5693 |
+| Logseq blog | `article` | 9519 |
+| Rise of Gunpla — new kits | `.entry-content` | 461 |
+| selfh.st | `article` | 10899 |
+| Phoronix | `article` | 1522 |
+| Final Fantasy XIV | `article` | 1435 |
+| Elite Dangerous | `#content` | 538 |
+| Anthropic / Claude | `article` | 11174 |
 
 What it costs: one extra request per new article, made by the pod, so the source sees the cluster's
 address rather than yours. What it breaks on: a redesign empties the article without an error, and
-`check` cannot see that — the selector still matches the file, it no longer matches the page. Check
-the reading view after a site redesign.
+`check` cannot see that — the selector still matches the file, it no longer matches the page.
+`verify` is what catches it: it reads the newest article through the selector and exits 1 when the
+extraction is empty, naming the page it read.
+
+`verify` understands one tag with an id and/or classes (`article`, `#content`, `.entry-content`,
+`div#main.box`) or a comma list of those. A selector built from a descendant combinator, an
+attribute test or a pseudo-class is outside what it reads, so it reports `unsupported` instead of
+passing silently — extend the reader before using one.
+
+On 2026-11-19 every one of the twelve reads a body: the smallest is Rise of Gunpla at 461
+characters (the newest kit is a short description), the largest Docker blog at 20013.
 
 Eight feeds carry a picture in the item already, so the list shows a thumbnail without a selector:
-Discord, Docker, Kubernetes, WSL2, Logseq, selfh.st, Simon Willison and Guild Wars 2. For the other
-five that have a selector — Phoronix, Rise of Gunpla, Final Fantasy XIV, Elite Dangerous and
-Anthropic — the selector is what brings the pictures, since the feed itself carries none.
+Discord, Docker, Kubernetes, WSL2, Logseq, selfh.st, Simon Willison and Guild Wars 2. Seven of those
+eight also carry a selector. The five that carry a selector without a picture in the item are
+Phoronix, Rise of Gunpla, Final Fantasy XIV, Elite Dangerous and Anthropic — there the selector is
+what brings the pictures, since the feed itself carries none.
 
 Five get nothing, and the reason is the source rather than a missing setting:
 

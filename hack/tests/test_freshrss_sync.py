@@ -2,6 +2,7 @@ import contextlib
 import importlib.util
 import io
 import json
+import re
 import urllib.parse
 import pathlib
 import sys
@@ -20,6 +21,34 @@ spec = importlib.util.spec_from_file_location("freshrss_sync", SYNC)
 mod = importlib.util.module_from_spec(spec)
 sys.modules["freshrss_sync"] = mod
 spec.loader.exec_module(mod)
+
+RSS = ('<?xml version="1.0"?><rss><channel><title>t</title>'
+       '<item><title>a</title><link>https://a.test/post</link></item></channel></rss>')
+ARTICLE = ('<html><body><main><article><div id="content">'
+           '<p class="entry-content">the body of the article</p>'
+           '</div></article></main></body></html>')
+DEAD = '<html><body><div class="unrelated">nothing selected here</div></body></html>'
+
+
+def serve(page=ARTICLE, fail=()):
+    """Answer each OPML URL with a document of its kind, and every article URL with `page`."""
+    feeds = {f.url: f for f in mod.parse_opml(OPML_PATH.read_text())}
+
+    def transport(method, url, headers=None, data=None):
+        if url in fail:
+            return 500, ""
+        feed = feeds.get(url)
+        if feed is None:
+            return 200, page
+        if feed.kind == "xpath":
+            item = dict(feed.settings).get("xPathItem", "")
+            match = re.search(r"@href,\s*'([^']*)'", item)
+            if not match:
+                return 200, page
+            return 200, (f'<html><body><a href="{match.group(1)}article-1">newest</a>'
+                         '</body></html>')
+        return 200, RSS
+    return transport
 
 
 class ParseTests(unittest.TestCase):
@@ -96,20 +125,31 @@ class PlanTests(unittest.TestCase):
         self.assertEqual(p.to_prune, ())
 
     def test_a_matching_instance_is_unchanged(self):
-        p = mod.plan([self.feed()], [("https://a.test/feed/", "Dev")])
+        p = mod.plan([self.feed()], [("https://a.test/feed/", ("Dev",))])
         self.assertEqual(p.to_subscribe, ())
         self.assertEqual(p.unchanged, (self.feed(),))
 
     def test_a_moved_category_is_resubscribed(self):
-        p = mod.plan([self.feed(cat="Jeux")], [("https://a.test/feed", "Dev")])
+        p = mod.plan([self.feed(cat="Jeux")], [("https://a.test/feed", ("Dev",))])
         self.assertEqual(p.to_subscribe, (self.feed(cat="Jeux"),))
 
+    def test_a_feed_with_two_labels_is_not_drift_when_one_of_them_matches(self):
+        """A re-subscribe adds a label; the file's label is still there, so it is in place."""
+        p = mod.plan([self.feed(cat="Dev")], [("https://a.test/feed", ("Ancien", "Dev"))])
+        self.assertEqual(p.to_subscribe, ())
+        self.assertEqual(p.unchanged, (self.feed(cat="Dev"),))
+
+    def test_a_feed_whose_every_label_is_foreign_is_resubscribed(self):
+        p = mod.plan([self.feed(cat="Dev")], [("https://a.test/feed", ("Jeux", "Boutiques"))])
+        self.assertEqual(p.to_subscribe, (self.feed(cat="Dev"),))
+
     def test_a_remote_feed_absent_from_the_file_is_reported_for_pruning(self):
-        p = mod.plan([], [("https://b.test/feed", "Dev")])
-        self.assertEqual(p.to_prune, (("https://b.test/feed", "Dev"),))
+        p = mod.plan([], [("https://b.test/feed", ("Dev",))])
+        self.assertEqual(p.to_prune, (("https://b.test/feed", ("Dev",)),))
 
     def test_an_internal_feed_is_not_reported_as_drift(self):
-        p = mod.plan([self.feed()], [("1", "Uncategorized"), ("https://a.test/feed", "Dev")])
+        p = mod.plan([self.feed()], [("1", ("Uncategorized",)),
+                                     ("https://a.test/feed", ("Dev",))])
         self.assertEqual(p.to_prune, ())
 
 
@@ -128,10 +168,14 @@ class FakeTransport:
         if url.endswith("/reader/api/0/token"):
             return 200, self.token
         if "/subscription/list" in url:
-            return 200, json.dumps({"subscriptions": [
-                {"id": f"feed/{i + 1}", "url": u, "title": t,
-                 "categories": [{"label": c}]}
-                for i, (u, t, c) in enumerate(self.subs)]})
+            subscriptions = []
+            for i, (u, t, labels) in enumerate(self.subs):
+                if isinstance(labels, str):
+                    labels = (labels,)
+                subscriptions.append({
+                    "id": f"feed/{i + 1}", "url": u, "title": t,
+                    "categories": [{"label": label} for label in labels]})
+            return 200, json.dumps({"subscriptions": subscriptions})
         if "/subscription/edit" in url:
             form = urllib.parse.parse_qs((data or b"").decode())
             feed_url = form.get("s", [""])[0].removeprefix("feed/")
@@ -175,10 +219,21 @@ class ClientTests(unittest.TestCase):
         self.assertIn("riseofgunpla.com%2Ffeed%3Fpost_type%3Dproduct", body)
         self.assertIn("label%2FBoutiques", body)
 
-    def test_subscriptions_returns_url_and_category_pairs(self):
+    def test_subscriptions_returns_url_and_label_tuples(self):
         t = FakeTransport(subs=[("https://a.test/feed", "A", "Dev")])
         c = mod.Client(base="https://x.test", user="u", password="p", transport=t)
-        self.assertEqual(c.subscriptions(), [("https://a.test/feed", "Dev")])
+        self.assertEqual(c.subscriptions(), [("https://a.test/feed", ("Dev",))])
+
+    def test_subscriptions_keeps_every_label_a_feed_carries(self):
+        """A re-subscribe adds a label and keeps the old one; the first is not the only one."""
+        t = FakeTransport(subs=[("https://a.test/feed", "A", ("Ancien", "Dev"))])
+        c = mod.Client(base="https://x.test", user="u", password="p", transport=t)
+        self.assertEqual(c.subscriptions(), [("https://a.test/feed", ("Ancien", "Dev"))])
+
+    def test_a_null_label_reads_as_uncategorized(self):
+        t = FakeTransport(subs=[("https://a.test/feed", "A", (None,))])
+        c = mod.Client(base="https://x.test", user="u", password="p", transport=t)
+        self.assertEqual(c.subscriptions(), [("https://a.test/feed", ("Uncategorized",))])
 
     def test_a_refused_login_raises_auth_error(self):
         t = FakeTransport(login_body="Error=BadAuthentication\n")
@@ -190,7 +245,7 @@ class ClientTests(unittest.TestCase):
         """FreshRSS 1.30 answers id="feed/5" and puts the real address in url."""
         t = FakeTransport(subs=[("https://a.test/feed", "A", "Dev")])
         c = mod.Client(base="https://x.test", user="u", password="p", transport=t)
-        self.assertEqual(c.subscriptions(), [("https://a.test/feed", "Dev")])
+        self.assertEqual(c.subscriptions(), [("https://a.test/feed", ("Dev",))])
 
     def test_subscribing_a_feed_the_instance_already_holds_is_not_an_error(self):
         """The instance answers 500 for a duplicate; the feed is present, so the call succeeded."""
@@ -212,6 +267,41 @@ class ClientTests(unittest.TestCase):
         edit = [call for call in t.calls if "/subscription/edit" in call[1]][-1]
         self.assertIn("ac=edit", edit[3].decode())
         self.assertEqual(t.subs[0][2], "Jeux")
+
+    def test_a_feed_already_held_under_a_second_label_is_not_edited_again(self):
+        """The 500 from a duplicate subscribe must not turn into a redundant ac=edit."""
+        t = FakeTransport(subs=[("https://a.test/feed", "A", ("Ancien", "Dev"))])
+        c = mod.Client(base="https://x.test", user="u", password="p", transport=t)
+        c.subscribe(mod.Feed(category="Dev", title="A", url="https://a.test/feed"))
+        self.assertFalse([call for call in t.calls if b"ac=edit" in (call[3] or b"")])
+
+
+class SelectorTests(unittest.TestCase):
+    def test_an_id_selector_picks_the_text_inside_that_element(self):
+        self.assertEqual(mod.select_text('<div id="content"><p>hello</p></div>', "#content"), 5)
+
+    def test_a_class_selector_matches_one_of_several_classes(self):
+        self.assertEqual(mod.select_text('<div class="a b">hi</div>', ".b"), 2)
+
+    def test_a_comma_list_takes_the_first_element_in_document_order(self):
+        self.assertEqual(
+            mod.select_text("<main>aa</main><article>bbb</article>", "article, main"), 2)
+
+    def test_a_missing_element_yields_zero(self):
+        self.assertEqual(mod.select_text("<div>hi</div>", "#content"), 0)
+
+    def test_a_script_body_is_not_article_text(self):
+        self.assertEqual(
+            mod.select_text('<div id="content"><script>var x = 1;</script></div>', "#content"), 0)
+
+    def test_the_first_match_is_the_first_in_document_order_not_the_shallowest(self):
+        page = ('<div><section><span id="content">deep</span></section></div>'
+                '<div id="content">later but shallower</div>')
+        self.assertEqual(mod.select_text(page, "#content"), 4)
+
+    def test_a_descendant_selector_is_reported_as_unsupported(self):
+        with self.assertRaises(ValueError):
+            mod.select_text("<main><article>hi</article></main>", "main article")
 
 
 class CliTests(unittest.TestCase):
@@ -268,7 +358,7 @@ class CliTests(unittest.TestCase):
             return 429, ""
         rows = mod.verify([mod.Feed(category="Boutiques", title="KBDfans",
                                     url="https://kbdfans.test/x.atom")], transport)
-        self.assertEqual(rows, [("HTTP429", "KBDfans", 0, "")])
+        self.assertEqual(rows, [("HTTP429", "KBDfans", 0, "", "", True)])
 
     def test_apply_reports_a_refused_feed_and_still_subscribes_the_rest(self):
         t = FakeTransport(subs=[], refuse=("https://mistral.ai/news/rss#force_feed",))
@@ -277,25 +367,155 @@ class CliTests(unittest.TestCase):
         bodies = b"".join(c[3] or b"" for c in t.calls if b"ac=subscribe" in (c[3] or b""))
         self.assertIn(b"lobste.rs", bodies)
 
-    def test_verify_exits_one_when_a_feed_answers_badly(self):
-        rss = (b'<?xml version="1.0"?><rss><channel><title>t</title>'
-               b'<item><title>a</title></item></channel></rss>')
+    def test_verify_reads_the_items_of_an_rss_1_0_feed(self):
+        """Steam serves RSS 1.0, whose items sit in a namespace rather than bare."""
+        rdf = ('<?xml version="1.0"?>'
+               '<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"'
+               ' xmlns="http://purl.org/rss/1.0/">'
+               '<channel><title>t</title></channel>'
+               '<item><title>a</title><link>https://a.test/1</link></item>'
+               '<item><title>b</title><link>https://a.test/2</link></item></rdf:RDF>')
 
         def transport(method, url, headers=None, data=None):
-            if "guildwars2" in url:
-                return 500, ""
-            return 200, rss.decode()
+            return 200, rdf
+        rows = mod.verify([mod.Feed(category="Jeux", title="Steam",
+                                    url="https://a.test/rdf")], transport)
+        self.assertEqual(rows, [("OK", "Steam", 2, "", "", False)])
+
+    def test_verify_reports_the_text_a_selector_extracts_from_the_newest_article(self):
+        feed = mod.Feed(category="Dev", title="Docker", url="https://a.test/feed",
+                        settings=(("path_entries", ".entry-content"),))
+        fetched = []
+
+        def transport(method, url, headers=None, data=None):
+            fetched.append(url)
+            return (200, RSS) if url == feed.url else (200, ARTICLE)
+        rows = mod.verify([feed], transport)
+        self.assertEqual(fetched, [feed.url, "https://a.test/post"])
+        self.assertEqual(rows, [("OK", "Docker", 1, "", "sel .entry-content 23 chars", False)])
+
+    def test_verify_reports_a_dead_selector_as_an_empty_extraction(self):
+        feed = mod.Feed(category="Dev", title="Docker", url="https://a.test/feed",
+                        settings=(("path_entries", ".entry-content"),))
+
+        def transport(method, url, headers=None, data=None):
+            return (200, RSS) if url == feed.url else (200, DEAD)
+        rows = mod.verify([feed], transport)
+        self.assertEqual(rows[0].note, "sel .entry-content empty (/post)")
+        self.assertTrue(rows[0].bad)
+
+    def test_verify_reports_a_selector_it_cannot_evaluate(self):
+        feed = mod.Feed(category="Dev", title="Docker", url="https://a.test/feed",
+                        settings=(("path_entries", "main .entry-content"),))
+
+        def transport(method, url, headers=None, data=None):
+            return (200, RSS) if url == feed.url else (200, ARTICLE)
+        rows = mod.verify([feed], transport)
+        self.assertEqual(rows[0].note, "sel main .entry-content unsupported")
+        self.assertTrue(rows[0].bad)
+
+    def test_verify_reads_an_xpath_feed_selector_on_the_article_its_listing_links_to(self):
+        feed = mod.Feed(category="Jeux", title="Final Fantasy XIV", url="https://a.test/news/",
+                        kind="xpath", settings=(
+                            ("path_entries", "article"),
+                            ("xPathItem", "//a[contains(@href,'/news/detail/')]"),
+                            ("xPathItemUri", "@href")))
+        listing = ('<html><body><a href="/news/other">skip</a>'
+                   '<a href="/news/detail/42">newest</a></body></html>')
+        fetched = []
+
+        def transport(method, url, headers=None, data=None):
+            fetched.append(url)
+            return (200, listing) if url == feed.url else (200, ARTICLE)
+        rows = mod.verify([feed], transport)
+        self.assertEqual(fetched, [feed.url, "https://a.test/news/detail/42"])
+        self.assertEqual(rows, [("OK", "Final Fantasy XIV", 0, "",
+                                 "sel article 23 chars", False)])
+
+    def test_the_linked_article_is_the_first_link_in_document_order(self):
+        feed = mod.Feed(category="Jeux", title="Elite Dangerous", url="https://a.test/news",
+                        kind="xpath", settings=(
+                            ("xPathItem", "//a[starts-with(@href,'/news/')]"),
+                            ("xPathItemUri", "@href")))
+        listing = ('<div><ul><li><a href="/news/newest">a</a></li></ul></div>'
+                   '<a href="/news/older">b</a>')
+        self.assertEqual(mod._linked_article(listing, feed), "https://a.test/news/newest")
+
+    def test_verify_says_an_xpath_selector_was_not_checked_when_no_item_links(self):
+        feed = mod.Feed(category="Jeux", title="Elite Dangerous", url="https://a.test/news",
+                        kind="xpath", settings=(
+                            ("path_entries", "#content"),
+                            ("xPathItem", "//a[starts-with(@href,'/news/')]"),
+                            ("xPathItemUri", "@href")))
+
+        def transport(method, url, headers=None, data=None):
+            return 200, DEAD
+        rows = mod.verify([feed], transport)
+        self.assertEqual(rows, [("OK", "Elite Dangerous", 0, "", "sel #content unchecked", False)])
+
+    def test_verify_checks_the_article_with_the_newest_date_not_the_first_in_the_file(self):
+        """A feed that publishes oldest-first would otherwise have an old article checked."""
+        rss = ('<?xml version="1.0"?><rss><channel><title>t</title>'
+               '<item><title>old</title><link>https://a.test/old</link>'
+               '<pubDate>Mon, 02 Jan 2023 10:00:00 +0000</pubDate></item>'
+               '<item><title>new</title><link>https://a.test/new</link>'
+               '<pubDate>Wed, 18 Nov 2026 10:00:00 +0000</pubDate></item>'
+               '</channel></rss>')
+        feed = mod.Feed(category="Dev", title="Docker", url="https://a.test/feed",
+                        settings=(("path_entries", "article"),))
+        fetched = []
+
+        def transport(method, url, headers=None, data=None):
+            fetched.append(url)
+            return (200, rss) if url == feed.url else (200, ARTICLE)
+        rows = mod.verify([feed], transport)
+        self.assertEqual(fetched, [feed.url, "https://a.test/new"])
+        self.assertEqual(rows[0].items, 2)
+        self.assertEqual(rows[0].last, "2026-11-18")
+
+    def test_verify_reads_an_atom_feed_and_follows_its_entry_link(self):
+        atom = ('<?xml version="1.0"?><feed xmlns="http://www.w3.org/2005/Atom">'
+                '<title>t</title><entry><title>a</title>'
+                '<link rel="alternate" href="https://a.test/post"/>'
+                '<updated>2026-11-18T10:00:00Z</updated></entry></feed>')
+        feed = mod.Feed(category="Veille", title="Simon Willison",
+                        url="https://a.test/atom", settings=(("path_entries", "article"),))
+        fetched = []
+
+        def transport(method, url, headers=None, data=None):
+            fetched.append(url)
+            return (200, atom) if url == feed.url else (200, ARTICLE)
+        rows = mod.verify([feed], transport)
+        self.assertEqual(fetched, [feed.url, "https://a.test/post"])
+        self.assertEqual(rows, [("OK", "Simon Willison", 1, "2026-11-18",
+                                 "sel article 23 chars", False)])
+
+    def test_verify_fails_when_an_xpath_listing_does_not_answer(self):
+        """Without the listing the feed produces nothing, so a dead one is a failure."""
+        feed = mod.Feed(category="IA", title="Anthropic / Claude", url="https://a.test/news",
+                        kind="xpath", settings=(
+                            ("path_entries", "article"),
+                            ("xPathItem", "//a[starts-with(@href,'/news/')]"),
+                            ("xPathItemUri", "@href")))
+
+        def transport(method, url, headers=None, data=None):
+            return 403, ""
+        rows = mod.verify([feed], transport)
+        self.assertEqual(rows, [("HTTP403", "Anthropic / Claude", 0, "",
+                                 "sel article unchecked", True)])
+
+    def test_verify_exits_one_when_a_feed_answers_badly(self):
+        transport = serve(fail=("https://www.guildwars2.com/en/feed/",))
         with contextlib.redirect_stdout(io.StringIO()):
             self.assertEqual(mod.main(["verify"], transport=transport, env={}), 1)
 
-    def test_verify_exits_zero_when_every_fetch_answers(self):
-        rss = (b'<?xml version="1.0"?><rss><channel><title>t</title>'
-               b'<item><title>a</title></item></channel></rss>')
-
-        def transport(method, url, headers=None, data=None):
-            return 200, rss.decode()
+    def test_verify_exits_one_when_a_full_content_selector_is_dead(self):
         with contextlib.redirect_stdout(io.StringIO()):
-            self.assertEqual(mod.main(["verify"], transport=transport, env={}), 0)
+            self.assertEqual(mod.main(["verify"], transport=serve(page=DEAD), env={}), 1)
+
+    def test_verify_exits_zero_when_every_fetch_answers(self):
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(mod.main(["verify"], transport=serve(), env={}), 0)
 
 
 def settings_page(feed_id, fields=None, action=None):
