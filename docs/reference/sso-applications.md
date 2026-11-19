@@ -34,7 +34,7 @@ absent from this table has no single sign-on at all — no provider, no gate —
 | Radarr | OIDC | configured 2026-11-18 — Radarr 7's own OIDC; the forward-auth gate and the app's login are gone, `/api` exempt | `radarr.kub.local` |
 | Radarr (anime) | OIDC | configured 2026-11-18 — same settings as Radarr, own client id; `/api` exempt | `radarr-anime.kub.local` |
 | Vikunja | OIDC | done 2026-11-16 — gate removed, subject linked to the original account | `vikunja.kub.local` |
-| FileBrowser | proxy auth — it is built for it | not configured: the chain, the outpost attachment and `filebrowser-editors` are deferred, so it runs `lan-only` plus its own accounts | `filebrowser.kub.home.ashudev.com` |
+| FileBrowser | OIDC | configured 2026-11-19 — FileBrowser Quantum, password form off, so the browser redirects straight to authentik; `filebrowser-editors` admits the editor, whose folder scope is set inside the app | `filebrowser.kub.home.ashudev.com` |
 | Bazarr | forward-auth gate | configured; its own login is off; `/api` exempt | `bazarr.kub.local` |
 | Bazarr (anime) | forward-auth gate | configured; no login of its own; `/api` exempt | `bazarr-anime.kub.local` |
 | Docs site (MkDocs) | forward-auth gate | live since 2026-11-17 — blueprint `app-docs`, Admins only | `docs.kub.local` |

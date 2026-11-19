@@ -1,6 +1,6 @@
 # Routes: every hostname, its gate and its certificate
 
-> **In one line.** Traefik answers the 33 hostnames in this table: five are public, twenty-four are
+> **In one line.** Traefik answers the 33 hostnames in this table: six are public, twenty-three are
 > internal over TLS, four answer plain HTTP, and two more names exist only to redirect; the gate
 > column — not the address — is what decides who gets in.
 >
@@ -25,22 +25,24 @@ the hostname is public or a `*.kub.home.ashudev.com` name the LAN resolves to `1
 
 ## Public
 
-These five are on the allowlist and are meant to answer the internet. Only Dashy carries a gate; the
-other four set response headers — and, for Plex and Seerr, a rate limit of 100 requests per second on
-average — and neither of those is authentication. The authentik page Dashy signs in through is
-public for that reason.
+These six are on the allowlist and are meant to answer the internet. Only Dashy carries a gate; the
+others set response headers — and, for Plex and Seerr, a rate limit of 100 requests per second on
+average — and neither of those is authentication. FileBrowser is open so the editor can sign in from
+outside and its share links can be opened by people with no account, and it authenticates inside the
+app through authentik. The authentik page Dashy signs in through is public for that reason.
 
 | Host | Application | Namespace | Gate | TLS | Public? |
 |---|---|---|---|---|---|
 | `ashuvidz.com` | ashuvidz website (nginx) | `ashuvidz` | none — `security` headers | Let's Encrypt | yes |
 | `authentik.kub.home.ashudev.com` | Authentik | `authentik` | none — `security` headers; each application's own policy is the gate | Let's Encrypt | yes |
 | `dashy.ashudev.com` | Dashy | `dashy` | `authentik-forwardauth` (admins only) then `security` | Let's Encrypt | yes |
+| `filebrowser.kub.home.ashudev.com` | FileBrowser | `filebrowser` | none — `security` headers; the app redirects to authentik | Let's Encrypt | yes |
 | `plex.kub.home.ashudev.com` | Plex | `media-stack` | none — `security` headers, rate limit (two `websecure` routers) | Let's Encrypt | yes |
 | `seerr.kub.home.ashudev.com` | Seerr | `media-stack` | none — `security` headers, rate limit | Let's Encrypt | yes |
 
 ## Internal over TLS
 
-Twenty-four hostnames. Seventeen use the internal CA on a `*.kub.local` name; seven carry their
+Twenty-three hostnames. Seventeen use the internal CA on a `*.kub.local` name; six carry their
 own certificate on a `*.kub.home.ashudev.com` or `*.ashudev.com` name.
 
 | Host | Application | Namespace | Gate | TLS | Public? |
@@ -51,7 +53,6 @@ own certificate on a `*.kub.home.ashudev.com` or `*.ashudev.com` name.
 | `bazarr-anime.kub.local` | Bazarr (anime) | `media-stack` | forward-auth; `lan-only` alone on `/api` | internal CA | no |
 | `calibre.kub.local` | Calibre-Web Automated | `media-stack` | `lan-only` | internal CA | no |
 | `docs.kub.local` | the docs site | `docs` | `lan-only` then forward-auth | internal CA | no |
-| `filebrowser.kub.home.ashudev.com` | FileBrowser | `filebrowser` | `lan-only`; the app does its own sign-in | Let's Encrypt | no |
 | `freshrss.kub.home.ashudev.com` | FreshRSS | `news` | `lan-only`; OIDC in the app, the API keeps its own login | Let's Encrypt | no |
 | `grafana.kub.local` | Grafana | `monitoring` | `lan-only` | internal CA | no |
 | `kavita.kub.home.ashudev.com` | Kavita | `media-stack` | `lan-only` | Let's Encrypt | no |
@@ -84,12 +85,12 @@ Four routes serve plain HTTP. The LAN allowlist or a password is all that stands
 ## What the table does not list
 
 **Redirect twins.** Every internal host in the first two tables also has a `web` router on the same
-name that only redirects to HTTPS, carrying `lan-only` and nothing else — `filebrowser` excepted,
-which has no plain-HTTP route at all. The public hosts' `web` routers carry `redirect-https` and no
-gate, because a gate there would refuse the browser before it ever asked for the certificate. The
-four rows in the last table are served on `web` itself. Two hostnames exist only to redirect and are
-rows in no table: `kub.home.ashudev.com` and `dashy.kub.local`, both to `https://dashy.ashudev.com`,
-path and query kept.
+name that only redirects to HTTPS, carrying `lan-only` and nothing else. The public hosts' `web`
+routers carry `redirect-https` and no gate, because a gate there would refuse the browser before it
+ever asked for the certificate. FileBrowser has no `web` router at all: it answers `websecure` only.
+The four rows in the last table are served on `web` itself. Two hostnames exist only to redirect and
+are rows in no table: `kub.home.ashudev.com` and `dashy.kub.local`, both to
+`https://dashy.ashudev.com`, path and query kept.
 
 **`/api` exemptions.** Ten hosts — `bazarr`, `bazarr-anime`, `lidarr`, `maintainerr`, `prowlarr`,
 `radarr`, `radarr-anime`, `sonarr`, `sonarr-anime`, `tautulli` — carry a second rule on
@@ -101,7 +102,7 @@ is the only control on `/api`.
 `koillection` and `syncthing`. Both are chart-first and drift, not design: their charts already emit
 `kube-system-lan-only@kubernetescrd`, the live objects predate the rule, and a sync closes the gap.
 `thelounge` was the third until 2026-11-19, when its rebuild added the LAN gate and the authentik
-forward-auth in front of it. The five public hosts above carry no `lan-only` by design instead, which
+forward-auth in front of it. The six public hosts above carry no `lan-only` by design instead, which
 is the other case `hack/check-exposure.sh` allows; it passes on both.
 
 **Two routers on Plex.** `plex.kub.home.ashudev.com` is claimed twice, both on `websecure`:

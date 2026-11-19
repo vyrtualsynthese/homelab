@@ -202,31 +202,77 @@ in its own blueprint, in `any` mode, so an application can be admin-only while a
 users. Removing somebody from a group takes their applications away at their next sign-in; it
 does not stop them signing in to authentik.
 
-Capability groups grant one extra thing on top of the level: `filebrowser-editors` exists but is
-unused until FileBrowser is wired to authentik.
+Capability groups grant one extra thing on top of the level: `filebrowser-editors` admits its members
+to FileBrowser, which then decides which folders they see.
 
-## FileBrowser (local login, authentik deferred)
+## FileBrowser (OIDC, configured 2026-11-19)
 
-FileBrowser is **not** behind authentik for now. It runs in namespace `filebrowser` with its own
-accounts; the forward-auth chain, the embedded-outpost attachment and `filebrowser-editors` are
-deferred. The provider is not attached to the outpost. The procedure to wire it later stays in
-`docs/superpowers/plans/2026-11-14-sso-access-model.md`.
+FileBrowser is [FileBrowser Quantum](https://github.com/gtsteffaniak/filebrowser), the maintained fork
+of the archived upstream, in namespace `filebrowser`. It authenticates through authentik natively; the
+password form is **off**, so an unauthenticated browser is redirected straight to authentik.
 
-The first admin is created from the `filebrowser` Secret when the database is empty. Rotate it with:
+Two Secrets carry the OAuth2 client secret, and both must hold the same value:
+
+| Secret | Key | Read by |
+|---|---|---|
+| `filebrowser-oidc` (namespace `filebrowser`) | `CLIENTSECRET` | the app, as `FILEBROWSER_OIDC_CLIENT_SECRET` |
+| `authentik-sso` (namespace `authentik`) | `FILEBROWSER_CLIENT_SECRET` | the worker, through `!Env` when the blueprint is applied |
+
+Secrets do not cross namespaces, hence the pair. Create both from one generated value:
 
 ```bash
-kubectl -n filebrowser exec deploy/filebrowser -- filebrowser users update admin --password '<new>'
+S=$(openssl rand -hex 24)
+kubectl -n authentik patch secret authentik-sso --type merge \
+  -p "$(jq -n --arg s "$S" '{stringData:{"FILEBROWSER_CLIENT_SECRET":$s}}')"
+kubectl -n filebrowser create secret generic filebrowser-oidc \
+  --from-literal=CLIENTSECRET="$S" --dry-run=client -o yaml | kubectl apply -f -
 ```
 
-Non-admin accounts keep the same shape as before, now in the new namespace:
+Changing the value means patching **both** Secrets and then restarting the worker: `!Env` is resolved
+when the blueprint is applied, not when the Secret changes. The chart's PostSync hook recreates the
+worker on the next `authentik` sync, which is the ordinary path.
+
+The blueprint is `cluster/helm/authentik/files/app-filebrowser.yaml`: provider `filebrowser-oidc`,
+client id `filebrowser`, redirect URI
+`https://filebrowser.kub.home.ashudev.com/api/auth/oidc/callback`, scopes `openid email profile`. The
+application is bound to `authentik Admins` and `filebrowser-editors`; no outpost is involved.
+
+### Accounts and folder scopes
+
+Who gets in is decided in authentik; **what each person sees is decided inside FileBrowser**, because
+authentik has no concept of a folder. Every source in the chart is `defaultEnabled: false`, so a
+brand-new OIDC user starts with an empty sidebar — administrators included. After the first sign-in,
+grant scopes in **Settings → User management → (the account) → Sources**: each source has its own
+access level and a `deny` / `read` / `create` / `modify` / `delete` set.
+
+The editor is a local authentik account in `filebrowser-editors` and `homelab-guests`, so nothing
+depends on the Discord guild or a Plex share. Create one with:
 
 ```bash
-kubectl -n filebrowser exec deploy/filebrowser -- filebrowser users add \
-  '<username>' "$(openssl rand -hex 24)" --scope '<scope-path>' \
-  --lockPassword --perm.execute=false
+set -a; . ~/.config/secrets/homelab.env; set +a
+PW=$(openssl rand -base64 18)
+curl -sS -X POST -H "Authorization: Bearer $AUTHENTIK_TOKEN" -H 'Content-Type: application/json' \
+  'https://authentik.kub.home.ashudev.com/api/v3/core/users/' \
+  -d "{\"username\":\"editor\",\"name\":\"Editor\",\"email\":\"\",\"is_active\":true,\"groups\":[<filebrowser-editors pk>,<homelab-guests pk>]}"
 ```
 
-Upstream archived FileBrowser on 2026-09-01; treat it as unmaintained.
+then `POST /api/v3/core/users/<pk>/set_password/` with `{"password": "<the generated one>"}` and hand
+the password over out of band. Group ids come from `/api/v3/core/groups/?name=<name>`.
+
+### Recovery when authentik is down
+
+There is no local login to fall back on. Restore one through git, not through the UI:
+
+1. In `cluster/helm/filebrowser/values.yaml`, set `auth.methods.password.enabled: true` and
+   `signup: false`, and replace `adminPassword.passwordOverride` with a real password (the pinned
+   `oidc-only-no-local-login` string exists only to keep renders deterministic).
+2. Commit, then sync `filebrowser`.
+3. Sign in as `admin` with that password and fix authentik.
+4. Revert the commit and sync again.
+
+Share links keep working during an authentik outage: the app answers `/share/...` itself, with no
+gate in front. The files themselves are also reachable over SMB/NFS on the NAS, which is the recovery
+that does not need the cluster at all.
 
 ## MFA
 
@@ -244,7 +290,6 @@ Recovery: delete the lost device in the admin interface and let the person enrol
 
 - Each authentik-managed application's login page offers authentik, and signing in lands back in
   the app.
-- FileBrowser signs in with the local admin created from the `filebrowser` Secret; it does not
-  redirect to authentik.
+- FileBrowser redirects an unauthenticated browser to authentik; no password form is served.
 - A guest sees an empty application list; a bookmarked application URL is refused by authentik.
 - Argo CD: the admin can sync; a `homelab-users` member reads only.

@@ -1,0 +1,75 @@
+# filebrowser chart
+
+FileBrowser Quantum over the NAS exports, signed in through authentik, with no local password form.
+
+## Why the fork
+
+Upstream `filebrowser/filebrowser` was archived on 2026-09-01: no fixes, no OIDC.
+[FileBrowser Quantum](https://github.com/gtsteffaniak/filebrowser) is the maintained fork and adds
+native OIDC plus per-user, per-source permissions.
+
+The chart here is a thin wrapper (repo pattern D): `Chart.yaml` pins the community chart
+[`Softwaredam/filebrowser-chart`](https://github.com/Softwaredam/filebrowser-chart) as an OCI
+dependency at `oci://ghcr.io/softwaredam/helm-charts`, and this file's values carry everything that
+matters. `charts/` and `Chart.lock` are gitignored — ArgoCD runs `helm dependency build` at sync time.
+
+| Object | Name |
+|---|---|
+| Deployment, Service, ConfigMap, Secret | `filebrowser-filebrowser-quantum` |
+| Claims on `local-path` | `filebrowser-filebrowser-quantum-config` (holds `database.db`), `-data` |
+| NFS claims | `filebrowser-stash`, `filebrowser-audio`, `filebrowser-download`, `filebrowser-creator` |
+
+The service port is **8080** (the chart's default), not 80. `templates/ingressroute.yaml` reads
+`traefik.service` and `traefik.port` for that reason.
+
+## Sources and the export they need
+
+| Source | Mount | NAS path | Claim |
+|---|---|---|---|
+| `various` | `/srv/various` | `/mnt/storage/nfs/stash` | `filebrowser-stash` |
+| `audio` | `/srv/audio` | `/mnt/storage/nfs/audio` | `filebrowser-audio` |
+| `torrent` | `/srv/torrent` | `/mnt/ultrafaststorage/nfs` | `filebrowser-download` |
+| `creator` | `/srv/creator` | `/mnt/storage/nfs/creator` | `filebrowser-creator` |
+
+`/mnt/storage/nfs/creator` must exist and be exported on the NAS before the first sync: without it the
+pod sits in `ContainerCreating` waiting for the mount, which is the intended failure — a silently empty
+folder would be worse. `templates/nfs-volumes.yaml` renders one PV and one pre-bound claim per entry in
+`nfsVolumes`.
+
+Every source sets `defaultEnabled: false`. A brand-new OIDC user therefore starts with an empty
+sidebar, **administrators included**: grant the sources in **Settings → User management** after the
+first sign-in. Without it the editor would inherit every export on the NAS.
+
+Uploads run as uid/gid 1100 (`securityContext`). Reads succeed under almost any identity; the first
+upload is the real test of the export's ownership.
+
+## Login
+
+Namespace `filebrowser` has one OAuth2 client, id `filebrowser`, secret in Secret `filebrowser-oidc`
+key `CLIENTSECRET`. The provider lives in the authentik blueprint
+`cluster/helm/authentik/files/app-filebrowser.yaml`; the same secret is `FILEBROWSER_CLIENT_SECRET` in
+the `authentik-sso` Secret, because Secrets do not cross namespaces. Callback:
+`https://filebrowser.kub.home.ashudev.com/api/auth/oidc/callback`.
+
+`auth.methods.password.enabled` is `false`, and Quantum only auto-redirects when OIDC is the *only*
+method, which is what the operator asked for. Consequences:
+
+- No local login exists. Recovery is a commit — see `docs/runbooks/authentik-apps.md`.
+- `adminPassword.passwordOverride` is pinned to an inert string because the chart otherwise generates
+  a password with `rand` on every render and emits it unquoted; a value starting with `#` produced
+  invalid YAML. Turning password login back on means setting a real value there first.
+- Share links are unaffected by an authentik outage: the app serves `/share/...` itself, with no gate
+  in front of it.
+
+## The route is public on purpose
+
+`middlewares` carries `security` only. `filebrowser.kub.home.ashudev.com` is on
+`hack/check_exposure.py`'s allowlist: the editor signs in from outside, and share links go to people
+with no account at all. Re-adding `lan-only` makes both unreachable while `helm template` still looks
+fine.
+
+## Known gap
+
+The community chart renders no `nodeSelector`, `affinity` or `tolerations`, so the pod is not pinned to
+a named node (repo rule). It can land on any node, including the ARM64 `rbp2`. Tracked as a follow-up
+task; the fixes are an upstream chart PR, a fork, or a local chart.
