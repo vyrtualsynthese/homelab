@@ -1,64 +1,112 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "fullname" . }}
+  name: {{ include "app.fullname" . }}
   labels:
-    {{- include "labels" . | nindent 4 }}
+    {{- include "app.labels" . | nindent 4 }}
 spec:
-  replicas: 1
+  replicas: {{ .Values.replicaCount }}
   strategy:
-    type: Recreate
+    type: {{ .Values.strategy }}
   selector:
     matchLabels:
-      {{- include "selectorLabels" . | nindent 6 }}
+      {{- include "app.selectorLabels" . | nindent 6 }}
   template:
     metadata:
-      {{- with .Values.podAnnotations }}
       annotations:
+        {{- with .Values.podAnnotations }}
         {{- toYaml . | nindent 8 }}
-      {{- end }}
+        {{- end }}
+        {{- /* The config file is mounted with `subPath`, which does not update
+        when the ConfigMap changes. Hashing it makes an edit to config.js roll
+        the pod, instead of leaving the old file in place until the next
+        restart that nobody planned. */}}
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
       labels:
-        {{- include "selectorLabels" . | nindent 8 }}
+        {{- include "app.labels" . | nindent 8 }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
     spec:
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      serviceAccountName: {{ include "serviceAccountName" . }}
+      serviceAccountName: {{ include "app.serviceAccountName" . }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
-      volumes:
-        - name: thelounge-volume
-          persistentVolumeClaim:
-            claimName: thelounge-volume
-        - name: thelounge-configmap
-          configMap:
-            name: {{ include "fullname" . }}
-      initContainers:
-        - name: init-theloung-config
-          image: busybox:1.38
-          command: [ 'sh', '-c', "cp /config/* /var/opt/thelounge" ]
-          volumeMounts:
-            - name: thelounge-volume
-              mountPath: /var/opt/thelounge
-            - mountPath: /config
-              name: thelounge-configmap
+      {{- $claimName := include "app.configClaimName" . }}
       containers:
         - name: {{ .Chart.Name }}
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- $env := list }}
+          {{- range $name, $value := .Values.env }}
+          {{- $env = append $env (dict "name" $name "value" ($value | toString)) }}
+          {{- end }}
+          {{- $env = concat $env (.Values.extraEnv | default list) }}
+          {{- with $env }}
+          env:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.envFrom }}
+          envFrom:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           ports:
-            - name: identd
-              containerPort: 113
             - name: web
-              containerPort: 9000
-          volumeMounts:
-            - name: thelounge-volume
-              mountPath: /var/opt/thelounge
+              containerPort: {{ include "app.containerPort" . }}
+              protocol: TCP
+          {{- with .Values.probes.liveness }}
+          {{- if .enabled }}
+          livenessProbe:
+            tcpSocket:
+              port: web
+            initialDelaySeconds: {{ .initialDelaySeconds }}
+            periodSeconds: {{ .periodSeconds }}
+            timeoutSeconds: {{ .timeoutSeconds }}
+            failureThreshold: {{ .failureThreshold }}
+          {{- end }}
+          {{- end }}
+          {{- with .Values.probes.readiness }}
+          {{- if .enabled }}
+          readinessProbe:
+            tcpSocket:
+              port: web
+            initialDelaySeconds: {{ .initialDelaySeconds }}
+            periodSeconds: {{ .periodSeconds }}
+            timeoutSeconds: {{ .timeoutSeconds }}
+            failureThreshold: {{ .failureThreshold }}
+          {{- end }}
+          {{- end }}
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            {{- if .Values.storage.enabled }}
+            - name: config
+              mountPath: {{ .Values.storage.mountPath }}
+            {{- end }}
+            - name: config-file
+              mountPath: {{ .Values.storage.mountPath }}/config.js
+              subPath: config.js
+              readOnly: true
+            {{- with .Values.volumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+      volumes:
+        {{- if .Values.storage.enabled }}
+        - name: config
+          persistentVolumeClaim:
+            claimName: {{ $claimName }}
+        {{- end }}
+        - name: config-file
+          configMap:
+            name: {{ include "app.fullname" . }}
+        {{- with .Values.volumes }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

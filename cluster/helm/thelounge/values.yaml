@@ -1,73 +1,165 @@
 # Default values for thelounge.
-# This is a YAML-formatted file.
-# Declare variables to be passed into your templates.
+# Built against the contract in docs/charts/README.md; the reference shape is
+# cluster/helm/media-stack/autobrr.
 
 replicaCount: 1
 
+# A ReadWriteOnce config claim cannot attach to two pods at once.
+strategy: Recreate
+
 image:
   repository: thelounge/thelounge
+  # Pinned. Renovate manages this tag and Chart.yaml's appVersion follows it.
+  tag: "4.5.2"
   pullPolicy: IfNotPresent
-  # Overrides the image tag whose default is the chart appVersion.
-  tag: 4.5.2
 
 imagePullSecrets: []
-nameOverride: ""
-fullnameOverride: ""
 
 serviceAccount:
-  # Specifies whether a service account should be created
-  create: false
-  # Annotations to add to the service account
-  annotations: {}
-  # The name of the service account to use.
-  # If not set and create is true, a name is generated using the fullname template
+  create: true
+  # The app talks to IRC networks, never to the Kubernetes API.
+  automount: false
   name: ""
+  annotations: {}
 
 podAnnotations: {}
+podLabels: {}
 
-podSecurityContext: {}
-  # fsGroup: 2000
+# `fsGroup` is deliberately absent: the config claim is local-path, which is
+# hostPath-backed, and the kubelet does not apply fsGroup ownership there.
+podSecurityContext:
+  seccompProfile:
+    type: RuntimeDefault
 
-securityContext: {}
-  # capabilities:
-  #   drop:
-  #   - ALL
-  # readOnlyRootFilesystem: true
-  # runAsNonRoot: true
-  # runAsUser: 1000
+# The image's Dockerfile ends with `USER node:node`, which is UID/GID 1000 on
+# node:22-alpine. The claim is new, and a new local-path volume is created
+# writable (0777, owned 1100:1100) by the provisioner, so 1000 can write it.
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
 
-ingress:
+service:
+  type: ClusterIP
+  # The only listener. identd (113) is disabled in config.js, so it is not
+  # exposed: a Service port with nothing behind it is a false promise.
+  port: 9000
+
+container:
+  # Defaults to service.port. Set only when the container listens elsewhere.
+  port: null
+
+ingressRoute:
   enabled: true
-  className: ""
+  # `traefik.containo.us/v1alpha1` is what the cluster's Traefik 2.x watches;
+  # flip to `traefik.io/v1alpha1` when the v3 upgrade lands.
+  apiVersion: traefik.containo.us/v1alpha1
+  entryPoints:
+    - websecure
+  host: thelounge.kub.home.ashudev.com
+  pathPrefix: /
+  # Plain-HTTP mirror that redirects to the router above.
+  redirectToHttps: true
+  # The gate. The Lounge has no OIDC support of its own, so authentik stands in
+  # front of it with a forward-auth provider (`cluster/helm/authentik/files/
+  # app-thelounge.yaml`). The app still asks for its own account afterwards:
+  # forward auth proves the browser passed authentik, it does not carry an
+  # identity into The Lounge.
+  #
+  # `lan-only` stays first: the hostname answers whether or not it resolves
+  # publicly, so the allowlist is the boundary and authentik is the credential.
+  middlewares:
+    - name: lan-only
+      namespace: kube-system
+    - name: authentik-forwardauth
+      namespace: kube-system
+    - name: security
+      namespace: kube-system
+  labels: {}
   annotations: {}
+  tls:
+    enabled: true
+    # No secretName: the resolver issues the certificate for the public-resolvable
+    # `*.kub.home.ashudev.com` name, as this route always has.
+    secretName: ""
+    certResolver: myresolver
+    # Rendered by templates/tls-option.yaml into this namespace. Not the shared
+    # `kube-system/internal-tls`: that policy belongs to the `*.kub.local` names.
+    options: thelounge-tlsoption
 
-resources:
-  limits:
-    memory: 128Mi
-  requests:
-    cpu: 1m
-    memory: 64Mi
-  # We usually recommend not to specify default resources and to leave this as a conscious
-  # choice for the user. This also increases chances charts run on environments with little
-  # resources, such as Minikube. If you do want to specify resources, uncomment the following
-  # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
-  # limits:
-  #   cpu: 100m
-  #   memory: 128Mi
-  # requests:
-  #   cpu: 100m
-  #   memory: 128Mi
+storage:
+  enabled: true
+  existingClaim: ""
+  className: local-path
+  accessModes:
+    - ReadWriteOnce
+  # Config, not media: users.json, logs and per-network settings. The claim this
+  # replaces was 20 GiB, which was a guess. 128Mi is the house standard.
+  size: 128Mi
+  # The image's THELOUNGE_HOME. `config.js` is mounted over it as a read-only
+  # file from the chart's ConfigMap; everything else in the directory is state.
+  mountPath: /var/opt/thelounge
 
-nodeSelector: {}
+# Non-secret settings, inline in the pod template so a change rolls the pod.
+env:
+  TZ: "Europe/Paris"
+  # No log-level variable exists. The Lounges's console output follows its own
+  # `debug` object in config.js (both keys are off), so it prints errors and
+  # warnings only; the per-network logs live in the claim. There is no `info`
+  # firehose to turn down, and no knob to turn down anyway — recorded as debt in
+  # the chart README.
+
+# Variables sourced from a Secret, as `{ name, valueFrom }`. The Lounge
+# currently needs none: it has no LDAP or OIDC client of its own.
+extraEnv: []
+
+# Bulk `envFrom` sources, usually `secretRef`.
+envFrom: []
+
+# Extra volumes and mounts, rendered verbatim.
+volumes: []
+volumeMounts: []
+
+nodeSelector:
+  # Every workload is pinned to a named node, and its local-path claim lands
+  # there. nuc0 is the general catalogue; The Lounge holds no media.
+  kubernetes.io/hostname: nuc0
 
 tolerations: []
 
-affinity:
-  nodeAffinity:
-    requiredDuringSchedulingIgnoredDuringExecution:
-      nodeSelectorTerms:
-        - matchExpressions:
-            - key: node-type
-              operator: In
-              values:
-                - general
+affinity: {}
+
+# Measured on the pod that ran 98 days on nuc0, from Prometheus
+# (`container_memory_working_set_bytes`, 30 days of samples):
+#   memory   p95 76Mi, peak 81Mi
+#   CPU      peak 2m
+# Request = p95, limit = peak x 1.5, rounded up. No CPU limit: a limit throttles
+# startup and protects nothing (docs/reference/chart-sizing.md).
+resources:
+  requests:
+    cpu: 10m
+    memory: 80Mi
+  limits:
+    memory: 128Mi
+
+# The Lounge has no health endpoint: `/` returns the login page, which is a
+# 200 whether or not an IRC network is reachable. A TCP connect on the web port
+# is therefore the honest liveness check — the process is either listening or
+# it is not.
+#
+# Readiness is off on purpose. There is no endpoint that reports the state of
+# the IRC connections, and a TCP readiness check would ask the same question as
+# liveness, so it would only delay a restart. See the chart README.
+probes:
+  liveness:
+    enabled: true
+    initialDelaySeconds: 10
+    periodSeconds: 30
+    timeoutSeconds: 5
+    failureThreshold: 3
+  readiness:
+    enabled: false

@@ -1,0 +1,72 @@
+{{- if .Values.ingressRoute.enabled }}
+{{- /* The object names keep the `-public` suffix they have carried since the
+route was created: renaming them would churn Argo's object tree for no reader's
+benefit. They are not public — `lan-only` is the first middleware. */}}
+apiVersion: {{ .Values.ingressRoute.apiVersion }}
+kind: IngressRoute
+metadata:
+  name: {{ include "app.fullname" . }}-public
+  labels:
+    {{- include "app.labels" . | nindent 4 }}
+    {{- with .Values.ingressRoute.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- with .Values.ingressRoute.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  entryPoints:
+    {{- toYaml .Values.ingressRoute.entryPoints | nindent 4 }}
+  routes:
+    - kind: Rule
+      match: Host(`{{ .Values.ingressRoute.host }}`){{- if ne .Values.ingressRoute.pathPrefix "/" }} && PathPrefix(`{{ .Values.ingressRoute.pathPrefix }}`){{- end }}
+      {{- with .Values.ingressRoute.middlewares }}
+      middlewares:
+        {{- range . }}
+        - name: {{ printf "%s-%s@kubernetescrd" .namespace .name }}
+        {{- end }}
+      {{- end }}
+      services:
+        - name: {{ include "app.fullname" . }}
+          port: {{ .Values.service.port }}
+  {{- if .Values.ingressRoute.tls.enabled }}
+  tls:
+    {{- with .Values.ingressRoute.tls.secretName }}
+    secretName: {{ . }}
+    {{- end }}
+    {{- with .Values.ingressRoute.tls.certResolver }}
+    certResolver: {{ . }}
+    {{- end }}
+    {{- with .Values.ingressRoute.tls.options }}
+    options:
+      name: {{ . }}
+    {{- end }}
+  {{- end }}
+{{- if .Values.ingressRoute.redirectToHttps }}
+---
+{{- /* Plain-HTTP mirror: `lan-only` and the redirect, nothing else, so an
+off-LAN request is refused here rather than sent through authentik first. */}}
+apiVersion: {{ .Values.ingressRoute.apiVersion }}
+kind: IngressRoute
+metadata:
+  name: {{ include "app.fullname" . }}-public-redirect
+  labels:
+    {{- include "app.labels" . | nindent 4 }}
+    {{- with .Values.ingressRoute.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  entryPoints:
+    - web
+  routes:
+    - kind: Rule
+      match: Host(`{{ .Values.ingressRoute.host }}`){{- if ne .Values.ingressRoute.pathPrefix "/" }} && PathPrefix(`{{ .Values.ingressRoute.pathPrefix }}`){{- end }}
+      middlewares:
+        - name: kube-system-lan-only@kubernetescrd
+        - name: kube-system-redirect-to-https@kubernetescrd
+      services:
+        - name: {{ include "app.fullname" . }}
+          port: {{ .Values.service.port }}
+{{- end }}
+{{- end }}
