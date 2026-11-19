@@ -196,37 +196,21 @@ are in `docs/superpowers/plans/`.
    SQLite file on an etcd cluster; the NAS script backs up a MinIO path deleted in July 2024; and the
    k3s and NAS hosts have had a daily cron since 2024 pointing at a script that was never deployed
    to them. See `docs/audit/ansible-hosts.md`.
-4. **Longhorn is gone, but it cannot bury its dead.** The driver, its StorageClasses, its custom
-   resources and the `longhorn-system` namespace are gone, and every application that was on it runs on
-   `local-path` or one of the NFS classes. What survives is **one** PV and its PVC, `syncthing-conf`,
-   stuck `Terminating` since 2026-08-28. Twenty-three of the twenty-six volumes and three
-   of the six claims were cleared on 2026-11-18; `n8n`, `thelounge` and `syncthing` were rebuilt on
-   `local-path` on 2026-11-19, and the first two were cleared the same day. The namespace is gone.
-   Those contents were
-   abandoned by decision, and **they will never clear on their own**: the finalizers name the
-   Longhorn CSI driver
-   (`external-attacher/driver-longhorn-io`), which no longer exists to remove itself, and the bound
-   ones also carry `kubernetes.io/pv-protection` until the matching claim goes. `syncthing` no longer
-   mounts its claim — only the dead pod `syncthing-75bc646f6b-b8cmq` does, and the running app is on
-   `syncthing-config`.
+4. **Longhorn is gone, and its dead are buried (resolved 2026-11-19).** The driver, its
+   StorageClasses, its custom resources, the `longhorn-system` namespace, all twenty-six volumes and
+   all six claims are gone, and every application that was on it runs on `local-path` or one of the
+   NFS classes. Twenty-three volumes and three claims were cleared on 2026-11-18; `n8n`, `thelounge`
+   and `syncthing` were rebuilt on `local-path` on 2026-11-19 and the last three claims followed that
+   day, `syncthing-conf` last. Their contents were abandoned by decision.
 
-   The inventory and the exact patch loop are in
-   [`docs/cleanup/longhorn-disposition.md`](docs/cleanup/longhorn-disposition.md). Clearing one is a
-   hand operation — the pod holding the mount cannot finish its own teardown, because the driver that
-   would unmount it is gone, so force-delete it first, then patch the finalizers away, PV first and
-   then the PVC:
+   The inventory, the dispositions and the patch loop that was used are kept as the record in
+   [`docs/cleanup/longhorn-disposition.md`](docs/cleanup/longhorn-disposition.md).
 
-   ```bash
-   kubectl -n <namespace> delete pod <pod> --force --grace-period=0
-   kubectl patch pv <name> -p '{"metadata":{"finalizers":null}}' --type=merge
-   kubectl -n <namespace> patch pvc <name> -p '{"metadata":{"finalizers":null}}' --type=merge
-   ```
-
-   Never run that loop over the four externally-provisioned NFS volumes that also show a deletion
-   timestamp (`pv-traefik-nfs`, `pv-plex-media`, `pv-stash-nfs-nfs-stash`,
+   **One trap survives the cleanup.** Four externally-provisioned NFS volumes still show a deletion
+   timestamp and must never be patched (`pv-traefik-nfs`, `pv-plex-media`, `pv-stash-nfs-nfs-stash`,
    `pv-nfs-qbittorrent-download-nfs-subdir-external-provisioner`): they are live, and `pv-traefik-nfs`
-   holds the ACME certificate store. The rest are inert: they hold no data, block nothing, and show up
-   only in `kubectl get pv` and in namespace health counts.
+   holds the ACME certificate store. They appear in `kubectl get pv` and in namespace health counts
+   and nothing else; that is expected, not a leftover to clear.
 
 **Broken references**
 
