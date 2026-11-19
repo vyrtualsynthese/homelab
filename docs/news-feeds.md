@@ -18,9 +18,18 @@ rebuilt instance gets the same set by replaying the file.
 ```bash
 python3 hack/freshrss_sync.py apply --dry-run   # show what would change
 python3 hack/freshrss_sync.py apply             # subscribe what the file lists
-python3 hack/freshrss_sync.py check             # exit 1 when instance and file disagree
+python3 hack/freshrss_sync.py check             # exit 1 when a listed feed is missing
 python3 hack/freshrss_sync.py verify            # fetch every URL, print items and newest date
 ```
+
+`check` fails only on a feed the file lists and the instance lacks. A feed the instance holds and
+the file does not is printed with a `-` and does not fail the run: `apply` never removes one without
+`--prune`, so an extra is not drift.
+
+`verify` fetches every URL and exits 1 when a native feed answers badly; an XPath feed reports
+`NOT-XML` by design, because the raw URL is a page.
+
+`FRESHRSS_BASE` overrides the instance URL, which is how a scratch instance gets tested.
 
 `apply` never unsubscribes anything unless `--prune` is passed, so a feed added by hand in the web
 UI survives a replay. Credentials are `FRESHRSS_USER` and `FRESHRSS_API_PASSWORD` from
@@ -32,7 +41,7 @@ UI survives a replay. Credentials are `FRESHRSS_USER` and `FRESHRSS_API_PASSWORD
 ## The feeds
 
 *Native* means the publisher ships RSS or Atom. *XPath* means FreshRSS reads the official page and
-picks items out of the HTML, which needs the selectors below set once by hand.
+picks items out of the HTML, with selectors that travel in the OPML (see "XPath selectors").
 
 ### Jeux
 
@@ -62,11 +71,11 @@ project may resume; it costs one line in the folder.
 | Feed | How | URL |
 |---|---|---|
 | Mistral | native | `https://mistral.ai/news/rss` |
+| Anthropic / Claude | XPath | `https://www.anthropic.com/news` |
 
 Mistral's feed answers `content-type: text/plain` and the instance refuses it at creation (HTTP
 500 from `subscription/edit`), while the same URL parses fine from a workstation. See "Refused by
 the instance" below.
-| Anthropic / Claude | XPath | `https://www.anthropic.com/news` |
 
 OpenAI and ChatGPT were dropped by decision, not for lack of a feed: its official feed carries 1413
 items of backlog.

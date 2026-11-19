@@ -1,4 +1,5 @@
 import importlib.util
+import urllib.parse
 import json
 import pathlib
 import sys
@@ -79,10 +80,11 @@ class PlanTests(unittest.TestCase):
 
 class FakeTransport:
     def __init__(self, token="TOK", subs=None, login_body="SID=x\nLSID=y\nAuth=AUTH123\n",
-                 edit_status=200):
+                 edit_status=200, refuse=()):
         self.calls = []
-        self.token, self.subs, self.login_body = token, subs or [], login_body
+        self.token, self.subs, self.login_body = token, list(subs or []), login_body
         self.edit_status = edit_status
+        self.refuse = set(refuse)
 
     def __call__(self, method, url, headers=None, data=None):
         self.calls.append((method, url, headers or {}, data))
@@ -96,7 +98,21 @@ class FakeTransport:
                  "categories": [{"label": c}]}
                 for i, (u, t, c) in enumerate(self.subs)]})
         if "/subscription/edit" in url:
-            return self.edit_status, "OK" if self.edit_status == 200 else ""
+            form = urllib.parse.parse_qs((data or b"").decode())
+            feed_url = form.get("s", [""])[0].removeprefix("feed/")
+            label = form.get("a", ["user/-/label/Uncategorized"])[0].rsplit("/", 1)[-1]
+            action = form.get("ac", [""])[0]
+            if action == "subscribe" and any(s[0] == feed_url for s in self.subs):
+                return 500, ""
+            if self.edit_status != 200 or feed_url in self.refuse:
+                return 500, ""
+            action = form.get("ac", [""])[0]
+            if action == "unsubscribe":
+                self.subs = [s for s in self.subs if s[0] != feed_url]
+            else:
+                self.subs = [s for s in self.subs if s[0] != feed_url]
+                self.subs.append((feed_url, feed_url, label))
+            return 200, "OK"
         return 404, ""
 
 
@@ -152,6 +168,15 @@ class ClientTests(unittest.TestCase):
         c = mod.Client(base="https://x.test", user="u", password="p", transport=t)
         with self.assertRaises(RuntimeError):
             c.subscribe(mod.Feed(category="Dev", title="B", url="https://b.test/feed"))
+
+    def test_moving_a_feed_between_categories_uses_edit_not_a_second_subscribe(self):
+        """A duplicate subscribe answers 500 and changes nothing; ac=edit is what moves a label."""
+        t = FakeTransport(subs=[("https://a.test/feed", "A", "Dev")])
+        c = mod.Client(base="https://x.test", user="u", password="p", transport=t)
+        c.subscribe(mod.Feed(category="Jeux", title="A", url="https://a.test/feed"))
+        edit = [call for call in t.calls if "/subscription/edit" in call[1]][-1]
+        self.assertIn("ac=edit", edit[3].decode())
+        self.assertEqual(t.subs[0][2], "Jeux")
 
 
 class CliTests(unittest.TestCase):
@@ -209,3 +234,28 @@ class CliTests(unittest.TestCase):
         rows = mod.verify([mod.Feed(category="Boutiques", title="KBDfans",
                                     url="https://kbdfans.test/x.atom")], transport)
         self.assertEqual(rows, [("HTTP429", "KBDfans", 0, "")])
+
+    def test_apply_reports_a_refused_feed_and_still_subscribes_the_rest(self):
+        t = FakeTransport(subs=[], refuse=("https://mistral.ai/news/rss",))
+        code = mod.main(["apply"], transport=t, env=self.ENV)
+        self.assertEqual(code, 1)
+        bodies = b"".join(c[3] or b"" for c in t.calls if b"ac=subscribe" in (c[3] or b""))
+        self.assertIn(b"lobste.rs", bodies)
+
+    def test_verify_exits_one_when_a_feed_answers_badly(self):
+        rss = (b'<?xml version="1.0"?><rss><channel><title>t</title>'
+               b'<item><title>a</title></item></channel></rss>')
+
+        def transport(method, url, headers=None, data=None):
+            if "guildwars2" in url:
+                return 500, ""
+            return 200, rss.decode()
+        self.assertEqual(mod.main(["verify"], transport=transport, env={}), 1)
+
+    def test_verify_exits_zero_when_every_fetch_answers(self):
+        rss = (b'<?xml version="1.0"?><rss><channel><title>t</title>'
+               b'<item><title>a</title></item></channel></rss>')
+
+        def transport(method, url, headers=None, data=None):
+            return 200, rss.decode()
+        self.assertEqual(mod.main(["verify"], transport=transport, env={}), 0)
