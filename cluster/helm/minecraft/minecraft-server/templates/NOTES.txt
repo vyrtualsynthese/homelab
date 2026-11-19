@@ -2,8 +2,10 @@ The Minecraft server is deliberately not running: the Deployment renders with
 replicas: 0 until the anti-cheat, anti-grief and backup work lands.
 
 The world claim {{ include "app.dataClaimName" . }} does not bind until a pod uses
-it, so a first start is also when the volume is created. The world is new; the
-pre-Longhorn world is gone.
+it, so a first start is also when the volume is created. Until then the
+PersistentVolumeClaim is Pending and ArgoCD shows this app as Progressing — that
+is expected while replicas is 0, not drift. The world is new; the pre-Longhorn
+world is gone.
 
 To start it, set replicaCount to 1 in values.yaml and let the chart sync. Watch
 the first boot: the startup probe gives it ten minutes, and downloading the pinned
