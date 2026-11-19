@@ -19,6 +19,9 @@ All notable changes to this repository. The format follows
   access and folders are granted per person.
 - FreshRSS signs in through authentik with its own OIDC session rather than the forward-auth
   middleware, and runs the official `freshrss/freshrss` image with its data at `/config/data`.
+- The Longhorn cleanup is closed: no volume, claim, StorageClass, namespace or custom resource
+  remains. The disposition page is kept as the record of what was removed, and the chart comments
+  that named a Terminating claim to explain a claim name now describe that as history.
 - The feed set is `hack/freshrss/feeds.opml`, and `hack/freshrss_sync.py` keeps the instance matching
   it. A feed the instance holds twice — same address with and without `#force_feed` — is now reported
   as an extra instead of hiding behind the first row.
