@@ -69,6 +69,11 @@ move to: the upgrade is packaging.
 - **A changed `fullnameOverride`.** PV, PVC, ServiceAccount, ClusterRole and provisioner name all
   derive from it. A drift creates a second claim with a new PV and leaves the running pods mounted on
   the orphan.
+- **A missing `nameOverride`.** The Deployment's `app:` selector comes from the chart name, and a
+  selector is immutable. Four of today's charts carry their own name, so their live selector reads
+  `app: plex-media`, `app: nfs-syncthing`, `app: traefik-nfs` and `app: nfs-stash` — not
+  `app: nfs-subdir-external-provisioner`, which is what the subchart would render. Without the
+  override the sync fails on four releases with `field is immutable`.
 - **`syncPolicy.automated` in an Application file** (AGENTS.md §7.1).
 - Editing `cluster/helm/nfs/provisioner/charts/` — it is a build artifact, ignored by git.
 - Clearing a `Terminating` PV whose claim a pod still mounts.
@@ -85,21 +90,24 @@ move to: the upgrade is packaging.
 
 `fullname` is the string the chart's helper resolves to; it names the Deployment, ServiceAccount,
 ClusterRole, ClusterRoleBinding, the PV (`pv-<fullname>`) and the PVC (`pvc-<fullname>`). The
-provisioner name defaults to `cluster.local/<fullname>`, which the StorageClass records.
+provisioner name defaults to `cluster.local/<fullname>`, which the StorageClass records. `nameOverride`
+pins the `app:` label and the Deployment selector to what the cluster already carries.
 
-| Export (NAS path) | Application = release | Namespace | `fullnameOverride` | StorageClass | Mounted by |
-|---|---|---|---|---|---|
-| `/mnt/storage/nfs/plexmedia` | `plex-media` | media-stack | `plex-media` | `plex-media` | plex, sonarr, sonarr-anime, radarr, radarr-anime, bazarr, bazarr-anime, maintainerr |
-| `/mnt/storage/nfs/audio` | `nfs-audio` | media-stack | `nfs-audio-nfs-subdir-external-provisioner` | `nfs-audio` | plex, lidarr |
-| `/mnt/storage/nfs/books` | `books-media` | media-stack | `books-media-nfs-subdir-external-provisioner` | `nfs-books` | calibre-web-automated, kavita |
-| `/mnt/ultrafaststorage/nfs` | `nfs-qbittorrent-download` | media-stack | `nfs-qbittorrent-download-nfs-subdir-external-provisioner` | `qbittorrent-download` | qbittorrent, sonarr, sonarr-anime, radarr, radarr-anime, lidarr, unpackerr |
-| `/mnt/storage/nfs/qbittorrent-config` | `nfs-qbittorrent-config` | media-stack | `nfs-qbittorrent-config-nfs-subdir-external-provisioner` | `nfs-qbittorrent-config` | qbittorrent |
-| `/mnt/storage/nfs/syncthing` | `nfs-syncthing` | syncthing | `nfs-syncthing` | `nfs-syncthing` | syncthing (app and backup) |
-| `/mnt/storage/nfs/stash` | `stash-nfs` | media-stack | `stash-nfs-nfs-stash` | `stash-nfs` | nothing (kept on purpose) |
-| `/mnt/storage/traefik` | `traefik-nfs` | kube-system | `traefik-nfs` | `traefik-nfs` | traefik's ACME store |
+| Export (NAS path) | Application = release | Namespace | `nameOverride` | `fullnameOverride` | StorageClass | Mounted by |
+|---|---|---|---|---|---|---|
+| `/mnt/storage/nfs/plexmedia` | `plex-media` | media-stack | `plex-media` | `plex-media` | `plex-media` | plex, sonarr, sonarr-anime, radarr, radarr-anime, bazarr, bazarr-anime, maintainerr |
+| `/mnt/storage/nfs/audio` | `nfs-audio` | media-stack | `nfs-subdir-external-provisioner` | `nfs-audio-nfs-subdir-external-provisioner` | `nfs-audio` | plex, lidarr |
+| `/mnt/storage/nfs/books` | `books-media` | media-stack | `nfs-subdir-external-provisioner` | `books-media-nfs-subdir-external-provisioner` | `nfs-books` | calibre-web-automated, kavita |
+| `/mnt/ultrafaststorage/nfs` | `nfs-qbittorrent-download` | media-stack | `nfs-subdir-external-provisioner` | `nfs-qbittorrent-download-nfs-subdir-external-provisioner` | `qbittorrent-download` | qbittorrent, sonarr, sonarr-anime, radarr, radarr-anime, lidarr, unpackerr |
+| `/mnt/storage/nfs/qbittorrent-config` | `nfs-qbittorrent-config` | media-stack | `nfs-subdir-external-provisioner` | `nfs-qbittorrent-config-nfs-subdir-external-provisioner` | `nfs-qbittorrent-config` | qbittorrent |
+| `/mnt/storage/nfs/syncthing` | `nfs-syncthing` | syncthing | `nfs-syncthing` | `nfs-syncthing` | `nfs-syncthing` | syncthing (app and backup) |
+| `/mnt/storage/nfs/stash` | `stash-nfs` | media-stack | `nfs-stash` | `stash-nfs-nfs-stash` | `stash-nfs` | nothing (kept on purpose) |
+| `/mnt/storage/traefik` | `traefik-nfs` | kube-system | `traefik-nfs` | `traefik-nfs` | `traefik-nfs` | traefik's ACME store |
 
 Every value in the release and namespace columns stays as it is, because ArgoCD passes the
-Application name as the Helm release name and `fullnameOverride` pins the rest.
+Application name as the Helm release name and the two overrides pin the rest. The `nameOverride` values
+are the chart names in the vendored copies that the live selectors came from; the four that read
+`nfs-subdir-external-provisioner` need no override beyond the subchart's own name.
 
 ## The target shape
 
@@ -130,7 +138,7 @@ dependencies:
 `values.yaml` carries the settings all eight share, nested under the dependency's name: image,
 `strategyType: Recreate`, the server, the mount-option list, reclaim policies, `storageClass.create`,
 RBAC, resources and placement. A `values/<release>.yaml` adds only what differs — `nfs.path`,
-`fullnameOverride`, `storageClass.name`.
+`nameOverride`, `fullnameOverride`, `storageClass.name`.
 
 An Application becomes:
 
@@ -208,7 +216,8 @@ NAS no longer serves; `nfs-hdd` points at the same path as the `plex-media` expo
    `helm template <release> cluster/helm/nfs/provisioner -f values/<release>.yaml` must produce
    `Deployment/<release>`, `ServiceAccount`, `ClusterRole`, `ClusterRoleBinding`, `Role`, `RoleBinding`,
    `PersistentVolume/pv-<fullname>`, `PersistentVolumeClaim/pvc-<fullname>` and
-   `StorageClass/<class>`, with the names from the inventory table and no others.
+   `StorageClass/<class>`, with the names from the inventory table and no others. The Deployment's
+   selector must equal the live one, read from the read-only MCP before the rewrite.
 3. The repo's chart loop (AGENTS.md §6) and both reference checks, CRLF-safe.
 4. `hack/check-exposure.sh` — no route changes, so it must be unchanged.
 5. After the merge: every Application Synced/Healthy, all eight provisioner pods Running on
