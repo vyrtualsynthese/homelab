@@ -338,6 +338,15 @@ exporter and autobrr all use `http://qbittorrent:8080`. The log level is worse o
 qBittorrent has no verbosity setting at all, only file-logging on/off, so the chart sets nothing, and
 the VueTorrent installer's traps are recorded above its values block.
 
+2026-11-19: the installer stopped being able to fail the pod. It ran `set -eu` and a bare `wget`, so
+a first boot with no route to github.com — cold cluster, fresh claim, GitHub outage — kept the init
+container from finishing and the pod from ever starting, over a UI asset. Every step is now guarded:
+it logs the step that failed plus one line saying qBittorrent starts on its stock WebUI, and exits 0
+with `/config/ui` untouched, staging still staging-before-swapping. `apk` runs under `timeout 60` and
+`wget` under `-T 20`, so a blackholed address costs seconds rather than the kernel's retry budget.
+Tested by running the rendered script with stub `apk`/`wget` and real `unzip`: no network, download
+failure, staging failure with a working UI present, and the no-op restart.
+
 2026-11-19: the sidecar's `AllowedIPs` is `0.0.0.0/0`, and wg-quick's local-access rule only spares
 prefixes the pod's main table knows specifically — which is its own subnet and a default route. So
 every ClusterIP went into the tunnel, and the post-download hook to `cross-seed:2468` died after the

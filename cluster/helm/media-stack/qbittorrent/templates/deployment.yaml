@@ -125,30 +125,50 @@ spec:
             - sh
             - -c
             - |
-              set -eu
-              # A `v`-prefixed value is accepted too: the release tag carries one,
-              # the values file does not have to.
+              set -u
+              # The alternative UI is an asset; the torrent client is the workload.
+              # Nothing here may fail the pod: a cold cluster, a fresh claim or a
+              # GitHub outage used to turn an unreachable zip into a container that
+              # never starts. Every failure leaves /config/ui as it is, and
+              # qBittorrent boots on its stock WebUI -- which it does by itself, by
+              # writing WebUI\AlternativeUIEnabled=false to qBittorrent.conf, so
+              # the recovery command in values.yaml is what brings the UI back.
               want="${VUETORRENT_VERSION#v}"
               installed="$(cat /config/ui/version.txt 2>/dev/null || true)"
               if [ "$installed" = "$want" ]; then
                 echo "VueTorrent $want already installed, nothing to do"
                 exit 0
               fi
-              apk add --no-cache unzip >/dev/null
-              tmp="$(mktemp -d)"
+              give_up() {
+                echo "WARNING: $1"
+                echo "WARNING: VueTorrent $want not installed; qBittorrent starts on its stock WebUI"
+                exit 0
+              }
               url="https://github.com/${VUETORRENT_REPOSITORY}/releases/download/v${want}/vuetorrent.zip"
               echo "installing VueTorrent $want from $url"
-              wget -q -O "$tmp/vuetorrent.zip" "$url"
-              unzip -q "$tmp/vuetorrent.zip" -d "$tmp"
+              # Bounded, both of them: an address that drops packets would otherwise
+              # hold pod start for the kernel's full TCP retry budget.
+              timeout 60 apk add --no-cache unzip >/dev/null 2>&1 \
+                || give_up "cannot install unzip (no package repository reachable)"
+              tmp="$(mktemp -d)" || give_up "cannot create a temporary directory"
+              wget -q -T 20 -O "$tmp/vuetorrent.zip" "$url" || give_up "cannot download $url"
+              unzip -q "$tmp/vuetorrent.zip" -d "$tmp" || give_up "the download from $url is not a readable zip"
+              [ -d "$tmp/vuetorrent" ] || give_up "the zip from $url carries no vuetorrent/ directory"
               # Stage the new UI next to the old one and swap at the end: a failed
-              # download or a truncated zip leaves the working UI untouched.
+              # copy leaves the working UI untouched.
               rm -rf /config/ui.next
-              cp -a "$tmp/vuetorrent" /config/ui.next
+              cp -a "$tmp/vuetorrent" /config/ui.next \
+                || give_up "cannot stage the UI on the config claim"
               if [ -d /config/ui ]; then
                 rm -rf /config/ui.prev
-                mv /config/ui /config/ui.prev
+                mv /config/ui /config/ui.prev || give_up "cannot move the current UI aside"
               fi
-              mv /config/ui.next /config/ui
+              if ! mv /config/ui.next /config/ui; then
+                if [ -d /config/ui.prev ]; then
+                  mv /config/ui.prev /config/ui
+                fi
+                give_up "cannot move the staged UI into place; the previous UI is back"
+              fi
               rm -rf /config/ui.prev "$tmp"
               echo "VueTorrent $want installed"
           volumeMounts:
