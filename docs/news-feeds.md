@@ -1,7 +1,8 @@
 # News feeds
 
 FreshRSS at `https://freshrss.kub.home.ashudev.com` is the main news intake. This page describes the
-feed set, the sources that have no feed, and how to replay the list onto a rebuilt instance.
+feed set, the sources that have no feed, how much of each article you get, and how to replay the
+list onto a rebuilt instance.
 
 Two rules decide what is in the set:
 
@@ -153,6 +154,63 @@ Dangerous 57, Anthropic 26.
 These are the brittle part of the set. A page redesign breaks them silently, and `verify` reports
 `NOT-XML` for an XPath feed because the raw URL is HTML — that is expected, not a failure. Check
 the folder in the web UI instead.
+
+## Images and full articles
+
+Two settings decide how much of a story you see, and they are separate.
+
+**Thumbnails in the list** are a display preference of the account, not of the feed:
+*Configuration* → *Display* → *Show article thumbnails* (`topline_thumbnail` in the user config,
+one of `none`, `portrait`, `square`, `landscape`). It is on unless it was set to `none`; the
+default is to show them. No API reaches it, so it is the one setting on this page that is not in
+git.
+
+**The article body** is per feed: FreshRSS fetches the article page and replaces the feed's summary
+with the part of that page a CSS selector picks (a CSS selector is the rule a stylesheet uses to
+target one element — `.entry-content` means "the element carrying the `entry-content` class"). The
+selector travels in the OPML as `frss:cssFullContent`, so a rebuilt instance gets it from the file.
+
+Twelve feeds carry a selector, each checked against the newest article on 2026-11-19:
+
+| Feed | Selector | Text taken from one article |
+|---|---|---|
+| Guild Wars 2 | `#content` | 3.4 kB |
+| Discord blog | `article` | 6.9 kB |
+| Docker blog | `.entry-content` | 13.9 kB |
+| Kubernetes blog | `main` | 9.9 kB |
+| WSL2 | `.entry-content` | 10.0 kB |
+| Logseq blog | `article` | 10.4 kB |
+| Rise of Gunpla — new kits | `.entry-content` | 4.0 kB |
+| selfh.st | `article` | 8.4 kB |
+| Phoronix | `article` | 5.3 kB |
+| Final Fantasy XIV | `article` | 5.4 kB |
+| Elite Dangerous | `#content` | 34.0 kB |
+| Anthropic / Claude | `article` | 3.4 kB |
+
+What it costs: one extra request per new article, made by the pod, so the source sees the cluster's
+address rather than yours. What it breaks on: a redesign empties the article without an error, and
+`check` cannot see it — the API does not expose feed settings, so a broken selector looks like a
+feed with short entries. Check the reading view after a site redesign.
+
+Eight feeds carry a picture in the item already, so the list shows a thumbnail without a selector:
+Discord, Docker, Kubernetes, WSL2, Logseq, selfh.st, Simon Willison and Guild Wars 2. For the other
+five that have a selector — Phoronix, Rise of Gunpla, Final Fantasy XIV, Elite Dangerous and
+Anthropic — the selector is what brings the pictures, since the feed itself carries none.
+
+Five get nothing, and the reason is the source rather than a missing setting:
+
+| Feed | Why not |
+|---|---|
+| Steam | the items are store announcements, already the whole text, and 2 images across 20 items |
+| Star Citizen comm-link | the article is built by JavaScript, so the HTML the fetcher receives is empty |
+| Lobsters | the item is a link to someone else's site; fetching it would copy their page |
+| Hacker News | same |
+| Mistral, KBDfans ×2 | refused by the instance (see below), so there is no feed to attach a selector to |
+
+On the live instance the twelve feeds exist already, and the OPML import skips a feed it already
+holds. So the selectors reach a fresh instance through the import, but each existing feed needs
+*Subscription management* → the feed → *Retrieve full content* set once in the web UI. Deleting the
+feed and importing again is the other route, and the cheaper one when several need it at once.
 
 ## Refused by the instance
 
