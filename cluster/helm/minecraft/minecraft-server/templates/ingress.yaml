@@ -1,27 +1,20 @@
 {{- if .Values.ingress.enabled -}}
-{{- $fullName := include "mc.fullname" . -}}
-{{- $svcPort := .Values.service.clusterip.port -}}
-{{- if and .Values.ingress.className (not (semverCompare ">=1.18-0" .Capabilities.KubeVersion.GitVersion)) }}
-  {{- if not (hasKey .Values.ingress.annotations "kubernetes.io/ingress.class") }}
-  {{- $_ := set .Values.ingress.annotations "kubernetes.io/ingress.class" .Values.ingress.className}}
-  {{- end }}
-{{- end }}
 apiVersion: traefik.containo.us/v1alpha1
 kind: IngressRouteTCP
 metadata:
-  name: {{ $fullName }}-public
+  name: {{ include "app.fullname" . }}-public
   labels:
-    {{- include "mc.labels" . | nindent 4 }}
+    {{- include "app.labels" . | nindent 4 }}
   {{- with .Values.ingress.annotations }}
   annotations:
     {{- toYaml . | nindent 4 }}
   {{- end }}
 spec:
   entryPoints:
-    - mc
+    - {{ .Values.ingress.entryPoint }}
   routes:
-    - match: HostSNI(`*`)
+    - match: {{ .Values.ingress.match }}
       services:
-        - name: minecraft-server
+        - name: {{ include "app.fullname" . }}
           port: mc
 {{- end }}

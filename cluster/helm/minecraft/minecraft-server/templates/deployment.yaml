@@ -1,16 +1,16 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "mc.fullname" . }}
+  name: {{ include "app.fullname" . }}
   labels:
-    {{- include "mc.labels" . | nindent 4 }}
+    {{- include "app.labels" . | nindent 4 }}
 spec:
-  replicas: 1
+  replicas: {{ .Values.replicaCount }}
+  strategy:
+    type: {{ .Values.strategy }}
   selector:
     matchLabels:
-      {{- include "mc.selectorLabels" . | nindent 6 }}
-  strategy:
-    type: Recreate
+      {{- include "app.selectorLabels" . | nindent 6 }}
   template:
     metadata:
       {{- with .Values.podAnnotations }}
@@ -18,17 +18,17 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       labels:
-        {{- include "mc.selectorLabels" . | nindent 8 }}
+        {{- include "app.labels" . | nindent 8 }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
     spec:
-      volumes:
-        - name: minecraft-server-volume
-          persistentVolumeClaim:
-            claimName: minecraft-lh-2
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      serviceAccountName: {{ include "mc.serviceAccountName" . }}
+      serviceAccountName: {{ include "app.serviceAccountName" . }}
+      automountServiceAccountToken: false
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:
@@ -38,86 +38,71 @@ spec:
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           env:
-            - name: EULA
-              value: "TRUE"
-            - name: ONLINE_MODE
-              value: "TRUE"
-            - name: OPS
-              value: "vsynthese"
-            - name: MAX_WORLD_SIZE
-              value: "12500"
-            - name: VERSION
-              value: "26.2"
-            - name: ANNOUNCE_PLAYER_ACHIEVEMENTS
-              value: "FALSE"
-            - name: MODE
-              value: "survival"
-            - name: PVP
-              value: "TRUE"
-            - name: SERVER_NAME
-              value: "ashulab"
-            - name: VIEW_DISTANCE
-              value: "10"
-            - name: TYPE
-              value: "PAPER"
-            - name: MAX_TICK_TIME
-              value: "-1"
-            #- name: ENABLE_JMX
-            #  value: "true"
-            #- name: JMX_HOST
-            #  value: "0.0.0.0"
-            - name: USE_MEOWICE_FLAGS
-              value: "true"
-            - name: USE_MEOWICE_GRAALVM_FLAGS
-              value: "true"
-            - name: STOP_SERVER_ANNOUNCE_DELAY
-              value: "30"
-            - name: ENABLE_ROLLING_LOGS
-              value: "true"
-            - name: INIT_MEMORY
-              value: "1G"
-            - name: MAX_MEMORY
-              value: "6G"
-            - name: MODS
-              value: "https://github.com/Multiverse/Multiverse-Core/releases/download/5.8.1/multiverse-core-5.8.1.jar,https://github.com/Multiverse/Multiverse-Portals/releases/download/5.3.0/multiverse-portals-5.3.0.jar,https://github.com/Multiverse/Multiverse-NetherPortals/releases/download/5.1.0/multiverse-netherportals-5.1.0.jar,https://download.luckperms.net/1668/bukkit/loader/LuckPerms-Bukkit-5.5.81.jar"
+            {{- range $name, $value := .Values.env }}
+            - name: {{ $name }}
+              value: {{ $value | toString | quote }}
+            {{- end }}
           ports:
             - name: mc
-              containerPort: 25565
-            - name: jmx
-              containerPort: 7091
+              containerPort: {{ .Values.service.port }}
+              protocol: TCP
+          # The game port is the only honest health signal: it opens when the world
+          # is loaded, and it stays closed while the server is generating one. The
+          # startup budget is ten minutes, which a first load of a pregenerated
+          # world clears and a fresh world may not — watch the first start.
           startupProbe:
             tcpSocket:
-               port: 25565
-            failureThreshold: 10
+              port: mc
             periodSeconds: 60
+            timeoutSeconds: 10
+            failureThreshold: 10
+          # Readiness is the same connect test, and deliberately so: a Minecraft
+          # server has no separate dependency that can fail while the JVM stays up.
+          # There is no second endpoint to ask, so sharing is the honest choice.
+          readinessProbe:
+            tcpSocket:
+              port: mc
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
           livenessProbe:
             tcpSocket:
-              port: 25565
-            periodSeconds: 60
-            failureThreshold: 10
-            successThreshold: 1
+              port: mc
+            periodSeconds: 30
             timeoutSeconds: 10
+            failureThreshold: 6
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
           volumeMounts:
-            - name: minecraft-server-volume
-              mountPath: /data
-        - name: {{ .Chart.Name }}-exporter
+            - name: data
+              mountPath: {{ .Values.storage.mountPath }}
+        - name: {{ .Chart.Name }}-monitor
           securityContext:
-                              {{- toYaml .Values.securityContext | nindent 12 }}
+            {{- toYaml .Values.monitor.securityContext | nindent 12 }}
           image: "{{ .Values.monitor.image.repository }}:{{ .Values.monitor.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.monitor.image.pullPolicy }}
+          args:
+            - export-for-prometheus
           env:
             - name: EXPORT_SERVERS
+              # Same pod network namespace as the server.
               value: "127.0.0.1"
           ports:
             - name: monitor
               containerPort: 8080
-          args:
-            - export-for-prometheus
+              protocol: TCP
           resources:
-                              {{- toYaml .Values.resources | nindent 12 }}
-
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              memory: 64Mi
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ include "app.dataClaimName" . }}
+      # The server saves the world on SIGTERM; ten minutes is the budget the old
+      # chart already gave it.
       terminationGracePeriodSeconds: 600
       {{- with .Values.nodeSelector }}
       nodeSelector:
