@@ -34,7 +34,7 @@ its `docker` manager bumps the tag; nothing in `cluster/argocd/` names a version
 
 `03:00 Europe/Paris`, one run at a time (`Forbid`), one retry then fail (`backoffLimit: 1`), a 90
 minute deadline, and three days of finished Jobs. The slot is after the *arrs' midnight housekeeping
-and before the 04:30 database dump; a run takes about 40 minutes. The timezone is explicit because
+and before the 04:30 database dump; a run has taken 18 to 39 minutes. The timezone is explicit because
 the CronJob controller runs in UTC and an unqualified schedule changes its local meaning with the
 offset.
 
@@ -48,7 +48,7 @@ account cannot read Secrets, so the token's type, scopes and expiry are recorded
 ## Why the log level stays at the default
 
 The chart contract asks for `warning` and above. Renovate is the exception, the way `recyclarr` is:
-its nightly log is about 100 lines and 4.5 KB, it is the only per-repository record of what was
+its nightly log is 300-350 lines and about 16 KB, it is the only per-repository record of what was
 scanned, and nothing else counts it. A run that reports the repositories it found is the evidence
 the repair was verified against; `warning` would leave an empty log on success.
 
