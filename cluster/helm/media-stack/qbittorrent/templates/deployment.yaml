@@ -73,6 +73,45 @@ spec:
             - name: downloads
               mountPath: {{ .Values.storage.downloads.mountPath }}
         {{- end }}
+        {{- with .Values.vpn.clusterRoutes }}
+        # The sidecar sends everything but the pod's own subnet into the tunnel,
+        # which is what a kill switch is meant to do and also what swallowed
+        # ClusterIP traffic. This puts the cluster ranges into the pod's main
+        # table first: the sidecar's `suppress_prefixlength 0` rule prefers a
+        # specific route there, so those ranges never enter the tunnel.
+        # NET_ADMIN only — no privileged flag, no device, no host namespace.
+        - name: vpn-cluster-routes
+          image: {{ $.Values.vpn.routeFix.image }}
+          securityContext:
+            runAsUser: 0
+            runAsGroup: 0
+            allowPrivilegeEscalation: false
+            capabilities:
+              add:
+                - NET_ADMIN
+              drop:
+                - ALL
+          resources:
+            {{- toYaml $.Values.vpn.routeFix.resources | nindent 12 }}
+          command:
+            - sh
+            - -c
+            - |
+              gw="$(ip route show default | awk '/^default/ {for (i=1;i<=NF;i++) if ($i=="via") {print $(i+1); exit}}')"
+              if [ -z "$gw" ]; then
+                echo "no default gateway to route through, leaving the table alone"
+                exit 0
+              fi
+              for cidr in {{ join " " . }}; do
+                # A CNI that already routes the range is not an error: say so
+                # and keep the pod booting rather than fail on "File exists".
+                if ip route add "$cidr" via "$gw" 2>/dev/null; then
+                  echo "added $cidr via $gw"
+                else
+                  echo "$cidr is already routed, leaving it"
+                fi
+              done
+        {{- end }}
         - name: init-qbittorrent
           image: "alpine:{{ .Values.vueTorrent.initTag }}"
           resources:
