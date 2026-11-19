@@ -23,16 +23,16 @@ python3 hack/freshrss_sync.py check             # exit 1 when a listed feed is m
 python3 hack/freshrss_sync.py verify            # fetch every URL, print items and newest date
 ```
 
+`apply` and `check` also cover the per-feed settings the file carries: the CSS selector that pulls
+the whole article, and an XPath feed's selectors and kind. Those live behind the web login, so they
+are only checked when `FRESHRSS_WEB_PASSWORD` is set; without it the run prints `settings: not
+checked` and does the rest. See "The settings the API cannot reach" below.
+
 `check` fails on three things: a feed the file lists and the instance lacks, a listed feed sitting in
 another category, and a listed feed whose content selectors differ from the file. A feed the instance
 holds and the file does not is printed with a `-` and does not fail the run: `apply` never removes
 one without `--prune`, so an extra is not drift. Exit codes are `0` clean, `1` any of the above, `2`
 credentials missing or refused — which includes the web login.
-
-`apply` and `check` also cover the per-feed settings the file carries: the CSS selector that pulls
-the whole article, and an XPath feed's selectors and kind. Those live behind the web login, so they
-are only checked when `FRESHRSS_WEB_PASSWORD` is set; without it the run prints `settings: not
-checked` and does the rest. See "The settings the API cannot reach" below.
 
 `verify` fetches every URL and exits 1 when a native feed answers badly; an XPath feed reports
 `NOT-XML` by design, because the raw URL is a page.
@@ -81,11 +81,9 @@ project may resume; it costs one line in the folder.
 | Mistral | native | `https://mistral.ai/news/rss` |
 | Anthropic / Claude | XPath | `https://www.anthropic.com/news` |
 
-Mistral serves its feed as `content-type: text/plain`, so the instance parses it only when the
-subscription URL carries FreshRSS's force-feed marker: the file asks for
-`https://mistral.ai/news/rss#force_feed`, and that is the subscription the instance holds. The API
-also refuses the plain URL at creation (HTTP 500 from `subscription/edit`). See "Feeds the API will
-not take" below.
+Mistral's feed answers `content-type: text/plain` and the instance refuses it at creation (HTTP
+500 from `subscription/edit`), while the same URL parses fine from a workstation. See "Refused by
+the instance" below.
 
 OpenAI and ChatGPT were dropped by decision, not for lack of a feed: its official feed carries 1413
 items of backlog.
@@ -101,10 +99,8 @@ items of backlog.
 The KBDfans collections rate-limit (HTTP 429) when polled hard. FreshRSS polls on a schedule, which
 is far below the limit; a `verify` run that reports 429 is the runner asking too often.
 
-The API refuses both KBDfans collections at creation: `subscription/edit` answers 500 while the same
-URLs answer 200 from a workstation. The OPML import subscribes them anyway, and as of 2026-11-19
-the instance holds them with no entries — the fetch from the pod is what fails. See "Feeds the API
-will not take" below.
+Both KBDfans collections are refused by the instance today: `subscription/edit` answers 500 while
+the same URLs answer 200 from a workstation. See "Refused by the instance" below.
 
 An old Rise of Gunpla kit coming back in stock is **not** covered. FreshRSS drops an item it
 already holds, so the same product cannot fire twice. That needs a change tracker, which is a
@@ -144,16 +140,12 @@ that trade is worth it.
 ## XPath selectors
 
 The four XPath feeds carry their selectors in the OPML itself, as `frss:xPathItem*` attributes —
-the format FreshRSS writes on export and reads on import. So they are configured by one import, not
-by four visits to the feed settings.
+the format FreshRSS writes on export and reads on import.
 
-As of 2026-11-19 all four are on the live instance. The check is the instance's own export
-(`/reader/api/0/subscription/export`): it carries the same four `frss:xPathItem` and twelve
-`frss:cssFullContent` attributes as the file, feed for feed.
-
-An import skips a feed the instance already holds, so it cannot change one that exists, and the API
-refuses to subscribe a page that is not a feed: the import is how these feeds are *created*, never
-how they are edited. A selector changed in the file therefore reaches the instance through the sync:
+Importing the file is how the feeds are *created*: *Subscription management* → *Import / export* →
+*OPML* → choose `hack/freshrss/feeds.opml` → *Upload*. That route skips a feed the instance already
+holds, so it cannot change one that exists, and the API refuses to subscribe a page that is not a
+feed. A selector edited in the file therefore reaches the instance through the sync:
 
 ```bash
 python3 hack/freshrss_sync.py check    # exit 1 when a feed's selectors differ from the file
@@ -161,10 +153,9 @@ python3 hack/freshrss_sync.py apply    # write the file's values onto the feeds
 ```
 
 `apply` reads each feed's settings page, resubmits that same form with the file's values, and reads
-it again to confirm; `check` does the read without the write. A feed whose kind is wrong for the file
-— created as RSS when the file says XPath — is repaired in the same pass, because the kind and the
-XPath fields are submitted together. Unsubscribing a feed and importing again is still the route for
-a fresh install, and the fallback when the instance is on a version this tool cannot drive.
+it again to confirm; `check` does the read without the write. A feed whose kind is wrong for the
+file — created as RSS when the file says XPath — is repaired in the same pass, because the kind and
+the XPath fields are submitted together.
 
 | Feed | Item | Title | Link |
 |---|---|---|---|
@@ -173,8 +164,8 @@ a fresh install, and the fallback when the instance is on a version this tool ca
 | Elite Dangerous | `//a[starts-with(@href,'/news/')]` | `normalize-space(.)` | `@href` |
 | Anthropic / Claude | `//a[starts-with(@href,'/news/')]` | `normalize-space(.)` | `@href` |
 
-Entries the instance held on 2026-11-19: Star Citizen 9, Final Fantasy XIV 9, Elite Dangerous 42,
-Anthropic 48.
+Counts observed on 2026-11-19, from the live pages: Star Citizen 9, Final Fantasy XIV 9, Elite
+Dangerous 57, Anthropic 26.
 
 These are the brittle part of the set. A page redesign breaks them silently, and `verify` reports
 `NOT-XML` for an XPath feed because the raw URL is HTML — that is expected, not a failure. `check`
@@ -223,7 +214,7 @@ Discord, Docker, Kubernetes, WSL2, Logseq, selfh.st, Simon Willison and Guild Wa
 five that have a selector — Phoronix, Rise of Gunpla, Final Fantasy XIV, Elite Dangerous and
 Anthropic — the selector is what brings the pictures, since the feed itself carries none.
 
-Four get nothing, and the reason is the source rather than a missing setting:
+Five get nothing, and the reason is the source rather than a missing setting:
 
 | Feed | Why not |
 |---|---|
@@ -231,57 +222,48 @@ Four get nothing, and the reason is the source rather than a missing setting:
 | Star Citizen comm-link | the article is built by JavaScript, so the HTML the fetcher receives is empty |
 | Lobsters | the item is a link to someone else's site; fetching it would copy their page |
 | Hacker News | same |
+| Mistral, KBDfans ×2 | refused by the instance (see below), so there is no feed to attach a selector to |
 
-Mistral and the two KBDfans collections carry no selector either, for a different reason: the file
-gives them none. Mistral arrives as the publisher's summary; the KBDfans feeds have delivered
-nothing so far (see "Feeds the API will not take").
-
-The twelve are on the live instance as of 2026-11-19. They got there by unsubscribing the ten feeds
-the instance held and importing the file once — an import cannot change a feed it already holds. The
-evidence is the instance's own export, which carries the twelve `frss:cssFullContent` values, and
-the newest entries themselves: between 1 kB and 80 kB of the publisher's HTML, where the feed alone
-carries a summary. From here on a change to a selector is one `apply`, not an unsubscribe and an
-import.
+On the live instance the twelve feeds exist already, and the OPML import skips a feed it already
+holds, so the selectors do not reach them that way. `apply` is what writes them: it puts the file's
+`frss:cssFullContent` into the feed's *Retrieve full content* field, so a selector edited in the
+file reaches the feed on the next run instead of needing a delete and a re-import.
 
 ## The settings the API cannot reach
 
 The GReader API carries no feed attributes, so nothing in it sets an XPath selector or the CSS
 selector of the article body. The web form that does is a plain POST at
-`?c=subscription&a=feed&id=<feed>`, and two things stand in front of it that the API password does
-not open: the form login, a bcrypt challenge where the browser hashes the password against the salt
-half of the stored hash and then hashes that plus a one-time nonce from the session, and a `_csrf`
-token that every POST must carry, the login included.
+`?c=subscription&a=feed&id=<feed>`, and the only thing in front of it is the form login: a bcrypt
+challenge, where the browser hashes the password against the salt half of the stored hash and then
+hashes that plus a one-time nonce from the session. The API password does not pass it, and nor does
+a bearer token.
 
-`hack/freshrss_sync.py` repeats both, which needs the `bcrypt` package — `pip install bcrypt`, the
-one dependency the script does not get from the standard library. It reads the feed id from the
-subscription list, opens the feed's settings page, resubmits the form with the file's values, and
-reads the page back; a field that still differs is printed and the run exits 1, and so is a field
-the submit changed that the file never asked for. Without `FRESHRSS_WEB_PASSWORD` the settings half
-is skipped and the subscription half behaves as before.
+`hack/freshrss_sync.py` repeats that challenge, which needs the `bcrypt` package —
+`pip install bcrypt`, the one dependency the script does not get from the standard library. It
+reads the feed id from the subscription list, opens the feed's settings page, resubmits the form
+with the file's values, and reads the page back to confirm; a field that still differs is printed
+and the run exits 1. Without `FRESHRSS_WEB_PASSWORD` the settings half is skipped and the
+subscription half behaves as before.
 
-## Feeds the API will not take
+## Refused by the instance
 
-Three feeds are in the file and `subscription/edit` answers HTTP 500 for each, while the same URLs
-return a valid feed from a workstation. The OPML import subscribes all three anyway, because it does
-not ask the instance to fetch the URL first, so the feeds exist and the open question is whether
-they deliver.
+Three feeds are in the list and in the OPML, and the instance will not take them: `subscription/edit`
+answers HTTP 500 for each while the same URLs return a valid feed from a workstation on 2026-11-19.
 
-| Feed | URL | State on 2026-11-19 |
+| Feed | URL | Observed |
 |---|---|---|
-| Mistral | `https://mistral.ai/news/rss#force_feed` | 94 entries as the publisher's summary; the plain URL delivered nothing, the marker is what changed it |
-| KBDfans — new arrivals | `https://kbdfans.com/collections/new-arrival.atom` | subscribed, zero entries after a refresh run |
+| Mistral | `https://mistral.ai/news/rss` | 94 items from a workstation; served as `text/plain`; instance answers 500 |
+| KBDfans — new arrivals | `https://kbdfans.com/collections/new-arrival.atom` | 200 from a workstation; instance answers 500 |
 | KBDfans — restock | `https://kbdfans.com/collections/restock.atom` | same |
 
-`check` passes on all three: the file asks for them and the instance holds them. It cannot see that
-the two KBDfans feeds are silent.
-
-What was ruled out for KBDfans: rate limiting (the URLs answered 200 from a workstation at the time
-of the retry) and a typo (the URLs are the ones verified in the design). What is still unchecked is
-the pod's own log, because the read-only ServiceAccount cannot exec into it.
+`check` reports them as missing, which is the truth: the file asks for them and the instance does
+not hold them. What was ruled out: rate limiting (KBDfans answered 200 at the time of the retry) and
+a typo (the URLs are the ones verified in the design). What was not checked: the pod's own log,
+because the read-only ServiceAccount cannot exec into it.
 
 Next step when someone has cluster access: read
-`/config/www/freshrss/data/users/<user>/log.txt` in the `news` namespace for the fetch error, then
-set the per-feed user agent or the feed type in the UI accordingly.
+`/config/www/freshrss/data/users/<user>/log.txt` in the `news` namespace for the 500, then set the
+per-feed user agent or the feed type in the UI accordingly.
 
 ## Categories
 
