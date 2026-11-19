@@ -1,14 +1,26 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<opml version="2.0">
+<opml version="2.0" xmlns:frss="https://freshrss.org/opml">
   <head><title>AshuLab FreshRSS feed set</title></head>
   <body>
     <outline text="Jeux" title="Jeux">
       <outline type="rss" text="Guild Wars 2" title="Guild Wars 2" xmlUrl="https://www.guildwars2.com/en/feed/"/>
       <outline type="rss" text="Steam" title="Steam" xmlUrl="https://store.steampowered.com/feeds/news.xml?l=english"/>
       <outline type="rss" text="Discord blog" title="Discord blog" xmlUrl="https://discord.com/blog/rss.xml"/>
-      <outline type="rss" text="Star Citizen comm-link" title="Star Citizen comm-link" kind="xpath" htmlUrl="https://robertsspaceindustries.com/comm-link"/>
-      <outline type="rss" text="Final Fantasy XIV" title="Final Fantasy XIV" kind="xpath" htmlUrl="https://na.finalfantasyxiv.com/lodestone/news/"/>
-      <outline type="rss" text="Elite Dangerous" title="Elite Dangerous" kind="xpath" htmlUrl="https://www.elitedangerous.com/news"/>
+      <outline type="HTML+XPath" text="Star Citizen comm-link" title="Star Citizen comm-link"
+               xmlUrl="https://robertsspaceindustries.com/comm-link" htmlUrl="https://robertsspaceindustries.com/comm-link"
+               frss:xPathItem="//a[contains(@href,'/comm-link/transmission/')]"
+               frss:xPathItemTitle="normalize-space(.)"
+               frss:xPathItemUri="@href"/>
+      <outline type="HTML+XPath" text="Final Fantasy XIV" title="Final Fantasy XIV"
+               xmlUrl="https://na.finalfantasyxiv.com/lodestone/news/" htmlUrl="https://na.finalfantasyxiv.com/lodestone/news/"
+               frss:xPathItem="//a[contains(@href,'/lodestone/news/detail/')]"
+               frss:xPathItemTitle="normalize-space(.)"
+               frss:xPathItemUri="@href"/>
+      <outline type="HTML+XPath" text="Elite Dangerous" title="Elite Dangerous"
+               xmlUrl="https://www.elitedangerous.com/news" htmlUrl="https://www.elitedangerous.com/news"
+               frss:xPathItem="//a[starts-with(@href,'/news/')]"
+               frss:xPathItemTitle="normalize-space(.)"
+               frss:xPathItemUri="@href"/>
     </outline>
     <outline text="Dev" title="Dev">
       <outline type="rss" text="Docker blog" title="Docker blog" xmlUrl="https://www.docker.com/blog/feed/"/>
@@ -18,7 +30,11 @@
     </outline>
     <outline text="IA" title="IA">
       <outline type="rss" text="Mistral" title="Mistral" xmlUrl="https://mistral.ai/news/rss"/>
-      <outline type="rss" text="Anthropic / Claude" title="Anthropic / Claude" kind="xpath" htmlUrl="https://www.anthropic.com/news"/>
+      <outline type="HTML+XPath" text="Anthropic / Claude" title="Anthropic / Claude"
+               xmlUrl="https://www.anthropic.com/news" htmlUrl="https://www.anthropic.com/news"
+               frss:xPathItem="//a[starts-with(@href,'/news/')]"
+               frss:xPathItemTitle="normalize-space(.)"
+               frss:xPathItemUri="@href"/>
     </outline>
     <outline text="Boutiques" title="Boutiques">
       <outline type="rss" text="Rise of Gunpla — new kits" title="Rise of Gunpla — new kits" xmlUrl="https://riseofgunpla.com/feed?post_type=product"/>
