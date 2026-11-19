@@ -151,7 +151,7 @@ Working, on the old chart shape. This is the queue for the chart work, not a def
 | `firefly` | firefly | 3/3 | OutOfSync; now on the `Bound` claim `firefly-config-2` |
 | `guacamole` | guacamole | 2/2 | OutOfSync |
 | `linkstack` | linkstack | 1/1 | **Borrowed volume**; `latest` tag |
-| `n8n` | n8n | 1/1 | **Borrowed volume**; OutOfSync |
+| `n8n` | n8n | 1/1 | **Borrowed volume** at the snapshot; rebuilt on `local-path` on 2026-11-19 |
 | `syncthing` | syncthing | 1/1 | **Borrowed volume**; OutOfSync |
 | `thelounge` | thelounge | 1/1 | **Borrowed volume**; OutOfSync |
 | `local-path` | default | 1/1 | OutOfSync; provisioner settings matter to every claim |
@@ -182,7 +182,8 @@ still attached and the deletion is blocked by a finalizer no driver can remove a
 The consequence matters for W0, the volume-cleanup workstream: clearing those finalizers **stops
 these apps and destroys their config**. Do not treat "1/1 ready" as "safe" for them. Twelve
 claims were stuck `Terminating` at the snapshot, not the nine the previous page recorded; `firefly`
-has since moved to a `Bound` claim and left this list. `kubectl get pvc -A` shows the current set.
+has since moved to a `Bound` claim and left this list, and `n8n` followed on 2026-11-19 when it was
+rebuilt on `local-path`. `kubectl get pvc -A` shows the current set.
 
 ## ArgoCD cannot compare (2)
 

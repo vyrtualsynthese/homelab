@@ -8,10 +8,11 @@ The storage driver and its custom resources are already uninstalled, so nothing 
 objects on its own: their finalizers name controllers that no longer exist.
 
 > **Where this stands.** The operator ran phases 1, 3 and 4 on 2026-11-18. Twenty-three volumes and
-> three claims were cleared, and `longhorn-system` is gone. **What remains is the three claims of
-> phase 2** — `n8n-2`, `syncthing-conf`, `thelounge-volume` — which stay until those three
-> applications are rebuilt off Longhorn. The tables below are the inventory taken before that run,
-> kept as the record of what was removed.
+> three claims were cleared, and `longhorn-system` is gone. `n8n` was rebuilt on `local-path` on
+> 2026-11-19, and its claim and volume followed the same day. **What remains is the two claims of
+> phase 2** — `syncthing-conf` and `thelounge-volume` — which stay until those two applications are
+> rebuilt off Longhorn. The tables below are the inventory taken before that run, kept as the record
+> of what was removed.
 
 > **Agents cannot run these steps.** The agent's cluster access is read-only and shell `kubectl` is
 > denied, so every cluster-side command here is for the operator. Repo-side items are already merged.
@@ -40,10 +41,14 @@ it is safe once the volumes are gone.
 | `syncthing/syncthing-conf` | 1Gi | `syncthing-75bc646f6b-b8cmq`, **Running** since 2026-08-13 | **no** |
 | `thelounge/thelounge-volume` | 20Gi | `thelounge-7ff76784d7-z8fmb`, **Running** since 2026-08-13 | **no** |
 
-The last three are still serving reads and writes from the mount the kubelet made before the failure.
+The last three were still serving reads and writes from the mount the kubelet made before the failure.
 Deleting the claim object does not stop the running process, but the application loses its volume on
 its next restart and will not start again. They are rebuilt on `local-path` first (Wave A), then
 their claims can go in the same way as the first three.
+
+`n8n` was rebuilt that way on 2026-11-19. Its old pod could not finish its own teardown — the
+unmount needs the driver that no longer exists — so it was force-deleted, then the volume was
+patched and the claim disappeared with it. `syncthing` and `thelounge` are the two left.
 
 AGENTS.md §7.4 said until 2026-11-18 that every application had been rebuilt. It had not: n8n,
 syncthing and thelounge were never migrated, and nothing else mounts a Longhorn claim. §7.4 says so
@@ -97,7 +102,7 @@ The plan calls this list "eleven", but its own table and this one both hold ten.
 | calibre | rebuilt in Wave A | rebuilt as Calibre-Web Automated on `local-path` |
 | firefly | rebuilt in Wave A | retired 2026-11-18 |
 | linkstack | rebuilt in Wave A | retired 2026-11-18 |
-| n8n | rebuilt in Wave A | **not yet rolled**: the chart creates `n8n-config` on `local-path`, and the live pod still mounts `n8n-2` until the next sync |
+| n8n | rebuilt in Wave A | rebuilt 2026-11-19: pod 1/1 on `n8n-config` (`local-path`), old claim and volume cleared |
 | syncthing | rebuilt in Wave A | **not rebuilt**, still on `syncthing-conf` |
 | thelounge | rebuilt in Wave A | **not rebuilt**, still on `thelounge-volume` |
 | pgadmin | rebuilt in Wave A | rebuilt on `local-path` |
@@ -147,13 +152,15 @@ kubectl get pv filebrowser-config filebrowser-db-2 prometheus-data 2>&1
 kubectl get pvc -A | grep longhorn
 ```
 
-The second command prints only the three claims of phase 2.
+The second command prints only the two claims of phase 2.
 
-### Phase 2 — the three claims still in use: deferred
+### Phase 2 — the two claims still in use: deferred
 
-`n8n-2`, `syncthing-conf` and `thelounge-volume` are mounted by running pods. Do not patch them
+`syncthing-conf` and `thelounge-volume` are mounted by running pods. Do not patch them
 here. Rebuild each application on `local-path` (Wave A), confirm the new pod runs on the new claim,
-then run the Phase 1 loop with those three names. Their PVs stay `Bound` until then, which is correct.
+force-delete the old pod (its teardown needs the driver that is gone), then run the Phase 1 loop with
+those two names. Their PVs stay `Bound` until then, which is correct. `n8n-2` was cleared this way on
+2026-11-19.
 
 ### Phase 3 — clear the twenty released volumes
 
@@ -188,9 +195,9 @@ kubectl get pvc -A | grep -ci longhorn
 kubectl get ns | grep -ci longhorn
 ```
 
-Expected: `3`, `3` and `0`. The two threes are the deferred claims of Phase 2 and their volumes —
-they stay until those applications are rebuilt. A `6` or `23` on either line means a phase did not
-run — `23` is what the volume count reads when phase 1 worked and phase 3 did not. A
+Expected: `2`, `2` and `0`. The two twos are the deferred claims of Phase 2 and their volumes —
+they stay until `syncthing` and `thelounge` are rebuilt. A `6` or `23` on either line means a phase
+did not run — `23` is what the volume count reads when phase 1 worked and phase 3 did not. A
 `1` on the last line is the terminating namespace still in the list; wait and re-run.
 
 ## Found on the way, outside this cleanup

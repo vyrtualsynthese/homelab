@@ -196,20 +196,24 @@ are in `docs/superpowers/plans/`.
    to them. See `docs/audit/ansible-hosts.md`.
 4. **Longhorn is gone, but it cannot bury its dead.** The driver, its StorageClasses, its custom
    resources and the `longhorn-system` namespace are gone, and every application that was on it runs on
-   `local-path` or one of the NFS classes — except three: **`n8n`, `syncthing` and `thelounge` still
-   mount their Longhorn claims** from before the failure. What survives is those three PVs and their
-   three PVCs, stuck `Terminating` since 2026-08-28. Twenty-three of the twenty-six volumes and three
-   of the six claims were cleared on 2026-11-18, and the namespace is gone. Their contents were
+   `local-path` or one of the NFS classes — except two: **`syncthing` and `thelounge` still mount
+   their Longhorn claims** from before the failure. What survives is those two PVs and their two
+   PVCs, stuck `Terminating` since 2026-08-28. Twenty-three of the twenty-six volumes and three
+   of the six claims were cleared on 2026-11-18; `n8n` was rebuilt on `local-path` and its claim and
+   volume cleared on 2026-11-19; the namespace is gone. Their contents were
    abandoned by decision, and **they will never clear on their own**: the finalizers name the
    Longhorn CSI driver
    (`external-attacher/driver-longhorn-io`), which no longer exists to remove itself, and the bound
    ones also carry `kubernetes.io/pv-protection` until the matching claim goes.
 
-   The inventory, the three claims that must wait for a rebuild, and the exact patch loop are in
+   The inventory, the two claims that must wait for a rebuild, and the exact patch loop are in
    [`docs/cleanup/longhorn-disposition.md`](docs/cleanup/longhorn-disposition.md). Clearing one is a
-   hand operation — patch the finalizers away, PV first and then the PVC:
+   hand operation — the pod holding the mount cannot finish its own teardown, because the driver that
+   would unmount it is gone, so force-delete it first, then patch the finalizers away, PV first and
+   then the PVC:
 
    ```bash
+   kubectl -n <namespace> delete pod <pod> --force --grace-period=0
    kubectl patch pv <name> -p '{"metadata":{"finalizers":null}}' --type=merge
    kubectl -n <namespace> patch pvc <name> -p '{"metadata":{"finalizers":null}}' --type=merge
    ```
