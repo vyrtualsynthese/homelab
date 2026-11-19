@@ -81,6 +81,12 @@ spec:
             # below is built around. FrankenPHP runs one process for the app.
             - name: PHP_MEMORY_LIMIT
               value: "128M"
+            # The entrypoint rewrites the image's user to these ids and chowns
+            # /uploads to it, then drops to it for migrations and the server.
+            - name: PUID
+              value: "1100"
+            - name: PGID
+              value: "1100"
           ports:
             - name: http
               containerPort: {{ .Values.app.service.port }}
