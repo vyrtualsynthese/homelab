@@ -2,5 +2,5 @@ apiVersion: v2
 name: freshrss
 description: FreshRSS — self-hosted RSS/Atom feed reader, with its config and database claim
 type: application
-version: 1.0.0
-appVersion: "1.30.4-ls332"
+version: 1.1.0
+appVersion: "1.30.4"

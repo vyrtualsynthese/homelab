@@ -5,7 +5,9 @@
 URL:
   https://{{ .Values.ingress.host }}/i/
 
-The route carries the LAN allowlist only: it answers from the LAN, nowhere else.
+The route carries the LAN allowlist only. The app asks authentik for the sign-in
+itself, so the first visitor is redirected there before the setup wizard runs.
+
 {{- else }}
 
 The IngressRoute is disabled. Reach it with a port-forward:
@@ -13,10 +15,11 @@ The IngressRoute is disabled. Reach it with a port-forward:
   kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "app.fullname" . }} {{ .Values.service.port }}:{{ .Values.service.port }}
 {{- end }}
 
-Configuration and the SQLite database live in the claim {{ include "app.configClaimName" . }}.
+Configuration and the SQLite database live under `{{ .Values.env.DATA_PATH }}` in the claim
+{{ include "app.configClaimName" . }}.
 {{- if not .Values.storage.existingClaim }}
 
 That claim is created by this chart and binds to the node the pod schedules on — the one in
-`nodeSelector` in values.yaml. On a fresh start it is empty: the install wizard creates the admin
-account and the database.
+`nodeSelector` in values.yaml. On a fresh data directory the install wizard creates the admin
+account after the authentik sign-in; the default user must be the exact OIDC identity.
 {{- end }}
