@@ -14,6 +14,12 @@ anti-cheat, no anti-grief plugin and no backup automation should not answer the
 internet. The remaining work is tracked on the board; set `replicaCount: 1` when
 it lands, and not before.
 
+While it is off, ArgoCD reports the Application as **Progressing**, not
+`Healthy`: the claim is `WaitForFirstConsumer`, so `minecraft-server-data` stays
+`Pending` until a pod uses it. That is the expected state of this chart, not
+drift — the Application is `Synced` against `develop`, and the Deployment is at
+0/0.
+
 The `IngressRouteTCP` is kept exactly as the live object has it — Traefik's `mc`
 entryPoint, `HostSNI(*)`, this chart's Service. At the router, `25565` must stay
 closed until the security work says otherwise. An HTTP `lan-only` middleware does
