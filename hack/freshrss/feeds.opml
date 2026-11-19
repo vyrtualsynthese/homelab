@@ -41,6 +41,7 @@
     </outline>
     <outline text="Boutiques" title="Boutiques">
       <outline type="rss" text="Rise of Gunpla — new kits" title="Rise of Gunpla — new kits" xmlUrl="https://riseofgunpla.com/feed?post_type=product" frss:cssFullContent=".entry-content"/>
+      <outline type="rss" text="KBDfans — new arrivals" title="KBDfans — new arrivals" xmlUrl="https://kbdfans.com/collections/new-arrival.atom" frss:ttl="21600"/>
     </outline>
     <outline text="Veille" title="Veille">
       <outline type="rss" text="selfh.st" title="selfh.st" xmlUrl="https://selfh.st/rss/" frss:cssFullContent="article"/>

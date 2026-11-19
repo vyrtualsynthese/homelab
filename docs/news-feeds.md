@@ -24,9 +24,10 @@ python3 hack/freshrss_sync.py verify            # fetch every URL, check each fu
 ```
 
 `apply` and `check` also cover the per-feed settings the file carries: the CSS selector that pulls
-the whole article, and an XPath feed's selectors and kind. Those live behind the web login, so they
-are only checked when `FRESHRSS_WEB_PASSWORD` is set; without it the run prints `settings: not
-checked` and does the rest. See "The settings the API cannot reach" below.
+the whole article, an XPath feed's selectors and kind, and a poll interval (`frss:ttl`, in seconds)
+where a host must not be asked often. Those live behind the web login, so they are only checked when
+`FRESHRSS_WEB_PASSWORD` is set; without it the run prints `settings: not checked` and does the rest.
+See "The settings the API cannot reach" below.
 
 `check` fails on three things: a feed the file lists and the instance lacks, a listed feed sitting in
 another category, and a listed feed whose content selectors differ from the file. A feed the instance
@@ -111,9 +112,12 @@ items of backlog.
 | Feed | How | URL |
 |---|---|---|
 | Rise of Gunpla — new kits | native | `https://riseofgunpla.com/feed?post_type=product` |
+| KBDfans — new arrivals | native | `https://kbdfans.com/collections/new-arrival.atom` |
 
-Two KBDfans collections — new arrivals and restock — were in the set until 2026-11-19 and left it:
-the instance cannot fetch them, for the client-fingerprint reason in "KBDfans: left out" below.
+KBDfans' *restock* collection was in the set until 2026-11-19 and stays out: it re-lists products
+coming back rather than new ones. The *new arrivals* collection is in, asked once every six hours
+because the shop limits how often one address may ask — see "KBDfans: one collection, polled
+rarely" below.
 
 An old Rise of Gunpla kit coming back in stock is **not** covered. FreshRSS drops an item it
 already holds, so the same product cannot fire twice. That needs a change tracker, which is a
@@ -295,8 +299,8 @@ subscription half behaves as before.
 
 Three feeds answered a blank HTTP 500 from `subscription/edit` while the same URLs return a valid
 feed from a workstation. The 500 was not a refusal: it is what the API answers when its own logger
-cannot write. Behind it are two different problems, one solved and one that cost the two KBDfans
-collections their place in the set.
+cannot write. Behind it are two different problems, one solved and one that keeps the KBDfans
+collection on a rare poll.
 
 ### What the empty 500 hid
 
@@ -324,34 +328,46 @@ the same URL parses on a workstation and delivered nothing here. FreshRSS's esca
 and the marker travels in the OPML, so a replay reproduces it. The subscription is
 `https://mistral.ai/news/rss#force_feed`, and it held 94 entries on 2026-11-19.
 
-### KBDfans: left out
+### KBDfans: one collection, polled rarely
 
-Both collections are valid Atom feeds and a workstation fetches them with `200`; the instance cannot
-have them. Cloudflare in front of kbdfans answers `429 local_rate_limited` — sometimes `403` — to the
-pod's requests, while the same request from a workstation on the same public IP is served `200`.
-The difference is the client, not the URL, the network or the polling cadence.
+Only the *new arrivals* collection is in the set; *restock* left it on 2026-11-19 because it re-lists
+products that are back, which is not what "new products" means here.
 
-Measured on 2026-11-19 from the pod, one request each, a minute apart:
+The feed itself is fine: a valid Atom feed of 25 entries, and a workstation fetches it with `200`.
+The instance's requests are the problem. Shopify answers `429` with the body `local_rate_limited` —
+its storefront limiter, which counts requests per client and per address — and the Cloudflare layer
+in front of the shop refuses a bare handshake outright. Neither is a permanent block, and both come
+and go by the minute.
 
-| Client | Answer |
-|---|---|
-| `curl` 8.23.0, the image's libcurl, which is what FreshRSS fetches with | `429 local_rate_limited` |
-| `openssl s_client`, same pod and same minute | `200 OK` |
+So the one lever the instance has is to ask less often: `frss:ttl="21600"` in the file sets the
+feed's *Do not automatically refresh more often than* field to six hours, and `apply` writes it.
+Left at the default the feed is asked on every refresh cycle, minutes apart, and nearly all of those
+are refused. The interval only starts to count once a poll has succeeded, so a feed that has never
+loaded keeps retrying on every cron run until one does. After a refusal FreshRSS also stores a
+25-minute per-domain backoff in `data/Retry-After/<domain>.txt` and logs
+`For that domain, will first retry after …`; a retry inside that window never reaches the site.
 
-That points at the TLS fingerprint (the handshake details a bot filter matches against a list of
-known clients) rather than a header: the per-feed user agent the feed settings offer, set to a
-Chrome string and tried against the live feed, did not change the answer, and no feed setting
-touches the TLS stack or the HTTP version. So the two collections left the set on 2026-11-19: the
-file no longer lists them and the two empty subscriptions were removed from the instance.
+Measured on 2026-11-19 from the workstation and the pod, alternating, one request each per round:
 
-Re-test when the image's curl changes. `lscr.io/linuxserver/freshrss` moves its libcurl with each
-base image, and a client fingerprint Cloudflare tolerates is the whole requirement — the feeds are
-fine.
+| Round | `openssl s_client`, raw HTTP/1.1 | `curl`, the client FreshRSS fetches with |
+|---|---|---|
+| 1 | `403` | `429` |
+| 2 | `403` | `200` |
+| 3 | `403` | `429` |
+| 4 | `403` | `429` |
+| 5 | `403` | `429` |
 
-One detail worth knowing if a shop feed is ever added again: after a `429` the instance stores a
-per-domain backoff (25 minutes by default) in `data/Retry-After/<domain>.txt` and refuses to touch
-that domain until it expires, logging `For that domain, will first retry after …`. A retry inside
-that window never reaches the site.
+The bare handshake is refused `403` every time — the bot filter rejects it on sight, so it was never
+the control it looked like. `curl` gets one `200` in five, from the same address in the same minutes:
+the refusal follows the address and the moment rather than the client. That is the opposite of what
+an earlier reading said, which compared the two clients a minute apart instead of together.
+
+A request therefore does get through, so a polled feed fills in; it just lags the shop by up to six
+hours. Until a poll lands the feed shows the red "This feed has encountered a problem" banner, which
+is the last refusal, not a lost subscription.
+
+Do not measure this feed by hand in a loop: each extra request takes a slot from the next refresh,
+and a workstation and the pod draw on the same address.
 
 ## Categories
 
