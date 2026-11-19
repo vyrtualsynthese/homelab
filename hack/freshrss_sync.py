@@ -3,14 +3,19 @@
 
 `hack/freshrss/feeds.opml` is the source of truth; the FreshRSS database is a cache of it.
 
-    apply [--prune] [--dry-run]   subscribe what the file lists, and nothing else
+    apply [--prune] [--dry-run]   subscribe what the file lists, set the content selectors it
+                                  carries, and clear a label it does not give the feed
     check                         exit 1 when the instance is missing a feed the file lists,
                                   or holds a feed whose content selectors differ from the file
     verify                        fetch every URL; exit 1 when a feed answers badly or a
                                   full-content selector extracts nothing
 
 `check` does not fail on a feed the instance holds and the file does not: apply never removes one
-without --prune, so an extra is not drift, and it is printed instead.
+without --prune, so an extra is not drift, and it is printed instead. The instance's own release feed
+is not an extra either, and an address is compared without its fragment.
+
+`apply` removes a label a listed feed still carries besides its category: the file gives one, and the
+instance can report several.
 
 Credentials come from FRESHRSS_USER and FRESHRSS_API_PASSWORD in the environment. The per-feed
 settings are behind the web login, which the API password does not open: set FRESHRSS_WEB_PASSWORD
@@ -64,6 +69,12 @@ SETTING_FIELDS = {
 }
 KIND_HTML_XPATH = 10
 
+# The instance subscribes itself to its own release feed. The file can never list it, so holding it
+# is not holding an extra: without this, `check` reports it as drift on every run.
+INSTANCE_FEEDS = (
+    "https://github.com/FreshRSS/FreshRSS/releases.atom",
+)
+
 
 @dataclass(frozen=True)
 class Feed:
@@ -75,12 +86,26 @@ class Feed:
 
 
 def normalize_url(url: str) -> str:
-    """Compare URLs the way a person does: one trailing slash is not a different feed."""
+    """Compare URLs the way a person does: no fragment, one trailing slash is not a different feed.
+
+    FreshRSS writes `#force_feed` at the end of an address to tell its parser to skip the
+    content-type check; the fragment is an instruction, not part of the feed's address.
+    """
+    address = url.split("#", 1)[0]
+    return address[:-1] if address.endswith("/") else address
+
+
+def distinct_key(url: str) -> str:
+    """What makes two OPML entries the same entry: the address as written, minus one trailing slash.
+
+    The fragment stays in the key. `#force_feed` changes what the parser does, so a file listing
+    both variants is asking for two different things, not repeating itself.
+    """
     return url[:-1] if url.endswith("/") else url
 
 
 def parse_opml(text: str) -> list[Feed]:
-    """Read an OPML export into feeds, collapsing duplicates on their normalized URL."""
+    """Read an OPML export into feeds, collapsing duplicates on the address as written."""
     root = ET.fromstring(text)
     feeds: list[Feed] = []
     seen: set[str] = set()
@@ -89,7 +114,7 @@ def parse_opml(text: str) -> list[Feed]:
         for child in node.findall("outline"):
             url = child.get("xmlUrl") or child.get("htmlUrl") or ""
             if url:
-                key = normalize_url(url)
+                key = distinct_key(url)
                 if key in seen:
                     continue
                 seen.add(key)
@@ -122,18 +147,25 @@ class Plan:
     to_subscribe: tuple[Feed, ...]
     to_prune: tuple[tuple[str, tuple[str, ...]], ...]
     unchanged: tuple[Feed, ...]
+    to_clean: tuple[tuple[Feed, str, tuple[str, ...]], ...] = ()
 
 
 def plan(local: Sequence[Feed], remote: Sequence[tuple[str, Sequence[str]]]) -> Plan:
     """Diff the file against what the instance reports, as (url, labels) pairs.
 
-    A feed can carry more than one label: re-subscribing with another `a=` adds one and keeps the
-    old, so the file's category counts as present when it is among them, not only when it is first.
+    A feed can report more than one label, and the file gives it exactly one: the category counts as
+    present when it is among them, not only when it is first. A feed that carries its category and
+    another label has that label to clean up: `to_clean` says which, with the address the instance
+    reported, and only for a feed already in place, so a removal can never leave a feed unlabelled.
 
     Entries whose id is not a URL are FreshRSS's own internal feeds (its release feed is `1`); the
-    file can never list them, so they are not drift and must never be pruned.
+    file can never list them, so they are not drift and must never be pruned. INSTANCE_FEEDS is the
+    other shape that answer takes: one of those feeds carries a real address.
     """
-    remote = [(url, tuple(labels)) for url, labels in remote if "://" in url]
+    own = {normalize_url(url) for url in INSTANCE_FEEDS}
+    remote = [(url, (labels,) if isinstance(labels, str) else tuple(labels))
+              for url, labels in remote
+              if "://" in url and normalize_url(url) not in own]
     by_url = {normalize_url(f.url): f for f in local}
     remote_by_url = {normalize_url(url): labels for url, labels in remote}
 
@@ -143,7 +175,17 @@ def plan(local: Sequence[Feed], remote: Sequence[tuple[str, Sequence[str]]]) -> 
     to_subscribe = tuple(f for f in local if not in_place(f))
     to_prune = tuple((url, labels) for url, labels in remote if normalize_url(url) not in by_url)
     unchanged = tuple(f for f in local if in_place(f))
-    return Plan(to_subscribe=to_subscribe, to_prune=to_prune, unchanged=unchanged)
+
+    def stale_labels(feed: Feed) -> tuple[str, tuple[str, ...]]:
+        url = next(url for url, _ in remote if normalize_url(url) == normalize_url(feed.url))
+        return url, tuple(label for label in remote_by_url[normalize_url(feed.url)]
+                          if label != feed.category)
+
+    to_clean = tuple((feed, *stale_labels(feed)) for feed in unchanged
+                     if any(label != feed.category
+                            for label in remote_by_url[normalize_url(feed.url)]))
+    return Plan(to_subscribe=to_subscribe, to_prune=to_prune, unchanged=unchanged,
+                to_clean=to_clean)
 
 
 class AuthError(Exception):
@@ -253,6 +295,22 @@ class Client:
         self._post("/reader/api/0/subscription/edit", {
             "ac": "unsubscribe",
             "s": "feed/" + url,
+            "T": self.token(),
+        })
+
+    def relabel(self, url: str, category: str, stale: str) -> None:
+        """Take one label off a feed the instance holds, naming the category the file wants.
+
+        `url` is the address the instance reported, which is not always the string the file writes.
+        The version measured here replaces a feed's categories on `a=`; other instances and earlier
+        labels leave more than one, so `r=` names the label to drop and the outcome does not rest on
+        which of the two the instance does.
+        """
+        self._post("/reader/api/0/subscription/edit", {
+            "ac": "edit",
+            "s": "feed/" + url,
+            "a": "user/-/label/" + category,
+            "r": "user/-/label/" + stale,
             "T": self.token(),
         })
 
@@ -817,7 +875,8 @@ def verify(feeds: Sequence[Feed],
 
 USAGE = """usage: freshrss_sync.py <apply|check|verify> [--prune] [--dry-run]
 
-  apply    subscribe every feed the OPML lists and set the content selectors it carries;
+  apply    subscribe every feed the OPML lists, set the content selectors it carries and
+           clear a label the file does not give that feed;
            --prune also drops the extras, --dry-run only prints
   check    exit 1 when the instance is missing a feed the file lists, or holds one whose
            content selectors differ from the file
@@ -935,6 +994,9 @@ def main(argv: list[str] | None = None,
         print(f"+ {feed.category}/{feed.title}")
     for url, labels in diff.to_prune:
         print(f"- {url} ({', '.join(labels)})")
+    removals = sum(len(stale) for _, _, stale in diff.to_clean)
+    if removals:
+        print(f"= {removals} stale label(s) to remove")
     xpath = [f for f in diff.to_subscribe if f.kind == "xpath"]
     print(f"{len(diff.to_subscribe)} to subscribe, {len(diff.to_prune)} extra, "
           f"{len(diff.unchanged)} unchanged, {len(xpath)} XPath (OPML import)")
@@ -948,6 +1010,9 @@ def main(argv: list[str] | None = None,
             return 2
         return 1 if (diff.to_subscribe or differing) else 0
     if "--dry-run" in flags:
+        for feed, _, stale in diff.to_clean:
+            for label in stale:
+                print(f"= {feed.category}/{feed.title}: label {label} would be removed")
         _, refused = settings_pass(apply=False)
         return 2 if refused else 0
 
@@ -960,9 +1025,22 @@ def main(argv: list[str] | None = None,
         except (RuntimeError, OSError) as error:
             print(f"! {feed.category}/{feed.title}: {error}", file=sys.stderr)
             failed.append(feed)
+    for feed, url, stale in diff.to_clean:
+        for label in stale:
+            try:
+                client.relabel(url, feed.category, label)
+                print(f"= {feed.category}/{feed.title}: label {label} removed")
+            except (RuntimeError, OSError) as error:
+                print(f"! {feed.category}/{feed.title}: label {label}: {error}",
+                      file=sys.stderr)
+                failed.append(feed)
     if "--prune" in flags:
         for url, _ in diff.to_prune:
-            client.unsubscribe(url)
+            try:
+                client.unsubscribe(url)
+            except (RuntimeError, OSError) as error:
+                print(f"! {url}: {error}", file=sys.stderr)
+                failed.append(url)
     differing, refused = settings_pass(apply=True)
     if refused:
         return 2

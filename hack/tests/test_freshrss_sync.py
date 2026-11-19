@@ -114,6 +114,20 @@ class ParseTests(unittest.TestCase):
         self.assertEqual(mod.normalize_url("https://a.test/feed/"), "https://a.test/feed")
         self.assertEqual(mod.normalize_url("https://a.test/f?x=1&y=2"), "https://a.test/f?x=1&y=2")
 
+    def test_normalize_url_carries_no_fragment(self):
+        """`#force_feed` is an instruction to the parser, not part of the address."""
+        self.assertEqual(
+            mod.normalize_url("https://mistral.ai/news/rss#force_feed"),
+            "https://mistral.ai/news/rss")
+
+    def test_two_opml_entries_differing_only_by_their_fragment_both_survive(self):
+        """`#force_feed` changes what the parser does, so it is not a duplicate entry."""
+        text = """<opml><body>
+          <outline text="IA"><outline type="rss" text="A" xmlUrl="https://a.test/rss"/></outline>
+          <outline text="IA"><outline type="rss" text="A force" xmlUrl="https://a.test/rss#force_feed"/></outline>
+        </body></opml>"""
+        self.assertEqual(len(mod.parse_opml(text)), 2)
+
 
 class PlanTests(unittest.TestCase):
     def feed(self, url="https://a.test/feed", cat="Dev", title="A"):
@@ -152,6 +166,50 @@ class PlanTests(unittest.TestCase):
                                      ("https://a.test/feed", ("Dev",))])
         self.assertEqual(p.to_prune, ())
 
+    def test_a_force_feed_subscription_matches_the_address_the_file_lists(self):
+        """The instance appends `#force_feed`; it is still the feed the file names."""
+        p = mod.plan([self.feed(url="https://a.test/rss")],
+                     [("https://a.test/rss#force_feed", ("Dev",))])
+        self.assertEqual(p.to_subscribe, ())
+        self.assertEqual(p.to_prune, ())
+
+    def test_freshrss_own_release_feed_is_not_reported_as_an_extra(self):
+        """The instance subscribes itself to its release feed; the file can never list it."""
+        p = mod.plan([], [("https://github.com/FreshRSS/FreshRSS/releases.atom",
+                           ("Uncategorized",))])
+        self.assertEqual(p.to_prune, ())
+
+    def test_a_feed_carrying_a_stale_label_asks_for_one_cleanup(self):
+        p = mod.plan([self.feed(cat="Dev")], [("https://a.test/feed", ("Ancien", "Dev"))])
+        self.assertEqual(p.to_clean, ((self.feed(cat="Dev"), "https://a.test/feed", ("Ancien",)),))
+
+    def test_a_cleanup_names_the_address_the_instance_reported(self):
+        """The instance may spell the address differently from the file; the edit goes to its own."""
+        p = mod.plan([self.feed(url="https://a.test/rss")],
+                     [("https://a.test/rss#force_feed", ("Dev", "Ancien"))])
+        self.assertEqual(p.to_clean, ((self.feed(url="https://a.test/rss"),
+                                       "https://a.test/rss#force_feed", ("Ancien",)),))
+
+    def test_a_feed_carrying_two_stale_labels_asks_for_both(self):
+        p = mod.plan([self.feed(cat="Dev")],
+                     [("https://a.test/feed", ("Ancien", "Autre", "Dev"))])
+        self.assertEqual(p.to_clean,
+                         ((self.feed(cat="Dev"), "https://a.test/feed", ("Ancien", "Autre")),))
+
+    def test_a_feed_carrying_only_its_label_asks_for_no_cleanup(self):
+        p = mod.plan([self.feed()], [("https://a.test/feed", ("Dev",))])
+        self.assertEqual(p.to_clean, ())
+
+    def test_the_same_label_reported_twice_asks_for_no_cleanup(self):
+        """The count says nothing when both labels are the file's; the labels themselves do."""
+        p = mod.plan([self.feed()], [("https://a.test/feed", ("Dev", "Dev"))])
+        self.assertEqual(p.to_clean, ())
+
+    def test_a_feed_whose_label_is_missing_is_not_cleaned_up_first(self):
+        """A feed to subscribe has no wanted label yet; moving it is the subscribe's job."""
+        p = mod.plan([self.feed(cat="Jeux")], [("https://a.test/feed", ("Dev", "Ancien"))])
+        self.assertEqual(p.to_clean, ())
+
 
 class FakeTransport:
     def __init__(self, token="TOK", subs=None, login_body="SID=x\nLSID=y\nAuth=AUTH123\n",
@@ -189,8 +247,11 @@ class FakeTransport:
             if action == "unsubscribe":
                 self.subs = [s for s in self.subs if s[0] != feed_url]
             else:
+                # The instance measured here replaces a feed's category on `a=` rather than adding
+                # to it; `r=` is what names a stale label for the versions that add. The request
+                # body is where a test sees both, so the fake models the measured replacement.
                 self.subs = [s for s in self.subs if s[0] != feed_url]
-                self.subs.append((feed_url, feed_url, label))
+                self.subs.append((feed_url, feed_url, (label,)))
             return 200, "OK"
         return 404, ""
 
@@ -266,7 +327,7 @@ class ClientTests(unittest.TestCase):
         c.subscribe(mod.Feed(category="Jeux", title="A", url="https://a.test/feed"))
         edit = [call for call in t.calls if "/subscription/edit" in call[1]][-1]
         self.assertIn("ac=edit", edit[3].decode())
-        self.assertEqual(t.subs[0][2], "Jeux")
+        self.assertEqual(t.subs[0][2], ("Jeux",))
 
     def test_a_feed_already_held_under_a_second_label_is_not_edited_again(self):
         """The 500 from a duplicate subscribe must not turn into a redundant ac=edit."""
@@ -274,6 +335,19 @@ class ClientTests(unittest.TestCase):
         c = mod.Client(base="https://x.test", user="u", password="p", transport=t)
         c.subscribe(mod.Feed(category="Dev", title="A", url="https://a.test/feed"))
         self.assertFalse([call for call in t.calls if b"ac=edit" in (call[3] or b"")])
+
+    def test_relabel_drops_the_stale_label_and_keeps_the_wanted_one_in_one_call(self):
+        """The address posted is the one the instance reported, which may not be the file's."""
+        t = FakeTransport(subs=[("https://a.test/feed", "A", ("Ancien", "Dev"))])
+        c = mod.Client(base="https://x.test", user="u", password="p", transport=t)
+        c.relabel("https://a.test/feed#force_feed", "Dev", "Ancien")
+        edits = [call for call in t.calls if b"ac=edit" in (call[3] or b"")]
+        self.assertEqual(len(edits), 1)
+        body = edits[0][3].decode()
+        self.assertIn("s=feed%2Fhttps%3A%2F%2Fa.test%2Ffeed%23force_feed", body)
+        self.assertIn("T=TOK", body)
+        self.assertIn("a=user%2F-%2Flabel%2FDev", body)
+        self.assertIn("r=user%2F-%2Flabel%2FAncien", body)
 
 
 class SelectorTests(unittest.TestCase):
@@ -327,6 +401,77 @@ class CliTests(unittest.TestCase):
         t = FakeTransport(subs=[("https://hand-added.test/feed", "Hand", "Dev")])
         mod.main(["apply", "--prune"], transport=t, env=self.ENV)
         self.assertTrue([c for c in t.calls if b"ac=unsubscribe" in (c[3] or b"")])
+
+    def test_apply_reports_a_refused_prune_and_still_prunes_the_rest(self):
+        t = FakeTransport(subs=[("https://bad.test/feed", "Bad", "Dev"),
+                                ("https://good.test/feed", "Good", "Dev")],
+                          refuse=("https://bad.test/feed",))
+        with contextlib.redirect_stderr(io.StringIO()) as errors:
+            code = mod.main(["apply", "--prune"], transport=t, env=self.ENV)
+        self.assertEqual(code, 1)
+        self.assertIn("bad.test", errors.getvalue())
+        self.assertNotIn("https://good.test/feed", [s[0] for s in t.subs])
+
+    def test_apply_cleans_the_stale_label_a_moved_feed_keeps(self):
+        """A feed can report a label besides its category; apply takes it back off."""
+        feeds = mod.parse_opml(OPML_PATH.read_text())
+        first = feeds[0]
+        stale = "Ancienne" if first.category != "Ancienne" else "Autre"
+        t = FakeTransport(subs=[(f.url, f.title, f.category) for f in feeds[1:]]
+                          + [(first.url, first.title, (first.category, stale))])
+        mod.main(["apply"], transport=t, env=self.ENV)
+        edits = [c for c in t.calls if b"ac=edit" in (c[3] or b"")]
+        self.assertEqual(len(edits), 1)
+        self.assertIn(f"r=user%2F-%2Flabel%2F{stale}".encode(), edits[0][3])
+        self.assertIn(f"a=user%2F-%2Flabel%2F{first.category}".encode(), edits[0][3])
+        held = next(s for s in t.subs if s[0] == first.url)
+        self.assertEqual(held[2], (first.category,))
+
+    def test_apply_takes_off_every_stale_label_a_feed_carries(self):
+        feeds = mod.parse_opml(OPML_PATH.read_text())
+        first = feeds[0]
+        t = FakeTransport(subs=[(f.url, f.title, f.category) for f in feeds[1:]]
+                          + [(first.url, first.title, ("Ancienne", "Autre", first.category))])
+        mod.main(["apply"], transport=t, env=self.ENV)
+        edits = [c for c in t.calls if b"ac=edit" in (c[3] or b"")]
+        self.assertEqual(len(edits), 2)
+        for stale, edit in zip(("Ancienne", "Autre"), edits):
+            self.assertIn(f"a=user%2F-%2Flabel%2F{first.category}".encode(), edit[3])
+            self.assertIn(f"r=user%2F-%2Flabel%2F{stale}".encode(), edit[3])
+
+    def test_apply_reports_a_refused_cleanup_and_still_cleans_the_rest(self):
+        feeds = mod.parse_opml(OPML_PATH.read_text())
+        first, second = feeds[0], feeds[1]
+        t = FakeTransport(subs=[(f.url, f.title, f.category) for f in feeds[2:]]
+                          + [(first.url, first.title, (first.category, "Ancienne")),
+                             (second.url, second.title, (second.category, "Autre"))],
+                          refuse=(first.url,))
+        with contextlib.redirect_stderr(io.StringIO()) as errors:
+            code = mod.main(["apply"], transport=t, env=self.ENV)
+        self.assertEqual(code, 1)
+        self.assertIn(first.title, errors.getvalue())
+        held = next(s for s in t.subs if s[0] == second.url)
+        self.assertEqual(held[2], (second.category,))
+
+    def test_apply_leaves_a_hand_added_feed_s_own_labels_alone(self):
+        """Only feeds the file lists are relabelled; this one is not in the file."""
+        feeds = mod.parse_opml(OPML_PATH.read_text())
+        t = FakeTransport(subs=[(f.url, f.title, f.category) for f in feeds]
+                          + [("https://hand-added.test/feed", "Hand", ("Dev", "Perso"))])
+        mod.main(["apply"], transport=t, env=self.ENV)
+        self.assertFalse([c for c in t.calls if b"ac=edit" in (c[3] or b"")])
+        held = next(s for s in t.subs if s[0] == "https://hand-added.test/feed")
+        self.assertEqual(held[2], ("Dev", "Perso"))
+
+    def test_a_dry_run_prints_a_stale_label_without_removing_it(self):
+        feeds = mod.parse_opml(OPML_PATH.read_text())
+        first = feeds[0]
+        t = FakeTransport(subs=[(f.url, f.title, f.category) for f in feeds[1:]]
+                          + [(first.url, first.title, (first.category, "Ancienne"))])
+        with contextlib.redirect_stdout(io.StringIO()) as out:
+            mod.main(["apply", "--dry-run"], transport=t, env=self.ENV)
+        self.assertIn("Ancienne would be removed", out.getvalue())
+        self.assertFalse([c for c in t.calls if b"ac=edit" in (c[3] or b"")])
 
     def test_missing_credentials_exit_two(self):
         self.assertEqual(mod.main(["check"], transport=FakeTransport(), env={}), 2)
