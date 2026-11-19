@@ -260,9 +260,11 @@ bursts alone. What is left of the 0.09 GB/day is mostly a symptom, not chatter:
   the figure above still contains errors that will stop at the next sync.
 - **monitoring, 14 MB** — `prometheus-smartctl`, which is talking about the
   failing `nas` drive.
-- **kube-system, 6 MB** — traefik errors, now only `koillection`: it has a claim
-  and a running neighbour but crash-loops on a database host that does not exist
-  (#386).
+- **kube-system, 6 MB** — traefik errors, two sources: a device at `192.168.1.13`
+  that resets its Syncthing connection through the `sttcp` entry point about twice a
+  minute, and `Cannot create service: subset not found` for `minecraft-server` at each
+  provider refresh while the server runs `0` replicas. The `koillection` and
+  `news-freshrss` lines stopped when their claims bound on 2026-11-19 (#386).
 - **vikunja, 5 MB** — request logs at `info`, again including health probes.
 - **n8n, 3 MB** — the `Pruning failed` loop stopped when the app was rebuilt on
   `local-path`; what is left is a telemetry retry that cannot connect.
