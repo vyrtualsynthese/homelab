@@ -35,7 +35,7 @@ Success is:
 - No login surfaces in the app besides authentik's; with authentik down nobody signs in, and the
   documented recovery is a commit that re-enables the password method (§7).
 - One normal share link created for one file downloads from a phone on mobile data, with no account.
-- Pod 1/1, the same three NFS exports mounted plus the creator export, config and database on
+- Pod 1/1, the same three NFS exports mounted, config and database on
   `local-path`, and `hack/check-exposure.sh` passes.
 
 ## 2. What exists today
@@ -147,20 +147,20 @@ becomes `8080`. The IngressRoute template does not change.
 
 ### 5.4 Sources
 
-Four sources, three of them the exports already mounted, one new:
+Three sources, the exports the NAS already serves:
 
 | Source name | Mount | NFS export |
 |---|---|---|
 | `various` | `/srv/various` | `/mnt/storage/nfs/stash` |
 | `audio` | `/srv/audio` | `/mnt/storage/nfs/audio` |
 | `torrent` | `/srv/torrent` | `/mnt/ultrafaststorage/nfs` |
-| `creator` | `/srv/creator` | `/mnt/storage/nfs/creator` **(new export, prerequisite)** |
 
-The creator export does not exist on the NAS today: the provisioner carries books, plexmedia, audio,
-qbittorrent-config, stash, syncthing, traefik and ultrafaststorage. The operator creates the directory
-and the export before the first sync, or changes one value (`nfsVolumes[].path`) if the folder already
-lives somewhere else — for example a subfolder of the stash export. Until the export exists the pod
-fails to mount and does not start; that is the prerequisite, not a defect to work around at runtime.
+**Amended 2026-11-19, after the first cutover.** This section originally added a fourth export,
+`/mnt/storage/nfs/creator`, as a prerequisite. The first sync produced exactly the failure the text
+predicted — the pod stuck in `ContainerCreating` because the NAS does not serve that path — and the
+operator's answer was that no new export is warranted. The editor's folder is therefore a
+**subdirectory of `various`**, and access to it is a per-user scope carrying a path (`various` +
+`creator`), which is how Quantum expresses one folder. No fourth volume, no new export.
 
 Every source sets `defaultEnabled: false`. Quantum otherwise gives a brand-new OIDC user the default
 scope on every source with `view` and `download` on, which would hand the editor the whole NAS. With it
@@ -225,7 +225,7 @@ still accepts a local username, so the account works without touching either sou
 
 On first OIDC sign-in the app creates the matching FileBrowser user. Because every source is
 `defaultEnabled: false`, it starts with no access at all, and the operator grants one scope on
-`creator` in **Settings → User management**:
+`various` with the path `creator` in **Settings → User management**:
 
 | Permission | Value |
 |---|---|
@@ -305,7 +305,7 @@ the proxy provider:
 | OIDC client secret mismatch | app answers a callback error after authentik | fix either Secret, restart the worker, restart the pod |
 | `groups` claim missing or renamed | `userGroups` refuses **every** OIDC login, the operator's included | same commit as the row above, then fix the authentik profile scope mapping, retry |
 | Admin sees an empty sidebar | the account has no scopes yet (§5.6) | grant the four sources from User management |
-| `creator` export missing | pod stuck in `ContainerCreating`/timeout mounting | create the export, or point `nfsVolumes[].path` at the real folder |
+| an export in `nfsVolumes` is not served | pod stuck in `ContainerCreating` on a failed mount | point the entry at an export the NAS serves; the mount error names the path |
 | NFS refuses uid 1100 | uploads fail with permission denied, reads fine | change `securityContext` to the owner's uid |
 | Pod lands on `rbp2` (no scheduling fields) | slow, but works if the ARM image pulls | follow-up card: pin the chart or move to our own chart |
 | Bad sync | app unreachable | `helm rollback` through Argo CD, or revert the commit |
@@ -331,7 +331,7 @@ After sync:
    that has no session is redirected to authentik with no password form in between.
 5. Operator signs in via authentik, is an administrator, grants their own account the four sources,
    and sees them.
-6. Editor signs in with the authentik account the plan created, sees `creator` only, uploads and
+6. Editor signs in with the authentik account the plan created, sees the creator subdirectory only, uploads and
    downloads one file, cannot delete.
 7. A normal share link opens from a phone on mobile data with no account.
 8. The password method is off in the rendered ConfigMap, and no local admin login is reachable.
