@@ -24,7 +24,7 @@ helm template qbittorrent cluster/helm/media-stack/qbittorrent --namespace media
 
 | File | Renders |
 |---|---|
-| `templates/deployment.yaml` | the Deployment: two init containers, the WireGuard sidecar, qBittorrent |
+| `templates/deployment.yaml` | the Deployment: three init containers, the WireGuard sidecar, qBittorrent |
 | `templates/service.yaml` | the ClusterIP Service on the WebUI port |
 | `templates/serviceaccount.yaml` | the ServiceAccount, with no API token mounted |
 | `templates/persistentvolumeclaim.yaml` | the WireGuard claim, the only claim this chart owns |
@@ -83,6 +83,37 @@ prepares `/config` and `/downloads` through s6, then drops to `PUID`/`PGID` 1100
 handing back only `CHOWN`/`SETUID`/`SETGID` works for some of these images but has not been verified
 against this one, and the failure mode is a pod that will not start. `runAsNonRoot` is not an option
 for the same reason. This is the same position as `sonarr` and `prowlarr`.
+
+## Cluster traffic across the tunnel
+
+The tunnel is a kill switch: `AllowedIPs` is `0.0.0.0/0`, so wg-quick puts a default route in its
+own table and a rule that sends everything there. It does keep local access, but only for prefixes
+the pod's main table knows specifically — `ip rule add table main suppress_prefixlength 0`. A pod's
+main table holds its own subnet and a default route, nothing else, so **every ClusterIP matched
+nothing specific and went into the tunnel**, where no route to `10.43.0.0/16` exists.
+
+That is the whole of the 2026-11-19 finding: the post-download hook calls `cross-seed:2468`, the
+SYN disappeared into the tunnel, and the connection died after 127 s — the kernel's SYN retry
+budget, not a `curl` timeout. 154 such lines in 24 h, 76 % of that container's log bytes.
+
+The `vpn-cluster-routes` init container adds `10.42.0.0/16` (pods) and `10.43.0.0/16` (Services) to
+the main table through the pod's own gateway before the sidecar starts; the sidecar's rule then
+prefers them. It needs `NET_ADMIN` and nothing else. The ranges are `vpn.clusterRoutes` in
+`values.yaml`, so another in-cluster dependency is one line there.
+
+Proof that the tunnel is what swallowed the traffic is the sidecar's own startup log:
+
+```
+[#] wg set wg0 fwmark 51820
+[#] ip -4 rule add not fwmark 51820 table 51820
+[#] ip -4 rule add table main suppress_prefixlength 0
+[#] ip -4 route add 0.0.0.0/0 dev wg0 table 51820
+```
+
+**One step stays in the app.** The hook itself is a qBittorrent preference on the config claim, not
+a chart value, and it should carry `--max-time 10` so a future route fault costs ten seconds rather
+than two minutes. Set it under Tools → Options → Downloads → *Run external program on torrent
+finished*.
 
 ## The three claims
 

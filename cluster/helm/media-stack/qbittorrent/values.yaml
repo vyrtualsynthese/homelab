@@ -68,6 +68,35 @@ securityContext:
 vpn:
   # -- Host device the sidecar mounts. Required by the LinuxServer image.
   tunDevice: /dev/net/tun
+  # The tunnel's `AllowedIPs` is `0.0.0.0/0`, so wg-quick installs its default
+  # route in its own table (51820) and keeps LAN access with a policy rule that
+  # falls back to the pod's main table first, defaults suppressed
+  # (`ip rule ... table main suppress_prefixlength 0`). A pod's main table holds
+  # its own subnet and a default route, and nothing else, so every address
+  # outside that subnet — every ClusterIP — matched nothing specific and went
+  # into the tunnel. That is why the post-download hook to `cross-seed:2468`
+  # timed out after 127 s, the kernel's SYN retry budget, instead of being
+  # refused: 154 times in the 24 h to 2026-11-19.
+  #
+  # These two ranges are added to the main table, through the pod's own gateway,
+  # by the `vpn-cluster-routes` init container before the sidecar starts. The
+  # rule above consults that table first, so the tunnel keeps every other
+  # destination and cluster traffic never enters it. Add a range here when
+  # something else in the cluster must be reachable from inside this pod.
+  clusterRoutes:
+    - 10.42.0.0/16
+    - 10.43.0.0/16
+  routeFix:
+    # -- Image for the init container that adds `clusterRoutes`. It only needs
+    # `sh`, `awk` and busybox's `ip`. Same image as the downloads probe.
+    image: busybox:1.38
+    # -- Seconds of runtime, no sample, a ceiling only.
+    resources:
+      requests:
+        cpu: 1m
+        memory: 4Mi
+      limits:
+        memory: 16Mi
   securityContext:
     privileged: true
     capabilities:
