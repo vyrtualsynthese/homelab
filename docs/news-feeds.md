@@ -23,9 +23,16 @@ python3 hack/freshrss_sync.py check             # exit 1 when a listed feed is m
 python3 hack/freshrss_sync.py verify            # fetch every URL, print items and newest date
 ```
 
-`check` fails only on a feed the file lists and the instance lacks. A feed the instance holds and
-the file does not is printed with a `-` and does not fail the run: `apply` never removes one without
-`--prune`, so an extra is not drift.
+`check` fails on three things: a feed the file lists and the instance lacks, a listed feed sitting in
+another category, and a listed feed whose content selectors differ from the file. A feed the instance
+holds and the file does not is printed with a `-` and does not fail the run: `apply` never removes
+one without `--prune`, so an extra is not drift. Exit codes are `0` clean, `1` any of the above, `2`
+credentials missing or refused — which includes the web login.
+
+`apply` and `check` also cover the per-feed settings the file carries: the CSS selector that pulls
+the whole article, and an XPath feed's selectors and kind. Those live behind the web login, so they
+are only checked when `FRESHRSS_WEB_PASSWORD` is set; without it the run prints `settings: not
+checked` and does the rest. See "The settings the API cannot reach" below.
 
 `verify` fetches every URL and exits 1 when a native feed answers badly; an XPath feed reports
 `NOT-XML` by design, because the raw URL is a page.
@@ -34,7 +41,7 @@ the file does not is printed with a `-` and does not fail the run: `apply` never
 
 `apply` never unsubscribes anything unless `--prune` is passed, so a feed added by hand in the web
 UI survives a replay. Credentials are `FRESHRSS_USER` and `FRESHRSS_API_PASSWORD` from
-`~/.config/secrets/homelab.env`.
+`~/.config/secrets/homelab.env`, plus `FRESHRSS_WEB_PASSWORD` for the settings half.
 
 `verify` fetches each URL from the machine that runs it, not from inside the cluster, so a 403 or
 429 there can be the runner's IP rather than the feed being broken.
@@ -144,11 +151,20 @@ As of 2026-11-19 all four are on the live instance. The check is the instance's 
 (`/reader/api/0/subscription/export`): it carries the same four `frss:xPathItem` and twelve
 `frss:cssFullContent` attributes as the file, feed for feed.
 
-An import skips a feed the instance already holds, which is also the catch: changing a selector in
-the file does not reach an existing feed. Unsubscribe that feed, then import again. The unsubscribe
-is reachable with the API password alone — `subscription/edit` with `ac=unsubscribe`, one call per
-URL, the call `apply --prune` already makes — so only the import needs the web UI: *Subscription
-management* → *Import / export* → *OPML* → choose `hack/freshrss/feeds.opml` → *Upload*.
+An import skips a feed the instance already holds, so it cannot change one that exists, and the API
+refuses to subscribe a page that is not a feed: the import is how these feeds are *created*, never
+how they are edited. A selector changed in the file therefore reaches the instance through the sync:
+
+```bash
+python3 hack/freshrss_sync.py check    # exit 1 when a feed's selectors differ from the file
+python3 hack/freshrss_sync.py apply    # write the file's values onto the feeds
+```
+
+`apply` reads each feed's settings page, resubmits that same form with the file's values, and reads
+it again to confirm; `check` does the read without the write. A feed whose kind is wrong for the file
+— created as RSS when the file says XPath — is repaired in the same pass, because the kind and the
+XPath fields are submitted together. Unsubscribing a feed and importing again is still the route for
+a fresh install, and the fallback when the instance is on a version this tool cannot drive.
 
 | Feed | Item | Title | Link |
 |---|---|---|---|
@@ -161,8 +177,9 @@ Entries the instance held on 2026-11-19: Star Citizen 9, Final Fantasy XIV 9, El
 Anthropic 48.
 
 These are the brittle part of the set. A page redesign breaks them silently, and `verify` reports
-`NOT-XML` for an XPath feed because the raw URL is HTML — that is expected, not a failure. Check
-the folder in the web UI instead.
+`NOT-XML` for an XPath feed because the raw URL is HTML — that is expected, not a failure. `check`
+can see a selector that no longer matches the file; it cannot see one that matches the file and no
+longer matches the page. Look at the folder in the web UI after a redesign.
 
 ## Images and full articles
 
@@ -198,8 +215,8 @@ Twelve feeds carry a selector, each checked against the newest article on 2026-1
 
 What it costs: one extra request per new article, made by the pod, so the source sees the cluster's
 address rather than yours. What it breaks on: a redesign empties the article without an error, and
-`check` cannot see it — the API does not expose feed settings, so a broken selector looks like a
-feed with short entries. Check the reading view after a site redesign.
+`check` cannot see that — the selector still matches the file, it no longer matches the page. Check
+the reading view after a site redesign.
 
 Eight feeds carry a picture in the item already, so the list shows a thumbnail without a selector:
 Discord, Docker, Kubernetes, WSL2, Logseq, selfh.st, Simon Willison and Guild Wars 2. For the other
@@ -223,7 +240,24 @@ The twelve are on the live instance as of 2026-11-19. They got there by unsubscr
 the instance held and importing the file once — an import cannot change a feed it already holds. The
 evidence is the instance's own export, which carries the twelve `frss:cssFullContent` values, and
 the newest entries themselves: between 1 kB and 80 kB of the publisher's HTML, where the feed alone
-carries a summary.
+carries a summary. From here on a change to a selector is one `apply`, not an unsubscribe and an
+import.
+
+## The settings the API cannot reach
+
+The GReader API carries no feed attributes, so nothing in it sets an XPath selector or the CSS
+selector of the article body. The web form that does is a plain POST at
+`?c=subscription&a=feed&id=<feed>`, and two things stand in front of it that the API password does
+not open: the form login, a bcrypt challenge where the browser hashes the password against the salt
+half of the stored hash and then hashes that plus a one-time nonce from the session, and a `_csrf`
+token that every POST must carry, the login included.
+
+`hack/freshrss_sync.py` repeats both, which needs the `bcrypt` package — `pip install bcrypt`, the
+one dependency the script does not get from the standard library. It reads the feed id from the
+subscription list, opens the feed's settings page, resubmits the form with the file's values, and
+reads the page back; a field that still differs is printed and the run exits 1, and so is a field
+the submit changed that the file never asked for. Without `FRESHRSS_WEB_PASSWORD` the settings half
+is skipped and the subscription half behaves as before.
 
 ## Feeds the API will not take
 

@@ -4,13 +4,16 @@
 `hack/freshrss/feeds.opml` is the source of truth; the FreshRSS database is a cache of it.
 
     apply [--prune] [--dry-run]   subscribe what the file lists, and nothing else
-    check                         exit 1 when the instance is missing a feed the file lists
+    check                         exit 1 when the instance is missing a feed the file lists,
+                                  or holds a feed whose content selectors differ from the file
     verify                        fetch every URL; exit 1 when a native feed answers badly
 
 `check` does not fail on a feed the instance holds and the file does not: apply never removes one
 without --prune, so an extra is not drift, and it is printed instead.
 
-Credentials come from FRESHRSS_USER and FRESHRSS_API_PASSWORD in the environment.
+Credentials come from FRESHRSS_USER and FRESHRSS_API_PASSWORD in the environment. The per-feed
+settings are behind the web login, which the API password does not open: set FRESHRSS_WEB_PASSWORD
+too and the selectors are checked with the rest, left out and the settings half is skipped.
 """
 
 from __future__ import annotations
@@ -25,13 +28,39 @@ import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
+from http.cookiejar import CookieJar
+from html.parser import HTMLParser
 from pathlib import Path
-from typing import Callable, Sequence
+from typing import Callable, Mapping, Sequence
 
 DEFAULT_BASE = "https://freshrss.kub.home.ashudev.com"
 API = "/api/greader.php"
 OPML_PATH = Path(__file__).resolve().parent / "freshrss" / "feeds.opml"
 USER_AGENT = "homelab-freshrss-sync/1"
+# The site root is a static page that only points at the app; every web route lives under it.
+WEB = "/i"
+FRSS = "{https://freshrss.org/opml}"
+
+# The OPML attribute FreshRSS writes, and the field the web form it feeds reads. The names drifted
+# between releases (`keep_history` became `archiving`, the CSS selector became `path_entries`), so
+# this map is the one place the spelling is written down.
+SETTING_FIELDS = {
+    "cssFullContent": "path_entries",
+    "cssFullContentConditions": "path_entries_conditions",
+    "cssContentFilter": "path_entries_filter",
+    "cssFullContentFilter": "path_entries_filter",
+    "xPathItem": "xPathItem",
+    "xPathItemTitle": "xPathItemTitle",
+    "xPathItemContent": "xPathItemContent",
+    "xPathItemUri": "xPathItemUri",
+    "xPathItemAuthor": "xPathItemAuthor",
+    "xPathItemTimestamp": "xPathItemTimestamp",
+    "xPathItemTimeFormat": "xPathItemTimeFormat",
+    "xPathItemThumbnail": "xPathItemThumbnail",
+    "xPathItemCategories": "xPathItemCategories",
+    "xPathItemUid": "xPathItemUid",
+}
+KIND_HTML_XPATH = 10
 
 
 @dataclass(frozen=True)
@@ -40,6 +69,7 @@ class Feed:
     title: str
     url: str
     kind: str = "native"
+    settings: tuple[tuple[str, str], ...] = ()
 
 
 def normalize_url(url: str) -> str:
@@ -64,12 +94,18 @@ def parse_opml(text: str) -> list[Feed]:
                 kind = "xpath" if (
                     child.get("kind") == "xpath" or "xpath" in (child.get("type") or "").lower()
                 ) else "native"
+                settings: dict[str, str] = {}
+                for attribute, field in SETTING_FIELDS.items():
+                    value = child.get(FRSS + attribute)
+                    if value:
+                        settings[field] = value
                 feeds.append(
                     Feed(
                         category=category,
                         title=child.get("text") or child.get("title") or url,
                         url=url,
                         kind=kind,
+                        settings=tuple(settings.items()),
                     )
                 )
             else:
@@ -213,6 +249,231 @@ class Client:
             "T": self.token(),
         })
 
+    def feed_ids(self) -> dict[str, int]:
+        """Feed address to its FreshRSS id, which the web UI addresses each settings page by."""
+        if not self.auth:
+            self.login()
+        status, body = self.transport(
+            "GET", self.base + "/reader/api/0/subscription/list?output=json",
+            {"Authorization": f"GoogleLogin auth={self.auth}"}, None)
+        if status != 200:
+            raise RuntimeError(f"subscription/list answered {status}")
+        ids: dict[str, int] = {}
+        for sub in json.loads(body).get("subscriptions", []):
+            url = sub.get("url") or sub.get("id", "").removeprefix("feed/")
+            ident = sub.get("id", "")
+            if ident.startswith("feed/") and ident[len("feed/"):].isdigit():
+                ids[normalize_url(url)] = int(ident[len("feed/"):])
+        return ids
+
+
+class Form:
+    """One HTML form, as the pairs a browser would submit it with."""
+
+    def __init__(self, action: str, fields: list[tuple[str, str]]):
+        self.action = action
+        self.fields = fields
+
+    def value(self, name: str) -> str | None:
+        for key, value in self.fields:
+            if key == name:
+                return value
+        return None
+
+    def as_pairs(self, overrides: Mapping[str, str]) -> list[tuple[str, str]]:
+        pairs: list[tuple[str, str]] = []
+        replaced: set[str] = set()
+        for key, value in self.fields:
+            if key in overrides:
+                pairs.append((key, overrides[key]))
+                replaced.add(key)
+            else:
+                pairs.append((key, value))
+        for key, value in overrides.items():
+            if key not in replaced:
+                pairs.append((key, value))
+        return pairs
+
+
+class _FormParser(HTMLParser):
+    """Collect every form and its submit-able fields: checkboxes only when checked, one option per
+    select, and a textarea's text."""
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.forms: list[dict] = []
+        self._form: dict | None = None
+        self._select: str | None = None
+        self._options: list[tuple[str, bool]] = []
+        self._textarea: str | None = None
+        self._text: list[str] = []
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        attributes = {key: value or "" for key, value in attrs}
+        if tag == "form":
+            self._form = {"action": attributes.get("action", ""), "fields": []}
+            self.forms.append(self._form)
+            return
+        if self._form is None:
+            return
+        if tag == "input":
+            name = attributes.get("name", "")
+            if not name or "disabled" in attributes:
+                return
+            kind = attributes.get("type", "text").lower()
+            if kind == "submit":
+                return
+            if kind in ("checkbox", "radio"):
+                if "checked" in attributes:
+                    self._form["fields"].append((name, attributes.get("value", "on")))
+            else:
+                self._form["fields"].append((name, attributes.get("value", "")))
+        elif tag == "select":
+            self._select = attributes.get("name", "")
+            self._options = []
+        elif tag == "option" and self._select:
+            self._options.append((attributes.get("value", ""), "selected" in attributes))
+        elif tag == "textarea":
+            self._textarea = attributes.get("name", "")
+            self._text = []
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag == "select" and self._select and self._form is not None:
+            chosen = next((v for v, selected in self._options if selected),
+                          self._options[0][0] if self._options else "")
+            self._form["fields"].append((self._select, chosen))
+            self._select, self._options = None, []
+        elif tag == "textarea" and self._textarea and self._form is not None:
+            self._form["fields"].append((self._textarea, "".join(self._text)))
+            self._textarea, self._text = None, []
+        elif tag == "form":
+            self._form = None
+
+    def handle_data(self, data: str) -> None:
+        if self._textarea is not None:
+            self._text.append(data)
+
+
+def settings_form(html: str) -> Form:
+    """The feed settings form on a subscription page, told apart by its content selector field."""
+    parser = _FormParser()
+    parser.feed(html)
+    candidates = [Form(collected["action"], collected["fields"])
+                  for collected in parser.forms
+                  if Form(collected["action"], collected["fields"]).value("path_entries") is not None]
+    if not candidates:
+        raise RuntimeError("no feed settings form on the page")
+    for form in candidates:
+        if "a=feed" in form.action:
+            return form
+    return candidates[0]
+
+
+def settings_drift(form: Form, wanted: Mapping[str, str]) -> dict[str, tuple[str, str]]:
+    """The fields a page displays differently from the file, as {field: (shown, wanted)}."""
+    drift = {}
+    for field, value in wanted.items():
+        shown = form.value(field) or ""
+        if shown != value:
+            drift[field] = (shown, value)
+    return drift
+
+
+def cookied_transport() -> Callable[..., tuple[int, str, dict]]:
+    """A transport that remembers cookies, which the web login needs to carry its nonce."""
+    jar = CookieJar()
+    opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(jar))
+
+    def transport(method: str, url: str, headers: dict[str, str] | None = None,
+                  data: bytes | None = None) -> tuple[int, str, dict]:
+        request = urllib.request.Request(url, data=data, method=method, headers=headers or {})
+        try:
+            with opener.open(request, timeout=30) as response:
+                return (response.status, response.read().decode("utf-8", "replace"),
+                        dict(response.headers))
+        except urllib.error.HTTPError as error:
+            return (error.code, error.read().decode("utf-8", "replace"), dict(error.headers))
+
+    return transport
+
+
+class WebClient:
+    """The web UI, as much of it as reading and writing a feed's settings needs.
+
+    The login is a bcrypt challenge: the browser asks for a nonce, hashes the password against the
+    salt half of the stored hash, hashes that plus the nonce, and posts the result against the
+    session cookie. The API password does not open this door; the web password does.
+    """
+
+    def __init__(self, base: str = DEFAULT_BASE, user: str = "", password: str = "",
+                 transport: Callable[..., tuple[int, str, dict]] | None = None):
+        self.base = base.rstrip("/")
+        self.user = user
+        self.password = password
+        self.transport = transport or cookied_transport()
+
+    def _request(self, method: str, path: str,
+                 pairs: dict[str, str] | None = None) -> tuple[int, str]:
+        headers = {"User-Agent": USER_AGENT}
+        data = None
+        if pairs is not None:
+            data = urllib.parse.urlencode(pairs).encode()
+            headers["Content-Type"] = "application/x-www-form-urlencoded"
+        status, body, _ = self.transport(method, self.base + path, headers, data)
+        return status, body
+
+    def get(self, path: str) -> str:
+        status, body = self._request("GET", path)
+        if status != 200:
+            raise RuntimeError(f"{path} answered {status}")
+        return body
+
+    def login(self) -> None:
+        status, body = self._request(
+            "GET", WEB + "/?c=javascript&a=nonce&user=" + urllib.parse.quote(self.user))
+        if status != 200:
+            raise RuntimeError(f"the nonce endpoint answered {status}")
+        try:
+            payload = json.loads(body)
+            salt1, nonce = payload["salt1"], payload["nonce"]
+        except (ValueError, KeyError) as error:
+            raise RuntimeError(f"the nonce endpoint answered {body[:120]}") from error
+        try:
+            import bcrypt
+        except ImportError as error:  # the one dependency this script does not already carry
+            raise RuntimeError("the web login needs the bcrypt package: pip install bcrypt") from error
+        salted = bcrypt.hashpw(self.password.encode(), salt1.encode())
+        challenge = bcrypt.hashpw(salted + nonce.encode(), bcrypt.gensalt(rounds=4)).decode()
+        status, body = self._request("POST", WEB + "/?c=auth&a=formLogin", {
+            "username": self.user,
+            "challenge": challenge,
+        })
+        # The refusal is a 403 error page; a page that still carries the login form means the same.
+        if status != 200 or "formLogin" in body:
+            raise AuthError(f"the web password was refused for {self.user}")
+
+    def feed_form(self, feed_id: int) -> Form:
+        return settings_form(self.get(f"{WEB}/?c=subscription&a=feed&id={feed_id}"))
+
+    def set_settings(self, feed_id: int, wanted: Mapping[str, str]) -> dict[str, tuple[str, str]]:
+        """Resubmit a feed's settings form with the file's values, and read back what took.
+
+        Returns what still differs afterwards, as {field: (shown, wanted)}; empty means the page
+        agrees with the file.
+        """
+        form = self.feed_form(feed_id)
+        if not settings_drift(form, wanted):
+            return {}
+        url = urllib.parse.urljoin(self.base + "/", form.action)
+        body = urllib.parse.urlencode(form.as_pairs(wanted)).encode()
+        status, _, _ = self.transport("POST", url, {
+            "Content-Type": "application/x-www-form-urlencoded",
+            "User-Agent": USER_AGENT,
+        }, body)
+        if status not in (200, 302):
+            raise RuntimeError(f"the settings page answered {status}")
+        return settings_drift(self.feed_form(feed_id), wanted)
+
 
 def _newest(root: ET.Element) -> str:
     """The newest date the feed publishes, as YYYY-MM-DD, or an empty string."""
@@ -265,19 +526,36 @@ def verify(feeds: Sequence[Feed],
 
 USAGE = """usage: freshrss_sync.py <apply|check|verify> [--prune] [--dry-run]
 
-  apply    subscribe every feed the OPML lists; --prune also drops the extras
-  check    exit 1 when the instance is missing a feed the file lists
+  apply    subscribe every feed the OPML lists and set the content selectors it carries;
+           --prune also drops the extras, --dry-run only prints
+  check    exit 1 when the instance is missing a feed the file lists, or holds one whose
+           content selectors differ from the file
   verify   fetch every URL and print status, items and newest date;
            exit 1 when a native feed answers badly
 
-FRESHRSS_USER and FRESHRSS_API_PASSWORD are read from the environment, and
-FRESHRSS_BASE overrides the instance URL (default %s).
+FRESHRSS_USER and FRESHRSS_API_PASSWORD are read from the environment,
+FRESHRSS_WEB_PASSWORD opens the web UI for the per-feed settings (without
+it the settings half is skipped), and FRESHRSS_BASE overrides the instance
+URL (default %s).
 """ % DEFAULT_BASE
+
+
+def settings_wanted(feeds: Sequence[Feed]) -> list[tuple[Feed, dict[str, str]]]:
+    """The per-feed settings the file asks for, and the feed kind an XPath feed needs with them."""
+    wanted = []
+    for feed in feeds:
+        settings = dict(feed.settings)
+        if feed.kind == "xpath":
+            settings["feed_kind"] = str(KIND_HTML_XPATH)
+        if settings:
+            wanted.append((feed, settings))
+    return wanted
 
 
 def main(argv: list[str] | None = None,
          transport: Callable[..., tuple[int, str]] = http,
-         env: dict[str, str] | None = None) -> int:
+         env: dict[str, str] | None = None,
+         web_transport: Callable[..., tuple[int, str, dict]] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
     env = dict(os.environ) if env is None else env
     if not args or args[0] not in ("apply", "check", "verify"):
@@ -302,7 +580,51 @@ def main(argv: list[str] | None = None,
         print("FRESHRSS_USER and FRESHRSS_API_PASSWORD must be set", file=sys.stderr)
         return 2
 
-    client = Client(env.get("FRESHRSS_BASE", DEFAULT_BASE), user, password, transport)
+    base = env.get("FRESHRSS_BASE", DEFAULT_BASE)
+    client = Client(base, user, password, transport)
+
+    def settings_pass(apply: bool) -> tuple[int, bool]:
+        """Read every feed's settings page; print what differs, and fix it when apply is set.
+
+        Returns how many feeds still differ, and whether the web UI refused to answer at all.
+        """
+        wanted = settings_wanted(feeds)
+        if not wanted:
+            return 0, False
+        web_password = env.get("FRESHRSS_WEB_PASSWORD", "")
+        if not web_password:
+            print("settings: not checked (set FRESHRSS_WEB_PASSWORD)")
+            return 0, False
+        web = WebClient(base, user, web_password, web_transport)
+        try:
+            web.login()
+            ids = client.feed_ids()
+        except AuthError as error:
+            print(str(error), file=sys.stderr)
+            return 0, True
+        except (RuntimeError, OSError) as error:
+            print(f"the web UI did not answer: {error}", file=sys.stderr)
+            return 0, True
+        differing = 0
+        for feed, settings in wanted:
+            feed_id = ids.get(normalize_url(feed.url))
+            if feed_id is None:
+                continue  # not subscribed yet; apply converges on a second run
+            try:
+                if apply:
+                    drift = web.set_settings(feed_id, settings)
+                else:
+                    drift = settings_drift(web.feed_form(feed_id), settings)
+            except (RuntimeError, OSError) as error:
+                print(f"! {feed.category}/{feed.title}: {error}", file=sys.stderr)
+                differing += 1
+                continue
+            for field, (shown, value) in sorted(drift.items()):
+                print(f"~ {feed.category}/{feed.title}: {field} {shown or '(empty)'} -> {value}")
+            if drift:
+                differing += 1
+        return differing, False
+
     try:
         diff = plan(feeds, client.subscriptions())
     except AuthError as error:
@@ -324,11 +646,15 @@ def main(argv: list[str] | None = None,
               f"the API refuses a page that is not a feed")
 
     if command == "check":
-        return 1 if diff.to_subscribe else 0
+        differing, refused = settings_pass(apply=False)
+        if refused:
+            return 2
+        return 1 if (diff.to_subscribe or differing) else 0
     if "--dry-run" in flags:
-        return 0
+        _, refused = settings_pass(apply=False)
+        return 2 if refused else 0
 
-    refused = []
+    failed = []
     for feed in diff.to_subscribe:
         if feed.kind == "xpath":
             continue
@@ -336,11 +662,14 @@ def main(argv: list[str] | None = None,
             client.subscribe(feed)
         except (RuntimeError, OSError) as error:
             print(f"! {feed.category}/{feed.title}: {error}", file=sys.stderr)
-            refused.append(feed)
+            failed.append(feed)
     if "--prune" in flags:
         for url, _ in diff.to_prune:
             client.unsubscribe(url)
-    return 1 if refused else 0
+    differing, refused = settings_pass(apply=True)
+    if refused:
+        return 2
+    return 1 if (failed or differing) else 0
 
 
 if __name__ == "__main__":
