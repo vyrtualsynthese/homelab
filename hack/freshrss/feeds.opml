@@ -19,10 +19,10 @@
                frss:cssFullContent="article"/>
       <outline type="HTML+XPath" text="Elite Dangerous" title="Elite Dangerous"
                xmlUrl="https://www.elitedangerous.com/news" htmlUrl="https://www.elitedangerous.com/news"
-               frss:xPathItem="//a[starts-with(@href,'/news/')]"
+               frss:xPathItem="//*[contains(@class,'__article-info')]//a[starts-with(@href,'/news/') and not(contains(@href,'/news/updates/'))]"
                frss:xPathItemTitle="normalize-space(.)"
                frss:xPathItemUri="@href"
-               frss:cssFullContent="#content"/>
+               frss:cssFullContent="main"/>
     </outline>
     <outline text="Dev" title="Dev">
       <outline type="rss" text="Docker blog" title="Docker blog" xmlUrl="https://www.docker.com/feed/" frss:cssFullContent=".entry-content"/>
