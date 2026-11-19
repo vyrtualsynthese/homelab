@@ -17,8 +17,18 @@ All notable changes to this repository. The format follows
   route; `security` headers remain.
 - FileBrowser's four NAS sources are `defaultEnabled: false`, so a new OIDC account starts with no
   access and folders are granted per person.
+- FreshRSS signs in through authentik with its own OIDC session rather than the forward-auth
+  middleware, and runs the official `freshrss/freshrss` image with its data at `/config/data`.
+- The feed set is `hack/freshrss/feeds.opml`, and `hack/freshrss_sync.py` keeps the instance matching
+  it. A feed the instance holds twice — same address with and without `#force_feed` — is now reported
+  as an extra instead of hiding behind the first row.
 
 ### Added
+
+- `hack/freshrss_sync.py drop <url>…`, which unsubscribes a feed so an OPML import can re-create it
+  with the settings the file carries. A poll interval, a CSS selector and `#force_feed` are stored on
+  the feed and applied only when it is created, so they cannot be edited in place.
+- `docs/news-feeds.md` records the feed set, the script's four commands and the re-apply procedure.
 
 - Per-user FileBrowser scopes carrying a path, so the editor's folder is granted as a subdirectory of
   an existing export instead of a dedicated one.
