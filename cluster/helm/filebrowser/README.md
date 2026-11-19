@@ -17,7 +17,7 @@ matters. `charts/` and `Chart.lock` are gitignored — ArgoCD runs `helm depende
 |---|---|
 | Deployment, Service, ConfigMap, Secret | `filebrowser-filebrowser-quantum` |
 | Claims on `local-path` | `filebrowser-filebrowser-quantum-config` (holds `database.db`), `-data` |
-| NFS claims | `filebrowser-stash`, `filebrowser-audio`, `filebrowser-download`, `filebrowser-creator` |
+| NFS claims | `filebrowser-stash`, `filebrowser-audio`, `filebrowser-download` |
 
 The service port is **8080** (the chart's default), not 80. `templates/ingressroute.yaml` reads
 `traefik.service` and `traefik.port` for that reason.
@@ -29,12 +29,15 @@ The service port is **8080** (the chart's default), not 80. `templates/ingressro
 | `various` | `/srv/various` | `/mnt/storage/nfs/stash` | `filebrowser-stash` |
 | `audio` | `/srv/audio` | `/mnt/storage/nfs/audio` | `filebrowser-audio` |
 | `torrent` | `/srv/torrent` | `/mnt/ultrafaststorage/nfs` | `filebrowser-download` |
-| `creator` | `/srv/creator` | `/mnt/storage/nfs/creator` | `filebrowser-creator` |
 
-`/mnt/storage/nfs/creator` must exist and be exported on the NAS before the first sync: without it the
-pod sits in `ContainerCreating` waiting for the mount, which is the intended failure — a silently empty
-folder would be worse. `templates/nfs-volumes.yaml` renders one PV and one pre-bound claim per entry in
-`nfsVolumes`.
+Those are the three exports the NAS already serves; there is no dedicated export for one folder. The
+editor's folder is a subdirectory of one of them, and that is expressed as a **scope**, not as a
+fourth volume: a user's scope is a source plus a path inside it, so `various` with `/creator` shows
+only that folder and nothing else from the assets export.
+
+`templates/nfs-volumes.yaml` renders one PV and one pre-bound claim per entry in `nfsVolumes`. A
+missing export is not tolerated: the pod sits in `ContainerCreating` on a failed mount rather than
+serving an empty folder.
 
 Every source sets `defaultEnabled: false`. A brand-new OIDC user therefore starts with an empty
 sidebar, **administrators included**: grant the sources in **Settings → User management** after the

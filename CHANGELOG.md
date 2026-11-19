@@ -20,6 +20,7 @@ All notable changes to this repository. The format follows
 
 ### Added
 
-- The `creator` NAS export as a fourth FileBrowser source, for the editor's folder.
+- Per-user FileBrowser scopes carrying a path, so the editor's folder is granted as a subdirectory of
+  an existing export instead of a dedicated one.
 - A `filebrowser-editors` capability group in the authentik blueprint, plus an OAuth2 provider
   (`filebrowser-oidc`) that replaces the forward-auth provider.
