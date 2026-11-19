@@ -31,9 +31,9 @@ The table is the inventory taken before the first run, on 2026-11-18.
 The namespace is empty, not "stuck on a finalizer": it holds no workload, service or secret. Deleting
 it is safe once the volumes are gone.
 
-### The six claims, and who is still on them
+### The six claims, and who was on them at the snapshot
 
-| Namespace / claim | Size | Pod still mounting it | Safe to clear now |
+| Namespace / claim | Size | Pod mounting it then | Safe to clear then |
 |---|---|---|---|
 | `media-stack/filebrowser-config` | 1Gi | none alive (`filebrowser-c9949b4cf-kpdxj` is `Succeeded`) | yes |
 | `media-stack/filebrowser-db-2` | 1Gi | same dead pod | yes |
@@ -43,17 +43,18 @@ it is safe once the volumes are gone.
 | `thelounge/thelounge-volume` | 20Gi | `thelounge-7ff76784d7-z8fmb`, **Running** since 2026-08-13 | **no** |
 
 The last three were still serving reads and writes from the mount the kubelet made before the failure.
-Deleting the claim object does not stop the running process, but the application loses its volume on
-its next restart and will not start again. They are rebuilt on `local-path` first (Wave A), then
-their claims can go in the same way as the first three.
+Deleting the claim object would not have stopped the running process, but the application would have
+lost its volume on its next restart. They were rebuilt on `local-path` first (Wave A), then their
+claims went in the same way as the first three.
 
 `n8n` was rebuilt that way on 2026-11-19. Its old pod could not finish its own teardown — the
 unmount needs the driver that no longer exists — so it was force-deleted, then the volume was
-patched and the claim disappeared with it. `syncthing` and `thelounge` are the two left.
+patched and the claim disappeared with it. `thelounge` and `syncthing` followed the same day, and
+`syncthing-conf` went last: no Longhorn claim is left.
 
 AGENTS.md §7.4 said until 2026-11-18 that every application had been rebuilt. It had not: n8n,
-syncthing and thelounge were never migrated, and nothing else mounts a Longhorn claim. §7.4 says so
-now, so the two documents agree.
+syncthing and thelounge were never migrated, and nothing else mounted a Longhorn claim. §7.4 records
+the resolution now, so the two documents agree.
 
 ### The twenty-six volumes
 
@@ -97,15 +98,15 @@ runtime.
 
 The plan calls this list "eleven", but its own table and this one both hold ten.
 
-| Application | Planned disposition | State on 2026-11-18 |
+| Application | Planned disposition | State, updated to 2026-11-19 |
 |---|---|---|
 | filebrowser | rebuilt in W7.1 | rebuilt, `local-path`, own namespace; old claims orphaned |
 | calibre | rebuilt in Wave A | rebuilt as Calibre-Web Automated on `local-path` |
 | firefly | rebuilt in Wave A | retired 2026-11-18 |
 | linkstack | rebuilt in Wave A | retired 2026-11-18 |
 | n8n | rebuilt in Wave A | rebuilt 2026-11-19: pod 1/1 on `n8n-config` (`local-path`), old claim and volume cleared |
-| syncthing | rebuilt in Wave A | rebuilt in the repository 2026-11-19: chart creates `syncthing-config` (`local-path`), pod pinned to `nuc0`; old claim clears once the stuck pod is force-deleted |
-| thelounge | rebuilt in Wave A | **not rebuilt**, still on `thelounge-volume` |
+| syncthing | rebuilt in Wave A | rebuilt 2026-11-19: chart creates `syncthing-config` (`local-path`), pod pinned to `nuc0`; old claim cleared 2026-11-19 |
+| thelounge | rebuilt in Wave A | rebuilt 2026-11-19 on `thelounge-config` (`local-path`); old volume and claim cleared |
 | pgadmin | rebuilt in Wave A | rebuilt on `local-path` |
 | prometheus | replaced wholesale in W6 | replaced on `local-path`; old claim orphaned |
 | postiz redis | rebuilt with postiz | retired 2026-11-18 |
@@ -153,15 +154,15 @@ kubectl get pv filebrowser-config filebrowser-db-2 prometheus-data 2>&1
 kubectl get pvc -A | grep longhorn
 ```
 
-The second command prints only the two claims of phase 2.
+The second command printed only the two claims of phase 2.
 
-### Phase 2 — the two claims still in use: deferred
+### Phase 2 — the two claims that were in use, cleared last
 
-`syncthing-conf` and `thelounge-volume` were mounted by running pods. Do not patch them
-here. Rebuild each application on `local-path` (Wave A), confirm the new pod runs on the new claim,
-force-delete the old pod (its teardown needs the driver that is gone), then run the Phase 1 loop with
-those two names. Their PVs stay `Bound` until then, which is correct. `n8n-2` was cleared this way on
-2026-11-19.
+`syncthing-conf` and `thelounge-volume` were mounted by running pods at the snapshot. Rebuild each
+application on `local-path` (Wave A), confirm the new pod runs on the new claim, force-delete the old
+pod (its teardown needs the driver that is gone), then run the Phase 1 loop with those two names.
+Their PVs stayed `Bound` until then, which was correct. `n8n-2` was cleared this way on 2026-11-19,
+and `thelounge-volume` and `syncthing-conf` followed the same day.
 
 For syncthing, the order matters and the concerns are separate: the chart change (new
 `syncthing-config` claim, pod pinned to `nuc0`) merges and syncs first, then the stuck
@@ -208,10 +209,11 @@ kubectl get pvc -A | grep -ci longhorn
 kubectl get ns | grep -ci longhorn
 ```
 
-Expected: `2`, `2` and `0`. The two twos are the deferred claims of Phase 2 and their volumes —
-they stay until `syncthing` and `thelounge` are rebuilt. A `6` or `23` on either line means a phase
-did not run — `23` is what the volume count reads when phase 1 worked and phase 3 did not. A
-`1` on the last line is the terminating namespace still in the list; wait and re-run.
+Expected: `0`, `0` and `0`. When the page was written the first two read `2` — the deferred claims of
+Phase 2 and their volumes — and they fell to zero when `thelounge` and `syncthing` were rebuilt on
+2026-11-19. A `6` or `23` on either line means a phase did not run — `23` is what the volume count
+reads when phase 1 worked and phase 3 did not. A `1` on the last line is the terminating namespace
+still in the list; wait and re-run.
 
 ## Found on the way, outside this cleanup
 
