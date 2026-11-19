@@ -55,9 +55,17 @@ podSecurityContext:
 #
 # The image is a LinuxServer base: `s6` starts as root, prepares `/config` and the
 # ingest folder, then drops to PUID/PGID. That is why `runAsNonRoot` and `runAsUser`
-# are absent — the container would not start — and why the capability set keeps
-# exactly the three calls that init makes: CHOWN to fix ownership, SETUID/SETGID to
-# drop. Nothing else is granted.
+# are absent, and why SETUID/SETGID stay: s6 drops privileges with them.
+#
+# DAC_OVERRIDE and FOWNER are not extra reach, they are what `root` normally has to
+# work on files it does not own. The image's init runs as root and writes into trees
+# that belong to 1100 — it creates `/app/calibre-web-automated/cps/cache`, writes
+# `/app/CWA_STABLE_RELEASE`, and sets owner and mode on the directories under
+# `/config` with `install -o 1100`. With only CHOWN/SETUID/SETGID those calls come
+# back `Operation not permitted` / `Permission denied`, because `root` without
+# DAC_OVERRIDE has no read of a 0700 directory owned by another uid, and without
+# FOWNER cannot `chmod` a file owned by one. The 2026-11-19 rollout showed all three
+# consequences in one log, see the README.
 #
 # `readOnlyRootFilesystem` was tried and does not work: the image writes its update
 # and theme-migration notices into `/app`, and the container logged
@@ -70,7 +78,7 @@ securityContext:
   readOnlyRootFilesystem: false
   capabilities:
     drop: [ALL]
-    add: [CHOWN, SETUID, SETGID]
+    add: [CHOWN, DAC_OVERRIDE, FOWNER, SETUID, SETGID]
 
 # `NETWORK_SHARE_MODE` is one switch over three mounts and only one of them is a
 # network share. It also makes the image skip the recursive chown of `/config`
@@ -81,6 +89,12 @@ securityContext:
 # that cannot start. Both are `local-path`, where the chown would have worked;
 # `/calibre-library` is the NFS mount that makes the switch necessary. This init
 # container does the chown the switch removed, before the app starts.
+#
+# Two capabilities, both needed: CHOWN to change the owner, DAC_OVERRIDE to walk
+# into the directories the app created as `0700` and 1100. The first rollout, on
+# 2026-11-19, added CHOWN alone and stopped on eight of them with `Permission
+# denied` — `chown -R` has to `readdir` a directory before it can descend, and
+# `root` without DAC_OVERRIDE has no read of a 0700 directory owned by another uid.
 claimOwnership:
   # -- Run the chown. Off means the pod starts as it did before 2026-11-19.
   enabled: true

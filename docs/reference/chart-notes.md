@@ -219,7 +219,12 @@ switch over three mounts, and upstream skips the recursive `chown` of `/config` 
 `/cwa-book-ingest` because of it. Only `/calibre-library` is NFS, so the app was starting as 1100 on
 two `local-path` claims it did not own — `install: cannot change owner`, `attempt to write a readonly
 database`, an AutoZipper that never started. The `claimOwnership` init container now does that chown,
-as root with `CHOWN` only; turning the mode off instead would put `metadata.db` in WAL on NFS. Its access control is the LAN allow list plus a sign-in: the UI can delete books and
+as root with `CHOWN` and `DAC_OVERRIDE`; turning the mode off instead would put `metadata.db` in WAL
+on NFS. The same rollout showed the capability set was a second defect of its own: `root` without
+`DAC_OVERRIDE`/`FOWNER` cannot read, write or `chmod` what 1100 owns, so the image's own init failed on
+`/app` and on `app.db` before any chown could help, and `sqlite3` reports that as `attempt to write a
+readonly database`. Both containers carry them now; nothing else was added and `privileged` stays
+false. Its access control is the LAN allow list plus a sign-in: the UI can delete books and
 rewrite files, and `calibre.kub.local` is only a DNS entry, so the shared `kube-system-lan-only`
 Middleware is what stops an outside request with `403` before the app sees it, and Calibre-Web asks
 authentik for a sign-in itself over OIDC (v4.0.8's generic provider, 2026-11-15). There is no proxy gate

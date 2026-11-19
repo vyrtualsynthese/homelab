@@ -140,12 +140,36 @@ Runtime error near line 1: attempt to write a readonly database (8)             
 AutoZipper could not be initiated ... attempt to write a readonly database                                       (every 23:59)
 ```
 
-The `claimOwnership` init container in `values.yaml` does the `chown` the switch removed, as root
-with `CHOWN` and nothing else, before the app starts. It walks both local claims, so it costs a
-metadata-only pass over `/config` at every start — the same walk the app used to do itself. The
-library stays out of it: a `chown` on the share is the share's business. Turning `NETWORK_SHARE_MODE`
-off instead would put `metadata.db` in WAL mode on NFS, which is the one thing this mode exists to
-prevent.
+The `claimOwnership` init container in `values.yaml` does the `chown` the switch removed, as root,
+before the app starts. It walks both local claims, so it costs a metadata-only pass over `/config` at
+every start — the same walk the app used to do itself. The library stays out of it: a `chown` on the
+share is the share's business. Turning `NETWORK_SHARE_MODE` off instead would put `metadata.db` in
+WAL mode on NFS, which is the one thing this mode exists to prevent.
+
+### Nothing root does on this pod works without DAC_OVERRIDE
+
+That is the second half of the same finding, and the first rollout on 2026-11-19 proved it the hard
+way. The chart's capability set was `drop: [ALL]` plus `CHOWN`, `SETUID`, `SETGID` — the three system
+calls `s6` seemed to make. It is not enough, because `root` is not special by its uid alone: its
+access to files it does not own comes from `DAC_OVERRIDE` (read, write and traverse), and its right to
+`chmod` one comes from `FOWNER`. With those dropped, and with `/app` and most of `/config` owned by
+1100, root's own init steps fail:
+
+```
+mkdir: cannot create directory '/app/calibre-web-automated/cps/cache': Permission denied
+Runtime error near line 1: attempt to write a readonly database (8)          (/config/app.db, mode 0600, 1100)
+/etc/s6-overlay/s6-rc.d/cwa-init/run: line 424: /app/CWA_STABLE_RELEASE: Permission denied
+chown: /config/processed_books/converted: Permission denied                 (the init container, CHOWN only)
+```
+
+The `readonly database` is the telling one: `app.db` was already 1100's, and the writer that fails is
+**root**, so no amount of chowning fixes it. `root` without `DAC_OVERRIDE` cannot open a `0600` file
+owned by 1100, and SQLite reports that as a read-only database rather than a permission error.
+
+Both containers therefore carry `DAC_OVERRIDE`, and the init container carries `CHOWN` too — it has to
+`readdir` a `0700` directory before it can descend into it, which is the `Permission denied` above.
+The app container also carries `FOWNER` for `install -o 1100 -m`, and keeps `SETUID`/`SETGID` for
+`s6`. Nothing else is granted, and `privileged` stays false.
 
 **The caveat, plainly:** upstream's wiki calls NFS unsupported and refuses to support it; upstream's
 release README documents this mode and says network shares are fully supported with it enabled. So
@@ -332,8 +356,10 @@ The image is a LinuxServer base: `s6` (the init supervisor inside the image) sta
 
 - `runAsNonRoot` and `runAsUser` are **absent**: setting either stops the container from starting.
   This is the documented LinuxServer exception, shared with `prowlarr`, `sonarr` and `tautulli`.
-- Capabilities are `ALL` dropped plus `CHOWN`, `SETUID`, `SETGID` — the three calls that init makes
-  and nothing else.
+- Capabilities are `ALL` dropped plus `CHOWN`, `DAC_OVERRIDE`, `FOWNER`, `SETUID`, `SETGID`. `CHOWN`
+  is the chown `s6` and `install` make, `SETUID`/`SETGID` the drop to 1100, and `DAC_OVERRIDE`/`FOWNER`
+  are what `root` normally relies on to read, write and `chmod` files owned by 1100 — without them the
+  image's own init fails on `/app` and on `app.db`. The worked example is under *Claim ownership*.
 - `allowPrivilegeEscalation: false` and `seccompProfile: RuntimeDefault` still apply and break
   nothing.
 - `fsGroup` is **not** set: `local-path` is hostPath-backed and the kubelet does not apply group
