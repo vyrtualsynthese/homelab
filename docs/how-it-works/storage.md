@@ -46,8 +46,8 @@ the classes below are what remains.
 
 Every NFS class there is a directory on a `nas` export, declared by its own release of the wrapper
 chart at `cluster/helm/nfs/provisioner/`: one chart, eight releases, one values file each. Two more
-classes, `nfs-plex` and `nfs-ssd`, belong to provisioners that exist only in the cluster — no chart,
-no Application — and no claim uses either. They are owed for removal by hand:
+classes, `nfs-plex` and `nfs-ssd`, belonged to provisioners that existed only in the cluster — no
+chart, no Application, no claim on either. They were uninstalled on 2026-11-19 with
 `helm uninstall nfs-hdd nfs-ssd -n default`.
 
 `local-path` is hostPath-backed: `fsGroup` does nothing, and `runAsUser` on a claim another UID wrote
