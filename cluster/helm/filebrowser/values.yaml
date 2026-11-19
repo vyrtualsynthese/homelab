@@ -21,6 +21,10 @@ nfsVolumes:
     pv: pv-filebrowser-download
     path: /mnt/ultrafaststorage/nfs
     accessMode: ReadWriteOnce
+  - claim: filebrowser-creator
+    pv: pv-filebrowser-creator
+    path: /mnt/storage/nfs/creator
+    accessMode: ReadWriteMany
 
 filebrowser-quantum:
   image:
@@ -28,6 +32,15 @@ filebrowser-quantum:
     # renovate: datasource=docker depName=gtsteffaniak/filebrowser
     tag: 2.0.2-stable
     pullPolicy: IfNotPresent
+
+  # The chart generates this password with `rand` on every render and emits it
+  # unquoted, so a password that starts with `#` produces invalid YAML (seen
+  # once in this repo). The password method is off, so the value cannot be used
+  # to sign in; pinning it makes renders deterministic. Turning password login
+  # back on in a recovery means setting a real value here first — the runbook
+  # says so.
+  adminPassword:
+    passwordOverride: "oidc-only-no-local-login"
 
   # PUID/PGID of the rest of the stack; the NAS exports are written by it.
   securityContext:
@@ -62,6 +75,9 @@ filebrowser-quantum:
     - name: qbittorrent-download-volume
       persistentVolumeClaim:
         claimName: filebrowser-download
+    - name: creator-volume
+      persistentVolumeClaim:
+        claimName: filebrowser-creator
 
   extraVolumeMounts:
     - name: stash-volume
@@ -70,6 +86,8 @@ filebrowser-quantum:
       mountPath: /srv/audio
     - name: qbittorrent-download-volume
       mountPath: /srv/torrent
+    - name: creator-volume
+      mountPath: /srv/creator
 
   # The client id is public; the secret is the only value from a Secret.
   extraEnv:
@@ -94,6 +112,10 @@ filebrowser-quantum:
             defaultEnabled: false
         - path: /srv/torrent
           name: torrent
+          config:
+            defaultEnabled: false
+        - path: /srv/creator
+          name: creator
           config:
             defaultEnabled: false
     auth:
