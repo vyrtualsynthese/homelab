@@ -18,14 +18,14 @@ different place where a version is written:
 | Manager | What it reads | Scope, 2026-11-19 |
 |---|---|---|
 | `helm-values` | every `cluster/helm/**/values.yaml`: an `image:` block, and a single-string `image: repo:tag` | 79 images |
-| custom regex, values | a `# renovate: datasource=… depName=…` line above a `version`, `appVersion`, `initTag` or `dockerTag` key | qBittorrent's VueTorrent release and the Alpine base of its installer |
+| custom regex, values | a `# renovate: datasource=… depName=…` line above a `version`, `appVersion`, `initTag`, `dockerTag` or `tag` key | qBittorrent's VueTorrent release, the Alpine base of its installer, and n8n's tag |
 | custom regex, templates | a literal `image: repo:tag` under `cluster/helm/**/templates/**` | five init containers and Authentik's kubectl hook |
 | `helmv3` | `dependencies:` in every `Chart.yaml` | 11 chart versions |
 | `argocd` | `targetRevision:` on a `chart:` in the Applications | the NFS provisioner chart, in two Applications |
 | `docker-compose` | the edge Pis' `docker-compose.yml` under `ansible/` | 9 images |
 | `kubernetes` | `image:` in the hand-applied manifests under `kubectl/` and `cluster/infrastructure/` | one `latest` scratch pod, nothing to update |
 
-Three of the rules in that file exist because of a failure, and they read as arbitrary without it:
+Four of the rules in that file exist because of a failure, and they read as arbitrary without it:
 
 - **LinuxServer tags.** The publisher writes the image build after the app version (`1.30.4-ls332`),
   and Docker's default versioning reads `-ls332` as a compatibility suffix. Renovate never crosses
@@ -42,6 +42,16 @@ Three of the rules in that file exist because of a failure, and they read as arb
   `targetRevision: develop` on this repository. There is no version to move to, and a tag written
   there would stop the GitOps sync, so renaming it a dependency only invented 56 rows on the
   dashboard.
+- **n8n's tag is read from GitHub releases, not Docker Hub.** n8n publishes its prerelease builds to
+  Docker Hub as ordinary version tags (`2.49.1`, `3.3.0`) and marks them as prereleases only in the
+  GitHub release, so the docker datasource treated `3.3.0` as a normal major upgrade (pull request
+  #1001). `cluster/helm/n8n/values.yaml` now carries a
+  `# renovate: datasource=github-releases depName=n8n-io/n8n` annotation, the docker entry for
+  `n8nio/n8n` is switched off in `packageRules` so the same pin is not read twice, and a second rule
+  strips the `n8n@` prefix off the release tags (`extractVersion`). That last part is not optional:
+  the default versioning reads the letters in `n8n@2.48.6` as the number 8, then judges every release
+  a major jump and hides all of them. The lookup on 2026-11-19 offered `2.48.6`, the newest stable,
+  and nothing from the `2.49.x` or `3.x` prerelease lines.
 
 ## Where the configuration lives, and when a change takes effect
 
@@ -59,6 +69,18 @@ npx --yes --package renovate@44.252.7 renovate-config-validator .github/renovate
 The validator catches a removed or renamed key and prints the migration for it. It does not catch a
 `packageRules` entry that matches nothing, so a rule that stops working can fail silently: the
 dependency dashboard issue is the place a coverage regression shows up as a pin that never moves.
+
+To see what one pin would actually get, before the change reaches `main`, run a lookup against the
+working copy. `newValue` in the output is what Renovate would write into the file:
+
+```bash
+RENOVATE_HOST_RULES="$(node -e 'console.log(JSON.stringify([{hostType:"github",matchHost:"api.github.com",token:process.env.GITHUB_PERSONAL_ACCESS_TOKEN}]))')" \
+  npx --yes --package renovate@44.252.7 renovate --platform=local --dry-run=lookup \
+  --include-paths='cluster/helm/n8n/values.yaml' --base-branch-patterns='.*'
+```
+
+The token is only needed for a dependency whose datasource is GitHub-hosted; the docker lookups run
+without one.
 
 ## The token
 
