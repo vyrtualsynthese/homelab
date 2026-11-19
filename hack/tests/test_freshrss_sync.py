@@ -246,7 +246,7 @@ class CliTests(unittest.TestCase):
         self.assertEqual(rows, [("HTTP429", "KBDfans", 0, "")])
 
     def test_apply_reports_a_refused_feed_and_still_subscribes_the_rest(self):
-        t = FakeTransport(subs=[], refuse=("https://mistral.ai/news/rss",))
+        t = FakeTransport(subs=[], refuse=("https://mistral.ai/news/rss#force_feed",))
         code = mod.main(["apply"], transport=t, env=self.ENV)
         self.assertEqual(code, 1)
         bodies = b"".join(c[3] or b"" for c in t.calls if b"ac=subscribe" in (c[3] or b""))

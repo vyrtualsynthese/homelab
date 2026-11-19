@@ -74,9 +74,11 @@ project may resume; it costs one line in the folder.
 | Mistral | native | `https://mistral.ai/news/rss` |
 | Anthropic / Claude | XPath | `https://www.anthropic.com/news` |
 
-Mistral's feed answers `content-type: text/plain` and the instance refuses it at creation (HTTP
-500 from `subscription/edit`), while the same URL parses fine from a workstation. See "Refused by
-the instance" below.
+Mistral serves its feed as `content-type: text/plain`, so the instance parses it only when the
+subscription URL carries FreshRSS's force-feed marker: the file asks for
+`https://mistral.ai/news/rss#force_feed`, and that is the subscription the instance holds. The API
+also refuses the plain URL at creation (HTTP 500 from `subscription/edit`). See "Feeds the API will
+not take" below.
 
 OpenAI and ChatGPT were dropped by decision, not for lack of a feed: its official feed carries 1413
 items of backlog.
@@ -92,8 +94,10 @@ items of backlog.
 The KBDfans collections rate-limit (HTTP 429) when polled hard. FreshRSS polls on a schedule, which
 is far below the limit; a `verify` run that reports 429 is the runner asking too often.
 
-Both KBDfans collections are refused by the instance today: `subscription/edit` answers 500 while
-the same URLs answer 200 from a workstation. See "Refused by the instance" below.
+The API refuses both KBDfans collections at creation: `subscription/edit` answers 500 while the same
+URLs answer 200 from a workstation. The OPML import subscribes them anyway, and as of 2026-11-19
+the instance holds them with no entries — the fetch from the pod is what fails. See "Feeds the API
+will not take" below.
 
 An old Rise of Gunpla kit coming back in stock is **not** covered. FreshRSS drops an item it
 already holds, so the same product cannot fire twice. That needs a change tracker, which is a
@@ -136,10 +140,15 @@ The four XPath feeds carry their selectors in the OPML itself, as `frss:xPathIte
 the format FreshRSS writes on export and reads on import. So they are configured by one import, not
 by four visits to the feed settings.
 
-In the web UI: *Subscription management* → *Import / export* → *OPML* → choose
-`hack/freshrss/feeds.opml` → *Upload*. Feeds already present are skipped, which is also the catch:
-changing a selector in the file does not reach an existing feed. Delete that feed first, then
-import again.
+As of 2026-11-19 all four are on the live instance. The check is the instance's own export
+(`/reader/api/0/subscription/export`): it carries the same four `frss:xPathItem` and twelve
+`frss:cssFullContent` attributes as the file, feed for feed.
+
+An import skips a feed the instance already holds, which is also the catch: changing a selector in
+the file does not reach an existing feed. Unsubscribe that feed, then import again. The unsubscribe
+is reachable with the API password alone — `subscription/edit` with `ac=unsubscribe`, one call per
+URL, the call `apply --prune` already makes — so only the import needs the web UI: *Subscription
+management* → *Import / export* → *OPML* → choose `hack/freshrss/feeds.opml` → *Upload*.
 
 | Feed | Item | Title | Link |
 |---|---|---|---|
@@ -148,8 +157,8 @@ import again.
 | Elite Dangerous | `//a[starts-with(@href,'/news/')]` | `normalize-space(.)` | `@href` |
 | Anthropic / Claude | `//a[starts-with(@href,'/news/')]` | `normalize-space(.)` | `@href` |
 
-Counts observed on 2026-11-19, from the live pages: Star Citizen 9, Final Fantasy XIV 9, Elite
-Dangerous 57, Anthropic 26.
+Entries the instance held on 2026-11-19: Star Citizen 9, Final Fantasy XIV 9, Elite Dangerous 42,
+Anthropic 48.
 
 These are the brittle part of the set. A page redesign breaks them silently, and `verify` reports
 `NOT-XML` for an XPath feed because the raw URL is HTML — that is expected, not a failure. Check
@@ -197,7 +206,7 @@ Discord, Docker, Kubernetes, WSL2, Logseq, selfh.st, Simon Willison and Guild Wa
 five that have a selector — Phoronix, Rise of Gunpla, Final Fantasy XIV, Elite Dangerous and
 Anthropic — the selector is what brings the pictures, since the feed itself carries none.
 
-Five get nothing, and the reason is the source rather than a missing setting:
+Four get nothing, and the reason is the source rather than a missing setting:
 
 | Feed | Why not |
 |---|---|
@@ -205,32 +214,40 @@ Five get nothing, and the reason is the source rather than a missing setting:
 | Star Citizen comm-link | the article is built by JavaScript, so the HTML the fetcher receives is empty |
 | Lobsters | the item is a link to someone else's site; fetching it would copy their page |
 | Hacker News | same |
-| Mistral, KBDfans ×2 | refused by the instance (see below), so there is no feed to attach a selector to |
 
-On the live instance the twelve feeds exist already, and the OPML import skips a feed it already
-holds. So the selectors reach a fresh instance through the import, but each existing feed needs
-*Subscription management* → the feed → *Retrieve full content* set once in the web UI. Deleting the
-feed and importing again is the other route, and the cheaper one when several need it at once.
+Mistral and the two KBDfans collections carry no selector either, for a different reason: the file
+gives them none. Mistral arrives as the publisher's summary; the KBDfans feeds have delivered
+nothing so far (see "Feeds the API will not take").
 
-## Refused by the instance
+The twelve are on the live instance as of 2026-11-19. They got there by unsubscribing the ten feeds
+the instance held and importing the file once — an import cannot change a feed it already holds. The
+evidence is the instance's own export, which carries the twelve `frss:cssFullContent` values, and
+the newest entries themselves: between 1 kB and 80 kB of the publisher's HTML, where the feed alone
+carries a summary.
 
-Three feeds are in the list and in the OPML, and the instance will not take them: `subscription/edit`
-answers HTTP 500 for each while the same URLs return a valid feed from a workstation on 2026-11-19.
+## Feeds the API will not take
 
-| Feed | URL | Observed |
+Three feeds are in the file and `subscription/edit` answers HTTP 500 for each, while the same URLs
+return a valid feed from a workstation. The OPML import subscribes all three anyway, because it does
+not ask the instance to fetch the URL first, so the feeds exist and the open question is whether
+they deliver.
+
+| Feed | URL | State on 2026-11-19 |
 |---|---|---|
-| Mistral | `https://mistral.ai/news/rss` | 94 items from a workstation; served as `text/plain`; instance answers 500 |
-| KBDfans — new arrivals | `https://kbdfans.com/collections/new-arrival.atom` | 200 from a workstation; instance answers 500 |
+| Mistral | `https://mistral.ai/news/rss#force_feed` | 94 entries as the publisher's summary; the plain URL delivered nothing, the marker is what changed it |
+| KBDfans — new arrivals | `https://kbdfans.com/collections/new-arrival.atom` | subscribed, zero entries after a refresh run |
 | KBDfans — restock | `https://kbdfans.com/collections/restock.atom` | same |
 
-`check` reports them as missing, which is the truth: the file asks for them and the instance does
-not hold them. What was ruled out: rate limiting (KBDfans answered 200 at the time of the retry) and
-a typo (the URLs are the ones verified in the design). What was not checked: the pod's own log,
-because the read-only ServiceAccount cannot exec into it.
+`check` passes on all three: the file asks for them and the instance holds them. It cannot see that
+the two KBDfans feeds are silent.
+
+What was ruled out for KBDfans: rate limiting (the URLs answered 200 from a workstation at the time
+of the retry) and a typo (the URLs are the ones verified in the design). What is still unchecked is
+the pod's own log, because the read-only ServiceAccount cannot exec into it.
 
 Next step when someone has cluster access: read
-`/config/www/freshrss/data/users/<user>/log.txt` in the `news` namespace for the 500, then set the
-per-feed user agent or the feed type in the UI accordingly.
+`/config/www/freshrss/data/users/<user>/log.txt` in the `news` namespace for the fetch error, then
+set the per-feed user agent or the feed type in the UI accordingly.
 
 ## Categories
 
