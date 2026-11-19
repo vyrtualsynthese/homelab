@@ -65,7 +65,9 @@ env:
   # Cuts the all-zero queue summary. The noise floor is one line per tracked item
   # per minute (measured on 0.16.1 on 2026-11-13, about 13k lines a day, mostly
   # "Imported, elapsed: N"). unpackerr has no log level; `quiet` is not an option
-  # because it silences errors too.
+  # because it silences errors too. On 2026-11-19 the items behind those lines
+  # turned out to be unimportable *arr queue entries; the README records which
+  # were cleared and how to read the remaining count.
   UN_ACTIVITY: "true"
   UN_INTERVAL: "1m"
   UN_START_DELAY: "1m"
