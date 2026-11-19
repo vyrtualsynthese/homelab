@@ -103,8 +103,8 @@ they are what everything above stands on.
 
 All eight provisioners are one release each of the wrapper chart at
 `cluster/helm/nfs/provisioner/`, one values file per export, and every release asks for `streaming`.
-Where the Node column says `nuc0` — five rows — that is where the pod was at
-verification; the next sync moves it. None of the eight selects the retired `node-type` label.
+The Node column records where each pod ran at verification; each row moves to `streaming` as its
+Application syncs. None of the eight selects the retired `node-type` label.
 
 ## The older charts still select the retired label
 
