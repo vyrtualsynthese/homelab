@@ -258,26 +258,31 @@ the article bodies it has fetched under `/config`, so the 128Mi settings-sized d
 within days. The pod stays on `nuc0`, which is what the retired `node-type: general` label used to
 select.
 
-Two things make it unusual. **No health endpoint exists**, so the probes split the question: startup
-and liveness are a TCP connect (is PHP-FPM listening), while readiness is `GET /i/`, which boots PHP,
-runs pending migrations and reads the user table — a dead SQLite file fails there and passes the TCP
-check. `/` is never used: it is a 301 to `p/` and answers with a broken backend. And **there is no
-log-level variable**: FreshRSS logs per user into `/config` and leaves PHP errors on stderr at the
-`php.ini` default, so the chart sets nothing and the README says what that costs.
+On 2026-11-19 the chart also moved to the **official `freshrss/freshrss` image**, because native OIDC
+needs the Apache module `mod_auth_openidc` and the LinuxServer image (nginx) has none. Two
+consequences. The data root is `DATA_PATH=/config/data`, not the claim root: the claim root was
+chowned to uid 1100 by the old image, and the container can change a file's group but not its mode
+without `FOWNER`, so the Apache worker could not write there. And the capability set keeps
+`DAC_OVERRIDE` for a new reason: the entrypoint runs as root and must create that data directory
+inside the 1100-owned claim. The old LinuxServer tree stays at `/config/www`, unread.
 
-The first sync proved one more thing about the hardening: `drop: [ALL]` plus the s6 init's three
-capabilities is one short for this image. Its nginx and php-fpm masters start as root and then read
-`/config/keys/cert.key` and write `/config/log/php/error.log`, both owned by 1100, so without
-`DAC_OVERRIDE` root is bound by the file modes like any other user and the container comes up
-`Running` but never ready, with nginx dead and `Permission denied (13)` in the log. The chart adds
-that one capability back, with the reason written next to it; the other LinuxServer charts do not
-need it because their apps never ask root to touch a 1100-owned file.
+Two things were unusual already and stay. **No health endpoint exists**, so the probes split the
+question: startup and liveness are a TCP connect, while readiness is `GET /i/`. With OIDC on that
+path answers `302` to authentik, which a probe counts as ready; it still boots Apache and PHP, so a
+dead worker fails there and passes the TCP check. `/` is never used: it is a 301 to `p/` and answers
+with a broken backend. And **there is no log-level variable**: FreshRSS logs per user under the data
+root and leaves PHP errors on stderr at the `php.ini` default, so the chart sets nothing and the
+README says what that costs.
 
-Debt: the image's 15-minute refresh cron writes `actualize_script.php` output to `/tmp/FreshRSS.log`
-inside the container, which Fluent Bit does not read, so refresh failures are only visible with
-`kubectl exec`; the `security` middleware renders but no route lists it; and the sizing is unmeasured,
-because the app has no sample in the six days Prometheus keeps. The `FreshRSS-AutoTTL` init container
-is gone — it cloned from `https://server/repo`, a placeholder that could only fail.
+The route has no authentik middleware. OIDC in the app is the only prompt; only `/i/` is behind the
+module, so `/p/api/` keeps its own login and the phone app and the feed sync keep working. `lan-only`
+stays, because a sign-in is not a network boundary.
+
+Debt: the refresh cron enabled by `CRON_MIN` writes `actualize_script.php` output to
+`/tmp/FreshRSS.log` inside the container, which Fluent Bit does not read, so refresh failures are only
+visible with `kubectl exec`; the `security` middleware renders but no route lists it; and the sizing
+is unmeasured. The `FreshRSS-AutoTTL` init container is gone — it cloned from `https://server/repo`, a
+placeholder that could only fail.
 
 ### koillection
 
