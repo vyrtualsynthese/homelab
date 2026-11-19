@@ -24,7 +24,8 @@ image:
 # the key is how an image silently stops being updated.
 vpnimage:
   repository: ghcr.io/linuxserver/wireguard
-  # -- Pin the tag. Never `latest`. Renovate manages this row.
+  # -- Pin the tag. Never `latest`. Renovate manages this row: the key name
+  # contains `image`, which is what its helm-values manager matches on.
   tag: 1.0.20260223
   pullPolicy: IfNotPresent
 
