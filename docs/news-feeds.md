@@ -62,6 +62,10 @@ project may resume; it costs one line in the folder.
 | Feed | How | URL |
 |---|---|---|
 | Mistral | native | `https://mistral.ai/news/rss` |
+
+Mistral's feed answers `content-type: text/plain` and the instance refuses it at creation (HTTP
+500 from `subscription/edit`), while the same URL parses fine from a workstation. See "Refused by
+the instance" below.
 | Anthropic / Claude | XPath | `https://www.anthropic.com/news` |
 
 OpenAI and ChatGPT were dropped by decision, not for lack of a feed: its official feed carries 1413
@@ -77,6 +81,9 @@ items of backlog.
 
 The KBDfans collections rate-limit (HTTP 429) when polled hard. FreshRSS polls on a schedule, which
 is far below the limit; a `verify` run that reports 429 is the runner asking too often.
+
+Both KBDfans collections are refused by the instance today: `subscription/edit` answers 500 while
+the same URLs answer 200 from a workstation. See "Refused by the instance" below.
 
 An old Rise of Gunpla kit coming back in stock is **not** covered. FreshRSS drops an item it
 already holds, so the same product cannot fire twice. That needs a change tracker, which is a
@@ -137,6 +144,26 @@ Dangerous 57, Anthropic 26.
 These are the brittle part of the set. A page redesign breaks them silently, and `verify` reports
 `NOT-XML` for an XPath feed because the raw URL is HTML — that is expected, not a failure. Check
 the folder in the web UI instead.
+
+## Refused by the instance
+
+Three feeds are in the list and in the OPML, and the instance will not take them: `subscription/edit`
+answers HTTP 500 for each while the same URLs return a valid feed from a workstation on 2026-11-19.
+
+| Feed | URL | Observed |
+|---|---|---|
+| Mistral | `https://mistral.ai/news/rss` | 94 items from a workstation; served as `text/plain`; instance answers 500 |
+| KBDfans — new arrivals | `https://kbdfans.com/collections/new-arrival.atom` | 200 from a workstation; instance answers 500 |
+| KBDfans — restock | `https://kbdfans.com/collections/restock.atom` | same |
+
+`check` reports them as missing, which is the truth: the file asks for them and the instance does
+not hold them. What was ruled out: rate limiting (KBDfans answered 200 at the time of the retry) and
+a typo (the URLs are the ones verified in the design). What was not checked: the pod's own log,
+because the read-only ServiceAccount cannot exec into it.
+
+Next step when someone has cluster access: read
+`/config/www/freshrss/data/users/<user>/log.txt` in the `news` namespace for the 500, then set the
+per-feed user agent or the feed type in the UI accordingly.
 
 ## Categories
 

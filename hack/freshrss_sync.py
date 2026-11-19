@@ -84,7 +84,12 @@ class Plan:
 
 
 def plan(local: Sequence[Feed], remote: Sequence[tuple[str, str]]) -> Plan:
-    """Diff the file against what the instance reports, as (url, category) pairs."""
+    """Diff the file against what the instance reports, as (url, category) pairs.
+
+    Entries whose id is not a URL are FreshRSS's own internal feeds (its release feed is `1`); the
+    file can never list them, so they are not drift and must never be pruned.
+    """
+    remote = [(url, cat) for url, cat in remote if "://" in url]
     by_url = {normalize_url(f.url): f for f in local}
     remote_by_url = {normalize_url(url): cat for url, cat in remote}
 
@@ -167,18 +172,26 @@ class Client:
             raise RuntimeError(f"subscription/list answered {status}")
         pairs = []
         for sub in json.loads(body).get("subscriptions", []):
-            url = sub.get("id", "").removeprefix("feed/")
+            # 1.30 answers a numeric id ("feed/5") and puts the address in url.
+            url = sub.get("url") or sub.get("id", "").removeprefix("feed/")
             categories = sub.get("categories") or [{"label": "Uncategorized"}]
             pairs.append((url, categories[0].get("label", "Uncategorized")))
         return pairs
 
     def subscribe(self, feed: Feed) -> None:
-        self._post("/reader/api/0/subscription/edit", {
-            "ac": "subscribe",
-            "s": "feed/" + feed.url,
-            "a": "user/-/label/" + feed.category,
-            "T": self.token(),
-        })
+        try:
+            self._post("/reader/api/0/subscription/edit", {
+                "ac": "subscribe",
+                "s": "feed/" + feed.url,
+                "a": "user/-/label/" + feed.category,
+                "T": self.token(),
+            })
+        except RuntimeError:
+            # The instance answers 500 for a feed it already holds. It is only an error if the
+            # feed is not there afterwards.
+            if normalize_url(feed.url) in {normalize_url(u) for u, _ in self.subscriptions()}:
+                return
+            raise
 
     def unsubscribe(self, url: str) -> None:
         self._post("/reader/api/0/subscription/edit", {
@@ -279,15 +292,21 @@ def main(argv: list[str] | None = None,
         print(f"+ {feed.category}/{feed.title}")
     for url, category in diff.to_prune:
         print(f"- {url} ({category})")
+    xpath = [f for f in diff.to_subscribe if f.kind == "xpath"]
     print(f"{len(diff.to_subscribe)} to subscribe, {len(diff.to_prune)} extra, "
-          f"{len(diff.unchanged)} unchanged")
+          f"{len(diff.unchanged)} unchanged, {len(xpath)} XPath (OPML import)")
+    for feed in xpath:
+        print(f"~ {feed.category}/{feed.title}: subscribe by importing the OPML, "
+              f"the API refuses a page that is not a feed")
 
     if command == "check":
-        return 1 if (diff.to_subscribe or diff.to_prune) else 0
+        return 1 if diff.to_subscribe else 0
     if "--dry-run" in flags:
         return 0
 
     for feed in diff.to_subscribe:
+        if feed.kind == "xpath":
+            continue
         client.subscribe(feed)
     if "--prune" in flags:
         for url, _ in diff.to_prune:
