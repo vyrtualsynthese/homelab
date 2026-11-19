@@ -340,10 +340,14 @@ chart must not set `fsGroup`, which the kubelet never applies on hostPath-backed
 
 The probes are the narrow pair. The image has no health endpoint: `/` returns the login page with a
 200 whether or not an IRC network is reachable, so liveness is a TCP connect on 9000 and readiness
-is off, with the reason next to the values. `config.js` is a file, so it lives in a ConfigMap mounted
-with `subPath`; the Deployment hashes it into `checksum/config` because a `subPath` mount never sees
-the update on its own. The init container that copied the file into the claim on every start is gone,
-and with it `busybox:1.35`.
+is off, with the reason next to the values. `config.js` is a file, so its source is a ConfigMap; an
+init container copies it into the claim as UID 1000 on every start. The rebuild had removed that
+copy, and it came back on 2026-11-19: The Lounge's `verifyFileOwner()` warns on every start when
+`<home>/config.js` is not owned by the UID it runs as, and every file a ConfigMap volume provides is
+owned by root, so a `subPath` mount of it is a warning on every start by construction. The copy uses
+the app's own image rather than another `busybox`, and the Deployment still hashes the ConfigMap into
+`checksum/config`, because the copy happens at pod start and an edit otherwise waits for a restart
+nobody planned.
 
 The gate is forward auth, not OIDC: The Lounge has none, and the LDAP provider its own integration
 guide uses needs an LDAP outpost this cluster does not run. So the route is `lan-only` then

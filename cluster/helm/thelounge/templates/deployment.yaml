@@ -17,10 +17,10 @@ spec:
         {{- with .Values.podAnnotations }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
-        {{- /* The config file is mounted with `subPath`, which does not update
-        when the ConfigMap changes. Hashing it makes an edit to config.js roll
-        the pod, instead of leaving the old file in place until the next
-        restart that nobody planned. */}}
+        {{- /* The init container copies `config.js` into the claim at pod start,
+        so an edit to the ConfigMap only reaches the app on the next pod. Hashing
+        it makes that edit roll the pod, instead of waiting for a restart nobody
+        planned. */}}
         checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
       labels:
         {{- include "app.labels" . | nindent 8 }}
@@ -35,6 +35,31 @@ spec:
       serviceAccountName: {{ include "app.serviceAccountName" . }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      {{- if .Values.storage.enabled }}
+      initContainers:
+        # The Lounge warns when `<home>/config.js` is not owned by the UID it runs
+        # as (`verifyFileOwner()`), and every file a ConfigMap volume provides is
+        # owned by root. Copy it into the claim first, as the app's own UID, so the
+        # app reads a file it owns. Same image as the app: no second tag to pin,
+        # no second pull.
+        - name: config-file
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command:
+            - sh
+            - -c
+            - cp {{ .Values.configFile.sourcePath }}/config.js {{ .Values.storage.mountPath }}/config.js
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          resources:
+            {{- toYaml .Values.configFile.initResources | nindent 12 }}
+          volumeMounts:
+            - name: config-file
+              mountPath: {{ .Values.configFile.sourcePath }}
+              readOnly: true
+            - name: config
+              mountPath: {{ .Values.storage.mountPath }}
+      {{- end }}
       {{- $claimName := include "app.configClaimName" . }}
       containers:
         - name: {{ .Chart.Name }}
@@ -88,10 +113,6 @@ spec:
             - name: config
               mountPath: {{ .Values.storage.mountPath }}
             {{- end }}
-            - name: config-file
-              mountPath: {{ .Values.storage.mountPath }}/config.js
-              subPath: config.js
-              readOnly: true
             {{- with .Values.volumeMounts }}
             {{- toYaml . | nindent 12 }}
             {{- end }}

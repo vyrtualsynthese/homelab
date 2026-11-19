@@ -5,8 +5,10 @@ metadata:
   labels:
     {{- include "app.labels" . | nindent 4 }}
 data:
-  # The app reads this file at startup. Mounted with `subPath`, so an edit only
-  # reaches a running pod after a restart; the Deployment carries a checksum of
-  # this object to make that restart happen.
+  # The app reads this file at startup. An init container copies it into the
+  # claim as the app's own UID first: a ConfigMap volume is root-owned, and The
+  # Lounge warns when `config.js` is not owned by the UID it runs as. An edit
+  # therefore only reaches a running pod after a restart, and the Deployment
+  # carries a checksum of this object to make that restart happen.
   config.js: |-
 {{ .Files.Get "config.js" | indent 4 }}
