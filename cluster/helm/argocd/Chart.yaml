@@ -3,7 +3,8 @@ name: argocd
 description: Argo CD - the cluster's GitOps controller
 type: application
 version: 0.1.0
-appVersion: "3.5.2"
+# No appVersion: the controller image tag is the dependency's appVersion, so a
+# value here would only drift from what runs (card 344).
 dependencies:
   - name: argo-cd
     version: 10.4.1

@@ -4,7 +4,7 @@
 
 **Goal:** Put the cluster's Argo CD under the same GitOps it runs for everything else: a wrapper chart on `argo-cd` 10.4.1, an Application beside the others, the hand-run release retired, and the recovery procedure written down.
 
-**Architecture:** `cluster/helm/argocd/` becomes a wrapper chart (pattern D) whose only dependency is `argo-cd`, pinned to `10.4.1`; the existing values move under the `argo-cd:` key unchanged, so the render matches the live objects byte for byte. `cluster/argocd/projects/platform/argocd.yaml` then points at it. Adoption — one UI sync, the Helm release secret's deletion, and the auto-sync toggle — is the operator's, not the agent's.
+**Architecture:** `cluster/helm/argocd/` becomes a wrapper chart (pattern D) whose only dependency is `argo-cd`, pinned to `10.4.1`; the existing values move under the `argo-cd:` key unchanged, so the render matches the chart output of the previous file byte for byte. The first sync is diffed against the cluster before it runs, because nothing in git proves the last hand run applied that file. `cluster/argocd/projects/platform/argocd.yaml` then points at it. Adoption — one UI sync, the Helm release secret's deletion, and the auto-sync toggle — is the operator's, not the agent's.
 
 **Tech Stack:** Helm 4, Argo CD 10.4.1 (app `v3.5.2`), Traefik 2 CRDs, MkDocs nav, Vikunja REST v2.
 
@@ -369,9 +369,14 @@ Expected: `201`. The card stays in `Doing`: the adoption is the blocker, and it 
 
 Recorded here so the PR body and the card comment carry it verbatim.
 
+- [ ] Render and diff against the cluster before the first sync:
+  `helm template argocd cluster/helm/argocd -n argocd | kubectl diff -f -`. This is the only step that
+  compares the file with what runs; the identity proof in Task 1 compared the file with itself.
+  Resolve what it shows first — the `*.log.level: warn` block from 606e13ac may never have reached the
+  cluster through the old hand run.
 - [ ] Merge the PR. `argocd-root` creates the Application; it shows `OutOfSync`, nothing applied.
-- [ ] Sync `argocd` from the UI, prune **off**. Pods should not restart: Task 1 proved the render
-  equals the live objects.
+- [ ] Sync `argocd` from the UI, prune **off**. Pods restart only where the diff showed drift: a roll
+  is expected if the log-level keys were never applied, and is not a failure of the adoption.
 - [ ] Verify: server loads at `https://argocd.kub.local`, SSO signs in, both routes answer, the child
   Applications still list and compare.
 - [ ] `helm -n argocd list` to read the revision, then
@@ -379,7 +384,8 @@ Recorded here so the PR body and the card comment carry it verbatim.
 - [ ] Enable auto-sync with prune for the `argocd` Application in the UI, not in git.
 - [ ] Close PR #966 with a comment: the image moves with the chart dependency now, and the
   `v3.6.1` upgrade is a chart bump to `10.15.0` or later, tracked on its own.
-- [ ] On Renovate's next run, confirm it lists `argo-cd` under `cluster/helm/argocd/Chart.yaml` and
-  opens no docker-tag PR for `quay.io/argoproj/argocd` from that file. Nothing else in the repo
-  changes for this.
+- [ ] On Renovate's next run, confirm it lists `argo-cd` under `cluster/helm/argocd/Chart.yaml`, and
+  that it proposes the dex and redis pins as well as the chart — not a docker-tag PR for
+  `quay.io/argoproj/argocd` from that file, which would undo the single lever. Nothing else in the
+  repo changes for this.
 - [ ] Move card 344 to `Validation` once the three checks above pass, with the sync's evidence.

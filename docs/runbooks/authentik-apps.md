@@ -178,8 +178,8 @@ Order matters on the first cut-over to TLS: sync `authentik` first, so the provi
 where the provider still knows only `http` and refuses the new redirect.
 
 A values change reaches the cluster on the next sync of the `argocd` Application — there is no
-`helm upgrade` step, and the Helm release record was deleted when the Application took over. If the
-controller itself is down, [`argocd.md`](argocd.md) has the by-hand rebuild.
+`helm upgrade` step, and the Helm release record is deleted on adoption. If the controller itself is
+down, [`argocd.md`](argocd.md) has the by-hand rebuild.
 
 The values carry `g, authentik Admins, role:admin` and `g, homelab-users, role:readonly`. There is
 **no local account**: `admin.enabled: "false"`, so authentik is the only way in. Break-glass is
