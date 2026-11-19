@@ -11,4 +11,8 @@ spec:
   source:
     repoURL: 'https://github.com/vyrtualsynthese/homelab.git'
     targetRevision: develop
-    path: cluster/helm/nfs/nfs-qbittorrent-config
+    path: cluster/helm/nfs/provisioner
+    helm:
+      releaseName: nfs-qbittorrent-config
+      valueFiles:
+        - values/nfs-qbittorrent-config.yaml
