@@ -12,12 +12,15 @@ replicaCount: 1
 strategy: Recreate
 
 image:
-  # LinuxServer publishes on lscr.io. The image starts as root, prepares /config,
-  # then drops to PUID/PGID through s6; that is why the securityContext below
-  # cannot use runAsNonRoot (see the chart README).
-  repository: lscr.io/linuxserver/freshrss
+  # The official image, and the only one that carries OIDC: it is Debian on
+  # x86_64 and ships Apache with mod_auth_openidc. The LinuxServer image this
+  # chart used to run is nginx and has no such module. The entrypoint still
+  # starts as root, chowns the data into the `www-data` group, then Apache
+  # drops to that user; that is why the securityContext below cannot use
+  # runAsNonRoot (see the chart README).
+  repository: freshrss/freshrss
   # Pinned, never floating. Bumped by hand with appVersion in Chart.yaml.
-  tag: 1.30.4-ls332
+  tag: 1.30.4
   pullPolicy: IfNotPresent
 
 imagePullSecrets: []
@@ -34,22 +37,19 @@ serviceAccount:
 podAnnotations: {}
 podLabels: {}
 
-# The LinuxServer init needs to write /config as root before dropping to
-# PUID/PGID, and local-path does not apply fsGroup to a hostPath volume. So no
-# fsGroup, and no runAsUser here: both look right and do nothing.
+# The entrypoint writes /config as root before Apache drops to www-data, and
+# local-path does not apply fsGroup to a hostPath volume. So no fsGroup, and no
+# runAsUser here: both look right and do nothing.
 podSecurityContext: {}
 
 securityContext:
   allowPrivilegeEscalation: false
-  # The s6 init hands /config to PUID/PGID with CHOWN, then drops to that user
-  # with SETUID/SETGID. DAC_OVERRIDE is the fourth one this image needs and the
-  # other LinuxServer charts do not: its nginx and php-fpm *masters* start as
-  # root and then read and write files under /config that belong to abc (1100),
-  # such as the TLS key the image generates and /config/log/php/error.log. With
-  # `drop: [ALL]` and no DAC_OVERRIDE, root is bound by those file modes like
-  # any other user, and the first start dies with `Permission denied (13)` on
-  # both. Dropping it is not an option while those two processes run as root;
-  # everything else stays dropped.
+  # The entrypoint runs as root: it creates the data root, hands it to the
+  # `www-data` group with CHOWN, then Apache drops to www-data with SETUID and
+  # SETGID. DAC_OVERRIDE is what lets root write under /config at all — the
+  # claim root is owned by uid 1100 (the LinuxServer image chowned it) and is not
+  # necessarily group-writable, so without it the entrypoint cannot create
+  # `/config/data` on the first start. Everything else stays dropped.
   capabilities:
     drop:
       - ALL
@@ -64,20 +64,50 @@ securityContext:
 # Rendered inline into the container spec, never through a ConfigMap: a change
 # here changes the pod template, so the Deployment rolls by itself.
 env:
-  # The LinuxServer PUID/PGID of this cluster (AGENTS.md §4).
-  PUID: "1100"
-  PGID: "1100"
   TZ: "Europe/Paris"
-  # No log-level variable exists. FreshRSS writes its own log per user into
-  # /config (Administration → Logs), keeps the API's log under the pseudo-user
-  # `_`, and PHP messages land in nginx's error log on the claim rather than on
-  # stdout; there is no environment knob to lower any of them. What that costs
-  # in Loki, and which file carries the outcome, is in the chart README. Do not
-  # add a variable here: it would do nothing.
+  # The writable root, at a subdirectory of the claim on purpose. The claim root
+  # was chowned to uid 1100 by the image this chart used to run, and the
+  # container can change a file's group but not its mode without FOWNER, so a
+  # data root there could not be written by the Apache worker. This path is
+  # created by the entrypoint as root, which can chmod what it owns.
+  DATA_PATH: "/config/data"
+  # The official image refreshes feeds from its own cron; the LinuxServer image
+  # did this for itself. Twice an hour, at 1 and 31 minutes.
+  CRON_MIN: "1,31"
+  # OIDC. The provider and its exact callback are in the authentik blueprint
+  # `ashulab-app-freshrss`. With OIDC on, the image protects /i/ only; /p/api/
+  # keeps its own login, which is what the phone app and the sync script use.
+  OIDC_ENABLED: "1"
+  OIDC_PROVIDER_METADATA_URL: "https://authentik.kub.home.ashudev.com/application/o/freshrss/.well-known/openid-configuration"
+  OIDC_CLIENT_ID: "freshrss"
+  OIDC_REMOTE_USER_CLAIM: "preferred_username"
+  OIDC_SCOPES: "openid profile email"
+  # Traefik terminates TLS, so the module builds the callback from the headers
+  # it sets, not from the request's own scheme.
+  OIDC_X_FORWARDED_HEADERS: "X-Forwarded-Host X-Forwarded-Port X-Forwarded-Proto"
+  # No log-level variable exists. FreshRSS writes its own log per user under
+  # the data root (Administration → Logs) and keeps the API's log under the
+  # pseudo-user `_`; PHP messages go to Apache's error log, which this image
+  # sends to stderr. There is no environment knob to lower any of them. What
+  # that costs in Loki, and which record carries the outcome, is in the chart
+  # README. Do not add a variable here: it would do nothing.
 
 # Variables sourced from a Secret, as `{ name, valueFrom }`. Kept separate so a
 # secret can never be pasted into the plain map above by accident.
-extraEnv: []
+extraEnv:
+  # The same client secret as `FRESHRSS_CLIENT_SECRET` in the authentik Secret
+  # `authentik-sso`; a Secret does not cross namespaces, so the value has two
+  # homes. The crypto key is local to this container.
+  - name: OIDC_CLIENT_SECRET
+    valueFrom:
+      secretKeyRef:
+        name: freshrss-oidc
+        key: client-secret
+  - name: OIDC_CLIENT_CRYPTO_KEY
+    valueFrom:
+      secretKeyRef:
+        name: freshrss-oidc
+        key: client-crypto-key
 
 # Bulk `envFrom` sources, usually `secretRef`.
 envFrom: []
@@ -104,11 +134,13 @@ storage:
   accessModes:
     - ReadWriteOnce
   # Not the 128Mi house default: FreshRSS keeps its SQLite database *and* the
-  # cached article bodies under /config, so this volume grows with the feeds,
-  # not with the settings. 1Gi is a starting size, revisited once an article
-  # retention policy is set in the UI.
+  # cached article bodies under the data root, so this volume grows with the
+  # feeds, not with the settings. 1Gi is a starting size, revisited once an
+  # article retention policy is set in the UI.
   size: 1Gi
-  # Where the claim is mounted inside the container.
+  # Where the claim is mounted inside the container. The data root is
+  # `DATA_PATH` under it, not this directory: the claim root still holds the
+  # tree the LinuxServer image wrote (uid 1100), which is left untouched.
   mountPath: /config
 
 # Probes.
@@ -117,10 +149,10 @@ storage:
 # separately:
 #   - is the process listening?            a TCP connect on the WebUI port
 #   - is the app actually able to answer?  the login page at /i/, which boots
-#                                          PHP, runs any pending migration and
-#                                          queries the user table — a dead
-#                                          SQLite file fails there and passes the
-#                                          TCP check
+#                                          Apache and PHP
+# With OIDC enabled, /i/ answers 302 to authentik and a probe counts 3xx as
+# ready, so readiness no longer reads the user table on every pass. It still
+# fails when Apache or PHP is down, which is the failure the TCP check misses.
 # `/` is deliberately not used: `index.php` is a 301 to `p/`, so it answers even
 # with a broken backend.
 probes:
