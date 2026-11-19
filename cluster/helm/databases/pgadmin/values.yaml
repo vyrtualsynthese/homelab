@@ -32,9 +32,10 @@ pgadmin:
   env:
     email: valentin.ronteix@ashudev.com
 
-  # The wrapper creates this claim in templates/pvc.yaml. The chart default name
-  # is pgadmin-pgadmin4, which still exists in the namespace as a Terminating
-  # Longhorn claim and cannot be created again.
+  # The wrapper creates this claim in templates/pvc.yaml. Its name is
+  # pgadmin-config, not the chart default pgadmin-pgadmin4: that name was held by
+  # a Terminating Longhorn claim when the wrapper was written, and the data has
+  # lived on this claim since.
   persistentVolume:
     enabled: true
     size: 10Gi

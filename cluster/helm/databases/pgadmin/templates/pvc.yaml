@@ -1,6 +1,6 @@
 # Explicit claim name on purpose. The chart default would be pgadmin-pgadmin4,
-# which is a Terminating Longhorn claim in this namespace and cannot be created
-# again; a new name sidesteps its stuck finalizers.
+# the name the dead Longhorn claim held when this wrapper was written; the data
+# has lived on this claim since.
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:

@@ -3,8 +3,8 @@ The config claim: the n8n database, the workflows and the credentials encrypted
 with them. Kept on purpose, so neither a release uninstall nor a prune that
 follows a chart change can delete the data by accident.
 
-The name is `<fullname>-config` (n8n-config), not the old Longhorn claim n8n-2:
-that name is still held by a Terminating object. See
+The name is `<fullname>-config` (n8n-config), not the old Longhorn claim n8n-2,
+which was still Terminating when this claim was created. See
 docs/cleanup/longhorn-disposition.md.
 */}}
 apiVersion: v1
