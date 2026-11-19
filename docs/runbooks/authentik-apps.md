@@ -145,9 +145,10 @@ and `POST /api/account/login` with a password answers
 
 ## 5. Argo CD
 
-Argo CD runs its bundled Dex, so the redirect address is `/api/dex/callback`. It is a hand-run Helm
-release, not an Application in this repo. Its connector, RBAC and ingress live in
-`cluster/helm/argocd/values.yaml`, so a chart upgrade keeps them.
+Argo CD runs its bundled Dex, so the redirect address is `/api/dex/callback`. Since 2026-11-19 it is
+an Application in this repository, not a hand-run release: `cluster/argocd/projects/platform/argocd.yaml`
+syncs the wrapper chart at `cluster/helm/argocd`, and that chart's values carry the connector, RBAC
+and ingress. Rebuilding it from nothing is [`argocd.md`](argocd.md).
 
 **The scheme is part of the address.** Argo CD compares the SSO return URL against its own
 `configs.cm.url` and answers `Invalid redirect URL: the protocol and host (including port) must
@@ -173,16 +174,12 @@ kubectl -n argocd patch secret argocd-secret --type merge \
 ```
 
 Order matters on the first cut-over to TLS: sync `authentik` first, so the provider lists the
-`https` redirect address, then apply the release. The reverse order leaves a window where the
-provider still knows only `http` and refuses the new redirect.
+`https` redirect address, then let the `argocd` Application sync. The reverse order leaves a window
+where the provider still knows only `http` and refuses the new redirect.
 
-Apply the release:
-
-```bash
-helm -n argocd upgrade argocd argo/argo-cd --version 10.4.1 \
-  -f cluster/helm/argocd/values.yaml
-kubectl -n argocd rollout status deploy/argocd-server --timeout=180s
-```
+A values change reaches the cluster on the next sync of the `argocd` Application — there is no
+`helm upgrade` step, and the Helm release record was deleted when the Application took over. If the
+controller itself is down, [`argocd.md`](argocd.md) has the by-hand rebuild.
 
 The values carry `g, authentik Admins, role:admin` and `g, homelab-users, role:readonly`. There is
 **no local account**: `admin.enabled: "false"`, so authentik is the only way in. Break-glass is
