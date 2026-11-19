@@ -371,8 +371,11 @@ are untouched until step 5.
    `values.yaml` behind a `# renovate: datasource=github-releases` annotation (on the new
    `VueTorrent/VueTorrent` name), and the download now runs only when `/config/ui/version.txt` differs
    from that tag — an ordinary pod restart installs nothing and needs no network. What remains of the
-   original point: a first install still fetches from GitHub at pod start, so a cold cluster with no
-   internet boots qBittorrent without its alternative UI.
+   original point: a first install still fetches from GitHub at pod start. Since 2026-11-19 that
+   fetch **fails open**: an unreachable GitHub leaves `/config/ui` as it is, logs which step failed,
+   and exits 0, so a cold cluster boots qBittorrent on its stock WebUI instead of the init container
+   never finishing. Baking the files into a pinned image is still the phase-4 shape, if the UI must
+   survive a boot with no internet at all.
 3. Ensure Renovate covers every media-stack chart; close the `latest` tags that remain.
 4. Plan the FileBrowser exit: archived upstream, running `v2.63.23`. Its own login (not forward
    auth) is the gate; the LAN allowlist is the network boundary.

@@ -187,10 +187,19 @@ needs and protects nothing, while a small request is all the scheduler needs.
 ## VueTorrent
 
 The `init-qbittorrent` container installs the alternative WebUI from a GitHub release into
-`/config/ui`, and only when the `version.txt` already there differs from `vueTorrent.version`. The
-long version of the contract between that installer and qBittorrent — including the two preference
-names that silently revert the UI — is in the comments above `vueTorrent` in `values.yaml`. Read it
-before changing either value.
+`/config/ui`, and only when the `version.txt` already there differs from `vueTorrent.version`. It
+**cannot fail the pod**: an unreachable package repository, a failed download, a truncated zip or a
+read-only claim each leave `/config/ui` untouched, log a `WARNING` line naming the step that failed,
+and exit 0, so qBittorrent starts on its stock WebUI instead of the pod never starting. The two
+network steps are bounded (`timeout 60` on `apk`, `wget -T 20`) so a blackholed address does not hold
+pod start for the kernel's full TCP retry budget.
+
+That fallback has a second half: qBittorrent reacts to a missing UI by writing
+`WebUI\AlternativeUIEnabled=false` to its own config, so a later successful install restores the
+files but not the preference. The recovery command is in the comments above `vueTorrent` in
+`values.yaml`. The long version of the contract between that installer and qBittorrent — including
+the two preference names that silently revert the UI — is there too. Read it before changing either
+value.
 
 Renovate tracks `vueTorrent.version` and `vueTorrent.initTag` through the `# renovate:` annotations.
 The `depName` on each annotation must stay equal to the value on the line under it.
