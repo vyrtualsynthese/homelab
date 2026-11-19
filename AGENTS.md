@@ -122,9 +122,11 @@ time. Examples:
 - **Every non-public route carries `kube-system-lan-only@kubernetescrd`.** The router forwards 80/443 to
   the cluster and Traefik routes on the `Host` header alone, so an ungated route answers the internet
   whether or not its hostname resolves publicly. The public list is `plex`, `seerr`,
-  `ashuvidz.com`, `dashy.ashudev.com` and `authentik.kub.home.ashudev.com` — the last one because it
-  is the sign-in page of the page before it, and a gate whose login lives on the LAN cannot be used
-  from outside. Nothing else. `hack/check-exposure.sh` enforces it and must pass before a PR.
+  `ashuvidz.com`, `dashy.ashudev.com`, `filebrowser.kub.home.ashudev.com` and
+  `authentik.kub.home.ashudev.com` — the last one because it is the sign-in page of the page before
+  it, and a gate whose login lives on the LAN cannot be used from outside. FileBrowser is public
+  because the editor signs in from outside and its share links are opened by people with no account.
+  Nothing else. `hack/check-exposure.sh` enforces it and must pass before a PR.
 - Stateful apps: `strategy: Recreate`; one PVC per concern; `storageClassName: local-path` for config.
   Shared media/data volumes use one of the eight NFS classes, each a release of
   `cluster/helm/nfs/provisioner` with its own values file. There is no
