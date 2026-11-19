@@ -304,8 +304,9 @@ collection on a rare poll.
 
 ### What the empty 500 hid
 
-The 500 carried no message because FreshRSS logs API errors to `data/users/_/log_api.txt`, and that
-directory was missing from the data root on 2026-11-19, although the image carries one. The logger's
+The 500 carried no message because FreshRSS logs API errors to
+`/config/data/users/_/log_api.txt`, and that directory was missing from the data root on 2026-11-19,
+although the image carries one. The logger's
 write fails, throws, and PHP dies mid-request before the API can answer anything but an empty 500.
 
 Restore it (the data root is `DATA_PATH`, `/config/data`) and the API answers `400 Bad Request`

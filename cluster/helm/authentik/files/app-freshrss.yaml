@@ -10,7 +10,9 @@ entries:
 
   # FreshRSS authenticates with OIDC itself through mod_auth_openidc, so this is
   # a plain OAuth2 provider — not a proxy provider. The route carries no
-  # authentik middleware; the app prompts by itself. See
+  # authentik middleware; the app prompts by itself. Only `/i/` is behind the
+  # module: `/p/api/` keeps its own login, so the route needs no `/api` rule and
+  # API clients never see a sign-in redirect. See
   # `cluster/helm/news/freshrss/values.yaml`.
   #
   # The name is `freshrss`, with no `-oidc` suffix: there was never a proxy
