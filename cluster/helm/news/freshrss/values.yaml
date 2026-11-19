@@ -69,10 +69,11 @@ env:
   PGID: "1100"
   TZ: "Europe/Paris"
   # No log-level variable exists. FreshRSS writes its own log per user into
-  # /config (Administration → Logs) and sends PHP errors to the container's
-  # stderr at the image's php.ini default; there is no environment knob to lower
-  # either. What that costs in Loki, and which record carries the outcome, is in
-  # the chart README. Do not add a variable here: it would do nothing.
+  # /config (Administration → Logs), keeps the API's log under the pseudo-user
+  # `_`, and PHP messages land in nginx's error log on the claim rather than on
+  # stdout; there is no environment knob to lower any of them. What that costs
+  # in Loki, and which file carries the outcome, is in the chart README. Do not
+  # add a variable here: it would do nothing.
 
 # Variables sourced from a Secret, as `{ name, valueFrom }`. Kept separate so a
 # secret can never be pasted into the plain map above by accident.
