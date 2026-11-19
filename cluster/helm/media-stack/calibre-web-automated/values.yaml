@@ -72,6 +72,37 @@ securityContext:
     drop: [ALL]
     add: [CHOWN, SETUID, SETGID]
 
+# `NETWORK_SHARE_MODE` is one switch over three mounts and only one of them is a
+# network share. It also makes the image skip the recursive chown of `/config`
+# and `/cwa-book-ingest` (`root/etc/s6-overlay/s6-rc.d/cwa-init/run`, the
+# `NETWORK_SHARE_MODE` branches), so here the app starts as 1100 on two claims it
+# does not own: eight `install: cannot change owner ... Operation not permitted`
+# lines, `attempt to write a readonly database` for `app.db`, and an AutoZipper
+# that cannot start. Both are `local-path`, where the chown would have worked;
+# `/calibre-library` is the NFS mount that makes the switch necessary. This init
+# container does the chown the switch removed, before the app starts.
+claimOwnership:
+  # -- Run the chown. Off means the pod starts as it did before 2026-11-19.
+  enabled: true
+  # -- Image for the chown: `sh` and `chown -R`, nothing else.
+  image: busybox:1.38
+  # -- Owner and group every path below gets.
+  uid: 1100
+  gid: 1100
+  # -- The two local-path claims, in mount order. The library is NFS and is
+  # deliberately not here: a chown there is the share's business.
+  paths:
+    - /config
+    - /cwa-book-ingest
+  # -- A metadata-only walk of `/config` at every start. The app's own init did
+  # the same walk until the network-share switch started skipping it.
+  resources:
+    requests:
+      cpu: 5m
+      memory: 8Mi
+    limits:
+      memory: 32Mi
+
 service:
   type: ClusterIP
   port: 8083
