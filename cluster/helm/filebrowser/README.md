@@ -49,7 +49,8 @@ upload is the real test of the export's ownership.
 That uid is also why `server.cacheDir` is set to `/data/cache`: the chart's default is the relative
 string `tmp`, resolved against the image's working directory, which 1100 cannot write, and the app
 dies at startup with `mkdir tmp: permission denied`. `/data` is the claim the chart already mounts for
-this, and `cacheDirMaxSizeMB: 700` keeps the preview cache inside the 1 Gi claim.
+this. The cache has no size cap, because `cacheDirMaxSizeMB` does not exist in 2.0.2 and the app
+refuses unknown config fields at startup; the 1 Gi claim is the limit.
 
 ## Login
 
