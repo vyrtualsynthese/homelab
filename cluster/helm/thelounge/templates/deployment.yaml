@@ -36,7 +36,7 @@ spec:
             name: {{ include "fullname" . }}
       initContainers:
         - name: init-theloung-config
-          image: busybox:1.35
+          image: busybox:1.38
           command: [ 'sh', '-c', "cp /config/* /var/opt/thelounge" ]
           volumeMounts:
             - name: thelounge-volume
