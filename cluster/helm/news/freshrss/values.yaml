@@ -41,8 +41,15 @@ podSecurityContext: {}
 
 securityContext:
   allowPrivilegeEscalation: false
-  # CHOWN/SETUID/SETGID are the only capabilities the s6 init uses to hand
-  # /config to PUID/PGID. Everything else is dropped.
+  # The s6 init hands /config to PUID/PGID with CHOWN, then drops to that user
+  # with SETUID/SETGID. DAC_OVERRIDE is the fourth one this image needs and the
+  # other LinuxServer charts do not: its nginx and php-fpm *masters* start as
+  # root and then read and write files under /config that belong to abc (1100),
+  # such as the TLS key the image generates and /config/log/php/error.log. With
+  # `drop: [ALL]` and no DAC_OVERRIDE, root is bound by those file modes like
+  # any other user, and the first start dies with `Permission denied (13)` on
+  # both. Dropping it is not an option while those two processes run as root;
+  # everything else stays dropped.
   capabilities:
     drop:
       - ALL
@@ -50,6 +57,7 @@ securityContext:
       - CHOWN
       - SETUID
       - SETGID
+      - DAC_OVERRIDE
   seccompProfile:
     type: RuntimeDefault
 

@@ -265,6 +265,14 @@ check. `/` is never used: it is a 301 to `p/` and answers with a broken backend.
 log-level variable**: FreshRSS logs per user into `/config` and leaves PHP errors on stderr at the
 `php.ini` default, so the chart sets nothing and the README says what that costs.
 
+The first sync proved one more thing about the hardening: `drop: [ALL]` plus the s6 init's three
+capabilities is one short for this image. Its nginx and php-fpm masters start as root and then read
+`/config/keys/cert.key` and write `/config/log/php/error.log`, both owned by 1100, so without
+`DAC_OVERRIDE` root is bound by the file modes like any other user and the container comes up
+`Running` but never ready, with nginx dead and `Permission denied (13)` in the log. The chart adds
+that one capability back, with the reason written next to it; the other LinuxServer charts do not
+need it because their apps never ask root to touch a 1100-owned file.
+
 Debt: the image's 15-minute refresh cron writes `actualize_script.php` output to `/tmp/FreshRSS.log`
 inside the container, which Fluent Bit does not read, so refresh failures are only visible with
 `kubectl exec`; the `security` middleware renders but no route lists it; and the sizing is unmeasured,
