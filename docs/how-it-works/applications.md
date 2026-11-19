@@ -22,9 +22,8 @@ placement, not the chart's intent, so the two can disagree — see the `node-typ
 - **D** — a small chart of ours that depends on the upstream chart and pins its image.
 
 A chart can be both A and D: `ashuvidz` depends on the upstream `nginx` chart and adds its own route
-templates, so it is marked **D**. A `—` in the Chart column means the Application declares no chart
-and deploys nothing (`nfs-qbittorrent-config`); a `—` in Node means it runs no workload of its own
-(`traefik-gate`).
+templates, so it is marked **D**. A `—` in Node means the Application runs no workload of its own
+(`traefik-gate`); every Application here now declares a chart.
 
 What those four patterns cost you when you change something is [gitops.md](gitops.md), one page.
 
@@ -90,41 +89,31 @@ they are what everything above stands on.
 | Application | Namespace | Node | Chart | What it is |
 |---|---|---|---|---|
 | `local-path` | `default` | nas | B | the default storage class: one directory per claim, on the node's own disk |
-| `books-media` | `media-stack` | nuc0 | B | the `nfs-books` class: the books library |
-| `nfs-audio` | `media-stack` | nuc0 | B | the `nfs-audio` class: music |
-| `nfs-qbittorrent-config` | `media-stack` | streaming | — | the `nfs-qbittorrent-config` class: qBittorrent's configuration on the NAS (old pod; this Application deploys nothing) |
-| `nfs-qbittorrent-download` | `media-stack` | streaming | A | the `qbittorrent-download` class: what is still downloading, on the fast SSD |
-| `plex-media` | `media-stack` | streaming | A | the `plex-media` class: film and television |
-| `stash-nfs` | `media-stack` | nuc0 | A | the `stash-nfs` class: the spare export FileBrowser also sees |
-| `nfs-syncthing` | `syncthing` | nuc0 | A | the `nfs-syncthing` class: what Syncthing syncs |
-| `traefik-nfs` | `kube-system` | nuc0 | A | the `traefik-nfs` class: where Traefik keeps its certificates |
+| `books-media` | `media-stack` | nuc0 | D | the `nfs-books` class: the books library |
+| `nfs-audio` | `media-stack` | nuc0 | D | the `nfs-audio` class: music |
+| `nfs-qbittorrent-config` | `media-stack` | streaming | D | the `nfs-qbittorrent-config` class: qBittorrent's configuration on the NAS |
+| `nfs-qbittorrent-download` | `media-stack` | streaming | D | the `qbittorrent-download` class: what is still downloading, on the fast SSD |
+| `plex-media` | `media-stack` | streaming | D | the `plex-media` class: film and television |
+| `stash-nfs` | `media-stack` | nuc0 | D | the `stash-nfs` class: the spare export FileBrowser also sees |
+| `nfs-syncthing` | `syncthing` | nuc0 | D | the `nfs-syncthing` class: what Syncthing syncs |
+| `traefik-nfs` | `kube-system` | nuc0 | D | the `traefik-nfs` class: where Traefik keeps its certificates |
 | `fluent-bit` | `monitoring` | every node | D | DaemonSet: ships container logs to Loki |
 | `prometheus-smartctl` | `monitoring` | every node | A | DaemonSet: drive health (SMART) metrics |
 | `traefik-gate` | `kube-system` | — | A | middlewares, TLS options and the `lan-only` gate: no workload of its own |
 
+All eight provisioners are one release each of the wrapper chart at
+`cluster/helm/nfs/provisioner/`, one values file per export, and every release asks for `streaming`.
+Where the Node column says `nuc0` — six rows, `stash-nfs` among them — that is where the pod was at
+verification; the next sync moves it. None of the eight selects the retired `node-type` label.
+
 ## The older charts still select the retired label
 
-Most charts pin their pod with `nodeSelector: kubernetes.io/hostname`. The older ones were written
-before that rule and are still configured to select the retired `node-type` label instead, which
-matches `nuc0` today. They are `koillection`, `mktxp`, `pihole-exporter`, `news-freshrss`,
-`syncthing`,
-`thelounge`, and the `books-media`, `nfs-audio`, `nfs-syncthing`, `stash-nfs` and `traefik-nfs`
-provisioners. This is what each chart asks
-for, not a statement about where its pod is: the Node column shows where the pods actually were.
-Moving them onto hostname pins is chart work.
-
-## Provisioner Applications that no longer render
-
-Two of them point at an old path and the third lost its
-chart. ArgoCD cannot generate a manifest for any of them:
-
-- `plex-media` points at `cluster/helm/nfs/plex-media`; the directory is `plexmedia`.
-- `nfs-audio` reads `cluster/helm/nfs/audio/values.yaml`; the directory is `nfs-audio`.
-- `nfs-qbittorrent-config` lost its chart: the directory holds only `values.yaml` and a README, so
-  ArgoCD renders an empty directory and deploys nothing.
-
-The provisioners running today were deployed before the break and still serve their storage classes.
-Nothing would recreate them if they stopped. Fixing them is chart work, tracked in the audit.
+Most charts pin their pod with `nodeSelector: kubernetes.io/hostname`. Three were written before that
+rule and still render a required node affinity on the retired `node-type` label:
+`monitoring/pihole-exporter`, `syncthing` and `thelounge`. `koillection`, `mktxp` and
+`news-freshrss` keep the same text in comments only and pin by hostname now. This is what each chart
+asks for, not a statement about where its pod is: the Node column shows where the pods actually were.
+Moving those three onto hostname pins is chart work.
 
 ## Where to look next
 

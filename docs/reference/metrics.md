@@ -254,7 +254,9 @@ bursts alone. What is left of the 0.09 GB/day is mostly a symptom, not chatter:
 - **argocd, 18 MB/day** — all but 1 MB of it repo-server repeating the two
   manifest errors for paths that do not exist, `cluster/helm/nfs/plex-media` and
   `cluster/helm/nfs/audio` (#383). The server joined the controllers at `warn` on
-  2026-11-19 and fell from 12.9 MB/day to 1.
+  2026-11-19 and fell from 12.9 MB/day to 1. Both paths are fixed in git as of
+  2026-11-19 — the two Applications point at `cluster/helm/nfs/provisioner` — so
+  the figure above still contains errors that will stop at the next sync.
 - **monitoring, 14 MB** — `prometheus-smartctl`, which is talking about the
   failing `nas` drive.
 - **kube-system, 6 MB** — traefik errors, now only `koillection`: it has a claim

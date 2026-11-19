@@ -15,7 +15,7 @@ A single K3s homelab managed by ArgoCD (GitOps) plus Ansible for host prep.
 - GitOps branch: `develop` (every Application pins `targetRevision: develop`).
 - 55 ArgoCD `Application` objects in `cluster/argocd/projects/**/*.yaml`. The old `calibre` Application
   and its chart were retired once Calibre-Web Automated had the collection.
-- 52 Helm charts under `cluster/helm/`.
+- 47 Helm charts under `cluster/helm/`.
 - No CI. Renovate updates images/chart versions; nothing runs on PR.
 - Secrets are never committed. See §5.
 
@@ -62,22 +62,20 @@ The chart lives at `cluster/helm/<path>`; its version is `image.tag` in that cha
 ```yaml
 spec:
   sources:
-    - repoURL: "https://kubernetes-sigs.github.io/nfs-subdir-external-provisioner/"
-      chart: nfs-subdir-external-provisioner
-      targetRevision: 4.0.18          # chart version lives here, not in values.yaml
+    - repoURL: "https://github.com/rancher/local-path-provisioner.git"
+      targetRevision: master
+      path: deploy/chart/local-path-provisioner
       helm:
         valueFiles:
-          - $values/cluster/helm/nfs/books-media/values.yaml
+          - $values/cluster/helm/local-path/values.yaml
     - repoURL: "https://github.com/vyrtualsynthese/homelab.git"
       targetRevision: develop
       ref: values
 ```
 
-The repo directory then holds only `values.yaml` (no `Chart.yaml`). Examples: local-path,
-books-media, nfs-audio.
+The repo directory then holds only `values.yaml` (no `Chart.yaml`). Example: local-path.
 
-Not the way to add an external chart: new work uses pattern D, and these three are converted
-separately.
+Not the way to add an external chart: new work uses pattern D, and this one is converted separately.
 
 ### C. Vendored upstream chart
 
@@ -127,7 +125,8 @@ time. Examples:
   `ashuvidz.com`; nothing else. `hack/check-exposure.sh` enforces it and
   must pass before a PR.
 - Stateful apps: `strategy: Recreate`; one PVC per concern; `storageClassName: local-path` for config.
-  Shared media/data volumes use the dedicated NFS provisioner classes (`nfs-*`). There is no
+  Shared media/data volumes use one of the eight NFS classes, each a release of
+  `cluster/helm/nfs/provisioner` with its own values file. There is no
   replicated volume class: Longhorn was abandoned after the 2026 disk failure and is not coming back.
 - LinuxServer images: `TZ=Europe/Paris`, `PUID=1100`, `PGID=1100`.
 - Placement: `nodeSelector: kubernetes.io/hostname: <node>` — every workload is pinned to a named node,
@@ -165,7 +164,7 @@ done
 
 Charts that need `helm dependency build`: `monitoring/prometheus`, `monitoring/grafana`,
 `monitoring/loki`, `monitoring/fluent-bit`, `authentik`, `dashy`, `filebrowser`,
-`databases/pgadmin`, `renovate`.
+`databases/pgadmin`, `renovate`, `nfs/provisioner`.
 
 Check that ArgoCD references resolve (CRLF-safe):
 
@@ -226,13 +225,15 @@ are in `docs/superpowers/plans/`.
 
 **Broken references**
 
-5. `projects/nfs/plex-media.yaml` → `path: cluster/helm/nfs/plex-media`; the directory is `plexmedia`.
-   This orphans the media NFS provisioner chart.
-6. `projects/nfs/nfs-audio.yaml` → `$values/cluster/helm/nfs/audio/values.yaml`; the directory is
-   `nfs-audio/`.
-7. `projects/nfs/nfs-qbittorrent-config.yaml` uses `path:` on a directory containing only
-   `values.yaml` and `README.md` (no `Chart.yaml`) → ArgoCD renders it as an empty directory and
-   reports **Synced/Healthy while deploying nothing**.
+5. **Resolved 2026-11-19:** `projects/nfs/plex-media.yaml` pointed at `cluster/helm/nfs/plex-media`
+   while the directory was `plexmedia`. It now reads `cluster/helm/nfs/provisioner` with
+   `values/plex-media.yaml`.
+6. **Resolved 2026-11-19:** `projects/nfs/nfs-audio.yaml` read
+   `$values/cluster/helm/nfs/audio/values.yaml`, which never existed. It now reads
+   `cluster/helm/nfs/provisioner` with `values/nfs-audio.yaml`.
+7. **Resolved 2026-11-19:** `projects/nfs/nfs-qbittorrent-config.yaml` used `path:` on a directory
+   holding no `Chart.yaml`, so ArgoCD reported **Synced/Healthy while deploying nothing**. It now
+   reads `cluster/helm/nfs/provisioner` with `values/nfs-qbittorrent-config.yaml`.
 
 **Chart defects**
 
@@ -254,9 +255,9 @@ are in `docs/superpowers/plans/`.
 
 13. All 65 live IngressRoutes and 82 repo files use `traefik.containo.us/v1alpha1`. Both CRD groups
     are installed; the v3 upgrade requires moving to `traefik.io/v1alpha1` while still on 2.11.
-14. Orphans: `cluster/helm/nfs/minio-nfs` (full chart, no Application, MinIO is gone). **Resolved for
-    the monitoring charts**: `cluster/helm/monitoring/loki` is now a wrapper chart with an
-    Application.
+14. **Resolved for the monitoring charts**: `cluster/helm/monitoring/loki` is now a wrapper chart with
+    an Application. **Resolved 2026-11-19**: the `cluster/helm/nfs/minio-nfs` orphan chart is deleted
+    with the rest of the old NFS packaging.
 
 **Version drift**
 

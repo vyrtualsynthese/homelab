@@ -91,7 +91,7 @@
   <g>
     <rect x="40" y="480" width="920" height="64" rx="10" fill="#eff6ff" stroke="#bfdbfe"/>
     <text x="58" y="506" font-size="14" font-weight="600" fill="#1e3a8a">Shared library</text>
-    <text x="58" y="528" font-size="12" fill="#1e40af">NFS exports on nas, one class each: nfs-plex, nfs-audio, nfs-books, qbittorrent-download, nfs-syncthing, stash-nfs.</text>
+    <text x="58" y="528" font-size="12" fill="#1e40af">NFS exports on nas, one class each: plex-media, nfs-audio, nfs-books, qbittorrent-download, nfs-qbittorrent-config, nfs-syncthing, stash-nfs, traefik-nfs.</text>
   </g>
   <path d="M240,305 L285,330 L285,478" fill="none" stroke="#60a5fa" stroke-width="2" stroke-dasharray="5 4" marker-end="url(#arrow)"/>
 

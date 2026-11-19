@@ -42,8 +42,6 @@ has **changed**:
   changed.
 - The pod filter prints rows. A row whose application is already on the status page is a fault you
   already own, not one you just found.
-- A few provisioners sit at `Progressing` while serving their claims: ArgoCD's reading of a
-  provisioner, not a fault.
 - On Health, everything firing is already known — an accepted fault below or a broken application the
   status page names. On Disks, every other drive has life left.
 

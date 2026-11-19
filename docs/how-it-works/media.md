@@ -70,7 +70,7 @@ cutover: [completed record](../runbooks/books-cutover.md).
 
 ## Where the files live
 
-Media is on the NFS classes from `nas`: `nfs-plex` for film and television, `nfs-audio` for music,
+Media is on the NFS classes from `nas`: `plex-media` for film and television, `nfs-audio` for music,
 `nfs-books` for the books library, `qbittorrent-download` for what is still downloading. Configuration
 sits on `local-path` on the node each app runs on. The classes, the binding trap and the absence of
 backups are [storage.md](storage.md); which claim belongs to which app is
