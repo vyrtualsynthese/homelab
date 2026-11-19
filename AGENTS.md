@@ -302,6 +302,7 @@ the operator wastes their turn and leaves no record of what changed.
 |---|---|---|
 | Radarr, Sonarr, Lidarr, Prowlarr, Bazarr, Tautulli, Seerr, qBittorrent, autobrr, Kavita | each app's own REST API (`/api/v3/config/host` for the *arr settings, `/api/v1` on Prowlarr) | `<APP>_API_KEY` in `~/.config/secrets/homelab.env` |
 | authentik | `https://authentik.kub.home.ashudev.com/api/v3/` — providers, applications, api tokens, blueprint apply | `AUTHENTIK_TOKEN` |
+| n8n | `https://n8n.kub.home.ashudev.com/api/v1` — workflows, executions, credentials, tags; the key goes in the `X-N8N-API-KEY` header, not a bearer token | `N8N_API_KEY` |
 | Traefik, Grafana, anything the MCP exposes | the Kubernetes API or the app's API, read-only | the MCP ServiceAccount |
 | Vikunja | `https://vikunja.kub.local/api/v2` | `VIKUNJA_API_TOKEN` |
 
