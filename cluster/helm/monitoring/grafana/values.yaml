@@ -61,14 +61,15 @@ grafana:
     type: Recreate
   nodeSelector:
     kubernetes.io/hostname: nas
-  # Sized from Prometheus on 2026-11-13 over the 39h it holds: 300Mi average and
-  # 370Mi peak. The 512Mi limit filled to 74%, and this app now evaluates and
-  # delivers every alert in the cluster, so the headroom matters more here than
-  # the footprint suggests.
+  # Re-measured 2026-11-19 over 7 days, across the eight pod generations the
+  # rollouts left behind: 370Mi average, 391Mi p95, 427Mi peak. The request was
+  # 256Mi, below every generation's p95; 416Mi is the next size above the
+  # highest. The 768Mi limit stays at 1.8x the peak, because this app evaluates
+  # and delivers every alert in the cluster.
   resources:
     requests:
       cpu: 50m
-      memory: 256Mi
+      memory: 416Mi
     limits:
       memory: 768Mi
   image:

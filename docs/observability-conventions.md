@@ -31,25 +31,34 @@ All four are wrapper charts under `cluster/helm/monitoring/`, one ArgoCD
 Application each; the design is
 `docs/superpowers/specs/2026-11-12-observability-stack-design.md`.
 
-**Resource sizing, measured 2026-11-12 over 15 h** (working set, per container):
+### Resource sizing
+
+**Measured 2026-11-19 over 7 days** (working set, per container):
 
 | Workload | avg | p95 | peak | request | limit |
 |---|---|---|---|---|---|
-| Prometheus | 1.26 GiB | 1.74 GiB | 1.76 GiB | 1Gi | 2Gi |
-| Grafana | 292 MiB | 346 MiB | 400 MiB | 256Mi | 768Mi |
-| Loki | 134 MiB | 166 MiB | 217 MiB | 256Mi | 1Gi |
+| Prometheus | 966 MiB | 1,102 MiB | 1,618 MiB | 1.25Gi | 2Gi |
+| Grafana | 370 MiB | 391 MiB | 427 MiB | 416Mi | 768Mi |
+| Loki | 144 MiB | 193 MiB | 437 MiB | 256Mi | 1Gi |
 | Fluent Bit (per pod) | 6-9 MiB | 9.8 MiB | 11.6 MiB | 32Mi | 64Mi |
 | config-reloader | 9 MiB | 9.6 MiB | 9.9 MiB | 16Mi | 32Mi |
 
-Grafana's limit moved from 512 MiB to 768 MiB on 2026-11-13: the rebuilt pod
-peaked at 370 MiB, filling the old limit to 74 %, and Grafana evaluates and
-delivers every alert in the cluster. The other rows are unchanged; the wider
-stack review of that date is the table in
-[`reference/chart-sizing.md`](reference/chart-sizing.md).
+The first three rows are the 2026-11-19 pass over the seven days the TSDB now
+retains; Fluent Bit and config-reloader are still the 2026-11-12 15-hour sample.
+Grafana was measured across the eight pod generations the rollouts left behind,
+and its row is the worst generation.
 
 Prometheus keeps its 2 GiB ceiling because it sizes its own GC from the cgroup
-limit and was OOM-killed at 1 GiB; only its request moved up to the measured
-steady state. Loki's rules sidecar is disabled — it watched for
+limit and was OOM-killed at 1 GiB; its request moved from 1 GiB to 1.25 GiB.
+Seven days put the p95 at 1,102 MiB, but the worst day was 1,162 MiB and the
+trend is upward, so 1.125 GiB would have sat a hair below the recent steady
+state. Grafana's request moved from 256 MiB to 416 MiB because every generation
+since 2026-11-17 ran above its 391 MiB p95; its limit moved from 512 MiB to
+768 MiB on 2026-11-13, when the rebuilt pod filled the old limit to 74 %, and
+this app evaluates and delivers every alert in the cluster. Loki's 256 MiB
+request stays: its p95 is 193 MiB over the week and 216 MiB over the last 24 h,
+and the 437 MiB peak on 2026-11-18 is the compaction burst its 1 GiB limit
+exists for. Loki's rules sidecar is disabled — it watched for
 Prometheus-Operator rule ConfigMaps this cluster does not install, and held
 78 MiB with no limit. There are no CPU limits, by house rule. The numbers are
 low because the cluster produces little log and query traffic: a 30-day Loki
@@ -151,8 +160,9 @@ job: `kubernetes-api-servers` 22,160 (49,243), `kubernetes-service-endpoints` 19
 `kubernetes-nodes-cadvisor` 11,628 (22,105), `kubernetes-pods` 6,413 (8,841), `kubernetes-nodes`
 2,590 (7,207), `grafana` 2,283 (new), `rbp0` 1,343, `rbp1` 1,341, `loki` 979 (new), `prometheus` 895
 (1,309). The working set did not follow the series count down: 1,195 MiB p95 in the half hour after
-the change against 1,185 MiB over the 24 hours before it. The request is still 1 GiB against a
-working set above it — a sizing question, not a scrape one; the detail is in
+the change against 1,185 MiB over the 24 hours before it. The request was then still 1 GiB against a
+working set above it — a sizing question, not a scrape one, answered on 2026-11-19 by raising it to
+1.25 GiB ([the sizing table](#resource-sizing)); the detail is in
 [`reference/metrics.md`](reference/metrics.md#what-prometheus-throws-away-before-storing).
 
 **Measured on 2026-11-18, after the media trim:** the media stack's ten targets

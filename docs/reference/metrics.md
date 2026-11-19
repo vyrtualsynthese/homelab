@@ -209,8 +209,9 @@ samples/s**, and a working set that has not moved — 1,195 MiB p95 over the hal
 against 1,185 MiB over the 24 hours before it, with the Go heap in use going from 964 to 899 MiB.
 
 That is the honest result: the drop halves what is stored and written, and does not fix the memory.
-Prometheus requests 1 GiB and uses about 1.2; removing 72,000 series moved the Go heap by 7 %, so the
-head was not what filled the process. The request is a sizing question with its own method
+Prometheus was requesting 1 GiB and holding about 1.1 GiB at p95; the request went to 1.25 GiB on
+2026-11-19. Removing 72,000 series moved the Go heap by 7 %, so the head was not what filled the
+process. The request is a sizing question with its own method
 ([`chart-sizing.md`](chart-sizing.md)), not a scrape-config one; do not expect a drop rule to buy
 memory here.
 
