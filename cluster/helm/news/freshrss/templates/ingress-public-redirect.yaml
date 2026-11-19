@@ -1,16 +1,11 @@
-{{- if .Values.ingress.enabled -}}
-{{- $fullName := include "fullname" . -}}
-{{- if and .Values.ingress.className (not (semverCompare ">=1.18-0" .Capabilities.KubeVersion.GitVersion)) }}
-  {{- if not (hasKey .Values.ingress.annotations "kubernetes.io/ingress.class") }}
-  {{- $_ := set .Values.ingress.annotations "kubernetes.io/ingress.class" .Values.ingress.className}}
-  {{- end }}
-{{- end }}
-apiVersion: traefik.containo.us/v1alpha1
+{{- if .Values.ingress.enabled }}
+{{- $fullName := include "app.fullname" . }}
+apiVersion: {{ .Values.ingress.apiVersion }}
 kind: IngressRoute
 metadata:
   name: {{ $fullName }}-public-redirect
   labels:
-    {{- include "labels" . | nindent 4 }}
+    {{- include "app.labels" . | nindent 4 }}
   {{- with .Values.ingress.annotations }}
   annotations:
     {{- toYaml . | nindent 4 }}
@@ -19,12 +14,14 @@ spec:
   entryPoints:
     - web
   routes:
-    - match: Host(`freshrss.kub.home.ashudev.com`)
+    - match: Host(`{{ .Values.ingress.host }}`)
       kind: Rule
       services:
-        - name: freshrss
+        - name: {{ $fullName }}
           port: webui
       middlewares:
-        - name: kube-system-lan-only@kubernetescrd
-        - name: {{ include "fullname" . }}-redirect-https
+        {{- range .Values.ingress.middlewares }}
+        - name: {{ . }}
+        {{- end }}
+        - name: {{ $fullName }}-redirect-https
 {{- end }}

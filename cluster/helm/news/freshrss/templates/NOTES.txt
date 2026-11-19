@@ -1,0 +1,22 @@
+{{ include "app.fullname" . }} has been deployed to namespace {{ .Release.Namespace }}.
+
+{{- if .Values.ingress.enabled }}
+
+URL:
+  https://{{ .Values.ingress.host }}/i/
+
+The route carries the LAN allowlist only: it answers from the LAN, nowhere else.
+{{- else }}
+
+The IngressRoute is disabled. Reach it with a port-forward:
+
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "app.fullname" . }} {{ .Values.service.port }}:{{ .Values.service.port }}
+{{- end }}
+
+Configuration and the SQLite database live in the claim {{ include "app.configClaimName" . }}.
+{{- if not .Values.storage.existingClaim }}
+
+That claim is created by this chart and binds to the node the pod schedules on — the one in
+`nodeSelector` in values.yaml. On a fresh start it is empty: the install wizard creates the admin
+account and the database.
+{{- end }}

@@ -1,73 +1,174 @@
-# Default values for thelounge.
-# This is a YAML-formatted file.
-# Declare variables to be passed into your templates.
+# Default values for freshrss.
+#
+# The app is rebuilt against the chart contract in docs/charts/README.md: the
+# claim this chart mounts is the claim this chart creates, the port lives in one
+# value, the probes ask the app rather than `/`, and every non-public route
+# carries the LAN allowlist.
 
 replicaCount: 1
 
+# A config claim cannot attach to two pods at once, and FreshRSS holds its SQLite
+# database there. Recreate, never RollingUpdate.
+strategy: Recreate
+
 image:
+  # LinuxServer publishes on lscr.io. The image starts as root, prepares /config,
+  # then drops to PUID/PGID through s6; that is why the securityContext below
+  # cannot use runAsNonRoot (see the chart README).
   repository: lscr.io/linuxserver/freshrss
+  # Pinned, never floating. Bumped by hand with appVersion in Chart.yaml.
+  tag: 1.30.4-ls332
   pullPolicy: IfNotPresent
-  # Overrides the image tag whose default is the chart appVersion.
-  tag: 1.25.0-ls257
 
 imagePullSecrets: []
 nameOverride: ""
 fullnameOverride: ""
 
 serviceAccount:
-  # Specifies whether a service account should be created
-  create: false
-  # Annotations to add to the service account
+  # The pod talks to no Kubernetes API. The token is not mounted either.
+  create: true
+  automount: false
   annotations: {}
-  # The name of the service account to use.
-  # If not set and create is true, a name is generated using the fullname template
   name: ""
 
 podAnnotations: {}
+podLabels: {}
 
+# The LinuxServer init needs to write /config as root before dropping to
+# PUID/PGID, and local-path does not apply fsGroup to a hostPath volume. So no
+# fsGroup, and no runAsUser here: both look right and do nothing.
 podSecurityContext: {}
-  # fsGroup: 2000
 
-securityContext: {}
-  # capabilities:
-  #   drop:
-  #   - ALL
-  # readOnlyRootFilesystem: true
-  # runAsNonRoot: true
-  # runAsUser: 1000
+securityContext:
+  allowPrivilegeEscalation: false
+  # CHOWN/SETUID/SETGID are the only capabilities the s6 init uses to hand
+  # /config to PUID/PGID. Everything else is dropped.
+  capabilities:
+    drop:
+      - ALL
+    add:
+      - CHOWN
+      - SETUID
+      - SETGID
+  seccompProfile:
+    type: RuntimeDefault
+
+# Rendered inline into the container spec, never through a ConfigMap: a change
+# here changes the pod template, so the Deployment rolls by itself.
+env:
+  # The LinuxServer PUID/PGID of this cluster (AGENTS.md §4).
+  PUID: "1100"
+  PGID: "1100"
+  TZ: "Europe/Paris"
+  # No log-level variable exists. FreshRSS writes its own log per user into
+  # /config (Administration → Logs) and sends PHP errors to the container's
+  # stderr at the image's php.ini default; there is no environment knob to lower
+  # either. What that costs in Loki, and which record carries the outcome, is in
+  # the chart README. Do not add a variable here: it would do nothing.
+
+# Variables sourced from a Secret, as `{ name, valueFrom }`. Kept separate so a
+# secret can never be pasted into the plain map above by accident.
+extraEnv: []
+
+# Bulk `envFrom` sources, usually `secretRef`.
+envFrom: []
+
+# Additional volumes and mounts, rendered verbatim into the pod spec.
+volumes: []
+volumeMounts: []
+
+service:
+  type: ClusterIP
+  # One value drives the container port, the Service port and every probe. The
+  # image's WebUI is port 80 (linuxserver/docker-freshrss) — it is not the
+  # upstream PHP-FPM dev port.
+  port: 80
+
+storage:
+  # Render the claim the Deployment mounts. A chart that mounts a claim must
+  # create it: this one did not, and the pod sat Pending for 77 days waiting for
+  # a `freshrss-volume` that nothing ever created.
+  enabled: true
+  # Use an existing claim instead of the one this chart creates.
+  existingClaim: ""
+  className: local-path
+  accessModes:
+    - ReadWriteOnce
+  # Not the 128Mi house default: FreshRSS keeps its SQLite database *and* the
+  # cached article bodies under /config, so this volume grows with the feeds,
+  # not with the settings. 1Gi is a starting size, revisited once an article
+  # retention policy is set in the UI.
+  size: 1Gi
+  # Where the claim is mounted inside the container.
+  mountPath: /config
+
+# Probes.
+#
+# FreshRSS ships no health endpoint of its own, so the two questions are asked
+# separately:
+#   - is the process listening?            a TCP connect on the WebUI port
+#   - is the app actually able to answer?  the login page at /i/, which boots
+#                                          PHP, runs any pending migration and
+#                                          queries the user table — a dead
+#                                          SQLite file fails there and passes the
+#                                          TCP check
+# `/` is deliberately not used: `index.php` is a 301 to `p/`, so it answers even
+# with a broken backend.
+probes:
+  startup:
+    enabled: true
+    periodSeconds: 5
+    timeoutSeconds: 3
+    # 30 × 5s = 150s, about three times a first start on this image.
+    failureThreshold: 30
+  liveness:
+    enabled: true
+    initialDelaySeconds: 20
+    periodSeconds: 30
+    timeoutSeconds: 5
+    failureThreshold: 3
+  readiness:
+    enabled: true
+    path: /i/
+    initialDelaySeconds: 10
+    periodSeconds: 15
+    timeoutSeconds: 5
+    failureThreshold: 3
+
+# Sizing was never measured: the pod has not run since 2026-08-09, and the six
+# days Prometheus retains carry no sample for it. These are a protection ceiling,
+# not evidence. The request is PHP-FPM's floor for a small feed set; the limit
+# covers a migration or a large OPML import. Re-measure before trusting either.
+resources:
+  requests:
+    cpu: 10m
+    memory: 128Mi
+  limits:
+    memory: 512Mi
+
+nodeSelector:
+  # Every workload is pinned to a named node; local-path claims are node-bound.
+  # `nuc0` is where the old `node-type: general` selector put this app before
+  # that label was retired, and where the general catalogue lives.
+  kubernetes.io/hostname: nuc0
+
+tolerations: []
+affinity: {}
 
 ingress:
   enabled: true
-  className: ""
+  # The API group of the Traefik CRDs. Traefik v3 needs `traefik.io/v1alpha1`;
+  # the v2 group stays until that upgrade lands.
+  apiVersion: traefik.containo.us/v1alpha1
+  # The host is kept exactly as the live routes have it.
+  host: freshrss.kub.home.ashudev.com
   annotations: {}
-
-resources:
-  limits:
-    memory: 256Mi
-  requests:
-    cpu: 1m
-    memory: 128Mi
-  # We usually recommend not to specify default resources and to leave this as a conscious
-  # choice for the user. This also increases chances charts run on environments with little
-  # resources, such as Minikube. If you do want to specify resources, uncomment the following
-  # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
-  # limits:
-  #   cpu: 100m
-  #   memory: 128Mi
-  # requests:
-  #   cpu: 100m
-  #   memory: 128Mi
-
-nodeSelector: {}
-
-tolerations: []
-
-affinity:
-  nodeAffinity:
-    requiredDuringSchedulingIgnoredDuringExecution:
-      nodeSelectorTerms:
-        - matchExpressions:
-            - key: node-type
-              operator: In
-              values:
-                - general
+  # Middlewares, as fully qualified names. `lan-only` is a boundary, not an
+  # account: every non-public route carries it, so a hostname is not the only
+  # thing standing between this app and the internet.
+  middlewares:
+    - kube-system-lan-only@kubernetescrd
+  tls:
+    # ACME through the `myresolver` resolver, with the per-app TLSOption the
+    # chart renders. Unchanged from the live objects.
+    certResolver: myresolver

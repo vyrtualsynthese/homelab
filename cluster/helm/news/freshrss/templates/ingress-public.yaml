@@ -1,16 +1,11 @@
-{{- if .Values.ingress.enabled -}}
-{{- $fullName := include "fullname" . -}}
-{{- if and .Values.ingress.className (not (semverCompare ">=1.18-0" .Capabilities.KubeVersion.GitVersion)) }}
-  {{- if not (hasKey .Values.ingress.annotations "kubernetes.io/ingress.class") }}
-  {{- $_ := set .Values.ingress.annotations "kubernetes.io/ingress.class" .Values.ingress.className}}
-  {{- end }}
-{{- end }}
-apiVersion: traefik.containo.us/v1alpha1
+{{- if .Values.ingress.enabled }}
+{{- $fullName := include "app.fullname" . }}
+apiVersion: {{ .Values.ingress.apiVersion }}
 kind: IngressRoute
 metadata:
   name: {{ $fullName }}-public
   labels:
-    {{- include "labels" . | nindent 4 }}
+    {{- include "app.labels" . | nindent 4 }}
   {{- with .Values.ingress.annotations }}
   annotations:
     {{- toYaml . | nindent 4 }}
@@ -19,15 +14,21 @@ spec:
   entryPoints:
     - websecure
   routes:
-    - match: Host(`freshrss.kub.home.ashudev.com`)
+    - match: Host(`{{ .Values.ingress.host }}`)
       kind: Rule
+      {{- with .Values.ingress.middlewares }}
       middlewares:
-        - name: kube-system-lan-only@kubernetescrd
+        {{- range . }}
+        - name: {{ . }}
+        {{- end }}
+      {{- end }}
       services:
-        - name: {{ include "fullname" . }}
+        - name: {{ $fullName }}
           port: webui
   tls:
-    certResolver: myresolver
+    {{- if .Values.ingress.tls.certResolver }}
+    certResolver: {{ .Values.ingress.tls.certResolver }}
+    {{- end }}
     options:
-      name: {{ include "fullname" . }}-tlsoption
+      name: {{ $fullName }}-tlsoption
 {{- end }}
