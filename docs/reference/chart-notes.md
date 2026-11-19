@@ -291,6 +291,13 @@ deployment mounted that path, and removing it is follow-up work rather than part
 running. The pod is pinned to `nuc0` by `nodeSelector`, replacing an `affinity` on the retired
 `node-type: general` label that matched no node at all.
 
+The first sync after the merge bound both claims and scheduled the pod on `nuc0`, and the pod then
+found the one thing the chart still had wrong: it ran as root with every capability dropped. The
+image has no `USER` instruction, so the default is root, and its entrypoint needs to write
+`/app/public`, which belongs to uid 1001 — root without `CAP_DAC_OVERRIDE` cannot. The chart now runs
+as 1001 itself, which is the image's own user: the entrypoint skips its user setup, nothing needs a
+capability, and the remaining failure is the one the operator owns — no database yet.
+
 ### qbittorrent
 
 As of 2026-11-18: the last media-stack chart to go through the contract pass, and the only one with a

@@ -22,7 +22,7 @@ differences this app needed are below.
 | `affinity.nodeAffinity` on the retired `node-type: general` label | `nodeSelector: kubernetes.io/hostname: nuc0` | `node-type` no longer exists anywhere, so the old affinity matched no node |
 | `service.port: 5432` (a PostgreSQL copy-paste) | `80`, one value for container port, Service and both probes | The image serves on :80 (`FRANKENPHP_SERVER_NAME=":80"`) |
 | No probes | A startup probe and a liveness probe on `/`; no readiness probe | The image's own `HEALTHCHECK` is `curl --fail http://localhost:80/`. Koillection publishes no health route, and nothing unauthenticated reports whether the database is up, so readiness would only duplicate liveness |
-| No `securityContext` | seccomp `RuntimeDefault`, no privilege escalation, all capabilities dropped except `CHOWN`, `SETUID`, `SETGID` | The entrypoint starts as root, rewrites the `koillection` user to `PUID`/`PGID`, chowns `/uploads`, then drops to that user with `setpriv` |
+| No `securityContext` | seccomp `RuntimeDefault`, no privilege escalation, all capabilities dropped, running as the image's own uid 1001 | The image ships no `USER` instruction and its entrypoint handles both cases: as root it rewrites its user and chowns `/uploads`, as anyone else it skips that. Root without privileges cannot write `/app/public` (owned by 1001) — the first sync after the merge proved it — so the chart runs as 1001 instead |
 | `limits.memory: 256Mi`, `requests.cpu: 1m` | request 128Mi / 10m, limit 512Mi | See "Sizing" below |
 | Boilerplate `Chart.yaml` (`appVersion` 1.0.0, a description nobody read) | `version` 0.2.0, `appVersion` 1.8.6 matching `image.tag` | Three numbers that disagree are worse than one number that is wrong |
 
