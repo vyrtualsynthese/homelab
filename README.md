@@ -111,7 +111,7 @@ while read -r p; do [ -d "$p" ] || echo "BROKEN PATH $p"; done < <(
 
 Charts that need `helm dependency build` first: `monitoring/prometheus`, `monitoring/grafana`,
 `monitoring/loki`, `monitoring/fluent-bit`, `authentik`, `dashy`, `ashuvidz-website`,
-`databases/pgadmin`, `discourse`.
+`databases/pgadmin`.
 
 ## Conventions
 

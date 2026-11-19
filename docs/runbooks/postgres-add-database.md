@@ -63,7 +63,7 @@ the value of `APP_SECRET_KEY` used by the check pod in Step 4. The two values mu
 the role is created from one copy and the application logs in with the other.
 
 A chart may read several keys from that Secret, and the non-secret ones must survive: koillection
-reads `DB_NAME` and `DB_HOST` as well, four keys in all; discourse reads two. Where
+reads `DB_NAME` and `DB_HOST` as well, four keys in all. Where
 the Secret already exists with those keys, do not run the second command — it fails with
 `AlreadyExists`, which stops the run — set the password key in a copy of the existing object and
 apply it, or recreate it with every key it had. The keys each chart expects are listed in

@@ -13,9 +13,9 @@ Everything below was derived from the repo; items marked **[verify]** need clust
 A single K3s homelab managed by ArgoCD (GitOps) plus Ansible for host prep.
 
 - GitOps branch: `develop` (every Application pins `targetRevision: develop`).
-- 56 ArgoCD `Application` objects in `cluster/argocd/projects/**/*.yaml`. The old `calibre` Application
+- 55 ArgoCD `Application` objects in `cluster/argocd/projects/**/*.yaml`. The old `calibre` Application
   and its chart were retired once Calibre-Web Automated had the collection.
-- 53 Helm charts under `cluster/helm/`.
+- 52 Helm charts under `cluster/helm/`.
 - No CI. Renovate updates images/chart versions; nothing runs on PR.
 - Secrets are never committed. See §5.
 
@@ -110,7 +110,7 @@ time. Examples:
     `docs/runbooks/internal-ca.md`.
   - TLS on a resolvable name: `entryPoints: [websecure]`, host `app.kub.home.ashudev.com`,
     `tls.certResolver: myresolver` plus a per-app `TLSOption` copied from an existing chart.
-  - Public: `ashuvidz.com`, `forum.ashuvidz.com`.
+  - Public: `ashuvidz.com`.
   - Cross-namespace middleware refs use `kube-system-<name>@kubernetescrd`.
 - **SSO: native first.** When an application supports OIDC (or SAML, or any session-based SSO) itself,
   use that, not `authentik-forwardauth`. The middleware cannot carry an identity into the app — every
@@ -123,8 +123,8 @@ time. Examples:
     the way `qbittorrent` and `autobrr` do.
 - **Every non-public route carries `kube-system-lan-only@kubernetescrd`.** The router forwards 80/443 to
   the cluster and Traefik routes on the `Host` header alone, so an ungated route answers the internet
-  whether or not its hostname resolves publicly. The public list is `plex`, `seerr`, `ashuvidz.com` and
-  `forum.ashuvidz.com`; nothing else. `hack/check-exposure.sh` enforces it and
+  whether or not its hostname resolves publicly. The public list is `plex`, `seerr` and
+  `ashuvidz.com`; nothing else. `hack/check-exposure.sh` enforces it and
   must pass before a PR.
 - Stateful apps: `strategy: Recreate`; one PVC per concern; `storageClassName: local-path` for config.
   Shared media/data volumes use the dedicated NFS provisioner classes (`nfs-*`). There is no
@@ -165,7 +165,7 @@ done
 
 Charts that need `helm dependency build`: `monitoring/prometheus`, `monitoring/grafana`,
 `monitoring/loki`, `monitoring/fluent-bit`, `authentik`, `dashy`, `filebrowser`,
-`databases/pgadmin`, `discourse`, `renovate`.
+`databases/pgadmin`, `renovate`.
 
 Check that ArgoCD references resolve (CRLF-safe):
 
@@ -188,7 +188,7 @@ are in `docs/superpowers/plans/`.
    UI — faster than a commit when debugging a pod. **No Application file records
    `syncPolicy.automated`**, and a PR that adds it is a regression: a root-app sync rewrites the
    Application to match git, which silently switches automation off until the operator re-enables it
-   in the UI. None of the 56 carries it (§8.4 of the design).
+   in the UI. None of the 55 carries it (§8.4 of the design).
 2. `cluster/infrastructure/**` is outside GitOps (§2).
 3. **Backups do not work.** The only offsite target is an AWS S3 bucket. The k3s script dumps a
    SQLite file on an etcd cluster; the NAS script backs up a MinIO path deleted in July 2024; and the
@@ -241,15 +241,14 @@ are in `docs/superpowers/plans/`.
     `cluster/infrastructure/storageclass/` are deleted with the rest of the Longhorn leftovers.
 11. **Resolved 2026-11-18:** `firefly` and `postiz` were the two charts that rendered a
     `networking.k8s.io/v1` Ingress, against the Traefik-CRD-only rule in §4. Both were retired, so no
-    chart in the repo breaks that rule; the live `discourse` Ingress comes from its vendored upstream
-    chart, not from a template here.
+    chart in the repo breaks that rule.
 12. Floating `latest` tags in `dashy`, `mktxp`, `minecraft` and `local-path`. (`alpine:latest` in
     qBittorrent's VueTorrent installer was pinned on 2026-11-18: `vueTorrent.initTag` plus a
     `# renovate: datasource=docker` annotation.)
 
 **Ingress**
 
-13. All 69 live IngressRoutes and 84 repo files use `traefik.containo.us/v1alpha1`. Both CRD groups
+13. All 65 live IngressRoutes and 82 repo files use `traefik.containo.us/v1alpha1`. Both CRD groups
     are installed; the v3 upgrade requires moving to `traefik.io/v1alpha1` while still on 2.11.
 14. Orphans: `cluster/helm/nfs/minio-nfs` (full chart, no Application, MinIO is gone). **Resolved for
     the monitoring charts**: `cluster/helm/monitoring/loki` is now a wrapper chart with an

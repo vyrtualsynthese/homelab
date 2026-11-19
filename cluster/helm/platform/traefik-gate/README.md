@@ -11,8 +11,8 @@ route by the `Host` header alone. The `*.kub.home.ashudev.com` zone answers the 
 authoritative DNS, so those hostnames reach the cluster from the internet by name. A route without
 this middleware is therefore a door left open, whether or not its hostname looks internal.
 
-The public hostnames are exactly four, and they do not carry this gate:
-`plex.kub.home.ashudev.com`, `seerr.kub.home.ashudev.com`, `ashuvidz.com`, `forum.ashuvidz.com`.
+The public hostnames are exactly three, and they do not carry this gate:
+`plex.kub.home.ashudev.com`, `seerr.kub.home.ashudev.com`, `ashuvidz.com`.
 
 ## The two ranges
 

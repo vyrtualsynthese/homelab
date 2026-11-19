@@ -21,9 +21,11 @@ is older than the last merge on `develop`, distrust it rather than argue with it
 
 `firefly`, `ghostfolio`, `guacamole`, `linkstack`, `monitorss`, `postiz` and `wiki` were removed from
 the cluster and from git on 2026-11-18 — charts, `Application` files and namespaces. Four of them
-appear below as broken and three as running; **nothing on this page's lists applies to those seven any
-more**, and their rows are the 17 November state, not a queue to pick up. The reasoning is
-[`decisions/2026-11-18-retire-seven-applications.md`](decisions/2026-11-18-retire-seven-applications.md);
+appear below as broken and three as running. `discourse` followed on 2026-11-19 and appears below as
+broken. **Nothing on this page's lists applies to those eight any more**, and their rows are the
+17 November state, not a queue to pick up. The reasoning is
+[`decisions/2026-11-18-retire-seven-applications.md`](decisions/2026-11-18-retire-seven-applications.md)
+and [`decisions/2026-11-19-retire-discourse.md`](decisions/2026-11-19-retire-discourse.md);
 [`how-it-works/applications.md`](how-it-works/applications.md) and
 [`reference/routes.md`](reference/routes.md) carry the lists as they stand today.
 

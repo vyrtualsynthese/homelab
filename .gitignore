@@ -44,10 +44,6 @@ cluster/helm/dashy/charts/
 cluster/helm/dashy/Chart.lock
 
 # Built by ArgoCD at sync time
-cluster/helm/discourse/charts/
-cluster/helm/discourse/Chart.lock
-
-# Built by ArgoCD at sync time
 cluster/helm/renovate/charts/
 cluster/helm/renovate/Chart.lock
 cluster/helm/argocd/charts/

@@ -44,7 +44,6 @@ belong to is [media.md](media.md).
 | `dashy` | `dashy` | nuc0 | D | the start page: links to every application |
 | `pgadmin` | `databases` | nuc0 | D | the web console for the shared PostgreSQL |
 | `postgres` | `databases` | nas | A | the shared PostgreSQL that holds the other apps' databases |
-| `discourse` | `discourse` | Pending | D | the community forum |
 | `docs-site` | `docs` | nuc0 | A | every repository's `docs/` folder, built on a schedule and served read-only |
 | `filebrowser` | `filebrowser` | nuc0 | D | web file browser over the media shares |
 | `koillection` | `koillection` | Pending | A | catalogue for a collection of things |
