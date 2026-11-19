@@ -46,7 +46,7 @@
 
 - [ ] **Step 1: Confirm the chart does not exist yet**
 
-Run: `helm template test cluster/helm/nfs/provisioner`
+Run: `helm template test ./cluster/helm/nfs/provisioner`
 Expected: FAIL — `Error: path "cluster/helm/nfs/provisioner" not found`.
 
 - [ ] **Step 2: Create `cluster/helm/nfs/provisioner/Chart.yaml`**
@@ -132,7 +132,7 @@ cluster/helm/nfs/provisioner/Chart.lock
 Run:
 ```bash
 helm dependency build cluster/helm/nfs/provisioner
-helm template test cluster/helm/nfs/provisioner | yq -r 'select(.kind=="StorageClass" or .kind=="PersistentVolume") | .kind + "/" + .metadata.name + " " + (.spec?.nfs?.path // .provisioner)'
+helm template test ./cluster/helm/nfs/provisioner | yq -r 'select(.kind=="StorageClass" or .kind=="PersistentVolume") | .kind + "/" + .metadata.name + " " + (.spec?.nfs?.path // .provisioner)'
 ```
 Expected: `StorageClass/nfs-client cluster.local/test-nfs-subdir-external-provisioner` and
 `PersistentVolume/pv-test-nfs-subdir-external-provisioner /nfs-storage`. This is the state a missing
@@ -200,7 +200,7 @@ Save as `/tmp/nfs-parity.sh` (not committed):
 ```bash
 #!/usr/bin/env bash
 set -euo pipefail
-chart=cluster/helm/nfs/provisioner
+chart=./cluster/helm/nfs/provisioner
 expect() { # release, fullname, class, selector, accessMode, export path
   local r=$1 full=$2 class=$3 sel=$4 am=$5 path=$6 out
   out=$(helm template "$r" "$chart" -f "$chart/values/$r.yaml")
@@ -279,7 +279,7 @@ file and re-run Step 3.
 Run:
 ```bash
 for f in cluster/helm/nfs/provisioner/values/*.yaml; do
-  helm template x cluster/helm/nfs/provisioner -f "$f" \
+  helm template x ./cluster/helm/nfs/provisioner -f "$f" \
     | yq -r 'select(.kind=="PersistentVolume" or .kind=="PersistentVolumeClaim") | .kind' | wc -l
 done
 ```
@@ -368,7 +368,7 @@ Expected: no output from either.
 
 ```bash
 for a in plex-media nfs-audio books-media nfs-qbittorrent-download nfs-qbittorrent-config nfs-syncthing stash-nfs traefik-nfs; do
-  helm template "$a" cluster/helm/nfs/provisioner -f "cluster/helm/nfs/provisioner/values/$a.yaml" >/dev/null && echo "ok $a"
+  helm template "$a" ./cluster/helm/nfs/provisioner -f "cluster/helm/nfs/provisioner/values/$a.yaml" >/dev/null && echo "ok $a"
 done
 ```
 Expected: eight `ok` lines.
