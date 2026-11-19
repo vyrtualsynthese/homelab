@@ -51,7 +51,9 @@ move to: the upgrade is packaging.
 
 - Moving any application from a static claim to dynamic provisioning. The libraries live at the root
   of each export; dynamic provisioning would create subdirectories under it.
-- Deleting the four PV/PVC pairs stuck in `Terminating`.
+- Deleting the four PVs that have carried a deletion timestamp since 2023-12-06 (`pv-plex-media`,
+  `pv-nfs-qbittorrent-download-…`, `pv-traefik-nfs`, `pv-stash-nfs-nfs-stash`). Their claims are
+  `Bound` and healthy; three of them are read by running pods.
 - Renaming StorageClasses for tidiness (`plex-media` stays, `nfs-plex` dies with its release).
 - Converting any other chart outside `cluster/helm/nfs/`.
 - Backups, or the Longhorn leftovers.
@@ -64,8 +66,9 @@ move to: the upgrade is packaging.
   sync creates a ninth class pointing nowhere. The render diff is the gate.
 - **An empty `mountOptions`.** The PV and PVC templates shipped inside the upstream chart are gated on
   `{{ if .Values.nfs.mountOptions }}`. Dropping the list removes both objects from the render, and the
-  sync prunes them. This is how the four `Terminating` pairs were made. The wrapper always sets the
-  list.
+  sync prunes them. A gate that silently stops rendering a live object is how a claim gets pruned out
+  from under its pod; four NFS volumes in this cluster have carried an unfinished deletion since
+  2023-12-06 for a related reason. The wrapper always sets the list.
 - **A changed `fullnameOverride`.** PV, PVC, ServiceAccount, ClusterRole and provisioner name all
   derive from it. A drift creates a second claim with a new PV and leaves the running pods mounted on
   the orphan.
@@ -199,13 +202,16 @@ NAS no longer serves; `nfs-hdd` points at the same path as the `plex-media` expo
 - **A live PV is immutable in its source.** If a values file disagreed with the export path, the sync
   fails with `PersistentVolumeSource is immutable` rather than re-pointing a library at the wrong
   directory. Loud and safe.
-- **Four PV/PVC pairs sit in `Terminating`** (`pv-plex-media`, `pv-nfs-qbittorrent-download-…`,
-  `pv-traefik-nfs`, `pv-stash-nfs-nfs-stash`). Three are mounted by running pods and `pv-traefik-nfs`
-  holds the ACME store. The refactor keeps every name, so they are patched, never recreated, and their
-  finalizers stay untouched.
-- **`pvc-stash-nfs-nfs-stash` is `Terminating` and unused.** Reserved for a later hand operation
+- **Four NFS volumes carry a deletion timestamp from 2023-12-06 while their claims are `Bound`**
+  (`pv-plex-media`, `pv-nfs-qbittorrent-download-…`, `pv-traefik-nfs`, `pv-stash-nfs-nfs-stash`).
+  Three are mounted by running pods and `pv-traefik-nfs` holds the ACME store; all four are held only
+  by `kubernetes.io/pv-protection`, which is the guard every in-use volume carries. Their `spec.nfs`
+  is set and `spec.csi` empty, so nothing Longhorn is involved. The refactor keeps every name, so they
+  are patched, never recreated, and their finalizers stay untouched.
+- **`pvc-stash-nfs-nfs-stash` is `Bound` and mounted by no pod.** Reserved for a later hand operation
   (delete the claim, patch the volume's finalizers, let the new release recreate the pair), and left
-  alone in this change.
+  alone in this change. The `stash-nfs` *class* is in use: koillection's uploads claim is provisioned
+  into the same export.
 - **ArgoCD adopts the objects that exist.** They carry no ArgoCD tracking annotation today — the
   provisioners were installed with `helm` at some point — so the first sync takes them over by name.
   Nothing is deleted.
