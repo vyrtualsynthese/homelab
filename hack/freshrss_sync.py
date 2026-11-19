@@ -6,7 +6,8 @@
     apply [--prune] [--dry-run]   subscribe what the file lists, and nothing else
     check                         exit 1 when the instance is missing a feed the file lists,
                                   or holds a feed whose content selectors differ from the file
-    verify                        fetch every URL; exit 1 when a native feed answers badly
+    verify                        fetch every URL; exit 1 when a feed answers badly or a
+                                  full-content selector extracts nothing
 
 `check` does not fail on a feed the instance holds and the file does not: apply never removes one
 without --prune, so an extra is not drift, and it is printed instead.
@@ -22,6 +23,7 @@ import datetime
 import email.utils
 import json
 import os
+import re
 import sys
 import urllib.error
 import urllib.parse
@@ -31,7 +33,7 @@ from dataclasses import dataclass
 from http.cookiejar import CookieJar
 from html.parser import HTMLParser
 from pathlib import Path
-from typing import Callable, Mapping, Sequence
+from typing import Callable, Iterator, Mapping, NamedTuple, Sequence
 
 DEFAULT_BASE = "https://freshrss.kub.home.ashudev.com"
 API = "/api/greader.php"
@@ -118,27 +120,29 @@ def parse_opml(text: str) -> list[Feed]:
 @dataclass(frozen=True)
 class Plan:
     to_subscribe: tuple[Feed, ...]
-    to_prune: tuple[tuple[str, str], ...]
+    to_prune: tuple[tuple[str, tuple[str, ...]], ...]
     unchanged: tuple[Feed, ...]
 
 
-def plan(local: Sequence[Feed], remote: Sequence[tuple[str, str]]) -> Plan:
-    """Diff the file against what the instance reports, as (url, category) pairs.
+def plan(local: Sequence[Feed], remote: Sequence[tuple[str, Sequence[str]]]) -> Plan:
+    """Diff the file against what the instance reports, as (url, labels) pairs.
+
+    A feed can carry more than one label: re-subscribing with another `a=` adds one and keeps the
+    old, so the file's category counts as present when it is among them, not only when it is first.
 
     Entries whose id is not a URL are FreshRSS's own internal feeds (its release feed is `1`); the
     file can never list them, so they are not drift and must never be pruned.
     """
-    remote = [(url, cat) for url, cat in remote if "://" in url]
+    remote = [(url, tuple(labels)) for url, labels in remote if "://" in url]
     by_url = {normalize_url(f.url): f for f in local}
-    remote_by_url = {normalize_url(url): cat for url, cat in remote}
+    remote_by_url = {normalize_url(url): labels for url, labels in remote}
 
-    to_subscribe = tuple(
-        f for f in local if remote_by_url.get(normalize_url(f.url)) != f.category
-    )
-    to_prune = tuple((url, cat) for url, cat in remote if normalize_url(url) not in by_url)
-    unchanged = tuple(
-        f for f in local if remote_by_url.get(normalize_url(f.url)) == f.category
-    )
+    def in_place(feed: Feed) -> bool:
+        return feed.category in remote_by_url.get(normalize_url(feed.url), ())
+
+    to_subscribe = tuple(f for f in local if not in_place(f))
+    to_prune = tuple((url, labels) for url, labels in remote if normalize_url(url) not in by_url)
+    unchanged = tuple(f for f in local if in_place(f))
     return Plan(to_subscribe=to_subscribe, to_prune=to_prune, unchanged=unchanged)
 
 
@@ -201,7 +205,8 @@ class Client:
             raise RuntimeError(f"token answered {status}")
         return body.strip()
 
-    def subscriptions(self) -> list[tuple[str, str]]:
+    def subscriptions(self) -> list[tuple[str, tuple[str, ...]]]:
+        """Every subscription as (url, labels); a feed can carry more than one label."""
         if not self.auth:
             self.login()
         status, body = self.transport(
@@ -213,8 +218,10 @@ class Client:
         for sub in json.loads(body).get("subscriptions", []):
             # 1.30 answers a numeric id ("feed/5") and puts the address in url.
             url = sub.get("url") or sub.get("id", "").removeprefix("feed/")
-            categories = sub.get("categories") or [{"label": "Uncategorized"}]
-            pairs.append((url, categories[0].get("label", "Uncategorized")))
+            reported = sub.get("categories") or [{"label": "Uncategorized"}]
+            labels = tuple(
+                label.get("label") or "Uncategorized" for label in reported) or ("Uncategorized",)
+            pairs.append((url, labels))
         return pairs
 
     def subscribe(self, feed: Feed) -> None:
@@ -228,9 +235,9 @@ class Client:
         except RuntimeError:
             # The instance answers 500 for a feed it already holds, and a second subscribe does
             # not move it between categories. Look at what it actually holds before giving up.
-            held = {normalize_url(u): cat for u, cat in self.subscriptions()}
+            held = {normalize_url(u): labels for u, labels in self.subscriptions()}
             current = held.get(normalize_url(feed.url))
-            if current == feed.category:
+            if current is not None and feed.category in current:
                 return
             if current is not None:
                 self._post("/reader/api/0/subscription/edit", {
@@ -547,30 +554,264 @@ def _newest(root: ET.Element) -> str:
     return best.date().isoformat() if best else ""
 
 
+class Row(NamedTuple):
+    """One line of `verify`: what answered, and whether that is a defect."""
+
+    status: str
+    title: str
+    items: int
+    last: str
+    note: str = ""
+    bad: bool = False
+
+
+VOID_ELEMENTS = {"area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta",
+                 "param", "source", "track", "wbr"}
+IGNORED_TEXT = {"script", "style"}
+
+
+class Node:
+    """One element of a page, with the text that sits directly inside it."""
+
+    __slots__ = ("tag", "attrs", "parts", "children")
+
+    def __init__(self, tag: str, attrs: dict[str, str]):
+        self.tag, self.attrs, self.parts, self.children = tag, attrs, [], []
+
+    def text(self) -> str:
+        # An explicit stack: a page with thousands of unclosed tags nests as deep as it likes.
+        pieces, pending = [], [self]
+        while pending:
+            node = pending.pop()
+            pieces.append("".join(node.parts))
+            pending.extend(reversed(node.children))
+        return " ".join("".join(pieces).split())
+
+
+class Page(HTMLParser):
+    """Just enough of an HTML tree to ask whether a CSS selector still points at the article."""
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.root = Node("#document", {})
+        self.stack = [self.root]
+
+    def handle_starttag(self, tag, attrs):
+        node = Node(tag, {key: value or "" for key, value in attrs})
+        self.stack[-1].children.append(node)
+        if tag not in VOID_ELEMENTS:
+            self.stack.append(node)
+
+    def handle_startendtag(self, tag, attrs):
+        self.stack[-1].children.append(
+            Node(tag, {key: value or "" for key, value in attrs}))
+
+    def handle_endtag(self, tag):
+        # HTML leaves elements unclosed; close back to the nearest matching one and carry on.
+        for index in range(len(self.stack) - 1, 0, -1):
+            if self.stack[index].tag == tag:
+                del self.stack[index:]
+                return
+
+    def handle_data(self, data):
+        if any(node.tag in IGNORED_TEXT for node in self.stack):
+            return
+        self.stack[-1].parts.append(data)
+
+
+def _walk(page: str) -> Iterator[Node]:
+    """Every element of a page, in document order: descend before moving sideways."""
+    tree = Page()
+    tree.feed(page)
+    tree.close()
+    pending = [tree.root]
+    while pending:
+        node = pending.pop()
+        yield node
+        pending.extend(reversed(node.children))
+
+
+SELECTOR = re.compile(r"^([A-Za-z][\w-]*)?((?:[.#][\w-]+)*)$")
+
+
+def parse_selector(selector: str) -> list[tuple[str, tuple[tuple[str, str], ...]]]:
+    """Read a comma list of simple selectors: `tag`, `#id`, `.class`, `tag.class#id`.
+
+    A descendant combinator, an attribute test or a pseudo-class is refused rather than guessed at,
+    so `verify` reports the selector it cannot read instead of passing it silently.
+    """
+    matchers = []
+    for part in selector.split(","):
+        part = part.strip()
+        match = SELECTOR.match(part)
+        if not part or not match:
+            raise ValueError(selector)
+        tests = tuple(
+            ("id" if token[0] == "#" else "class", token[1:])
+            for token in re.findall(r"[.#][\w-]+", match.group(2)))
+        matchers.append(((match.group(1) or "").lower(), tests))
+    return matchers
+
+
+def _matches(node: Node, matcher: tuple[str, tuple[tuple[str, str], ...]]) -> bool:
+    tag, tests = matcher
+    if tag and node.tag != tag:
+        return False
+    if not tests:
+        return True
+    classes = node.attrs.get("class", "").split()
+    for kind, value in tests:
+        if kind == "id" and node.attrs.get("id") != value:
+            return False
+        if kind == "class" and value not in classes:
+            return False
+    return True
+
+
+def select_text(page: str, selector: str) -> int:
+    """Characters of text inside the first element the selector picks, 0 when it picks none.
+
+    "First" is document order, which is the order a browser would reach it in.
+
+    Raises ValueError for a selector this reader cannot evaluate.
+    """
+    matchers = parse_selector(selector)
+    for node in _walk(page):
+        if node.tag != "#document" and any(_matches(node, m) for m in matchers):
+            return len(node.text())
+    return 0
+
+
+def _items(root: ET.Element) -> list[ET.Element]:
+    """A feed's items, whichever format it is: RSS 2.0 leaves `item` bare, RSS 1.0 namespaces it."""
+    return [element for element in root.iter()
+            if element.tag.rsplit("}", 1)[-1] in ("item", "entry")]
+
+
+def _item_link(item: ET.Element) -> str:
+    """The page an item points at: RSS gives link text, Atom an alternate link's href."""
+    for child in item:
+        if child.tag.rsplit("}", 1)[-1] != "link":
+            continue
+        if (child.text or "").strip():
+            return child.text.strip()
+        if (child.get("rel") or "alternate") == "alternate" and child.get("href"):
+            return child.get("href").strip()
+    return ""
+
+
+def _article_url(root: ET.Element) -> str:
+    """The newest item's page: what FreshRSS reads the full content out of.
+
+    The item is picked by date, not by file position: a feed that publishes oldest-first would
+    otherwise have a stale article checked.
+    """
+    best, best_date = "", ""
+    for item in _items(root):
+        link = _item_link(item)
+        if not link:
+            continue
+        date = _newest(item)
+        if not best or date > best_date:
+            best, best_date = link, date
+    return best
+
+
+XPATH_LINK = re.compile(
+    r"^//a\[(contains|starts-with)\(@href,\s*(['\"])(.*?)\2\)\]$")
+
+
+def _linked_article(page: str, feed: Feed) -> str:
+    """The newest article of an XPath feed: the first link its item expression picks.
+
+    Only the two item expressions the OPML uses are read (`//a[contains(@href,'…')]` and
+    `//a[starts-with(@href,'…')]`, whose URI is `@href`). Anything else answers "" and `verify`
+    says the selector was not checked, rather than checking the wrong page. The pick is the first
+    link in document order, which is the order FreshRSS sees the same expression in.
+    """
+    match = XPATH_LINK.match(_setting(feed, "xPathItem"))
+    if not match or _setting(feed, "xPathItemUri") not in ("", "@href"):
+        return ""
+    test, fragment = match.group(1), match.group(3)
+    for node in _walk(page):
+        href = node.attrs.get("href", "") if node.tag == "a" else ""
+        if href and (test == "contains" and fragment in href
+                     or test == "starts-with" and href.startswith(fragment)):
+            return urllib.parse.urljoin(feed.url, href)
+    return ""
+
+
+def _verdict(selector: str, page: str, article: str) -> tuple[str, bool]:
+    """What the selector extracts from one page, and whether an empty extraction is a defect."""
+    try:
+        chars = select_text(page, selector)
+    except ValueError:
+        return f"sel {selector} unsupported", True
+    if not chars:
+        return f"sel {selector} empty ({urllib.parse.urlsplit(article).path})", True
+    return f"sel {selector} {chars} chars", False
+
+
+def _unchecked(selector: str) -> str:
+    return f"sel {selector} unchecked" if selector else ""
+
+
+def _setting(feed: Feed, attribute: str) -> str:
+    """The value the file gives one OPML setting, looked up under the form's field name."""
+    return dict(feed.settings).get(SETTING_FIELDS[attribute], "")
+
+
 def verify(feeds: Sequence[Feed],
-           transport: Callable[..., tuple[int, str]] = http) -> list[tuple[str, str, int, str]]:
-    """Fetch every URL and say what came back, without ever raising on a bad answer."""
+           transport: Callable[..., tuple[int, str]] = http) -> list[Row]:
+    """Fetch every URL and say what came back, without ever raising on a bad answer.
+
+    A feed that carries a full-content selector gets one more request: the newest article, read the
+    way the selector reads it. A selector that picks nothing is the failure this command exists to
+    catch, because the feed itself still answers 200 when it happens.
+    """
     rows = []
     for feed in feeds:
+        selector = _setting(feed, "cssFullContent")
         try:
             status, body = transport("GET", feed.url, {"User-Agent": USER_AGENT}, None)
         except Exception:
-            rows.append(("ERR", feed.title, 0, ""))
+            rows.append(Row("ERR", feed.title, 0, "", _unchecked(selector), True))
             continue
         if status != 200:
-            rows.append((f"HTTP{status}", feed.title, 0, ""))
+            rows.append(Row(f"HTTP{status}", feed.title, 0, "", _unchecked(selector), True))
+            continue
+        items, last, article = 0, "", ""
+        if feed.kind == "xpath":
+            # The raw URL is a listing page; the selector reads the article it links to.
+            if selector:
+                article = _linked_article(body, feed)
+        else:
+            try:
+                root = ET.fromstring(body)
+            except ET.ParseError:
+                rows.append(Row("NOT-XML", feed.title, 0, "", _unchecked(selector), True))
+                continue
+            found = _items(root)
+            if not found:
+                rows.append(Row("EMPTY", feed.title, 0, "", _unchecked(selector), True))
+                continue
+            items = len(found)
+            last = _newest(root)
+            if selector:
+                article = _article_url(root)
+        if not article:
+            rows.append(Row("OK", feed.title, items, last, _unchecked(selector)))
             continue
         try:
-            root = ET.fromstring(body)
-        except ET.ParseError:
-            rows.append(("NOT-XML", feed.title, 0, ""))
+            page_status, page = transport("GET", article, {"User-Agent": USER_AGENT}, None)
+        except Exception:
+            page_status, page = 0, ""
+        if page_status != 200:
+            where = "ERR" if page_status == 0 else f"HTTP{page_status}"
+            rows.append(Row("OK", feed.title, items, last, f"sel {selector} page {where}"))
             continue
-        items = root.findall(".//item") or root.findall(
-            ".//{http://www.w3.org/2005/Atom}entry")
-        if not items:
-            rows.append(("EMPTY", feed.title, 0, ""))
-            continue
-        rows.append(("OK", feed.title, len(items), _newest(root)))
+        note, dead = _verdict(selector, page, article)
+        rows.append(Row("OK", feed.title, items, last, note, dead))
     return rows
 
 
@@ -580,8 +821,9 @@ USAGE = """usage: freshrss_sync.py <apply|check|verify> [--prune] [--dry-run]
            --prune also drops the extras, --dry-run only prints
   check    exit 1 when the instance is missing a feed the file lists, or holds one whose
            content selectors differ from the file
-  verify   fetch every URL and print status, items and newest date;
-           exit 1 when a native feed answers badly
+  verify   fetch every URL and print status, items and newest date; a feed with a full-content
+           selector also has its newest article read through that selector;
+           exit 1 when a feed answers badly or a selector extracts nothing
 
 FRESHRSS_USER and FRESHRSS_API_PASSWORD are read from the environment,
 FRESHRSS_WEB_PASSWORD opens the web UI for the per-feed settings (without
@@ -620,11 +862,9 @@ def main(argv: list[str] | None = None,
 
     if command == "verify":
         rows = verify(feeds, transport)
-        failed = 0
-        for (status, title, items, last), feed in zip(rows, feeds):
-            print(f"{status:9} {title:28} {items:4} {last}")
-            if feed.kind == "native" and status != "OK":
-                failed += 1
+        failed = sum(1 for row in rows if row.bad)
+        for row in rows:
+            print(f"{row.status:9} {row.title:28} {row.items:4} {row.last:10} {row.note}".rstrip())
         return 1 if failed else 0
 
     user = env.get("FRESHRSS_USER", "")
@@ -693,8 +933,8 @@ def main(argv: list[str] | None = None,
 
     for feed in diff.to_subscribe:
         print(f"+ {feed.category}/{feed.title}")
-    for url, category in diff.to_prune:
-        print(f"- {url} ({category})")
+    for url, labels in diff.to_prune:
+        print(f"- {url} ({', '.join(labels)})")
     xpath = [f for f in diff.to_subscribe if f.kind == "xpath"]
     print(f"{len(diff.to_subscribe)} to subscribe, {len(diff.to_prune)} extra, "
           f"{len(diff.unchanged)} unchanged, {len(xpath)} XPath (OPML import)")
