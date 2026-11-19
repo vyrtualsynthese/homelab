@@ -11,3 +11,10 @@ After the pod is up:
 3. Confirm a test file syncs both ways.
 4. Only then clear the old claim and volume (PV first), per
    docs/cleanup/longhorn-disposition.md.
+
+5. Once the browser shows authentik before the WebUI, remove Syncthing's own login: Settings → GUI,
+   clear the user and password, tick Insecure Admin Access, save. Do it in that order — the gate is
+   the only thing left in front of the WebUI afterwards.
+
+The gate itself needs no restart: the route change applies on sync, so reload the page once ArgoCD
+has caught up.
