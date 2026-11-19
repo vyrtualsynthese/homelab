@@ -31,18 +31,22 @@ app:
     seccompProfile:
       type: RuntimeDefault
 
-  # The image's entrypoint starts as root, rewrites the `koillection` user to
-  # PUID/PGID, chowns /uploads and then drops to that user with setpriv. CHOWN,
-  # SETUID and SETGID are what that init needs; everything else is dropped.
+  # The image has no USER instruction: left alone it starts as root, rewrites the
+  # `koillection` user to PUID/PGID, chowns /uploads and drops to that user. Root
+  # without privileges cannot write /app/public, which the image owns as uid 1001,
+  # so dropping capabilities and staying root fails at the entrypoint's first
+  # write (verified live: `touch /app/public/.env.local: Permission denied`).
+  # Running as the image's own uid instead makes the entrypoint take its
+  # "skipping user creation" path, needs no capability at all, and writes where
+  # the image already expects to.
   securityContext:
+    runAsNonRoot: true
+    runAsUser: 1001
+    runAsGroup: 1001
     allowPrivilegeEscalation: false
     capabilities:
       drop:
         - ALL
-      add:
-        - CHOWN
-        - SETUID
-        - SETGID
 
   # The image serves on :80 (frankenphp, FRANKENPHP_SERVER_NAME=":80"). This
   # value drives the container port, the Service and both probes.
