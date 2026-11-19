@@ -72,11 +72,17 @@ class PlanTests(unittest.TestCase):
         p = mod.plan([], [("https://b.test/feed", "Dev")])
         self.assertEqual(p.to_prune, (("https://b.test/feed", "Dev"),))
 
+    def test_an_internal_feed_is_not_reported_as_drift(self):
+        p = mod.plan([self.feed()], [("1", "Uncategorized"), ("https://a.test/feed", "Dev")])
+        self.assertEqual(p.to_prune, ())
+
 
 class FakeTransport:
-    def __init__(self, token="TOK", subs=None, login_body="SID=x\nLSID=y\nAuth=AUTH123\n"):
+    def __init__(self, token="TOK", subs=None, login_body="SID=x\nLSID=y\nAuth=AUTH123\n",
+                 edit_status=200):
         self.calls = []
         self.token, self.subs, self.login_body = token, subs or [], login_body
+        self.edit_status = edit_status
 
     def __call__(self, method, url, headers=None, data=None):
         self.calls.append((method, url, headers or {}, data))
@@ -86,10 +92,11 @@ class FakeTransport:
             return 200, self.token
         if "/subscription/list" in url:
             return 200, json.dumps({"subscriptions": [
-                {"id": f"feed/{u}", "title": t, "categories": [{"label": c}]}
-                for u, t, c in self.subs]})
+                {"id": f"feed/{i + 1}", "url": u, "title": t,
+                 "categories": [{"label": c}]}
+                for i, (u, t, c) in enumerate(self.subs)]})
         if "/subscription/edit" in url:
-            return 200, "OK"
+            return self.edit_status, "OK" if self.edit_status == 200 else ""
         return 404, ""
 
 
@@ -128,6 +135,24 @@ class ClientTests(unittest.TestCase):
         with self.assertRaises(mod.AuthError):
             c.login()
 
+    def test_subscriptions_read_the_url_field_not_the_numeric_id(self):
+        """FreshRSS 1.30 answers id="feed/5" and puts the real address in url."""
+        t = FakeTransport(subs=[("https://a.test/feed", "A", "Dev")])
+        c = mod.Client(base="https://x.test", user="u", password="p", transport=t)
+        self.assertEqual(c.subscriptions(), [("https://a.test/feed", "Dev")])
+
+    def test_subscribing_a_feed_the_instance_already_holds_is_not_an_error(self):
+        """The instance answers 500 for a duplicate; the feed is present, so the call succeeded."""
+        t = FakeTransport(subs=[("https://a.test/feed", "A", "Dev")], edit_status=500)
+        c = mod.Client(base="https://x.test", user="u", password="p", transport=t)
+        c.subscribe(mod.Feed(category="Dev", title="A", url="https://a.test/feed"))
+
+    def test_subscribing_a_feed_that_stays_absent_still_raises(self):
+        t = FakeTransport(subs=[], edit_status=500)
+        c = mod.Client(base="https://x.test", user="u", password="p", transport=t)
+        with self.assertRaises(RuntimeError):
+            c.subscribe(mod.Feed(category="Dev", title="B", url="https://b.test/feed"))
+
 
 class CliTests(unittest.TestCase):
     ENV = {"FRESHRSS_USER": "u", "FRESHRSS_API_PASSWORD": "p"}
@@ -155,6 +180,20 @@ class CliTests(unittest.TestCase):
 
     def test_missing_credentials_exit_two(self):
         self.assertEqual(mod.main(["check"], transport=FakeTransport(), env={}), 2)
+
+    def test_check_exits_zero_when_the_instance_only_has_extra_feeds(self):
+        """A feed added by hand is not drift: apply never removes it, so check must not fail on it."""
+        feeds = mod.parse_opml(OPML_PATH.read_text())
+        t = FakeTransport(subs=[(f.url, f.title, f.category) for f in feeds]
+                          + [("https://hand-added.test/feed", "Hand", "Dev")])
+        self.assertEqual(mod.main(["check"], transport=t, env=self.ENV), 0)
+
+    def test_apply_skips_xpath_feeds_because_the_api_cannot_create_them(self):
+        t = FakeTransport(subs=[])
+        mod.main(["apply"], transport=t, env=self.ENV)
+        bodies = b"".join(c[3] or b"" for c in t.calls if b"ac=subscribe" in (c[3] or b""))
+        self.assertNotIn(b"anthropic.com", bodies)
+        self.assertNotIn(b"comm-link", bodies)
 
     def test_apply_twice_sends_no_second_subscribe(self):
         feeds = mod.parse_opml(OPML_PATH.read_text())
