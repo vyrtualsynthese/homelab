@@ -22,29 +22,18 @@ nfsVolumes:
     path: /mnt/ultrafaststorage/nfs
     accessMode: ReadWriteOnce
 
-filebrowser:
-  fullnameOverride: filebrowser
-  replicaCount: 1
-
+filebrowser-quantum:
   image:
-    repository: filebrowser/filebrowser
-    # 2.63.23 is the last published 2.63.x; it also carries the fix that stopped
-    # auto-provisioned users receiving the server root.
-    tag: v2.63.23
+    repository: ghcr.io/gtsteffaniak/filebrowser
+    # renovate: datasource=docker depName=gtsteffaniak/filebrowser
+    tag: 2.0.2-stable
     pullPolicy: IfNotPresent
 
-  strategyType: Recreate
-
-  podAnnotations:
-    setGateway: "true"
-
-  # The repo uses Traefik CRDs only; templates/ingressroute.yaml renders the route.
-  ingress:
-    enabled: false
-
-  service:
-    type: ClusterIP
-    port: 80
+  # PUID/PGID of the rest of the stack; the NAS exports are written by it.
+  securityContext:
+    runAsUser: 1100
+    runAsNonRoot: true
+    fsGroup: 1100
 
   resources:
     requests:
@@ -53,20 +42,17 @@ filebrowser:
     limits:
       memory: 256Mi
 
-  storage:
+  persistence:
+    enabled: true
+    keep: true
+    storageClass: local-path
+    accessMode: ReadWriteOnce
+    data:
+      size: 1Gi
     config:
-      class: local-path
-      accessModes: ReadWriteOnce
-      dataSize: 1Gi
-      existingClaim: ""
-    database:
-      class: local-path
-      accessModes: ReadWriteOnce
-      dataSize: 1Gi
-      subPath: ""
-      existingClaim: ""
+      size: 1Gi
 
-  volumes:
+  extraVolumes:
     - name: stash-volume
       persistentVolumeClaim:
         claimName: filebrowser-stash
@@ -77,7 +63,7 @@ filebrowser:
       persistentVolumeClaim:
         claimName: filebrowser-download
 
-  volumeMounts:
+  extraVolumeMounts:
     - name: stash-volume
       mountPath: /srv/various
     - name: audio-volume
@@ -85,23 +71,60 @@ filebrowser:
     - name: qbittorrent-download-volume
       mountPath: /srv/torrent
 
-  # The Secret carries FB_CONFIG and FB_DATABASE too; the subchart renders no ConfigMap.
-  env:
-    existingSecret: filebrowser
+  # The client id is public; the secret is the only value from a Secret.
+  extraEnv:
+    - name: FILEBROWSER_OIDC_CLIENT_ID
+      value: filebrowser
+    - name: FILEBROWSER_OIDC_CLIENT_SECRET
+      valueFrom:
+        secretKeyRef:
+          name: filebrowser-oidc
+          key: CLIENTSECRET
 
-  nodeSelector:
-    kubernetes.io/hostname: nuc0
-
-  tolerations: []
-  affinity: {}
+  config:
+    server:
+      sources:
+        - path: /srv/various
+          name: various
+          config:
+            defaultEnabled: false
+        - path: /srv/audio
+          name: audio
+          config:
+            defaultEnabled: false
+        - path: /srv/torrent
+          name: torrent
+          config:
+            defaultEnabled: false
+    auth:
+      methods:
+        # No password form: OIDC is the only way in, which is also what makes
+        # the app redirect straight to authentik.
+        password:
+          enabled: false
+          signup: false
+        oidc:
+          enabled: true
+          issuerUrl: https://authentik.kub.home.ashudev.com/application/o/filebrowser/
+          clientId: filebrowser
+          scopes: openid email profile
+          userIdentifier: preferred_username
+          adminGroup: authentik Admins
+          userGroups:
+            - authentik Admins
+            - filebrowser-editors
+    http:
+      port: 8080
+      trustProxyHeaders: true
+      externalUrl: https://filebrowser.kub.home.ashudev.com
 
 traefik:
   apiVersion: traefik.containo.us/v1alpha1
   host: filebrowser.kub.home.ashudev.com
   certResolver: myresolver
   tlsOption: filebrowser-tlsoption
-  service: filebrowser
-  port: 80
+  service: filebrowser-filebrowser-quantum
+  port: 8080
   middlewares:
     - namespace: kube-system
       name: lan-only
