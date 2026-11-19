@@ -456,7 +456,8 @@ git commit -m "🔥 chore(nfs): delete the nine per-export chart copies and the 
 
 One row per export and class: `plex-media` (film and television), `nfs-audio` (music), `nfs-books`
 (books), `qbittorrent-download` (qBittorrent's output), `nfs-qbittorrent-config`, `nfs-syncthing`,
-`stash-nfs` (kept, nothing mounts it), `traefik-nfs` (certificate store). Drop the "strays" sentence
+`stash-nfs` (assets: koillection's uploads, filebrowser's read of the same export), `traefik-nfs`
+(certificate store). Drop the "strays" sentence
 and the `nfs-plex`/`nfs-ssd` rows. Add one line naming the wrapper chart and that each export is one
 release of it.
 

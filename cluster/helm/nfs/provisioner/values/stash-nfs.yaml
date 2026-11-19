@@ -1,4 +1,5 @@
-# Assets and documents. Kept although nothing mounts it today.
+# Assets and documents. koillection's uploads claim is provisioned into this export,
+# and FileBrowser reads the same directory.
 nfs-subdir-external-provisioner:
   nameOverride: nfs-stash
   fullnameOverride: stash-nfs-nfs-stash

@@ -94,7 +94,7 @@ they are what everything above stands on.
 | `nfs-qbittorrent-config` | `media-stack` | streaming | D | the `nfs-qbittorrent-config` class: qBittorrent's configuration on the NAS |
 | `nfs-qbittorrent-download` | `media-stack` | streaming | D | the `qbittorrent-download` class: what is still downloading, on the fast SSD |
 | `plex-media` | `media-stack` | streaming | D | the `plex-media` class: film and television |
-| `stash-nfs` | `media-stack` | nuc0 | D | the `stash-nfs` class: the spare export FileBrowser also sees |
+| `stash-nfs` | `media-stack` | nuc0 | D | the `stash-nfs` class: the assets export — koillection's uploads, and FileBrowser's read of the same directory |
 | `nfs-syncthing` | `syncthing` | nuc0 | D | the `nfs-syncthing` class: what Syncthing syncs |
 | `traefik-nfs` | `kube-system` | nuc0 | D | the `traefik-nfs` class: where Traefik keeps its certificates |
 | `fluent-bit` | `monitoring` | every node | D | DaemonSet: ships container logs to Loki |
@@ -103,7 +103,7 @@ they are what everything above stands on.
 
 All eight provisioners are one release each of the wrapper chart at
 `cluster/helm/nfs/provisioner/`, one values file per export, and every release asks for `streaming`.
-Where the Node column says `nuc0` — six rows, `stash-nfs` among them — that is where the pod was at
+Where the Node column says `nuc0` — five rows — that is where the pod was at
 verification; the next sync moves it. None of the eight selects the retired `node-type` label.
 
 ## The older charts still select the retired label
