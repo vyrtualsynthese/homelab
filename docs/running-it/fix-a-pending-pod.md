@@ -45,8 +45,9 @@ not a hand-made claim.
 [storage.md](../how-it-works/storage.md#claims-and-names).
 
 **The provisioner is down.** The claim waits with `waiting for a volume to be created`. Read
-`kubectl -n <ns> describe pvc <name>`, then find its pod; `nfs-ssd` is dead this way, so use a class
-whose provisioner runs.
+`kubectl -n <ns> describe pvc <name>`, then find the pod of the provisioner behind that class — its
+name is the class's `provisioner` value without the `cluster.local/` prefix — and check it is running.
+A class whose provisioner does not exist, or is not ready, can never satisfy the claim.
 
 ## The claim bound to the wrong node
 
