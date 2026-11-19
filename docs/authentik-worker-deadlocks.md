@@ -12,8 +12,10 @@ cutover ([PR #1287](https://github.com/vyrtualsynthese/homelab/pull/1287)).
   `remove_all_perms_from_managed_role`. Four task slots were `running` at once.
 - Postgres logged `deadlock detected` on `guardian_roleobjectpermission` every one or two minutes,
   one backend blocking others for minutes.
-- Restarting the worker pod cleared it: the first card was written around 22:25 CET and the queue
-  processed normally again after the restart.
+- The card asked for a worker restart. By the time the next session looked, the worker was healthy and
+  the queue empty: the storm ended by itself at 21:28:11, five minutes after the card was written, and
+  the worker went on to process tasks normally. So a restart clears the *symptom* — the stuck rows
+  belong to a task the new process never sees — but this incident did not need one to end.
 
 ## The measurement
 
@@ -79,7 +81,9 @@ shows the backlog if it ever does.
 ## If it happens again
 
 1. Restart the worker: `kubectl -n authentik rollout restart deployment/authentik-worker`. Stuck
-   `running` rows belong to the process that died; they are retried or cleared as the queue drains.
+   `running` rows belong to the process that died or to a task still waiting on a lock; the new
+   process takes the queue over and the backlog drains. On 2026-11-19 the storm also ended on its
+   own in about half an hour, so a restart is not the only way out — it is the fast one.
 2. Watch the queue settle in authentik under **System → Tasks**, or read it with the API:
    `GET /api/v3/tasks/tasks/?search=apply_blueprint` (`AUTHENTIK_TOKEN` in
    `~/.config/secrets/homelab.env`).
