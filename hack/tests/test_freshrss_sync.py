@@ -1,6 +1,8 @@
+import contextlib
 import importlib.util
-import urllib.parse
+import io
 import json
+import urllib.parse
 import pathlib
 import sys
 import unittest
@@ -250,7 +252,8 @@ class CliTests(unittest.TestCase):
             if "guildwars2" in url:
                 return 500, ""
             return 200, rss.decode()
-        self.assertEqual(mod.main(["verify"], transport=transport, env={}), 1)
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(mod.main(["verify"], transport=transport, env={}), 1)
 
     def test_verify_exits_zero_when_every_fetch_answers(self):
         rss = (b'<?xml version="1.0"?><rss><channel><title>t</title>'
@@ -258,4 +261,5 @@ class CliTests(unittest.TestCase):
 
         def transport(method, url, headers=None, data=None):
             return 200, rss.decode()
-        self.assertEqual(mod.main(["verify"], transport=transport, env={}), 0)
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(mod.main(["verify"], transport=transport, env={}), 0)
