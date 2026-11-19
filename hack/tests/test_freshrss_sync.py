@@ -52,9 +52,9 @@ def serve(page=ARTICLE, fail=()):
 
 
 class ParseTests(unittest.TestCase):
-    def test_the_shipped_opml_yields_19_feeds_in_five_categories(self):
+    def test_the_shipped_opml_yields_15_feeds_in_five_categories(self):
         feeds = mod.parse_opml(OPML_PATH.read_text())
-        self.assertEqual(len(feeds), 19)
+        self.assertEqual(len(feeds), 15)
         self.assertEqual({f.category for f in feeds}, {"Jeux", "Dev", "IA", "Boutiques", "Veille"})
 
     def test_a_query_string_survives_parsing(self):
@@ -82,13 +82,13 @@ class ParseTests(unittest.TestCase):
         self.assertEqual(text.count("frss:xPathItem="), 4)
         self.assertIn('xmlns:frss="https://freshrss.org/opml"', text)
 
-    def test_twelve_feeds_carry_a_full_content_selector(self):
+    def test_eleven_feeds_carry_a_full_content_selector(self):
         text = OPML_PATH.read_text()
-        self.assertEqual(text.count("frss:cssFullContent="), 12)
+        self.assertEqual(text.count("frss:cssFullContent="), 11)
 
     def test_a_full_content_selector_does_not_add_or_drop_a_feed(self):
         feeds = mod.parse_opml(OPML_PATH.read_text())
-        self.assertEqual(len(feeds), 19)
+        self.assertEqual(len(feeds), 15)
 
     def test_a_full_content_selector_reaches_the_feed_as_path_entries(self):
         feeds = mod.parse_opml(OPML_PATH.read_text())
@@ -516,7 +516,7 @@ class CliTests(unittest.TestCase):
         code = mod.main(["apply"], transport=t, env=self.ENV)
         self.assertEqual(code, 1)
         bodies = b"".join(c[3] or b"" for c in t.calls if b"ac=subscribe" in (c[3] or b""))
-        self.assertIn(b"lobste.rs", bodies)
+        self.assertIn(b"selfh.st", bodies)
 
     def test_verify_reads_the_items_of_an_rss_1_0_feed(self):
         """Steam serves RSS 1.0, whose items sit in a namespace rather than bare."""

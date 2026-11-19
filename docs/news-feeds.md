@@ -128,10 +128,10 @@ separate decision.
 | Feed | How | URL |
 |---|---|---|
 | selfh.st | native | `https://selfh.st/rss/` |
-| Phoronix | native | `https://www.phoronix.com/rss.php` |
-| Simon Willison | native | `https://simonwillison.net/atom/everything/` |
-| Hacker News front page | native | `https://hnrss.org/frontpage` |
-| Lobsters | native | `https://lobste.rs/rss` |
+
+Four feeds left this category on 2026-11-19 by decision: Phoronix, Simon Willison, the Hacker News
+front page and Lobsters. Their feeds were fine — they were not read often enough to hold a place,
+so the list stays short rather than complete.
 
 ## Sources with no feed
 
@@ -223,7 +223,7 @@ with the part of that page a CSS selector picks (a CSS selector is the rule a st
 target one element — `.entry-content` means "the element carrying the `entry-content` class"). The
 selector travels in the OPML as `frss:cssFullContent`, so a rebuilt instance gets it from the file.
 
-Twelve feeds carry a selector. The column is what `verify` printed on 2026-11-19, read from the
+Eleven feeds carry a selector. The column is what `verify` printed on 2026-11-19, read from the
 newest article of each feed; Elite Dangerous and Anthropic are the exceptions, read by hand the same
 way, because `verify` cannot evaluate their item expressions (see "XPath selectors").
 
@@ -237,7 +237,6 @@ way, because `verify` cannot evaluate their item expressions (see "XPath selecto
 | Logseq blog | `article` | 9519 |
 | Rise of Gunpla — new kits | `.entry-content` | 461 |
 | selfh.st | `article` | 10899 |
-| Phoronix | `article` | 1522 |
 | Final Fantasy XIV | `article` | 1435 |
 | Elite Dangerous | `main` | 2348 |
 | Anthropic / Claude | `article` | 1952 |
@@ -255,26 +254,24 @@ extraction is empty, naming the page it read.
 attribute test or a pseudo-class is outside what it reads, so it reports `unsupported` instead of
 passing silently — extend the reader before using one.
 
-On 2026-11-19 every one of the twelve reads a body: the smallest is Rise of Gunpla at 461
+On 2026-11-19 every one of the eleven reads a body: the smallest is Rise of Gunpla at 461
 characters (the newest kit is a short description), the largest Docker blog at 20013.
 
-Eight feeds carry a picture in the item already, so the list shows a thumbnail without a selector:
-Discord, Docker, Kubernetes, WSL2, Logseq, selfh.st, Simon Willison and Guild Wars 2. Seven of those
-eight also carry a selector. The five that carry a selector without a picture in the item are
-Phoronix, Rise of Gunpla, Final Fantasy XIV, Elite Dangerous and Anthropic — there the selector is
-what brings the pictures, since the feed itself carries none.
+Seven feeds carry a picture in the item already, so the list shows a thumbnail without a selector:
+Discord, Docker, Kubernetes, WSL2, Logseq, selfh.st and Guild Wars 2. Every one of those seven also
+carries a selector. The four that carry a selector without a picture in the item are Rise of Gunpla,
+Final Fantasy XIV, Elite Dangerous and Anthropic — there the selector is what brings the pictures,
+since the feed itself carries none.
 
-Five get nothing, and the reason is the source rather than a missing setting:
+Three get nothing, and the reason is the source rather than a missing setting:
 
 | Feed | Why not |
 |---|---|
 | Steam | the items are store announcements, already the whole text, and 2 images across 20 items |
 | Star Citizen comm-link | the article is built by JavaScript, so the HTML the fetcher receives is empty |
-| Lobsters | the item is a link to someone else's site; fetching it would copy their page |
-| Hacker News | same |
 | Mistral | served as `text/plain`, so the URL needs the force-feed marker; the publisher's summary is the whole article |
 
-On the live instance the twelve feeds exist already, and the OPML import skips a feed it already
+On the live instance the eleven feeds exist already, and the OPML import skips a feed it already
 holds, so the selectors do not reach them that way. `apply` is what writes them: it puts the file's
 `frss:cssFullContent` into the feed's *Retrieve full content* field, so a selector edited in the
 file reaches the feed on the next run instead of needing a delete and a re-import.
