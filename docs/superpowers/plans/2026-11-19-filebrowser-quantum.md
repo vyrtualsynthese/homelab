@@ -606,6 +606,8 @@ Sync `authentik` from the Argo CD UI first (its PostSync hook recreates the work
 
 Then sync `filebrowser` **with Prune enabled**, so the old Deployment, Service, Secret and the two old claims are removed. AGENTS.md §7.1 explains why automation is toggled in the UI and never committed.
 
+Finally delete the orphaned provider (operator, in the UI): the blueprint entry kept its `id` but its identifiers changed from `filebrowser` (proxy) to `filebrowser-oidc` (OAuth2), so the apply creates the new provider and leaves the old one behind. Remove it in **Directory → Federation & Providers**, with its outpost assignment. Nothing reads it, but it is a second way in that outlives its reason.
+
 - [ ] **Step 4: Verify the workload (read-only)**
 
 ```bash

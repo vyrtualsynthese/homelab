@@ -187,7 +187,9 @@ auth:
       enabled: true
       issuerUrl: https://authentik.kub.home.ashudev.com/application/o/filebrowser/
       clientId: filebrowser
-      clientSecret: <FILEBROWSER_OIDC_CLIENT_SECRET from Secret>
+      # clientSecret is not written here: the app overrides it from the
+      # FILEBROWSER_OIDC_CLIENT_SECRET environment variable, which is fed from
+      # the Secret (the fork reads it in loadEnvConfig).
       scopes: openid email profile
       userIdentifier: preferred_username
       adminGroup: authentik Admins
