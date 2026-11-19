@@ -171,8 +171,9 @@ Each keeps the destination namespace it has today.
 - **Keep the StorageClasses**, one per export, under the names that exist today. `nfs-plex` and
   `nfs-ssd` disappear with their releases; no PVC references any of them, and the claim name, not the
   class, is what applications mount.
-- **Keep `stash-nfs`** even though nothing mounts it: the export stays available for filebrowser and
-  future apps.
+- **Keep `stash-nfs`** — koillection's uploads claim is provisioned into that export and filebrowser
+  reads the same directory, so the class is in use. (Corrected 2026-11-19: what is unused is the
+  static pair below, not the class.)
 
 ## Cleanup
 

@@ -41,7 +41,7 @@ the classes below are what remains.
 | `qbittorrent-download` | Immediate | qBittorrent's output |
 | `nfs-qbittorrent-config` | Immediate | qBittorrent's state directory |
 | `nfs-syncthing` | Immediate | Syncthing's folder |
-| `stash-nfs` | Immediate | assets and documents, kept although nothing mounts it |
+| `stash-nfs` | Immediate | assets and documents: koillection's uploads are provisioned into this export, and FileBrowser reads the same directory |
 | `traefik-nfs` | Immediate | Traefik's certificate store |
 
 Every NFS class there is a directory on a `nas` export, declared by its own release of the wrapper
