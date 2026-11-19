@@ -70,25 +70,24 @@ Deployments, 5 StatefulSets, 17 DaemonSets, 50 PersistentVolumeClaims, 5 CronJob
 
 | State | Count | Meaning |
 |---|---|---|
-| Repaired to the contract | 28 | Rebuilt against the chart contract, every replica ready |
+| Repaired to the contract | 29 | Rebuilt against the chart contract, every replica ready |
 | Running, not yet rebuilt | 23 | Running, but on a chart that predates the contract |
-| Broken | 8 | No working replica; cause recorded below |
+| Broken | 7 | No working replica; cause recorded below |
 | ArgoCD cannot compare | 2 | The Application points at a path that does not exist |
 | Middlewares only | 1 | Renders no pod; defines shared Traefik objects |
 | **Total** | **62** | |
 
-53 of the 62 applications have at least one working replica: the 28 repaired, the 23 not yet
+54 of the 62 applications have at least one working replica: the 29 repaired, the 23 not yet
 rebuilt, and the two provisioners ArgoCD cannot compare but still run. `traefik-gate` renders no pod
 at all and is counted apart. Four of the working ones sit on a volume whose claim is stuck
 `Terminating` — they work today and will not survive the Longhorn cleanup (see **Running on a
 borrowed volume**).
 
-## Broken now (8)
+## Broken now (7)
 
 | Application | Namespace | Replicas | Cause |
 |---|---|---|---|
 | `discourse` | discourse | 0/1 | Pending: claim `discourse2` not found |
-| `koillection` | koillection | 0/1 | Pending: claim `koillection-conf` not found |
 | `minecraft-server` | minecraft | 0/1 | Pending: claim `minecraft-lh-2` not found |
 | `news-freshrss` | news | 0/1 | Pending: claim `freshrss-volume` not found |
 | `postiz` | postiz | 0/1 | Pending: claim `postiz-uploads` not found. Its Redis is up, but that claim (`redis-data-postiz-redis-master-0`) is now stuck `Terminating` too, so the pair would not survive a restart |
@@ -96,11 +95,11 @@ borrowed volume**).
 | `ghostfolio` | ghostfolio | 0/1 | Crash-loop, more than ten thousand restarts: resolves `postgres-postgresql.databases.svc.cluster.local`, the **retired Bitnami** Service name. The live one is `postgres.databases.svc.cluster.local` |
 | `wiki` | wiki | 0/1 | Crash-loop, more than ten thousand restarts: same retired Bitnami hostname, `getaddrinfo ENOTFOUND` |
 
-Two distinct causes, not eight: six apps lost a claim that nobody recreated, and two still point at
+Two distinct causes, not seven: five apps lost a claim that nobody recreated, and two still point at
 the PostgreSQL Service that W2, the PostgreSQL workstream, retired. W2's "point the consuming apps at
 the new instance" step is unfinished for `ghostfolio` and `wiki`.
 
-## Repaired to the contract (28)
+## Repaired to the contract (29)
 
 Rebuilt against [`docs/charts/README.md`](charts/README.md) — pinned image tag, node pin, `Recreate`
 where a config claim exists, probes, memory limits, hardening. All of these were ready at the
@@ -136,6 +135,7 @@ snapshot.
 | `vikunja` | vikunja | 2026-11-16 | Wrapper on `vikunja/vikunja` 2.8.0, database on the rebuilt `postgres`, no local password: the only way in is authentik single sign-on (OIDC) |
 | `docs-site` | docs | 2026-11-16 | Wrapper: an nginx pod serving the rendered docs and a builder CronJob every minute on `mkdocs-material` 9.8.1, its own claim |
 | `alert-relay` | monitoring | 2026-11-16 | One small Python process relaying Grafana alerts into board comments, code in a ConfigMap so there is no image to build; on `nas` |
+| `koillection` | koillection | 2026-11-19 | Rebuilt from the broken shape: the chart created neither of the two claims it mounted. Its database was created by hand the same day; the entrypoint must run as root, so capabilities are kept and only `allowPrivilegeEscalation` is off — two failed syncs proved both other shapes (root with everything dropped, and `runAsUser 1001`) |
 
 Two media-stack charts are documented but **not** rebuilt: `plex` (README plus recorded contract
 exceptions) and `qbittorrent` (a DNS fix only). Both run.

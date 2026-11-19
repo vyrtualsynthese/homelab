@@ -308,8 +308,10 @@ capability dropped cannot write `/app/public`, which belongs to uid 1001
 and dies on `php.ini` (`Permission denied`), which it cannot skip. So the chart keeps the default
 capability set and sets only `allowPrivilegeEscalation: false` — `prowlarr`'s shape for a root init.
 Hardening that cannot start the app is not hardening, and leaving the level at `info` for a week
-while the pod crash-loops would have been worse than the two failed syncs were. The remaining failure
-is the one the operator owns: no database yet.
+while the pod crash-loops would have been worse than the two failed syncs were. The last failure was
+the operator's: the `koillection` Secret still named the retired Bitnami Service, and the database did
+not exist. Both were fixed by hand on 2026-11-19 and the app runs 1/1 on its own claims, with the
+account created and the API answering.
 
 ### qbittorrent
 
