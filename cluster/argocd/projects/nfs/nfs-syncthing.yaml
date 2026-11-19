@@ -11,4 +11,8 @@ spec:
   source:
     repoURL: 'https://github.com/vyrtualsynthese/homelab.git'
     targetRevision: develop
-    path: cluster/helm/nfs/nfs-syncthing
+    path: cluster/helm/nfs/provisioner
+    helm:
+      releaseName: nfs-syncthing
+      valueFiles:
+        - values/nfs-syncthing.yaml
