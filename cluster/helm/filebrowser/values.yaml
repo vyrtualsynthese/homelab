@@ -38,11 +38,16 @@ filebrowser-quantum:
   adminPassword:
     passwordOverride: "oidc-only-no-local-login"
 
-  # PUID/PGID of the rest of the stack; the NAS exports are written by it.
+  # PUID/PGID of the rest of the stack, and the uid that owns the download
+  # export (0755). fsGroup is 1000 rather than 1100 on purpose: the assets export
+  # holds directories outside the world-readable majority, owned by 1000 with
+  # mode 0750, which uid 1100 cannot open. NFS volumes are never chowned, so the
+  # only effect is that 1000 joins the process's group list and those
+  # directories become readable.
   securityContext:
     runAsUser: 1100
     runAsNonRoot: true
-    fsGroup: 1100
+    fsGroup: 1000
 
   resources:
     requests:
