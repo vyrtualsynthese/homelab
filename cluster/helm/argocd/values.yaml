@@ -130,7 +130,7 @@ argo-cd:
   dex:
     image:
       repository: ghcr.io/dexidp/dex
-      tag: v2.45.1
+      tag: v2.46.1
   redis:
     image:
       repository: ecr-public.aws.com/docker/library/redis
