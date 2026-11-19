@@ -151,7 +151,7 @@ Working, on the old chart shape. This is the queue for the chart work, not a def
 | `guacamole` | guacamole | 2/2 | OutOfSync |
 | `linkstack` | linkstack | 1/1 | **Borrowed volume**; `latest` tag |
 | `n8n` | n8n | 1/1 | **Borrowed volume** at the snapshot; rebuilt on `local-path` on 2026-11-19 |
-| `syncthing` | syncthing | 1/1 | **Borrowed volume** at the snapshot; rebuilt on `local-path` on 2026-11-19 (`syncthing-config`, pod on `nuc0`). Only the dead pod and its Longhorn claim remain |
+| `syncthing` | syncthing | 1/1 | **Borrowed volume** at the snapshot; rebuilt on `local-path` on 2026-11-19 (`syncthing-config`, pod on `nuc0`). The old pod and its Longhorn claim are gone |
 | `thelounge` | thelounge | 1/1 | **Borrowed volume** at the snapshot; rebuilt on `local-path` on 2026-11-19 (`thelounge-config`); its Longhorn claim is gone |
 | `local-path` | default | 1/1 | OutOfSync; provisioner settings matter to every claim |
 | `renovate` | renovate | CronJob | OutOfSync; Application and values disagreed on the chart version |
@@ -172,20 +172,17 @@ Working, on the old chart shape. This is the queue for the chart work, not a def
 The three provisioners marked `Progressing` (`nfs-qbittorrent-download`, `stash-nfs`, `traefik-nfs`)
 are reported that way while serving their claims normally. That state is ArgoCD's, not a fault.
 
-## Running on a borrowed volume
+## Ran on a borrowed volume (resolved)
 
 `linkstack`, `n8n`, `syncthing` and `thelounge` mounted claims that were already stuck `Terminating` —
 the Longhorn volumes the 2026 disk failure orphaned. Their pods kept running because the volume was
-still attached and the deletion is blocked by a finalizer no driver can remove any more.
+still attached and the deletion was blocked by a finalizer no driver could remove any more.
 
 The consequence mattered for W0, the volume-cleanup workstream: clearing those finalizers **stops
-these apps and destroys their config**. Do not treat "1/1 ready" as "safe" for them. Twelve
-claims were stuck `Terminating` at the snapshot, not the nine the previous page recorded; `firefly`
-has since moved to a `Bound` claim and left this list, `n8n` followed on 2026-11-19 when it was
-rebuilt on `local-path`, and `syncthing` and `thelounge` followed the same day. **One claim is left
-in this state**: `syncthing/syncthing-conf`, held by the force-deletable pod
-`syncthing-75bc646f6b-b8cmq`; the running app no longer mounts it, so clearing it loses nothing.
-`kubectl get pvc -A | grep Terminating` shows the current set.
+these apps and destroys their config**, so "1/1 ready" was never "safe" for them. Twelve claims were
+stuck `Terminating` at the snapshot, not the nine the previous page recorded. All four are rebuilt on
+`local-path` and every one of those claims is cleared as of 2026-11-19, `syncthing/syncthing-conf`
+last. `kubectl get pvc -A | grep Terminating` should now come back empty.
 
 ## ArgoCD cannot compare (2)
 

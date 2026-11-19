@@ -1,24 +1,24 @@
-# Longhorn leftovers: what is left and how to clear it
+# Longhorn leftovers: what was left and how it was cleared
 
 Longhorn was the cluster's replicated storage layer. It was abandoned after the 2026 disk failure and
-its replica data is gone; no volume below holds anything worth rescuing, by operator decision
+its replica data is gone; no volume below held anything worth rescuing, by operator decision
 (`docs/superpowers/specs/2026-11-10-homelab-stabilisation-design.md` §9 W0).
 
-The storage driver and its custom resources are already uninstalled, so nothing removes the last
-objects on its own: their finalizers name controllers that no longer exist.
+The storage driver and its custom resources were uninstalled first, so nothing could remove the last
+objects on its own: their finalizers named controllers that no longer exist.
 
-> **Where this stands.** The operator ran phases 1, 3 and 4 on 2026-11-18. Twenty-three volumes and
-> three claims were cleared, and `longhorn-system` is gone. `n8n` was rebuilt on `local-path` on
-> 2026-11-19 and its claim and volume followed; `thelounge` and `syncthing` were rebuilt the same day,
-> and `thelounge`'s claim and volume are gone too. **One claim is left**: `syncthing-conf`, held by the
-> force-deletable pod `syncthing-75bc646f6b-b8cmq`; the running app is on `syncthing-config` and no
-> longer mounts it, so clearing it loses nothing. The tables below are the inventory taken before the
-> first run, kept as the record of what was removed.
+> **Where this stands: done, 2026-11-19.** Every Longhorn object is gone — the driver, its
+> StorageClasses, its custom resources, the `longhorn-system` namespace, all twenty-six volumes and
+> all six claims. Twenty-three volumes and three claims went on 2026-11-18; `n8n`, `thelounge` and
+> `syncthing` were rebuilt on `local-path` on 2026-11-19 and their claims followed, `syncthing-conf`
+> last. The page is kept as the record of what was removed and how, not as a queue.
 
 > **Agents cannot run these steps.** The agent's cluster access is read-only and shell `kubectl` is
-> denied, so every cluster-side command here is for the operator. Repo-side items are already merged.
+> denied, so every cluster-side command here was the operator's. Repo-side items were merged.
 
-## What is left
+## What was left
+
+The table is the inventory taken before the first run, on 2026-11-18.
 
 | Object | Count | State |
 |---|---|---|
