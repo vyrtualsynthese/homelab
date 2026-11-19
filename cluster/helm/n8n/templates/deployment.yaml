@@ -47,6 +47,11 @@ spec:
                   key: encryption-key
             - name: "N8N_PORT"
               value: "5678"
+            # Traefik is the only proxy in front of n8n. Without this, Express
+            # ignores X-Forwarded-For and the rate limiter counts every client as
+            # the Traefik pod: one busy caller throttles everyone.
+            - name: "N8N_PROXY_HOPS"
+              value: "1"
             - name: "N8N_METRICS"
               value: "true"
             - name: "N8N_METRICS_INCLUDE_DEFAULT_METRICS"
