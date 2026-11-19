@@ -265,7 +265,12 @@ consequences. The data root is `DATA_PATH=/config/data`, not the claim root: the
 chowned to uid 1100 by the old image, and the container can change a file's group but not its mode
 without `FOWNER`, so the Apache worker could not write there. And the capability set keeps
 `DAC_OVERRIDE` for a new reason: the entrypoint runs as root and must create that data directory
-inside the 1100-owned claim. The old LinuxServer tree stays at `/config/www`, unread.
+inside the 1100-owned claim. The old LinuxServer tree stays at `/config/www`; its contents were
+copied into `/config/data`, so the subscriptions and the read state survived the image swap. Two
+requirements came out of that copy, and the chart README spells them out: the user directory has to
+carry the authentik username, because `http_auth` looks the account up by name and nothing is
+provisioned on first sign-in, and `auth_type` has to be `http_auth` rather than the wizard's `form`,
+or the app asks for a second, local password after authentik.
 
 Two things were unusual already and stay. **No health endpoint exists**, so the probes split the
 question: startup and liveness are a TCP connect, while readiness is `GET /i/`. With OIDC on that
