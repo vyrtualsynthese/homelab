@@ -66,6 +66,7 @@ SETTING_FIELDS = {
     "xPathItemThumbnail": "xPathItemThumbnail",
     "xPathItemCategories": "xPathItemCategories",
     "xPathItemUid": "xPathItemUid",
+    "ttl": "ttl",
 }
 KIND_HTML_XPATH = 10
 
