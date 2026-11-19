@@ -113,8 +113,8 @@ time. Examples:
 - **SSO: native first.** When an application supports OIDC (or SAML, or any session-based SSO) itself,
   use that, not `authentik-forwardauth`. The middleware cannot carry an identity into the app — every
   browser that passes the gate is the same user — so it is the fallback for applications that only
-  know a local login. The order is: native OIDC, then proxy auth where the app is built for it
-  (FileBrowser), then `authentik-forwardauth`, then `lan-only` alone with the reason written down.
+  know a local login. The order is: native OIDC, then proxy auth where the app is built for it,
+  then `authentik-forwardauth`, then `lan-only` alone with the reason written down.
   - `kube-system-authentik` is **headers**, not authentication. Naming an app's route with it gates
     nothing; the middleware that authenticates is `kube-system-authentik-forwardauth`.
   - A route that keeps `lan-only` and no gate must say why in the chart, next to the middleware list,

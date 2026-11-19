@@ -65,6 +65,12 @@ filebrowser-quantum:
     config:
       size: 1Gi
 
+  # The repo uses Traefik CRDs only, so the subchart's own Ingress stays off. It
+  # already defaults to false; pinned here so an upstream default change cannot
+  # reintroduce a networking.k8s.io/v1 Ingress.
+  ingress:
+    enabled: false
+
   extraVolumes:
     - name: stash-volume
       persistentVolumeClaim:

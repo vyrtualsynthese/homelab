@@ -232,10 +232,32 @@ Changing the value means patching **both** Secrets and then restarting the worke
 when the blueprint is applied, not when the Secret changes. The chart's PostSync hook recreates the
 worker on the next `authentik` sync, which is the ordinary path.
 
+The cutover order matters. Sync `authentik` **first**: its PostSync hook recreates the worker, which
+applies the blueprint and creates `filebrowser-oidc` and the `filebrowser-editors` group. Only then
+sync `filebrowser`, with **Prune** enabled, so the old Deployment, Service, Secret and the two old
+claims are removed. A `filebrowser` sync first leaves the app pointing at a provider that does not
+exist yet.
+
 The blueprint is `cluster/helm/authentik/files/app-filebrowser.yaml`: provider `filebrowser-oidc`,
 client id `filebrowser`, redirect URI
 `https://filebrowser.kub.home.ashudev.com/api/auth/oidc/callback`, scopes `openid email profile`. The
 application is bound to `authentik Admins` and `filebrowser-editors`; no outpost is involved.
+
+**Delete the old forward-auth provider once.** The blueprint entry kept its `id` but changed its
+identifiers from `filebrowser` (proxy) to `filebrowser-oidc` (OAuth2), so the apply creates the new
+provider and leaves the old one behind. Remove it in **Directory → Federation & Providers**, and drop
+its outpost assignment with it. Nothing reads it afterwards, but a stale provider is a second way in
+that outlives its reason.
+
+### When a sign-in fails
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| the app answers a callback error after authentik | the two Secrets hold different values, or the worker has not restarted since the patch | patch both from one value, restart the worker, restart the pod |
+| every OIDC login is refused, the operator's included | the `groups` claim is missing or renamed, so `userGroups` matches nobody | re-enable the password method (§ Recovery), sign in, fix the profile scope mapping |
+| the operator signs in and the sidebar is empty | the account has no source scopes yet — administrators are not exempt | grant the sources in **Settings → User management** |
+| the pod stays in `ContainerCreating` | `/mnt/storage/nfs/creator` is not exported | create the export, or point `nfsVolumes[].path` at the real folder |
+| reads work and uploads fail with permission denied | the NFS export refuses uid 1100 | change `securityContext.runAsUser`/`fsGroup` to the export's owner |
 
 ### Accounts and folder scopes
 
