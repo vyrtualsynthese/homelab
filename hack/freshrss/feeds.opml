@@ -15,12 +15,10 @@
       <outline type="rss" text="Kubernetes blog" title="Kubernetes blog" xmlUrl="https://kubernetes.io/feed.xml"/>
       <outline type="rss" text="WSL2" title="WSL2" xmlUrl="https://devblogs.microsoft.com/commandline/feed/"/>
       <outline type="rss" text="Logseq blog" title="Logseq blog" xmlUrl="https://blog.logseq.com/rss/"/>
-      <outline type="rss" text="Renovate blog" title="Renovate blog" kind="xpath" htmlUrl="https://renovatebot.com/blog"/>
     </outline>
     <outline text="IA" title="IA">
       <outline type="rss" text="Mistral" title="Mistral" xmlUrl="https://mistral.ai/news/rss"/>
       <outline type="rss" text="Anthropic / Claude" title="Anthropic / Claude" kind="xpath" htmlUrl="https://www.anthropic.com/news"/>
-      <outline type="rss" text="DeepSeek" title="DeepSeek" kind="xpath" htmlUrl="https://api-docs.deepseek.com/news/"/>
     </outline>
     <outline text="Boutiques" title="Boutiques">
       <outline type="rss" text="Rise of Gunpla — new kits" title="Rise of Gunpla — new kits" xmlUrl="https://riseofgunpla.com/feed?post_type=product"/>

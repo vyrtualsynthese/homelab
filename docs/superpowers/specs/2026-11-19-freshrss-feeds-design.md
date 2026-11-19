@@ -64,9 +64,9 @@ subscription API cannot carry selectors); **gap** = no official machine-readable
 | Kubernetes | native | `https://kubernetes.io/feed.xml` — 50 items, last 2026-11-16 |
 | WSL2 | native | `https://devblogs.microsoft.com/commandline/feed/` — 10 items, last 2026-11-04 |
 | Logseq | native | `https://blog.logseq.com/rss/` — 8 items, **last 2024-08-31** (blog is dormant) |
-| Renovate | XPath | `https://renovatebot.com/blog` — server-rendered listing |
 | ZSH | gap | No blog. The official channel is the `zsh-announce` mailing list; no feed. |
 | opencode | gap | Only `/changelog`, which is release notes and excluded by the blog-only rule. |
+| Renovate | gap | `renovatebot.com/blog` has no feed and now renders Mend's corporate blog. |
 
 ### IA
 
@@ -74,7 +74,7 @@ subscription API cannot carry selectors); **gap** = no official machine-readable
 |---|---|---|
 | Mistral | native | `https://mistral.ai/news/rss` — 94 items |
 | Anthropic / Claude | XPath | `https://www.anthropic.com/news` — server-rendered, 35 news links |
-| DeepSeek | XPath | `https://api-docs.deepseek.com/news/` — server-rendered, `news/newsNNNNNN` items |
+| DeepSeek | gap | `api-docs.deepseek.com/news/` exposes one article link; `deepseek.com/en/news` refuses non-browser clients. |
 
 OpenAI and ChatGPT are dropped by decision: the only official feed carries 1413 items of history and
 the topic is not worth the noise.
@@ -119,7 +119,9 @@ Original publishers, not aggregators:
 
 ## Resolved with the operator (2026-11-19)
 
-- The seven gaps stay as documented holes; no topic is dropped.
+- The gaps stay as documented holes; no topic is dropped by the operator. Two of them (DeepSeek,
+  Renovate) were demoted during implementation because their page yielded too few items to be a
+  feed.
 - "mykbdfan" is **KBDfans** (`kbdfans.com`), confirmed.
 - OpenAI/ChatGPT is dropped, not capped.
 

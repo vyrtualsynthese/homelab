@@ -15,9 +15,9 @@ spec.loader.exec_module(mod)
 
 
 class ParseTests(unittest.TestCase):
-    def test_the_shipped_opml_yields_22_feeds_in_five_categories(self):
+    def test_the_shipped_opml_yields_20_feeds_in_five_categories(self):
         feeds = mod.parse_opml(OPML_PATH.read_text())
-        self.assertEqual(len(feeds), 22)
+        self.assertEqual(len(feeds), 20)
         self.assertEqual({f.category for f in feeds}, {"Jeux", "Dev", "IA", "Boutiques", "Veille"})
 
     def test_a_query_string_survives_parsing(self):
