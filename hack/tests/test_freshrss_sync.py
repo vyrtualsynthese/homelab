@@ -122,3 +122,46 @@ class ClientTests(unittest.TestCase):
         c = mod.Client(base="https://x.test", user="u", password="p", transport=t)
         with self.assertRaises(mod.AuthError):
             c.login()
+
+
+class CliTests(unittest.TestCase):
+    ENV = {"FRESHRSS_USER": "u", "FRESHRSS_API_PASSWORD": "p"}
+
+    def test_check_exits_one_when_the_instance_is_missing_a_feed(self):
+        t = FakeTransport(subs=[])
+        code = mod.main(["check"], transport=t, env=self.ENV)
+        self.assertEqual(code, 1)
+
+    def test_check_exits_zero_when_every_feed_matches(self):
+        feeds = mod.parse_opml(OPML_PATH.read_text())
+        t = FakeTransport(subs=[(f.url, f.title, f.category) for f in feeds])
+        code = mod.main(["check"], transport=t, env=self.ENV)
+        self.assertEqual(code, 0)
+
+    def test_apply_without_prune_never_unsubscribes(self):
+        t = FakeTransport(subs=[("https://hand-added.test/feed", "Hand", "Dev")])
+        mod.main(["apply"], transport=t, env=self.ENV)
+        self.assertFalse([c for c in t.calls if b"ac=unsubscribe" in (c[3] or b"")])
+
+    def test_apply_with_prune_unsubscribes_the_extra_feed(self):
+        t = FakeTransport(subs=[("https://hand-added.test/feed", "Hand", "Dev")])
+        mod.main(["apply", "--prune"], transport=t, env=self.ENV)
+        self.assertTrue([c for c in t.calls if b"ac=unsubscribe" in (c[3] or b"")])
+
+    def test_missing_credentials_exit_two(self):
+        self.assertEqual(mod.main(["check"], transport=FakeTransport(), env={}), 2)
+
+    def test_apply_twice_sends_no_second_subscribe(self):
+        feeds = mod.parse_opml(OPML_PATH.read_text())
+        t = FakeTransport(subs=[(f.url, f.title, f.category) for f in feeds])
+        mod.main(["apply"], transport=t, env=self.ENV)
+        before = len(t.calls)
+        mod.main(["apply"], transport=t, env=self.ENV)
+        self.assertFalse([c for c in t.calls[before:] if b"ac=subscribe" in (c[3] or b"")])
+
+    def test_verify_reports_a_rate_limited_feed_without_raising(self):
+        def transport(method, url, headers=None, data=None):
+            return 429, ""
+        rows = mod.verify([mod.Feed(category="Boutiques", title="KBDfans",
+                                    url="https://kbdfans.test/x.atom")], transport)
+        self.assertEqual(rows, [("HTTP429", "KBDfans", 0, "")])

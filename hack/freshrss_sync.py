@@ -12,6 +12,8 @@ Credentials come from FRESHRSS_USER and FRESHRSS_API_PASSWORD in the environment
 
 from __future__ import annotations
 
+import datetime
+import email.utils
 import json
 import os
 import sys
@@ -181,3 +183,114 @@ class Client:
             "s": "feed/" + url,
             "T": self.token(),
         })
+
+
+def _newest(root: ET.Element) -> str:
+    """The newest date the feed publishes, as YYYY-MM-DD, or an empty string."""
+    best = None
+    for element in root.iter():
+        tag = element.tag.rsplit("}", 1)[-1]
+        if tag not in ("pubDate", "updated", "published") or not element.text:
+            continue
+        raw = element.text.strip()
+        try:
+            if raw[:4].isdigit() and raw[4:5] == "-":
+                when = datetime.datetime.fromisoformat(raw.replace("Z", "+00:00"))
+            else:
+                when = email.utils.parsedate_to_datetime(raw)
+        except (TypeError, ValueError):
+            continue
+        if when.tzinfo is None:
+            when = when.replace(tzinfo=datetime.timezone.utc)
+        if best is None or when > best:
+            best = when
+    return best.date().isoformat() if best else ""
+
+
+def verify(feeds: Sequence[Feed],
+           transport: Callable[..., tuple[int, str]] = http) -> list[tuple[str, str, int, str]]:
+    """Fetch every URL and say what came back, without ever raising on a bad answer."""
+    rows = []
+    for feed in feeds:
+        try:
+            status, body = transport("GET", feed.url, {"User-Agent": USER_AGENT}, None)
+        except Exception:
+            rows.append(("ERR", feed.title, 0, ""))
+            continue
+        if status != 200:
+            rows.append((f"HTTP{status}", feed.title, 0, ""))
+            continue
+        try:
+            root = ET.fromstring(body)
+        except ET.ParseError:
+            rows.append(("NOT-XML", feed.title, 0, ""))
+            continue
+        items = root.findall(".//item") or root.findall(
+            ".//{http://www.w3.org/2005/Atom}entry")
+        if not items:
+            rows.append(("EMPTY", feed.title, 0, ""))
+            continue
+        rows.append(("OK", feed.title, len(items), _newest(root)))
+    return rows
+
+
+USAGE = """usage: freshrss_sync.py <apply|check|verify> [--prune] [--dry-run]
+
+  apply    subscribe every feed the OPML lists; --prune also drops the extras
+  check    exit 1 when the instance and the file disagree
+  verify   fetch every URL and print status, items and newest date
+"""
+
+
+def main(argv: list[str] | None = None,
+         transport: Callable[..., tuple[int, str]] = http,
+         env: dict[str, str] | None = None) -> int:
+    args = list(sys.argv[1:] if argv is None else argv)
+    env = dict(os.environ) if env is None else env
+    if not args or args[0] not in ("apply", "check", "verify"):
+        print(USAGE, file=sys.stderr)
+        return 2
+    command, flags = args[0], {a for a in args[1:] if a.startswith("-")}
+
+    feeds = parse_opml(OPML_PATH.read_text())
+
+    if command == "verify":
+        for status, title, items, last in verify(feeds, transport):
+            print(f"{status:9} {title:28} {items:4} {last}")
+        return 0
+
+    user = env.get("FRESHRSS_USER", "")
+    password = env.get("FRESHRSS_API_PASSWORD", "")
+    if not user or not password:
+        print("FRESHRSS_USER and FRESHRSS_API_PASSWORD must be set", file=sys.stderr)
+        return 2
+
+    client = Client(env.get("FRESHRSS_BASE", DEFAULT_BASE), user, password, transport)
+    try:
+        diff = plan(feeds, client.subscriptions())
+    except AuthError as error:
+        print(str(error), file=sys.stderr)
+        return 2
+
+    for feed in diff.to_subscribe:
+        print(f"+ {feed.category}/{feed.title}")
+    for url, category in diff.to_prune:
+        print(f"- {url} ({category})")
+    print(f"{len(diff.to_subscribe)} to subscribe, {len(diff.to_prune)} extra, "
+          f"{len(diff.unchanged)} unchanged")
+
+    if command == "check":
+        return 1 if (diff.to_subscribe or diff.to_prune) else 0
+    if "--dry-run" in flags:
+        return 0
+
+    for feed in diff.to_subscribe:
+        client.subscribe(feed)
+    if "--prune" in flags:
+        for url, _ in diff.to_prune:
+            client.unsubscribe(url)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
