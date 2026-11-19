@@ -96,6 +96,7 @@ nav:
       - Dashboards: reference/dashboards.md
       - Secrets: secrets.md
       - qBittorrent Web UI stalls: qbittorrent-webui-stalls.md
+      - authentik worker deadlocks: authentik-worker-deadlocks.md
   - Runbooks:
       - runbooks/README.md
       - Wire an application to authentik: runbooks/authentik-apps.md
