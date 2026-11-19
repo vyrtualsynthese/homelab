@@ -53,7 +53,7 @@ release lands; only then does the nightly run pick it up. The pull requests them
 Validate a change before committing it (this is the same Renovate version the cluster runs):
 
 ```bash
-npx --yes --package renovate@44.251.0 renovate-config-validator .github/renovate.json
+npx --yes --package renovate@44.252.7 renovate-config-validator .github/renovate.json
 ```
 
 The validator catches a removed or renamed key and prints the migration for it. It does not catch a
@@ -78,7 +78,8 @@ The read-only cluster account cannot read Secrets, so the value is only ever see
 ## A run, by hand
 
 The scheduled run is `03:00 Europe/Paris` every day (`0 3 * * *`), under `Forbid` and with
-`backoffLimit: 1` — a failed run is retried once, then left failed. A run has taken 18 to 39 minutes.
+`backoffLimit: 1` — a failed run is retried once, then left failed. A run takes 7 to 10 minutes on
+the current image; runs on the previous one took up to 39.
 
 Trigger one now, without waiting for 03:00:
 
@@ -138,6 +139,21 @@ Dependency Dashboard refreshed at 00:30 UTC; four pull requests updated
 `Chart.yaml` dependency is now one of the eleven, so Renovate owns the chart version in the same file
 the image tag lives in.
 
+## The coverage rewrite, 2026-11-19
+
+`.github/renovate.json` was rewritten that day and released to `main`; two hand-triggered runs then
+proved it in the cluster:
+
+```
+job renovate-manual-20261119-0433: Complete, 1/1, exit 0, 7m27s — 16 pull requests opened (#1244–#1259)
+job renovate-manual-20261119-0503: Complete, 1/1, exit 0, 9m38s — six blocked branches rebased, one commit each
+```
+
+The LinuxServer gate held: the dependency dashboard lists the major tags (lidarr v8, prowlarr v3,
+qbittorrent v20) under **Pending Approval**, and no branch was created for them. `qbittorrent
+20.04.1` also sits behind the closed pull request #615, so recreating that branch needs a checkbox
+as well as an approval.
+
 ## Rotating the token
 
 The pod reads environment variables at container start, so a patched Secret reaches the next run and
@@ -174,7 +190,7 @@ renovate:
 
 Keep the timezone explicit: the CronJob controller runs in UTC, so an unqualified schedule silently
 moves by an hour when the offset changes. Pick a slot that does not overlap the *arrs' midnight
-housekeeping or the 04:30 database dump — a run has taken 18 to 39 minutes.
+housekeeping or the 04:30 database dump — a run takes 7 to 10 minutes.
 
 **Expect one catch-up run when the slot moves.** The controller remembers the last scheduled time
 and creates a Job for a slot it missed. Moving from `0 1 * * *` (UTC) to `0 3 * * *` (Europe/Paris)
