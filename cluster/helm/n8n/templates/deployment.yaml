@@ -30,12 +30,21 @@ spec:
       volumes:
         - name: n8n
           persistentVolumeClaim:
-            claimName: "n8n-2"
+            claimName: {{ .Values.n8n.persistence.claimName }}
       containers:
         - name: {{ .Chart.Name }}
           image: "{{ .Values.n8n.image.repository }}:{{ .Values.n8n.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.n8n.image.pullPolicy }}
           env:
+            # n8n generates this key at first start and keeps it beside the data.
+            # Setting it explicitly means a claim rebuilt from scratch comes back
+            # with the same key, so credentials restored from a backup stay
+            # readable. The value lives only in the cluster; see docs/secrets.md.
+            - name: "N8N_ENCRYPTION_KEY"
+              valueFrom:
+                secretKeyRef:
+                  name: n8n
+                  key: encryption-key
             - name: "N8N_PORT"
               value: "5678"
             - name: "N8N_METRICS"
@@ -67,6 +76,41 @@ spec:
           ports:
             - containerPort: 5678
               name: "n8n"
+          {{- with .Values.n8n.probes.startup }}
+          {{- if .enabled }}
+          startupProbe:
+            httpGet:
+              path: {{ .path }}
+              port: n8n
+            periodSeconds: {{ .periodSeconds }}
+            timeoutSeconds: {{ .timeoutSeconds }}
+            failureThreshold: {{ .failureThreshold }}
+          {{- end }}
+          {{- end }}
+          {{- with .Values.n8n.probes.liveness }}
+          {{- if .enabled }}
+          livenessProbe:
+            httpGet:
+              path: {{ .path }}
+              port: n8n
+            initialDelaySeconds: {{ .initialDelaySeconds }}
+            periodSeconds: {{ .periodSeconds }}
+            timeoutSeconds: {{ .timeoutSeconds }}
+            failureThreshold: {{ .failureThreshold }}
+          {{- end }}
+          {{- end }}
+          {{- with .Values.n8n.probes.readiness }}
+          {{- if .enabled }}
+          readinessProbe:
+            httpGet:
+              path: {{ .path }}
+              port: n8n
+            initialDelaySeconds: {{ .initialDelaySeconds }}
+            periodSeconds: {{ .periodSeconds }}
+            timeoutSeconds: {{ .timeoutSeconds }}
+            failureThreshold: {{ .failureThreshold }}
+          {{- end }}
+          {{- end }}
           volumeMounts:
             - mountPath: "/home/node/.n8n"
               name: "n8n"

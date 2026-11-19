@@ -1,0 +1,26 @@
+{{/*
+The config claim: the n8n database, the workflows and the credentials encrypted
+with them. Kept on purpose, so neither a release uninstall nor a prune that
+follows a chart change can delete the data by accident.
+
+The name comes from values (n8n-config), not from the old Longhorn claim n8n-2,
+whose name is still held by a Terminating object. See
+docs/cleanup/longhorn-disposition.md.
+*/}}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ .Values.n8n.persistence.claimName }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "n8n.labels" . | nindent 4 }}
+  annotations:
+    helm.sh/resource-policy: keep
+    argocd.argoproj.io/sync-options: Delete=false
+spec:
+  accessModes:
+    - {{ .Values.n8n.persistence.accessMode }}
+  storageClassName: {{ .Values.n8n.persistence.storageClassName }}
+  resources:
+    requests:
+      storage: {{ .Values.n8n.persistence.size }}
