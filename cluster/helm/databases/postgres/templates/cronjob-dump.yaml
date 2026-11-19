@@ -74,7 +74,7 @@ spec:
               type: RuntimeDefault
           containers:
             - name: dump
-              image: "{{ .Values.image.repository }}@{{ .Values.image.digest }}"
+              image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
               imagePullPolicy: IfNotPresent
               command:
                 - /bin/bash

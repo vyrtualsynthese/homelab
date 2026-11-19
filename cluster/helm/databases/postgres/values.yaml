@@ -1,7 +1,9 @@
 image:
   repository: postgres
+  # A floating minor tag: Docker Hub republishes 18.7 with each 18.7.x patch. The
+  # reference is the tag alone; digest pinning was decided against on 2026-11-19,
+  # so a re-pushed 18.7 changes what runs without being detected here.
   tag: "18.7"
-  digest: "sha256:9f4fd4aa918f52ae3d6f3b687f1de90d8f867cd4d520021545a9a50c120eae3b"
 
 nodeSelector:
   kubernetes.io/hostname: nas
@@ -58,6 +60,3 @@ networkPolicy:
 exporter:
   repository: prometheuscommunity/postgres-exporter
   tag: "v0.17.1"
-  # Pinned like the postgres image: the tag is the readable version, the digest is
-  # the identity. Index digest of v0.17.1 (multi-arch, linux/amd64 on nas).
-  digest: "sha256:38606faa38c54787525fb0ff2fd6b41b4cfb75d455c1df294927c5f611699b17"
