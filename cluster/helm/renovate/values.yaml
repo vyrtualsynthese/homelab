@@ -26,7 +26,7 @@ renovate:
   # Schedule. The CronJob controller runs in UTC, and an unqualified schedule
   # silently changes its local meaning when the offset does, so the timezone is
   # explicit. 03:00 Paris is after the *arrs' midnight housekeeping and before
-  # the 04:30 database dump; a run takes about 40 minutes.
+  # the 04:30 database dump; a run has taken 18 to 39 minutes.
   cronjob:
     schedule: "0 3 * * *"
     timeZone: Europe/Paris

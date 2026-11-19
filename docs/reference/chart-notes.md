@@ -90,7 +90,7 @@ dump — with `Forbid`, `backoffLimit: 1`, a 90-minute deadline and three days o
 takes the batch exception on probes and readiness, and its image already runs as UID 12021, so
 non-root, `allowPrivilegeEscalation: false`, `drop: [ALL]` and the runtime seccomp profile cost
 nothing. **Log level is a deliberate divergence:** the contract asks for `warning`, but the nightly
-log is about 100 lines and 4.5 KB, it is the only per-repository record of what was scanned, and
+log is 300-350 lines and about 16 KB, it is the only per-repository record of what was scanned, and
 `recyclarr` — the other batch job — keeps `info` too. Resources are a protection ceiling (256Mi
 requested, 1Gi limited), not a measurement: a run is shorter than the scrape interval. It still runs
 under the namespace's `default` ServiceAccount, which mounts a token Renovate never uses; the
