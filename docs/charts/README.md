@@ -109,6 +109,7 @@ that are not valid environment-variable names. If a rollout is only correct beca
 | 17 | If the image ships a Prometheus exporter, it is enabled and scraped (see **Metrics**) | An exporter that is off is an observability hole nobody notices until the incident |
 | 18 | The app logs at `warning` or above, not at `info` (see **Logs**) | Fluent Bit ships every line to Loki with no filter; `info` is thousands of lines a day nobody reads |
 | 19 | A non-public route references `kube-system-lan-only@kubernetescrd`; a public one does not | The internet reaches every route by hostname, so the allowlist is the only thing that keeps internal apps internal |
+| 20 | A chart whose app rejects unknown config keys at startup is listed in `hack/config-key-checks.yaml` | An unknown key fails the app at startup, and only after a sync; the manifest is how the local check knows to read it |
 
 Two things live outside this page because they change for reasons the contract does not:
 [chart sizing](../reference/chart-sizing.md) records which charts have been measured against Prometheus
