@@ -543,8 +543,8 @@ that can fail. `PUID`/`PGID` moved from `0` to `1100` with `TZ` from `Etc/CEST` 
 `local-path` claim is already owned by 1100.
 
 Debt: no log level. Syncthing has no verbosity variable (`STTRACE` only raises), so it runs at
-`info` and the GUI is the other record. The nightly restic CronJob's 512Mi limit is unmeasured: a
-five-minute job leaves no working set in Prometheus.
+`info` and the GUI is the other record. The restic CronJob this chart carried until 2026-11-20 is
+gone; its folder is the `nfs` stream of `cluster/helm/backup`.
 
 ### filebrowser
 

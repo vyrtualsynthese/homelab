@@ -24,6 +24,10 @@ own restic repository inside it, so a broken stream cannot damage another's hist
 | `nodes-streaming` | `backup-node-streaming` | 05:30 | the media stack's configuration, the node's `/etc`, the etcd copy |
 | `nfs` | `backup-nfs` | 06:00 | syncthing, koillection's uploads, the ACME store, the qBittorrent config |
 
+The syncthing application's own chart carried a restic CronJob until 2026-11-20. It pointed at an
+AWS bucket that never existed, so it had never written a snapshot; the `nfs` row above is what
+covers that folder now.
+
 `backup-prune` runs Sunday at noon: 7 daily, 4 weekly, 12 monthly. `backup-verify` runs at 08:30 and
 is the one that says whether a stream is still advancing.
 

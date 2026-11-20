@@ -71,6 +71,10 @@ All notable changes to this repository. The format follows
 
 ### Removed
 
+- The syncthing chart carries no backup any more. Its restic CronJob wrote to
+  `s3:s3.amazonaws.com/ashudev-homelab-syncthing-backup`, a bucket that does not exist, so the job
+  had never written a snapshot and reported `Failed` every night. The folder it read is the `nfs`
+  stream of `cluster/helm/backup`.
 - KBDfans *new arrivals* leaves the feed set: the shop refuses the pod's client at every interval —
   `429 local_rate_limited` on eight consecutive scheduled polls while every other feed answered — and
   no address, user agent, protocol or cURL option changes that. `state` never saw an item. The
