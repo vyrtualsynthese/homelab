@@ -11,5 +11,6 @@ data:
   # Service cannot drift apart.
   config.yaml: |
     {{- $config := deepCopy .Values.config }}
-    {{- $_ := set (index $config "http") "port" (int .Values.service.port) }}
+    {{- $http := default (dict) (index $config "http") }}
+    {{- $_ := set $config "http" (merge $http (dict "port" (int .Values.service.port))) }}
     {{- toYaml $config | nindent 4 }}
