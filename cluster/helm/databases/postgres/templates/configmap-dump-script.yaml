@@ -17,6 +17,11 @@ Why it is shaped the way it is:
 - The dump is written to "<name>.partial" and only renamed once it passed both
   checks, so a half-written file never carries a name that looks like a good
   one. Leftover .partial files are removed at the start of each run.
+- Roles come first, as one "globals.sql": a dump restores rows into owners that
+  must already exist, and a rebuilt cluster has none of them. The file has a
+  fixed name rather than a date because roles change rarely and the copy must
+  match the newest dumps; it is replaced whole, through the same
+  partial-then-rename rule.
 - Retention prunes BEFORE the dumps are taken. Deletion is by age, so it can
   never reach the newest file, and pruning first means a volume that filled up
   overnight is freed on the next run instead of making every later run fail on
@@ -54,6 +59,14 @@ data:
     fi
     rm -f /dumps/.write-test
     export PGPASSWORD="${BACKUP_PASSWORD:?}"
+    # Roles before databases: a dump restores rows into owners that must already exist, so
+    # the globals file is the half of the backup that makes the other half restorable. A
+    # fixed name on purpose — roles change rarely, and the file must always match the newest
+    # dumps rather than age out beside them.
+    globals="/dumps/globals.sql"
+    pg_dumpall --globals-only -h postgres -U backup -f "${globals}.partial"
+    [ -s "${globals}.partial" ] || { echo "empty globals dump: ${globals}.partial" >&2; exit 1; }
+    mv "${globals}.partial" "${globals}"
     dbs_out=$(psql -h postgres -U backup -d postgres -At -c \
       "SELECT datname FROM pg_database WHERE datistemplate = false AND datname <> 'postgres' ORDER BY 1")
     mapfile -t dbs <<< "$dbs_out"
