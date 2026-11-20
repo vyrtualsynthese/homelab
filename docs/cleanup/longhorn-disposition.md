@@ -227,8 +227,9 @@ recipe:
   reading them now. They were asked to delete in December 2023 and are held only by
   `kubernetes.io/pv-protection` — the guard that every in-use volume carries — and their
   `spec.csi` is empty, which is the one thing that keeps the phase 3 filter from selecting them.
-  Patch their finalizers away and the live mount goes with the object. They need their own
-  investigation before anyone touches them.
+  Patch their finalizers away and the live mount goes with the object. They were decided to be kept
+  on 2026-11-20; the per-volume reasons and the replacement procedure are in
+  [`../how-it-works/storage.md`](../how-it-works/storage.md).
 - **Four `local-path` volumes are `Released`** and hold no claim: `pvc-51a71183…`
   (`calibre-web-automated-config`), `pvc-61023024…` (`pgadmin-config`), `pvc-76b5d66d…`
   (`cross-seed2`), `pvc-801276ae…` (`plex-transcode`). Deleting the objects is safe; the directories

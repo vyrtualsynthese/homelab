@@ -207,10 +207,14 @@ are in `docs/superpowers/plans/`.
    [`docs/cleanup/longhorn-disposition.md`](docs/cleanup/longhorn-disposition.md).
 
    **One trap survives the cleanup.** Four externally-provisioned NFS volumes still show a deletion
-   timestamp and must never be patched (`pv-traefik-nfs`, `pv-plex-media`, `pv-stash-nfs-nfs-stash`,
-   `pv-nfs-qbittorrent-download-nfs-subdir-external-provisioner`): they are live, and `pv-traefik-nfs`
-   holds the ACME certificate store. They appear in `kubectl get pv` and in namespace health counts
-   and nothing else; that is expected, not a leftover to clear.
+   timestamp. They are **kept as they are, by decision on 2026-11-20**, and must never be patched:
+   `pv-traefik-nfs` (the ACME certificate store), `pv-plex-media` (the film and television library),
+   `pv-stash-nfs-nfs-stash` (the assets export koillection writes to and FileBrowser reads) and
+   `pv-nfs-qbittorrent-download-nfs-subdir-external-provisioner` (the downloads queue). All four are
+   declared by the provisioner chart, so git still owns them and a sync recreates them. They appear
+   in `kubectl get pv` and in namespace health counts and nothing else; that is expected, not a
+   leftover to clear. The per-volume reasons and the replacement procedure are in
+   [`docs/how-it-works/storage.md`](docs/how-it-works/storage.md).
 
 **Broken references**
 
