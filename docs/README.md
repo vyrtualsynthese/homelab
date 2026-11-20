@@ -46,7 +46,8 @@ The board is the state of the work: when a plan's checkboxes and the board disag
 | Subject | Page | It answers |
 |---|---|---|
 | Nodes | [The machines](how-it-works/nodes.md) | which machines exist, what each is for, what a dead node takes with it |
-| Storage | [Where the data lives](how-it-works/storage.md) | `local-path` against NFS, claim naming, the honest state of backups |
+| Storage | [Where the data lives](how-it-works/storage.md) | `local-path` against NFS, claim naming, what a lost disk costs |
+| Backups | [Backups](how-it-works/backups.md) | what leaves the machine nightly, what is deliberately left, and how a stream is proved alive |
 | Identity | [Who gets in](how-it-works/identity.md) | authentik's job, the three groups, and how a route is protected |
 | Monitoring | [What watches the cluster](how-it-works/observability.md) | metrics and logs, the dashboards, where alerts go, the known holes |
 | Media | [The media pipeline](how-it-works/media.md) | from finding releases to playback, the storage paths, the two book apps |

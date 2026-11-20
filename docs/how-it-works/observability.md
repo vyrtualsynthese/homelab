@@ -13,12 +13,14 @@
 | Prometheus | collects metrics by scraping | `nas` | 90 days, 20 GiB cap |
 | Loki | stores the logs | `nas` | 30 days |
 | Fluent Bit | reads container logs on every node | DaemonSet, all nodes | nothing |
-| Grafana | dashboards and alert rules | `nas` | its own database, not backed up |
+| Grafana | dashboards and alert rules | `nas` | its own database; one row of the nightly `nodes-nas` backup |
 
 All four are wrapper charts under `cluster/helm/monitoring/`; the design is
 [`2026-11-12-observability-stack-design.md`](../superpowers/specs/2026-11-12-observability-stack-design.md).
 The three stateful ones use `local-path` claims, so the cluster's memory sits on `nas`: losing that disk
-loses the dashboards and the rules; losing the machine stops the watching.
+takes Grafana's dashboards and rules until the nightly backup is restored, and stops the watching until
+the disk is back. Prometheus and Loki are rebuilt by their sources, which is why only Grafana has a
+backup row ([Backups](backups.md)).
 
 ```mermaid
 flowchart LR
