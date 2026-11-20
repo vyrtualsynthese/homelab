@@ -66,7 +66,7 @@ webhook exists only in that contact point.
 | `OOMKilled` | terminated by OOM in the last hour | 5m | warning | inactive |
 | `JobFailed` | any Job with a failed pod, no success, and younger than 2 h | 5m | warning | inactive |
 | `RecyclarrNotSucceeding` | no successful recyclarr run in 26 h | 5m | warning | inactive |
-| `BackupStreamStale` | a CronJob in namespace `backup` whose last success is more than 26 h old | 5m | warning | inactive |
+| `BackupStreamStale` | a CronJob in namespace `backup` whose last success is more than 26 h old | 10m | warning | inactive |
 | `CertificateExpiring` | newest Traefik cert per SAN <21 days | 1h | warning | inactive |
 | `PodCrashLooping` | CrashLoopBackOff | 15m | warning | **firing, silenced** ×3 |
 | `PodPending` | Pending, created <2 h ago | 15m | warning | **firing** on `databases/pgadmin-67c5f5c85` (missing Secret, 2026-11-14) |
@@ -101,7 +101,9 @@ generic because everything it watches lives in one namespace and runs daily:
 one daily slot plus two hours. It covers `backup-node-nas`, `backup-node-nuc0`,
 `backup-node-streaming` and `backup-nfs`; `backup-prune` and `backup-verify` are in the same namespace
 and are watched by the same rule, which is intended — a verifier that stops running is exactly the
-silence this rule exists to break. The summary names `{{ $labels.cronjob }}` rather than a stream
+silence this rule exists to break. Its `for` is 10 minutes rather than 5, which is what keeps it in
+`homelab-core`: the split rule puts a 5-minute `for` in the fast group, and a nightly job gains
+nothing from a 60 s evaluation. The summary names `{{ $labels.cronjob }}` rather than a stream
 label because kube-state-metrics does not publish CronJob labels on
 `kube_cronjob_status_last_successful_time`; `backup-node-nas` is the job, `nodes-nas` is the stream,
 and the mapping is in the chart. The verifier has no rule of its own for that reason: a verifier whose

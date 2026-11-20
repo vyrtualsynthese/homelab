@@ -12,7 +12,8 @@ import unittest
 from datetime import datetime, timedelta, timezone
 from importlib import util
 
-VERIFY = pathlib.Path(__file__).resolve().parents[2] / "cluster/helm/backup/files/verify.py"
+CHART = pathlib.Path(__file__).resolve().parents[2] / "cluster/helm/backup"
+VERIFY = CHART / "files/verify.py"
 NOW = datetime(2026, 11, 21, 8, 30, tzinfo=timezone.utc)
 
 
@@ -71,15 +72,27 @@ class EtcdTests(unittest.TestCase):
     def test_the_etcd_copy_ages_from_the_newest_file_in_the_snapshots(self):
         entries = [
             {"path": "/x/other", "mtime": NOW.isoformat()},
-            {"path": "/etcd-snapshots/streaming-1", "mtime": (NOW - timedelta(hours=30)).isoformat()},
-            {"path": "/etcd-snapshots/streaming-2", "mtime": (NOW - timedelta(hours=2)).isoformat()},
+            {"path": "/host/etcd-snapshots/streaming-1", "mtime": (NOW - timedelta(hours=30)).isoformat()},
+            {"path": "/host/etcd-snapshots/streaming-2", "mtime": (NOW - timedelta(hours=2)).isoformat()},
         ]
         self.assertEqual(load().newest_etcd(entries, NOW)["age_h"], 2.0)
         self.assertEqual(load().newest_etcd(entries, NOW)["file"], "streaming-2")
 
     def test_a_directory_entry_is_not_a_snapshot(self):
-        entries = [{"path": "/etcd-snapshots", "type": "dir", "mtime": NOW.isoformat()}]
+        entries = [
+            {"path": "/host/etcd-snapshots", "type": "dir", "mtime": NOW.isoformat()},
+            {"path": "/host/etcd-snapshots/sub", "type": "dir", "mtime": NOW.isoformat()},
+        ]
         self.assertIsNone(load().newest_etcd(entries, NOW))
+
+    def test_the_prefix_is_the_path_the_node_job_hands_restic(self):
+        # The chart passes etcdSnapshotsPath as a --host-path argument, so restic stores that
+        # path in the snapshot. A verifier looking anywhere else reports "no etcd snapshot"
+        # every night while the copies are there.
+        import yaml
+
+        values = yaml.safe_load((CHART / "values.yaml").read_text())
+        self.assertEqual(load().ETCD_PREFIX, values["etcdSnapshotsPath"] + "/")
 
     def test_an_etcd_copy_older_than_the_window_is_a_problem(self):
         self.assertIn("etcd", load().check_etcd("nodes-streaming", {"age_h": 27.5, "file": "f"}, NOW)[0])
@@ -99,7 +112,7 @@ class MainTests(unittest.TestCase):
             'case "$3" in\n'
             f"  snapshots) echo '[{{\"id\": \"a\", \"time\": \"{snapshot_iso}\"}}]' ;;\n"
             "  stats) echo '{\"total_size\": 4096}' ;;\n"
-            f"  ls) echo '{{\"path\": \"/etcd-snapshots/nuc0-1\", \"type\": \"file\", \"mtime\": \"{ls_mtime}\"}}' ;;\n"
+            f"  ls) echo '{{\"path\": \"/host/etcd-snapshots/nuc0-1\", \"type\": \"file\", \"mtime\": \"{ls_mtime}\"}}' ;;\n"
             "  *) exit 9 ;;\n"
             "esac\n"
         )

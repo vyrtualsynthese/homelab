@@ -16,7 +16,7 @@ The nightly mechanism is [Backups](../how-it-works/backups.md); the procedure is
 | Stream | Holds | Where it lands |
 |---|---|---|
 | `nodes-nas` | the PostgreSQL dumps and their `globals.sql`, Grafana's database and alert rules | OVH bucket, nightly 04:30 |
-| `nodes-nuc0` | eleven applications' configuration, the node's `/etc`, an etcd snapshot copy | OVH bucket, nightly 05:00 |
+| `nodes-nuc0` | ten claims from nine applications, the node's `/etc`, an etcd snapshot copy | OVH bucket, nightly 05:00 |
 | `nodes-streaming` | the media stack's configuration, the node's `/etc`, an etcd snapshot copy | OVH bucket, nightly 05:30 |
 | `nfs` | syncthing, koillection's uploads, the ACME certificate store, the qBittorrent config | OVH bucket, nightly 06:00 |
 

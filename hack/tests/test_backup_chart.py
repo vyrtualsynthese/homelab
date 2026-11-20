@@ -115,6 +115,10 @@ class NfsJobTests(unittest.TestCase):
         lines = [l for l in cms["backup-nfs-paths"]["nfs-paths.txt"].splitlines() if l.strip()]
         self.assertEqual(len(lines), len(values()["nfs"]["paths"]))
 
+    def test_the_exclude_words_are_not_shell_expanded(self):
+        cms = {d["metadata"]["name"]: d["data"] for d in render() if d["kind"] == "ConfigMap"}
+        self.assertIn("set -f", cms["backup-scripts"]["backup-nfs.sh"])
+
     def test_missing_export_fails_the_run(self):
         cms = {d["metadata"]["name"]: d["data"] for d in render() if d["kind"] == "ConfigMap"}
         self.assertIn('[ -d "$path" ] ||', cms["backup-scripts"]["backup-nfs.sh"])
@@ -173,6 +177,15 @@ class PruneTests(unittest.TestCase):
         self.assertIn("retention:", text)
         self.assertEqual(values()["retention"],
                          {"keepDaily": 7, "keepWeekly": 4, "keepMonthly": 12})
+
+    def test_prune_finishes_every_repository_before_failing(self):
+        # A repository that fails on Sunday must not leave the other three unpruned for the
+        # week: the loop remembers the failure and the last test fails the job.
+        script = scripts()["prune.sh"]
+        self.assertNotIn("set -eu", script)
+        self.assertIn("failed=0", script)
+        self.assertEqual(script.count("|| failed=1"), len(values()["streams"]))
+        self.assertIn('[ "$failed" -eq 0 ]', script)
 
     def test_prune_runs_one_repository_at_a_time(self):
         # Two restic processes on one repository would fight over the lock; the loop is a

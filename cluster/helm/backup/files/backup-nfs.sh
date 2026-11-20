@@ -3,6 +3,9 @@
 # here: an export that is named but missing fails the job, because backing up less than the
 # matrix says without saying so is the failure this repository exists to prevent.
 set -eu
+# -f: the exclude words are patterns for restic, not for the shell. Without it a word like
+# logs* would be expanded against this directory and reach restic as a filename, or vanish.
+set -f
 : "${RESTIC_REPOSITORY:?}" "${RESTIC_PASSWORD:?}" "${STREAM:?}"
 
 while IFS='|' read -r tag path exclude; do
