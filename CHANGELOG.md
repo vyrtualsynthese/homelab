@@ -55,3 +55,11 @@ All notable changes to this repository. The format follows
 - `freshrss_sync.py verify` reads the Elite Dangerous item expression: it now honours a container
   class (`//*[contains(@class,'…')]//`) and an exclusion (`and not(contains(@href,'…'))`), so the
   feed is checked automatically instead of printing `sel main unchecked`.
+
+### Removed
+
+- KBDfans *new arrivals* leaves the feed set: the shop refuses the pod's client at every interval —
+  `429 local_rate_limited` on eight consecutive scheduled polls while every other feed answered — and
+  no address, user agent, protocol or cURL option changes that. `state` never saw an item. The
+  measurement is in `docs/news-feeds.md`, and a fetcher outside FreshRSS is left as its own decision
+  (Vikunja #463) rather than pending work.

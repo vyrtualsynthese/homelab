@@ -53,9 +53,9 @@ def serve(page=ARTICLE, fail=()):
 
 
 class ParseTests(unittest.TestCase):
-    def test_the_shipped_opml_yields_15_feeds_in_five_categories(self):
+    def test_the_shipped_opml_yields_14_feeds_in_five_categories(self):
         feeds = mod.parse_opml(OPML_PATH.read_text())
-        self.assertEqual(len(feeds), 15)
+        self.assertEqual(len(feeds), 14)
         self.assertEqual({f.category for f in feeds}, {"Jeux", "Dev", "IA", "Boutiques", "Veille"})
 
     def test_a_query_string_survives_parsing(self):
@@ -89,7 +89,7 @@ class ParseTests(unittest.TestCase):
 
     def test_a_full_content_selector_does_not_add_or_drop_a_feed(self):
         feeds = mod.parse_opml(OPML_PATH.read_text())
-        self.assertEqual(len(feeds), 15)
+        self.assertEqual(len(feeds), 14)
 
     def test_a_full_content_selector_reaches_the_feed_as_path_entries(self):
         feeds = mod.parse_opml(OPML_PATH.read_text())
@@ -110,12 +110,6 @@ class ParseTests(unittest.TestCase):
         feeds = mod.parse_opml(OPML_PATH.read_text())
         steam = next(f for f in feeds if f.title == "Steam")
         self.assertEqual(steam.settings, ())
-
-    def test_the_shipped_opml_pins_a_poll_interval_where_a_feed_asks_for_one(self):
-        """Only KBDfans carries a ttl today: its host rate-limits by address, so it is polled rarely."""
-        feeds = mod.parse_opml(OPML_PATH.read_text())
-        kbdfans = next(f for f in feeds if f.title == "KBDfans — new arrivals")
-        self.assertEqual(dict(kbdfans.settings), {"ttl": "21600"})
 
     def test_normalize_url_strips_one_trailing_slash_and_keeps_the_query(self):
         self.assertEqual(mod.normalize_url("https://a.test/feed/"), "https://a.test/feed")
