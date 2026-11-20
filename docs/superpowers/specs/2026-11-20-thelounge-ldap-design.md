@@ -107,15 +107,21 @@ have.
 
 ## The design
 
-### 1. authentik objects — one blueprint file
+### 1. authentik objects — one new blueprint file
 
-`cluster/helm/authentik/files/app-thelounge.yaml` is rewritten to hold, in this order:
+A new file, `cluster/helm/authentik/files/app-thelounge-ldap.yaml`, holds, in this order:
 
-1. the `ashulab-groups` meta-apply, as today;
+1. the `ashulab-groups` meta-apply, as the other app files do;
 2. an **LDAP provider** named `thelounge-ldap`;
-3. an **application** with the new slug `thelounge-ldap`, display name "The Lounge", the same launch
-   URL and icon, bound to `authentik Admins` — the same access as the gate;
+3. an **application** with the slug `thelounge-ldap`, display name "The Lounge", the same launch URL
+   and icon, bound to `authentik Admins` — the same access as the gate;
 4. the **LDAP outpost** object, created after the provider so the `!Find` can resolve in one pass.
+
+The existing `app-thelounge.yaml` is **not touched in this change**. `hack/tests/test_authentik_blueprints.py`
+requires every provider named in `outpost-embedded.yaml` to be declared in some blueprint file and
+every declared proxy provider to be on that list; deleting the old file while its line is still in
+`outpost-embedded.yaml` fails the suite, and that pairing is exactly the silent-404 trap the test
+exists for. The old file and its line go together in the last pull request.
 
 ```yaml
   - model: authentik_providers_ldap.ldapprovider
@@ -281,12 +287,13 @@ authentik.
 *Gate:* the operator signs in with the authentik username and password in a browser and confirms the
 account is the right one, with its networks. This is the only end-to-end proof.
 
-**PR 3 — retire the gate.** Drop the `thelounge` proxy provider line from `outpost-embedded.yaml`,
-then delete the application `thelounge` and the provider `thelounge` through the authentik API, in
-that order: the application holds the provider's foreign key, and the outpost list must have applied
-first because a `!Find` on a missing provider rolls the whole file back. Blueprints do not prune, so
-those two deletions are by hand and belong in the runbook. If the browser check in PR 2 fails, this PR
-does not open and the task stays in `Doing` with the blocker named in a comment.
+**PR 3 — retire the gate.** In one commit, remove `files/app-thelounge.yaml` and the `thelounge`
+lines from `outpost-embedded.yaml` (both its meta-apply and its `!Find`), so the blueprint test stays
+green, then delete the application `thelounge` and the provider `thelounge` through the authentik API
+once that commit has synced. Order matters: the list must have applied before the provider is deleted,
+because a `!Find` on a missing provider rolls the whole file back. Blueprints do not prune, so the two
+deletions are by hand and belong in the runbook. If the browser check in PR 2 fails, this PR does not
+open and the task stays in `Doing` with the blocker named in a comment.
 
 ## Verification
 
