@@ -1,6 +1,8 @@
 # Cloud services observability — design
 
-2026-11-20. Status: awaiting operator approval.
+2026-11-20. Status: approved and built. The deviations found while building are recorded
+in the sections they touch (§2, §5.2, §6, §8, §10); where this document and the build
+disagree, §10 says which one moved.
 
 ## 1. What this is, and why
 
@@ -177,9 +179,10 @@ be discovered by the pod annotation.
 | `blackbox-dns` | 5 m | each module against **every** authoritative server of its zone | one per target, carried as a `module` label |
 
 Relabelling is the standard multi-target shape: `__address__` becomes
-`__param_target`, `instance` is set from the target plus the check, the real
-`__address__` becomes `blackbox-exporter.monitoring.svc:9115`, and a `module`
-label is copied to `__param_module`. Each target carries `zone` and `check`
+`__param_target`, `instance` is set from the target alone — one server answers
+several checks, so `check` and `zone` are what tell those series apart — the
+real `__address__` becomes `blackbox-exporter.monitoring.svc:9115`, and a
+`module` label is copied to `__param_module`. Each target carries `zone` and `check`
 labels so an alert message can name what failed without a lookup.
 
 DNS target list today, which is every server the delegations publish:
@@ -196,9 +199,12 @@ addresses become the two OVH ones and the count becomes 22.
 
 ## 6. Alerts
 
-Three rules in Grafana's `Homelab` folder, through the provisioning API. Every
-expression returns a positive number when firing, per the house pattern; the
+Three rules in Grafana's `Homelab` folder, through the provisioning API. The
 notification policy, grouping and Discord contact point are reused unchanged.
+Two expressions return a positive number when firing, per the house pattern; the
+certificate rule is the deliberate exception and fires below a threshold (21
+days), because its value is the number of days remaining and the message has to
+be able to say so.
 
 | Rule | Expression | for | Group | Severity |
 |---|---|---|---|---|
@@ -219,10 +225,11 @@ notification policy, grouping and Discord contact point are reused unchanged.
   ns13.ovh.net does not match Google Workspace's hosts. Read the zone with
   `ovhcloud domain-zone record list ashudev.com`, then compare with
   infra-main."
-- `CloudTlsCertificateExpiring` is the outside view of a certificate the
-  cluster does not issue for `ashudev.com` (GitHub pages it) and does issue
-  for `ashuvidz.com` (Let's Encrypt through Traefik). It stays a warning at 21
-  days, matching `CertificateExpiring`.
+- `CloudTlsCertificateExpiring` is the outside view of the certificate a
+  stranger is served for all three names: since 2026-11-20 that is one Let's
+  Encrypt certificate through Traefik, renewed well before 21 days remain (the
+  §2 correction is the reason `ashudev.com` is included). It stays a warning at
+  21 days, matching `CertificateExpiring`.
 
 ## 7. Dashboard
 
@@ -233,7 +240,7 @@ side healthy, and what needs attention?":
 |---|---|
 | Needs attention | KPI: endpoints answering (x/3) · KPI: DNS checks passing (x/28) · KPI: days to earliest certificate |
 | Endpoints | timeseries `probe_success` per endpoint, 24 h · timeseries `probe_duration_seconds` per endpoint |
-| Detail | table: endpoint or check, target, server, result, certificate days, duration |
+| Detail | table: one row per probe — target or name server, check, zone, result, failures first |
 
 Colour is used for thresholds only (red on `probe_success == 0`, amber under
 21 days). The table is the panel a person reads when an alert names one check.
@@ -301,14 +308,23 @@ emails. The AWS budget is not touched; migration Task 16 destroys it.
    lists the new jobs with no down target. **Done 2026-11-20:** 3/3 HTTP and
    28/28 DNS probes pass, `sum(probe_success{job="blackbox-dns"})` is 28.
 3. Each panel query is executed through the Grafana datasource API and returns
-   data; no panel ships on a query that has never returned a row.
+   data; no panel ships on a query that has never returned a row. **Done
+   2026-11-20:** every saved `target.expr` returned rows when re-run from the
+   dashboard (1, 1, 1, 3 series, 3 series, 31 rows).
 4. The firing path is proven without paging anyone: a throwaway `vector(1)`
    rule in the same group reaches `firing` under a silence, then both are
    deleted. (A broken target in the values was the original plan; injecting a
    series is not possible here, and a rule that fires for a fake reason proves
-   the same path.)
+   the same path.) **Done 2026-11-20:** reached `firing` with rendered
+   annotations and `state: suppressed`; rule and silence deleted, absence
+   confirmed. The three real rules were never fired.
 5. The missing-data case is checked: a module that returns no answer renders
-   blank, not zero, in the table and never fires `CloudEndpointDown`.
+   blank, not zero, in the table and never fires `CloudEndpointDown`. **Checked
+   from the build, not reproduced with a live missing answer:** a probe that
+   gets no answer produces no `probe_success` series at all, so the table has no
+   row for it and `1 - probe_success` has nothing to compare — `noDataState: OK`
+   is what keeps that quiet, which is the same property that hides a dead
+   prober (§6, §11).
 6. `ovhcloud cloud alerting list --cloud-project <id>` shows the one
    configuration that exists: `all-20`, €20, `valentin.ronteix@ashudev.com`,
    delay 3600. The €50 configuration is refused by the provider; see §8.
@@ -330,8 +346,8 @@ cluster depends on it.
   workstation on 2026-11-20; `9.9.9.9` is the second so one resolver outage
   does not raise three false alerts.
 - **`www` is probed as its own target**, not assumed to follow the apex: it is
-  a CNAME to GitHub, and a broken `www` is a real failure for anyone typing
-  it.
+  a CNAME to the apex today, and a broken `www` is a real failure for anyone
+  typing it.
 - **Every authoritative server is probed for every DNS check.** All four
   `ashuvidz.com` servers are in the list while the delegation is on Route 53;
   the extra probes are cheaper than a silent dead server, and the list shrinks
@@ -341,5 +357,9 @@ cluster depends on it.
   asserting OVH would fail until the flip.
 - **`for: 5m` stays.** A blip should not page; the 6½-minute worst case is
   recorded in §6 rather than traded for a tighter `for`.
-- **The apex A assertion is loose.** Exact-IP assertions on GitHub's addresses
-  turn a provider change into a false page.
+- **The apex A assertions are substring matches, not anchored ones.** The
+  regexes assert the router address `80.14.57.209` as text, which a wrong
+  record could satisfy (`180.14.57.209` contains it), and a WAN change
+  invalidates both assertions until the values file is edited. The failure mode
+  is a missed record, not a false page; anchoring (`^…$`) would not fix the WAN
+  half, so it is recorded rather than half-solved.

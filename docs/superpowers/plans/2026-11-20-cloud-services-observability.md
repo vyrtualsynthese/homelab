@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Probe the public cloud names and their DNS records from inside the cluster, alert on failures through the existing Grafana route, and set OVHcloud billing alerts at €20 and €50.
+**Goal:** Probe the public cloud names and their DNS records from inside the cluster, alert on failures through the existing Grafana route, and set OVHcloud billing alerts at €20 (a €50 one was attempted and refused by the provider, which Task 3 records).
 
 **Architecture:** A pinned wrapper chart runs `blackbox_exporter` on `nas` with its own public resolvers. Two static Prometheus jobs feed it targets: HTTP probes for the three public names, DNS probes against every authoritative server of both zones. Three Grafana rules and one dashboard read those series. Billing alerts are created in OVHcloud through its API; nothing about the money side runs in the cluster.
 
@@ -45,7 +45,7 @@
 
 - [ ] **Step 1: Write the chart metadata**
 
-`Chart.yaml`: `apiVersion: v2`, `name: blackbox-exporter`, `description: Blackbox probes for the public cloud services`, `type: application`, `version: 0.1.0`, `appVersion: v0.29.1`, and one dependency:
+`Chart.yaml`: `apiVersion: v2`, `name: blackbox-exporter`, `description: Blackbox probes for the public cloud services`, `type: application`, `version: 0.1.0`, `appVersion: 0.29.1` (no `v`: `hack/check-app-version.sh` compares it with the image tag's version), and one dependency:
 
 ```yaml
 dependencies:
@@ -188,30 +188,35 @@ git commit -m "🚀 feat(monitoring): scrape the blackbox prober for cloud names
 
 **Interfaces:**
 - Consumes: `~/ovh.conf` (or the same trio in `~/.config/secrets/keys.env`) and project `a93a624a514243a6a557863c90a5379e`.
-- Produces: two alert configurations, `all-20` and `all-50`.
+- Produces: one alert configuration, `all-20`. The `all-50` attempt is recorded with the provider's
+  refusal, so the plan does not promise an alert that does not exist.
 
 - [ ] **Step 1: Confirm nothing exists yet**
 
 Run: `ovhcloud cloud alerting list --cloud-project a93a624a514243a6a557863c90a5379e -o json`
 Expected: `null`. If a configuration exists, stop and report its content instead of creating a duplicate.
 
-- [ ] **Step 2: Create the two configurations**
+- [ ] **Step 2: Create the €20 threshold**
 
 ```bash
 ovhcloud cloud alerting create --cloud-project a93a624a514243a6a557863c90a5379e \
   --name all-20 --service all --monthly-threshold 20 \
   --emails valentin.ronteix@ashudev.com --delay 3600
-ovhcloud cloud alerting create --cloud-project a93a624a514243a6a557863c90a5379e \
-  --name all-50 --service all --monthly-threshold 50 \
-  --emails valentin.ronteix@ashudev.com --delay 3600
 ```
 
-Expected: two JSON objects returned. A `--delay` below 3600 is refused by the API; keep 3600.
+Expected: one JSON object returned. A `--delay` below 3600 is refused by the API; keep 3600.
 
-- [ ] **Step 3: Read them back**
+Then attempt the €50 one, the same way with `--name all-50 --monthly-threshold 50`. **As built on
+2026-11-20 this endpoint answered HTTP 500 `Server::InternalServerError` on five attempts, from
+three different backends, with a body identical in shape to the one that succeeded**; nothing was
+created. Treat that as a provider failure, not a reason to change the request: if it still refuses
+on the day, stop, keep the one threshold, and file the retry as a card. Crossing €50 crosses €20, so
+no spend condition is unmonitored.
+
+- [ ] **Step 3: Read it back**
 
 Run: `ovhcloud cloud alerting list --cloud-project a93a624a514243a6a557863c90a5379e -o json`
-Expected: two entries, thresholds 20 and 50, service `all`, the email above, delay 3600. A wrong email is the failure this step exists for: the alert cannot be corrected by the cluster, only here.
+Expected: the entries that were actually created — one `all-20` at €20, service `all`, the email above, delay 3600 — plus `all-50` only if the provider accepted it. A wrong email is the failure this step exists for: the alert cannot be corrected by the cluster, only here.
 
 ---
 
@@ -254,7 +259,7 @@ curl -sG http://prometheus.kub.local/api/v1/query --data-urlencode 'query=probe_
   jq -r '.data.result[] | "\(.metric.instance) \(.value[1])"'
 ```
 
-Expected: all three HTTP probes `1`; eleven `check` values each with the expected count (8 checks × 2 servers for `ashudev.com`, 3 × 4 for `ashuvidz.com`); MX answer counts of 5 or more. A `check` value with zero targets means the label-to-parameter relabel failed. If `ashuvidz.com` is `0` while `curl -I https://ashuvidz.com` from the workstation returns 200, record the hairpin limitation and take that target out of the values in a follow-up commit rather than silencing the rule.
+Expected: all three HTTP probes `1`; eight `check` values each with the expected count — the 11 `(zone, check)` pairs collapse to 8 check names, because `soa`, `a` and `ns` exist in both zones (8 checks × 2 servers for `ashudev.com`, 3 × 4 for `ashuvidz.com`); MX answer counts of 5 or more. A `check` value with zero targets means the label-to-parameter relabel failed. If `ashuvidz.com` is `0` while `curl -I https://ashuvidz.com` from the workstation returns 200, record the hairpin limitation and take that target out of the values in a follow-up commit rather than silencing the rule.
 
 - [ ] **Step 5: Confirm the certificate series and its issuer**
 
@@ -262,7 +267,7 @@ Expected: all three HTTP probes `1`; eleven `check` values each with the expecte
 curl -sG http://prometheus.kub.local/api/v1/query --data-urlencode 'query=(probe_ssl_earliest_cert_expiry{job="blackbox-http"}-time())/86400'
 ```
 
-Expected: three values well above 21 (GitHub's and Let's Encrypt's renew ahead of expiry). A negative value means the probe followed a redirect to a host whose name is not in the certificate; read the target, do not widen the assertion.
+Expected: three values well above 21 (one Let's Encrypt certificate through Traefik, renewed ahead of expiry). A negative value means the probe followed a redirect to a host whose name is not in the certificate; read the target, do not widen the assertion.
 
 ---
 
@@ -290,13 +295,17 @@ Every new rule reuses that object's `data` array (refIds `A` and `C`, `__expr__`
 |---|---|---|---|---|
 | `CloudEndpointDown` | `homelab-core-fast` | `5m` | `severity=critical` | `1 - probe_success{job="blackbox-http"} > 0` |
 | `CloudDnsCheckFailing` | `homelab-core-fast` | `10m` | `severity=critical` | `1 - probe_success{job="blackbox-dns"} > 0` |
-| `CloudTlsCertificateExpiring` | `homelab-core` | `1h` | `severity=warning` | `(21 * 86400 - (probe_ssl_earliest_cert_expiry{job="blackbox-http"} - time())) / 86400 > 0` |
+| `CloudTlsCertificateExpiring` | `homelab-core` | `1h` | `severity=warning` | `(probe_ssl_earliest_cert_expiry{job="blackbox-http"} - time()) / 86400`, threshold `lt 21` |
 
-Each expression returns a positive number when firing; the threshold stays `gt 0`. Annotations:
+The two `probe_success` expressions return a positive number when firing and keep the copied
+threshold `gt 0`. The certificate rule is the exception, and was corrected while building: with
+`(21*86400 - remaining)/86400 > 0` the alert's value is how far the certificate has entered the
+window, so the summary said "expires in 1 days" at 20 days left. It now returns **days remaining**
+and fires **below 21**, which is the form design §6 already had. Annotations:
 
 - `CloudEndpointDown` — summary `{{ $labels.instance }} did not answer over HTTPS`, description `The public endpoint failed to answer from inside the cluster, which sees the public internet. For ashudev.com and ashuvidz.com this is the same homelab router: check Traefik, the public TLS certificate and the WAN address.`
 - `CloudDnsCheckFailing` — summary `{{ $labels.check }} check on {{ $labels.zone }} failed at {{ $labels.instance }}`, description `The authoritative server answered with nothing, an error, or a record that does not match. Read the zone with 'ovhcloud domain-zone record list {{ $labels.zone }}', then compare with infra-main/dns. A missing MX, SPF, DKIM or DMARC record breaks mail silently.`
-- `CloudTlsCertificateExpiring` — summary `{{ $labels.instance }} certificate expires in {{ $value }} days`, description `Renewal happens well before 21 days for Let's Encrypt through Traefik. If this fires, the issuer is failing, not the site.`
+- `CloudTlsCertificateExpiring` — summary `{{ $labels.instance }} certificate expires in {{ printf "%.0f" $value }} days`, description `Renewal happens well before 21 days for Let's Encrypt through Traefik. If this fires, the issuer is failing, not the site.`
 
 POST each to `/api/v1/provisioning/alert-rules`.
 
@@ -354,14 +363,17 @@ Expected: every query returns at least one row. A query with zero rows is droppe
 
 | Row | Panel | Type | Query |
 |---|---|---|---|
-| Needs attention | Endpoints answering | stat, `w=4 h=5`, unit `none`, display `x / 3` via a value mapping | `sum(probe_success{job="blackbox-http"})` |
-| Needs attention | DNS checks passing | stat, `w=4 h=5`, `x / 28` | `sum(probe_success{job="blackbox-dns"})` |
+| Needs attention | Endpoints answering (of 3) | stat, `w=4 h=5`, unit `none`, the count with thresholds | `sum(probe_success{job="blackbox-http"})` |
+| Needs attention | DNS checks passing (of 28) | stat, `w=4 h=5`, the count with thresholds | `sum(probe_success{job="blackbox-dns"})` |
 | Needs attention | Days to earliest certificate | stat, `w=4 h=5`, unit `d`, thresholds 21 amber / 7 red | `min((probe_ssl_earliest_cert_expiry{job="blackbox-http"}-time())/86400)` |
 | Endpoints | Endpoint success, 24 h | timeseries `w=8 h=8`, zero line, legend bottom | `probe_success{job="blackbox-http"}` |
 | Endpoints | Probe latency | timeseries `w=8 h=8`, unit `s`, legend bottom | `probe_duration_seconds{job="blackbox-http"}` |
 | Detail | Every check | table `w=24 h=8`, columns `instance`, `check`, `zone`, `Value` | `probe_success{job=~"blackbox-.*"}` with a labels-to-fields transformation |
 
-Thresholds and units are on the panels; no colour without a threshold. The table is the panel a person reads when an alert names a check.
+The denominator lives in the panel title, not in a value mapping: a reader must be able to tell
+what "3" is out of without clicking. Thresholds and units are on the panels; no colour without a
+threshold. The table is the panel a person reads when an alert names a check: columns `instance`,
+`check`, `zone`, `result`, sorted so failures come first.
 
 - [ ] **Step 3: Create it through the API**
 
