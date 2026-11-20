@@ -146,5 +146,31 @@ class NfsJobTests(unittest.TestCase):
         self.assertTrue(any(p.startswith("/mnt/storage/nfs/stash/koillection-") for p in paths))
 
 
+class PruneTests(unittest.TestCase):
+    def test_runs_sunday_at_noon_outside_every_backup(self):
+        job = next(c for c in crons() if c["metadata"]["name"] == "backup-prune")
+        self.assertEqual(job["spec"]["schedule"], "0 12 * * 0")
+
+    def test_forgets_each_repository_with_the_agreed_retention(self):
+        script = scripts()["prune.sh"]
+        for flag in ("--keep-daily 7", "--keep-weekly 4", "--keep-monthly 12", "--prune",
+                     "--retry-lock 6h"):
+            self.assertIn(flag, script)
+        for repo in ("nodes-nas", "nodes-nuc0", "nodes-streaming", "nfs"):
+            self.assertIn(repo, script)
+
+    def test_retention_comes_from_values(self):
+        text = (CHART / "values.yaml").read_text()
+        self.assertIn("retention:", text)
+        self.assertEqual(values()["retention"],
+                         {"keepDaily": 7, "keepWeekly": 4, "keepMonthly": 12})
+
+    def test_prune_runs_one_repository_at_a_time(self):
+        # Two restic processes on one repository would fight over the lock; the loop is a
+        # sequence, not a fan-out.
+        script = scripts()["prune.sh"]
+        self.assertEqual(script.count("restic -r"), len(values()["streams"]))
+
+
 if __name__ == "__main__":
     unittest.main()

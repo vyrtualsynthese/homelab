@@ -1,0 +1,58 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: backup-prune
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "backup.labels" (dict "root" . "stream" "prune") | nindent 4 }}
+spec:
+  # Sunday noon: every nightly job has finished, and nothing else touches the repositories.
+  schedule: "0 12 * * 0"
+  timeZone: Europe/Paris
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 3600
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      # Eight hours for four repositories. A prune that outlives this is repacking a stream
+      # far larger than the budget, which is itself the alarm.
+      activeDeadlineSeconds: 28800
+      template:
+        metadata:
+          labels:
+            {{- include "backup.labels" (dict "root" . "stream" "prune") | nindent 12 }}
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          # Pinned like every other workload in this repo. Nothing here reads local data, so
+          # the node only decides where the CPU time is spent.
+          nodeSelector:
+            kubernetes.io/hostname: nas
+          volumes:
+            - name: scripts
+              configMap:
+                name: backup-scripts
+                defaultMode: 0555
+          containers:
+            - name: restic
+              image: {{ include "backup.image" (dict "root" . "name" "restic") }}
+              command: ["/bin/sh", "/scripts/prune.sh"]
+              envFrom:
+                - secretRef:
+                    name: {{ .Values.repository.secretName }}
+              env:
+                - name: RESTIC_CACHE_DIR
+                  value: /tmp/restic-cache
+                - name: TZ
+                  value: Europe/Paris
+              resources:
+                requests: {cpu: 50m, memory: 128Mi}
+                limits: {cpu: "2", memory: 1Gi}
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop: ["ALL"]
+              volumeMounts:
+                - {name: scripts, mountPath: /scripts, readOnly: true}
