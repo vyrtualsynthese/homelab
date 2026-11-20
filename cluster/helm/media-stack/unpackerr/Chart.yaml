@@ -5,7 +5,7 @@ type: application
 # Chart version. It moves independently of the image.
 version: 1.0.0
 # Must equal image.tag in values.yaml. unpackerr tags carry a leading v.
-appVersion: "v1.0.1"
+appVersion: "1.0.1"
 icon: https://unpackerr.zip/img/unpackerr.png
 home: https://unpackerr.zip
 sources:

@@ -4,7 +4,7 @@
 > `autobrr` is the worked example of what meeting it looks like.
 >
 > **Use it when** you are writing a chart, reviewing one against the list it has to satisfy, or
-> looking for the reason a rule exists · **Verified** 2026-11-17 · **Kind:** living page
+> looking for the reason a rule exists · **Verified** 2026-11-20 · **Kind:** living page
 
 Most charts in `cluster/helm/` are written here rather than vendored. This page is the checklist
 every one of them is expected to satisfy. [`cluster/helm/media-stack/autobrr`](../../cluster/helm/media-stack/autobrr)
@@ -31,7 +31,7 @@ templates where the image demands it; it is not allowed to diverge from the cont
 
 | # | Requirement | Why |
 |---|---|---|
-| 1 | `Chart.yaml` has `name`, `description`, `version`, `appVersion`, and `appVersion` matches `image.tag` | Three numbers that disagree are worse than one number that is wrong |
+| 1 | `Chart.yaml` has `name`, `description`, `version` and `appVersion`, and `appVersion` is the version of the image in `image.tag` | Three numbers that disagree are worse than one number that is wrong |
 | 2 | `image.tag` is pinned to an explicit version. Never `latest`, never empty | A rolling tag makes every deploy a different app |
 | 3 | `strategy: Recreate` whenever the app has a config volume | A `ReadWriteOnce` claim cannot attach to two pods. Deployments only: a `CronJob` has no strategy field |
 | 4 | `nodeSelector` pins the pod to one node, and the `local-path` claim lands there | There is no failover; pretending otherwise hides it |
@@ -43,6 +43,44 @@ templates where the image demands it; it is not allowed to diverge from the cont
 | 10 | No tabs, and no tab indentation in any template | Invisible in review, fatal in YAML |
 | 11 | `helm lint` and `helm template <release> . --namespace <ns>` both pass | The only local test these charts have |
 | 12 | A chart whose route carries the authentik gate sets `apiBypassMiddlewares` when the app authenticates `/api` itself | An API client sends a key, not a browser session, and cannot complete a sign-in redirect. `lan-only` is a boundary, not a credential |
+
+### How `appVersion` relates to `image.tag`
+
+`Chart.yaml` cannot read `values.yaml`, so the application's version is written twice: once as
+`appVersion`, once inside `image.tag`. Requirement 1 is about keeping the two honest, and it needs a
+rule because the tag carries packaging that the version does not.
+
+**`appVersion` is the application's own version: the leading number of `image.tag`, with the `v`
+prefix and the packaging suffix dropped.**
+
+| `image.tag` | `appVersion` |
+|---|---|
+| `v2.1.7-ls237` | `2.1.7` |
+| `13.3.1-distroless` | `13.3.1` |
+| `5.3.0_v2.1.2-ls487` | `5.3.0` |
+| `1.43.5.11079-b3b13e506` | `1.43.5.11079` |
+| `2026.11.0-java25-alpine` | `2026.11.0` |
+
+The suffix is dropped because it moves on its own: a LinuxServer image is rebuilt on a new base and
+jumps from `-ls329` to `-ls332` without the application changing. A value that carried the suffix
+would be stale after an update that changed nothing the value describes, and `appVersion` would then
+claim a build that is no longer the one running.
+
+The image a chart runs, and therefore the tag `appVersion` follows, is **the first `tag:` in
+`values.yaml`**: the app's own image goes first, sidecars, exporters and init images after it.
+
+A chart that pins no versioned tag states why on an `# appVersion-check: exempt — <reason>` line in
+`Chart.yaml`, next to the `appVersion` it would otherwise carry. Four do:
+
+| Chart | Why the check does not read it |
+|---|---|
+| `argocd` | the controller image belongs to the `argo-cd` dependency; only the sidecars are pinned here |
+| `docs-site` | two images pinned as full strings, mkdocs-material builds and nginx serves; neither owns the version |
+| `monitoring/mktxp` | upstream publishes no semver tag, only `latest` |
+| `platform/traefik-gate` | runs no image; its `appVersion` names the Traefik release the middlewares target |
+
+`hack/check-app-version.sh` enforces all of this, and it is the check to run after an image bump:
+Renovate moves `image.tag` and cannot move `appVersion`.
 
 ### How configuration reaches the app
 
@@ -239,6 +277,7 @@ cd cluster/helm/<area>/<app>
 helm lint . --namespace <ns>
 helm template <release> . --namespace <ns> | kubeconform -strict -summary
 hack/check-exposure.sh --only cluster/helm/<area>/<app>   # non-public routes carry the LAN gate
+hack/check-app-version.sh --only cluster/helm/<area>/<app> # appVersion names the version in image.tag
 
 # the checks that grep can still do
 grep -rnP '\t' templates/ || echo "no tabs"

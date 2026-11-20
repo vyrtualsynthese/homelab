@@ -5,7 +5,7 @@ type: application
 # Chart version. Renovate bumps this when the image tag moves.
 version: 1.2.2
 # Must match image.tag in values.yaml.
-appVersion: "4.0.20.3014-ls4"
+appVersion: "4.0.20.3014"
 icon: https://raw.githubusercontent.com/Sonarr/Sonarr/develop/Logo/1024.png
 home: https://sonarr.tv/
 sources:

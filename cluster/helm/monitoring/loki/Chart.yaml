@@ -3,7 +3,7 @@ name: loki
 description: Loki - observability
 type: application
 version: 0.1.0
-appVersion: 3.7.9
+appVersion: "3.7.10"
 dependencies:
   - name: loki
     version: 21.4.1

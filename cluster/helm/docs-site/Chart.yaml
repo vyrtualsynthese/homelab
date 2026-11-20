@@ -3,4 +3,5 @@ name: docs-site
 description: Every repository's docs folder, rendered by a cron builder and served read-only
 type: application
 version: 0.1.0
-appVersion: "1"
+# appVersion-check: exempt — two images pinned as full strings in values.yaml
+# (mkdocs-material builds, nginx serves); neither one is the chart's app version.

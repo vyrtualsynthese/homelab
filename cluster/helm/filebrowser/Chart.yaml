@@ -3,7 +3,7 @@ name: filebrowser
 description: FileBrowser Quantum - web file browser over the NAS exports, OIDC only
 type: application
 version: 0.2.0
-appVersion: "2.0.2-stable"
+appVersion: "2.0.2"
 dependencies:
   - name: filebrowser-quantum
     version: 2.0.2-stable

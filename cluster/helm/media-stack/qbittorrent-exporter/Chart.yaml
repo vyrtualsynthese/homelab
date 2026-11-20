@@ -5,7 +5,7 @@ type: application
 # Chart version. Renovate bumps this when the image tag moves.
 version: 1.0.0
 # Must match image.tag in values.yaml.
-appVersion: "v2.0.4"
+appVersion: "2.0.4"
 sources:
   - https://github.com/martabal/qbittorrent-exporter
 keywords:
