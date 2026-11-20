@@ -1,33 +1,29 @@
 # What is broken right now
 
-> **Kind: snapshot.** Read on **Tuesday 17 November 2026, 17:45–17:55 CET** through the read-only
-> ServiceAccount `kube-system/opencode-mcp`. This is **not a live view**: it is true for that
-> evening and for nothing after it.
+> **Kind: snapshot.** Read on **Friday 20 November 2026, 01:10–01:40 CET** through the read-only
+> ServiceAccount `kube-system/opencode-mcp`, plus the Grafana API for the one firing alert and the
+> drive number below. This is **not a live view**: it is true for that early morning and for nothing
+> after it.
 
-The page answers two questions at once — *is the app running?* and *has its chart been rebuilt to the
-contract?* — and it answers them only for the date above. Every other page in `docs/` describes how
-things should be; this one says how they were on that day.
-
-What it replaces: before this page existed, the answer was split across three files, none of them a
-status board. `docs/charts/README.md` knew which charts had probes,
-`docs/audit/argocd-helm.md` knew which references were broken on 2026-11-10, and
-`docs/observability-conventions.md` knew a few pod counts. The audit has already drifted — it still
-lists defects that were fixed on 2026-11-12.
+The short answer: **nothing is broken.** Every application that is meant to run has a ready replica,
+both batch applications ran successfully, and the two Applications ArgoCD reports `OutOfSync` are
+`Healthy`. Five Applications are `Progressing`, and each is explained below: four are the storage
+provisioners whose volumes carry a deletion request and are kept on purpose, and the fifth is a
+Minecraft server switched off in its own values file.
 
 **Refresh this page when a workstream lands.** The date at the top is the only claim it makes: if it
 is older than the last merge on `develop`, distrust it rather than argue with it.
 
-## Retired after this snapshot
+## What this page answers, and what it stopped answering
 
-`firefly`, `ghostfolio`, `guacamole`, `linkstack`, `monitorss`, `postiz` and `wiki` were removed from
-the cluster and from git on 2026-11-18 — charts, `Application` files and namespaces. Four of them
-appear below as broken and three as running. `discourse` followed on 2026-11-19 and appears below as
-broken. **Nothing on this page's lists applies to those eight any more**, and their rows are the
-17 November state, not a queue to pick up. The reasoning is
-[`decisions/2026-11-18-retire-seven-applications.md`](decisions/2026-11-18-retire-seven-applications.md)
-and [`decisions/2026-11-19-retire-discourse.md`](decisions/2026-11-19-retire-discourse.md);
-[`how-it-works/applications.md`](how-it-works/applications.md) and
-[`reference/routes.md`](reference/routes.md) carry the lists as they stand today.
+It answers *is the app running?* for the morning above, from the cluster itself.
+
+It no longer answers *has its chart been rebuilt to the contract?* That question is a fact about
+git, not about the cluster, and copying it into a dated snapshot is how the previous version came to
+list apps as broken months after they were fixed. The answer now lives in two living pages:
+[`charts/README.md`](charts/README.md) is the contract and its per-chart table, and
+[`reference/chart-notes.md`](reference/chart-notes.md) is the per-app record. This page carries only
+what a read of the cluster can prove.
 
 ## How to check right now
 
@@ -41,13 +37,14 @@ kubectl get pods -A --no-headers | awk '$4!="Running" && $4!="Completed"'
 
 kubectl get deploy,statefulset,daemonset -A
 kubectl get pvc -A
+kubectl get pv | grep Terminating
 ```
 
-Every `Terminating` row the last command prints is expected: the driver that would clear it is gone.
-Clearing a finalizer by hand destroys the volume and the application still running on it — the ones
-the page names under **Running on a borrowed volume**.
+`kubectl get pvc -A` today prints one `Pending` claim, `minecraft/minecraft-server-data`, which binds
+only when a pod asks for it. `kubectl get pv` prints four `Terminating` volumes; they are kept by
+decision (see **Storage**) and clearing them destroys live data.
 
-Four dashboards answer most of it without a shell, all in Grafana's **Homelab** folder:
+Grafana's **Homelab** folder holds eight dashboards. These four answer most of the questions above:
 
 | Dashboard | Use it for |
 |---|---|
@@ -58,185 +55,199 @@ Four dashboards answer most of it without a shell, all in Grafana's **Homelab** 
 
 An agent reads the same data through the `kubernetes` MCP server: `resources_list` for
 `argoproj.io/v1alpha1` `Application`, `apps/v1` `Deployment`/`StatefulSet`/`DaemonSet`, `v1`
-`PersistentVolumeClaim`, and `pods_list` for the pod table. The server is read-only and cannot print
-Secrets.
+`PersistentVolumeClaim`/`PersistentVolume`, and `pods_list` for the pod table. The server is
+read-only and cannot print Secrets.
 
 ## Summary
 
-What the snapshot saw: **63 ArgoCD `Application` objects**, which are **62 applications plus
-`argocd-root`** (the root app is not an application workload). Behind them, 149 pods, 80
-Deployments, 5 StatefulSets, 17 DaemonSets, 50 PersistentVolumeClaims, 5 CronJobs, 4 nodes, all on
-`v1.30.1+k3s1`.
+What the snapshot saw: **56 ArgoCD `Application` objects**, 55 of which are application workloads
+(one of them, `traefik-gate`, renders no pod) plus `argocd-root`, the root application that syncs the
+rest. `argocd` itself is one of the 55: since 2026-11-19 the install is a wrapper chart in
+`cluster/helm/argocd`, synced like every other app. Behind them, 63 Deployments, 3 StatefulSets,
+17 DaemonSets, 47 claims, 5 CronJobs and 120 pods (105 running, 15 finished Job pods), on four nodes
+all at `v1.30.1+k3s1`.
+
+Twenty of those pods sit in three namespaces no Application manages: `gpu-operator`,
+`node-feature-discovery` and `system-upgrade`. They run and they are not part of the GitOps flow —
+[`audit/ansible-hosts.md`](audit/ansible-hosts.md) records the history.
 
 | State | Count | Meaning |
 |---|---|---|
-| Repaired to the contract | 29 | Rebuilt against the chart contract, every replica ready |
-| Running, not yet rebuilt | 23 | Running, but on a chart that predates the contract |
-| Broken | 7 | No working replica; cause recorded below |
-| ArgoCD cannot compare | 2 | The Application points at a path that does not exist |
-| Middlewares only | 1 | Renders no pod; defines shared Traefik objects |
-| **Total** | **62** | |
+| Running | 51 | At least one ready replica |
+| Batch | 2 | `renovate` and `recyclarr`: CronJobs with no long-running pod; the last run succeeded |
+| Switched off by choice | 1 | `minecraft-server`, `replicaCount: 0` in its values |
+| Middlewares only | 1 | `traefik-gate` renders no pod; it defines shared Traefik objects |
+| Broken | 0 | |
+| **Total** | **55** | plus `argocd-root` |
 
-54 of the 62 applications have at least one working replica: the 29 repaired, the 23 not yet
-rebuilt, and the two provisioners ArgoCD cannot compare but still run. `traefik-gate` renders no pod
-at all and is counted apart. Four of the working ones sit on a volume whose claim is stuck
-`Terminating` — they work today and will not survive the Longhorn cleanup (see **Running on a
-borrowed volume**).
+## Broken now (0)
 
-## Broken now (6)
+Nothing. The five applications the previous snapshot called broken — `discourse`, `ghostfolio`,
+`monitorss`, `postiz` and `wiki` — were retired, `minecraft-server` is off by choice, and
+`guacamole` and `linkstack` were retired while still running.
 
-| Application | Namespace | Replicas | Cause |
-|---|---|---|---|
-| `discourse` | discourse | 0/1 | Pending: claim `discourse2` not found |
-| `minecraft-server` | minecraft | 0/1 | Pending: claim `minecraft-lh-2` not found |
-| `postiz` | postiz | 0/1 | Pending: claim `postiz-uploads` not found. Its Redis is up, but that claim (`redis-data-postiz-redis-master-0`) is now stuck `Terminating` too, so the pair would not survive a restart |
-| `monitorss` | monitorss | 0/2 | The Mongo pod is Pending on claim `monitorss-mongo`; the bot then crash-loops with no database, more than ten thousand restarts. Web and Redis are up |
-| `ghostfolio` | ghostfolio | 0/1 | Crash-loop, more than ten thousand restarts: resolves `postgres-postgresql.databases.svc.cluster.local`, the **retired Bitnami** Service name. The live one is `postgres.databases.svc.cluster.local` |
-| `wiki` | wiki | 0/1 | Crash-loop, more than ten thousand restarts: same retired Bitnami hostname, `getaddrinfo ENOTFOUND` |
+## Working (51)
 
-Two distinct causes, not seven: five apps lost a claim that nobody recreated, and two still point at
-the PostgreSQL Service that W2, the PostgreSQL workstream, retired. W2's "point the consuming apps at
-the new instance" step is unfinished for `ghostfolio` and `wiki`.
-
-## Repaired to the contract (29)
-
-Rebuilt against [`docs/charts/README.md`](charts/README.md) — pinned image tag, node pin, `Recreate`
-where a config claim exists, probes, memory limits, hardening. All of these were ready at the
-snapshot.
-
-| Application | Namespace | Rebuilt | Note |
-|---|---|---|---|
-| `autobrr` | media-stack | 2026-11-11 | The reference chart every other one was measured against |
-| `flaresolverr` | media-stack | 2026-11-12 | Metrics listener and annotations from one values block |
-| `prowlarr` | media-stack | 2026-11-12 | LinuxServer root-then-`PUID` phase kept; exportarr wired |
-| `cross-seed` | media-stack | 2026-11-12 | Liveness only, deliberately: no endpoint reports its dependencies |
-| `sonarr` | media-stack | 2026-11-12 | Exportarr port fixed; the old chart aimed it at 7878 instead of 8989 |
-| `sonarr-anime` | media-stack | 2026-11-12 | Same shape, second library |
-| `radarr` | media-stack | 2026-11-13 | Named `downloads`/`media` claims; 300 s startup budget for the migration |
-| `radarr-anime` | media-stack | 2026-11-13 | Also moved off `PUID 0` |
-| `lidarr` | media-stack | 2026-11-13 | New claim; exporter waits for the operator to paste the minted API key |
-| `bazarr` | media-stack | 2026-11-13 | exportarr present and **off** — its collector walks the whole library per scrape |
-| `bazarr-anime` | media-stack | 2026-11-13 | Same chart, second library |
-| `recyclarr` | media-stack | 2026-11-13 | CronJob: no listener, no probes; exit status is the health signal |
-| `tautulli` | media-stack | 2026-11-13 | LAN-only route, TLS since 2026-11-15; no gate, its own login is the gate; readiness disabled for a documented reason |
-| `seerr` | media-stack | 2026-11-13 | Rebuilt and hardened on its public route |
-| `unpackerr` | media-stack | 2026-11-13 | Metrics deliberately off: v1 needs an API key for `/metrics` |
-| `maintainerr` | media-stack | 2026-11-13 | First real dependency check: readiness runs `SELECT 1` and answers 503 |
-| `calibre-web-automated` | media-stack | 2026-11-13 | New chart; replaced the retired `calibre` |
-| `kavita` | media-stack | 2026-11-13 | Rebuilt from scratch; library claim mounted read-only |
-| `postgres` | databases | 2026-11-13 | Own chart on the official image; Bitnami gone |
-| `pgadmin` | databases | 2026-11-13 | Wrapper with a login; was one of the eleven Longhorn casualties |
-| `authentik` | authentik | 2026-11-14 | Repaved on `2026.8.5` with one hostname, blueprints in `files/` and a PostSync worker reload; database and secrets rebuilt the same day. Sign-in sources: Discord (members of the homelab guild only — verified refused for a non-member) and Plex (accounts with access to AshuFlex), both landing on the same account. Access model: `authentik Admins` / `homelab-users` / `homelab-guests`, bound per application, with `filebrowser-editors` as a capability group; MFA optional (TOTP, WebAuthn) and applied to source logins. Applications actually wired to it: Grafana and pgAdmin, plus Vikunja natively since 2026-11-16 — its chart sets its own `VIKUNJA_AUTH_OPENID_PROVIDERS_AUTHENTIK_*` values. FileBrowser joined natively on 2026-11-19, its app values carrying the issuer, client id and group names. Argo CD and Kavita have authentik objects in git but no application-side configuration yet |
-| `filebrowser` | filebrowser | 2026-11-19 | FileBrowser Quantum (`ghcr.io/gtsteffaniak/filebrowser:2.0.2-stable`) through the community chart as an OCI dependency; authentik OIDC with the password form off, so the browser redirects straight to the provider; three NFS sources each `defaultEnabled: false`, so access is granted per account and a per-user scope names both the source and the path inside it; public route for sign-in from outside and account-less share links |
-| `prometheus` | monitoring | 2026-11-12 | Wrapper on the official chart, its time-series database on `local-path` |
-| `grafana` | monitoring | 2026-11-12 | Wrapper; rules and dashboards still live only in its database |
-| `loki` | monitoring | 2026-11-12 | Wrapper, 90-day retention |
-| `vikunja` | vikunja | 2026-11-16 | Wrapper on `vikunja/vikunja` 2.8.0, database on the rebuilt `postgres`, no local password: the only way in is authentik single sign-on (OIDC) |
-| `docs-site` | docs | 2026-11-16 | Wrapper: an nginx pod serving the rendered docs and a builder CronJob every minute on `mkdocs-material` 9.8.1, its own claim |
-| `alert-relay` | monitoring | 2026-11-16 | One small Python process relaying Grafana alerts into board comments, code in a ConfigMap so there is no image to build; on `nas` |
-| `koillection` | koillection | 2026-11-19 | Rebuilt from the broken shape: the chart created neither of the two claims it mounted. Its database was created by hand the same day; the entrypoint must run as root, so capabilities are kept and only `allowPrivilegeEscalation` is off — two failed syncs proved both other shapes (root with everything dropped, and `runAsUser 1001`) |
-
-Two media-stack charts are documented but **not** rebuilt: `plex` (README plus recorded contract
-exceptions) and `qbittorrent` (a DNS fix only). Both run.
-
-## Running, not yet rebuilt (23)
-
-Working, on the old chart shape. This is the queue for the chart work, not a defect list.
+Replicas are the live `Ready` figure at the read. Every one of these is `Synced` except the two
+rows that say otherwise.
 
 | Application | Namespace | Replicas | Note |
 |---|---|---|---|
-| `ashuvidz` | ashuvidz | 1/1 | |
-| `dashy` | dashy | 1/1 | `latest` tag and OutOfSync at the snapshot; repaired 2026-11-18 — image pinned. Served publicly at `dashy.ashudev.com` since 2026-11-19, behind the admins-only forward-auth gate; the old names redirect to it |
-| `firefly` | firefly | 3/3 | OutOfSync; now on the `Bound` claim `firefly-config-2` |
-| `guacamole` | guacamole | 2/2 | OutOfSync |
-| `linkstack` | linkstack | 1/1 | **Borrowed volume**; `latest` tag |
-| `n8n` | n8n | 1/1 | **Borrowed volume** at the snapshot; rebuilt on `local-path` on 2026-11-19 |
-| `syncthing` | syncthing | 1/1 | **Borrowed volume** at the snapshot; rebuilt on `local-path` on 2026-11-19 (`syncthing-config`, pod on `nuc0`). The old pod and its Longhorn claim are gone |
-| `thelounge` | thelounge | 1/1 | **Borrowed volume** at the snapshot; rebuilt on `local-path` on 2026-11-19 (`thelounge-config`); its Longhorn claim is gone |
-| `local-path` | default | 1/1 | OutOfSync; provisioner settings matter to every claim |
-| `renovate` | renovate | CronJob | OutOfSync; Application and values disagreed on the chart version |
-| `plex` | media-stack | 1/1 | Contract exceptions recorded in its README |
-| `qbittorrent` | media-stack | 1/1 | DNS fix applied; the VueTorrent installer's `alpine` base is pinned to `3.22` since 2026-11-18, and it fails open since 2026-11-19: an unreachable GitHub costs the alternative UI, never the pod |
-| `qbittorrent-exporter` | media-stack | 1/1 | Now on `v2.0.4`; the previous image could not log in at all |
+| `argocd` | argocd | 7 workloads, 1/1 each | Argo CD itself: server, repo server, controller, applicationset, notifications, dex, redis |
+| `ashuvidz` | ashuvidz | 1/1 | The `ashuvidz.com` site and its git sidecar |
+| `authentik` | authentik | 1/1 + 1/1 | Server and worker |
+| `dashy` | dashy | 1/1 | |
+| `pgadmin` | databases | 1/1 | |
+| `postgres` | databases | 1/1 | **OutOfSync**: only the first-install bootstrap Job differs |
+| `local-path` | default | 1/1 | **OutOfSync**: the Deployment differs from git; its claim settings matter to every `local-path` claim |
+| `docs-site` | docs | 1/1 | Serves the docs; the builder CronJob ran a minute before the read |
+| `filebrowser` | filebrowser | 1/1 | |
+| `koillection` | koillection | 1/1 | Rebuilt from the broken shape on 2026-11-19 |
+| `traefik-nfs` | kube-system | 1/1 | **Progressing**: kept volume, see **Storage** |
+| `autobrr` | media-stack | 1/1 | |
+| `bazarr` | media-stack | 1/1 | |
+| `bazarr-anime` | media-stack | 1/1 | |
+| `books-media` | media-stack | 1/1 | The `nfs-books` class |
+| `calibre-web-automated` | media-stack | 1/1 | |
+| `cross-seed` | media-stack | 1/1 | |
+| `flaresolverr` | media-stack | 1/1 | |
+| `kavita` | media-stack | 1/1 | |
+| `lidarr` | media-stack | 1/1 | |
+| `maintainerr` | media-stack | 1/1 | |
+| `nfs-audio` | media-stack | 1/1 | The `nfs-audio` class |
+| `nfs-qbittorrent-config` | media-stack | 1/1 | Renders its provisioner from the wrapper chart — the previous snapshot's "manages nothing" no longer applies |
+| `nfs-qbittorrent-download` | media-stack | 1/1 | **Progressing**: kept volume, see **Storage** |
+| `plex` | media-stack | 1/1 | |
+| `plex-media` | media-stack | 1/1 | **Progressing**: kept volume, see **Storage** |
+| `prowlarr` | media-stack | 1/1 | |
+| `qbittorrent` | media-stack | 1/1 | With its WireGuard sidecar |
+| `qbittorrent-exporter` | media-stack | 1/1 | |
+| `radarr` | media-stack | 1/1 | |
+| `radarr-anime` | media-stack | 1/1 | |
+| `seerr` | media-stack | 1/1 | |
+| `sonarr` | media-stack | 1/1 | |
+| `sonarr-anime` | media-stack | 1/1 | |
+| `stash-nfs` | media-stack | 1/1 | The `stash-nfs` class. **Progressing**: kept volume, see **Storage** |
+| `tautulli` | media-stack | 1/1 | |
+| `unpackerr` | media-stack | 1/1 | |
+| `alert-relay` | monitoring | 1/1 | |
 | `fluent-bit` | monitoring | 4/4 | DaemonSet, not pinned — it must run on every node |
-| `mktxp` | monitoring | 1/1 | `latest` tag; OutOfSync |
+| `grafana` | monitoring | 1/1 | |
+| `loki` | monitoring | 1/1 | |
+| `mktxp` | monitoring | 1/1 | `latest` tag, kept by decision on 2026-11-19: upstream publishes no usable semver tag |
 | `pihole-exporter` | monitoring | 1/1 | |
-| `prometheus-smartctl` | monitoring | 4/4 | DaemonSet |
-| `books-media` | media-stack | 1/1 | NFS provisioner, wrapper chart |
-| `nfs-qbittorrent-config` | media-stack | 1/1 | **Manages nothing** — see below; the running provisioner is a leftover |
-| `nfs-qbittorrent-download` | media-stack | 1/1 | ArgoCD still reports `Progressing` |
-| `nfs-syncthing` | syncthing | 1/1 | |
-| `stash-nfs` | media-stack | 1/1 | ArgoCD still reports `Progressing` |
-| `traefik-nfs` | kube-system | 1/1 | ArgoCD still reports `Progressing` |
+| `prometheus` | monitoring | 1/1 | Plus kube-state-metrics and node-exporter |
+| `prometheus-smartctl` | monitoring | 4/4 | DaemonSet: drive health on every node |
+| `n8n` | n8n | 1/1 | Rebuilt on `local-path` on 2026-11-19 |
+| `news-freshrss` | news | 1/1 | Rebuilt against the contract on 2026-11-19, with native OIDC |
+| `nfs-syncthing` | syncthing | 1/1 | The `nfs-syncthing` class |
+| `syncthing` | syncthing | 1/1 | Rebuilt on `local-path` on 2026-11-19; carries the backup CronJob |
+| `thelounge` | thelounge | 1/1 | Rebuilt on `local-path` on 2026-11-19 |
+| `vikunja` | vikunja | 1/1 | |
 
-The three provisioners marked `Progressing` (`nfs-qbittorrent-download`, `stash-nfs`, `traefik-nfs`)
-are reported that way while serving their claims normally. That state is ArgoCD's, not a fault.
+## ArgoCD reports Progressing (5)
 
-## Ran on a borrowed volume (resolved)
-
-`linkstack`, `n8n`, `syncthing` and `thelounge` mounted claims that were already stuck `Terminating` —
-the Longhorn volumes the 2026 disk failure orphaned. Their pods kept running because the volume was
-still attached and the deletion was blocked by a finalizer no driver could remove any more.
-
-The consequence mattered for W0, the volume-cleanup workstream: clearing those finalizers **stops
-these apps and destroys their config**, so "1/1 ready" was never "safe" for them. Twelve claims were
-stuck `Terminating` at the snapshot, not the nine the previous page recorded. All four are rebuilt on
-`local-path` and every one of those claims is cleared as of 2026-11-19, `syncthing/syncthing-conf`
-last. `kubectl get pvc -A | grep Terminating` should now come back empty.
-
-## ArgoCD cannot compare (2)
-
-Both report `Healthy`, because the objects from their last good sync are still running. ArgoCD simply
-cannot render them any more, so a sync would fail:
-
-| Application | Error |
+| Application | Why |
 |---|---|
-| `plex-media` | `cluster/helm/nfs/plex-media: app path does not exist` — the directory is `plexmedia` |
-| `nfs-audio` | `helm template` fails on `$values/cluster/helm/nfs/audio/values.yaml` — the directory is `nfs-audio` |
+| `nfs-qbittorrent-download`, `plex-media`, `stash-nfs`, `traefik-nfs` | The four volumes named under **Storage** carry a deletion timestamp, so ArgoCD never settles on `Healthy`. Their provisioners serve their claims normally. This is a property of the volume, not a fault in the app, and it is recorded in [`how-it-works/storage.md`](how-it-works/storage.md) and [`cleanup/longhorn-disposition.md`](cleanup/longhorn-disposition.md) |
+| `minecraft-server` | `replicaCount: 0`: nothing runs, so nothing ever becomes healthy. Its claim is `Pending` for the same reason — `local-path` binds a claim only when a pod asks for it |
 
-Their provisioners still run, so the storage they serve is in use. The charts are effectively
-unmanaged: fixing one defect at a time in the repo is the only way back.
+## Switched off by choice (1)
 
-## Middlewares only (1)
+`minecraft-server` is at 0 replicas in `cluster/helm/minecraft/minecraft-server/values.yaml`. The
+Application still syncs; the pod is simply not wanted. Turning it back on is a values change plus a
+sync, not a repair.
 
-| Application | Namespace | Sync / health | Note |
-|---|---|---|---|
-| `traefik-gate` | kube-system | Synced / Healthy | No pod of its own: carries the shared Traefik objects, not an app |
+## Drift, not breakage (2)
 
-`traefik-gate` creates nothing to run: it carries the shared Traefik objects every other chart's
-route refers to by name — the `lan-only` IP gate, the `redirect-to-https` middleware and the
-`internal-tls` TLS policy for `*.kub.local`. The authentik gate middlewares are not in it; they live
-under `cluster/infrastructure/` and are applied by hand. It is counted apart from the running apps
-because there is nothing to run.
+Both are `Healthy` and `OutOfSync`. Neither needs an incident.
 
-## Drift, not breakage (8)
+- `local-path` — the Deployment differs from what git renders. The provisioner itself is
+  `v0.0.37`; the chart's helper image floats on `latest`, one of the two recorded exceptions to the
+  pinned-tag rule.
+- `postgres` — the difference is the `postgres-bootstrap` Job created by the first install. A
+  completed Job cannot be compared to a template, so it stays `OutOfSync` while the StatefulSet,
+  both claims, the Services and the dump CronJob are `Synced`.
 
-`dashy`, `firefly`, `guacamole`, `linkstack`, `local-path`, `mktxp`, `n8n` and `renovate` are
-`OutOfSync` while `Healthy`. That means git and the cluster disagree about something — often an
-image Renovate bumped, sometimes a UI edit. Not urgent; worth one look each when its chart is
-touched. `syncthing` and `thelounge` left this list on 2026-11-19, when their rebuilds synced.
+## Storage
 
-## Faults this page does not fix
+All 47 claims are `Bound` except `minecraft/minecraft-server-data` (`Pending`, see above). **No
+claim is `Terminating`**: the Longhorn cleanup finished on 2026-11-19, and `syncthing`, `thelounge`
+and `n8n` were rebuilt on `local-path` before their old claims were cleared.
 
-- `default/nfs-ssd-...-provisioner` has been `ContainerCreating` for 75 days, 0/1 (71 days on the
-  previous page). The `nfs-ssd` StorageClass is therefore dead. W1, the storage workstream, owns it.
-- `nfs-qbittorrent-config` renders nothing: the Application uses `path:` on a directory that holds
-  only `values.yaml` and `README.md`, so ArgoCD reports `Synced`/`Healthy` while managing no object.
-  The provisioner pod that serves that class is a leftover from before the split.
-- `nas /dev/sdf`, the SSD that holds the `local-path` claims of the apps pinned to `nas`, is at 0 %
-  of its rated life. Tracked in
-  [`observability-conventions.md`](observability-conventions.md); it is the single largest risk to
-  this page's "working" column.
-- The docs-site builder failed three CronJob runs on 2026-11-17 — `Permission denied` while writing
-  the staging landing page — after which the last three runs completed. Watched, not counted as a
-  broken application.
-- Backups still do not run. W4, the backups workstream.
-- All four nodes are on `v1.30.1+k3s1`, behind the current stable Kubernetes. The upgrade is W5, the
-  Kubernetes upgrade workstream, and it has not started.
+`kubectl get pv` shows four `Terminating` volumes anyway:
+`pv-traefik-nfs`, `pv-plex-media`, `pv-stash-nfs-nfs-stash` and
+`pv-nfs-qbittorrent-download-nfs-subdir-external-provisioner`. They were asked to delete in
+December 2023 and never went, because their claims stayed in use. **They are kept as they are, by
+decision on 2026-11-20**: stripping the finalizer would delete the volume and the live mount with
+it, and `pv-traefik-nfs` holds the ACME certificate store. Each is declared by the provisioner
+chart, so git still owns it. The per-volume reasons and the replacement procedure are in
+[`how-it-works/storage.md`](how-it-works/storage.md).
+
+Six `Released` volumes remain from earlier rebuilds (`filebrowser-config`, `filebrowser-database`,
+the old `pgadmin-config`, the old `calibre-web-automated-config`, `cross-seed2`, `plex-transcode`).
+`local-path` keeps them on purpose (retain policy); each holds a directory on its node until someone
+deletes the volume and the directory by hand. Housekeeping, not breakage.
+
+Each of the eight classes is a directory on a `nas` export, served by one release of
+`cluster/helm/nfs/provisioner/`. `nfs-ssd` and `nfs-plex` no longer exist as classes or as
+provisioners, and the `nfs-ssd` `ContainerCreating` pod the previous snapshot recorded is gone with
+them.
+
+## Faults that are not an application
+
+Checked against the cluster, or explicitly marked as not visible to it:
+
+- **`nas /dev/sdf` is at 0 % of its rated life.** It is a `CT1000BX500SSD1`, it holds the
+  `local-path` claims of the apps pinned to `nas`, and Grafana's `DriveNeedsReplacement` rule is
+  **firing** for it: `smartprom_percent_lifetime_remain` reads 0, where the only other two drives
+  that report the number read 92 and 85. This is the single largest risk to the "working" column
+  above.
+- **Backups.** The in-cluster dumps run: `postgres-dump` last ran 21 hours before the read and
+  `syncthing-backup` 19 hours. The offsite copy is a host-side script and is not visible to this
+  read; [`audit/ansible-hosts.md`](audit/ansible-hosts.md) still records it as broken, and nothing
+  seen here contradicts that.
+- **Empty namespaces.** Eight hold no pod at all: `inventree`, `inventree-lego`, `minio`,
+  `nextcloud`, `orbital-sync`, `postfix`, `synapse`, `test`. They cost nothing, and they are
+  leftovers.
+- **Kubernetes version.** All four nodes are on `v1.30.1+k3s1`, behind the current stable. The
+  upgrade is W5, and it has not started.
+- **Alert rules.** 132 rules exist in the Homelab folder: 1 firing (the drive above), 104 `Normal`,
+  27 `Normal (NoData)`.
+
+## Retired since the previous snapshot
+
+`firefly`, `ghostfolio`, `guacamole`, `linkstack`, `monitorss`, `postiz` and `wiki` were removed from
+the cluster and from git on 2026-11-18 — charts, `Application` files and namespaces — and
+`discourse` followed on 2026-11-19. None of them appears in any list above. The reasoning is
+[`decisions/2026-11-18-retire-seven-applications.md`](decisions/2026-11-18-retire-seven-applications.md)
+and [`decisions/2026-11-19-retire-discourse.md`](decisions/2026-11-19-retire-discourse.md);
+[`how-it-works/applications.md`](how-it-works/applications.md) carries the inventory as it stands.
+
+## What changed since 17 November
+
+- The page said 63 Applications; the cluster holds 56. Eight were retired, `argocd` became one more
+  managed workload, and `freshrss` was rebuilt into a `news` namespace.
+- The six "broken" applications from the previous page are gone or fixed, and the three
+  "ArgoCD cannot compare" entries are gone: `plex-media` and `nfs-audio` are `Synced`, and the
+  paths they pointed at are the wrapper chart.
+- `nfs-ssd` and its 75-day `ContainerCreating` pod are gone; the NFS classes are one chart with
+  eight releases.
+- The Longhorn claims are gone with the pods rebuilt: no claim is `Terminating` any more. The four
+  volumes still marked for deletion are NFS volumes kept by decision, a different thing.
+- Pods fell from 149 to 120 at the read, and claims from 50 to 47.
+- The docs builder, which failed three runs on 2026-11-17, has run cleanly since: its runs complete
+  and the CronJob fires every minute.
 
 ## Related
 
-- [`charts/README.md`](charts/README.md) — what "rebuilt to the contract" means, one requirement at a time.
-- [`audit/argocd-helm.md`](audit/argocd-helm.md) — the dated audit this page replaces as a status board.
-- [`observability-conventions.md`](observability-conventions.md) — the dashboards and alerts that watch these apps.
-- [`runbooks/docs-site-first-run.md`](runbooks/docs-site-first-run.md) — the builder whose failed runs are recorded above.
+- [`how-it-works/applications.md`](how-it-works/applications.md) — every Application, its namespace,
+  its node and how its chart is consumed.
+- [`charts/README.md`](charts/README.md) — what "rebuilt to the contract" means, and the per-chart
+  record of who meets it.
+- [`audit/argocd-helm.md`](audit/argocd-helm.md) — the dated audit this page replaces as a status
+  board.
+- [`observability-conventions.md`](observability-conventions.md) — the dashboards, the alert set and
+  its known holes.
+- [`how-it-works/storage.md`](how-it-works/storage.md) — the classes, the claims, and the four
+  volumes kept with a deletion timestamp.
