@@ -18,14 +18,21 @@
 gpu-operator:
   # `driver.enabled: false` is the declaration that a rebuild is safe: with the
   # driver disabled the operator never builds one against the host kernel, so a
-  # fresh cluster needs the driver installed first and nothing else. The node
-  # label `nvidia.com/gpu.deploy.driver=pre-installed` left over from the hand
-  # install is then vestigial, not required.
+  # fresh cluster needs the driver installed first and nothing else. The
+  # `nvidia.com/gpu.deploy.*` node labels are written by the operator from this
+  # ClusterPolicy, so they follow the values rather than the hand install.
   driver:
     enabled: false
 
   operator:
+    repository: nvcr.io/nvidia
+    image: gpu-operator
     version: v26.3.1
+    # The operator keeps its CRDs on uninstall. The cutover uninstalls the
+    # hand-installed release before ArgoCD syncs this chart, and the existing
+    # ClusterPolicy and operand objects have to survive that uninstall: with the
+    # CRD deleted, Kubernetes would garbage-collect them.
+    cleanupCRD: false
     # Pinned to where the controller already runs: it watches nodes, not pods, so
     # its placement only has to be predictable.
     nodeSelector:
@@ -38,6 +45,8 @@ gpu-operator:
         memory: 192Mi
 
   validator:
+    repository: nvcr.io/nvidia
+    image: gpu-operator
     version: v26.3.1
     # The validator runs to completion per rollout; its memory is a transient.
     resources:
@@ -48,6 +57,8 @@ gpu-operator:
         memory: 64Mi
 
   toolkit:
+    repository: nvcr.io/nvidia/k8s
+    image: container-toolkit
     version: v1.19.0
     # K3s keeps containerd under /var/lib/rancher/k3s and listens on its own
     # socket. These four values are the whole reason this file exists: without
@@ -70,6 +81,8 @@ gpu-operator:
         memory: 96Mi
 
   devicePlugin:
+    repository: nvcr.io/nvidia
+    image: k8s-device-plugin
     version: v0.19.0
     resources:
       requests:
@@ -79,6 +92,8 @@ gpu-operator:
         memory: 96Mi
 
   gfd:
+    repository: nvcr.io/nvidia
+    image: k8s-device-plugin
     version: v0.19.0
     resources:
       requests:
@@ -88,6 +103,8 @@ gpu-operator:
         memory: 128Mi
 
   dcgmExporter:
+    repository: nvcr.io/nvidia/k8s
+    image: dcgm-exporter
     version: 4.5.1-4.8.0-distroless
     # This container holds ~530 MiB for its whole life: it embeds nv-hostengine
     # rather than talking to a standalone DCGM, which is why the limits sit far
@@ -100,8 +117,12 @@ gpu-operator:
         memory: 1Gi
 
   migManager:
-    # The P400 is not MIG capable, so this DaemonSet stays at 0/0. The limits are
-    # declared anyway so the object is complete if the card is ever replaced.
+    # The P400 is not MIG capable, so this DaemonSet stays at 0/0. The image and
+    # the limits are declared anyway so the object is complete if the card is
+    # ever replaced.
+    repository: nvcr.io/nvidia/cloud-native
+    image: k8s-mig-manager
+    version: v0.14.0
     resources:
       requests:
         cpu: 10m
@@ -138,7 +159,6 @@ gpu-operator:
       kind: Service
       metadata:
         name: nvidia-dcgm-exporter-metrics
-        namespace: '{{ .Release.Namespace }}'
         annotations:
           prometheus.io/scrape: "true"
       spec:
