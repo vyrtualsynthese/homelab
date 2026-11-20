@@ -53,8 +53,10 @@ helm -n argocd list; kubectl -n argocd get pods
 If `argocd` reappears in the list later, something has created a release record again, and a
 `helm upgrade` through it would fight Argo CD for the same objects.
 
-**Still outstanding on 2026-11-20:** the record exists. Clearing it needs write access on the
-cluster, which the agent ServiceAccount does not have, so it stays a hand command.
+**Cleared on 2026-11-20.** The record was still there when this page was written; the command above
+was run by hand that day, because clearing it needs write access the agent ServiceAccount does not
+have. Since then `helm -n argocd list` prints the header row alone, `helm history argocd` answers
+`release: not found`, and all seven pods stayed `1/1`.
 
 ## Rebuild from nothing
 
