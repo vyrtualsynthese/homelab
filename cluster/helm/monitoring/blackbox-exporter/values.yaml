@@ -1,0 +1,145 @@
+blackbox:
+  fullnameOverride: blackbox-exporter
+  kind: Deployment
+  replicaCount: 1
+  nodeSelector:
+    kubernetes.io/hostname: nas
+  resources:
+    requests:
+      cpu: 10m
+      memory: 32Mi
+    limits:
+      memory: 64Mi
+  # Resolve the public names against the public resolvers, not ClusterFirst:
+  # Pi-hole rewrites ashudev.com to its LAN address, so a ClusterFirst prober
+  # would check the wrong record and report green for a broken public zone.
+  dnsPolicy: None
+  dnsConfig:
+    nameservers:
+      - 1.1.1.1
+      - 9.9.9.9
+    searches: []
+    options:
+      - name: ndots
+        value: "1"
+  podAnnotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "9115"
+  service:
+    port: 9115
+  image:
+    registry: quay.io
+    repository: prometheus/blackbox-exporter
+    tag: v0.29.1
+  config:
+    modules:
+      http_2xx:
+        prober: http
+        timeout: 10s
+        http:
+          follow_redirects: true
+          valid_status_codes:
+            - 200
+          preferred_ip_protocol: ip4
+          ip_protocol_fallback: false
+      dns_soa_ashudev:
+        prober: dns
+        timeout: 10s
+        dns:
+          preferred_ip_protocol: ip4
+          query_name: ashudev.com
+          query_type: SOA
+      dns_a_ashudev:
+        prober: dns
+        timeout: 10s
+        dns:
+          preferred_ip_protocol: ip4
+          query_name: ashudev.com
+          query_type: A
+          validate_answer_rrs:
+            fail_if_none_matches_regexp:
+              - 185\.199\.1
+      dns_www_ashudev:
+        prober: dns
+        timeout: 10s
+        dns:
+          preferred_ip_protocol: ip4
+          query_name: www.ashudev.com
+          query_type: CNAME
+          validate_answer_rrs:
+            fail_if_none_matches_regexp:
+              - vyrtualsynthese\.github\.io
+      dns_mx_ashudev:
+        prober: dns
+        timeout: 10s
+        dns:
+          preferred_ip_protocol: ip4
+          query_name: ashudev.com
+          query_type: MX
+          validate_answer_rrs:
+            fail_if_none_matches_regexp:
+              - (aspmx|alt[0-9]\.aspmx)\.l\.google\.com
+      dns_spf_ashudev:
+        prober: dns
+        timeout: 10s
+        dns:
+          preferred_ip_protocol: ip4
+          query_name: ashudev.com
+          query_type: TXT
+          validate_answer_rrs:
+            fail_if_none_matches_regexp:
+              - _spf\.google\.com
+      dns_dkim_ashudev:
+        prober: dns
+        timeout: 10s
+        dns:
+          preferred_ip_protocol: ip4
+          query_name: google._domainkey.ashudev.com
+          query_type: TXT
+          validate_answer_rrs:
+            fail_if_none_matches_regexp:
+              - v=DKIM1; k=rsa
+      dns_dmarc_ashudev:
+        prober: dns
+        timeout: 10s
+        dns:
+          preferred_ip_protocol: ip4
+          query_name: _dmarc.ashudev.com
+          query_type: TXT
+          validate_answer_rrs:
+            fail_if_none_matches_regexp:
+              - v=DMARC1
+      dns_ns_ashudev:
+        prober: dns
+        timeout: 10s
+        dns:
+          preferred_ip_protocol: ip4
+          query_name: ashudev.com
+          query_type: NS
+          validate_answer_rrs:
+            fail_if_none_matches_regexp:
+              - ovh\.net
+      dns_soa_ashuvidz:
+        prober: dns
+        timeout: 10s
+        dns:
+          preferred_ip_protocol: ip4
+          query_name: ashuvidz.com
+          query_type: SOA
+      dns_a_ashuvidz:
+        prober: dns
+        timeout: 10s
+        dns:
+          preferred_ip_protocol: ip4
+          query_name: ashuvidz.com
+          query_type: A
+          validate_answer_rrs:
+            fail_if_none_matches_regexp:
+              - 80\.14\.57\.209
+      dns_ns_ashuvidz:
+        prober: dns
+        timeout: 10s
+        dns:
+          preferred_ip_protocol: ip4
+          query_name: ashuvidz.com
+          query_type: NS
