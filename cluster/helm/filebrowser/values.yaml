@@ -1,5 +1,5 @@
 # The NAS exports FileBrowser browses. Templates/nfs-volumes.yaml renders one PV +
-# one pre-bound claim per entry, and the filebrowser subchart mounts them.
+# one pre-bound claim per entry, and the Deployment mounts them.
 nfsServer: 192.168.1.41
 nfsMountOptions:
   - nfsvers=4.2
@@ -22,141 +22,201 @@ nfsVolumes:
     path: /mnt/ultrafaststorage/nfs
     accessMode: ReadWriteOnce
 
-filebrowser-quantum:
-  image:
-    repository: ghcr.io/gtsteffaniak/filebrowser
-    # renovate: datasource=docker depName=gtsteffaniak/filebrowser
-    tag: 2.0.2-stable
-    pullPolicy: IfNotPresent
+# This chart owns the whole workload. It used to depend on the community
+# `filebrowser-quantum` chart, which rendered no nodeSelector, affinity or
+# tolerations, so the pod could be scheduled on any node — including the ARM64
+# rbp2 — and its local-path config claim had to follow it. The names below are
+# the ones that chart rendered; see app.fullname in templates/_helpers.tpl.
+replicaCount: 1
+strategy: Recreate
 
-  # The chart generates this password with `rand` on every render and emits it
-  # unquoted, so a password that starts with `#` produces invalid YAML (seen
-  # once in this repo). The password method is off, so the value cannot be used
-  # to sign in; pinning it makes renders deterministic. Turning password login
-  # back on in a recovery means setting a real value here first — the runbook
-  # says so.
-  adminPassword:
-    passwordOverride: "oidc-only-no-local-login"
+image:
+  repository: ghcr.io/gtsteffaniak/filebrowser
+  # renovate: datasource=docker depName=gtsteffaniak/filebrowser
+  tag: 2.0.2-stable
+  pullPolicy: IfNotPresent
 
-  # PUID/PGID of the rest of the stack, and the uid that owns the download
-  # export (0755).
-  #
-  # `runAsGroup` is what makes the assets export readable, and it has to be the
-  # *primary* group: that export is a mergerfs pool (several disks, one folder)
-  # served through FUSE, and a FUSE request carries only the caller's uid and
-  # primary gid. mergerfs checks the underlying disk as that pair, so a group
-  # that is only supplementary is invisible to it — the container's `id` lists
-  # 1000 either way. Proven on the NAS: uid 1100 with primary gid 0 was denied
-  # on `Games/PSP` while primary gid 1000 listed it.
-  #
-  # Directories outside the world-readable majority are 0750 owned by 1000:1000,
-  # so primary gid 1000 gets `r-x` and nothing more; writes stay with uid 1100,
-  # the owner of the download export. `supplementalGroups` is kept for volumes
-  # that never pass through mergerfs, where ordinary NFS group checks apply.
-  securityContext:
-    runAsUser: 1100
-    runAsGroup: 1000
-    runAsNonRoot: true
-    supplementalGroups:
-      - 1000
-    fsGroup: 1000
+# The one port value: the container port, the Service, every probe and
+# config.http.port in the rendered config.yaml all read it.
+service:
+  type: ClusterIP
+  port: 8080
 
-  resources:
-    requests:
-      cpu: 1m
-      memory: 64Mi
-    limits:
-      memory: 256Mi
+serviceAccount:
+  create: true
+  # The app never talks to the Kubernetes API.
+  automount: false
+  name: ""
+  annotations: {}
 
-  persistence:
+# PUID/PGID of the rest of the stack, and the uid that owns the download
+# export (0755).
+#
+# `runAsGroup` is what makes the assets export readable, and it has to be the
+# *primary* group: that export is a mergerfs pool (several disks, one folder)
+# served through FUSE, and a FUSE request carries only the caller's uid and
+# primary gid. mergerfs checks the underlying disk as that pair, so a group
+# that is only supplementary is invisible to it — the container's `id` lists
+# 1000 either way. Proven on the NAS: uid 1100 with primary gid 0 was denied
+# on `Games/PSP` while primary gid 1000 listed it.
+#
+# Directories outside the world-readable majority are 0750 owned by 1000:1000,
+# so primary gid 1000 gets `r-x` and nothing more; writes stay with uid 1100,
+# the owner of the download export. `supplementalGroups` is kept for volumes
+# that never pass through mergerfs, where ordinary NFS group checks apply.
+podSecurityContext:
+  runAsUser: 1100
+  runAsGroup: 1000
+  runAsNonRoot: true
+  supplementalGroups:
+    - 1000
+  fsGroup: 1000
+
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+  seccompProfile:
+    type: RuntimeDefault
+
+# Liveness and readiness share /health on purpose: the app's only dependency is
+# its local SQLite database, which stays up with the process, so there is no
+# second endpoint that reports a failed dependency. The README records why.
+probes:
+  liveness:
     enabled: true
-    keep: true
-    storageClass: local-path
-    accessMode: ReadWriteOnce
-    data:
-      size: 1Gi
-    config:
-      size: 1Gi
+    path: /health
+    initialDelaySeconds: 10
+    periodSeconds: 20
+    timeoutSeconds: 2
+    failureThreshold: 3
+  readiness:
+    enabled: true
+    path: /health
+    initialDelaySeconds: 5
+    periodSeconds: 10
+    timeoutSeconds: 2
+    failureThreshold: 3
 
-  # The repo uses Traefik CRDs only, so the subchart's own Ingress stays off. It
-  # already defaults to false; pinned here so an upstream default change cannot
-  # reintroduce a networking.k8s.io/v1 Ingress.
-  ingress:
-    enabled: false
+resources:
+  requests:
+    cpu: 1m
+    memory: 64Mi
+  limits:
+    cpu: 500m
+    memory: 256Mi
 
-  extraVolumes:
-    - name: stash-volume
-      persistentVolumeClaim:
-        claimName: filebrowser-stash
-    - name: audio-volume
-      persistentVolumeClaim:
-        claimName: filebrowser-audio
-    - name: qbittorrent-download-volume
-      persistentVolumeClaim:
-        claimName: filebrowser-download
-
-  extraVolumeMounts:
-    - name: stash-volume
-      mountPath: /srv/various
-    - name: audio-volume
-      mountPath: /srv/audio
-    - name: qbittorrent-download-volume
-      mountPath: /srv/torrent
-
-  # The client id is public; the secret is the only value from a Secret.
-  extraEnv:
-    - name: FILEBROWSER_OIDC_CLIENT_ID
-      value: filebrowser
-    - name: FILEBROWSER_OIDC_CLIENT_SECRET
-      valueFrom:
-        secretKeyRef:
-          name: filebrowser-oidc
-          key: CLIENTSECRET
-
+# Claim names are app.fullname plus a suffix, so they stay the two claims the
+# previous chart created: filebrowser-filebrowser-quantum-config and -data. The
+# config claim holds database.db — users, scopes and the OIDC linkage — and the
+# name must not change. Both stay 1 Gi as provisioned: a local-path claim cannot
+# shrink, and the config is not small enough to bother recreating.
+persistence:
   config:
-    server:
-      # The chart's default is the relative string "tmp", resolved against the
-      # image's working directory, which uid 1100 cannot write: the app dies at
-      # startup with `mkdir tmp: permission denied`. /data is the claim the chart
-      # mounts for this purpose.
-      #
-      # No size cap: `cacheDirMaxSizeMB` does not exist in 2.0.2 and the app
-      # rejects unknown fields at startup, so the 1 Gi claim is the only limit.
-      cacheDir: /data/cache
-      sources:
-        - path: /srv/various
-          name: various
-          config:
-            defaultEnabled: false
-        - path: /srv/audio
-          name: audio
-          config:
-            defaultEnabled: false
-        - path: /srv/torrent
-          name: torrent
-          config:
-            defaultEnabled: false
-    auth:
-      methods:
-        # No password form: OIDC is the only way in, which is also what makes
-        # the app redirect straight to authentik.
-        password:
-          enabled: false
-          signup: false
-        oidc:
-          enabled: true
-          issuerUrl: https://authentik.kub.home.ashudev.com/application/o/filebrowser/
-          clientId: filebrowser
-          scopes: openid email profile
-          userIdentifier: preferred_username
-          adminGroup: authentik Admins
-          userGroups:
-            - authentik Admins
-            - filebrowser-editors
-    http:
-      port: 8080
-      trustProxyHeaders: true
-      externalUrl: https://filebrowser.kub.home.ashudev.com
+    size: 1Gi
+    storageClass: local-path
+  data:
+    size: 1Gi
+    storageClass: local-path
+
+# The password method is off, so this value cannot be used to sign in. It has to
+# exist because the chart always renders the variable, and the previous chart
+# generated one with `rand` on every render and emitted it unquoted — a value
+# starting with `#` produced invalid YAML. Pinning it makes renders
+# deterministic. Turning password login back on in a recovery means setting a
+# real value here first; the runbook says so.
+adminPassword:
+  passwordOverride: "oidc-only-no-local-login"
+
+# The client id is public; the secret is the only value from a Secret.
+extraEnv:
+  - name: FILEBROWSER_OIDC_CLIENT_ID
+    value: filebrowser
+  - name: FILEBROWSER_OIDC_CLIENT_SECRET
+    valueFrom:
+      secretKeyRef:
+        name: filebrowser-oidc
+        key: CLIENTSECRET
+
+extraVolumes:
+  - name: stash-volume
+    persistentVolumeClaim:
+      claimName: filebrowser-stash
+  - name: audio-volume
+    persistentVolumeClaim:
+      claimName: filebrowser-audio
+  - name: qbittorrent-download-volume
+    persistentVolumeClaim:
+      claimName: filebrowser-download
+
+extraVolumeMounts:
+  - name: stash-volume
+    mountPath: /srv/various
+  - name: audio-volume
+    mountPath: /srv/audio
+  - name: qbittorrent-download-volume
+    mountPath: /srv/torrent
+
+nodeSelector:
+  kubernetes.io/hostname: nuc0
+
+# Left empty on purpose. The chart that came before had no scheduling field at
+# all, so an empty map here is visibly "pinned, no toleration, no affinity".
+tolerations: []
+affinity: {}
+
+config:
+  server:
+    # The previous chart's default is the relative string "tmp", resolved
+    # against the image's working directory, which uid 1100 cannot write: the
+    # app dies at startup with `mkdir tmp: permission denied`. /data is the
+    # claim the Deployment mounts for this purpose.
+    #
+    # No size cap: `cacheDirMaxSizeMB` does not exist in 2.0.2 and the app
+    # rejects unknown fields at startup, so the 1 Gi claim is the only limit.
+    cacheDir: /data/cache
+    # Fluent Bit ships every line to Loki with no filter, so only warnings and
+    # errors are emitted. The startup failures this app reports still land in
+    # those two levels.
+    logging:
+      - levels: "warning|error"
+        apiLevels: "warning|error"
+        output: stdout
+    sources:
+      - path: /srv/various
+        name: various
+        config:
+          defaultEnabled: false
+      - path: /srv/audio
+        name: audio
+        config:
+          defaultEnabled: false
+      - path: /srv/torrent
+        name: torrent
+        config:
+          defaultEnabled: false
+  auth:
+    methods:
+      # No password form: OIDC is the only way in, which is also what makes
+      # the app redirect straight to authentik.
+      password:
+        enabled: false
+        signup: false
+      oidc:
+        enabled: true
+        issuerUrl: https://authentik.kub.home.ashudev.com/application/o/filebrowser/
+        clientId: filebrowser
+        scopes: openid email profile
+        userIdentifier: preferred_username
+        adminGroup: authentik Admins
+        userGroups:
+          - authentik Admins
+          - filebrowser-editors
+  http:
+    # `port` is rendered from service.port, so the value does not live here.
+    trustProxyHeaders: true
+    externalUrl: https://filebrowser.kub.home.ashudev.com
 
 traefik:
   apiVersion: traefik.containo.us/v1alpha1
@@ -164,7 +224,6 @@ traefik:
   certResolver: myresolver
   tlsOption: filebrowser-tlsoption
   service: filebrowser-filebrowser-quantum
-  port: 8080
   middlewares:
     # Public on purpose: the editor signs in from outside, and share links go to
     # people with no account at all. The gate is the app's own authentik OIDC
