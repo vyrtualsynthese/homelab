@@ -99,9 +99,11 @@ picks up a directory it should not have trips the check long before the bill not
 
 ## What has been proved, and what has not
 
-Proved on 2026-11-20: a WAL database on a read-only mount can be copied through SQLite's backup API
-into an `integrity_check`-clean file; the two ambiguous rows fail until they name their PV; the
-values file resolves every row against the live cluster's directories.
+Proved on 2026-11-20: a database is copied through SQLite's backup API into a clean file even when
+the claim is mounted read-only — a WAL database whose `-shm` cannot be created is first copied into
+the staging directory, where the log is replayed and a committed frame is not lost. The two
+ambiguous rows fail until they name their PV, and the values file resolves every row against the
+live cluster's directories.
 
 Not yet proved: that a snapshot restores. No drill is recorded in
 [`runbooks/restore.md`](../runbooks/restore.md), so the honest statement is that the jobs run and

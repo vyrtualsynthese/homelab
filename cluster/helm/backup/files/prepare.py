@@ -19,6 +19,7 @@ import argparse
 import fnmatch
 import json
 import pathlib
+import shutil
 import sqlite3
 import sys
 from typing import Sequence
@@ -69,20 +70,19 @@ def _copy_sqlite(source: pathlib.Path, destination: pathlib.Path) -> None:
     """Copy one database through SQLite's backup API, never with a byte copy."""
     if destination.exists():
         destination.unlink()
+    scratch: pathlib.Path | None = None
     try:
         try:
+            # The clean path: a read-only open writes nowhere, and the backup API reads the
+            # database as it stands.
             live = sqlite3.connect(f"file:{source}?mode=ro", uri=True)
             live.execute("SELECT count(*) FROM sqlite_master").fetchone()
         except sqlite3.OperationalError:
-            # A WAL database on a read-only mount can refuse the read-only open. The fallback is
-            # a read-write open of the same file, which works when the mount itself is writable;
-            # on a read-only mount it raises, which is a RowError and fails the job loudly.
-            try:
-                live.close()
-            except (NameError, sqlite3.Error):
-                pass
-            live = sqlite3.connect(f"file:{source}", uri=True)
-            live.execute("SELECT count(*) FROM sqlite_master").fetchone()
+            # A WAL database cannot be opened read-only unless its -shm exists and can be
+            # updated, and every claim is mounted read-only on purpose. So the copy is taken
+            # into the staging directory, where SQLite may create the side files and replay the
+            # WAL: a torn tail is discarded, a committed frame is applied.
+            live, scratch = _open_copy(source, destination)
         try:
             copy = sqlite3.connect(destination)
             try:
@@ -93,6 +93,25 @@ def _copy_sqlite(source: pathlib.Path, destination: pathlib.Path) -> None:
             live.close()
     except sqlite3.DatabaseError as exc:
         raise RowError(f"cannot stage {source}: {exc}") from exc
+    finally:
+        if scratch is not None:
+            for suffix in ("", *SIDECAR_SUFFIXES):
+                pathlib.Path(f"{scratch}{suffix}").unlink(missing_ok=True)
+
+
+def _open_copy(
+    source: pathlib.Path, destination: pathlib.Path
+) -> tuple[sqlite3.Connection, pathlib.Path]:
+    """Copy a database and its side files into the writable staging directory, then open it."""
+    scratch = destination.parent / f".{destination.name}.copy"
+    for suffix in SIDECAR_SUFFIXES:
+        side = pathlib.Path(f"{source}{suffix}")
+        if side.exists():
+            shutil.copy2(side, f"{scratch}{suffix}")
+    shutil.copy2(source, scratch)
+    live = sqlite3.connect(scratch)
+    live.execute("SELECT count(*) FROM sqlite_master").fetchone()
+    return live, scratch
 
 
 def stage_databases(

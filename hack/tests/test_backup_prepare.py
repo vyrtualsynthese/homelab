@@ -8,6 +8,7 @@ directories because a released PV left one behind.
 """
 
 import pathlib
+import shutil
 import sqlite3
 import tempfile
 import unittest
@@ -84,6 +85,36 @@ class StageTests(unittest.TestCase):
             copy = sqlite3.connect(staged / "sonarr.db")
             self.assertEqual(copy.execute("SELECT v FROM t").fetchone()[0], "kept")
             copy.close()
+
+    def test_a_wal_database_on_a_read_only_mount_is_staged_from_a_copy(self):
+        # Every claim is mounted read-only, and SQLite cannot open a WAL database read-only
+        # without creating its -shm. The staging copy is the way in: the WAL is replayed
+        # there, a committed frame survives, and nothing is written back to the claim.
+        with tempfile.TemporaryDirectory() as tmp:
+            src = pathlib.Path(tmp) / "src"
+            src.mkdir()
+            live = sqlite3.connect(src / "kavita.db")
+            live.execute("PRAGMA journal_mode=WAL")
+            live.execute("PRAGMA wal_autocheckpoint=0")
+            live.execute("CREATE TABLE t (v TEXT)")
+            live.execute("INSERT INTO t VALUES ('kept')")
+            live.commit()
+            frozen = pathlib.Path(tmp) / "frozen"
+            frozen.mkdir()
+            shutil.copy2(src / "kavita.db", frozen / "kavita.db")
+            shutil.copy2(src / "kavita.db-wal", frozen / "kavita.db-wal")
+            live.close()
+            frozen.chmod(0o555)
+            try:
+                out = pathlib.Path(tmp) / "out"
+                written = load().stage_databases(frozen, out, ["*.db"])
+                self.assertEqual([p.name for p in written], ["kavita.db"])
+                copy = sqlite3.connect(written[0])
+                self.assertEqual(copy.execute("SELECT v FROM t").fetchone()[0], "kept")
+                copy.close()
+                self.assertEqual(sorted(p.name for p in out.iterdir()), ["kavita.db"])
+            finally:
+                frozen.chmod(0o755)
 
     def test_a_claim_with_no_database_raises(self):
         with tempfile.TemporaryDirectory() as tmp:
