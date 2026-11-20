@@ -303,6 +303,41 @@ Share links keep working during an authentik outage: the app answers `/share/...
 gate in front. The files themselves are also reachable over SMB/NFS on the NAS, which is the recovery
 that does not need the cluster at all.
 
+## The LDAP outpost (The Lounge)
+
+The Lounge has no OIDC, so it authenticates people with an LDAP bind against authentik. The provider,
+its application (`thelounge-ldap`) and the outpost (`ashulab-ldap`) are created by
+`cluster/helm/authentik/files/app-thelounge-ldap.yaml`; the outpost pod and its Service
+(`authentik-ldap`, port 3389) are `templates/ldap-outpost.yaml` in the same chart. Creating an outpost
+generates its service account and token, and the token is the one thing git cannot hold: the pod reads
+it from Secret `authentik-ldap`, key `AUTHENTIK_TOKEN`.
+
+Create it once, after the blueprint has applied. The value is printed nowhere:
+
+```bash
+set -a; . ~/.config/secrets/homelab.env; set +a
+API=https://authentik.kub.home.ashudev.com/api/v3
+TOK=$(curl -s -H "Authorization: Bearer $AUTHENTIK_TOKEN" \
+  "$API/outposts/instances/?search=ashulab-ldap" \
+  | jq -r '.results[] | select(.name=="ashulab-ldap") | .token_identifier')
+KEY=$(curl -s -H "Authorization: Bearer $AUTHENTIK_TOKEN" "$API/core/tokens/$TOK/view_key/" | jq -r '.key')
+kubectl -n authentik create secret generic authentik-ldap \
+  --from-literal=AUTHENTIK_TOKEN="$KEY" --dry-run=client -o yaml | kubectl apply -f -
+unset KEY
+```
+
+Until the Secret exists the pod sits in `CreateContainerConfigError`; that is expected, and the rest of
+the sync is healthy.
+
+Two checks mean the outpost is up: `GET $API/outposts/instances/?search=ashulab-ldap` lists
+`ashulab-ldap` with `providers` holding `thelounge-ldap`, and
+`GET $API/outposts/instances/<uuid>/health/` returns a record whose `version` is `2026.8.5`. The pod
+log adds the listener line for port 3389.
+
+A person signs in to The Lounge with their authentik username and their authentik password, not
+their Lounge password — LDAP replaces the local login. If they enrol MFA later, the provider's
+`mfa_support` must be turned on at the same time, and they type `password;123456`.
+
 ## MFA
 
 Optional. TOTP and WebAuthn (YubiKey) are offered from **MFA Devices** in the user's own
