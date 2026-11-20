@@ -31,6 +31,11 @@ data loss. The commands are the same; only the target changes, see
 
 ## Step 1 — find the newest dump
 
+**If the claim itself is gone** — the case after `nas` lost its disk — the dumps are not on it: they
+are in the `nodes-nas` restic repository in the OVH bucket, and
+[`restore.md`](restore.md) section 1 brings them back, including the `globals.sql` this procedure
+needs when the roles are gone too. Restore those files to a working directory first, then run the
+steps below against it as if it were `/dumps`.
 Mount the claim read-only in a pod that does nothing but list it. It stays up for the rest of the
 procedure, so the dump file is one `ls` away.
 
