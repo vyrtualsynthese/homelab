@@ -173,6 +173,11 @@ Charts that need `helm dependency build`: `monitoring/prometheus`, `monitoring/g
 every `appVersion` names the version inside the chart's `image.tag`, with the packaging suffix
 dropped. It is the check to run after merging a Renovate image bump, which moves the tag alone.
 
+`hack/check-config-keys.sh` renders each chart listed in `hack/config-key-checks.yaml` and fails
+any key in its config file that the pinned dependency's `values.yaml` does not declare — the class
+of failure that cost the FileBrowser cutover three syncs. A chart whose app rejects unknown config
+keys at startup belongs in that manifest; the check names the key and its line in the rendered file.
+
 Check that ArgoCD references resolve (CRLF-safe):
 
 ```bash
