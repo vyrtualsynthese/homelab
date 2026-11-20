@@ -55,6 +55,35 @@ hostPaths:
 # The interim bridge until the official S3 upload lands with the 1.31 upgrade.
 etcdSnapshotsPath: /host/etcd-snapshots
 
+# The NFS stream: the exports on `nas` that hold data no rebuild can recreate. The exports the
+# operator excluded (music, media, stash's library, downloads) are not listed at all, so a
+# job can never reach them by accident. `exclude` entries are restic basename patterns.
+nfs:
+  schedule: "0 6 * * *"
+  server: 192.168.1.41
+  paths:
+    # 6 773.3 MB. The operator's own critical data. File versioning is off today; the exclude
+    # is here so that turning it on cannot silently double the stream.
+    - tag: syncthing
+      path: /mnt/storage/nfs/syncthing
+      exclude: [".stversions"]
+    # 21 952.1 MB. The Calibre library and its metadata.db.
+    - tag: books
+      path: /mnt/storage/nfs/books
+    # 8 KB, currently one empty subdirectory. The name carries the claim's PV id, because the
+    # stash-nfs class mounts a static subdirectory: recreated claim, changed row, loud failure.
+    - tag: koillection
+      path: /mnt/storage/nfs/stash/koillection-koillection-uploads-pvc-9c9ffcb6-90e9-4d6a-94b3-d6b2f6c04d15
+    # 0.9 MB. The ACME certificate store; losing it means re-issuing and risking Let's Encrypt's
+    # weekly duplicate limit.
+    - tag: traefik
+      path: /mnt/storage/traefik
+    # 428.7 MB → 181.2. The live qBittorrent mounts this at /config and writes BT_backup here:
+    # the seed list and resume data. Logs, GeoIP data and an old web UI copy are not data.
+    - tag: qbittorrent-config
+      path: /mnt/storage/nfs/qbittorrent-config
+      exclude: ["logs", "log", "geoip", "ui.prev", ".cache", ".npm"]
+
 nodes:
   nas:
     schedule: "30 4 * * *"
