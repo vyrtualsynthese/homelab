@@ -82,16 +82,26 @@ class NodeJobTests(unittest.TestCase):
             args = next(c for c in pod_of(f"backup-node-{node}")["initContainers"] if c["name"] == "prepare")["args"]
             self.assertEqual(args.count("--root"), len(cfg["roots"]))
 
-    def test_reads_are_mounted_read_only(self):
-        writable = ("/staging", "/scripts", "/config")
+    def test_host_data_is_never_mounted_writable(self):
+        # The claims and the node's /etc arrive by hostPath, so the only thing that may be
+        # labelled writable is the empty staging volume. A hostPath mounted writable would let
+        # a job write into a live claim.
         for c in crons():
             pod = c["spec"]["jobTemplate"]["spec"]["template"]["spec"]
+            kinds = {}
+            for volume in pod["volumes"]:
+                kinds[volume["name"]] = (
+                    "hostPath" if "hostPath" in volume
+                    else "configMap" if "configMap" in volume
+                    else "emptyDir"
+                )
             for container in pod.get("initContainers", []) + pod["containers"]:
                 for mount in container["volumeMounts"]:
-                    if mount["mountPath"] in writable:
+                    if kinds[mount["name"]] == "emptyDir":
                         continue
-                    self.assertTrue(mount.get("readOnly"),
-                                    f"{c['metadata']['name']} {container['name']} {mount['mountPath']}")
+                    self.assertTrue(
+                        mount.get("readOnly"),
+                        f"{c['metadata']['name']} {container['name']} {mount['mountPath']}")
 
     def test_etcd_bridge_only_on_control_plane_nodes(self):
         snap = "/var/lib/rancher/k3s/server/db/snapshots"
