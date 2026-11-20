@@ -1,0 +1,69 @@
+version: 1
+metadata:
+  name: ashulab-app-thelounge-ldap
+entries:
+  - model: authentik_blueprints.metaapplyblueprint
+    attrs:
+      identifiers:
+        name: ashulab-groups
+      required: true
+
+  # LDAP, not the proxy gate: The Lounge's own identity path is an LDAP bind.
+  # A bind needs an authentication flow (it validates the password), not the
+  # implicit-consent flow the proxy providers use. The flow's MFA stage skips
+  # when no device is enrolled, which is the case today; `mfa_support` stays
+  # false until somebody enrols, because it would split a password at a `;`.
+  - model: authentik_providers_ldap.ldapprovider
+    id: thelounge-ldap-provider
+    identifiers:
+      name: thelounge-ldap
+    attrs:
+      name: thelounge-ldap
+      authorization_flow: !Find [authentik_flows.flow, [slug, default-authentication-flow]]
+      invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
+      base_dn: dc=ldap,dc=goauthentik,dc=io
+      # One human, occasional logins: consult the database on every bind, so a
+      # changed password or a revoked account takes effect at once.
+      bind_mode: direct
+      search_mode: direct
+      mfa_support: false
+
+  # A second application on purpose: the existing `thelounge` application still
+  # points at the proxy provider the gate uses, and switching it here would
+  # break the gate before the route stops asking for it. The slug appears in
+  # URLs nobody opens; the display name, icon and host do not change.
+  - model: authentik_core.application
+    id: thelounge-ldap-app
+    identifiers:
+      slug: thelounge-ldap
+    attrs:
+      name: The Lounge
+      slug: thelounge-ldap
+      provider: !KeyOf thelounge-ldap-provider
+      meta_launch_url: https://thelounge.kub.home.ashudev.com/
+      meta_icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/thelounge.svg
+      policy_engine_mode: any
+
+  # Admins only, the same access the gate has today. Opening it to a non-admin
+  # tier is a second binding, not a chart change.
+  - model: authentik_policies.policybinding
+    identifiers:
+      target: !KeyOf thelounge-ldap-app
+      order: 0
+    attrs:
+      group: !Find [authentik_core.group, [name, authentik Admins]]
+
+  # Creating an outpost generates its service account and token; the token is
+  # what the pod in Task 2 authenticates with. It must NOT go into
+  # outpost-embedded.yaml: that list is the embedded proxy outpost's.
+  - model: authentik_outposts.outpost
+    identifiers:
+      name: ashulab-ldap
+    attrs:
+      name: ashulab-ldap
+      type: ldap
+      providers:
+        - !Find [authentik_providers_ldap.ldapprovider, [name, thelounge-ldap]]
+      config:
+        refresh_interval: minutes=5
+        log_level: info
