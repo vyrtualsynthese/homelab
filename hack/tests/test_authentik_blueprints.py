@@ -16,8 +16,6 @@ This test reads the blueprints in git, so it needs no cluster.
 import re
 from pathlib import Path
 
-import pytest
-
 FILES = Path(__file__).resolve().parents[2] / "cluster" / "helm" / "authentik" / "files"
 OUTPOST = FILES / "outpost-embedded.yaml"
 
@@ -91,18 +89,13 @@ def test_outpost_only_metaapplies_existing_blueprints():
     assert missing == [], f"outpost-embedded.yaml metaapplies blueprints that do not exist: {missing}"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="app-vikunja.yaml still declares the retired forward-auth provider; card #352 owns the cleanup",
-)
 def test_every_declared_proxy_provider_is_on_the_outpost():
     """A provider that exists but is not listed is created and ignored: its host answers 404.
 
-    Known drift, so expected to fail today: `app-vikunja.yaml` still declares the
-    forward-auth provider that was retired when Vikunja moved to OIDC on 2026-11-16,
-    and the outpost no longer lists it. The dead entry is a landmine rather than a
-    live fault — the provider itself is gone — but the next apply of that blueprint
-    would recreate it and point the Vikunja application at it. Card #352 owns it.
+    This one carried a strict xfail until 2026-11-20: `app-vikunja.yaml` still
+    declared the forward-auth provider retired when Vikunja moved to OIDC, and the
+    outpost no longer lists it. Card #352 replaced that entry with the OAuth2
+    provider the board actually uses, so the drift is gone and the assertion holds.
     """
     unlisted = sorted(proxy_providers() - set(outpost_proxy_refs()))
     assert unlisted == [], (
