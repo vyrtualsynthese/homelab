@@ -60,6 +60,14 @@ All notable changes to this repository. The format follows
 
 ### Fixed
 
+- `local-path` and `postgres` report `Synced` again, and for a reason rather than a forced sync.
+  `local-path`'s upstream chart renders `spec.template.spec.hostUsers: true`, which this API server
+  (1.30, user namespaces off) drops from the stored object whether it is true or false, so the
+  Deployment could never match; the Application ignores that one field. `postgres`'s bootstrap Job
+  gained the image tag in its content-addressed name, because a Job's pod template cannot be updated
+  in place and the image had drifted since the Job ran; the four labels the Job controller adds to
+  that template are now ignored, since they are not in git and cannot be removed.
+
 - `ashudev.com` serves `/name` as `name.html`, the way GitHub Pages did: the site links to
   extensionless paths from outside, and they would have answered 404 on the first day of the move.
 - The `ashudev-website` sidecar reports which git command failed. A failed fetch leaves the previous
