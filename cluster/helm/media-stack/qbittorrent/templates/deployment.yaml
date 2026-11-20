@@ -162,32 +162,55 @@ spec:
               # ever after an install, so an operator who turned the alternative UI
               # off in the WebUI keeps it off. The app rewrites this file from memory
               # on exit, which is why it is written here and not while it runs.
+              #
+              # Ownership matters as much as the content: the app runs as
+              # PUID/PGID and has to be able to save its own settings. An existing
+              # file is rewritten through its own inode, so a root-run container
+              # never turns it into a file the app cannot write. A file this
+              # container creates is removed if it cannot be handed over -- no
+              # config at all is recoverable, an unwritable one is not.
               set_pref() {
                 conf=/config/qBittorrent/qBittorrent.conf
                 if [ ! -f "$conf" ]; then
-                  mkdir -p /config/qBittorrent || return 1
-                  chown "$PUID:$PGID" /config/qBittorrent || true
+                  made_dir=0
+                  if [ ! -d /config/qBittorrent ]; then
+                    mkdir -p /config/qBittorrent || return 1
+                    made_dir=1
+                  fi
                   printf '[Preferences]\nWebUI\\AlternativeUIEnabled=true\n' > "$conf" || return 1
-                else
-                  awk '
-                    BEGIN { line = "WebUI\\AlternativeUIEnabled=true"; key = "WebUI\\AlternativeUIEnabled=" }
-                    /^\[/ {
-                      if (inprefs && !done) { print line; done = 1 }
-                      inprefs = ($0 == "[Preferences]")
-                      print
-                      next
-                    }
-                    index($0, key) == 1 { print line; done = 1; next }
-                    { print }
-                    END {
-                      if (!done) {
-                        if (!inprefs) print "[Preferences]"
-                        print line
-                      }
-                    }
-                  ' "$conf" > "$conf.next" && mv "$conf.next" "$conf" || { rm -f "$conf.next"; return 1; }
+                  if chown "$PUID:$PGID" "$conf" \
+                    && { [ "$made_dir" = 0 ] || chown "$PUID:$PGID" /config/qBittorrent; }; then
+                    return 0
+                  fi
+                  rm -f "$conf"
+                  [ "$made_dir" = 0 ] || rmdir /config/qBittorrent 2>/dev/null
+                  return 1
                 fi
-                chown "$PUID:$PGID" "$conf"
+                new="$conf.new"
+                awk '
+                  BEGIN { line = "WebUI\\AlternativeUIEnabled=true"; key = "WebUI\\AlternativeUIEnabled=" }
+                  /^\[/ {
+                    if (inprefs && !done) { print line; done = 1 }
+                    inprefs = ($0 == "[Preferences]")
+                    print
+                    next
+                  }
+                  index($0, key) == 1 { print line; done = 1; next }
+                  { print }
+                  END {
+                    if (!done) {
+                      if (!inprefs) print "[Preferences]"
+                      print line
+                    }
+                  }
+                ' "$conf" > "$new" || { rm -f "$new"; return 1; }
+                if ! cat "$new" > "$conf"; then
+                  rm -f "$new"
+                  return 1
+                fi
+                rm -f "$new"
+                chown "$PUID:$PGID" "$conf" 2>/dev/null || true
+                return 0
               }
               echo "installing VueTorrent $want from $url"
               # Bounded, both of them: an address that drops packets would otherwise
@@ -222,9 +245,16 @@ spec:
                 give_up "cannot move the staged UI into place; the previous UI is back"
               fi
               rm -rf /config/ui.prev
-              cp "$tmp/vuetorrent.zip" "$cache" 2>/dev/null \
-                && chown "$PUID:$PGID" "$cache" 2>/dev/null \
-                || echo "WARNING: cannot cache the archive at $cache; the next install will need the network"
+              if cp "$tmp/vuetorrent.zip" "$cache" 2>/dev/null; then
+                # One archive, not one per version: an upgrade would otherwise leave
+                # 6 MB behind on the claim every time.
+                for old in /config/vuetorrent-*.zip; do
+                  [ "$old" = "$cache" ] || rm -f "$old" 2>/dev/null || true
+                done
+                chown "$PUID:$PGID" "$cache" 2>/dev/null || true
+              else
+                echo "WARNING: cannot cache the archive at $cache; the next install will need the network"
+              fi
               rm -rf "$tmp"
               set_pref || echo "WARNING: cannot set WebUI\\AlternativeUIEnabled=true; the WebUI may stay on the stock UI"
               echo "VueTorrent $want installed"
