@@ -7,7 +7,7 @@
 > ever been rehearsed · **Verified** 2026-11-20 · **Kind:** living page
 
 A runbook exists only after it has been performed at least once; a procedure nobody has run is a
-guess with a title. This page lists only files that exist. Nine are procedures — four of them
+guess with a title. This page lists only files that exist. Ten are procedures — five of them
 pending their first run — and five are completed records, kept because each is the only write-up of
 something that happened once; their status says so.
 
@@ -20,6 +20,7 @@ something that happened once; their status says so.
 | [`argocd.md`](argocd.md) | pending — the rebuild has not been run | the controller is down, or Argo CD must be rebuilt from nothing since it became self-managed on 2026-11-19. |
 | [`postgres-add-database.md`](postgres-add-database.md) | proved 2026-11-13 (acceptance database) | an application is rebuilt and needs its own role, database and Secrets. |
 | [`postgres-restore.md`](postgres-restore.md) | pending — the dumps were verified 2026-11-13, the restore itself has not been run | a database is lost, or the drill that proves the dumps restore is due. |
+| [`restore.md`](restore.md) | pending — no restore has been recorded; the bucket's layout is checked against the cluster | a file, a claim, a database or the cluster state has to come back out of the OVH bucket, or the monthly restore drill is due. |
 | [`alert-relay.md`](alert-relay.md) | pending — one synthetic alert through Grafana is its proof | Grafana alerts must reach the board, or the relay needs rebuilding. |
 | [`renovate.md`](renovate.md) | proved 2026-11-19 | Renovate stopped opening pull requests, its token has to be rotated, or the nightly slot has to move. |
 | [`gpu-operator.md`](gpu-operator.md) | pending — the chart is in git; the host driver step has not been run since | the GPU disappears from a pod, Plex stops transcoding, the DCGM GPU panels go empty, or someone asks about `nvidia.com/gpu-driver-upgrade-state`. |
@@ -38,7 +39,6 @@ No file exists for these, so there is no procedure to follow — do not run one 
   down.
 - `traefik-cutover.md` — W5 (Platform) Task 5.
 - `k3s-upgrade.md` — W5 (Platform) Task 13.
-- `restore.md` — W4 (Offsite). The offsite restore drill.
 - `add-a-node.md` — W8 (Ansible and docs).
 - `rotate-a-secret.md` — W8 (Ansible and docs). No longer a gap: the procedure lives at
   `docs/running-it/rotate-a-secret.md`, which is the page the Running it tab lists.

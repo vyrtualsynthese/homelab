@@ -104,6 +104,7 @@ nav:
       - The internal CA: runbooks/internal-ca.md
       - Add a database: runbooks/postgres-add-database.md
       - Restore a database: runbooks/postgres-restore.md
+      - Restore from a backup: runbooks/restore.md
       - The alert relay: runbooks/alert-relay.md
       - Renovate: runbooks/renovate.md
       - The GPU stack: runbooks/gpu-operator.md
