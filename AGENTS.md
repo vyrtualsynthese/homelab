@@ -132,6 +132,13 @@ time. Examples:
   Shared media/data volumes use one of the eight NFS classes, each a release of
   `cluster/helm/nfs/provisioner` with its own values file. There is no
   replicated volume class: Longhorn was abandoned after the 2026 disk failure and is not coming back.
+- **Backups: `cluster/helm/backup/values.yaml` is the coverage matrix.** One OVH bucket in `GRA`, four
+  restic repositories (`nodes-nas`, `nodes-nuc0`, `nodes-streaming`, `nfs`), six CronJobs. Adding or
+  removing a stateful application means adding or removing its row in the same change, with the
+  measured size beside it; a row that resolves to nothing fails that node's job on purpose. No job
+  runs `restic init` — the four repositories are created once by hand. `backup-verify` runs nightly
+  and is what proves a stream is still advancing; `BackupStreamStale` alerts when one stops. The page
+  is `docs/how-it-works/backups.md`, the procedure `docs/runbooks/restore.md`.
 - LinuxServer images: `TZ=Europe/Paris`, `PUID=1100`, `PGID=1100`.
 - Placement: `nodeSelector: kubernetes.io/hostname: <node>` — every workload is pinned to a named node,
   and its `local-path` volume lands on that same node. `streaming` for GPU and media work
@@ -208,10 +215,12 @@ are in `docs/superpowers/plans/`.
    Application to match git, which silently switches automation off until the operator re-enables it
    in the UI. None of the 55 carries it (§8.4 of the design).
 2. `cluster/infrastructure/**` is outside GitOps (§2).
-3. **Backups do not work.** The only offsite target is an AWS S3 bucket. The k3s script dumps a
-   SQLite file on an etcd cluster; the NAS script backs up a MinIO path deleted in July 2024; and the
-   k3s and NAS hosts have had a daily cron since 2024 pointing at a script that was never deployed
-   to them. See `docs/audit/ansible-hosts.md`.
+3. **Backups run, and their restore is not yet drilled.** One OVH bucket in `GRA`, four restic
+   repositories (`nodes-nas`, `nodes-nuc0`, `nodes-streaming`, `nfs`), six CronJobs in
+   `cluster/helm/backup`, nightly. `docs/how-it-works/backups.md` is the page; the drill log in
+   `docs/runbooks/restore.md` is empty, so a copy is written nightly but no restore has been proved.
+   The old paths remain broken and are not used: the k3s script dumps a SQLite file on an etcd cluster,
+   the NAS script backs up a MinIO path deleted in July 2024. See `docs/audit/ansible-hosts.md`.
 4. **Longhorn is gone, and its dead are buried (resolved 2026-11-19).** The driver, its
    StorageClasses, its custom resources, the `longhorn-system` namespace, all twenty-six volumes and
    all six claims are gone, and every application that was on it runs on `local-path` or one of the

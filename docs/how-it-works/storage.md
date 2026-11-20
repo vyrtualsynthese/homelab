@@ -1,7 +1,8 @@
 # Where the data lives
 
 > **In one line.** Each application's configuration sits on one machine's own disk, the media library
-> sits on `nas` over NFS, and neither has a second copy or a working backup.
+> sits on `nas` over NFS, and the configuration leaves the machine nightly while the media library does
+> not.
 >
 > **Use it when** you are adding a claim, a pod will not start because of one, or you want to know what
 > a backup would save · **Verified** 2026-11-20 · **Kind:** living page
@@ -127,15 +128,17 @@ scaling back. The NFS directory is untouched throughout; a restart under load is
 
 ## Backups
 
-Plainly: no backup of this cluster works. The audit's
-[backup table](../audit/observability-storage.md#3-backups) is the evidence: the K3s script dumps a
-SQLite file this etcd cluster lacks; the NAS script writes to a MinIO path deleted in July 2024
-([ansible audit](../audit/ansible-hosts.md)); host restic covers only the two edge Pis, to S3;
-PostgreSQL's `pg_dumpall` writes into a dead Longhorn claim; Syncthing's restic job covers its
-configuration alone.
+Every stateful claim a row names is copied to one OVH bucket nightly, encrypted and deduplicated,
+with the PostgreSQL dumps and their roles, four host `/etc` directories and the books library:
+[Backups](backups.md) is the list and the schedule. What that page does not claim is a proved
+restore — neither has been drilled.
 
-The one thing with two copies is the internal CA's root key: a password-manager note and an offline
-USB stick, both hand-made, while the automated offsite path is broken too
-([runbooks/internal-ca.md](../runbooks/internal-ca.md)). W4, the offsite backup workstream, owns the
-fix; until it lands, treat a lost disk as lost data. Which claim belongs to which app:
-[applications.md](applications.md).
+The media library, the music and the stash library are **not** backed up: one copy on `nas`, by
+decision, and a fire ends them. The old paths — the K3s script that dumps a SQLite file this etcd
+cluster lacks, the NAS script writing to a MinIO path deleted in July 2024, PostgreSQL's `pg_dumpall`
+into a dead Longhorn claim, Syncthing's restic job that never succeeded — are recorded in the
+[audit](../audit/observability-storage.md#3-backups) and are not what runs now.
+
+The one thing with two copies by hand is the internal CA's root key: a password-manager note and an
+offline USB stick ([runbooks/internal-ca.md](../runbooks/internal-ca.md)). Which claim belongs to
+which app: [applications.md](applications.md).

@@ -203,10 +203,10 @@ Checked against the cluster, or explicitly marked as not visible to it:
   **firing** for it: `smartprom_percent_lifetime_remain` reads 0, where the only other two drives
   that report the number read 92 and 85. This is the single largest risk to the "working" column
   above.
-- **Backups.** The in-cluster dumps run: `postgres-dump` last ran 21 hours before the read and
-  `syncthing-backup` 19 hours. The offsite copy is a host-side script and is not visible to this
-  read; [`audit/ansible-hosts.md`](audit/ansible-hosts.md) still records it as broken, and nothing
-  seen here contradicts that.
+- **Backups.** The dumps and the offsite copies are one system now: `postgres-dump` writes the
+  dump, and the `backup` namespace's six CronJobs ship it, the claims, the NFS exports and the etcd
+  copies to one OVH bucket nightly. The old host-side paths in
+  [`audit/ansible-hosts.md`](audit/ansible-hosts.md) are retired. What is not proved is a restore.
 - **Empty namespaces.** Eight hold no pod at all: `inventree`, `inventree-lego`, `minio`,
   `nextcloud`, `orbital-sync`, `postfix`, `synapse`, `test`. They cost nothing, and they are
   leftovers.
@@ -238,6 +238,9 @@ and [`decisions/2026-11-19-retire-discourse.md`](decisions/2026-11-19-retire-dis
 - Pods fell from 149 to 120 at the read, and claims from 50 to 47.
 - The docs builder, which failed three runs on 2026-11-17, has run cleanly since: its runs complete
   and the CronJob fires every minute.
+- Backups became a cluster workload: six CronJobs in the `backup` namespace, four restic repositories
+  in one OVH bucket, a nightly verifier and a `BackupStreamStale` rule. No restore has been drilled,
+  which the drill log in [`runbooks/restore.md`](runbooks/restore.md) records by being empty.
 
 ## Related
 
