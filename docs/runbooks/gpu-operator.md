@@ -42,11 +42,12 @@ has no field for adding the `prometheus.io/scrape` annotation to it.
 On 2026-11-20 `streaming` runs driver `580.178.04` with CUDA runtime `13.0`, on Ubuntu 22.04 with
 the HWE kernel `6.8.0-149`. It was installed by hand and nothing in this repository reinstalls it.
 
-The card is a Quadro P400: Pascal generation, compute 6.1, 2 GiB, graphics mode, no MIG and no MPS
-(MIG and MPS are the two ways of splitting one GPU between several processes; neither is supported
-here). Pascal support is what keeps the driver on an older branch, and the host kernel moves with
-`unattended-upgrades`, so a containerised driver would have to be rebuilt against the kernel on
-every bump. Installing on the host, from the distribution's own packages, survives that.
+The card is a Quadro P400: Pascal generation, compute 6.1, 2 GiB, graphics mode. It is not MIG
+capable — MIG is how a data-centre card is split into isolated slices — and MPS, the software
+alternative for sharing one card between processes, is not used here. Pascal support is what keeps
+the driver on an older branch, and the host kernel moves with `unattended-upgrades`, so a
+containerised driver would have to be rebuilt against the kernel on every bump. Installing on the
+host, from the distribution's own packages, survives that.
 
 A rebuild therefore needs, on `streaming`, in this order:
 
@@ -54,9 +55,9 @@ A rebuild therefore needs, on `streaming`, in this order:
    Kubernetes;
 2. the chart synced, which registers the `nvidia` runtime class and starts the toolkit, device
    plugin, GPU feature discovery and DCGM;
-3. nothing else — the operator does not need a node label to know the driver is host-managed once
-   `driver.enabled` is false. The `nvidia.com/gpu.deploy.driver=pre-installed` label left over from
-   the hand install is vestigial.
+3. nothing else. The `nvidia.com/gpu.deploy.*` node labels are written by the operator from the
+   chart's values, so with `driver.enabled: false` it labels the driver as externally provided by
+   itself; nothing about the split depends on a hand-set label.
 
 ## Checking the GPU
 
@@ -107,6 +108,5 @@ quiet days does.
 
 ## Related
 
-- `hack/` holds no GPU check; the exposure checker is unrelated but must still pass on a GPU change.
 - The Ansible playbook still does not install the driver — see the open item in
   [`audit/ansible-hosts.md`](../audit/ansible-hosts.md).
