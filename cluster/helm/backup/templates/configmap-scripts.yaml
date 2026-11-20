@@ -15,6 +15,9 @@ data:
   # One restic run per NFS export.
   backup-nfs.sh: |
 {{ .Files.Get "files/backup-nfs.sh" | indent 4 }}
+  # The verifier: reads every repository and says whether it is still advancing.
+  verify.py: |
+{{ .Files.Get "files/verify.py" | indent 4 }}
   # Weekly forget + prune, rendered here so the retention numbers come from values.yaml and
   # exist in one place only.
   prune.sh: |

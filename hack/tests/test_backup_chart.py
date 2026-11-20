@@ -172,5 +172,23 @@ class PruneTests(unittest.TestCase):
         self.assertEqual(script.count("restic -r"), len(values()["streams"]))
 
 
+class VerifyTests(unittest.TestCase):
+    def test_runs_after_every_backup_and_carries_its_label(self):
+        job = next(c for c in crons() if c["metadata"]["name"] == "backup-verify")
+        self.assertEqual(job["spec"]["schedule"], "30 8 * * *")
+        self.assertEqual(job["metadata"]["labels"]["homelab.io/backup-stream"], "verify")
+
+    def test_every_repository_is_checked(self):
+        cms = {d["metadata"]["name"]: d["data"] for d in render() if d["kind"] == "ConfigMap"}
+        streams = json.loads(cms["backup-streams"]["streams.json"])
+        self.assertEqual({s["name"] for s in streams}, {"nodes-nas", "nodes-nuc0", "nodes-streaming", "nfs"})
+        self.assertEqual({s["etcd"] for s in streams if s["name"] == "nodes-streaming"}, {True})
+        self.assertEqual({s["etcd"] for s in streams if s["name"] == "nodes-nas"}, {False})
+
+    def test_the_verifier_cannot_initialise_a_repository(self):
+        self.assertNotIn("restic init", scripts()["verify.py"])
+        self.assertNotIn("forget", scripts()["verify.py"])
+
+
 if __name__ == "__main__":
     unittest.main()
