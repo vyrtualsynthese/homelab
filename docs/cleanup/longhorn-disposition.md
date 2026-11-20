@@ -58,41 +58,42 @@ the resolution now, so the two documents agree.
 
 ### The twenty-six volumes
 
-Every one carries `external-attacher/driver-longhorn-io`. The six `Bound` ones also carry
-`kubernetes.io/pv-protection` until their claim is gone, and `pvc-e705d2ea-…` adds
+Every one carried `external-attacher/driver-longhorn-io`. The six `Bound` ones also carried
+`kubernetes.io/pv-protection` until their claim was gone, and `pvc-e705d2ea-…` added
 `external-provisioner.volume.kubernetes.io/finalizer`.
 
-| PV | Claim | Size | Phase |
-|---|---|---|---|
-| `bazarr-anime-config` | `media-stack/bazarr-anime-config` | 2Gi | Released |
-| `bazarr-config` | `media-stack/bazarr-config` | 2Gi | Released |
-| `cross-seed` | `media-stack/cross-seed` | 5Gi | Released |
-| `cross-seed-config` | `media-stack/cross-seed-config` | 1Gi | Released |
-| `discourse2` | `discourse/discourse2` | 20Gi | Released |
-| `filebrowser-config` | `media-stack/filebrowser-config` | 1Gi | Bound |
-| `filebrowser-db-2` | `media-stack/filebrowser-db-2` | 1Gi | Bound |
-| `freshrss-volume` | `news/freshrss-volume` | 1Gi | Released |
-| `grafana-2` | `monitoring/grafana-2` | 1Gi | Released |
-| `kavita-config2` | `media-stack/kavita-config2` | 5Gi | Released |
-| `koillection-conf` | `koillection/koillection-conf` | 1Gi | Released |
-| `koillection-uploads` | `koillection/koillection-uploads` | 20Gi | Released |
-| `n8n-2` | `n8n/n8n-2` | 1Gi | Bound |
-| `overseerr-config` | `media-stack/overseerr-config` | 20Gi | Released |
-| `prometheus-data` | `monitoring/prometheus-data` | 150Gi | Bound |
-| `prowlarr-config` | `media-stack/prowlarr-config` | 50Gi | Released |
-| `pvc-e705d2ea-c817-44b5-888a-985bed767c8c` | `discourse/redis-data-discourse-redis-master-0` | 8Gi | Released |
-| `qbittorrent-vpn-config` | `media-stack/qbittorrent-vpn-config` | 1Gi | Released |
-| `radarr-anime-config` | `media-stack/radarr-anime-config` | 20Gi | Released |
-| `radarr-config2` | `media-stack/radarr-config2` | 50Gi | Released |
-| `readarr-config` | `media-stack/readarr-config` | 20Gi | Released |
-| `sonarr-anime-config` | `media-stack/sonarr-anime-config` | 20Gi | Released |
-| `sonarr-config` | `media-stack/sonarr-config` | 20Gi | Released |
-| `syncthing-conf` | `syncthing/syncthing-conf` | 1Gi | Bound |
-| `tautulli-config2` | `media-stack/tautulli-config2` | 50Gi | Released |
-| `thelounge-volume` | `thelounge/thelounge-volume` | 20Gi | Bound |
+| PV | Claim | Size | Phase at the snapshot | Cleared |
+|---|---|---|---|---|
+| `bazarr-anime-config` | `media-stack/bazarr-anime-config` | 2Gi | Released | 2026-11-18 |
+| `bazarr-config` | `media-stack/bazarr-config` | 2Gi | Released | 2026-11-18 |
+| `cross-seed` | `media-stack/cross-seed` | 5Gi | Released | 2026-11-18 |
+| `cross-seed-config` | `media-stack/cross-seed-config` | 1Gi | Released | 2026-11-18 |
+| `discourse2` | `discourse/discourse2` | 20Gi | Released | 2026-11-18 |
+| `filebrowser-config` | `media-stack/filebrowser-config` | 1Gi | Bound | 2026-11-18 |
+| `filebrowser-db-2` | `media-stack/filebrowser-db-2` | 1Gi | Bound | 2026-11-18 |
+| `freshrss-volume` | `news/freshrss-volume` | 1Gi | Released | 2026-11-18 |
+| `grafana-2` | `monitoring/grafana-2` | 1Gi | Released | 2026-11-18 |
+| `kavita-config2` | `media-stack/kavita-config2` | 5Gi | Released | 2026-11-18 |
+| `koillection-conf` | `koillection/koillection-conf` | 1Gi | Released | 2026-11-18 |
+| `koillection-uploads` | `koillection/koillection-uploads` | 20Gi | Released | 2026-11-18 |
+| `n8n-2` | `n8n/n8n-2` | 1Gi | Bound | 2026-11-19 |
+| `overseerr-config` | `media-stack/overseerr-config` | 20Gi | Released | 2026-11-18 |
+| `prometheus-data` | `monitoring/prometheus-data` | 150Gi | Bound | 2026-11-18 |
+| `prowlarr-config` | `media-stack/prowlarr-config` | 50Gi | Released | 2026-11-18 |
+| `pvc-e705d2ea-c817-44b5-888a-985bed767c8c` | `discourse/redis-data-discourse-redis-master-0` | 8Gi | Released | 2026-11-18 |
+| `qbittorrent-vpn-config` | `media-stack/qbittorrent-vpn-config` | 1Gi | Released | 2026-11-18 |
+| `radarr-anime-config` | `media-stack/radarr-anime-config` | 20Gi | Released | 2026-11-18 |
+| `radarr-config2` | `media-stack/radarr-config2` | 50Gi | Released | 2026-11-18 |
+| `readarr-config` | `media-stack/readarr-config` | 20Gi | Released | 2026-11-18 |
+| `sonarr-anime-config` | `media-stack/sonarr-anime-config` | 20Gi | Released | 2026-11-18 |
+| `sonarr-config` | `media-stack/sonarr-config` | 20Gi | Released | 2026-11-18 |
+| `syncthing-conf` | `syncthing/syncthing-conf` | 1Gi | Bound | 2026-11-19 |
+| `tautulli-config2` | `media-stack/tautulli-config2` | 50Gi | Released | 2026-11-18 |
+| `thelounge-volume` | `thelounge/thelounge-volume` | 20Gi | Bound | 2026-11-19 |
 
-A `Released` volume has no claim left: nothing references it, and clearing it changes nothing at
-runtime.
+A `Released` volume had no claim left, so clearing it changed nothing at runtime; a `Bound` one
+held its claim until the application moved to `local-path`. Every row is cleared now, and the
+`Cleared` column is the answer to "is this still here" without listing PersistentVolumes first.
 
 ## Where the ten affected applications stand
 
