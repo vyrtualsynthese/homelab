@@ -1,0 +1,20 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: atlantis
+  namespace: argocd
+spec:
+  destination:
+    namespace: atlantis
+    server: https://kubernetes.default.svc
+  project: default
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=true
+  source:
+    repoURL: 'https://github.com/vyrtualsynthese/homelab.git'
+    targetRevision: develop
+    path: cluster/helm/atlantis
+    helm:
+      valueFiles:
+        - values.yaml

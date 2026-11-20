@@ -1,0 +1,110 @@
+# Atlantis comments a `tofu plan` on every pull request that touches a stack of
+# `infra-main`, and never applies anything: the server refuses `apply` outright.
+# A merge to `develop` is what approves a change, and the `tofu` workflow in
+# `infra-main` applies the plan it prints there.
+#
+# The repository it plans and the routes it answers on are described in the
+# chart README.
+
+atlantis:
+  image:
+    # Pinned: Renovate bumps this. OpenTofu is downloaded separately, at the
+    # version below, so the image and the tool move independently.
+    tag: "v0.49.0"
+
+  # The only repository this server will plan. A pull request from a fork is
+  # refused before this list is read; the list is what makes a webhook from any
+  # other repository useless.
+  orgAllowlist: github.com/vyrtualsynthese/infra-main
+
+  # Two independent refusals, on purpose: `disableApply` is the documented
+  # switch, and the allowlist also leaves `apply` out. `unlock` is left out too,
+  # because a comment that drops the state lock while an apply is running is the
+  # one thing the plan/apply split depends on not happening.
+  disableApply: true
+  environment:
+    ATLANTIS_ALLOW_COMMANDS: version,plan
+    ATLANTIS_LOG_LEVEL: info
+
+  # `infra-main` pins OpenTofu in `.opentofu-version`; these two values are the
+  # other half of that pin and have to be bumped with it. Atlantis downloads the
+  # binary on the first plan, so the pod needs egress to the OpenTofu release
+  # host, and the plan volume keeps it between runs.
+  defaultTFVersion: 1.13.9
+  defaultTFDistribution: opentofu
+
+  # Links in the comments open the UI, which only answers on the LAN.
+  atlantisUrl: https://atlantis.kub.local
+
+  service:
+    type: ClusterIP
+    port: 80
+
+  # The chart's own Ingress is off: the routes are Traefik CRDs in templates/.
+  ingress:
+    enabled: false
+
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 1Gi
+
+  # Pinned like every other workload here. `nuc0` is where the cluster's own
+  # controllers run (argocd included), and Atlantis is one of them.
+  nodeSelector:
+    kubernetes.io/hostname: nuc0
+
+  # Checked-out repositories, plan files and the downloaded OpenTofu builds.
+  volumeClaim:
+    dataStorage: 10Gi
+
+  # One Secret, made by hand (`kubectl create secret generic atlantis-env -n
+  # atlantis`), holding both credential sets and the GitHub token. Its keys are
+  # listed in the chart README; nothing here is versioned.
+  environmentSecrets:
+    - name: OVH_ENDPOINT
+      secretKeyRef: { name: atlantis-env, key: OVH_ENDPOINT }
+    - name: OVH_APPLICATION_KEY
+      secretKeyRef: { name: atlantis-env, key: OVH_APPLICATION_KEY }
+    - name: OVH_APPLICATION_SECRET
+      secretKeyRef: { name: atlantis-env, key: OVH_APPLICATION_SECRET }
+    - name: OVH_CONSUMER_KEY
+      secretKeyRef: { name: atlantis-env, key: OVH_CONSUMER_KEY }
+    # The state backend is OVH Object Storage spoken to over the S3 API, so its
+    # pair travels in the variables the backend reads.
+    - name: AWS_ACCESS_KEY_ID
+      secretKeyRef: { name: atlantis-env, key: AWS_ACCESS_KEY_ID }
+    - name: AWS_SECRET_ACCESS_KEY
+      secretKeyRef: { name: atlantis-env, key: AWS_SECRET_ACCESS_KEY }
+    - name: AWS_DEFAULT_REGION
+      secretKeyRef: { name: atlantis-env, key: AWS_DEFAULT_REGION, optional: true }
+    - name: ATLANTIS_GH_TOKEN
+      secretKeyRef: { name: atlantis-env, key: ATLANTIS_GH_TOKEN }
+    - name: ATLANTIS_GH_WEBHOOK_SECRET
+      secretKeyRef: { name: atlantis-env, key: ATLANTIS_GH_WEBHOOK_SECRET }
+    # The `github` provider manages branch protection, which a workflow token
+    # cannot do, so the stacks read it from TF_VAR_GIT_TOKEN.
+    - name: TF_VAR_GIT_TOKEN
+      secretKeyRef: { name: atlantis-env, key: ATLANTIS_GH_TOKEN }
+
+ingressRoute:
+  apiVersion: traefik.containo.us/v1alpha1
+  # The UI: LAN only. Atlantis has no sign-in of its own beyond basic auth, and
+  # the network floor is the boundary the other internal UIs use.
+  host: atlantis.kub.local
+  # GitHub posts here. It cannot sign in, so this route carries no middleware —
+  # and it is restricted to /events, so the UI is not reachable through it.
+  webhookHost: atlantis.kub.home.ashudev.com
+  webhookPath: /events
+  service: atlantis
+  port: 80
+  tls:
+    # The internal certificate for the LAN host.
+    options: internal-tls
+    optionsNamespace: kube-system
+  # Let's Encrypt for the public host: GitHub validates the certificate, and it
+  # does not trust the cluster's internal CA.
+  certResolver: myresolver
+  redirectToHttps: true

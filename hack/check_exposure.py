@@ -25,6 +25,10 @@ PUBLIC_HOSTS = frozenset(
         # FileBrowser: the app signs in through authentik, and the normal share
         # links it mints are opened by people with no account.
         "filebrowser.kub.home.ashudev.com",
+        # Atlantis' webhook: GitHub posts plan triggers here and cannot complete
+        # a sign-in redirect. Only /events is routed on this host; the UI lives
+        # on atlantis.kub.local behind the LAN gate.
+        "atlantis.kub.home.ashudev.com",
     }
 )
 
