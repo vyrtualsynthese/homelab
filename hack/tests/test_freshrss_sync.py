@@ -45,8 +45,9 @@ def serve(page=ARTICLE, fail=()):
             match = re.search(r"@href,\s*'([^']*)'", item)
             if not match:
                 return 200, page
-            return 200, (f'<html><body><a href="{match.group(1)}article-1">newest</a>'
-                         '</body></html>')
+            return 200, (f'<html><body><div class="__article-info">'
+                         f'<a href="{match.group(1)}article-1">newest</a>'
+                         '</div></body></html>')
         return 200, RSS
     return transport
 
@@ -626,6 +627,45 @@ class CliTests(unittest.TestCase):
         listing = ('<div><ul><li><a href="/news/newest">a</a></li></ul></div>'
                    '<a href="/news/older">b</a>')
         self.assertEqual(mod._linked_article(listing, feed), "https://a.test/news/newest")
+
+    def test_the_linked_article_honours_a_container_and_an_exclusion(self):
+        """The Elite Dangerous shape: only links inside the card block, and never the patch notes."""
+        feed = mod.Feed(category="Jeux", title="Elite Dangerous",
+                        url="https://www.elitedangerous.com/news", kind="xpath", settings=(
+                            ("xPathItem",
+                             "//*[contains(@class,'__article-info')]"
+                             "//a[starts-with(@href,'/news/')"
+                             " and not(contains(@href,'/news/updates/'))]"),
+                            ("xPathItemUri", "@href")))
+        listing = ('<a href="/news/ticker">ticker</a>'
+                   '<div class="news-card__article-info">'
+                   '<a href="/news/updates/patch">patch note</a>'
+                   '<a href="/news/thargoids">Thargoids</a>'
+                   '</div>'
+                   '<a href="/news/read-more">read more</a>')
+        self.assertEqual(mod._linked_article(listing, feed),
+                         "https://www.elitedangerous.com/news/thargoids")
+
+    def test_verify_reads_the_shipped_elite_dangerous_expression(self):
+        feed = next(f for f in mod.parse_opml(OPML_PATH.read_text())
+                    if f.title == "Elite Dangerous")
+        listing = ('<div class="__article-info"><a href="/news/thargoids">Thargoids</a></div>')
+
+        def transport(method, url, headers=None, data=None):
+            return (200, listing) if url == feed.url else (200, ARTICLE)
+        rows = mod.verify([feed], transport)
+        self.assertEqual(rows, [("OK", "Elite Dangerous", 0, "",
+                                 "sel main 23 chars", False)])
+
+    def test_an_item_expression_richer_than_container_and_exclusion_is_still_refused(self):
+        """Anthropic tests an attribute on the container, which this reader does not do."""
+        feed = mod.Feed(category="IA", title="Anthropic / Claude",
+                        url="https://www.anthropic.com/news", kind="xpath", settings=(
+                            ("xPathItem",
+                             "//li[@data-listing-row]//a[contains(@class,'_title-link')]"),
+                            ("xPathItemUri", "@href")))
+        listing = '<li data-listing-row><a class="_title-link" href="/news/real">t</a></li>'
+        self.assertEqual(mod._linked_article(listing, feed), "")
 
     def test_verify_says_an_xpath_selector_was_not_checked_when_no_item_links(self):
         feed = mod.Feed(category="Jeux", title="Elite Dangerous", url="https://a.test/news",

@@ -50,7 +50,9 @@ picks nothing out of the newest article.
 
 A feed whose items come from an XPath expression is printed `OK` with no item count: its raw URL is
 a page, not a feed. When such a feed carries a full-content selector, `verify` follows the first link
-its item expression picks and reads that page.
+its item expression picks and reads that page. An item expression is read when it tests `@href` with
+`contains` or `starts-with`, optionally narrowed to a container class and to links that must not
+carry a fragment; any other expression prints `sel … unchecked` rather than being guessed at.
 
 `FRESHRSS_BASE` overrides the instance URL, which is how a scratch instance gets tested.
 
@@ -204,14 +206,18 @@ looks like an article":
   one `<li data-listing-row>`, and its title link is the only `_title-link` inside it: 24 stories,
   all of them, once each.
 
-Neither expression is one of the two forms `verify` reads, so both lines end `sel … unchecked` and
-those two folders need a look after a redesign.
+`verify` reads Elite Dangerous' expression: a container class (`//*[contains(@class,'…')]//`) and
+an exclusion (`and not(contains(@href,'…'))`) are the two extensions it understands on top of the
+plain `contains`/`starts-with` test. Anthropic's expression tests an attribute on the `<li>` instead,
+which it does not, so that line still ends `sel … unchecked` and the folder needs a look after a
+redesign.
 
 These are the brittle part of the set: a redesign empties them quietly, and `check` cannot see that —
 the selector still matches the file. `verify` follows the first link the item expression picks and
 reads that page through the full-content selector, so a dead selector shows as `sel … empty (path)`.
-When the expression stops matching links, the same check prints `sel … unchecked` instead of
-failing, so the item list itself still needs a look in the web UI after a redesign.
+When the expression stops matching links, or is one this reader does not understand, the same check
+prints `sel … unchecked` instead of failing, so the item list itself still needs a look in the web UI
+after a redesign.
 
 ## Images and full articles
 
@@ -229,8 +235,10 @@ target one element — `.entry-content` means "the element carrying the `entry-c
 selector travels in the OPML as `frss:cssFullContent`, so a rebuilt instance gets it from the file.
 
 Eleven feeds carry a selector. The column is what `verify` printed on 2026-11-19, read from the
-newest article of each feed; Elite Dangerous and Anthropic are the exceptions, read by hand the same
-way, because `verify` cannot evaluate their item expressions (see "XPath selectors").
+newest article of each feed; Elite Dangerous and Anthropic were the exceptions, read by hand the same
+way, because `verify` could not evaluate their item expressions then (see "XPath selectors"). Since
+2026-11-20 `verify` reads Elite Dangerous' expression and prints `sel main 2348 chars`; Anthropic's
+line still says `sel article unchecked`.
 
 | Feed | Selector | Text taken from one article (characters) |
 |---|---|---|

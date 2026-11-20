@@ -40,3 +40,9 @@ All notable changes to this repository. The format follows
   an existing export instead of a dedicated one.
 - A `filebrowser-editors` capability group in the authentik blueprint, plus an OAuth2 provider
   (`filebrowser-oidc`) that replaces the forward-auth provider.
+
+### Fixed
+
+- `freshrss_sync.py verify` reads the Elite Dangerous item expression: it now honours a container
+  class (`//*[contains(@class,'…')]//`) and an exclusion (`and not(contains(@href,'…'))`), so the
+  feed is checked automatically instead of printing `sel main unchecked`.
