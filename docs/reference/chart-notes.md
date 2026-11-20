@@ -504,6 +504,18 @@ Debt: no log level. Syncthing has no verbosity variable (`STTRACE` only raises),
 `info` and the GUI is the other record. The nightly restic CronJob's 512Mi limit is unmeasured: a
 five-minute job leaves no working set in Prometheus.
 
+### filebrowser
+
+As of 2026-11-20: the chart owns its templates (pattern A) after the community chart it depended on
+was found to render no scheduling field at all. Every object name and the Deployment selector are the
+ones that chart rendered, because a Deployment selector is immutable and the config claim holds the
+database with the OIDC users and scopes. `nodeSelector` pins `nuc0`; the claim was provisioned there
+and `local-path` binds on first consumer, so any other node would leave it unschedulable. Liveness
+and readiness share `/health` — the only dependency is the local SQLite database, which fails with
+the process — and `server.logging` keeps `warning|error`. Uploads run as uid 1100 with primary gid
+1000; the primary group is the mergerfs requirement, not a preference. Debt: none recorded; the 1 Gi
+claims are the ones the previous chart created and a `local-path` claim cannot shrink.
+
 ## Charts still to align
 
 Only non-public apps with hand-maintained charts are in scope for now. Public-facing apps wait,
