@@ -733,16 +733,22 @@ class Page(HTMLParser):
         self.stack[-1].parts.append(data)
 
 
-def _walk(page: str) -> Iterator[Node]:
-    """Every element of a page, in document order: descend before moving sideways."""
+def _walk(page: str, container: str = "") -> Iterator[Node]:
+    """Every element of a page, in document order: descend before moving sideways.
+
+    With `container`, only what sits inside an element whose class attribute contains it, which is
+    what `//*[contains(@class,'…')]//` asks for.
+    """
     tree = Page()
     tree.feed(page)
     tree.close()
-    pending = [tree.root]
+    pending = [(tree.root, not container)]
     while pending:
-        node = pending.pop()
-        yield node
-        pending.extend(reversed(node.children))
+        node, inside = pending.pop()
+        if inside:
+            yield node
+        nested = bool(container) and container in node.attrs.get("class", "")
+        pending.extend((child, inside or nested) for child in reversed(node.children))
 
 
 SELECTOR = re.compile(r"^([A-Za-z][\w-]*)?((?:[.#][\w-]+)*)$")
@@ -832,25 +838,37 @@ def _article_url(root: ET.Element) -> str:
 
 
 XPATH_LINK = re.compile(
-    r"^//a\[(contains|starts-with)\(@href,\s*(['\"])(.*?)\2\)\]$")
+    r"^//(?:\*\[contains\(@class,\s*(['\"])(.*?)\1\)\]//)?"
+    r"a\[(contains|starts-with)\(@href,\s*(['\"])(.*?)\4\)"
+    r"(?:\s+and\s+not\(contains\(@href,\s*(['\"])(.*?)\6\)\))?\]$")
 
 
 def _linked_article(page: str, feed: Feed) -> str:
     """The newest article of an XPath feed: the first link its item expression picks.
 
-    Only the two item expressions the OPML uses are read (`//a[contains(@href,'…')]` and
-    `//a[starts-with(@href,'…')]`, whose URI is `@href`). Anything else answers "" and `verify`
-    says the selector was not checked, rather than checking the wrong page. The pick is the first
-    link in document order, which is the order FreshRSS sees the same expression in.
+    The item expressions this reads test `@href` with `contains` or `starts-with`, optionally
+    narrowed to links inside an element carrying a class, and to links that do not carry a
+    fragment:
+
+        //a[contains(@href,'/comm-link/transmission/')]
+        //*[contains(@class,'__article-info')]//a[starts-with(@href,'/news/')
+            and not(contains(@href,'/news/updates/'))]
+
+    Anything else answers "" and `verify` says the selector was not checked, rather than checking
+    the wrong page. The pick is the first link in document order, which is the order FreshRSS sees
+    the same expression in.
     """
     match = XPATH_LINK.match(_setting(feed, "xPathItem"))
     if not match or _setting(feed, "xPathItemUri") not in ("", "@href"):
         return ""
-    test, fragment = match.group(1), match.group(3)
-    for node in _walk(page):
+    container, test = match.group(2) or "", match.group(3)
+    fragment, excluded = match.group(5), match.group(7) or ""
+    for node in _walk(page, container):
         href = node.attrs.get("href", "") if node.tag == "a" else ""
-        if href and (test == "contains" and fragment in href
-                     or test == "starts-with" and href.startswith(fragment)):
+        if not href or (excluded and excluded in href):
+            continue
+        if (test == "contains" and fragment in href
+                or test == "starts-with" and href.startswith(fragment)):
             return urllib.parse.urljoin(feed.url, href)
     return ""
 
