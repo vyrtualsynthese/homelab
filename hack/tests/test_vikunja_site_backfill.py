@@ -3,6 +3,7 @@ import subprocess
 import sys
 import unittest
 from unittest import mock
+from urllib.parse import parse_qs, urlsplit
 
 HACK = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(HACK))
@@ -126,15 +127,36 @@ class CheckDevelopTests(unittest.TestCase):
 
 
 class StubBoard:
-    """A board that answers the one read ``open_cards`` makes."""
+    """A board that answers the bucket list and the paged, filtered task list.
 
-    def __init__(self, buckets):
-        self.buckets = buckets
+    ``columns`` is ``{bucket_id: (title, cards)}``. The stub pages and filters
+    the way the server does; ``ignore_filter`` mimics a server that drops the
+    filter and answers every page with the first one.
+    """
+
+    def __init__(self, columns, ignore_filter=False):
+        self.columns = columns
+        self.ignore_filter = ignore_filter
         self.calls = []
 
     def call(self, method, path, body=None):
         self.calls.append((method, path))
-        return {"items": self.buckets}
+        if path.endswith("/buckets"):
+            return {"items": [{"id": bucket_id, "title": title}
+                              for bucket_id, (title, _) in self.columns.items()]}
+        query = parse_qs(urlsplit(path).query)
+        bucket_id = int(query["filter"][0].rsplit("=", 1)[1])
+        page = int(query["page"][0])
+        per_page = int(query["per_page"][0])
+        cards = [card for _, found in self.columns.values() for card in found] \
+            if self.ignore_filter else self.columns[bucket_id][1]
+        if self.ignore_filter:
+            page = 1
+        return {"items": cards[(page - 1) * per_page:page * per_page],
+                "total": len(cards)}
+
+    def task_calls(self):
+        return [path for _, path in self.calls if "/tasks?" in path]
 
 
 def _card(card_id):
@@ -143,44 +165,50 @@ def _card(card_id):
 
 class OpenCardsTests(unittest.TestCase):
     def test_only_the_open_columns_are_returned(self):
-        board = StubBoard([
-            {"title": "Idea", "count": 1, "tasks": [_card(1)]},
-            {"title": "Shaping", "count": 1, "tasks": [_card(2)]},
-            {"title": "Backlog", "count": 2, "tasks": [_card(3), _card(4)]},
-            {"title": "Doing", "count": 1, "tasks": [_card(5)]},
-            {"title": "Validation", "count": 1, "tasks": [_card(6)]},
-            {"title": "Done", "count": 1, "tasks": [_card(7)]},
-        ])
+        board = StubBoard({
+            10: ("Idea", [_card(1)]),
+            97: ("Shaping", [_card(2)]),
+            13: ("Backlog", [_card(3), _card(4)]),
+            11: ("Doing", [_card(5)]),
+            14: ("Validation", [_card(6)]),
+            12: ("Done", [_card(7)]),
+        })
         cards = b.open_cards(board, 2, 13)
         self.assertEqual([card["id"] for card in cards], [3, 4, 5, 6])
         self.assertEqual(board.calls[0][0], "GET")
-        self.assertTrue(board.calls[0][1].endswith("/buckets/tasks"))
+        self.assertTrue(board.calls[0][1].endswith("/buckets"))
+        # Idea, Shaping and Done are never asked for.
+        self.assertEqual(len(board.task_calls()), 3)
+        self.assertIn("filter=bucket_id+%3D+13", board.task_calls()[0])
 
-    def test_a_bucket_with_no_tasks_key_is_empty_not_an_error(self):
-        board = StubBoard([
-            {"title": "Doing", "count": 0},
-            {"title": "Backlog", "count": 1, "tasks": [_card(3)]},
-        ])
+    def test_a_column_with_no_cards_is_empty_not_an_error(self):
+        board = StubBoard({11: ("Doing", []), 13: ("Backlog", [_card(3)])})
         self.assertEqual([card["id"] for card in b.open_cards(board, 2, 13)], [3])
 
-    def test_a_cap_sized_bucket_aborts_the_run(self):
-        board = StubBoard([{"title": "Backlog", "count": 100,
-                            "tasks": [_card(i) for i in range(100)]}])
-        with self.assertRaises(SystemExit) as caught:
-            b.open_cards(board, 2, 13)
-        self.assertIn("Backlog", str(caught.exception))
+    def test_a_column_over_the_page_cap_is_read_whole(self):
+        board = StubBoard({13: ("Backlog", [_card(i) for i in range(173)])})
+        cards = b.open_cards(board, 2, 13)
+        self.assertEqual(len(cards), 173)
+        self.assertEqual([card["id"] for card in cards], list(range(173)))
+        self.assertEqual(len(board.task_calls()), 2)
+        self.assertIn("page=2", board.task_calls()[1])
 
-    def test_a_bucket_shorter_than_its_count_aborts_the_run(self):
-        board = StubBoard([{"title": "Backlog", "count": 120, "tasks": [_card(3)]}])
+    def test_a_column_exactly_at_the_cap_takes_one_request(self):
+        board = StubBoard({13: ("Backlog", [_card(i) for i in range(100)])})
+        self.assertEqual(len(b.open_cards(board, 2, 13)), 100)
+        self.assertEqual(len(board.task_calls()), 1)
+
+    def test_a_server_that_ignores_the_filter_stops_the_run(self):
+        board = StubBoard({13: ("Backlog", [_card(i) for i in range(150)])},
+                          ignore_filter=True)
         with self.assertRaises(SystemExit) as caught:
             b.open_cards(board, 2, 13)
-        self.assertIn("truncated", str(caught.exception))
+        message = str(caught.exception)
+        self.assertIn("Backlog", message)
+        self.assertIn("filter", message)
 
     def test_the_same_card_in_two_columns_aborts_the_run(self):
-        board = StubBoard([
-            {"title": "Backlog", "count": 1, "tasks": [_card(3)]},
-            {"title": "Doing", "count": 1, "tasks": [_card(3)]},
-        ])
+        board = StubBoard({13: ("Backlog", [_card(3)]), 11: ("Doing", [_card(3)])})
         with self.assertRaises(SystemExit):
             b.open_cards(board, 2, 13)
 
