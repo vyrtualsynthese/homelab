@@ -338,6 +338,32 @@ A person signs in to The Lounge with their authentik username and their authenti
 their Lounge password — LDAP replaces the local login. If they enrol MFA later, the provider's
 `mfa_support` must be turned on at the same time, and they type `password;123456`.
 
+### Retiring the gate's objects
+
+The forward-auth application `thelounge` and the proxy provider `thelounge` were the gate that LDAP
+replaced on 2026-11-20. Git no longer declares them — `app-thelounge.yaml` is deleted and
+`outpost-embedded.yaml` names neither — but **blueprints do not prune**, so the objects survive until
+they are deleted through the API. Order matters twice:
+
+1. **The commit must have synced first.** The embedded outpost's `providers` list is set whole, and a
+   `!Find` on a provider that no longer exists rolls the whole file back — every host in it would go
+   back to the previous list.
+2. **The application before the provider.** The application holds the provider's foreign key.
+
+```bash
+set -a; . ~/.config/secrets/homelab.env; set +a
+API=https://authentik.kub.home.ashudev.com/api/v3
+curl -s -o /dev/null -w '%{http_code}\n' -X DELETE \
+  -H "Authorization: Bearer $AUTHENTIK_TOKEN" "$API/core/applications/thelounge/"
+PK=$(curl -s -H "Authorization: Bearer $AUTHENTIK_TOKEN" "$API/providers/proxy/?search=thelounge" \
+  | jq -r '.results[] | select(.name=="thelounge") | .pk')
+curl -s -o /dev/null -w '%{http_code}\n' -X DELETE \
+  -H "Authorization: Bearer $AUTHENTIK_TOKEN" "$API/providers/proxy/$PK/"
+```
+
+Both answer `204`. The end state is one Lounge application (`thelounge-ldap`), one LDAP provider, and
+no proxy provider for the app.
+
 ## MFA
 
 Optional. TOTP and WebAuthn (YubiKey) are offered from **MFA Devices** in the user's own
