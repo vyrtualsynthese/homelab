@@ -41,7 +41,7 @@ streams:
     budgetGiB: 5
     etcd: true
   - name: nfs
-    budgetGiB: 36
+    budgetGiB: 9
 
 # The one place the retention policy is written. The prune job renders its flags from these
 # numbers, so the schedule and the flags cannot disagree.
@@ -63,8 +63,9 @@ hostPaths:
 etcdSnapshotsPath: /host/etcd-snapshots
 
 # The NFS stream: the exports on `nas` that hold data no rebuild can recreate. The exports the
-# operator excluded (music, media, stash's library, downloads) are not listed at all, so a
-# job can never reach them by accident. `exclude` entries are restic basename patterns.
+# operator excluded (music, media, stash's library, downloads, and since 2026-11-20 the books
+# library) are not listed at all, so a job can never reach them by accident. `exclude` entries are
+# restic basename patterns; a whole export that is out of scope is an absent row, not an `exclude`.
 nfs:
   schedule: "0 6 * * *"
   server: 192.168.1.41
@@ -74,9 +75,6 @@ nfs:
     - tag: syncthing
       path: /mnt/storage/nfs/syncthing
       exclude: [".stversions"]
-    # 21 952.1 MB. The Calibre library and its metadata.db.
-    - tag: books
-      path: /mnt/storage/nfs/books
     # 8 KB, currently one empty subdirectory. The name carries the claim's PV id, because the
     # stash-nfs class mounts a static subdirectory: recreated claim, changed row, loud failure.
     - tag: koillection

@@ -33,7 +33,7 @@ Storage bucket. Four restic repositories, one per stream: `nodes-nas`, `nodes-nu
 | Objects | Runs | Reads |
 |---|---|---|
 | `backup-node-nas`, `backup-node-nuc0`, `backup-node-streaming` | 04:30, 05:00, 05:30 Europe/Paris | the node's `local-path` roots, its host configuration, and on the two control planes the K3s snapshot directory |
-| `backup-nfs` | 06:00 | the `nas` exports: syncthing, books, koillection uploads, the ACME store, the qBittorrent config export |
+| `backup-nfs` | 06:00 | the `nas` exports: syncthing, koillection uploads, the ACME store, the qBittorrent config export |
 | `backup-prune` | Sunday 12:00 | every repository, `forget --keep-daily 7 --keep-weekly 4 --keep-monthly 12` |
 | `backup-verify` | 08:30 | every repository: newest snapshot age, size against budget, the etcd copy's age |
 
@@ -52,7 +52,8 @@ retention policy and the health check live beside what they check.
 
 ## Sizes
 
-Measured 2026-11-20: 34.1 GB in scope, 22 GB of it the books library. The per-row numbers and their
+Measured 2026-11-20: 12.2 GB in scope. The books library was dropped from scope by the operator on
+2026-11-20, which is why this is not the 34.1 GB the first measurement found. The per-row numbers and their
 exclusions are in the design,
 [`docs/superpowers/specs/2026-11-20-backups-design.md`](../../../docs/superpowers/specs/2026-11-20-backups-design.md),
 and the budget each stream is allowed is `streams[].budgetGiB` in `values.yaml`.

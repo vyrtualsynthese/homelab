@@ -15,8 +15,9 @@ spec:
   jobTemplate:
     spec:
       backoffLimit: 1
-      # Twelve hours. The books library is 22 GB and a cold read over NFS is slow, but an
-      # export that has stopped answering must not hold the lock until the next night.
+      # Twelve hours. A cold read of every export over NFS is slow enough that a tighter
+      # deadline is a false alarm, but an export that has stopped answering must not hold the
+      # lock until the next night.
       activeDeadlineSeconds: 43200
       template:
         metadata:

@@ -2,8 +2,8 @@
 
 > **In one line.** Every night, four `restic` repositories (restic is the backup program: it stores
 > encrypted, deduplicated snapshots — one point-in-time copy each — in one OVH bucket) carry the data
-> a rebuild cannot recreate: application configuration, the PostgreSQL dumps and their roles, the
-> books, syncthing, and the etcd snapshot copies.
+> a rebuild cannot recreate: application configuration, the PostgreSQL dumps and their roles,
+> syncthing, koillection's uploads, and the etcd snapshot copies.
 >
 > **Use it when** you are adding a stateful application, a job went red, a stream looks stale, or you
 > are weighing what a loss would cost · **Verified** 2026-11-20 · **Kind:** living page
@@ -22,7 +22,7 @@ own restic repository inside it, so a broken stream cannot damage another's hist
 | `nodes-nas` | `backup-node-nas` | 04:30 | the PostgreSQL dumps and their `globals.sql`, Grafana's database |
 | `nodes-nuc0` | `backup-node-nuc0` | 05:00 | eleven applications' configuration, the node's `/etc`, the etcd copy |
 | `nodes-streaming` | `backup-node-streaming` | 05:30 | the media stack's configuration, the node's `/etc`, the etcd copy |
-| `nfs` | `backup-nfs` | 06:00 | syncthing, the books library, koillection's uploads, the ACME store, the qBittorrent config |
+| `nfs` | `backup-nfs` | 06:00 | syncthing, koillection's uploads, the ACME store, the qBittorrent config |
 
 `backup-prune` runs Sunday at noon: 7 daily, 4 weekly, 12 monthly. `backup-verify` runs at 08:30 and
 is the one that says whether a stream is still advancing.
@@ -54,24 +54,26 @@ K3s S3 upload lands with the 1.31 upgrade (W5).
 | Not backed up | Why |
 |---|---|
 | music, the media library, the stash library, downloads | by the operator's decision: bulk data that a source can re-supply, and far larger than the rest combined |
+| the books library (22 GB on `nas`) | by the operator's decision on 2026-11-20: re-acquiring a book is possible, and it was the single largest thing in scope — dropping it took the bill from €0.24 to €0.09 for the first snapshot |
 | Loki logs, Prometheus metrics | reconstructed by what writes them; the history is not worth €7.10 per TB here |
 | the edge Pis' own state | deferred; they are outside the cluster and their restic path is documented in the Ansible audit |
 | poster art, thumbnails, caches, application log directories | rebuilt from the metadata providers on the next refresh |
 
 ## What the numbers are
 
-Measured on 2026-11-20, after every exclusion: **34.1 GB** in scope.
+Measured on 2026-11-20, after every exclusion: **12.2 GB** in scope. The first measurement was
+34.1 GB; the books library left scope the same day.
 
 | Stream | On disk | After exclusions |
 |---|---|---|
 | `nodes-streaming` | 12.9 GB | 3.7 GB |
 | `nodes-nuc0` | 0.94 GB | 0.25 GB |
 | `nodes-nas` | 3.10 GB | 0.10 GB |
-| `nfs` | ≈ 3 087 GB | 28.9 GB |
+| `nfs` | ≈ 3 087 GB | 6.9 GB |
 | etcd copies | 1.11 GB | 1.11 GB |
 
-The first snapshot costs about €0.24; with the retention tail the repository settles between 45 and
-70 GB, roughly €0.32–0.50 a month. Egress is free, so a restore costs nothing but time.
+The first snapshot costs about €0.09; with the retention tail the repositories settle between 22 and
+48 GB, roughly €0.16–0.34 a month. Egress is free, so a restore costs nothing but time.
 
 ## The three ways it fails
 
