@@ -121,6 +121,12 @@ spec:
               value: {{ .Values.vueTorrent.repository | quote }}
             - name: VUETORRENT_VERSION
               value: {{ .Values.vueTorrent.version | quote }}
+            # Needed by the installer's last step: the preference it writes must
+            # stay writable by the app, so the file is handed to the same uid.
+            - name: PUID
+              value: {{ .Values.env.PUID | quote }}
+            - name: PGID
+              value: {{ .Values.env.PGID | quote }}
           command:
             - sh
             - -c
@@ -130,14 +136,18 @@ spec:
               # Nothing here may fail the pod: a cold cluster, a fresh claim or a
               # GitHub outage used to turn an unreachable zip into a container that
               # never starts. Every failure leaves /config/ui as it is, and
-              # qBittorrent boots on its stock WebUI -- which it does by itself, by
-              # writing WebUI\AlternativeUIEnabled=false to qBittorrent.conf, so
-              # the recovery command in values.yaml is what brings the UI back.
+              # qBittorrent boots on its stock WebUI.
               want="${VUETORRENT_VERSION#v}"
               installed="$(cat /config/ui/version.txt 2>/dev/null || true)"
-              if [ "$installed" = "$want" ]; then
+              # `version.txt` alone is not an installation: the app serves
+              # `<RootFolder>/public`, so an index.html that went missing is a tree
+              # that has to be put back.
+              if [ "$installed" = "$want" ] && [ -f /config/ui/public/index.html ]; then
                 echo "VueTorrent $want already installed, nothing to do"
                 exit 0
+              fi
+              if [ "$installed" = "$want" ]; then
+                echo "VueTorrent $want is recorded in version.txt but public/index.html is missing; reinstalling"
               fi
               give_up() {
                 echo "WARNING: $1"
@@ -145,13 +155,51 @@ spec:
                 exit 0
               }
               url="https://github.com/${VUETORRENT_REPOSITORY}/releases/download/v${want}/vuetorrent.zip"
+              # The archive is kept on the claim after a successful install, so a
+              # pod that has to reinstall the same version needs no network.
+              cache="/config/vuetorrent-${want}.zip"
+              # Write the preference qBittorrent clears when it finds no UI. Only
+              # ever after an install, so an operator who turned the alternative UI
+              # off in the WebUI keeps it off. The app rewrites this file from memory
+              # on exit, which is why it is written here and not while it runs.
+              set_pref() {
+                conf=/config/qBittorrent/qBittorrent.conf
+                if [ ! -f "$conf" ]; then
+                  mkdir -p /config/qBittorrent || return 1
+                  chown "$PUID:$PGID" /config/qBittorrent || true
+                  printf '[Preferences]\nWebUI\\AlternativeUIEnabled=true\n' > "$conf" || return 1
+                else
+                  awk '
+                    BEGIN { line = "WebUI\\AlternativeUIEnabled=true"; key = "WebUI\\AlternativeUIEnabled=" }
+                    /^\[/ {
+                      if (inprefs && !done) { print line; done = 1 }
+                      inprefs = ($0 == "[Preferences]")
+                      print
+                      next
+                    }
+                    index($0, key) == 1 { print line; done = 1; next }
+                    { print }
+                    END {
+                      if (!done) {
+                        if (!inprefs) print "[Preferences]"
+                        print line
+                      }
+                    }
+                  ' "$conf" > "$conf.next" && mv "$conf.next" "$conf" || { rm -f "$conf.next"; return 1; }
+                fi
+                chown "$PUID:$PGID" "$conf"
+              }
               echo "installing VueTorrent $want from $url"
               # Bounded, both of them: an address that drops packets would otherwise
               # hold pod start for the kernel's full TCP retry budget.
               timeout 60 apk add --no-cache unzip >/dev/null 2>&1 \
                 || give_up "cannot install unzip (no package repository reachable)"
               tmp="$(mktemp -d)" || give_up "cannot create a temporary directory"
-              wget -q -T 20 -O "$tmp/vuetorrent.zip" "$url" || give_up "cannot download $url"
+              if ! wget -q -T 20 -O "$tmp/vuetorrent.zip" "$url"; then
+                [ -f "$cache" ] || give_up "cannot download $url"
+                echo "download failed; installing from the cached archive $cache"
+                cp "$cache" "$tmp/vuetorrent.zip" || give_up "cannot read the cached archive $cache"
+              fi
               unzip -q "$tmp/vuetorrent.zip" -d "$tmp" || give_up "the download from $url is not a readable zip"
               [ -d "$tmp/vuetorrent" ] || give_up "the zip from $url carries no vuetorrent/ directory"
               # Stage the new UI next to the old one and swap at the end: a failed
@@ -159,6 +207,10 @@ spec:
               rm -rf /config/ui.next
               cp -a "$tmp/vuetorrent" /config/ui.next \
                 || give_up "cannot stage the UI on the config claim"
+              if [ ! -f /config/ui.next/public/index.html ]; then
+                rm -rf /config/ui.next
+                give_up "the staged UI has no public/index.html"
+              fi
               if [ -d /config/ui ]; then
                 rm -rf /config/ui.prev
                 mv /config/ui /config/ui.prev || give_up "cannot move the current UI aside"
@@ -169,7 +221,12 @@ spec:
                 fi
                 give_up "cannot move the staged UI into place; the previous UI is back"
               fi
-              rm -rf /config/ui.prev "$tmp"
+              rm -rf /config/ui.prev
+              cp "$tmp/vuetorrent.zip" "$cache" 2>/dev/null \
+                && chown "$PUID:$PGID" "$cache" 2>/dev/null \
+                || echo "WARNING: cannot cache the archive at $cache; the next install will need the network"
+              rm -rf "$tmp"
+              set_pref || echo "WARNING: cannot set WebUI\\AlternativeUIEnabled=true; the WebUI may stay on the stock UI"
               echo "VueTorrent $want installed"
           volumeMounts:
             - name: config
