@@ -34,13 +34,6 @@ All notable changes to this repository. The format follows
 
 ### Added
 
-- Atlantis runs in the cluster (`cluster/helm/atlantis`, ArgoCD application `atlantis`) and comments a
-  `tofu plan` on every pull request to `infra-main` that touches a stack. It never applies: `apply`
-  is disabled and also absent from the command allowlist, and `unlock` is absent too so a comment
-  cannot drop a state lock an apply is holding. The webhook answers on
-  `atlantis.kub.home.ashudev.com/events` with no middleware, because GitHub cannot sign in; the UI
-  stays on `atlantis.kub.local` behind `lan-only`. Its credentials live in `atlantis-env`, listed in
-  `docs/secrets.md`.
 - `hack/check-config-keys.sh`, which renders each chart listed in `hack/config-key-checks.yaml` and
   fails any key in its config file that the pinned dependency's own `values.yaml` does not declare,
   naming the key and its line — the class of failure that cost the FileBrowser cutover three syncs.
