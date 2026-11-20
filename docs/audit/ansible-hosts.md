@@ -77,6 +77,13 @@ The K3s binary is untouched — it is not apt-managed.
 
 Net: the only working offsite path is runner config from two Pis, into an AWS S3 bucket.
 
+**Resolved 2026-11-20.** `backup-setup.yaml`, `restic_env.yaml.dist` and all three
+`backup-scripts/` are deleted. Nothing writes a credential to `/etc/environment` any more, no
+inventory group carries a restic cron, and the repo has no AWS endpoint left to point at. Coverage
+is `cluster/helm/backup` in the homelab repository: one OVH bucket in `GRA`, four restic
+repositories, one job per node and one for the NFS exports. The two Pis stay uncovered by decision;
+their compose stacks are in `playbooks/templates/runners/`, so they are in git.
+
 ## 5. Runner templates
 
 `rbp0` and `rbp1` compose files define Pi-hole (`jacklul/pihole:2024.07.0`), wg-easy v14 (ports

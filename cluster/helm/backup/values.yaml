@@ -13,7 +13,9 @@ repository:
   bucket: ashudev-homelab-backup
   endpoint: s3.gra.io.cloud.ovh.net
   region: gra
-  # RESTIC_PASSWORD, AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY. Created by hand from the
+  # RESTIC_PASSWORD, AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY. The last two are restic's
+  # names for any S3 store's pair: the values are the OVH user declared in
+  # infra-main/ovh/backup.tf, scoped to this bucket alone. Nothing here reaches AWS. Created by hand from the
   # password manager; the chart never creates or initialises anything.
   secretName: backup-restic
 

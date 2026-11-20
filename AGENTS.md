@@ -294,7 +294,7 @@ are in `docs/superpowers/plans/`.
 
 ## 8. Rules
 
-- Never commit secrets, kubeconfigs, `*.pub` keys, or `restic_env.yaml` (see `.gitignore`).
+- Never commit secrets, kubeconfigs or `*.pub` keys (see `.gitignore`).
 - Do not introduce a shared/library chart or restructure the per-app charts unless asked.
 - Do not merge the app patterns into one. A and D are in active use, B is legacy and converted one app at a time, and C has no chart left in the repo: do not bring it back for a new app.
 - Changes go through git. Never apply manifests by hand to "fix" drift.
