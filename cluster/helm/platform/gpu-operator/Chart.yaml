@@ -4,6 +4,10 @@ description: NVIDIA GPU Operator - GPU stack
 type: application
 version: 0.1.0
 appVersion: v26.3.1
+# appVersion-check: exempt — upstream pins every image with a `version:` key, not `tag:`, so the
+# first (and only) `tag:` in values.yaml is the node-feature-discovery operand v0.18.3, not this
+# chart's application. appVersion names the operator release, and is kept level with
+# `operator.version` by the same change that bumps it.
 dependencies:
   - name: gpu-operator
     version: v26.3.1

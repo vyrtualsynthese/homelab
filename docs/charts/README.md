@@ -70,13 +70,14 @@ The image a chart runs, and therefore the tag `appVersion` follows, is **the fir
 `values.yaml`**: the app's own image goes first, sidecars, exporters and init images after it.
 
 A chart that pins no versioned tag states why on an `# appVersion-check: exempt — <reason>` line in
-`Chart.yaml`, next to the `appVersion` it would otherwise carry. Four do:
+`Chart.yaml`, next to the `appVersion` it would otherwise carry. Five do:
 
 | Chart | Why the check does not read it |
 |---|---|
 | `argocd` | the controller image belongs to the `argo-cd` dependency; only the sidecars are pinned here |
 | `docs-site` | two images pinned as full strings, mkdocs-material builds and nginx serves; neither owns the version |
 | `monitoring/mktxp` | upstream publishes no semver tag, only `latest` |
+| `platform/gpu-operator` | upstream pins every image with its own `version:` key, so the only `tag:` is the node-feature-discovery operand, not the operator this chart deploys |
 | `platform/traefik-gate` | runs no image; its `appVersion` names the Traefik release the middlewares target |
 
 `hack/check-app-version.sh` enforces all of this, and it is the check to run after an image bump:
