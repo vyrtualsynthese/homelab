@@ -1,0 +1,147 @@
+{{- range $node, $cfg := .Values.nodes }}
+{{- $stream := printf "nodes-%s" $node }}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: backup-node-{{ $node }}
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    {{- include "backup.labels" (dict "root" $ "stream" $stream) | nindent 4 }}
+spec:
+  schedule: {{ $cfg.schedule | quote }}
+  timeZone: Europe/Paris
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 3600
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 5
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      # Six hours. A books or Plex run is minutes; this is the ceiling that kills a hung
+      # NFS read instead of leaving it locked until the next night.
+      activeDeadlineSeconds: 21600
+      template:
+        metadata:
+          labels:
+            {{- include "backup.labels" (dict "root" $ "stream" $stream) | nindent 12 }}
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          # The directories exist on one node only, and no claim is mounted, so the
+          # scheduler cannot infer the placement.
+          nodeSelector:
+            kubernetes.io/hostname: {{ $node }}
+          securityContext:
+            # hostPath ignores fsGroup, so a claim written by another UID is readable only as
+            # that UID or as root. Root keeps the two capabilities that read anything and
+            # nothing else: every mount below is readOnly, so it cannot write into a claim.
+            runAsUser: 0
+            runAsGroup: 0
+          volumes:
+            - name: scripts
+              configMap:
+                name: backup-scripts
+                defaultMode: 0555
+            - name: config
+              configMap:
+                name: backup-rows-{{ $node }}
+            - name: staging
+              emptyDir:
+                sizeLimit: {{ $.Values.staging.sizeLimit }}
+            - name: host-etc
+              hostPath:
+                path: /etc
+                type: Directory
+            {{- range $i, $root := $cfg.roots }}
+            - name: root-{{ $i }}
+              hostPath:
+                path: {{ $root }}
+                type: Directory
+            {{- end }}
+            {{- if $cfg.etcdSnapshots }}
+            - name: etcd-snapshots
+              hostPath:
+                path: /var/lib/rancher/k3s/server/db/snapshots
+                type: Directory
+            {{- end }}
+          initContainers:
+            - name: prepare
+              image: {{ include "backup.image" (dict "root" $ "name" "python") }}
+              command: ["python", "/scripts/prepare.py"]
+              args:
+                - --rows
+                - /config/rows.json
+                - --staging
+                - /staging
+                {{- range $cfg.roots }}
+                - --root
+                - {{ . }}
+                {{- end }}
+                {{- range $.Values.hostPaths }}
+                - --host-path
+                - {{ . }}
+                {{- end }}
+                {{- if $cfg.etcdSnapshots }}
+                - --host-path
+                - {{ $.Values.etcdSnapshotsPath }}
+                {{- end }}
+              env:
+                - name: TZ
+                  value: Europe/Paris
+              resources:
+                requests: {cpu: 10m, memory: 32Mi}
+                limits: {cpu: 500m, memory: 512Mi}
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop: ["ALL"]
+                  add: ["DAC_OVERRIDE", "DAC_READ_SEARCH"]
+              volumeMounts:
+                - {name: scripts, mountPath: /scripts, readOnly: true}
+                - {name: config, mountPath: /config, readOnly: true}
+                - {name: staging, mountPath: /staging}
+                - {name: host-etc, mountPath: /host/etc, readOnly: true}
+                {{- range $i, $root := $cfg.roots }}
+                - {name: root-{{ $i }}, mountPath: {{ $root }}, readOnly: true}
+                {{- end }}
+                {{- if $cfg.etcdSnapshots }}
+                - {name: etcd-snapshots, mountPath: {{ $.Values.etcdSnapshotsPath }}, readOnly: true}
+                {{- end }}
+          containers:
+            - name: restic
+              image: {{ include "backup.image" (dict "root" $ "name" "restic") }}
+              command: ["/bin/sh", "/scripts/backup-node.sh"]
+              envFrom:
+                - secretRef:
+                    name: {{ $.Values.repository.secretName }}
+              env:
+                - name: RESTIC_REPOSITORY
+                  value: {{ include "backup.repository" (dict "root" $ "name" $stream) | quote }}
+                - name: RESTIC_CACHE_DIR
+                  value: /tmp/restic-cache
+                - name: STREAM
+                  value: {{ $stream }}
+                - name: NODE
+                  value: {{ $node }}
+                - name: TZ
+                  value: Europe/Paris
+              resources:
+                requests: {cpu: 50m, memory: 128Mi}
+                limits: {cpu: "2", memory: 1Gi}
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop: ["ALL"]
+                  add: ["DAC_OVERRIDE", "DAC_READ_SEARCH"]
+              volumeMounts:
+                - {name: scripts, mountPath: /scripts, readOnly: true}
+                - {name: staging, mountPath: /staging}
+                - {name: host-etc, mountPath: /host/etc, readOnly: true}
+                {{- range $i, $root := $cfg.roots }}
+                - {name: root-{{ $i }}, mountPath: {{ $root }}, readOnly: true}
+                {{- end }}
+                {{- if $cfg.etcdSnapshots }}
+                - {name: etcd-snapshots, mountPath: {{ $.Values.etcdSnapshotsPath }}, readOnly: true}
+                {{- end }}
+{{- end }}
