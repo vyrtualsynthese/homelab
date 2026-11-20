@@ -1,0 +1,82 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: backup-nfs
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "backup.labels" (dict "root" . "stream" "nfs") | nindent 4 }}
+spec:
+  schedule: {{ .Values.nfs.schedule | quote }}
+  timeZone: Europe/Paris
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 3600
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 5
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      # Twelve hours. The books library is 22 GB and a cold read over NFS is slow, but an
+      # export that has stopped answering must not hold the lock until the next night.
+      activeDeadlineSeconds: 43200
+      template:
+        metadata:
+          labels:
+            {{- include "backup.labels" (dict "root" . "stream" "nfs") | nindent 12 }}
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          # The NAS is the NFS server, so this is also the only node from which the reads are
+          # local rather than a second network hop through `streaming`.
+          nodeSelector:
+            kubernetes.io/hostname: nas
+          securityContext:
+            # The exports are written by application UIDs. Root plus the two read capabilities
+            # is the only combination that can read all of them; every mount is readOnly, so
+            # there is nothing to write.
+            runAsUser: 0
+            runAsGroup: 0
+          volumes:
+            - name: scripts
+              configMap:
+                name: backup-scripts
+                defaultMode: 0555
+            - name: config
+              configMap:
+                name: backup-nfs-paths
+            {{- range $i, $row := .Values.nfs.paths }}
+            - name: nfs-{{ $i }}
+              nfs:
+                server: {{ $.Values.nfs.server }}
+                path: {{ $row.path }}
+                readOnly: true
+            {{- end }}
+          containers:
+            - name: restic
+              image: {{ include "backup.image" (dict "root" . "name" "restic") }}
+              command: ["/bin/sh", "/scripts/backup-nfs.sh"]
+              envFrom:
+                - secretRef:
+                    name: {{ .Values.repository.secretName }}
+              env:
+                - name: RESTIC_REPOSITORY
+                  value: {{ include "backup.repository" (dict "root" . "name" "nfs") | quote }}
+                - name: RESTIC_CACHE_DIR
+                  value: /tmp/restic-cache
+                - name: STREAM
+                  value: nfs
+                - name: TZ
+                  value: Europe/Paris
+              resources:
+                requests: {cpu: 50m, memory: 128Mi}
+                limits: {cpu: "2", memory: 1Gi}
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop: ["ALL"]
+                  add: ["DAC_OVERRIDE", "DAC_READ_SEARCH"]
+              volumeMounts:
+                - {name: scripts, mountPath: /scripts, readOnly: true}
+                - {name: config, mountPath: /config, readOnly: true}
+                {{- range $i, $row := .Values.nfs.paths }}
+                - {name: nfs-{{ $i }}, mountPath: {{ $row.path }}, readOnly: true}
+                {{- end }}

@@ -86,7 +86,7 @@ class NodeJobTests(unittest.TestCase):
         writable = ("/staging", "/scripts", "/config")
         for c in crons():
             pod = c["spec"]["jobTemplate"]["spec"]["template"]["spec"]
-            for container in pod["initContainers"] + pod["containers"]:
+            for container in pod.get("initContainers", []) + pod["containers"]:
                 for mount in container["volumeMounts"]:
                     if mount["mountPath"] in writable:
                         continue
@@ -107,6 +107,43 @@ class NodeJobTests(unittest.TestCase):
         self.assertIn(snap, mounts("backup-node-nuc0"))
         self.assertNotIn(snap, mounts("backup-node-nas"))
         self.assertNotIn("/host/etcd-snapshots", args("backup-node-nas"))
+
+
+class NfsJobTests(unittest.TestCase):
+    def test_one_backup_per_row(self):
+        cms = {d["metadata"]["name"]: d["data"] for d in render() if d["kind"] == "ConfigMap"}
+        lines = [l for l in cms["backup-nfs-paths"]["nfs-paths.txt"].splitlines() if l.strip()]
+        self.assertEqual(len(lines), len(values()["nfs"]["paths"]))
+
+    def test_missing_export_fails_the_run(self):
+        cms = {d["metadata"]["name"]: d["data"] for d in render() if d["kind"] == "ConfigMap"}
+        self.assertIn('[ -d "$path" ] ||', cms["backup-scripts"]["backup-nfs.sh"])
+
+    def test_exports_are_mounted_read_only(self):
+        job = next(c for c in crons() if c["metadata"]["name"] == "backup-nfs")
+        nfs = [v for v in job["spec"]["jobTemplate"]["spec"]["template"]["spec"]["volumes"] if "nfs" in v]
+        self.assertTrue(nfs)
+        for v in nfs:
+            self.assertTrue(v["nfs"]["readOnly"])
+
+    def test_every_export_is_mounted_from_the_configured_server(self):
+        job = next(c for c in crons() if c["metadata"]["name"] == "backup-nfs")
+        nfs = [v["nfs"] for v in job["spec"]["jobTemplate"]["spec"]["template"]["spec"]["volumes"] if "nfs" in v]
+        self.assertEqual({n["server"] for n in nfs}, {values()["nfs"]["server"]})
+        self.assertEqual({n["path"] for n in nfs}, {row["path"] for row in values()["nfs"]["paths"]})
+
+    def test_job_runs_on_nas_with_its_stream_label(self):
+        job = next(c for c in crons() if c["metadata"]["name"] == "backup-nfs")
+        self.assertEqual(job["metadata"]["labels"]["homelab.io/backup-stream"], "nfs")
+        self.assertEqual(job["spec"]["jobTemplate"]["spec"]["template"]["spec"]["nodeSelector"],
+                         {"kubernetes.io/hostname": "nas"})
+
+    def test_nfs_backup_pins_the_host_too(self):
+        self.assertIn('--host nas', scripts()["backup-nfs.sh"])
+
+    def test_koillection_row_names_the_directory_its_pv_mounts(self):
+        paths = [row["path"] for row in values()["nfs"]["paths"]]
+        self.assertTrue(any(p.startswith("/mnt/storage/nfs/stash/koillection-") for p in paths))
 
 
 if __name__ == "__main__":
