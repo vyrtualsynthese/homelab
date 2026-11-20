@@ -44,11 +44,35 @@ database passwords.
 | `local-cert` | `kube-system` | Traefik default TLS cert (`TLSStore`) |
 | `traefik-dashboard-auth` | `kube-system` | basicAuth for the dashboard |
 | `n8n` | `n8n` | `encryption-key` → `N8N_ENCRYPTION_KEY`, the key n8n encrypts stored credentials with |
+| `backup-restic` | `backup` | `RESTIC_PASSWORD`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` → `envFrom` in every job of `cluster/helm/backup` |
 
 `n8n` is the one application Secret that must exist **before** its first sync: the deployment reads
 `encryption-key` without `optional`, so a missing Secret is `CreateContainerConfigError`, not a pod
 that regenerates the key and silently makes every stored credential unreadable. Generate it once with
 `openssl rand -hex 32` and keep it in the password manager; changing it later costs the credentials.
+
+## The restic repositories (`backup` namespace)
+
+`backup-restic` is created by hand, once, before the first backup job runs:
+
+```bash
+kubectl -n backup create secret generic backup-restic \
+  --from-literal=RESTIC_PASSWORD='<value>' \
+  --from-literal=AWS_ACCESS_KEY_ID='<value>' \
+  --from-literal=AWS_SECRET_ACCESS_KEY='<value>'
+```
+
+The two AWS keys are the scoped OVH S3 user from the `infra-main` board, also kept in
+`~/.config/secrets/keys.env` as `OVH_S3_ACCESS_KEY` and `OVH_S3_SECRET_KEY`. The restic password is
+not an S3 credential and is not stored anywhere in the cluster's gift alone.
+
+Three credentials are **not** Kubernetes Secrets, and a rebuild needs all three:
+
+| Credential | Why losing it matters | Where it is kept |
+|---|---|---|
+| the restic repository password | every repository is ciphertext under it; without it the bucket is noise, not a backup | the password manager, plus one sealed paper copy |
+| the K3s server join token (`/var/lib/rancher/k3s/server/token`) | an etcd snapshot is encrypted with a key derived from it, so restoring onto a rebuilt host with a different token produces an unreadable snapshot | the password manager |
+| `k3s-etcd-snapshot-s3-config` | reserved: the Secret the official K3s upload reads, with keys `bucket`, `endpoint`, `access-key`, `secret-key`. Created by the K3s 1.31 upgrade (W5), **not** by the restic work | does not exist yet |
 
 ## The PostgreSQL instance (`databases` namespace)
 

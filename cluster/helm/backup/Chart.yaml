@@ -1,0 +1,12 @@
+apiVersion: v2
+name: backup
+description: Nightly restic backups of every stateful claim, the PostgreSQL dumps, the etcd snapshots and the NFS exports, into one OVH bucket.
+type: application
+# Chart version. Renovate bumps this when an image tag moves.
+version: 1.0.0
+# Must match the restic tag in values.yaml.
+appVersion: "0.19.1"
+keywords:
+  - backup
+  - restic
+  - restore
