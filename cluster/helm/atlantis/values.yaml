@@ -25,6 +25,9 @@ atlantis:
   environment:
     ATLANTIS_ALLOW_COMMANDS: version,plan
     ATLANTIS_LOG_LEVEL: info
+    # `--gh-token` is refused without a user: Atlantis wants the pair even when
+    # the token identifies itself. Not a secret — the login is in every URL.
+    ATLANTIS_GH_USER: vyrtualsynthese
 
   # `infra-main` pins OpenTofu in `.opentofu-version`; these two values are the
   # other half of that pin and have to be bumped with it. Atlantis downloads the
