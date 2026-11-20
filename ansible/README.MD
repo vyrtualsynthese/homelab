@@ -27,13 +27,19 @@ a firewall; WireGuard keys and Pi-hole secrets; the System Upgrade Controller pl
 
 ## Backups
 
-`backup-setup.yaml` writes restic credentials in plaintext to `/etc/environment` and points every
-host at an AWS S3 bucket. It copies only the runner script, and only to `rbp0` and `rbp1`, then
-installs a daily cron for the whole `backup` group — so the k3s and NAS hosts have been running a
-cron against a script that was never deployed to them since 2024. The k3s script dumps
-`sqlite3 .../server/db/state.db`, which does not exist on an etcd cluster.
+This directory holds no backup code any more. `backup-setup.yaml`, `restic_env.yaml.dist` and the
+three `backup-scripts/` were removed on 2026-11-20: they wrote AWS credentials in plaintext to
+`/etc/environment`, dumped a SQLite `state.db` that an etcd cluster does not have, and backed up a
+MinIO path deleted in July 2024.
 
-**Do not run `make backup-setup` expecting backups.** W4 replaces it entirely, against OVH.
+Backups are `cluster/helm/backup` in the homelab repository: one OVH bucket in `GRA`, four restic
+repositories, a nightly job per node plus one for the NFS exports. Its coverage matrix is
+`cluster/helm/backup/values.yaml`, and [`docs/how-it-works/backups.md`](../docs/how-it-works/backups.md)
+explains it.
+
+What this playbook used to cover on the edge, and still does not: the two Pis' data. Their compose
+stacks are in `playbooks/templates/runners/`, so the configuration is in git; anything they keep
+outside those files is not backed up anywhere, by decision, until an edge stream exists.
 
 ## Intended use
 

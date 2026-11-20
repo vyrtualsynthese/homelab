@@ -117,12 +117,12 @@ unreferenced). Deferred to the documentation workstream.
 
 ## 6. Decommissioned software
 
-- MinIO: only `cluster/helm/nfs/minio-nfs` (orphan chart) and
-  `ansible/playbooks/scripts/backup-scripts/nas/backup.sh:4`, which still includes
-  `/mnt/storage/minio/.minio.sys` in the restic backup set.
-- AWS: real usage only in `ansible/playbooks/backup-setup.yaml:30-45` — restic to
-  `s3:s3.amazonaws.com/ashudev-homelab-<host>-backup` with `AWS_ACCESS_KEY_ID` /
-  `AWS_SECRET_ACCESS_KEY`. Everything else is commented-out boilerplate in vendored chart values.
+- MinIO: only `cluster/helm/nfs/minio-nfs` (orphan chart). The NAS backup script that still named
+  `/mnt/storage/minio/.minio.sys` was deleted on 2026-11-20, and the orphan chart on 2026-11-19.
+- AWS: nothing in this repository talks to AWS any more. `ansible/playbooks/backup-setup.yaml` was
+  the last caller (restic to `s3:s3.amazonaws.com/...`); it is deleted. The one remaining string of
+  that shape is `arn:aws:s3:::ashudev-homelab-backup` in `infra-main/ovh/backup.tf`, which is how
+  OVH's S3 policy API spells a bucket in its own cloud.
 - No `route53`, `external-dns`, `cloudflare`, `rclone` or cloud SDK references anywhere.
 
 ## 7. Known defects, verdicts

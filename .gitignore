@@ -10,7 +10,6 @@ helm/overviewer/minecraft-server
 helm/overviewer/render
 render
 world
-restic_env.yaml
 etc-dnsmasq.d
 etc-pihole
 build

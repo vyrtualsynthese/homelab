@@ -19,7 +19,7 @@ portfolio.
 | Replicated storage | Longhorn was abandoned after the disk failure. Its volumes are gone. |
 | Applications | 58 ArgoCD Applications; about 20 are unhealthy |
 | GitOps coverage | Auto-sync is enabled per Application from the ArgoCD UI; no manifest in git records it |
-| Backups | **Not working.** The offsite target is an AWS S3 bucket and no script covers the control plane or PVC data |
+| Backups | Four restic repositories in one OVH bucket, one job per node plus the NFS exports. Awaiting its first run: the Application syncs, the Secret and the bucket are the last two gates |
 | Observability | Prometheus with alerting disabled, Grafana down, no log pipeline |
 
 The full evidence is in [`docs/audit/`](docs/audit/), captured 2026-11-10.
