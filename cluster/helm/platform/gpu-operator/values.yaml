@@ -148,25 +148,9 @@ gpu-operator:
       nodeSelector:
         kubernetes.io/hostname: nuc0
 
-  # The operator creates the DCGM exporter's Service itself, and the
-  # ClusterPolicy CRD has no field for Service annotations (`service` takes
-  # internalTrafficPolicy and type only). Prometheus scrapes through
-  # `kubernetes-service-endpoints`, which is annotation-driven, so the scrape
-  # target has to be a Service this chart owns. Same selector, same port; the
-  # operator leaves a Service it did not create alone.
-  extraObjects:
-    - apiVersion: v1
-      kind: Service
-      metadata:
-        name: nvidia-dcgm-exporter-metrics
-        annotations:
-          prometheus.io/scrape: "true"
-      spec:
-        type: ClusterIP
-        selector:
-          app: nvidia-dcgm-exporter
-        ports:
-          - name: metrics
-            port: 9400
-            targetPort: 9400
-            protocol: TCP
+  # DCGM scraping needs nothing from this file. The operator creates the
+  # exporter's Service itself and sets `prometheus.io/scrape: "true"` on it
+  # (measured 2026-11-20: the Service it created after the cutover carries the
+  # annotation with no value set here), and Prometheus's
+  # `kubernetes-service-endpoints` job finds it by that annotation. A second
+  # Service in this chart was tried first and scraped the same pod twice.
