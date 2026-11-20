@@ -44,7 +44,7 @@ database passwords.
 | `local-cert` | `kube-system` | Traefik default TLS cert (`TLSStore`) |
 | `traefik-dashboard-auth` | `kube-system` | basicAuth for the dashboard |
 | `n8n` | `n8n` | `encryption-key` → `N8N_ENCRYPTION_KEY`, the key n8n encrypts stored credentials with |
-| `backup-restic` | `backup` | `RESTIC_PASSWORD`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` → `envFrom` in every job of `cluster/helm/backup` |
+| `backup-restic` | `backup` | `RESTIC_PASSWORD`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` (restic's names for any S3 store's pair; the values are OVH's) → `envFrom` in every job of `cluster/helm/backup` |
 
 `n8n` is the one application Secret that must exist **before** its first sync: the deployment reads
 `encryption-key` without `optional`, so a missing Secret is `CreateContainerConfigError`, not a pod
@@ -62,9 +62,12 @@ kubectl -n backup create secret generic backup-restic \
   --from-literal=AWS_SECRET_ACCESS_KEY='<value>'
 ```
 
-The two AWS keys are the scoped OVH S3 user from the `infra-main` board, also kept in
-`~/.config/secrets/keys.env` as `OVH_S3_ACCESS_KEY` and `OVH_S3_SECRET_KEY`. The restic password is
-not an S3 credential and is not stored anywhere in the cluster's gift alone.
+`AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` are the variable names restic's S3 backend reads;
+the credentials behind them are the OVH S3 user declared in `infra-main/ovh/backup.tf`, scoped to
+`arn:aws:s3:::ashudev-homelab-backup` and nothing else. Read them with `tofu output -raw
+access_key_id` and `-raw secret_access_key` in that stack. They are not the state backend's pair and
+must never be: that one reaches the OpenTofu state. The restic password is not an S3 credential at
+all — it encrypts the repository, and losing it loses the backups.
 
 Three credentials are **not** Kubernetes Secrets, and a rebuild needs all three:
 

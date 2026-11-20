@@ -152,6 +152,11 @@ Net: no working backup of the cluster control plane, no backup of PVC data, and 
 offsite storage is an AWS S3 bucket. This matches `REBUILD.md` line 10 — "all backups were
 corrupt and restic is not running".
 
+**Resolved 2026-11-20.** The two host scripts are deleted; the AWS bucket is not used by anything in
+this repository. `cluster/helm/backup` carries the whole matrix — per-node restic jobs staging
+SQLite copies, the PostgreSQL dumps, the NFS exports, and the etcd snapshot copy — into one OVH
+bucket in `GRA`. `docs/how-it-works/backups.md` is the page.
+
 ## 4. Drift summary for this area
 
 1. `prometheus` and `grafana` are vendored 2024 charts pinned to 2022-era appVersions

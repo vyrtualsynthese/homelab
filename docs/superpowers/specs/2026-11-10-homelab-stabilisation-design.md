@@ -480,6 +480,8 @@ The AWS exit starts here and is one workstream, not two.
      in `docs/runbooks/restore.md`.
 3. **Remove the old path.** Delete the AWS S3 repository, the AWS keys, and the `/etc/environment`
    plaintext credentials. Delete or rewrite `ansible/playbooks/backup-setup.yaml` entirely.
+   *Done 2026-11-20:* the playbook, `restic_env.yaml.dist` and all three `backup-scripts/` are
+   deleted, with the `make backup-setup` target and the `.gitignore` entry.
 
 Acceptance: a documented restore from OVH rebuilding one app's configuration and one database on a
 clean path, performed at least once; a monitoring alert fires if the newest snapshot is older than
