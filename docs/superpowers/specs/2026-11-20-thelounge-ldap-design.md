@@ -246,23 +246,19 @@ needed.
 - `docs/runbooks/authentik-apps.md`: a section for adding an LDAP outpost, with the token one-liner.
 - `cluster/helm/thelounge/README.md`: the gate section becomes the sign-in section.
 
-## Before anything is built: two facts only the operator holds
+## Before anything is built: two facts only the operator holds — answered 2026-11-20
 
 The bind validates against authentik's password table, and The Lounge keys everything by username.
-Neither is readable from here, and a wrong assumption in either breaks the verification step rather
-than the build.
+Neither is readable from here, and a wrong assumption in either would break the verification step
+rather than the build.
 
-1. **Is the The Lounge account's username exactly the authentik username?** If it differs, the LDAP
-   login lands under the authentik name and opens a fresh empty account; the existing one, with its
-   networks and stored IRC passwords, is orphaned. The answer decides whether the plan carries a
-   migration step (rename in The Lounge after the first login, or rename in authentik — which changes
-   the username every OIDC app sees) or records the old account as abandoned.
-2. **Does the authentik account have a local password today, and can it sign in with it?** A
-   Discord/Plex-only identity has no password and the bind cannot succeed. The pre-step is setting
-   one in authentik, before the The Lounge change merges.
+1. **The Lounge account's username is `vyrtualsynthese`, the same as the authentik username.** No
+   migration step, no rename, no abandoned account; the first LDAP login lands on the existing account
+   with its networks.
+2. **The authentik account has a local password and can sign in with it.** No pre-step in authentik.
 
-A third, cheap to answer: are there Lounge accounts besides the operator's? Every local password stops
-working, so each one needs an authentik account with the same username.
+A third, answered by the same conversation: the operator's is the only Lounge account that matters.
+Every local password stops working, and each account needs an authentik identity with the same name.
 
 ## Rollout: three pull requests, with the operator at each gate
 
