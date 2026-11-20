@@ -2,13 +2,11 @@
 # The chart is hand-written against the contract in docs/charts/README.md;
 # media-stack/autobrr is the reference it was shaped from.
 
-# -- `nginx`, so the helpers build the names the cluster already holds:
-# `app.fullname` becomes `ashudev-nginx` (release `ashuvidz` + this name), the
-# Service keeps the name the two IngressRoutes already point at, and the
-# Deployment keeps the selector it was created with — `spec.selector` is
-# immutable, so changing it would mean ArgoCD deleting and recreating the
-# Deployment, and the site would answer 503 for the length of a crawl.
-# The label `app.kubernetes.io/name: nginx` is also true: nginx is what serves.
+# -- `nginx`, so the helpers build the names this chart's objects carry:
+# `app.fullname` is `ashudev-nginx`, the Service the routers point at. The
+# suffixed name separates the web server from the chart, and matches the
+# sibling site this chart was shaped from. The label
+# `app.kubernetes.io/name: nginx` is also true: nginx is what serves.
 nameOverride: nginx
 fullnameOverride: ""
 
@@ -83,9 +81,9 @@ ingressRoute:
   # -- API group. `traefik.containo.us/v1alpha1` is what the cluster's Traefik 2.x
   # -- watches today; flip this to `traefik.io/v1alpha1` when Traefik v3 lands.
   apiVersion: traefik.containo.us/v1alpha1
-  # -- Route name, defaulting to the release name (`ashuvidz`) — not the fullname.
-  # -- That is the name Traefik already serves, and a rename leaves the host with
-  # -- no router until the new object is applied.
+  # -- Route name, defaulting to the release name (`ashudev`) — not the fullname.
+  # -- Traefik serves the site under this name, and a rename would leave the host
+  # -- without a router until the new object is applied.
   name: ""
   # -- Public host. It is on the cluster's public list, so there is no `lan-only`
   # -- middleware here, by design. This is `ashudev.com`; the `www` name below
