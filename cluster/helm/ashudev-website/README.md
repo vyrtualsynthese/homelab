@@ -53,7 +53,21 @@ The content lives in an `emptyDir` mounted at `/site`:
   chart deliberately differs from `ashuvidz-website`. Pages rewrites `gh-pages` on every publish, so
   a fast-forward-only pull can fail forever after one rewrite: the site would keep serving the
   previous build with nothing red anywhere. A failed fetch is logged and the previous content stays.
+- The reset is **not atomic**: `git reset --hard` rewrites `/site` file by file while nginx serves
+  it, so a request landing in that window can read a new `index.html` beside a bundle that is not
+  written yet. The window is the length of one reset of a small static tree, and a request that
+  loses the race gets a 404 for one asset and a reload fixes it. Making it atomic would need a
+  second directory and a symlink swap; that cost is not paid for a personal site. A failed fetch
+  leaves the previous tree intact; a failed reset leaves a half-written one, and the sidecar says so
+  in its log rather than claiming otherwise.
 - Nothing survives a restart: the pod re-clones. The repository is the only copy.
+
+## Paths
+
+`/name` serves `name.html` when no such file exists, because that is what GitHub Pages did and what
+the site's own links still assume (`/services` answered 200 there). `/index.html` is served as
+`index.html` rather than redirected to `/`; Pages redirected it, and the difference is a duplicate
+URL, not a broken one.
 
 ## Routing
 
