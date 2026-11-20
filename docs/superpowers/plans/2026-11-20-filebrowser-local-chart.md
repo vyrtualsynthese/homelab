@@ -48,7 +48,7 @@
 - Consumes: nothing from another task.
 - Produces: rendered Deployment `filebrowser-filebrowser-quantum` with `nodeSelector` `nuc0`; Service `filebrowser-filebrowser-quantum` on 8080; ConfigMap and Secret of the same name; claims `filebrowser-filebrowser-quantum-config` and `-data`; values `nfsVolumes` and `traefik.*` unchanged for the existing templates.
 
-- [ ] **Step 1: Pull the released upstream chart and record what it renders, as the baseline**
+- [x] **Step 1: Pull the released upstream chart and record what it renders, as the baseline**
 
 ```bash
 rm -rf /tmp/opencode/fb-baseline && git worktree add /tmp/opencode/fb-baseline origin/develop
@@ -58,19 +58,19 @@ helm template filebrowser . --namespace filebrowser > /tmp/opencode/fb-before.ya
 
 Expected: exit 0, and `/tmp/opencode/fb-before.yaml` names the objects listed in the spec.
 
-- [ ] **Step 2: Write `Chart.yaml` without dependencies**
+- [x] **Step 2: Write `Chart.yaml` without dependencies**
 
 Version `0.3.0`, `appVersion: "2.0.2"`, description "FileBrowser Quantum — web file browser over the NAS exports, OIDC only".
 
-- [ ] **Step 3: Rewrite `values.yaml` at the root**
+- [x] **Step 3: Rewrite `values.yaml` at the root**
 
 Move the `filebrowser-quantum:` block to the root, drop `fullnameOverride`-style subchart keys, add `nodeSelector`, `tolerations`, `affinity`, `service.port`, `probes`, `podSecurityContext`, `securityContext`, `serviceAccount`, `persistence.config/data`, `adminPassword`, `extraEnv`, `extraVolumes`, `extraVolumeMounts`, and `config` with `server.logging` at `warning|error`. Keep the existing comments that carry the uid/mergerfs and OIDC reasoning.
 
-- [ ] **Step 4: Write `_helpers.tpl`, `deployment.yaml`, `service.yaml`, `serviceaccount.yaml`, `configmap.yaml`, `secret.yaml`, `persistentvolumeclaim.yaml`**
+- [x] **Step 4: Write `_helpers.tpl`, `deployment.yaml`, `service.yaml`, `serviceaccount.yaml`, `configmap.yaml`, `secret.yaml`, `persistentvolumeclaim.yaml`**
 
 Follow `cluster/helm/media-stack/autobrr` for helper and object shape, with `app.selectorLabels` rendering the legacy pair and `app.fullname` rendering `<release>-filebrowser-quantum`.
 
-- [ ] **Step 5: Render and compare names and selectors with the baseline**
+- [x] **Step 5: Render and compare names and selectors with the baseline**
 
 ```bash
 cd cluster/helm/filebrowser && rm -rf charts Chart.lock
@@ -90,7 +90,7 @@ PY
 
 Expected: the only differences are the new ServiceAccount and the added `helm.sh`/`app.kubernetes.io` labels; every workload, Service, ConfigMap, Secret and claim name is identical, and the Deployment selector is identical.
 
-- [ ] **Step 6: Check the pin**
+- [x] **Step 6: Check the pin**
 
 ```bash
 grep -A2 'nodeSelector' /tmp/opencode/fb-after.yaml
@@ -98,7 +98,7 @@ grep -A2 'nodeSelector' /tmp/opencode/fb-after.yaml
 
 Expected: `kubernetes.io/hostname: nuc0` under the Deployment's `spec.template.spec`.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add cluster/helm/filebrowser .gitignore
@@ -117,19 +117,19 @@ git commit -m "🚀 feat(filebrowser): own the chart and pin it to nuc0"
 - Consumes: the chart from Task 1.
 - Produces: nothing other tasks read.
 
-- [ ] **Step 1: Rewrite the chart README's chart section**
+- [x] **Step 1: Rewrite the chart README's chart section**
 
 Replace "Why the fork" with "Why a local chart": the upstream chart exports no scheduling field, the card's options, and why the third won. Replace the "Known gap" section with the pin, and record: the legacy selector reason, why liveness shares `/health` with readiness, the `warning|error` log level, and that a `config.yaml` change needs a restart.
 
-- [ ] **Step 2: Update the applications table row**
+- [x] **Step 2: Update the applications table row**
 
 `| \`filebrowser\` | \`filebrowser\` | nuc0 | A | web file browser over the media shares, FileBrowser Quantum, sign-in through authentik |`
 
-- [ ] **Step 3: Add the two contract records**
+- [x] **Step 3: Add the two contract records**
 
 A `filebrowser` row in `docs/charts/README.md`'s table (probes on `/health`, capabilities dropped, seccomp, no privilege escalation, uid 1100 with primary gid 1000), and a `### filebrowser` paragraph in `docs/reference/chart-notes.md` under "What good looks like".
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add cluster/helm/filebrowser/README.md docs/how-it-works/applications.md docs/charts/README.md docs/reference/chart-notes.md
@@ -140,7 +140,7 @@ git commit -m "📝 docs(filebrowser): the chart is ours and runs on nuc0"
 
 **Files:** none.
 
-- [ ] **Step 1: Lint and render**
+- [x] **Step 1: Lint and render**
 
 ```bash
 cd cluster/helm/filebrowser
@@ -151,7 +151,7 @@ cd - >/dev/null
 
 Expected: both exit 0.
 
-- [ ] **Step 2: Schema check**
+- [x] **Step 2: Schema check**
 
 ```bash
 cd cluster/helm/filebrowser && helm template filebrowser . --namespace filebrowser | kubeconform -strict -summary
@@ -159,7 +159,7 @@ cd cluster/helm/filebrowser && helm template filebrowser . --namespace filebrows
 
 Expected: all resources valid. If `kubeconform` is absent, report it as not run, not as a pass.
 
-- [ ] **Step 3: The repo checks**
+- [x] **Step 3: The repo checks**
 
 ```bash
 hack/check-app-version.sh --only cluster/helm/filebrowser
@@ -169,11 +169,11 @@ uv run --with-requirements hack/tests/requirements.txt python -m pytest -q hack/
 
 Expected: one chart passes both scripts; the pytest suite reports zero failures.
 
-- [ ] **Step 4: ArgoCD references still resolve** (AGENTS.md §6, CRLF-safe snippets)
+- [x] **Step 4: ArgoCD references still resolve** (AGENTS.md §6, CRLF-safe snippets)
 
 Expected: no `BROKEN PATH` or `BROKEN VALUES` line.
 
-- [ ] **Step 5: Rebase, push, open the PR**
+- [x] **Step 5: Rebase, push, open the PR**
 
 ```bash
 git fetch origin
@@ -183,7 +183,7 @@ git push -u origin feature/filebrowser-quantum
 
 Then open the PR against `develop` with the rendered-name comparison, the pin evidence and the check output in the body.
 
-- [ ] **Step 6: Move card #427 to Validation**
+- [x] **Step 6: Move card #427 to Validation**
 
 Comment with the branch, the PR link, the render diff and the check output. Leave it in `Validation`; never `Done`.
 
