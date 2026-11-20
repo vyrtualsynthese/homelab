@@ -150,12 +150,18 @@ def main(argv: list[str] | None = None) -> int:
 
         problems = check_stream(name, snapshots, used, budget, now)
         if stream.get("etcd"):
-            newest = newest_etcd(read_etcd(repository, restic=args.restic), now)
-            if newest is None:
-                print(f"etcd stream={name} file=- age_h=-", flush=True)
+            # `restic ls latest` exits 1 when the repository holds no snapshot at all, and a
+            # repository with no snapshot is what check_stream just reported; asking for the
+            # newest file would abort the run instead of naming the stream.
+            if snapshots:
+                newest = newest_etcd(read_etcd(repository, restic=args.restic), now)
+                if newest is None:
+                    print(f"etcd stream={name} file=- age_h=-", flush=True)
+                else:
+                    print(f"etcd stream={name} file={newest['file']} age_h={newest['age_h']}", flush=True)
+                problems.extend(check_etcd(name, newest, now))
             else:
-                print(f"etcd stream={name} file={newest['file']} age_h={newest['age_h']}", flush=True)
-            problems.extend(check_etcd(name, newest, now))
+                print(f"etcd stream={name} file=- age_h=-", flush=True)
 
         for problem in problems:
             print(f"problem stream={name} {problem}", flush=True)
