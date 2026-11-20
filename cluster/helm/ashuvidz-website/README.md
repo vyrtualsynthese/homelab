@@ -31,7 +31,7 @@ helm template ashuvidz cluster/helm/ashuvidz-website --namespace ashuvidz
 | `templates/configmap.yaml` | `nginx.conf` — the served root, `/healthz`, the `.git` deny, gzip |
 | `templates/service.yaml` | the ClusterIP Service on port 80 → the container's 8080 |
 | `templates/serviceaccount.yaml` | the ServiceAccount, with no API token mounted |
-| `templates/ingressroute.yaml` | the `websecure` IngressRoute and the `web` redirect |
+| `templates/ingressroute.yaml` | the `websecure` IngressRoute, the `web` redirect, and the `www` pair |
 | `templates/NOTES.txt` | install notes |
 
 ## How a content change reaches the cluster
@@ -58,7 +58,20 @@ The content lives in an `emptyDir` mounted at `/site`:
 no authentik gate: it is reachable from the internet by design. TLS is `certResolver: myresolver`
 (Let's Encrypt); the only middleware is `kube-system/security`, which sets the security headers.
 
-Both routes are unchanged from what the cluster already ran — same names (`ashuvidz`,
+Three routers:
+
+| Router | Entry point | What it does |
+|---|---|---|
+| `ashuvidz` | `websecure` | the site, TLS from `myresolver` |
+| `ashuvidz-redirect` | `web` | 301 to HTTPS through `kube-system/redirect-https` |
+| `ashuvidz-www` | `web`, `websecure` | 301 `www.ashuvidz.com/<path>` → `ashuvidz.com/<path>`, with its own `tls` |
+
+The `www` router is not decoration. Traefik only asks the resolver for a certificate for a name some
+router matches, so a `www` that resolves with no router answers with a TLS name mismatch — which is
+what `www.ashuvidz.com` did until this block existed. Its `tls` block is what makes
+`https://www.ashuvidz.com` work at all; the redirect is only what it does once the certificate exists.
+
+The apex routes are unchanged from what the cluster already ran — same names (`ashuvidz`,
 `ashuvidz-redirect`), same `websecure`/`web` pair, the `security` headers and the `redirect-https`
 middleware on Traefik's no-op service. `hack/check-exposure.sh --only ashuvidz` passes because a
 public host is allowed to be ungated.

@@ -16,6 +16,9 @@ PUBLIC_HOSTS = frozenset(
         "plex.kub.home.ashudev.com",
         "seerr.kub.home.ashudev.com",
         "ashuvidz.com",
+        # Its `www` is the same redirect pair as `ashudev.com`'s: a router of its
+        # own so Traefik requests a certificate for the name, and then a 301.
+        "www.ashuvidz.com",
         # The operator's own site and its redirect: both are meant to answer the
         # internet, so the gate cannot be the LAN. The `www` name has its own
         # router only so Traefik requests a certificate for it.
