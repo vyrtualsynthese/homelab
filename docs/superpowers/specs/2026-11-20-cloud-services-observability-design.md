@@ -246,8 +246,17 @@ Configured through the OVH API, not a dashboard:
 Evidence for the numbers: the one 2026 bill on the account is €16.19 (March);
 the new project's usage is €0.00. €20 is a small margin above the historical
 monthly, €50 is the "something is running that should not be" line. The API
-allows one configuration per service and threshold, and repeats no more than
-once an hour.
+repeats no more than once an hour.
+
+**Built 2026-11-20, with one deviation.** `all-20` was created and reads back
+correct (id `07f35b7f-f559-472b-8852-93b140034720`). `all-50` was refused by
+the API on five attempts, each an HTTP 500 `Server::InternalServerError` from a
+different backend, with a request body identical in shape to the one that
+succeeded apart from the name and the threshold. The provider, not the
+request, is at fault. The €20 threshold still fires on higher spend, so no
+condition is unmonitored; only the second signal is missing. A Backlog card
+tracks the retry. The earlier claim that the API allows one configuration per
+service and threshold is not supported by this evidence and is withdrawn.
 
 The credentials are the legacy application-key trio in `~/ovh.conf` (mode
 600; section `[ovh-eu]`): `application_key`, `application_secret`,
@@ -257,10 +266,10 @@ what the shell and the OpenCode wrapper load; the two files were compared on
 2026-11-20 and hold the same three values. With them loaded, `ovhcloud` and
 signed API calls authenticate against `ovh-eu`: `cloud project list`,
 `GET /cloud/project/<id>/usage/current` and `GET /me/bill` all answered. The
-builder runs the two `alerting create` calls and verifies with `alerting
+builder ran the `alerting create` calls and verified with `alerting
 list`; no credential value is copied into the repository. This is the
 repository's normal agent path (`AGENTS.md` §9, "Configure through the API,
-not the operator's mouse"), and the only OVH writes are the two configurations
+not the operator's mouse"), and the only OVH writes were the configurations
 named in the table.
 
 What stays with OVH, unchanged, and is written down rather than replaced:

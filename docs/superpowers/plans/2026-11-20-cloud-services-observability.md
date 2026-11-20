@@ -385,7 +385,7 @@ Take each `target.expr` out of the saved dashboard and run it through `/api/ds/q
 
 - [ ] **Step 1: Write the runbook**
 
-Sections, each answering one question: **What is watched** (table: target, module, assertion, where it lives); **Why the prober has its own resolvers** (the `192.168.1.46` rewrite); **Reading each alert** (one subsection per rule: what it means, what to check, the command to run); **Adding a target** (values file, module, scrape job, and that two files change); **The ashuvidz.com delegation flip** (target list four AWS → two OVH, NS module stays liveness-only, no rule changes); **The money alerts** (IDs, thresholds, email, how to change or delete them with `ovhcloud cloud alerting`); **Rollback** (delete the Application and the two scrape jobs; delete the three rules, the dashboard and the silences through the Grafana API; delete the two OVH configurations with `ovhcloud cloud alerting delete`; nothing holds state); **Known limits** (no mail delivery test, no zone-versus-git drift, no spend dashboard).
+Sections, each answering one question: **What is watched** (table: target, module, assertion, where it lives); **Why the prober has its own resolvers** (the `192.168.1.46` rewrite); **Reading each alert** (one subsection per rule: what it means, what to check, the command to run); **Adding a target** (values file, module, scrape job, and that two files change); **The ashuvidz.com delegation flip** (target list four AWS → two OVH, NS module stays liveness-only, no rule changes); **The money alerts** (id `07f35b7f-f559-472b-8852-93b140034720`, threshold €20, email, how to change or delete with `ovhcloud cloud alerting`; state that the €50 configuration was refused by the provider with HTTP 500 and is tracked by a Backlog card, so the page does not promise an alert that does not exist); **Rollback** (delete the Application and the two scrape jobs; delete the three rules, the dashboard and the silences through the Grafana API; delete the OVH configuration with `ovhcloud cloud alerting delete`; nothing holds state); **Known limits** (no mail delivery test, no zone-versus-git drift, no spend dashboard).
 
 Plain language: "authoritative server (the server that holds the zone's real records)", "delegation (which servers the registry points the domain at)", "CNAME (one name that points at another)".
 
@@ -423,5 +423,5 @@ After Task 7, on the merged tree:
 3. Prometheus `/api/v1/targets`: every blackbox target `up`.
 4. Grafana rules API: three rules, correct groups, `inactive`; the silenced clone test proved pending → firing → resolved and was removed.
 5. Dashboard: every panel query returned rows when re-run from the saved dashboard.
-6. `ovhcloud cloud alerting list`: two configurations with the right email and thresholds.
+6. `ovhcloud cloud alerting list`: one configuration (`all-20`, €20, right email); the €50 one is refused by the provider and tracked by a Backlog card.
 7. `docs/runbooks/cloud-monitoring.md` is in the nav and every relative link resolves.
