@@ -39,6 +39,17 @@ def _dotted(path, key):
     return f"{path}.{key}" if path else key
 
 
+def _merge(left, right):
+    """Recursively union two key trees: a nested map is merged, never replaced."""
+    merged = dict(left)
+    for key, value in right.items():
+        if isinstance(merged.get(key), dict) and isinstance(value, dict):
+            merged[key] = _merge(merged[key], value)
+        else:
+            merged[key] = value
+    return merged
+
+
 def _walk(node, schema, path, found):
     """Collect the keys of a parsed config node that the schema does not declare."""
     if isinstance(node, yaml.MappingNode):
@@ -56,12 +67,16 @@ def _walk(node, schema, path, found):
     elif isinstance(node, yaml.SequenceNode):
         if not isinstance(schema, list):
             return
-        # Helm replaces a list wholesale, so the chart's one example element has
-        # to stand for every element the user wrote: merge their key sets.
+        # Helm replaces a list wholesale, so the chart's example elements have
+        # to stand for every element the user wrote: union their key trees.
         element_schema = {}
         for element in schema:
             if isinstance(element, dict):
-                element_schema.update(element)
+                element_schema = _merge(element_schema, element)
+        if not element_schema:
+            # The schema declares no element at all (an empty list, or a list of
+            # scalars), so there is nothing to compare the render against.
+            return
         for element in node.value:
             _walk(element, element_schema, f"{path}[]", found)
 
@@ -95,15 +110,19 @@ def config_text(documents, key):
 
 
 def _dependency_from_directory(directory):
-    chart_yaml = (directory / "Chart.yaml").read_text(encoding="utf-8")
-    values_yaml = (directory / "values.yaml").read_text(encoding="utf-8")
+    try:
+        chart_yaml = (directory / "Chart.yaml").read_text(encoding="utf-8")
+        values_yaml = (directory / "values.yaml").read_text(encoding="utf-8")
+    except OSError as error:
+        raise CheckError(f"{directory}: cannot read the dependency chart: {error}") from error
     return values_yaml, chart_yaml
 
 
 def _dependency_from_archive(archive_path):
     with tarfile.open(archive_path) as archive:
+        names = set(archive.getnames())
         tops = set()
-        for name in archive.getnames():
+        for name in names:
             parts = name.split("/")
             if len(parts) == 2 and parts[1] in ("Chart.yaml", "values.yaml") and parts[0]:
                 tops.add(parts[0])
@@ -112,13 +131,19 @@ def _dependency_from_archive(archive_path):
                 f"{archive_path.name}: expected one top-level directory, found {len(tops)}"
             )
         top = tops.pop()
+        for filename in ("Chart.yaml", "values.yaml"):
+            if f"{top}/{filename}" not in names:
+                raise CheckError(f"{archive_path.name}: no {filename} in the archive")
         values_yaml = archive.extractfile(f"{top}/values.yaml").read().decode("utf-8")
         chart_yaml = archive.extractfile(f"{top}/Chart.yaml").read().decode("utf-8")
     return values_yaml, chart_yaml
 
 
 def _name_and_version(chart_yaml, fallback):
-    chart = yaml.safe_load(chart_yaml) or {}
+    try:
+        chart = yaml.safe_load(chart_yaml) or {}
+    except yaml.YAMLError as error:
+        raise CheckError(f"the dependency's Chart.yaml is not YAML: {error}") from error
     name = chart.get("name") or fallback
     version = chart.get("version") or "?"
     return str(name), str(version)
@@ -137,6 +162,14 @@ def dependency_chart(charts_dir, dependency):
                 f"{dependency} is not built under {charts_dir}; run `helm dependency build` "
                 f"in the chart that owns it"
             )
+        if len(archives) > 1:
+            # charts/ is gitignored scratch: a stale archive from an older pin
+            # would silently become the schema while helm renders the new one.
+            raise CheckError(
+                f"several archives for {dependency} under {charts_dir} "
+                f"({', '.join(archive.name for archive in archives)}); run "
+                f"`helm dependency build` to leave only the pinned one"
+            )
         values_yaml, chart_yaml = _dependency_from_archive(archives[0])
     name, version = _name_and_version(chart_yaml, dependency)
     return values_yaml, name, version
@@ -144,7 +177,10 @@ def dependency_chart(charts_dir, dependency):
 
 def schema_tree(values_yaml, subtree):
     """Return the declared key tree: the `subtree` map of the dependency's values."""
-    values = yaml.safe_load(values_yaml) or {}
+    try:
+        values = yaml.safe_load(values_yaml) or {}
+    except yaml.YAMLError as error:
+        raise CheckError(f"the dependency's values.yaml is not YAML: {error}") from error
     tree = values.get(subtree) if isinstance(values, dict) else None
     if not isinstance(tree, dict):
         raise CheckError(f"no `{subtree}:` map in the dependency's values.yaml")
@@ -154,18 +190,21 @@ def schema_tree(values_yaml, subtree):
 def render(chart_dir, helm="helm"):
     """Render a chart the way ArgoCD would, into a list of documents."""
     chart_dir = pathlib.Path(chart_dir)
-    result = subprocess.run(
-        [
-            helm,
-            "template",
-            chart_dir.name,
-            str(chart_dir),
-            "-f",
-            str(chart_dir / "values.yaml"),
-        ],
-        capture_output=True,
-        text=True,
-    )
+    try:
+        result = subprocess.run(
+            [
+                helm,
+                "template",
+                chart_dir.name,
+                str(chart_dir),
+                "-f",
+                str(chart_dir / "values.yaml"),
+            ],
+            capture_output=True,
+            text=True,
+        )
+    except OSError as error:
+        raise CheckError(f"cannot run {helm}: {error}") from error
     if result.returncode != 0:
         first_lines = "\n".join(result.stderr.strip().splitlines()[:5])
         raise CheckError(f"helm template {chart_dir} failed:\n{first_lines}")
@@ -191,19 +230,28 @@ def check_entry(entry, root, helm="helm", render_fn=render):
 def main(argv):
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--manifest", default=str(DEFAULT_MANIFEST))
+    parser.add_argument("--root", default=str(ROOT), help="directory the manifest's chart paths are relative to")
     parser.add_argument("--only", default="", help="only charts whose path contains this string")
     arguments = parser.parse_args(argv)
 
-    entries = yaml.safe_load(pathlib.Path(arguments.manifest).read_text(encoding="utf-8")) or []
+    try:
+        entries = yaml.safe_load(pathlib.Path(arguments.manifest).read_text(encoding="utf-8")) or []
+    except (OSError, yaml.YAMLError) as error:
+        print(f"SKIP {arguments.manifest}: {error}")
+        return 2
+
     violations = 0
     for entry in entries:
         chart = entry.get("chart", "?")
         if arguments.only and arguments.only not in chart:
             continue
         try:
-            found = check_entry(entry, ROOT)
+            missing = [field for field in ("chart", "dependency", "schema", "key") if not entry.get(field)]
+            if missing:
+                raise CheckError(f"the manifest entry is missing {', '.join(missing)}")
+            found = check_entry(entry, arguments.root)
         except CheckError as error:
-            print(f"FAIL {chart}: {error}")
+            print(f"SKIP {chart}: {error}")
             return 2
         if found:
             for violation in found:

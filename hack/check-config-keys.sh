@@ -19,7 +19,7 @@ case "${1:-}" in
   --self-test)
     exec python3 -m unittest discover -s "$ROOT/hack/tests" -p 'test_check_config_keys.py' -v ;;
   -h|--help)
-    sed -n '2,12p' "${BASH_SOURCE[0]}"; exit 0 ;;
+    sed -n '2,13p' "${BASH_SOURCE[0]}"; exit 0 ;;
 esac
 
 exec python3 "$ROOT/hack/check_config_keys.py" --manifest "$ROOT/hack/config-key-checks.yaml" "$@"
