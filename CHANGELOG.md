@@ -16,6 +16,11 @@ All notable changes to this repository. The format follows
 
 ### Changed
 
+- The restore runbook's drill log has its first three entries. On 2026-11-21 a scratch restic pod
+  restored the PostgreSQL dump directory from `nodes-nas` (26 dumps plus `globals.sql`), Sonarr's
+  database from `nodes-streaming` (which passed `pragma integrity_check`) and one Syncthing photo
+  from `nfs` (sha256 identical to the live file). The destructive put-back onto a live claim and the
+  etcd rehearsal are still unproved, and the pages say so.
 - FileBrowser moves to FileBrowser Quantum, the maintained fork of the archived upstream, as a wrapper
   around the community chart pinned at `2.0.2-stable`.
 - FileBrowser signs in through authentik only: the password form is off, so an unauthenticated browser
