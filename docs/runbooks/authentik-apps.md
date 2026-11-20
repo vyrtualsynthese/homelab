@@ -329,6 +329,12 @@ unset KEY
 Until the Secret exists the pod sits in `CreateContainerConfigError`; that is expected, and the rest of
 the sync is healthy.
 
+**If `TOK` comes back empty**, the outpost has no token and the Secret would hold `null`. Creating the
+outpost object *does* generate the token — confirmed on 2026-11-20, when this one-liner produced a
+working Secret — so an empty value means the outpost object did not apply: check the blueprint
+instance (`GET $API/managed/blueprints/?search=outpost`) and the worker log first. Do not hand-craft a
+token; a token that authentik did not issue for that outpost authenticates nothing.
+
 Two checks mean the outpost is up: `GET $API/outposts/instances/?search=ashulab-ldap` lists
 `ashulab-ldap` with `providers` holding `thelounge-ldap`, and
 `GET $API/outposts/instances/<uuid>/health/` returns a record whose `version` is `2026.8.5`. The pod
