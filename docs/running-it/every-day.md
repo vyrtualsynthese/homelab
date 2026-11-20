@@ -18,7 +18,8 @@ kubectl get applications -n argocd \
 kubectl get pods -A --no-headers | awk '$4!="Running" && $4!="Completed"'
 
 kubectl get deploy,statefulset,daemonset -A
-kubectl get pvc -A   # the `Terminating` claims are expected
+kubectl get pvc -A   # one `Pending` minecraft claim is expected
+kubectl get pv        # nothing should read `Terminating`
 ```
 
 Then the dashboards, from anything on fire, to whose logs are noisy, to the hardware underneath:
@@ -37,17 +38,12 @@ cluster.
 Normal is not silence — this cluster has known faults, and they stay visible. Normal is that nothing
 has **changed**:
 
-- Every `Application` is `Synced` and `Healthy`, apart from the drift set, the chart-path errors and
-  the broken list: all named on the status page, so the only question is whether the membership
-  changed.
+- Every `Application` is `Synced` and `Healthy`, apart from the ones the status page names. The only
+  question is whether the membership changed.
 - The pod filter prints rows. A row whose application is already on the status page is a fault you
   already own, not one you just found.
-- Four provisioners read `Progressing` while their pod is `1/1` ready: `plex-media`,
-  `nfs-qbittorrent-download`, `stash-nfs` and `traefik-nfs`. Each tracks a PersistentVolume that has
-  carried a deletion timestamp since 2023-12-06 while its claim stays `Bound`, and ArgoCD calls a
-  volume marked for deletion unfinished. They stay that way until those four volumes are dealt with —
-  [cleanup/longhorn-disposition.md](../cleanup/longhorn-disposition.md) — and none of the four is
-  broken storage.
+- One Application reads `Progressing` with nothing wrong: `minecraft-server` at 0 replicas has no
+  pod to become healthy. It is switched off in its values file, not broken.
 - On Health, everything firing is already known — an accepted fault below or a broken application the
   status page names. On Disks, every other drive has life left.
 
@@ -94,9 +90,10 @@ unrecorded.
 - **Never `kubectl edit` or `kubectl apply` a GitOps-managed object.** Self-heal or the next sync
   reverts it, and the change vanishes with no record of why. Edit the chart, commit, let the
   Application pick it up.
-- **Never restart a pod whose volume is borrowed, nor clear a `Terminating` claim's finalizers.** The
-  driver that holds the claim is gone, so a restart can lose the volume and its configuration, and
-  clearing the finalizers is the same loss done on purpose.
-  [The status page](../status.md) names the apps to leave alone.
+- **Never restart a pod to make its volume behave, and never clear a deletion mark on its own.** A
+  volume or claim carries a deletion mark because something asked for it; clearing the finalizer
+  without deleting the claim as well deletes the volume and leaves a claim pointing at nothing. The
+  rebuild procedure, which keeps the data and the running pods, is in
+  [storage.md](../how-it-works/storage.md#four-volumes-that-carried-a-deletion-mark).
 - **Never silence a new alert to clear red.** A silence suppresses the notification only, with an
   expiry and a comment; the rule goes on firing. It is a decision, not a broom.

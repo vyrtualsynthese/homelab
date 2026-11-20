@@ -79,52 +79,62 @@ pod**; otherwise the scheduler keeps queueing it against the old claim's identit
 stays as `Released` — delete it and its directory. The habit that avoids it: scale the old Deployment
 to zero before the first sync that creates the claim.
 
-## Four volumes stay marked for deletion
+## Four volumes that carried a deletion mark
 
 Longhorn is gone: the driver, its classes and custom resources, the namespace, all twenty-six volumes
 and all six claims were cleared on 2026-11-18 and 2026-11-19. The record of how is
 [the Longhorn page](../cleanup/longhorn-disposition.md).
 
-Four volumes still show `Terminating` in `kubectl get pv`. They are not leftovers. They were asked to
-delete on 2023-12-06, the deletion was blocked because each is bound to a live claim, and a deletion
-timestamp cannot be cleared on a running object. They are **kept as they are, by decision on
-2026-11-20**, and nothing is to be done about them:
+Four volumes were asked to delete on 2023-12-06. The deletion was blocked because each was bound to a
+live claim, and a deletion timestamp cannot be cleared on a running object, so the mark survived
+every rebuild since:
 
-| Volume | Claim | Mounted by | What it holds | Why it stays |
-|---|---|---|---|---|
-| `pv-traefik-nfs` | `kube-system/pvc-traefik-nfs` | the `traefik` DaemonSet | the ACME certificate store, `/mnt/storage/traefik` | every TLS route depends on it, and a bad replacement re-issues the certificates |
-| `pv-plex-media` | `media-stack/pvc-plex-media` | `plex`, `sonarr`, `sonarr-anime`, `radarr`, `radarr-anime`, `bazarr`, `bazarr-anime` | film and television, `/mnt/storage/nfs/plexmedia` | seven workloads read it; replacing it buys nothing and stops all seven |
-| `pv-stash-nfs-nfs-stash` | `media-stack/pvc-stash-nfs-nfs-stash` | the `stash-nfs` provisioner | assets and documents, `/mnt/storage/nfs/stash` | it is the export FileBrowser reads, and koillection's uploads are provisioned into it |
-| `pv-nfs-qbittorrent-download-nfs-subdir-external-provisioner` | `media-stack/pvc-nfs-qbittorrent-download-nfs-subdir-external-provisioner` | `qbittorrent`, `unpackerr`, `sonarr`, `sonarr-anime`, `radarr`, `radarr-anime`, `lidarr` | the downloads queue, `/mnt/ultrafaststorage/nfs` | it is the in-flight queue every *arr application and the unpacker share |
+| Volume | Claim | Mounted by | What it holds |
+|---|---|---|---|
+| `pv-traefik-nfs` | `kube-system/pvc-traefik-nfs` | the `traefik` DaemonSet | the ACME certificate store, `/mnt/storage/traefik` |
+| `pv-plex-media` | `media-stack/pvc-plex-media` | `plex`, `sonarr`, `sonarr-anime`, `radarr`, `radarr-anime`, `bazarr`, `bazarr-anime` | film and television, `/mnt/storage/nfs/plexmedia` |
+| `pv-stash-nfs-nfs-stash` | `media-stack/pvc-stash-nfs-nfs-stash` | the `stash-nfs` provisioner | assets and documents, `/mnt/storage/nfs/stash`, the export FileBrowser reads |
+| `pv-nfs-qbittorrent-download-nfs-subdir-external-provisioner` | `media-stack/pvc-nfs-qbittorrent-download-nfs-subdir-external-provisioner` | `qbittorrent`, `unpackerr`, `sonarr`, `sonarr-anime`, `radarr`, `radarr-anime`, `lidarr` | the downloads queue, `/mnt/ultrafaststorage/nfs` |
 
-Two facts keep them safe. Each volume is bound to a live claim, so its only finalizer is
-`kubernetes.io/pv-protection`, the guard any in-use volume carries; and its reclaim policy is
-`Retain`, so the directory on the NAS survives even a deletion that does complete. All four are
-declared by the provisioner chart (`cluster/helm/nfs/provisioner/values/*.yaml`, with
-`nfs.mountOptions` non-empty), so git still owns them and a sync recreates them.
+ArgoCD reads an object marked for deletion as still going away, so those four Applications —
+`plex-media`, `nfs-qbittorrent-download`, `stash-nfs`, `traefik-nfs` — reported `Progressing` and
+never `Healthy`, while their provisioners and every claim they served worked normally. The four
+classes whose volume was not marked (`books-media`, `nfs-audio`, `nfs-qbittorrent-config`,
+`nfs-syncthing`) read `Healthy` throughout, which was the tell.
 
-Their four Applications — `plex-media`, `nfs-qbittorrent-download`, `stash-nfs`, `traefik-nfs` — read
-`Progressing` and never `Healthy`. That is the deletion timestamp and nothing else: ArgoCD reads an
-object marked for deletion as still going away, and the four classes whose volume is not marked
-(`books-media`, `nfs-audio`, `nfs-qbittorrent-config`, `nfs-syncthing`) read `Healthy`. All four
-still sync, and every pod under them is `1/1`.
+They were kept as they were by decision on 2026-11-20, then rebuilt on **2026-11-21**, because a
+`Progressing` Application that can never settle is a standing false alarm on the health page, and its
+cause was a leaked mark rather than a fault worth watching.
 
-**Their finalizers must never be patched.** They carry no `spec.csi`, which is exactly what the
-Longhorn recipe filtered on, so a loop written for that cleanup cannot reach them; a hand-run patch
-can. The check is:
+Replacing one costs a few seconds and no downtime. The order per Application:
+
+1. delete the claim (`kubectl delete pvc … --wait=false`). The claim then sits `Terminating` behind
+   `kubernetes.io/pvc-protection`, so clear that one finalizer from the claim — safe, because the
+   volume's reclaim policy is `Retain` and the directory on `nas` is not touched by any of this;
+2. with the claim gone, the volume loses the `kubernetes.io/pv-protection` finalizer and its pending
+   deletion from 2023 completes;
+3. ArgoCD's self-heal recreates claim and volume from the provisioner chart in the same pass.
+
+Do the least critical Application first and `traefik-nfs` last, since it holds the ACME store.
+
+Running pods keep their NFS mounts: the kubelet holds the mount until the pod goes, and no pod is
+restarted by this. The NFS directory is never touched — the volumes are all `Retain`, and the data
+lives on `nas` at the paths above. Verified after the four swaps: no volume carries a deletion
+timestamp, the four Applications are `Synced`/`Healthy`, every consumer pod kept its start time and
+restart count, and `acme.json` in `pv-traefik-nfs` stayed byte-identical (417,415 bytes), so no
+certificate was re-issued.
+
+The deletion marks were never in git and a sync can neither create nor clear them, so no manifest in
+this repository changed for them. To check for a new one:
 
 ```bash
 kubectl get pv -o json \
   | jq -r '.items[] | select(.metadata.deletionTimestamp != null) | .metadata.name'
 ```
 
-Expected: exactly those four names. A fifth volume in that list is a real leftover; the four above
-are neither leftovers nor a problem.
-
-Replacing one is possible and unnecessary. It means scaling to zero every workload mounting the claim
-(the provisioner Deployment included, because it mounts the claim too), deleting the claim, letting
-the pending volume deletion complete, syncing the Application so the chart recreates the pair, then
-scaling back. The NFS directory is untouched throughout; a restart under load is the only cost.
+Expected: nothing. A name in that list is a volume to rebuild with the procedure above, in the same
+change as its claim. Patching the volume's finalizer alone deletes the object under a live claim and
+leaves the claim `Lost`; the data survives on the NAS, but nothing is mounted.
 
 ## Backups
 

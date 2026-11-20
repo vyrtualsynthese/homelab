@@ -2,14 +2,13 @@
 
 > **Kind: snapshot.** Read on **Friday 20 November 2026, 01:10–01:40 CET** through the read-only
 > ServiceAccount `kube-system/opencode-mcp`, plus the Grafana API for the one firing alert and the
-> drive number below. This is **not a live view**: it is true for that early morning and for nothing
-> after it.
+> drive number below. Refreshed on **Saturday 21 November 2026, 00:25 CET** for the storage
+> provisioners and the two drifted Applications, which were rebuilt and settled that night. This is
+> **not a live view**: it is true for the moment named beside each section.
 
 The short answer: **nothing is broken.** Every application that is meant to run has a ready replica,
-both batch applications ran successfully, and the two Applications ArgoCD reports `OutOfSync` are
-`Healthy`. Five Applications are `Progressing`, and each is explained below: four are the storage
-provisioners whose volumes carry a deletion request and are kept on purpose, and the fifth is a
-Minecraft server switched off in its own values file.
+both batch applications ran successfully, and every Application ArgoCD manages is `Synced`. One
+Application is `Progressing`: a Minecraft server switched off in its own values file.
 
 **Refresh this page when a workstream lands.** The date at the top is the only claim it makes: if it
 is older than the last merge on `develop`, distrust it rather than argue with it.
@@ -41,8 +40,8 @@ kubectl get pv | grep Terminating
 ```
 
 `kubectl get pvc -A` today prints one `Pending` claim, `minecraft/minecraft-server-data`, which binds
-only when a pod asks for it. `kubectl get pv` prints four `Terminating` volumes; they are kept by
-decision (see **Storage**) and clearing them destroys live data.
+only when a pod asks for it. `kubectl get pv | grep Terminating` prints nothing: the four volumes that
+carried a deletion mark since 2023 were rebuilt on 2026-11-21 (see **Storage**).
 
 Grafana's **Homelab** folder holds nine dashboards. These four answer most of the questions above:
 
@@ -98,12 +97,12 @@ rows that say otherwise.
 | `authentik` | authentik | 1/1 + 1/1 | Server and worker |
 | `dashy` | dashy | 1/1 | |
 | `pgadmin` | databases | 1/1 | |
-| `postgres` | databases | 1/1 | **OutOfSync**: only the first-install bootstrap Job differs |
-| `local-path` | default | 1/1 | **OutOfSync**: the Deployment differs from git; its claim settings matter to every `local-path` claim |
+| `postgres` | databases | 1/1 | Bootstrap Job carries the image tag in its name, so a bump replaces it |
+| `local-path` | default | 1/1 | Ignores the one field this API server drops; its claim settings matter to every `local-path` claim |
 | `docs-site` | docs | 1/1 | Serves the docs; the builder CronJob ran a minute before the read |
 | `filebrowser` | filebrowser | 1/1 | |
 | `koillection` | koillection | 1/1 | Rebuilt from the broken shape on 2026-11-19 |
-| `traefik-nfs` | kube-system | 1/1 | **Progressing**: kept volume, see **Storage** |
+| `traefik-nfs` | kube-system | 1/1 | The `traefik-nfs` class; volume rebuilt on 2026-11-21 |
 | `autobrr` | media-stack | 1/1 | |
 | `bazarr` | media-stack | 1/1 | |
 | `bazarr-anime` | media-stack | 1/1 | |
@@ -116,9 +115,9 @@ rows that say otherwise.
 | `maintainerr` | media-stack | 1/1 | |
 | `nfs-audio` | media-stack | 1/1 | The `nfs-audio` class |
 | `nfs-qbittorrent-config` | media-stack | 1/1 | Renders its provisioner from the wrapper chart — the previous snapshot's "manages nothing" no longer applies |
-| `nfs-qbittorrent-download` | media-stack | 1/1 | **Progressing**: kept volume, see **Storage** |
+| `nfs-qbittorrent-download` | media-stack | 1/1 | The downloads queue class; volume rebuilt on 2026-11-21 |
 | `plex` | media-stack | 1/1 | |
-| `plex-media` | media-stack | 1/1 | **Progressing**: kept volume, see **Storage** |
+| `plex-media` | media-stack | 1/1 | The film and television class; volume rebuilt on 2026-11-21 |
 | `prowlarr` | media-stack | 1/1 | |
 | `qbittorrent` | media-stack | 1/1 | With its WireGuard sidecar |
 | `qbittorrent-exporter` | media-stack | 1/1 | |
@@ -127,7 +126,7 @@ rows that say otherwise.
 | `seerr` | media-stack | 1/1 | |
 | `sonarr` | media-stack | 1/1 | |
 | `sonarr-anime` | media-stack | 1/1 | |
-| `stash-nfs` | media-stack | 1/1 | The `stash-nfs` class. **Progressing**: kept volume, see **Storage** |
+| `stash-nfs` | media-stack | 1/1 | The `stash-nfs` class; volume rebuilt on 2026-11-21 |
 | `tautulli` | media-stack | 1/1 | |
 | `unpackerr` | media-stack | 1/1 | |
 | `alert-relay` | monitoring | 1/1 | |
@@ -145,11 +144,10 @@ rows that say otherwise.
 | `thelounge` | thelounge | 1/1 | Rebuilt on `local-path` on 2026-11-19 |
 | `vikunja` | vikunja | 1/1 | |
 
-## ArgoCD reports Progressing (5)
+## ArgoCD reports Progressing (1)
 
 | Application | Why |
 |---|---|
-| `nfs-qbittorrent-download`, `plex-media`, `stash-nfs`, `traefik-nfs` | The four volumes named under **Storage** carry a deletion timestamp, so ArgoCD never settles on `Healthy`. Their provisioners serve their claims normally. This is a property of the volume, not a fault in the app, and it is recorded in [`how-it-works/storage.md`](how-it-works/storage.md) and [`cleanup/longhorn-disposition.md`](cleanup/longhorn-disposition.md) |
 | `minecraft-server` | `replicaCount: 0`: nothing runs, so nothing ever becomes healthy. Its claim is `Pending` for the same reason — `local-path` binds a claim only when a pod asks for it |
 
 ## Switched off by choice (1)
@@ -158,16 +156,12 @@ rows that say otherwise.
 Application still syncs; the pod is simply not wanted. Turning it back on is a values change plus a
 sync, not a repair.
 
-## Drift, not breakage (2)
+## Drift, not breakage (0)
 
-Both are `Healthy` and `OutOfSync`. Neither needs an incident.
-
-- `local-path` — the Deployment differs from what git renders. The provisioner itself is
-  `v0.0.37`; the chart's helper image floats on `latest`, one of the two recorded exceptions to the
-  pinned-tag rule.
-- `postgres` — the difference is the `postgres-bootstrap` Job created by the first install. A
-  completed Job cannot be compared to a template, so it stays `OutOfSync` while the StatefulSet,
-  both claims, the Services and the dump CronJob are `Synced`.
+Nothing sits `Healthy` and `OutOfSync`. The two that did were settled on 2026-11-21 rather than
+accepted: `local-path` ignores `/spec/template/spec/hostUsers`, which this API server drops from the
+stored Deployment, and the `postgres` bootstrap Job now carries the image tag in its name so a bump
+replaces it instead of failing on an immutable pod template.
 
 ## Storage
 
@@ -175,14 +169,13 @@ All 47 claims are `Bound` except `minecraft/minecraft-server-data` (`Pending`, s
 claim is `Terminating`**: the Longhorn cleanup finished on 2026-11-19, and `syncthing`, `thelounge`
 and `n8n` were rebuilt on `local-path` before their old claims were cleared.
 
-`kubectl get pv` shows four `Terminating` volumes anyway:
-`pv-traefik-nfs`, `pv-plex-media`, `pv-stash-nfs-nfs-stash` and
-`pv-nfs-qbittorrent-download-nfs-subdir-external-provisioner`. They were asked to delete in
-December 2023 and never went, because their claims stayed in use. **They are kept as they are, by
-decision on 2026-11-20**: stripping the finalizer would delete the volume and the live mount with
-it, and `pv-traefik-nfs` holds the ACME certificate store. Each is declared by the provisioner
-chart, so git still owns it. The per-volume reasons and the replacement procedure are in
-[`how-it-works/storage.md`](how-it-works/storage.md).
+`kubectl get pv` shows no `Terminating` volume: the four that carried a deletion mark since
+2023-12-06 — `pv-traefik-nfs`, `pv-plex-media`, `pv-stash-nfs-nfs-stash` and
+`pv-nfs-qbittorrent-download-nfs-subdir-external-provisioner` — were rebuilt on **2026-11-21**. Each
+claim was deleted, the volume's pending deletion completed, and self-heal recreated the pair from the
+provisioner chart. The data stayed on `nas` throughout: every volume is `Retain`, no pod restarted,
+and `acme.json` was byte-identical afterwards. The order, the check and why the mark could not
+simply be cleared are in [`how-it-works/storage.md`](how-it-works/storage.md).
 
 Six `Released` volumes remain from earlier rebuilds (`filebrowser-config`, `filebrowser-database`,
 the old `pgadmin-config`, the old `calibre-web-automated-config`, `cross-seed2`, `plex-transcode`).
@@ -233,8 +226,8 @@ and [`decisions/2026-11-19-retire-discourse.md`](decisions/2026-11-19-retire-dis
   paths they pointed at are the wrapper chart.
 - `nfs-ssd` and its 75-day `ContainerCreating` pod are gone; the NFS classes are one chart with
   eight releases.
-- The Longhorn claims are gone with the pods rebuilt: no claim is `Terminating` any more. The four
-  volumes still marked for deletion are NFS volumes kept by decision, a different thing.
+- The Longhorn claims are gone with the pods rebuilt, and so is every remaining deletion mark: on
+  2026-11-21 the four NFS volumes that had carried one since 2023 were rebuilt.
 - Pods fell from 149 to 120 at the read, and claims from 50 to 47.
 - The docs builder, which failed three runs on 2026-11-17, has run cleanly since: its runs complete
   and the CronJob fires every minute.
@@ -252,5 +245,5 @@ and [`decisions/2026-11-19-retire-discourse.md`](decisions/2026-11-19-retire-dis
   board.
 - [`observability-conventions.md`](observability-conventions.md) — the dashboards, the alert set and
   its known holes.
-- [`how-it-works/storage.md`](how-it-works/storage.md) — the classes, the claims, and the four
-  volumes kept with a deletion timestamp.
+- [`how-it-works/storage.md`](how-it-works/storage.md) — the classes, the claims, and the rebuild
+  procedure for a volume that carries a deletion mark.
