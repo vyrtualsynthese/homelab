@@ -2,25 +2,31 @@
 
 FileBrowser Quantum over the NAS exports, signed in through authentik, with no local password form.
 
-## Why the fork
+## Why the fork, and why the chart is ours
 
 Upstream `filebrowser/filebrowser` was archived on 2026-09-01: no fixes, no OIDC.
 [FileBrowser Quantum](https://github.com/gtsteffaniak/filebrowser) is the maintained fork and adds
 native OIDC plus per-user, per-source permissions.
 
-The chart here is a thin wrapper (repo pattern D): `Chart.yaml` pins the community chart
-[`Softwaredam/filebrowser-chart`](https://github.com/Softwaredam/filebrowser-chart) as an OCI
-dependency at `oci://ghcr.io/softwaredam/helm-charts`, and this file's values carry everything that
-matters. `charts/` and `Chart.lock` are gitignored — ArgoCD runs `helm dependency build` at sync time.
+`cluster/helm/filebrowser` used to be a thin wrapper (repo pattern D) around the community chart
+[`Softwaredam/filebrowser-chart`](https://github.com/Softwaredam/filebrowser-chart). That chart
+rendered no `nodeSelector`, `affinity` or `tolerations`, so the pod could be scheduled on any node —
+including the ARM64 `rbp2` — and its `local-path` config claim had to follow it. Card #427 offered an
+upstream PR, a fork, or a local chart; the operator chose the local chart on 2026-11-20, because it
+is the only one that ends the dependency on someone else's release cycle.
+
+The chart now owns its templates (repo pattern A). The names are the ones the previous chart
+rendered, so ArgoCD patches in place:
 
 | Object | Name |
 |---|---|
-| Deployment, Service, ConfigMap, Secret | `filebrowser-filebrowser-quantum` |
+| Deployment, Service, ConfigMap, Secret, ServiceAccount | `filebrowser-filebrowser-quantum` |
 | Claims on `local-path` | `filebrowser-filebrowser-quantum-config` (holds `database.db`), `-data` |
 | NFS claims | `filebrowser-stash`, `filebrowser-audio`, `filebrowser-download` |
 
-The service port is **8080** (the chart's default), not 80. `templates/ingressroute.yaml` reads
-`traefik.service` and `traefik.port` for that reason.
+The service port is **8080**, and `service.port` is the only copy of it: the container port, the
+Service, every probe and `http.port` in `config.yaml` all read that value. `templates/ingressroute.yaml`
+reads `traefik.service` and the same `service.port`.
 
 ## Sources and the export they need
 
@@ -58,9 +64,9 @@ the NAS — uid 1100, primary gid 0 denied, primary gid 1000 allowed — settled
 NFS group checks apply. Both groups are read-only on those directories; writes stay with uid 1100, the
 owner of the download export (`0755`).
 
-That uid is also why `server.cacheDir` is set to `/data/cache`: the chart's default is the relative
+That uid is also why `server.cacheDir` is set to `/data/cache`: upstream's default is the relative
 string `tmp`, resolved against the image's working directory, which 1100 cannot write, and the app
-dies at startup with `mkdir tmp: permission denied`. `/data` is the claim the chart already mounts for
+dies at startup with `mkdir tmp: permission denied`. `/data` is the claim the Deployment mounts for
 this. The cache has no size cap, because `cacheDirMaxSizeMB` does not exist in 2.0.2 and the app
 refuses unknown config fields at startup; the 1 Gi claim is the limit.
 
@@ -76,9 +82,10 @@ the `authentik-sso` Secret, because Secrets do not cross namespaces. Callback:
 method, which is what the operator asked for. Consequences:
 
 - No local login exists. Recovery is a commit — see `docs/runbooks/authentik-apps.md`.
-- `adminPassword.passwordOverride` is pinned to an inert string because the chart otherwise generates
-  a password with `rand` on every render and emits it unquoted; a value starting with `#` produced
-  invalid YAML. Turning password login back on means setting a real value there first.
+- `adminPassword.passwordOverride` is pinned to an inert string. The chart that came before generated
+  it with `rand` on every render and emitted it unquoted; a value starting with `#` produced invalid
+  YAML. The Secret renders whatever is set there, and an empty value fails the render. Turning
+  password login back on means setting a real value first.
 - Share links are unaffected by an authentik outage: the app serves `/share/...` itself, with no gate
   in front of it.
 
@@ -89,8 +96,28 @@ method, which is what the operator asked for. Consequences:
 with no account at all. Re-adding `lan-only` makes both unreachable while `helm template` still looks
 fine.
 
-## Known gap
+## Scheduling
 
-The community chart renders no `nodeSelector`, `affinity` or `tolerations`, so the pod is not pinned to
-a named node (repo rule). It can land on any node, including the ARM64 `rbp2`. Tracked as a follow-up
-task; the fixes are an upstream chart PR, a fork, or a local chart.
+`nodeSelector` pins `kubernetes.io/hostname: nuc0`. The config claim was provisioned there and
+`local-path` is `WaitForFirstConsumer`, so pinning the pod elsewhere would leave the claim welded to
+`nuc0` and the pod unschedulable. `tolerations: []` and `affinity: {}` are explicit rather than
+absent, so a reader can tell "no scheduling change" from "the field was forgotten again".
+
+The Deployment selector stays `app: filebrowser-quantum` + `release: <release>` rather than the usual
+`app.kubernetes.io/*` pair. A Deployment selector is immutable, and changing it means deleting and
+recreating the Deployment; the `app.kubernetes.io/*` labels are added alongside for dashboards and
+`kubectl` selectors. The full reason is in `templates/_helpers.tpl`.
+
+## Health, logs and config
+
+Liveness and readiness both use `/health`. That is deliberate: the app's only dependency is its local
+SQLite database, which stays up with the process, so there is no second endpoint that reports a failed
+dependency. Sharing an endpoint only turns a blip into a restart loop when the dependency is remote;
+this one is not.
+
+`server.logging` enables `warning|error` only, because Fluent Bit ships every line to Loki with no
+filter. Startup failures and request errors still appear at those two levels.
+
+`config.yaml` is a ConfigMap mounted with `subPath`, which does not update when the ConfigMap changes.
+The `checksum/config` pod annotation rolls the pod on the next sync; a manual edit to the mounted file
+needs a restart to take effect.

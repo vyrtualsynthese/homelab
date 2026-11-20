@@ -47,7 +47,7 @@ belong to is [media.md](media.md).
 | `pgadmin` | `databases` | nuc0 | D | the web console for the shared PostgreSQL |
 | `postgres` | `databases` | nas | A | the shared PostgreSQL that holds the other apps' databases |
 | `docs-site` | `docs` | nuc0 | A | every repository's `docs/` folder, built on a schedule and served read-only |
-| `filebrowser` | `filebrowser` | any | D | web file browser over the media shares, FileBrowser Quantum, sign-in through authentik; the community chart exports no scheduling field, so the pod is not pinned |
+| `filebrowser` | `filebrowser` | nuc0 | A | web file browser over the media shares, FileBrowser Quantum, sign-in through authentik |
 | `koillection` | `koillection` | nuc0 | A | catalogue for a collection of things |
 | `autobrr` | `media-stack` | streaming | A | grabs releases from IRC announcements, without a search |
 | `bazarr` | `media-stack` | streaming | A | subtitles for the television and film libraries |
