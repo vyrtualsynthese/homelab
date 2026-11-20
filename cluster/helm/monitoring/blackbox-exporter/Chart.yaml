@@ -1,0 +1,11 @@
+apiVersion: v2
+name: blackbox-exporter
+description: Blackbox probes for the public cloud services
+type: application
+version: 0.1.0
+appVersion: 0.29.1
+dependencies:
+  - name: prometheus-blackbox-exporter
+    alias: blackbox
+    version: 11.21.3
+    repository: https://prometheus-community.github.io/helm-charts
