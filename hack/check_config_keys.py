@@ -241,10 +241,12 @@ def main(argv):
         return 2
 
     violations = 0
+    checked = 0
     for entry in entries:
         chart = entry.get("chart", "?")
         if arguments.only and arguments.only not in chart:
             continue
+        checked += 1
         try:
             missing = [field for field in ("chart", "dependency", "schema", "key") if not entry.get(field)]
             if missing:
@@ -260,7 +262,12 @@ def main(argv):
         else:
             print(f"{chart}  ok")
 
-    return 1 if violations else 0
+    print(f"checked: {checked} chart(s)")
+    if violations:
+        print("result: FAIL")
+        return 1
+    print("result: OK")
+    return 0
 
 
 if __name__ == "__main__":

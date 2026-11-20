@@ -229,3 +229,8 @@ class MainTests(unittest.TestCase):
             0,
         )
 
+    def test_an_empty_manifest_exits_0(self):
+        root = pathlib.Path(tempfile.mkdtemp())
+        manifest = self.manifest(root, "# no chart opts in yet\n")
+        self.assertEqual(self.run_main(["--manifest", str(manifest), "--root", str(root)]), 0)
+
