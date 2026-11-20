@@ -68,7 +68,7 @@ own certificate on a `*.kub.home.ashudev.com` or `*.ashudev.com` name.
 | `sonarr-anime.kub.local` | Sonarr (anime) | `media-stack` | forward-auth; `lan-only` alone on `/api` | internal CA | no |
 | `syncthing.kub.home.ashudev.com` | Syncthing | `syncthing` | `lan-only` then forward-auth, Admins only | Let's Encrypt | no |
 | `tautulli.kub.local` | Tautulli | `media-stack` | `lan-only`; no gate, its own login | internal CA | no |
-| `thelounge.kub.home.ashudev.com` | The Lounge | `thelounge` | `lan-only` then forward-auth | Let's Encrypt | no |
+| `thelounge.kub.home.ashudev.com` | The Lounge | `thelounge` | `lan-only`; LDAP sign-in in the app, no gate | Let's Encrypt | no |
 | `vikunja.kub.local` | Vikunja | `vikunja` | `lan-only` | internal CA | no |
 
 ## Internal without TLS
@@ -101,7 +101,8 @@ is the only control on `/api`.
 **No internal route is ungated any more.** `koillection` was the last one: its chart already emitted
 `kube-system-lan-only@kubernetescrd`, the live object predated the rule, and the sync that followed its
 claim rebuild closed the gap on 2026-11-19. `thelounge` was the second until the same day, when its
-rebuild added the LAN gate and the authentik forward-auth in front of it, and `syncthing` followed. The
+rebuild added the LAN gate, and `syncthing` followed; The Lounge's forward-auth went on 2026-11-20 when
+its LDAP sign-in replaced it. The
 six public hosts above carry no `lan-only` by design instead, which is the other case
 `hack/check-exposure.sh` allows; it passes on both.
 

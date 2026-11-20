@@ -43,7 +43,7 @@ absent from this table has no single sign-on at all — no provider, no gate —
 | Prowlarr | forward-auth gate | configured; its own login is off; `/api` exempt; its probes carry a `Host` header | `prowlarr.kub.local` |
 | Sonarr | forward-auth gate | configured; its own login is off; `/api` exempt | `sonarr.kub.local` |
 | Tautulli | none | by decision: no gate and no authentik object; `lan-only` stays, and Tautulli's own login is the gate because a gate would collapse per-user history | `tautulli.kub.local` |
-| The Lounge | forward-auth gate | blueprint `app-thelounge`, Admins only — `homelab-users` has no members, and a binding to an empty group denies the sign-in; the app has no OIDC and keeps its own accounts behind the gate, so a second sign-in | `thelounge.kub.home.ashudev.com` |
+| The Lounge | LDAP | configured 2026-11-20 — authentik's LDAP outpost `ashulab-ldap` and provider `thelounge-ldap`; the gate is gone and the app's own form is the credential, so the account is the person's own username | `thelounge.kub.home.ashudev.com` |
 | Dashy | forward-auth gate | configured 2026-11-18 — blueprint `app-dashy`, Admins only; the only application whose gate is the public sign-in page, since `dashy.ashudev.com` answers the internet | `dashy.ashudev.com` |
 | qBittorrent | forward-auth gate | configured 2026-11-18 — blueprint `app-qbittorrent`, Admins only; its own login is bypassed for the pod network so the gate is the only prompt, and port-forward still asks (the break-glass); no `/api` exemption because every API client uses the Service name | `qbittorrent.kub.local` |
 | Syncthing | forward-auth gate | configured 2026-11-19 — blueprint `app-syncthing`, Admins only; it has no single sign-on of its own, so the gate is the only user check. Its own GUI login stays until the operator removes it, then Insecure Admin Access is what lets Traefik in | `syncthing.kub.home.ashudev.com` |
@@ -146,6 +146,44 @@ be HTTP authentication** (`auth_type: http_auth`). The module authenticates the 
 still asks for its own form login unless it is told to trust the identity Apache hands it; the
 install wizard defaults to `form` and offers the choice. The same mode looks the account up by name,
 so the FreshRSS user must be the authentik username — there is no provisioning on first sign-in.
+
+## Adding a tool that speaks LDAP
+
+The Lounge is the worked example: no OIDC, but a built-in LDAP plugin, so an LDAP bind is its native
+path. Five things differ from the OIDC recipe:
+
+1. **An LDAP provider and a separate outpost.** `authentik_providers_ldap.ldapprovider` plus an
+   `authentik_outposts.outpost` of `type: ldap`. The embedded outpost serves proxy providers only and
+   cannot serve an LDAP provider, so the outpost is its own workload: the chart renders it as
+   `templates/ldap-outpost.yaml`, image `ghcr.io/goauthentik/ldap:<tag>`, port 3389, Service
+   `authentik-ldap` in namespace `authentik`.
+2. **The authentication flow, not the implicit-consent flow.** A bind validates a password, so
+   `authorization_flow` is `default-authentication-flow`. Pointing it at the proxy providers'
+   implicit-consent flow produces a bind that authenticates nothing.
+3. **The outpost's token is a Secret, and authentik generates it.** Creating the outpost object creates
+   its service account and token. Read it once with
+   `GET /api/v3/core/tokens/<token_identifier>/view_key/` and store it in Secret `authentik-ldap`
+   (the runbook has the one-liner). Until it exists the pod is in `CreateContainerConfigError`, which
+   is the expected state, not a failed sync.
+4. **Direct bind in the app, no service account.** `config.js` sets `baseDN` and `primaryKey: "cn"` and
+   omits `searchDN`. Adding `searchDN` switches The Lounge to the advanced path, where it first binds
+   a system account from `rootDN`/`rootPassword` and searches for the person — an extra credential, an
+   extra permission, and the same access decision in two places.
+5. **Access is the application binding.** authentik refuses a bind from someone who cannot open the
+   application, so the policy binding on the LDAP application is the only gate. No group filter in
+   `config.js`.
+
+The DN authentik exposes is `cn=<username>,ou=users,dc=ldap,dc=goauthentik,dc=io`, so
+`primaryKey: "cn"` and `baseDN: "ou=users,dc=ldap,dc=goauthentik,dc=io"`.
+
+**`mfa_support` is a trap in both directions.** Off, a person with a device enrolled cannot bind at
+all. On, a password containing `;` is split at the semicolon and rejected. Leave it off while nobody
+has a device enrolled (the flow's MFA stage skips then), and flip it in the same change as the first
+enrolment, telling that person to type `password;123456`.
+
+**The app's local passwords stop working.** The LDAP plugin replaces the local login; accounts,
+networks and history are keyed by username and survive, but every person needs an authentik password
+and the same username.
 
 ## Migrating Vikunja to OIDC
 
