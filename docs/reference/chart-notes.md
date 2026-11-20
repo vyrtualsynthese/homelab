@@ -356,7 +356,8 @@ nobody planned.
 
 The sign-in is LDAP since 2026-11-20, not a gate. The Lounge has no OIDC, but its own LDAP plugin is
 native, so authentik runs an LDAP outpost (`authentik-ldap`, port 3389, rendered by the authentik
-chart) and `config.js` binds directly as the person — `baseDN` with `primaryKey: "cn"` and no
+chart, authenticated by Secret `authentik-ldap` — a missing Secret is a `CreateContainerConfigError`,
+not a failed sync) and `config.js` binds directly as the person — `baseDN` with `primaryKey: "cn"` and no
 `searchDN`, so no service account and no bind password exist to store. The route is `lan-only` then
 `security`; the forward-auth gate is gone because a gate in front of an app that authenticates is a
 second prompt that carries no identity. The app's local passwords stop working and the authentik

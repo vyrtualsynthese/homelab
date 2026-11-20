@@ -13,6 +13,11 @@ entries:
   # implicit-consent flow the proxy providers use. The flow's MFA stage skips
   # when no device is enrolled, which is the case today; `mfa_support` stays
   # false until somebody enrols, because it would split a password at a `;`.
+  #
+  # Both `!Find` tags below must resolve or the WHOLE file rolls back, outpost
+  # included, and the outpost silently keeps its previous provider list. They
+  # name stock authentik objects; if a flow is ever renamed, fix this file in the
+  # same change, and check the outpost's provider list afterwards.
   - model: authentik_providers_ldap.ldapprovider
     id: thelounge-ldap-provider
     identifiers:
@@ -28,10 +33,11 @@ entries:
       search_mode: direct
       mfa_support: false
 
-  # A second application on purpose: the existing `thelounge` application still
-  # points at the proxy provider the gate uses, and switching it here would
-  # break the gate before the route stops asking for it. The slug appears in
-  # URLs nobody opens; the display name, icon and host do not change.
+  # The `-ldap` slug dates from the cutover: a second application was needed so
+  # the forward-auth gate kept working until the route stopped asking for it.
+  # That gate is retired (2026-11-20), but the slug is what the application is
+  # known by, so it stays; the display name, icon and host are the ones people
+  # see. Renaming it would mean deleting and recreating the object.
   - model: authentik_core.application
     id: thelounge-ldap-app
     identifiers:
