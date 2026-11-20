@@ -1,0 +1,61 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: backup-verify
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "backup.labels" (dict "root" . "stream" "verify") | nindent 4 }}
+spec:
+  # 08:30, after the last nightly job (06:00) and the local-path jobs before it.
+  schedule: "30 8 * * *"
+  timeZone: Europe/Paris
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 3600
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 5
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: 7200
+      template:
+        metadata:
+          labels:
+            {{- include "backup.labels" (dict "root" . "stream" "verify") | nindent 12 }}
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          # Pinned like every other workload here; nothing local is read, so the node only
+          # decides where the small amount of CPU goes.
+          nodeSelector:
+            kubernetes.io/hostname: nas
+          volumes:
+            - name: scripts
+              configMap:
+                name: backup-scripts
+                defaultMode: 0555
+            - name: config
+              configMap:
+                name: backup-streams
+          containers:
+            - name: verify
+              image: {{ include "backup.image" (dict "root" . "name" "python") }}
+              command: ["python", "/scripts/verify.py"]
+              args: ["--config", "/config/streams.json"]
+              envFrom:
+                - secretRef:
+                    name: {{ .Values.repository.secretName }}
+              env:
+                - name: RESTIC_CACHE_DIR
+                  value: /tmp/restic-cache
+                - name: TZ
+                  value: Europe/Paris
+              resources:
+                requests: {cpu: 10m, memory: 128Mi}
+                limits: {cpu: 500m, memory: 256Mi}
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop: ["ALL"]
+              volumeMounts:
+                - {name: scripts, mountPath: /scripts, readOnly: true}
+                - {name: config, mountPath: /config, readOnly: true}

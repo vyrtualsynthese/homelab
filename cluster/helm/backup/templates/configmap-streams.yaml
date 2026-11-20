@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: backup-streams
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "backup.labels" (dict "root" . "stream" "verify") | nindent 4 }}
+data:
+  # The verifier's whole input: one entry per repository, with the budget it must stay under
+  # and whether it is expected to carry an etcd snapshot copy. Written by hand rather than
+  # with toJson so the rendered file stays readable in `kubectl get cm -o yaml`.
+  streams.json: |
+    [
+    {{- range $i, $stream := .Values.streams }}
+    {{- if $i }},{{ end }}
+      {"name": "{{ $stream.name }}", "repository": "{{ include "backup.repository" (dict "root" $ "name" $stream.name) }}", "budgetGiB": {{ $stream.budgetGiB }}, "etcd": {{ $stream.etcd | default false }}}
+    {{- end }}
+    ]
