@@ -1,11 +1,13 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  # Content-addressed name: the SQL digest is part of the object's identity. A
-  # Job's pod template is immutable, so a fixed name would turn every edit of
-  # configmap-bootstrap.yaml into a rejected update ("field is immutable") and
-  # the new SQL would never run. With the digest in the name, an edit creates a
-  # new Job and leaves the old, completed one behind for ArgoCD to prune.
+  # Content-addressed name: the SQL digest and the image tag are part of the
+  # object's identity. A Job's pod template is immutable, so a fixed name would
+  # turn every edit of configmap-bootstrap.yaml, and every image bump, into a
+  # rejected update ("field is immutable") and the new SQL or image would never
+  # land. With both in the name, a change creates a new Job and leaves the old,
+  # completed one behind for ArgoCD to prune. The SQL is idempotent, so the
+  # re-run a bump costs is a few seconds that change nothing.
   #
   # Deliberately NOT a sync hook: a PostSync hook runs only once the synced
   # resources are healthy, and this pod is not healthy until the exporter sidecar
@@ -14,7 +16,7 @@ metadata:
   #
   # The chart has no "postgres.fullname": "postgres.name" is the release-stable
   # name of the instance, so the Job name stays postgres-bootstrap-<digest>.
-  name: {{ include "postgres.name" . }}-bootstrap-{{ include (print $.Template.BasePath "/configmap-bootstrap.yaml") . | sha256sum | trunc 8 }}
+  name: {{ include "postgres.name" . }}-bootstrap-{{ printf "%s:%s" (include (print $.Template.BasePath "/configmap-bootstrap.yaml") .) .Values.image.tag | sha256sum | trunc 8 }}
   namespace: {{ .Release.Namespace }}
   # Not include "postgres.labels": it hardcodes app: postgres, which would clash
   # with the label this object is identified by, and duplicate keys resolve to
