@@ -1,0 +1,17 @@
+{{- range $node, $cfg := .Values.nodes }}
+{{- $stream := printf "nodes-%s" $node }}
+{{- $payload := dict "stream" $stream "claims" $cfg.claims }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: backup-rows-{{ $node }}
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    {{- include "backup.labels" (dict "root" $ "stream" $stream) | nindent 4 }}
+data:
+  # The rows prepare.py resolves. The roots and host paths are passed as arguments by the
+  # job, so this file holds one thing: what is backed up on this node.
+  rows.json: |
+{{ $payload | toJson | indent 4 }}
+{{- end }}

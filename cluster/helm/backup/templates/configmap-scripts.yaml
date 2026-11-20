@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: backup-scripts
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "backup.labels" (dict "root" . "stream" "scripts") | nindent 4 }}
+data:
+  # Resolves the rows and stages the SQLite copies. Runs as the job's initContainer.
+  prepare.py: |
+{{ .Files.Get "files/prepare.py" | indent 4 }}
+  # One restic run per node job.
+  backup-node.sh: |
+{{ .Files.Get "files/backup-node.sh" | indent 4 }}
