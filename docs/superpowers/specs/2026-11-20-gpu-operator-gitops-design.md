@@ -62,12 +62,14 @@ to what is running today, and writes down the one step that stays manual: the ho
    `v26.3.1` — the version running now — with every rendered image tag pinned in `values.yaml`.
 4. **NFD workers are pinned to `streaming`.** Nothing in the repo reads NFD labels, and only that
    node has a GPU. NFD master and gc are pinned to `nuc0`, where they already run.
-5. **The DCGM Service annotation is declared by a Service this chart owns.** A second Service,
+5. **The DCGM Service annotation is the operator's own.** ~~A second Service,
    `nvidia-dcgm-exporter-metrics`, selects the exporter pods on 9400 and carries
-   `prometheus.io/scrape: "true"`. The operator will not touch a Service it did not create, so
-   there is no ownership fight, and the scrape no longer depends on a hand-typed annotation. The
-   stale annotation on the operator's Service is removed once, at cutover, so Prometheus does not
-   scrape the same target twice.
+   `prometheus.io/scrape: "true"`.~~ **Corrected 2026-11-20, after the cutover:** the premise was
+   wrong. The operator sets `prometheus.io/scrape: "true"` on the Service it creates itself, which is
+   why the hand-installed release had the annotation with nothing in its values. The chart's second
+   Service is therefore redundant, and it scraped the same pod twice — two series per metric, one per
+   `service` label. It was removed in the follow-up, and the chart declares nothing for DCGM
+   scraping.
 6. **`pod-restart-required` is cleared at cutover** with a one-line label overwrite, and the card
    records why the pods did not need a second restart: they already restarted on 11-17.
 

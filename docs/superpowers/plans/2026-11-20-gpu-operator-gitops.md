@@ -55,9 +55,12 @@ v26.3.1, Prometheus service-endpoint discovery.
 - Modify: `.gitignore` (after the `cluster/helm/argocd/` block)
 
 **Interfaces:**
-- Produces: a chart whose `helm template` output Task 2 deploys and Task 3 documents. The Service
-  it renders is `nvidia-dcgm-exporter-metrics` in the release namespace, selecting
-  `app: nvidia-dcgm-exporter` on port 9400, annotated `prometheus.io/scrape: "true"`.
+- Produces: a chart whose `helm template` output Task 2 deploys and Task 3 documents.
+
+> **Corrected 2026-11-20, after the cutover.** Steps mentioning `extraObjects` and the
+> `nvidia-dcgm-exporter-metrics` Service were built and then removed: the operator annotates its own
+> DCGM Service with `prometheus.io/scrape`, so the second Service scraped the same pod twice. See
+> decision 5 in the design. The chart now declares nothing for DCGM scraping.
 
 - [ ] **Step 1: Write `Chart.yaml`**
 
@@ -110,12 +113,8 @@ repository `registry.k8s.io/nfd/node-feature-discovery`, tag `v0.18.3`;
 `master.nodeSelector` and `gc.nodeSelector`: `{kubernetes.io/hostname: nuc0}`. Keep the subchart's
 own resource defaults.
 
-Then `extraObjects` with the metrics Service: `apiVersion: v1`, `kind: Service`,
-`metadata.name: nvidia-dcgm-exporter-metrics`, `metadata.namespace: '{{ .Release.Namespace }}'`,
-annotation `prometheus.io/scrape: "true"`, `spec.type: ClusterIP`,
-`spec.selector: {app: nvidia-dcgm-exporter}`, one port `metrics` 9400/targetPort 9400/TCP. Comment
-why it exists: the ClusterPolicy CRD has no field for Service annotations, and the operator's own
-Service is not ours to annotate.
+Do not add a Service for DCGM: the operator sets `prometheus.io/scrape: "true"` on the one it
+creates itself, which is what the hand-installed release had all along.
 
 - [ ] **Step 3: Add the build artefacts to `.gitignore`**
 
@@ -129,7 +128,7 @@ Run: `helm dependency build cluster/helm/platform/gpu-operator && helm template 
 Expected: 5 `CustomResourceDefinition` (2 `nvidia.com`, 3 `nfd.k8s-sigs.io`), 1 `ClusterPolicy`,
 1 `DaemonSet` (NFD worker), 3 `Deployment` (operator, NFD master, NFD gc), 2 `Job`, 5
 `ClusterRole`/`ClusterRoleBinding` pairs, 2 `Role`/`RoleBinding` pairs, 4 `ServiceAccount`,
-2 `ConfigMap`, and `nvidia-dcgm-exporter-metrics` among the Services.
+2 `ConfigMap`, and no Service (the operator creates the DCGM one at runtime).
 
 - [ ] **Step 5: Check the rendered values against the live inventory**
 
@@ -288,8 +287,9 @@ releases manage one ClusterPolicy. Sequence:
    — the CRDs and the operator's objects survive because the chart sets `cleanupCRD: false`; verify
    with `kubectl -n gpu-operator get ds,deploy`.
 2. Trigger the sync for the new Application, then watch `kubectl -n gpu-operator get pods -w`.
-3. `kubectl annotate -n gpu-operator svc nvidia-dcgm-exporter prometheus.io/scrape-` — otherwise
-   Prometheus scrapes the exporter twice and the GPU panels draw two lines.
+3. ~~`kubectl annotate -n gpu-operator svc nvidia-dcgm-exporter prometheus.io/scrape-`~~ — not
+   needed. The annotation is the operator's own; the duplicate scrape came from this chart's second
+   Service, which is gone.
 4. `kubectl label node streaming nvidia.com/gpu-driver-upgrade-state- --overwrite` and record the
    driver as host-managed on the card.
 5. Verify with the runbook checklist, then comment the output on the card.

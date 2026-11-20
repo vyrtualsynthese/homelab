@@ -33,9 +33,10 @@ runtime class is never registered and every GPU pod fails to start.
 Node Feature Discovery, which the operator uses to label the node, runs its worker only on
 `streaming` — the only node with a GPU. Its master and garbage collector sit on `nuc0`.
 
-DCGM, the metrics exporter for the card, is scraped through a Service this chart owns,
-`nvidia-dcgm-exporter-metrics`, because the operator creates its own Service and the ClusterPolicy
-has no field for adding the `prometheus.io/scrape` annotation to it.
+DCGM, the metrics exporter for the card, is scraped through the Service the operator creates for it,
+`nvidia-dcgm-exporter`. The operator sets `prometheus.io/scrape: "true"` on that Service itself, and
+Prometheus's `kubernetes-service-endpoints` job finds it by that annotation — the chart declares
+nothing for it.
 
 ## The host driver
 
