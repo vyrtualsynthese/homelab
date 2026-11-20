@@ -60,6 +60,23 @@ A rebuild therefore needs, on `streaming`, in this order:
    chart's values, so with `driver.enabled: false` it labels the driver as externally provided by
    itself; nothing about the split depends on a hand-set label.
 
+## Removing an old release
+
+The hand-installed release was removed on 2026-11-20 with `helm -n gpu-operator uninstall
+gpu-operator`. The CRDs survive (`operator.cleanupCRD: false` means no pre-delete hook); the
+ClusterPolicy and the operand objects do not — the GPU is gone until the chart is synced again.
+
+The uninstall prints one warning and it is harmless: NFD's post-delete prune Job cannot be created,
+because the subchart writes `resources` at pod-spec level and `batch/v1` has no such field. The
+consequence is that the `NodeFeature` objects it would have pruned survive the release, and so do
+the `feature.node.kubernetes.io/*` labels they put on every node. If the workers no longer run on
+`nas`, `nuc0` or `rbp2`, delete those objects:
+
+```bash
+kubectl get nodefeature
+kubectl delete nodefeature nas nuc0 rbp2   # only for nodes that no longer run an NFD worker
+```
+
 ## Checking the GPU
 
 Run these after anything that touches the node, the driver or the chart:
