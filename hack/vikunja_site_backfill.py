@@ -38,15 +38,16 @@ import os
 import re
 import subprocess
 from typing import Any
+from urllib.parse import urlencode
 
 from vikunja_migrate import Board, site_url
 
 OPEN_COLUMNS = ("Backlog", "Doing", "Validation")
 BLOB = "/blob/develop/"
 DEVELOP = "origin/develop"
-# The bucket read returns at most this many cards per bucket; hitting it means
-# the read is truncated, not that the column is that size.
-BUCKET_CAP = 100
+# The server caps one page at its max_items_per_page (100 on this instance) and
+# reports the true total beside it, so a column is read a page at a time.
+PAGE_SIZE = 100
 
 
 # ---------------------------------------------------------------------------
@@ -116,30 +117,57 @@ def on_develop(path: str, ref: str = DEVELOP) -> bool:
 # ---------------------------------------------------------------------------
 # The board.
 # ---------------------------------------------------------------------------
-def open_cards(board: Board, project: int, view: int) -> list[dict[str, Any]]:
-    """Every card in the open columns, and nothing else.
+def columns(board: Board, project: int, view: int) -> list[tuple[int, str]]:
+    """The view's kanban columns, as ``(bucket_id, title)``, in board order."""
+    answer = board.call("GET", f"/api/v2/projects/{project}/views/{view}/buckets")
+    return [(bucket["id"], bucket["title"])
+            for bucket in (answer or {}).get("items") or []]
 
-    One v2 read returns the view's buckets with their cards, so the six columns
-    cost one request. A bucket that comes back at the server's cap is truncated
-    and this refuses to guess the rest.
+
+def column_cards(board: Board, project: int, view: int,
+                 bucket_id: int, title: str) -> list[dict[str, Any]]:
+    """Every card in one column, page by page.
+
+    The flat view task list is paginated and takes a ``bucket_id`` filter, so a
+    column of any size is read whole: the server caps a page at
+    ``max_items_per_page`` and states the true total beside it, and the loop
+    stops on that total. A card seen twice means the filter was ignored — the
+    same page comes back and the rest of the column would be silently lost —
+    so the run stops instead of counting a card twice.
     """
-    answer = board.call("GET", f"/api/v2/projects/{project}/views/{view}/buckets/tasks")
-    buckets = (answer or {}).get("items") or []
     cards: list[dict[str, Any]] = []
-    for bucket in buckets:
-        if bucket.get("title") not in OPEN_COLUMNS:
-            continue
-        tasks = bucket.get("tasks") or []
-        # The server caps the cards it returns per bucket and states the true
-        # count beside them: either sign of a short read aborts the run.
-        if len(tasks) >= BUCKET_CAP or bucket.get("count", 0) > len(tasks):
-            raise SystemExit(f"column {bucket['title']} returned {len(tasks)} of "
-                             f"{bucket.get('count', 'an unknown number of')} cards; "
-                             "the read is truncated, not complete")
-        cards.extend(tasks)
+    seen: set[int] = set()
+    page = 1
+    while True:
+        query = urlencode({"per_page": PAGE_SIZE, "page": page,
+                           "filter": f"bucket_id = {bucket_id}"})
+        answer = board.call(
+            "GET", f"/api/v2/projects/{project}/views/{view}/tasks?{query}") or {}
+        items = answer.get("items") or []
+        if any(card["id"] in seen for card in items):
+            raise SystemExit(f"column {title} repeated a card on page {page}; the server "
+                             "is not honouring the bucket filter, so the read would "
+                             "lose the rest of the column")
+        if not items:
+            break
+        seen.update(card["id"] for card in items)
+        cards.extend(items)
+        total = answer.get("total")
+        if total is not None and len(cards) >= total:
+            break
+        page += 1
+    return cards
+
+
+def open_cards(board: Board, project: int, view: int) -> list[dict[str, Any]]:
+    """Every card in the open columns, and nothing else."""
+    cards: list[dict[str, Any]] = []
+    for bucket_id, title in columns(board, project, view):
+        if title in OPEN_COLUMNS:
+            cards.extend(column_cards(board, project, view, bucket_id, title))
     seen = {card["id"] for card in cards}
     if len(seen) != len(cards):
-        raise SystemExit("the bucket read returned the same card in two columns")
+        raise SystemExit("the column read returned the same card in two columns")
     return cards
 
 
