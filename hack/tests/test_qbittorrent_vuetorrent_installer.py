@@ -177,6 +177,17 @@ class InstallerPrefTests(unittest.TestCase):
         self.assertLess(lines.index(PREF + "=true"), lines.index("[BitTorrent]"))
         self.assertIn("WebUI\\Address=*", lines)
 
+    def test_crlf_conf_keeps_one_preferences_section(self):
+        # Key absent, so the insertion point is the section header itself.
+        conf = "[Preferences]\r\nWebUI\\Address=*\r\n[BitTorrent]\r\nX=1\r\n"
+        box = self.sandbox(conf=conf)
+        self.run_ok(box)
+        text = box.conf_file.read_text().replace("\r", "")
+        self.assertEqual(text.count("[Preferences]"), 1)
+        lines = text.splitlines()
+        self.assertLess(lines.index("[Preferences]"), lines.index(PREF + "=true"))
+        self.assertLess(lines.index(PREF + "=true"), lines.index("[BitTorrent]"))
+
     def test_no_preferences_section_is_added(self):
         box = self.sandbox(conf="[BitTorrent]\nSession\\Port=18515\n")
         self.run_ok(box)
