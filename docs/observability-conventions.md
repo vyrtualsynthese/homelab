@@ -4,7 +4,7 @@
 > query Prometheus, Loki and Grafana without cluster access, and how metrics get in.
 >
 > **Use it when** you want a number out of the stack, or you are adding an exporter · **Verified**
-> 2026-11-17 · **Kind:** living page
+> 2026-11-20 · **Kind:** living page
 
 The general practice — how to choose a threshold, lay out a screen, verify a panel — lives in the
 project skill at `.opencode/skills/observability-and-alerting/SKILL.md`. This file only records what
@@ -22,12 +22,13 @@ after the media chart repairs. Re-verify a measured number before trusting it in
 | Grafana | 13.3.1 | `nas`, 768 MiB limit |
 | Loki | 3.7.9 | `nas`, monolithic |
 | Fluent Bit | 5.1.3 | DaemonSet, all 4 nodes |
+| blackbox exporter | v0.29.1 | `nas`, 64 MiB limit |
 
 Fluent Bit tails `/var/log/containers/*.log` only: container output, no host logs and no systemd
 journal. The claim sizes and how long each keeps data are in
 [`reference/metrics.md#storage-and-retention`](reference/metrics.md#storage-and-retention).
 
-All four are wrapper charts under `cluster/helm/monitoring/`, one ArgoCD
+All five are wrapper charts under `cluster/helm/monitoring/`, one ArgoCD
 Application each; the design is
 `docs/superpowers/specs/2026-11-12-observability-stack-design.md`.
 
@@ -71,6 +72,14 @@ on `nuc0`, and `prometheus-smartctl` as a DaemonSet (its pods on `nas`, `nuc0`,
 2026-11-18 it is scheduled by `nodeSelector` on `nuc0` rather than by the retired
 `node-type` label. Its image stays on `latest`: the registry publishes no
 semver or digest-friendly tags.
+
+The blackbox exporter joined the stack on 2026-11-20: one replica on `nas`, probing the
+public names and both DNS zones
+([`runbooks/cloud-monitoring.md`](runbooks/cloud-monitoring.md)). It is the one pod
+here that does not use cluster DNS — `dnsPolicy: None` with `1.1.1.1` and `9.9.9.9` —
+because Pi-hole rewrites `ashudev.com` to the LAN address `192.168.1.46`, and a
+probe resolving through it would test Traefik instead of the public zone and call a
+broken name green.
 
 ## How to query the stack
 
@@ -147,6 +156,13 @@ Grafana's own data: where they live, and what that costs, is in
   own health (`loki_*` push failures, `grafana_*` rule-evaluation failures),
   which nothing scraped before. Scrape the **Service** port: Grafana listens on
   3000 in the container but its Service exposes only 80, so `:3000` times out.
+- **The cloud probes are two static jobs too**, `blackbox-http` every minute against 3 endpoints and
+  `blackbox-dns` every five minutes against 28 — 8 `ashudev.com` checks on its 2 authoritative
+  servers, 3 `ashuvidz.com` checks on its 4. A multi-target exporter cannot be found by pod
+  annotation — Prometheus has to rewrite each target's address into `__param_target` and name the
+  module — so the targets are static, while the prober's own pod carries `prometheus.io/scrape` like
+  any exporter. What that means for the `Cloud*` rules when the prober dies is in
+  [`runbooks/cloud-monitoring.md` §8](runbooks/cloud-monitoring.md#8-known-limits).
 - **mktxp is annotation discovery**, like the in-cluster exporters: one pod with
   `prometheus.io/scrape` on port 49090, and 838 series for the two switches on
   2026-11-18. An unreachable switch publishes nothing rather than `up == 0`.

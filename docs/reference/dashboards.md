@@ -1,10 +1,10 @@
-# Dashboards: the eight Homelab screens
+# Dashboards: the nine Homelab screens
 
-> **In one line.** The eight Grafana dashboards in the `Homelab` folder, what each is for, and the API
+> **In one line.** The nine Grafana dashboards in the `Homelab` folder, what each is for, and the API
 > calls that change one.
 >
 > **Use it when** you need to know where to look, are adding or editing a panel, or are explaining why
-> a dashboard is not backed up · **Verified** 2026-11-19 · **Kind:** living page
+> a dashboard is not backed up · **Verified** 2026-11-20 · **Kind:** living page
 
 ## Dashboards
 
@@ -20,6 +20,7 @@ Folder **Homelab**, created through the HTTP API:
 | Homelab · Disks | `homelab-disks` | 11 | SMART per drive: status, life, temperature, hours, sectors, wear |
 | Homelab · Showcase | `homelab-showcase` | 13 | Presentation screen: drawn topology, four big numbers, network, storage, GPU |
 | Homelab · Media | `homelab-media` | 9 + rows | Media stack: app health issues, queues, missing items, indexers, release intake, qBittorrent transfer, Plex sessions and library |
+| Cloud | `cloud-services` | 6 | Internet-facing side: endpoints answering, DNS checks passing, days to the earliest certificate, per-probe success and latency, every check in one table |
 
 The old `homelab-investigate` was replaced by `homelab-platform` on 2026-11-12: its workload
 row duplicated the new Applications dashboard, and its node/control-plane/Prometheus panels are
@@ -50,7 +51,16 @@ because Loki and Grafana only became scrape targets then, and the numbers answer
 whether the 20 GiB claim will hold the 30-day retention (it will, with room:
 [`metrics.md`](metrics.md#storage-and-retention)).
 
-All eight refresh every 1 m and hold a 6 h–24 h default range. They are not
+**Cloud** was added on 2026-11-20, when the public names got a prober
+([`runbooks/cloud-monitoring.md`](../runbooks/cloud-monitoring.md)). Six panels answer "is the
+internet-facing side healthy, and what needs attention?": three numbers on top — endpoints answering
+of 3, DNS checks passing of 28, days to the earliest certificate — then `probe_success` and
+`probe_duration_seconds` per endpoint over 24 h, and an `Every check` table listing one row per probe
+with failures first. That table is the panel to read when a `CloudDnsCheckFailing` message names a
+zone, a check and a server. The two denominators in the top-row titles are written into those titles
+by hand, not computed by a query: adding a target means editing the title as well.
+
+All nine refresh every 1 m and hold a 6 h–24 h default range. They are not
 backed up: Grafana's 5 GiB claim is the only copy. A `docker save` of the
 dashboard JSON is not a backup either — the SQLite file is what would be lost.
 

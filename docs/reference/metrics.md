@@ -184,8 +184,8 @@ its SSD.
 A scrape returns everything an exporter publishes; Prometheus stores what something reads. Since
 2026-11-18 ten `metric_relabel_configs` entries in `cluster/helm/monitoring/prometheus/values.yaml`
 — one regex widened, nine added — drop the rest at the scrape, so those series never reach the
-head, the WAL or the SSD. Every family below was checked against the eight dashboards' PromQL and
-the 35 alert rules' expressions first; none of them appears in either.
+head, the WAL or the SSD. Every family below was checked against the nine dashboards' PromQL and
+the 38 alert rules' expressions first; none of them appears in either.
 
 | Job | Dropped | Series | Why it has no reader |
 |---|---|---|---|

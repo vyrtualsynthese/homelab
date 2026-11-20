@@ -44,7 +44,7 @@ kubectl get pv | grep Terminating
 only when a pod asks for it. `kubectl get pv` prints four `Terminating` volumes; they are kept by
 decision (see **Storage**) and clearing them destroys live data.
 
-Grafana's **Homelab** folder holds eight dashboards. These four answer most of the questions above:
+Grafana's **Homelab** folder holds nine dashboards. These four answer most of the questions above:
 
 | Dashboard | Use it for |
 |---|---|
