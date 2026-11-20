@@ -1,0 +1,7 @@
+apiVersion: v2
+name: ashudev-website
+description: ashudev.com - the public site, static files served by nginx and pulled from its own git repository
+type: application
+version: 1.0.0
+# Matches the nginx image tag in values.yaml (image.tag), as the chart contract requires.
+appVersion: "1.31.7"

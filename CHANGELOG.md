@@ -6,6 +6,14 @@ All notable changes to this repository. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `ashudev.com` is served by this cluster: a third static-site chart on the `ashuvidz-website`
+  pattern, publishing the site's `gh-pages` branch — the same bytes GitHub Pages served, with no
+  build in the cluster. `www.ashudev.com` redirects to the apex and carries its own certificate, and
+  the sidecar fetches and resets rather than pulling fast-forward-only, because Pages rewrites that
+  branch.
+
 ### Changed
 
 - FileBrowser moves to FileBrowser Quantum, the maintained fork of the archived upstream, as a wrapper
