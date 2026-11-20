@@ -353,6 +353,7 @@ restore there.
   run but nothing notifies. That is the alerting single point recorded in
   [`reference/alerts.md`](../reference/alerts.md#known-gaps).
 - **The `Cloud` dashboard is the only place these series are drawn**, and it lives in Grafana's
-  database like every other dashboard: not in git, not backed up.
+  database like every other dashboard: not in git, and reachable only through a restore of the
+  `nodes-nas` stream ([how-it-works/backups.md](../how-it-works/backups.md)).
 - **Three names and these records only.** No other port, no other hostname, no internal `*.kub.local`
   name — Traefik's own `CertificateExpiring` covers those.

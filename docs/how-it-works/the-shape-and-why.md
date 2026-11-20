@@ -14,7 +14,9 @@ failure took every volume it held and left claims that cannot be deleted, becaus
 clear them is gone. Three gaps around the storage turned one failure into a lost cluster: no backup
 anyone had restored, no alerting that would have noticed stuck pods, and no document saying what the
 machines were or what should run on them. The inventory, the alerting and the placement rule wrote
-down what was missing; the backup gap is still open. The dated evidence is in
+down what was missing; the backup gap was the last one, and it closed when the nightly streams
+started ([Backups](backups.md)) — the restore is still undrilled, which is not the same gap. The
+dated evidence is in
 [`audit/observability-storage.md`](../audit/observability-storage.md); current counts are in
 [`status.md`](../status.md).
 
