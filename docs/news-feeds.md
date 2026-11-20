@@ -21,8 +21,14 @@ python3 hack/freshrss_sync.py apply --dry-run   # show what would change
 python3 hack/freshrss_sync.py apply             # subscribe what the file lists
 python3 hack/freshrss_sync.py check             # exit 1 when a listed feed is missing
 python3 hack/freshrss_sync.py verify            # fetch every URL, check each full-content selector
+python3 hack/freshrss_sync.py state             # what the instance holds, per feed; fetches nothing
 python3 hack/freshrss_sync.py drop <url>…       # unsubscribe, so an import can re-create with settings
 ```
+
+`state` reads the instance and nobody else: one line per feed, either the date the instance last
+stored an item and that item's title, or `never` when every poll has failed. It is the command to
+reach for while a publisher rate-limits, because `verify` fetches from the runner and spends the
+budget the pod needs — see "KBDfans" below.
 
 `apply` and `check` also cover the per-feed settings the file carries: the CSS selector that pulls
 the whole article, an XPath feed's selectors and kind, and a poll interval (`frss:ttl`, in seconds)
@@ -66,6 +72,10 @@ labels cleared on the next run, not the same one.
 Credentials are `FRESHRSS_USER` and `FRESHRSS_API_PASSWORD` from
 `~/.config/secrets/homelab.env`, plus `FRESHRSS_WEB_PASSWORD` for the settings half — which an
 OIDC-signed-in instance does not have, so there the run covers subscriptions only.
+
+`FRESHRSS_USER` is the username FreshRSS holds, which after the move to OIDC is the identity
+provider's claim (`vyrtualsynthese`), not the local account name it replaced. A stale value answers
+`401 Unauthorized!` on every command, and the API password is unchanged by the rename.
 
 `verify` fetches each URL from the machine that runs it, not from inside the cluster, so a 403 or
 429 there can be the runner's IP rather than the feed being broken.
@@ -123,8 +133,8 @@ items of backlog.
 
 KBDfans' *restock* collection was in the set until 2026-11-19 and stays out: it re-lists products
 coming back rather than new ones. The *new arrivals* collection is in, asked once every six hours
-because the shop limits how often one address may ask — see "KBDfans: one collection, polled
-rarely" below.
+while the shop refuses the pod's fetches — see "KBDfans: one collection, the shop refuses the pod"
+below.
 
 An old Rise of Gunpla kit coming back in stock is **not** covered. FreshRSS drops an item it
 already holds, so the same product cannot fire twice. That needs a change tracker, which is a
@@ -341,16 +351,17 @@ kubectl -n news exec deploy/news-freshrss -- su www-data -s /bin/sh -c \
   removes it.
 
 Three specimens from that day. Mistral is served as `text/plain`, so its address carries
-`#force_feed` and a row without it answers "A feed could not be found". KBDfans answers HTTP 429 when
-polled every cycle, which `frss:ttl="21600"` (six hours) prevents. Elite Dangerous moved its article
-body out of `#content`; the file's `main` reads it.
+`#force_feed` and a row without it answers "A feed could not be found". KBDfans answers HTTP 429 to
+the instance at every interval, which `frss:ttl="21600"` (six hours) asks for without curing it —
+see "What the pod's polls say". Elite Dangerous moved its article body out of `#content`; the file's
+`main` reads it.
 
 ## Feeds the instance cannot fetch
 
 Three feeds answered a blank HTTP 500 from `subscription/edit` while the same URLs return a valid
 feed from a workstation. The 500 was not a refusal: it is what the API answers when its own logger
 cannot write. Behind it are two different problems, one solved and one that keeps the KBDfans
-collection on a rare poll.
+collection from loading at all.
 
 ### What the empty 500 hid
 
@@ -380,16 +391,14 @@ the same URL parses on a workstation and delivered nothing here. FreshRSS's esca
 and the marker travels in the OPML, so a replay reproduces it. The subscription is
 `https://mistral.ai/news/rss#force_feed`, and it held 94 entries on 2026-11-19.
 
-### KBDfans: one collection, polled rarely
+### KBDfans: one collection, the shop refuses the pod
 
 Only the *new arrivals* collection is in the set; *restock* left it on 2026-11-19 because it re-lists
 products that are back, which is not what "new products" means here.
 
 The feed itself is fine: a valid Atom feed of 25 entries, and a workstation fetches it with `200`.
-The instance's requests are the problem. Shopify answers `429` with the body `local_rate_limited` —
-its storefront limiter, which counts requests per client and per address — and the Cloudflare layer
-in front of the shop refuses a bare handshake outright. Neither is a permanent block, and both come
-and go by the minute.
+The instance's requests are the problem. Shopify answers `429` with the body `local_rate_limited`,
+and the Cloudflare layer in front of the shop refuses a bare handshake outright.
 
 So the one lever the instance has is to ask less often: `frss:ttl="21600"` in the file sets the
 feed's *Do not automatically refresh more often than* field to six hours, and `apply` writes it.
@@ -410,16 +419,52 @@ Measured on 2026-11-19 from the workstation and the pod, alternating, one reques
 | 5 | `403` | `429` |
 
 The bare handshake is refused `403` every time — the bot filter rejects it on sight, so it was never
-the control it looked like. `curl` gets one `200` in five, from the same address in the same minutes:
-the refusal follows the address and the moment rather than the client. That is the opposite of what
-an earlier reading said, which compared the two clients a minute apart instead of together.
+the control it looked like. The `curl` column is the one that moves: one `200` in five, in the same
+minutes. That reading was taken while one probe followed another, and it does not describe the
+instance's own experience — see "What the pod's polls say" below.
 
-A request therefore does get through, so a polled feed fills in; it just lags the shop by up to six
-hours. Until a poll lands the feed shows the red "This feed has encountered a problem" banner, which
-is the last refusal, not a lost subscription.
+### What the pod's polls say
 
-Do not measure this feed by hand in a loop: each extra request takes a slot from the next refresh,
-and a workstation and the pod draw on the same address.
+Seven scheduled polls answered `429` between 23:31 and 02:31 local time on 2026-11-19/20, thirty
+minutes apart, and not one answered `200`. The same refresh runs logged `200` or `304` for every
+other feed in the file, Rise of Gunpla included — another Shopify shop — so the pod's egress and
+Shopify's normal path both worked, and this collection's own filter refused it. The instance held
+nothing for it: `python3 hack/freshrss_sync.py state` printed `never`.
+
+A refusal every thirty minutes is not a rate limit, and the six-hour interval cannot help it: what
+the shop refuses is the way the pod asks. Measured from the workstation during that same night,
+minutes after the pod's 02:31 refusal:
+
+| Request | Answer |
+|---|---|
+| `curl --http2`, the `FreshRSS/1.30.4` user agent | `200`, 25 entries, 1.2 MB |
+| `curl --http1.1`, same user agent and `Accept` header | `429`, 18 bytes (`local_rate_limited`) |
+| `curl --http1.1` again, after 90 seconds of quiet | `429` |
+| `curl --http2` eight seconds after that | `200` |
+
+Every one of those HTTP/1.1 requests was refused, and a single HTTP/2 request after a quiet gap was
+admitted every time — four times over that night.
+
+The protocol was the only property that changed in those pairs, and every HTTP/1.1 request was
+refused while the HTTP/2 request seconds later was admitted. One more measurement keeps that honest:
+earlier the same night, two HTTP/2 requests six seconds apart answered `200` and then `429`. So the
+shop also refuses a burst, which is what the 2026-11-19 reading saw; what it does not explain is a
+single request every thirty minutes being refused seven times running.
+
+Two limits on the reading: every varying request came from the workstation, and the 2026-11-19 table
+above recorded neither the protocol nor the order of its rounds, so it neither confirms nor refutes
+this. Whether the pod's own fetcher speaks HTTP/1.1 has not been observed — the read-only service
+account cannot exec into the pod.
+
+So try the one lever that tests it: FreshRSS hands its system configuration's `curl_options` to every
+feed fetch, and `CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_2TLS` in `data/config.php` (behind
+*Administration* → *System configuration*) is that setting. It is on the data root, so it is not in
+git. If the polls still answer `429`, this feed needs the route the design already keeps for restock
+tracking — an in-cluster fetch that carries the `_shopify_essential` cookie the `200` sets, or
+`changedetection.io` — and no poll interval will substitute for it.
+
+Do not measure this feed by hand: `verify` fetches from wherever it runs and takes the slot the pod's
+next poll wants, and `state` costs nothing.
 
 ## Categories
 

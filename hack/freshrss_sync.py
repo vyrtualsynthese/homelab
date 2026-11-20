@@ -9,6 +9,8 @@
                                   or holds a feed whose content selectors differ from the file
     verify                        fetch every URL; exit 1 when a feed answers badly or a
                                   full-content selector extracts nothing
+    state                         print what the instance holds per feed: when it last stored an
+                                  item and what it was; asks the instance only, never the publisher
     drop <url>…                   unsubscribe those addresses so an OPML import can create them
                                   again with the settings the file carries
 
@@ -366,6 +368,33 @@ class Client:
             "r": "user/-/label/" + stale,
             "T": self.token(),
         })
+
+    def newest(self, url: str) -> tuple[str, str] | None:
+        """When the instance last stored an item of this feed, and that item's title.
+
+        `crawlTimeMsec` is FreshRSS's own clock for storing an item, which is the only proof that
+        a poll reached the publisher and came back with something. Reading it asks the instance
+        and nobody else, so it can be repeated while a feed's limiter counts every request the
+        address makes.
+        """
+        if not self.auth:
+            self.login()
+        path = "/reader/api/0/stream/contents/feed/" + urllib.parse.quote(url, safe="")
+        status, body = self.transport(
+            "GET", self.base + path + "?n=25&output=json",
+            {"Authorization": f"GoogleLogin auth={self.auth}"}, None)
+        if status != 200:
+            raise RuntimeError(f"stream/contents for {url} answered {status}")
+        stamps = []
+        for item in json.loads(body).get("items") or []:
+            millis = int(item.get("crawlTimeMsec") or 0)
+            if millis:
+                stamps.append((millis, item.get("title") or ""))
+        if not stamps:
+            return None
+        millis, title = max(stamps)
+        seen = datetime.datetime.fromtimestamp(millis / 1000, datetime.timezone.utc)
+        return seen.strftime("%Y-%m-%dT%H:%MZ"), title
 
     def feed_ids(self) -> dict[str, int]:
         """Feed address to its FreshRSS id, which the web UI addresses each settings page by."""
@@ -893,6 +922,27 @@ def _setting(feed: Feed, attribute: str) -> str:
     return dict(feed.settings).get(SETTING_FIELDS[attribute], "")
 
 
+def state(feeds: Sequence[Feed], client: "Client") -> list[tuple[str, Feed, str]]:
+    """What the instance holds for each feed the file lists: when an item last arrived, and which.
+
+    The answer to "has a poll landed?" without asking the publisher, which matters for a feed whose
+    limiter counts every request the address makes: a `verify` run spends the budget the pod needs.
+    A feed with no stored item has never completed a fetch, whatever the shop answered it.
+    """
+    held = {normalize_url(url) for url, _ in client.subscriptions()}
+    rows = []
+    for feed in feeds:
+        if normalize_url(feed.url) not in held:
+            rows.append(("not subscribed", feed, ""))
+            continue
+        newest = client.newest(feed.url)
+        if newest is None:
+            rows.append(("never", feed, "no item stored"))
+        else:
+            rows.append((newest[0], feed, newest[1]))
+    return rows
+
+
 def verify(feeds: Sequence[Feed],
            transport: Callable[..., tuple[int, str]] = http) -> list[Row]:
     """Fetch every URL and say what came back, without ever raising on a bad answer.
@@ -947,7 +997,7 @@ def verify(feeds: Sequence[Feed],
     return rows
 
 
-USAGE = """usage: freshrss_sync.py <apply|check|verify> [--prune] [--dry-run]
+USAGE = """usage: freshrss_sync.py <apply|check|verify|state> [--prune] [--dry-run]
 
   apply    subscribe every feed the OPML lists, set the content selectors it carries and
            clear a label the file does not give that feed;
@@ -957,6 +1007,8 @@ USAGE = """usage: freshrss_sync.py <apply|check|verify> [--prune] [--dry-run]
   verify   fetch every URL and print status, items and newest date; a feed with a full-content
            selector also has its newest article read through that selector;
            exit 1 when a feed answers badly or a selector extracts nothing
+  state    print, per feed, when the instance last stored an item and what it was, or `never`
+           when it has stored none; reads the instance and never the publisher
   drop <url>…
            unsubscribe those addresses so an OPML import can create them again with the
            settings the file carries: a selector, a poll interval and `#force_feed` are
@@ -990,7 +1042,7 @@ def main(argv: list[str] | None = None,
          web_transport: Callable[..., tuple[int, str, dict]] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
     env = dict(os.environ) if env is None else env
-    if not args or args[0] not in ("apply", "check", "verify", "drop"):
+    if not args or args[0] not in ("apply", "check", "verify", "state", "drop"):
         print(USAGE, file=sys.stderr)
         return 2
     command, flags = args[0], {a for a in args[1:] if a.startswith("-")}
@@ -1012,6 +1064,19 @@ def main(argv: list[str] | None = None,
 
     base = env.get("FRESHRSS_BASE", DEFAULT_BASE)
     client = Client(base, user, password, transport)
+
+    if command == "state":
+        try:
+            rows = state(feeds, client)
+        except AuthError as error:
+            print(str(error), file=sys.stderr)
+            return 2
+        except (RuntimeError, OSError) as error:
+            print(f"the instance did not answer: {error}", file=sys.stderr)
+            return 2
+        for seen, feed, title in rows:
+            print(f"{seen:14} {feed.category}/{feed.title:30} {title}".rstrip())
+        return 0
 
     if command == "drop":
         addresses = [a for a in args[1:] if not a.startswith("-")]

@@ -28,6 +28,9 @@ All notable changes to this repository. The format follows
 - The feed set is `hack/freshrss/feeds.opml`, and `hack/freshrss_sync.py` keeps the instance matching
   it. A feed the instance holds twice — same address with and without `#force_feed` — is now reported
   as an extra instead of hiding behind the first row.
+- `hack/freshrss_sync.py state` reports what the instance holds per feed — the date it last stored an
+  item and that item's title, or `never` — so a feed whose publisher rate-limits can be watched
+  without spending the same address's request budget.
 
 ### Added
 
