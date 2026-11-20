@@ -40,7 +40,7 @@
 - Create: `cluster/helm/filebrowser/templates/service.yaml`
 - Create: `cluster/helm/filebrowser/templates/serviceaccount.yaml`
 - Create: `cluster/helm/filebrowser/templates/configmap.yaml`
-- Create: `cluster/helm/filebrowser/templates/secret.yaml`
+- Create: `cluster/helm/filebrowser/templates/secrets.yaml`
 - Create: `cluster/helm/filebrowser/templates/persistentvolumeclaim.yaml`
 - Modify: `.gitignore` (drop the now-unused `filebrowser` `charts/` and `Chart.lock` ignores)
 
