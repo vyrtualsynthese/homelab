@@ -187,19 +187,31 @@ needs and protects nothing, while a small request is all the scheduler needs.
 ## VueTorrent
 
 The `init-qbittorrent` container installs the alternative WebUI from a GitHub release into
-`/config/ui`, and only when the `version.txt` already there differs from `vueTorrent.version`. It
-**cannot fail the pod**: an unreachable package repository, a failed download, a truncated zip or a
+`/config/ui`. It runs when `version.txt` there differs from `vueTorrent.version`, **or** when
+`public/index.html` is missing: the app serves `<RootFolder>/public`, so a tree carrying the right
+version and no page is a broken tree, and the installer puts it back.
+
+It **cannot fail the pod**: an unreachable package repository, a failed download, a truncated zip or a
 read-only claim each leave `/config/ui` untouched, log a `WARNING` line naming the step that failed,
 and exit 0, so qBittorrent starts on its stock WebUI instead of the pod never starting. The two
 network steps are bounded (`timeout 60` on `apk`, `wget -T 20`) so a blackholed address does not hold
 pod start for the kernel's full TCP retry budget.
 
-That fallback has a second half: qBittorrent reacts to a missing UI by writing
-`WebUI\AlternativeUIEnabled=false` to its own config, so a later successful install restores the
-files but not the preference. The recovery command is in the comments above `vueTorrent` in
-`values.yaml`. The long version of the contract between that installer and qBittorrent — including
-the two preference names that silently revert the UI — is there too. Read it before changing either
-value.
+Two things follow a successful install, both on the config claim:
+
+- `WebUI\AlternativeUIEnabled=true` is written into `/config/qBittorrent/qBittorrent.conf`, which is
+  then chowned to `PUID`/`PGID`. qBittorrent clears that preference itself when it finds no UI, and
+  it rewrites the whole file from memory on exit, so the only moment it can be set safely is here,
+  before the app starts. It is written **only after an install**, so an operator who turns the
+  alternative UI off in the WebUI keeps it off across restarts.
+- the archive is kept as `/config/vuetorrent-<version>.zip`; a later install of that same version
+  uses it when github.com is unreachable.
+
+That closes the loop the fallback opened: "files present, preference false, stock UI" was the state a
+successful install could leave behind, and it no longer exists. A **first** boot with no network
+still serves the stock WebUI — there is nothing on the claim to install from and no image carries the
+files. That gap is accepted. The recovery `curl` in the comments above `vueTorrent` in `values.yaml`
+is now only for a UI deleted while the app is running.
 
 Renovate tracks `vueTorrent.version` and `vueTorrent.initTag` through the `# renovate:` annotations.
 The `depName` on each annotation must stay equal to the value on the line under it.
@@ -225,8 +237,10 @@ from here; it stays debt until upstream adds a level.
   outage of the WebUI, and an in-flight download is not affected — qBittorrent checkpoints to its
   config claim.
 - The three claims are unchanged, so there is no first-start step and no data move. A **rebuilt**
-  config volume does need the bypass preferences above re-applied, and a **deleted** WireGuard claim
-  needs the tunnel re-registered.
+  config volume starts with no `/config/ui` and no `qBittorrent.conf`: the installer fetches the UI
+  from the cached archive or GitHub and sets the preference, so it needs nothing here. It does need
+  the bypass preferences above re-applied, and a **deleted** WireGuard claim needs the tunnel
+  re-registered.
 - The new ServiceAccount replaces `default` on the pod; nothing reads the Kubernetes API.
 
 ## Uninstalling

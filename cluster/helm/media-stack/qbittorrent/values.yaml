@@ -242,17 +242,29 @@ storage:
 # The post-start installer for the WebUI. qBittorrent serves VueTorrent's static
 # files from the config claim (`WebUI\RootFolder=/config/ui`), and this init
 # container puts them there: it downloads the release asset only when the
-# `version.txt` sitting in `/config/ui` differs from `version` below, so an
-# ordinary pod restart installs nothing and needs no network.
+# `version.txt` sitting in `/config/ui` differs from `version` below, or when
+# `public/index.html` is missing, so an ordinary pod restart installs nothing and
+# needs no network.
 #
 # Nothing in the installer may fail the pod. The UI is an asset; the torrent
 # client is the workload, so a first boot with no route to github.com — a cold
 # cluster, a fresh claim, a GitHub outage — leaves `/config/ui` as it is, says
-# why in the pod's start log, and qBittorrent starts on its stock WebUI. One
-# consequence is worth knowing before it surprises someone: qBittorrent answers
-# a missing UI by writing `WebUI\AlternativeUIEnabled=false` to its own config,
-# so after that fallback a later successful install puts the files back while
-# the UI stays stock until the recovery command below is run.
+# why in the pod's start log, and qBittorrent starts on its stock WebUI.
+#
+# What it repairs, and when: it installs when `version.txt` differs from
+# `version` below **or** when `/config/ui/public/index.html` is gone (the app
+# serves `<RootFolder>/public`, so the version file alone is not an install).
+# After a verified swap it writes `WebUI\AlternativeUIEnabled=true` into
+# `/config/qBittorrent/qBittorrent.conf` and chowns that file to `PUID`/`PGID`.
+# qBittorrent clears the preference by itself when it finds no UI, and rewrites
+# the file from memory on exit, so the init container is the only place it can be
+# set safely. It is written **only when an install happened**, so an operator who
+# turned the alternative UI off in the WebUI keeps it off across restarts.
+# The archive is kept at `/config/vuetorrent-<version>.zip`, and a later install
+# of that version falls back to it when github.com is unreachable.
+#
+# A first boot with no network still serves the stock WebUI: there are no files
+# on the claim and no image carries them. That is accepted, not a defect.
 #
 # The pairing with qBittorrent is not optional and nothing enforces it: the app
 # serves `<RootFolder>/public`, so `WebUI\RootFolder` must stay `/config/ui`, the
@@ -272,7 +284,9 @@ storage:
 #     WebUI\AuthSubnetWhitelistEnabled  bypass_auth_subnet_whitelist_enabled
 #     WebUI\AuthSubnetWhitelist         bypass_auth_subnet_whitelist
 #
-# Recovery, run from the pod's own address so the auth whitelist covers it, then
+# The manual path, for the one case the installer cannot reach — a UI deleted
+# while the app is running, where the running process would overwrite the file on
+# exit. Run it from the pod's own address so the auth whitelist covers it, then
 # read back with `GET /api/v2/app/preferences` rather than trusting the `200`:
 #
 #     curl -X POST "http://$(hostname -i):8080/api/v2/app/setPreferences" \
