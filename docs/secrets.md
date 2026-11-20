@@ -101,10 +101,11 @@ Only the password keys hold secrets; `DB_NAME`, `DB_HOST` and `DB_USER` live in
 the Secret because the chart reads them there, not because they are sensitive.
 
 Rotation is therefore two writes and one statement: update both Secrets, then
-`ALTER ROLE <app> PASSWORD '<new value>'`, then restart the application pod. Until the dedicated
-rotation runbook lands (W8, `rotate-a-secret.md`), this paragraph is the procedure. Changing only
-one of the two copies is the failure mode: the application keeps working until its next restart,
-then fails authentication for no visible reason.
+`ALTER ROLE <app> PASSWORD '<new value>'`, then restart the application pod. The procedure, in
+order and with the checks at each step, is
+[`running-it/rotate-a-secret.md`](running-it/rotate-a-secret.md). Changing only one of the two
+copies is the failure mode: the application keeps working until its next restart, then fails
+authentication for no visible reason.
 
 ## What goes wrong without them
 
