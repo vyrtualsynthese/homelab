@@ -46,7 +46,8 @@ Two facts decide the shape of the prober:
 **Goals**
 
 1. A public name that stops answering, or serves a broken or expiring
-   certificate, notifies Discord within five minutes.
+   certificate, notifies Discord within roughly five minutes (§6 states the
+   measured worst case).
 2. A mail-critical record that disappears (MX, SPF, DKIM, DMARC) notifies.
 3. A zone whose authoritative servers stop answering, or whose delegation
    changes, notifies.
@@ -97,7 +98,10 @@ New wrapper chart at `cluster/helm/monitoring/blackbox-exporter`, pattern D:
   **11.21.3** (app `v0.29.1`).
 - `values.yaml` pins the image repository and tag
   `quay.io/prometheus/blackbox-exporter:v0.29.1`, sets the module
-  configuration, one replica on `nas`, and the service on 9115.
+  configuration, one replica on `nas`, and the service on 9115. It sets
+  `fullnameOverride: blackbox-exporter`, so the Service really is
+  `blackbox-exporter.monitoring.svc:9115` as used below; without it the
+  upstream chart names it `<release>-prometheus-blackbox-exporter`.
 - `charts/` is already gitignored for wrapper charts; ArgoCD runs
   `helm dependency build` at sync time.
 - Resources: request `10m` CPU / `32Mi` memory, limit `64Mi` memory, no CPU
@@ -141,7 +145,7 @@ the granularity):
 | `dns_ns_ashudev` | `ashudev.com` NS | `ovh\.net` |
 | `dns_soa_ashuvidz` | `ashuvidz.com` SOA | answers |
 | `dns_a_ashuvidz` | `ashuvidz.com` A | `80\.14\.57\.209` |
-| `dns_ns_ashuvidz` | `ashuvidz.com` NS | `awsdns` today; `ovh\.net` once the delegation flips |
+| `dns_ns_ashuvidz` | `ashuvidz.com` NS | answers (provider not asserted; see below) |
 
 Assertions use `validate_answer_rrs.fail_if_none_matches_regexp`, which the
 exporter applies to each answer in its wire form. The apex A record is asserted
@@ -149,9 +153,12 @@ loosely (`185.199.1`) because GitHub owns those four addresses and may add a
 fifth; the HTTP probe is what proves the site, and `www`'s CNAME is
 contractual.
 
-`dns_ns_ashuvidz` is a documented trap: it asserts AWS today. The delegation
-flip is a step in `infra-main`'s migration, so the module and the target list
-change in the same window; the runbook says so.
+`dns_ns_ashuvidz` deliberately asserts only that the delegation answers, not
+who answers it. The zone is mid-transfer from AWS to OVHcloud, and asserting
+the provider would either fail on the day of the planned flip or need a
+throwaway assertion built today. Liveness is the property that matters; the
+runbook says the target list changes when the delegation moves, and why that
+is the only edit.
 
 ### 5.3 Targets and scrape jobs
 
@@ -163,7 +170,7 @@ be discovered by the pod annotation.
 | Job | Interval | Targets | Module |
 |---|---|---|---|
 | `blackbox-http` | 1 m | `https://ashudev.com`, `https://www.ashudev.com`, `https://ashuvidz.com` | `http_2xx` |
-| `blackbox-dns` | 5 m | each module against **both** authoritative servers of its zone | one per target, carried as a `module` label |
+| `blackbox-dns` | 5 m | each module against **every** authoritative server of its zone | one per target, carried as a `module` label |
 
 Relabelling is the standard multi-target shape: `__address__` becomes
 `__param_target`, `instance` is set from the target plus the check, the real
@@ -171,14 +178,17 @@ Relabelling is the standard multi-target shape: `__address__` becomes
 label is copied to `__param_module`. Each target carries `zone` and `check`
 labels so an alert message can name what failed without a lookup.
 
-DNS target list today:
+DNS target list today, which is every server the delegations publish:
 
 - `dns13.ovh.net:53` and `ns13.ovh.net:53` — the eight `ashudev.com` modules;
-- `ns-1029.awsdns-00.org:53` and `ns-1714.awsdns-22.co.uk:53` — the three
+- `ns-1029.awsdns-00.org:53`, `ns-1714.awsdns-22.co.uk:53`,
+  `ns-339.awsdns-42.com:53` and `ns-901.awsdns-48.net:53` — the three
   `ashuvidz.com` modules.
 
-Two servers per zone is the point: one dead authoritative server is invisible
-to a probe that asks the other one. That is 22 probes per five minutes.
+Every authoritative server is probed because one dead server is invisible to a
+probe that asks its siblings. That is 28 probes per five minutes (16 for
+`ashudev.com`, 12 for `ashuvidz.com`); at the delegation flip the four AWS
+addresses become the two OVH ones and the count becomes 22.
 
 ## 6. Alerts
 
@@ -194,6 +204,10 @@ notification policy, grouping and Discord contact point are reused unchanged.
 
 - `noDataState: OK` and `execErrState: OK` on all three: no series is the
   healthy case, and a dead Prometheus is already `MonitoringDown`'s message.
+- **Timing.** A 1 m probe interval, `for: 5m` and the 30 s `group_wait` put
+  the first Discord message at about 6½ minutes after a failure starts. That
+  is accepted: it keeps the house 5 m `for` and filters a single failed probe.
+  Goal 1's "roughly five minutes" means this number.
 - Summaries name the target, the check and the server, and say what to do:
   `CloudEndpointDown` — "https://ashudev.com did not answer from the public
   internet (GitHub Pages). Check githubstatus.com, then the DNS records in
@@ -213,7 +227,7 @@ side healthy, and what needs attention?":
 
 | Row | Panels |
 |---|---|
-| Needs attention | KPI: endpoints answering (x/3) · KPI: DNS checks passing (x/22) · KPI: days to earliest certificate |
+| Needs attention | KPI: endpoints answering (x/3) · KPI: DNS checks passing (x/28) · KPI: days to earliest certificate |
 | Endpoints | timeseries `probe_success` per endpoint, 24 h · timeseries `probe_duration_seconds` per endpoint |
 | Detail | table: endpoint or check, target, server, result, certificate days, duration |
 
@@ -234,6 +248,16 @@ the new project's usage is €0.00. €20 is a small margin above the historical
 monthly, €50 is the "something is running that should not be" line. The API
 allows one configuration per service and threshold, and repeats no more than
 once an hour.
+
+The credentials already exist and were proved read-only on 2026-11-20:
+`OVH_APPLICATION_KEY`, `OVH_APPLICATION_SECRET` and `OVH_CONSUMER_KEY` in
+`~/.config/secrets/keys.env` authenticate `ovhcloud` and signed API calls
+against `ovh-eu`; `GET /cloud/project/<id>/usage/current`, `GET /me/bill` and
+`cloud project list` all answered. The builder runs the two `alerting create`
+calls and verifies with `alerting list`; nothing reads or writes the consumer
+key into the repository. This is the repository's normal agent path
+(`AGENTS.md` §9, "Configure through the API, not the operator's mouse"), and
+the only OVH writes are the two configurations named in the table.
 
 What stays with OVH, unchanged, and is written down rather than replaced:
 domain renewal and expiry notices, unpaid-bill dunning, and the invoice
@@ -286,7 +310,14 @@ cluster depends on it.
 - **`www` is probed as its own target**, not assumed to follow the apex: it is
   a CNAME to GitHub, and a broken `www` is a real failure for anyone typing
   it.
-- **Both authoritative servers are probed for every DNS check.** The extra 11
-  probes per interval are cheaper than a silent dead secondary.
+- **Every authoritative server is probed for every DNS check.** All four
+  `ashuvidz.com` servers are in the list while the delegation is on Route 53;
+  the extra probes are cheaper than a silent dead server, and the list shrinks
+  to two at the flip.
+- **`ashuvidz.com`'s NS record is asserted for liveness, not for provider.**
+  The zone is mid-transfer; asserting AWS would be throwaway work and
+  asserting OVH would fail until the flip.
+- **`for: 5m` stays.** A blip should not page; the 6½-minute worst case is
+  recorded in §6 rather than traded for a tighter `for`.
 - **The apex A assertion is loose.** Exact-IP assertions on GitHub's addresses
   turn a provider change into a false page.
