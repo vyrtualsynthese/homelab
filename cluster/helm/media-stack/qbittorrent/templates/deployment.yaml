@@ -191,7 +191,10 @@ spec:
                   BEGIN { line = "WebUI\\AlternativeUIEnabled=true"; key = "WebUI\\AlternativeUIEnabled=" }
                   /^\[/ {
                     if (inprefs && !done) { print line; done = 1 }
-                    inprefs = ($0 == "[Preferences]")
+                    # Tolerate a CRLF file: qBittorrent writes LF, but the claim is
+                    # on NFS and an editor elsewhere can change that. Without this,
+                    # the key would land in a second [Preferences] section.
+                    inprefs = ($0 == "[Preferences]" || $0 == "[Preferences]\r")
                     print
                     next
                   }
