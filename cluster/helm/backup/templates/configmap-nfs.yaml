@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: backup-nfs-paths
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "backup.labels" (dict "root" . "stream" "nfs") | nindent 4 }}
+data:
+  # One export per line as <tag>|<path>|<exclude patterns>. The third field is empty when the
+  # row excludes nothing; otherwise the restic patterns are separated by one space. The job
+  # refuses to run when an export named here is missing, which is what stops a rename from
+  # turning into a quiet gap.
+  nfs-paths.txt: |
+    {{- range .Values.nfs.paths }}
+    {{ .tag }}|{{ .path }}|{{ join " " (.exclude | default (list)) }}
+    {{- end }}
