@@ -6,7 +6,7 @@
 >
 > **Use it when** you need to know whether a hostname is reachable from outside, what stands in
 > front of an application before its own login, or which certificate a browser will be shown ·
-> **Verified** 2026-11-19 · **Kind:** living page
+> **Verified** 2026-11-20 · **Kind:** living page
 
 Read from the live cluster on 2026-11-17 through the read-only Kubernetes MCP: every
 `traefik.containo.us/v1alpha1` `IngressRoute` in every namespace, plus the `Middleware` objects in
@@ -37,7 +37,7 @@ app through authentik. The authentik page Dashy signs in through is public for t
 | `authentik.kub.home.ashudev.com` | Authentik | `authentik` | none — `security` headers; each application's own policy is the gate | Let's Encrypt | yes |
 | `dashy.ashudev.com` | Dashy | `dashy` | `authentik-forwardauth` (admins only) then `security` | Let's Encrypt | yes |
 | `filebrowser.kub.home.ashudev.com` | FileBrowser | `filebrowser` | none — `security` headers; the app redirects to authentik | Let's Encrypt | yes |
-| `plex.kub.home.ashudev.com` | Plex | `media-stack` | none — `security` headers, rate limit (two `websecure` routers) | Let's Encrypt | yes |
+| `plex.kub.home.ashudev.com` | Plex | `media-stack` | none — `security` headers, rate limit | Let's Encrypt | yes |
 | `seerr.kub.home.ashudev.com` | Seerr | `media-stack` | none — `security` headers, rate limit | Let's Encrypt | yes |
 
 ## Internal over TLS
@@ -104,10 +104,6 @@ claim rebuild closed the gap on 2026-11-19. `thelounge` was the second until the
 rebuild added the LAN gate and the authentik forward-auth in front of it, and `syncthing` followed. The
 six public hosts above carry no `lan-only` by design instead, which is the other case
 `hack/check-exposure.sh` allows; it passes on both.
-
-**Two routers on Plex.** `plex.kub.home.ashudev.com` is claimed twice, both on `websecure`:
-`plex-public` (headers and rate limit) and a leftover `plex-media-public` from an older release with
-no middleware. Equal rules, so what a browser gets is not settled by git.
 
 **The Traefik dashboard hostname disagrees with itself.** The live router answers `traefik.kub.local`;
 the only copy in git, `cluster/infrastructure/traefik/traefik-config.yaml`, sets
