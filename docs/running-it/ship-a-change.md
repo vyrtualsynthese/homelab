@@ -58,6 +58,7 @@ Then, from the repo root:
 
 ```bash
 hack/check-exposure.sh          # a non-public route must keep its LAN gate
+hack/check-config-keys.sh       # a config key must exist in the pinned chart's schema
 python3 hack/check_docs_links.py   # when docs change
 uv run --with-requirements hack/tests/requirements.txt python -m pytest -q hack/tests
 ```

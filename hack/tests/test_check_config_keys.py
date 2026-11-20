@@ -1,3 +1,5 @@
+import contextlib
+import io
 import pathlib
 import sys
 import tarfile
@@ -70,6 +72,22 @@ class ComparisonTests(unittest.TestCase):
             [(6, "server.sources[].config.rules[].bogus")],
         )
 
+    def test_differing_example_elements_merge_their_nested_keys(self):
+        rendered = (
+            "server:\n  sources:\n    - config:\n        rules:\n"
+            "          - folderName: x\n        defaultEnabled: false\n"
+        )
+        schema = {"server": {"sources": [
+            {"config": {"rules": [{"folderName": ""}]}},
+            {"config": {"defaultEnabled": True}},
+        ]}}
+        self.assertEqual(check_config_keys.undeclared_keys(rendered, schema), [])
+
+    def test_an_empty_element_schema_accepts_the_elements(self):
+        rendered = "server:\n  sources:\n    - path: /srv/a\n"
+        schema = {"server": {"sources": []}}
+        self.assertEqual(check_config_keys.undeclared_keys(rendered, schema), [])
+
 
 class DiscoveryTests(unittest.TestCase):
     def test_the_configmap_holding_the_key_is_read(self):
@@ -119,6 +137,26 @@ class DependencyTests(unittest.TestCase):
             check_config_keys.dependency_chart(charts, "filebrowser-quantum")
         self.assertIn("helm dependency build", str(caught.exception))
 
+    def test_two_candidate_archives_are_a_setup_error(self):
+        charts = pathlib.Path(tempfile.mkdtemp()) / "charts"
+        charts.mkdir(parents=True)
+        for version in ("1.0.0", "2.0.0"):
+            (charts / f"filebrowser-quantum-{version}.tgz").write_bytes(b"")
+        with self.assertRaises(check_config_keys.CheckError) as caught:
+            check_config_keys.dependency_chart(charts, "filebrowser-quantum")
+        self.assertIn("helm dependency build", str(caught.exception))
+
+    def test_an_archive_without_values_is_a_setup_error(self):
+        charts = pathlib.Path(tempfile.mkdtemp()) / "charts"
+        charts.mkdir(parents=True)
+        source = pathlib.Path(tempfile.mkdtemp()) / "filebrowser-quantum"
+        source.mkdir()
+        (source / "Chart.yaml").write_text("name: filebrowser-quantum\nversion: 2.0.2-stable\n")
+        with tarfile.open(charts / "filebrowser-quantum-2.0.2-stable.tgz", "w:gz") as archive:
+            archive.add(source / "Chart.yaml", arcname="filebrowser-quantum/Chart.yaml")
+        with self.assertRaises(check_config_keys.CheckError):
+            check_config_keys.dependency_chart(charts, "filebrowser-quantum")
+
     def test_the_schema_subtree_is_returned(self):
         self.assertEqual(
             check_config_keys.schema_tree(self.values(), "config"),
@@ -152,17 +190,42 @@ class EntryTests(unittest.TestCase):
 
 
 class MainTests(unittest.TestCase):
+    def manifest(self, root, body=None):
+        manifest = root / "manifest.yaml"
+        manifest.write_text(body or (
+            "- chart: cluster/helm/app\n"
+            "  dependency: filebrowser-quantum\n"
+            "  schema: config\n"
+            "  key: config.yaml\n"
+        ))
+        return manifest
+
+    def run_main(self, argv):
+        """Call main without letting its report pollute the test output."""
+        with contextlib.redirect_stdout(io.StringIO()):
+            return check_config_keys.main(argv)
+
     def test_an_unbuilt_dependency_exits_2(self):
         root = pathlib.Path(tempfile.mkdtemp())
         chart = root / "cluster/helm/app"
         (chart / "charts").mkdir(parents=True)
         (chart / "Chart.yaml").write_text("name: app\nversion: 0.1.0\n")
         (chart / "values.yaml").write_text("filebrowser-quantum: {}\n")
-        manifest = root / "manifest.yaml"
-        manifest.write_text(
-            "- chart: cluster/helm/app\n"
-            "  dependency: filebrowser-quantum\n"
-            "  schema: config\n"
-            "  key: config.yaml\n"
+        manifest = self.manifest(root)
+        self.assertEqual(self.run_main(["--manifest", str(manifest), "--root", str(root)]), 2)
+
+    def test_an_incomplete_manifest_entry_exits_2(self):
+        root = pathlib.Path(tempfile.mkdtemp())
+        (root / "cluster/helm/app").mkdir(parents=True)
+        manifest = self.manifest(root, "- chart: cluster/helm/app\n")
+        self.assertEqual(self.run_main(["--manifest", str(manifest), "--root", str(root)]), 2)
+
+    def test_only_skips_other_charts_and_exits_0(self):
+        root = pathlib.Path(tempfile.mkdtemp())
+        (root / "cluster/helm/app").mkdir(parents=True)
+        manifest = self.manifest(root)
+        self.assertEqual(
+            self.run_main(["--manifest", str(manifest), "--root", str(root), "--only", "elsewhere"]),
+            0,
         )
-        self.assertEqual(check_config_keys.main(["--manifest", str(manifest)]), 2)
+
