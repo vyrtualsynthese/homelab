@@ -169,6 +169,10 @@ Charts that need `helm dependency build`: `monitoring/prometheus`, `monitoring/g
 `monitoring/loki`, `monitoring/fluent-bit`, `authentik`, `dashy`, `filebrowser`,
 `databases/pgadmin`, `renovate`, `nfs/provisioner`.
 
+`hack/check-app-version.sh` checks requirement 1 of [`docs/charts/README.md`](docs/charts/README.md):
+every `appVersion` names the version inside the chart's `image.tag`, with the packaging suffix
+dropped. It is the check to run after merging a Renovate image bump, which moves the tag alone.
+
 Check that ArgoCD references resolve (CRLF-safe):
 
 ```bash

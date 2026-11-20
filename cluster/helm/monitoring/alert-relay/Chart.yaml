@@ -3,4 +3,4 @@ name: alert-relay
 description: Turns Grafana alerts into cards on the alerts board
 type: application
 version: 0.1.0
-appVersion: "0.1.0"
+appVersion: "3.15.2"

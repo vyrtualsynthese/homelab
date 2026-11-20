@@ -53,6 +53,14 @@ Four of the rules in that file exist because of a failure, and they read as arbi
   a major jump and hides all of them. The lookup on 2026-11-19 offered `2.48.6`, the newest stable,
   and nothing from the `2.49.x` or `3.x` prerelease lines.
 
+**`appVersion` does not move with the tag.** The docker manager owns `image.tag` in `values.yaml` and
+reads nothing in `Chart.yaml` but `dependencies:`, so a version bump merges with `appVersion` behind
+it. A second `# renovate:` annotation on `Chart.yaml` was rejected: it would extract the same pin
+twice, and it would copy the packaging suffix (`-ls332`, `-distroless`) into `appVersion`, which the
+[chart contract](../charts/README.md#how-appversion-relates-to-imagetag) says is the application's
+own version. `hack/check-app-version.sh` is the guard instead: after merging an image bump, it fails
+until `appVersion` names the version inside the new tag.
+
 ## Where the configuration lives, and when a change takes effect
 
 `.github/renovate.json`, in this repository. Renovate reads it from the **default branch**, which is
