@@ -33,7 +33,7 @@ absent from this table has no single sign-on at all — no provider, no gate —
 | pgAdmin | OIDC | configured; no local login left | `pgadmin.kub.local` |
 | Radarr | OIDC | configured 2026-11-18 — Radarr 7's own OIDC; the forward-auth gate and the app's login are gone, `/api` exempt | `radarr.kub.local` |
 | Radarr (anime) | OIDC | configured 2026-11-18 — same settings as Radarr, own client id; `/api` exempt | `radarr-anime.kub.local` |
-| Vikunja | OIDC | done 2026-11-16 — gate removed, subject linked to the original account | `vikunja.kub.local` |
+| Vikunja | OIDC | done 2026-11-16 — gate removed, subject linked to the original account; the blueprint in git describes this provider since 2026-11-20 | `vikunja.kub.local` |
 | FileBrowser | OIDC | configured 2026-11-19 — FileBrowser Quantum, password form off, so the browser redirects straight to authentik; `filebrowser-editors` admits the editor, whose folder scope is set inside the app | `filebrowser.kub.home.ashudev.com` |
 | Bazarr | forward-auth gate | configured; its own login is off; `/api` exempt | `bazarr.kub.local` |
 | Bazarr (anime) | forward-auth gate | configured; no login of its own; `/api` exempt | `bazarr-anime.kub.local` |
@@ -153,7 +153,7 @@ It is the only application here that supports OIDC and does not use it, and the 
 loss is visible: forward-auth hands Vikunja one shared identity, so every card the operator writes and
 every card an agent writes need labels or bots to be told apart.
 
-The migration is four steps, in this order, and the order is the safety:
+The migration is five steps, in this order, and the order is the safety:
 
 1. **Done 2026-11-16.** OAuth2 provider `vikunja-oidc` (pk 62, client id
    `eqfj9awPPBaZSDan6HikbXBYSJgh1nok8ahhVKG4`) and application `vikunja-oidc`, whose slug is what
@@ -194,6 +194,18 @@ The migration is four steps, in this order, and the order is the safety:
      or any API token, which are local users and unaffected.
    - **A failed OIDC login creates a second account** with the same subject, and then two rows match
      one subject. Retire the newer one by clearing its subject and renaming it; never leave two.
+5. **Done 2026-11-20.** `cluster/helm/authentik/files/app-vikunja.yaml` now declares what the cluster
+   runs — the OAuth2 provider `vikunja-oidc` (client id, strict redirect
+   `https://vikunja.kub.local/auth/openid/authentik`, the `openid` and `profile` scopes plus the local
+   `vikunja: email verified` one), the application `vikunja-oidc` whose slug names the issuer, and the
+   Admins-only binding. The retired forward-auth proxy provider is gone, so re-applying the blueprint
+   can no longer re-point the board at a gate.
+
+   The file reads the client secret from `VIKUNJA_CLIENT_SECRET` in `authentik-sso`, which holds the
+   same value as Secret `vikunja-oidc`/`CLIENTSECRET` in the `vikunja` namespace: Secrets do not cross
+   namespaces, so the key is copied, not shared ([`docs/secrets.md`](../secrets.md)). Until that key
+   exists the file fails to apply — atomically, so the live provider is left untouched and the board
+   keeps working.
 
 ## Media tools behind the gate
 
