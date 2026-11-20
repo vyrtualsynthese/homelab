@@ -4,7 +4,7 @@
 > sits on `nas` over NFS, and neither has a second copy or a working backup.
 >
 > **Use it when** you are adding a claim, a pod will not start because of one, or you want to know what
-> a backup would save · **Verified** 2026-11-17 · **Kind:** living page
+> a backup would save · **Verified** 2026-11-20 · **Kind:** living page
 
 ## Two storage worlds
 
@@ -69,17 +69,46 @@ pod**; otherwise the scheduler keeps queueing it against the old claim's identit
 stays as `Released` — delete it and its directory. The habit that avoids it: scale the old Deployment
 to zero before the first sync that creates the claim.
 
-## Longhorn's corpse
+## Four volumes stay marked for deletion
 
-Longhorn is the replicated-storage layer that failed in 2026. It was not rebuilt, and the claims it left
-in the application namespaces are stuck in `Terminating`, each carrying a finalizer naming a storage
-driver that is gone, so nothing will clear them. Their contents were abandoned by decision.
+Longhorn is gone: the driver, its classes and custom resources, the namespace, all twenty-six volumes
+and all six claims were cleared on 2026-11-18 and 2026-11-19. The record of how is
+[the Longhorn page](../cleanup/longhorn-disposition.md).
 
-The claims still mounted by a running application are **not** inert: clearing their finalizers stops
-the application and destroys its configuration, and [`status.md`](../status.md) names them. The rest
-hold no data and block nothing. Clear one by hand only after checking which it is: patch the volume's
-finalizers away, then the claim's
-([cause](../audit/observability-storage.md#21-longhorn-removed-not-cleaned-up)).
+Four volumes still show `Terminating` in `kubectl get pv`. They are not leftovers. They were asked to
+delete on 2023-12-06, the deletion was blocked because each is bound to a live claim, and a deletion
+timestamp cannot be cleared on a running object. They are **kept as they are, by decision on
+2026-11-20**, and nothing is to be done about them:
+
+| Volume | Claim | Mounted by | What it holds | Why it stays |
+|---|---|---|---|---|
+| `pv-traefik-nfs` | `kube-system/pvc-traefik-nfs` | the `traefik` DaemonSet | the ACME certificate store, `/mnt/storage/traefik` | every TLS route depends on it, and a bad replacement re-issues the certificates |
+| `pv-plex-media` | `media-stack/pvc-plex-media` | `plex`, `sonarr`, `sonarr-anime`, `radarr`, `radarr-anime`, `bazarr`, `bazarr-anime` | film and television, `/mnt/storage/nfs/plexmedia` | seven workloads read it; replacing it buys nothing and stops all seven |
+| `pv-stash-nfs-nfs-stash` | `media-stack/pvc-stash-nfs-nfs-stash` | the `stash-nfs` provisioner | assets and documents, `/mnt/storage/nfs/stash` | it is the export FileBrowser reads, and koillection's uploads are provisioned into it |
+| `pv-nfs-qbittorrent-download-nfs-subdir-external-provisioner` | `media-stack/pvc-nfs-qbittorrent-download-nfs-subdir-external-provisioner` | `qbittorrent`, `unpackerr`, `sonarr`, `sonarr-anime`, `radarr`, `radarr-anime`, `lidarr` | the downloads queue, `/mnt/ultrafaststorage/nfs` | it is the in-flight queue every *arr application and the unpacker share |
+
+Two facts keep them safe. Each volume is bound to a live claim, so its only finalizer is
+`kubernetes.io/pv-protection`, the guard any in-use volume carries; and its reclaim policy is
+`Retain`, so the directory on the NAS survives even a deletion that does complete. All four are
+declared by the provisioner chart (`cluster/helm/nfs/provisioner/values/*.yaml`, with
+`nfs.mountOptions` non-empty), so git still owns them and a sync recreates them.
+
+**Their finalizers must never be patched.** They carry no `spec.csi`, which is exactly what the
+Longhorn recipe filtered on, so a loop written for that cleanup cannot reach them; a hand-run patch
+can. The check is:
+
+```bash
+kubectl get pv -o json \
+  | jq -r '.items[] | select(.metadata.deletionTimestamp != null) | .metadata.name'
+```
+
+Expected: exactly those four names. A fifth volume in that list is a real leftover; the four above
+are neither leftovers nor a problem.
+
+Replacing one is possible and unnecessary. It means scaling to zero every workload mounting the claim
+(the provisioner Deployment included, because it mounts the claim too), deleting the claim, letting
+the pending volume deletion complete, syncing the Application so the chart recreates the pair, then
+scaling back. The NFS directory is untouched throughout; a restart under load is the only cost.
 
 ## Backups
 

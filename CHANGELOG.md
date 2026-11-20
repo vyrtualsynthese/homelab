@@ -22,6 +22,9 @@ All notable changes to this repository. The format follows
 - The Longhorn cleanup is closed: no volume, claim, StorageClass, namespace or custom resource
   remains. The disposition page is kept as the record of what was removed, and the chart comments
   that named a Terminating claim to explain a claim name now describe that as history.
+- The four NFS volumes that have carried a deletion timestamp since 2023-12-06 are recorded as
+  deliberately kept, one reason each, in `docs/how-it-works/storage.md`; the provisioner chart still
+  declares all four, so a sync recreates them if one ever has to be replaced.
 - The feed set is `hack/freshrss/feeds.opml`, and `hack/freshrss_sync.py` keeps the instance matching
   it. A feed the instance holds twice — same address with and without `#force_feed` — is now reported
   as an extra instead of hiding behind the first row.
