@@ -1,0 +1,152 @@
+# NVIDIA GPU Operator — the GPU stack.
+#
+# Wrapper around the upstream chart (pattern D): the chart version and every
+# image below are pinned to what runs on `streaming`, and Renovate proposes the
+# bumps from here on. The chart lives at cluster/helm/platform/gpu-operator and
+# is deployed by the Application of the same name in projects/platform.
+#
+# What this chart does NOT own: the host driver. It is installed and upgraded by
+# hand on `streaming` (580.178.04, CUDA 13.0 on 2026-11-20) and the operator is
+# told to leave it alone. docs/runbooks/gpu-operator.md records the step.
+#
+# Resources below are sized from 7-day peaks in Prometheus on 2026-11-20:
+# operator 89 MiB, dcgm-exporter 531 MiB, gpu-feature-discovery 76 MiB,
+# container-toolkit 48 MiB, device-plugin 42 MiB, NFD worker 59 MiB, NFD master
+# 86 MiB, NFD gc 18 MiB. Requests track the steady state so the scheduler
+# reserves what the pods actually hold; limits leave room for a peak.
+
+gpu-operator:
+  # `driver.enabled: false` is the declaration that a rebuild is safe: with the
+  # driver disabled the operator never builds one against the host kernel, so a
+  # fresh cluster needs the driver installed first and nothing else. The node
+  # label `nvidia.com/gpu.deploy.driver=pre-installed` left over from the hand
+  # install is then vestigial, not required.
+  driver:
+    enabled: false
+
+  operator:
+    version: v26.3.1
+    # Pinned to where the controller already runs: it watches nodes, not pods, so
+    # its placement only has to be predictable.
+    nodeSelector:
+      kubernetes.io/hostname: streaming
+    resources:
+      requests:
+        cpu: 50m
+        memory: 96Mi
+      limits:
+        memory: 192Mi
+
+  validator:
+    version: v26.3.1
+    # The validator runs to completion per rollout; its memory is a transient.
+    resources:
+      requests:
+        cpu: 10m
+        memory: 16Mi
+      limits:
+        memory: 64Mi
+
+  toolkit:
+    version: v1.19.0
+    # K3s keeps containerd under /var/lib/rancher/k3s and listens on its own
+    # socket. These four values are the whole reason this file exists: without
+    # them the toolkit container rewrites /etc/containerd/config.toml, which K3s
+    # does not read, and the `nvidia` runtime class is never registered.
+    env:
+      - name: CONTAINERD_CONFIG
+        value: /var/lib/rancher/k3s/agent/etc/containerd/config.toml
+      - name: CONTAINERD_SOCKET
+        value: /run/k3s/containerd/containerd.sock
+      - name: CONTAINERD_RUNTIME_CLASS
+        value: nvidia
+      - name: CONTAINERD_SET_AS_DEFAULT
+        value: "true"
+    resources:
+      requests:
+        cpu: 10m
+        memory: 32Mi
+      limits:
+        memory: 96Mi
+
+  devicePlugin:
+    version: v0.19.0
+    resources:
+      requests:
+        cpu: 10m
+        memory: 32Mi
+      limits:
+        memory: 96Mi
+
+  gfd:
+    version: v0.19.0
+    resources:
+      requests:
+        cpu: 10m
+        memory: 48Mi
+      limits:
+        memory: 128Mi
+
+  dcgmExporter:
+    version: 4.5.1-4.8.0-distroless
+    # This container holds ~530 MiB for its whole life: it embeds nv-hostengine
+    # rather than talking to a standalone DCGM, which is why the limits sit far
+    # above what an exporter usually needs.
+    resources:
+      requests:
+        cpu: 50m
+        memory: 512Mi
+      limits:
+        memory: 1Gi
+
+  migManager:
+    # The P400 is not MIG capable, so this DaemonSet stays at 0/0. The limits are
+    # declared anyway so the object is complete if the card is ever replaced.
+    resources:
+      requests:
+        cpu: 10m
+        memory: 16Mi
+      limits:
+        memory: 64Mi
+
+  node-feature-discovery:
+    image:
+      repository: registry.k8s.io/nfd/node-feature-discovery
+      tag: v0.18.3
+    # Only `streaming` has a GPU, and nothing in this repo reads NFD labels.
+    # Four workers for one node was three pods of waste.
+    worker:
+      nodeSelector:
+        kubernetes.io/hostname: streaming
+    # The master and its garbage collector are cluster-scope controllers. They
+    # run on nuc0, the node kept for the general catalogue.
+    master:
+      nodeSelector:
+        kubernetes.io/hostname: nuc0
+    gc:
+      nodeSelector:
+        kubernetes.io/hostname: nuc0
+
+  # The operator creates the DCGM exporter's Service itself, and the
+  # ClusterPolicy CRD has no field for Service annotations (`service` takes
+  # internalTrafficPolicy and type only). Prometheus scrapes through
+  # `kubernetes-service-endpoints`, which is annotation-driven, so the scrape
+  # target has to be a Service this chart owns. Same selector, same port; the
+  # operator leaves a Service it did not create alone.
+  extraObjects:
+    - apiVersion: v1
+      kind: Service
+      metadata:
+        name: nvidia-dcgm-exporter-metrics
+        namespace: '{{ .Release.Namespace }}'
+        annotations:
+          prometheus.io/scrape: "true"
+      spec:
+        type: ClusterIP
+        selector:
+          app: nvidia-dcgm-exporter
+        ports:
+          - name: metrics
+            port: 9400
+            targetPort: 9400
+            protocol: TCP
