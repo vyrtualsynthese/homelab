@@ -13,9 +13,9 @@ Everything below was derived from the repo; items marked **[verify]** need clust
 A single K3s homelab managed by ArgoCD (GitOps) plus Ansible for host prep.
 
 - GitOps branch: `develop` (every Application pins `targetRevision: develop`).
-- 55 ArgoCD `Application` objects in `cluster/argocd/projects/**/*.yaml`. The old `calibre` Application
+- 57 ArgoCD `Application` objects in `cluster/argocd/projects/**/*.yaml`. The old `calibre` Application
   and its chart were retired once Calibre-Web Automated had the collection.
-- 47 Helm charts under `cluster/helm/`.
+- 49 Helm charts under `cluster/helm/`.
 - No CI. Renovate updates images/chart versions; nothing runs on PR.
 - Secrets are never committed. See §5.
 
@@ -122,11 +122,12 @@ time. Examples:
 - **Every non-public route carries `kube-system-lan-only@kubernetescrd`.** The router forwards 80/443 to
   the cluster and Traefik routes on the `Host` header alone, so an ungated route answers the internet
   whether or not its hostname resolves publicly. The public list is `plex`, `seerr`,
-  `ashuvidz.com`, `dashy.ashudev.com`, `filebrowser.kub.home.ashudev.com` and
-  `authentik.kub.home.ashudev.com` — the last one because it is the sign-in page of the page before
-  it, and a gate whose login lives on the LAN cannot be used from outside. FileBrowser is public
-  because the editor signs in from outside and its share links are opened by people with no account.
-  Nothing else. `hack/check-exposure.sh` enforces it and must pass before a PR.
+  `ashuvidz.com`, `ashudev.com` with `www.ashudev.com`, `dashy.ashudev.com`,
+  `filebrowser.kub.home.ashudev.com` and `authentik.kub.home.ashudev.com` — the last one because it
+  is the sign-in page of the page before it, and a gate whose login lives on the LAN cannot be used
+  from outside. FileBrowser is public because the editor signs in from outside and its share links
+  are opened by people with no account. Nothing else. `hack/check-exposure.sh` enforces it and must
+  pass before a PR.
 - Stateful apps: `strategy: Recreate`; one PVC per concern; `storageClassName: local-path` for config.
   Shared media/data volumes use one of the eight NFS classes, each a release of
   `cluster/helm/nfs/provisioner` with its own values file. There is no

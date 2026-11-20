@@ -1,7 +1,7 @@
 # Routes: every hostname, its gate and its certificate
 
-> **In one line.** Traefik answers the 33 hostnames in this table: six are public, twenty-three are
-> internal over TLS, four answer plain HTTP, and two more names exist only to redirect; the gate
+> **In one line.** Traefik answers the 34 hostnames in this table: seven are public, twenty-three are
+> internal over TLS, four answer plain HTTP, and three more names exist only to redirect; the gate
 > column — not the address — is what decides who gets in.
 >
 > **Use it when** you need to know whether a hostname is reachable from outside, what stands in
@@ -25,7 +25,7 @@ the hostname is public or a `*.kub.home.ashudev.com` name the LAN resolves to `1
 
 ## Public
 
-These six are on the allowlist and are meant to answer the internet. Only Dashy carries a gate; the
+These seven are on the allowlist and are meant to answer the internet. Only Dashy carries a gate; the
 others set response headers — and, for Plex and Seerr, a rate limit of 100 requests per second on
 average — and neither of those is authentication. FileBrowser is open so the editor can sign in from
 outside and its share links can be opened by people with no account, and it authenticates inside the
@@ -34,6 +34,7 @@ app through authentik. The authentik page Dashy signs in through is public for t
 | Host | Application | Namespace | Gate | TLS | Public? |
 |---|---|---|---|---|---|
 | `ashuvidz.com` | ashuvidz website (nginx) | `ashuvidz` | none — `security` headers | Let's Encrypt | yes |
+| `ashudev.com` | ashudev website (nginx) | `ashudev` | none — `security` headers | Let's Encrypt | yes |
 | `authentik.kub.home.ashudev.com` | Authentik | `authentik` | none — `security` headers; each application's own policy is the gate | Let's Encrypt | yes |
 | `dashy.ashudev.com` | Dashy | `dashy` | `authentik-forwardauth` (admins only) then `security` | Let's Encrypt | yes |
 | `filebrowser.kub.home.ashudev.com` | FileBrowser | `filebrowser` | none — `security` headers; the app redirects to authentik | Let's Encrypt | yes |
@@ -88,9 +89,11 @@ Four routes serve plain HTTP. The LAN allowlist or a password is all that stands
 name that only redirects to HTTPS, carrying `lan-only` and nothing else. The public hosts' `web`
 routers carry `redirect-https` and no gate, because a gate there would refuse the browser before it
 ever asked for the certificate. FileBrowser has no `web` router at all: it answers `websecure` only.
-The four rows in the last table are served on `web` itself. Two hostnames exist only to redirect and
+The four rows in the last table are served on `web` itself. Three hostnames exist only to redirect and
 are rows in no table: `kub.home.ashudev.com` and `dashy.kub.local`, both to
-`https://dashy.ashudev.com`, path and query kept.
+`https://dashy.ashudev.com`, and `www.ashudev.com` to `https://ashudev.com`, path and query kept. The
+first two answer on `web` alone; `www.ashudev.com` also has a `websecure` router and carries its own
+certificate, because Traefik asks the resolver for a name only when a router matches it.
 
 **`/api` exemptions.** Ten hosts — `bazarr`, `bazarr-anime`, `lidarr`, `maintainerr`, `prowlarr`,
 `radarr`, `radarr-anime`, `sonarr`, `sonarr-anime`, `tautulli` — carry a second rule on
@@ -103,7 +106,7 @@ is the only control on `/api`.
 claim rebuild closed the gap on 2026-11-19. `thelounge` was the second until the same day, when its
 rebuild added the LAN gate, and `syncthing` followed; The Lounge's forward-auth went on 2026-11-20 when
 its LDAP sign-in replaced it. The
-six public hosts above carry no `lan-only` by design instead, which is the other case
+seven public hosts above carry no `lan-only` by design instead, which is the other case
 `hack/check-exposure.sh` allows; it passes on both.
 
 **The Traefik dashboard hostname disagrees with itself.** The live router answers `traefik.kub.local`;

@@ -74,6 +74,13 @@ protection ceiling only, with the reason next to the values.
 |---|---|---|---|---|
 | `thelounge` | 76Mi / 81Mi | 64Mi → **80Mi** | 128Mi (unchanged) | The request sat below the working set; the limit already covered 1.5× the peak. Measured on the pod that had run 98 days on `nuc0`, before its rebuild on a new claim |
 
+## Carried over on 2026-11-20
+
+| Chart | p95 / peak | Request / limit | Why |
+|---|---|---|---|
+| `ashudev-website` nginx | not measured | 32Mi / 128Mi | Carried from `ashuvidz-website`, which serves the same files from disk. The clone init container has no sample to size from either way |
+| `ashudev-website` git-syncer and clone | not measured | 32Mi / 64Mi | Same reason; one `git fetch` a minute on a small tree. Re-measure once the pod has history |
+
 ## Enforced by the method, not by these numbers
 
 No CPU limit anywhere, and CPU requests stay at 10–100m. CPU is compressible: a limit throttles the
