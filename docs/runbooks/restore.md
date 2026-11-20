@@ -8,8 +8,8 @@ neither belongs in a drill.
 > the drill log that says which of these has actually been tried.
 >
 > **Use it when** something was deleted, a claim is gone, a database has to be rebuilt, or the
-> monthly restore drill is due · **Verified** 2026-11-20, against the bucket's layout; no restore has
-> been recorded yet · **Kind:** living page
+> monthly restore drill is due · **Verified** 2026-11-21: sections 1–3 restored and read back, the
+> destructive put-back and the etcd rehearsal are untried · **Kind:** living page
 
 The nightly jobs write four restic repositories into one bucket. Restic is the tool that reads them:
 it holds the file list, the encryption and the history. There is no other way in.
@@ -280,9 +280,13 @@ recently, not what is believed.
 
 | Date (UTC) | Drill | Duration | Result | By |
 |---|---|---|---|---|
+| 2026-11-21 | Section 1 — PostgreSQL dumps (`nodes-nas`) | ~3 min | 26 dumps plus `globals.sql` (7 `CREATE ROLE`) restored from snapshot `e36ab944` into `/out`. The first attempt found no `globals.sql`: the roles capture landed after that morning's dump, so a dump and a `nodes-nas` run were made first and the restore repeated | opencode (agent) |
+| 2026-11-21 | Section 2 — Sonarr's database (`nodes-streaming`) | ~1 min | `sonarr.db` restored from `/staging` (42.9 MiB, no `-wal` beside it), `pragma integrity_check` → `ok`, 103 series and 6 212 episodes | opencode (agent) |
+| 2026-11-21 | Section 3 — a Syncthing file (`nfs`) | ~1 min | `Photos/Argentique/IMG_20240121_0008.jpg` restored from snapshot `173c4caa`; sha256 `a90eb14a…` identical to the live file read through the Syncthing pod | opencode (agent) |
 
-**No drill has been recorded yet.** The jobs are scheduled and the layout above is checked against
-the cluster, but until a row exists here, every restore is unproven.
+**Recorded 2026-11-21.** Sections 1–3 have each been restored and read back once. Section 2's
+destructive put-back onto a live claim and section 4's etcd rehearsal are still untried, so those two
+remain unproven.
 
 ## When a restore surprises you
 

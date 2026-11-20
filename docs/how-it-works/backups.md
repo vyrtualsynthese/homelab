@@ -105,6 +105,12 @@ the staging directory, where the log is replayed and a committed frame is not lo
 ambiguous rows fail until they name their PV, and the values file resolves every row against the
 live cluster's directories.
 
-Not yet proved: that a snapshot restores. No drill is recorded in
-[`runbooks/restore.md`](../runbooks/restore.md), so the honest statement is that the jobs run and
-the files are in the bucket — not that the data comes back.
+Proved on 2026-11-21: a snapshot restores. A scratch restic pod brought back the PostgreSQL dump
+directory from `nodes-nas` (26 dumps plus `globals.sql`), Sonarr's `sonarr.db` from the staging
+directory in `nodes-streaming` (which then passed `pragma integrity_check`), and one Syncthing photo
+from `nfs` whose sha256 matched the live file. The three rows are in the drill log of
+[`runbooks/restore.md`](../runbooks/restore.md).
+
+Still not proved: putting a restored configuration back onto a live claim, and restoring an etcd
+snapshot. Both are destructive and neither has been rehearsed, so the honest statement is that the
+data comes back, not that a broken application has been rebuilt from it.
