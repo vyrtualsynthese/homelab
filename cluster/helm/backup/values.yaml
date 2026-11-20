@@ -165,7 +165,9 @@ nodes:
       - {claim: qbittorrent-vpn-config, namespace: media-stack, kind: files}
       # 7 663.7 MB → 1 851.5: the library databases hold collections, playlists, watch state and
       # manual matches. Cache, Metadata, Media, Scanners and Codecs are all regenerated.
-      - {claim: plex-config, namespace: media-stack, kind: sqlite, db: ["Plug-in Support/Databases/*.db"], exclude: ["Cache/", "Metadata/", "Media/", "Scanners/", "Codecs/"]}
+      # Plex keeps its databases under Library/Application Support/Plex Media Server/, not at
+      # the claim root, so the pattern carries the whole relative path.
+      - {claim: plex-config, namespace: media-stack, kind: sqlite, db: ["Library/Application Support/Plex Media Server/Plug-in Support/Databases/*.db"], exclude: ["Cache/", "Metadata/", "Media/", "Scanners/", "Codecs/"]}
       # 67.3 MB → 5.4: covers are rebuilt from the files, cache* and backups/ are copies.
       - {claim: kavita-config, namespace: media-stack, kind: sqlite, exclude: ["covers/", "logs/", "cache*", "backups/"]}
       # Pinned for the same reason as pgAdmin: a released claim of this name left a directory.

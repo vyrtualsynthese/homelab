@@ -173,7 +173,8 @@ nodes:
     claims:
       - { claim: sonarr-config, namespace: media-stack, kind: sqlite,
           exclude: ["MediaCover/", "logs/", "logs.db*", "Backups/"] }
-      - { claim: plex-config,   namespace: media-stack, kind: files,
+      - { claim: plex-config,   namespace: media-stack, kind: sqlite,
+          db: ["Library/Application Support/Plex Media Server/Plug-in Support/Databases/*.db"],
           exclude: ["Cache/", "Metadata/", "Media/", "Scanners/", "Codecs/"] }
       - { claim: kavita-config, namespace: media-stack, kind: sqlite, db: ["*.db"] }
   nuc0:
@@ -493,7 +494,7 @@ today; that page is rewritten to describe what this builds instead.
 | One bucket, one credential: a mistake or a compromise can delete history | separate repositories per stream; the S3 user is scoped to this bucket; the credential is not used by anything else. There is no immutable copy — restic prune needs deletes. A removable-media third copy is left to the operator |
 | The etcd snapshot holds every Secret in the clear | bucket private, encryption at rest, EU region; the join token stays out of the bucket |
 | A job reports success and writes nothing | the verifier checks snapshot counts and ages independently; a stream that stops adding snapshots fails within a day |
-| SQLite `.backup` cannot open a database read-only under WAL | fallback is a read-write mount of that one claim, recorded in its row; the copy is still made by `.backup`, never by `cp` |
+| SQLite `.backup` cannot open a database read-only under WAL | the database and its side files are copied into the writable staging directory first and opened there, so the log is replayed and the claim stays read-only; the snapshot is still made by `.backup`, never by `cp` |
 | A claim is recreated with a new identity, so its directory name no longer matches | rows resolve `<root>/*_<namespace>_<claim>` and the job fails when a row resolves to nothing; a red job is the alert |
 | A claim is added and nobody adds its row | the matrix is reviewed whenever an application is added; the chart's values are the matrix, so the review is a diff |
 | The etcd Secret flag is missing on 1.30.1 | decided: the official upload waits for W5, with the `etcd-local` restic bridge in the meantime |
