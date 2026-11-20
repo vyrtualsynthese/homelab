@@ -15,7 +15,7 @@ The overview — what runs where, its sizing, and how to query the stack:
 
 Grafana unified alerting, folder `Homelab`, **two rule groups split by cadence
 on 2026-11-18**: `homelab-core-fast` at **60 s** (19 rules) and `homelab-core` at
-**300 s** (19 rules). **38 rules**, one contact point, two routes by severity.
+**300 s** (20 rules). **39 rules**, one contact point, two routes by severity.
 
 The split rule is the `for` duration: a rule sits in the fast group when its `for`
 is 5 minutes or less, or when it reports that something is down and its `for` is
@@ -27,8 +27,8 @@ because its whole job is noticing that data stopped arriving. Everything else is
 checked every five minutes: `CertificateExpiring` and `CloudTlsCertificateExpiring`
 (`for: 1h`), the three disk-fill predictions (`for: 30m`), the temperature and
 SLO-ish checks (`for: 10m` and above). No rule is evaluated slower than a fifth
-of its own `for`, so no alert is delayed by more than a few minutes. Measured:
-35.0 rule evaluations per minute before the split, 20.5 after.
+of its own `for`, so no alert is delayed by more than a few minutes. Measured at 35 rules: 35.0 rule evaluations per minute
+before the split, 20.5 after.
 
 **Delivery**: contact point `discord-homelab` (type `discord`).
 `group_by [alertname, instance]`, `group_wait 30s`, `group_interval 5m`.
@@ -66,6 +66,7 @@ webhook exists only in that contact point.
 | `OOMKilled` | terminated by OOM in the last hour | 5m | warning | inactive |
 | `JobFailed` | any Job with a failed pod, no success, and younger than 2 h | 5m | warning | inactive |
 | `RecyclarrNotSucceeding` | no successful recyclarr run in 26 h | 5m | warning | inactive |
+| `BackupStreamStale` | a CronJob in namespace `backup` whose last success is more than 26 h old | 5m | warning | inactive |
 | `CertificateExpiring` | newest Traefik cert per SAN <21 days | 1h | warning | inactive |
 | `PodCrashLooping` | CrashLoopBackOff | 15m | warning | **firing, silenced** ×3 |
 | `PodPending` | Pending, created <2 h ago | 15m | warning | **firing** on `databases/pgadmin-67c5f5c85` (missing Secret, 2026-11-14) |
@@ -93,6 +94,24 @@ never finishes leaves no failure to alert on. It fires when
 plus two hours of slack — and resolves on the next successful run. It is scoped
 to recyclarr because KSM 2.20 no longer publishes `kube_cronjob_spec_schedule`,
 so a generic rule cannot know how often each CronJob should succeed.
+
+**`BackupStreamStale`** (2026-11-20) is the same condition for the backup jobs, and it can be
+generic because everything it watches lives in one namespace and runs daily:
+`(time() - kube_cronjob_status_last_successful_time{namespace="backup"}) > 93600`. 93600 s is 26 h,
+one daily slot plus two hours. It covers `backup-node-nas`, `backup-node-nuc0`,
+`backup-node-streaming` and `backup-nfs`; `backup-prune` and `backup-verify` are in the same namespace
+and are watched by the same rule, which is intended — a verifier that stops running is exactly the
+silence this rule exists to break. The summary names `{{ $labels.cronjob }}` rather than a stream
+label because kube-state-metrics does not publish CronJob labels on
+`kube_cronjob_status_last_successful_time`; `backup-node-nas` is the job, `nodes-nas` is the stream,
+and the mapping is in the chart. The verifier has no rule of its own for that reason: a verifier whose
+last success is 26 hours old is already firing this one.
+
+A stale backup and a *failing* backup are different faults, and only the second one reaches `JobFailed`
+(the pod failed). A job whose pod starts and exits non-zero is both — `JobFailed` within its two-hour
+window and this rule 26 h later — but a job that never runs at all, because the schedule stopped or
+the sync removed it, only reaches this rule. That is the case worth having: a backup repository that
+nobody writes to looks exactly like a healthy one until the day it is needed.
 
 **`PodPending` and `PodNotStarting` split one symptom by cause.** `Pending` covers
 two different faults: a pod that was never scheduled (unbound claim, node selector,
@@ -234,8 +253,11 @@ reports `firing` on the Health dashboard.
   construction; why the metric cannot exist for a `local-path` claim is in
   [`metrics.md`](metrics.md#exporter-quirks). The node filesystem rule covers the
   same disk, at a coarser grain.
-- **No backup-freshness metric.** Backups do not run today, so an alert would
-  either never fire or lie.
+- **Backup freshness is covered, backup *contents* are not.** `BackupStreamStale` says a stream
+  stopped advancing; `JobFailed` says a run failed. Neither says the bytes are restorable: the
+  verifier checks the repository's snapshot age and size, not a restored file. The monthly drills in
+  [`../runbooks/restore.md`](../runbooks/restore.md) are the only proof of that, and its log is
+  empty today.
 - **No vulnerability scanning.** Nothing reports which CVEs affect the running
   images, so there is no metric to alert on. Design and cost are recorded in
   [`superpowers/specs/2026-11-14-vulnerability-alerting-design.md`](../superpowers/specs/2026-11-14-vulnerability-alerting-design.md);
@@ -270,7 +292,9 @@ reports `firing` on the Health dashboard.
   `:2020` exists, but only Loki's push replies are watched. A Fluent Bit that
   retries forever without Loki ever answering 5xx is seen only when
   `LokiSilent` fires, ten minutes later.
-- Dashboards and rules are not in git and are not backed up.
+- Dashboards and rules are not in git. Their database is no longer unbacked up — the `grafana` claim
+  is one row of the nightly `nodes-nas` stream — but a restore brings back a database, not a
+  reviewable change, so a rule is still edited through the API and written down here.
 
 ## Changing things
 
