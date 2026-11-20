@@ -284,10 +284,13 @@ storage:
 #     WebUI\AuthSubnetWhitelistEnabled  bypass_auth_subnet_whitelist_enabled
 #     WebUI\AuthSubnetWhitelist         bypass_auth_subnet_whitelist
 #
-# The manual path, for the one case the installer cannot reach — a UI deleted
-# while the app is running, where the running process would overwrite the file on
-# exit. Run it from the pod's own address so the auth whitelist covers it, then
-# read back with `GET /api/v2/app/preferences` rather than trusting the `200`:
+# The manual path, for the one state the installer does not repair: the
+# preference cleared while the tree is complete. qBittorrent clears it by itself
+# when it finds no UI, and the running process rewrites the file from memory on
+# exit — so with the files already in place the next boot installs nothing and
+# leaves the preference as it is. Run this from the pod's own address so the auth
+# whitelist covers it, then read back with `GET /api/v2/app/preferences` rather
+# than trusting the `200`:
 #
 #     curl -X POST "http://$(hostname -i):8080/api/v2/app/setPreferences" \
 #       --data-urlencode 'json={"alternative_webui_enabled":true,"alternative_webui_path":"/config/ui"}'

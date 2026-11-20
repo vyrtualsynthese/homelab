@@ -1,5 +1,6 @@
 import os
 import pathlib
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -34,7 +35,14 @@ mkdir -p "$dir"
 python3 -m zipfile -e "$file" "$dir"
 """
 
-CHOWN_STUB = '#!/bin/sh\necho "$@" >> "$STUB_LOG/chown.log"\n'
+CHOWN_STUB = """#!/bin/sh
+echo "$@" >> "$STUB_LOG/chown.log"
+[ "$CHOWN_OK" = "1" ] || exit 1
+"""
+
+
+def helm_available():
+    return shutil.which("helm") is not None
 
 
 def rendered_script():
@@ -67,7 +75,7 @@ class Sandbox:
     """A throwaway `/config`, a fake release asset and the stubs the script calls."""
 
     def __init__(self, root, conf=None, tree_version=None, tree_index=True, cached=False,
-                 download_ok=True, zip_index=True):
+                 download_ok=True, zip_index=True, chown_ok=True):
         self.root = pathlib.Path(root)
         self.config = self.root / "config"
         self.config.mkdir()
@@ -100,6 +108,7 @@ class Sandbox:
             make_zip(self.config / f"vuetorrent-{VERSION}.zip")
 
         self.download_ok = download_ok
+        self.chown_ok = chown_ok
 
     @property
     def conf_file(self):
@@ -115,6 +124,7 @@ class Sandbox:
             "STUB_LOG": str(self.log),
             "ZIP_FIXTURE": str(self.zip_fixture),
             "DOWNLOAD_OK": "1" if self.download_ok else "0",
+            "CHOWN_OK": "1" if self.chown_ok else "0",
             "VUETORRENT_REPOSITORY": "VueTorrent/VueTorrent",
             "VUETORRENT_VERSION": VERSION,
             "PUID": "1100",
@@ -127,6 +137,7 @@ class Sandbox:
         )
 
 
+@unittest.skipUnless(helm_available(), "these tests render the chart with helm")
 class InstallerPrefTests(unittest.TestCase):
     """The preference qBittorrent writes when the UI is missing must not survive an install."""
 
@@ -174,6 +185,27 @@ class InstallerPrefTests(unittest.TestCase):
         self.assertLess(lines.index("[Preferences]"), lines.index(PREF + "=true"))
         self.assertIn("Session\\Port=18515", lines)
 
+    def test_an_existing_conf_is_flipped_even_when_chown_fails(self):
+        # root_squash on the export: the rewrite must still land, through the
+        # file's own inode, so its owner never changes. The inode is the proxy
+        # for that — a rename would replace it with one this container owns.
+        conf = f"[Preferences]\n{PREF}=false\n"
+        box = self.sandbox(conf=conf, chown_ok=False)
+        before = box.conf_file.stat().st_ino
+        self.run_ok(box)
+        self.assertIn(PREF + "=true", box.conf_file.read_text())
+        self.assertEqual(box.conf_file.stat().st_ino, before)
+
+    def test_a_new_conf_is_removed_when_it_cannot_be_handed_over(self):
+        # A root-owned config the app cannot save into is worse than none: the
+        # app would then never write its own.
+        box = self.sandbox(chown_ok=False)
+        result = self.run_ok(box)
+        self.assertFalse(box.conf_file.exists())
+        self.assertFalse((box.config / "qBittorrent").exists())
+        self.assertTrue((box.ui / "public" / "index.html").exists())
+        self.assertIn("WARNING", result.stdout)
+
     def test_success_chowns_conf(self):
         box = self.sandbox()
         self.run_ok(box)
@@ -182,6 +214,7 @@ class InstallerPrefTests(unittest.TestCase):
         self.assertIn(str(box.conf_file), log)
 
 
+@unittest.skipUnless(helm_available(), "these tests render the chart with helm")
 class InstallerTreeTests(unittest.TestCase):
     """Only a complete tree counts as installed, and only a good download is swapped in."""
 
@@ -230,10 +263,26 @@ class InstallerTreeTests(unittest.TestCase):
             not chown_log.exists() or str(box.conf_file) not in chown_log.read_text()
         )
 
-    def test_read_only_claim_exits_zero(self):
+    def test_claim_that_cannot_take_a_tree_exits_zero(self):
+        # A file where the claim should be: `cp -a` fails whatever uid runs it,
+        # which a chmod 0500 directory does not when the suite runs as root.
         box = self.sandbox()
-        box.config.chmod(0o500)
-        self.addCleanup(box.config.chmod, 0o700)
+        shutil.rmtree(box.config)
+        box.config.write_text("not a directory\n")
         result = self.run_ok(box)
         self.assertIn("WARNING", result.stdout)
-        self.assertFalse(box.ui.exists())
+
+    def test_noop_leaves_a_deliberate_toggle_off(self):
+        conf = f"[Preferences]\n{PREF}=false\n"
+        box = self.sandbox(conf=conf, tree_version=VERSION)
+        self.run_ok(box)
+        self.assertFalse((box.log / "wget.called").exists())
+        self.assertIn(PREF + "=false", box.conf_file.read_text())
+
+    def test_old_cache_versions_are_pruned(self):
+        box = self.sandbox()
+        stale = box.config / "vuetorrent-2.36.0.zip"
+        make_zip(stale)
+        self.run_ok(box)
+        self.assertTrue((box.config / f"vuetorrent-{VERSION}.zip").exists())
+        self.assertFalse(stale.exists())
