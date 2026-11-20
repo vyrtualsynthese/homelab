@@ -202,12 +202,16 @@ nodes:
   unit added by hand) are mounted read-only by the same job and tagged `host`, so a node's snapshot
   carries both its claims and its host configuration.
 
-**3. NFS streams — one restic run pinned to `nas`, read-only.** syncthing, books, koillection
-uploads, the Traefik ACME store and the qBittorrent config export. The job mounts the
+**3. NFS streams — one restic run pinned to `nas`, read-only.** syncthing, koillection uploads, the
+Traefik ACME store and the qBittorrent config export. The job mounts the
 exports directly rather than through a claim, so it needs no namespace of its own. It is pinned to
-`nas` to keep several hundred gigabytes of reads off the cluster network, and it is the job whose
-size decides the monthly bill — but the measurement says that size is 28.9 GB, of which 22 GB is the
-books library, not the hundreds of gigabytes the two media exports would have made it.
+`nas` to keep the reads off the cluster network.
+
+**Ruling, 2026-11-20: the books library is out of scope.** It was 22 GB of the 28.9 GB this stream
+carried — the single largest thing in the backup and the number that set the bill. Re-acquiring a
+book is possible, the operator decided that is the cheaper answer, and the export is now absent from
+`values.yaml` rather than excluded, so the job cannot reach it. Scope drops from 34.1 GB to 12.2 GB,
+and the first snapshot from €0.24 to €0.09.
 
 ### Names, secrets, credentials
 
@@ -235,13 +239,13 @@ before the node job that copies the dumps.
 | 04:30 | `backup-node-nas` | `nodes-nas/` |
 | 05:00 | `backup-node-nuc0` | `nodes-nuc0/` |
 | 05:30 | `backup-node-streaming` | `nodes-streaming/` |
-| 06:00 | `backup-nfs` | `nfs/` (syncthing, books, koillection, ACME) |
+| 06:00 | `backup-nfs` | `nfs/` (syncthing, koillection, ACME, qBittorrent config) |
 | Sun 12:00 | `backup-prune` | one `forget --keep-daily 7 --keep-weekly 4 --keep-monthly 12 --prune` per repository, sequentially |
 | 08:30 | `backup-verify` | checks every stream, exits non-zero when one is stale or over budget |
 
 Every restic invocation carries `--retry-lock 2h` (the prune `--retry-lock 6h`) and every job
-`concurrencyPolicy: Forbid`. The prune sits at noon on Sunday, outside every nightly window, so a
-books run that started at 06:00 and is still going at noon waits for the lock rather than racing it —
+`concurrencyPolicy: Forbid`. The prune sits at noon on Sunday, outside every nightly window, so an
+NFS run that started at 06:00 and is still going at noon waits for the lock rather than racing it —
 and if it holds the lock past six hours, the prune fails loudly instead of silently skipping a week.
 
 Until W5, the `nuc0` and `streaming` node jobs also copy `/var/lib/rancher/k3s/server/db/snapshots`
@@ -251,10 +255,9 @@ Until W5, the `nuc0` and `streaming` node jobs also copy `/var/lib/rancher/k3s/s
 Repositories are created once, by hand, in the setup runbook (`restic init`, four times). No job ever
 runs `init`, so a job cannot accidentally create an empty repository where a lost one used to be.
 
-The 06:00 slot for the NFS job was a guess; the measurement settles it. The job walks 29 GB a night,
-22 GB of it the books library, and restic reads only what changed, so the window is hours of walking
-at worst and normally minutes. If a books run still reaches Sunday noon, the pruning moves rather than
-the backup: the backup is the thing that must not be cut short.
+The 06:00 slot for the NFS job was a guess; the measurement settles it. The job walks 6.9 GB a night,
+and restic reads only what changed, so the window is normally minutes. If a run still reaches Sunday
+noon, the pruning moves rather than the backup: the backup is the thing that must not be cut short.
 
 The existing syncthing CronJob in `cluster/helm/syncthing` is **retired**, not repointed: the new NFS
 job does the same work with the retention policy the rest of the design uses, and two mechanisms for
@@ -281,7 +284,7 @@ advertised size is never used: several advertise 128 MiB and hold a gigabyte.
 | `qbittorrent-vpn-config` | qBittorrent | files | 0.02 | **back up** | the VPN client's keys and config, not a database. The seed state is `BT_backup/` on the NFS export below |
 | `plex-config` | Plex | files + sqlite | 7 663.7 → 1 851.5 | **back up**, excluding `Cache/`, `Metadata/`, `Media/`, `Scanners/`, `Codecs/` | the case review found the library database at `Library/Application Support/Plex Media Server/Plug-in Support/Databases` (1.85 GB, both `library.db` and `library.blobs.db`): collections, playlists, watch state and manual matches, none of it reconstructible. The 5.8 GB excluded is poster art, the transcode cache, thumbnails and downloaded scanners — all regenerated |
 | `kavita-config` | Kavita | sqlite | 67.3 → 5.4 | **back up**, excluding `covers/`, `logs/`, `cache*`, `backups/` | library index, users, reading progress; covers are regenerated from the files |
-| `calibre-web-automated-config` | CWA | sqlite + files | 152.1 → 1.0 | **back up**, excluding `log/`, `log_archive/`, `thumbnails/` | `app.db`, settings; the library itself is the books stream and the 151 MB of thumbnails is rebuilt from it |
+| `calibre-web-automated-config` | CWA | sqlite + files | 152.1 → 1.0 | **back up**, excluding `log/`, `log_archive/`, `thumbnails/` | `app.db`, settings; the library itself left scope on 2026-11-20 and the 151 MB of thumbnails is rebuilt from it |
 | `calibre-web-automated-ingest` | CWA | files | 0.004 | **back up** | books waiting to be filed are not yet on the share |
 
 ### `local-path` claims, node `nuc0`
@@ -316,7 +319,7 @@ advertised size is never used: several advertise 128 MiB and hold a gigabyte.
 | Claim | Export | Size (MB) | Decision | Why |
 |---|---|---|---|---|
 | `pvc-nfs-syncthing` | `/mnt/storage/nfs/syncthing` | 6 773.3 | **back up** (the `nfs` stream) | the operator's own critical data. The case review checked for `.stversions` and found none: Syncthing's file versioning is off, so the exclusion below is future-proofing, not a saving |
-| `pvc-books-media-…` | `/mnt/storage/nfs/books` | 21 952.1 | **back up** | the Calibre library and its `metadata.db`; re-acquiring books is possible but expensive |
+| `pvc-books-media-…` | `/mnt/storage/nfs/books` | 21 952.1 | **not backed up** (ruling 2026-11-20) | the Calibre library and its `metadata.db`; re-acquiring books is possible, and it was the largest thing in scope |
 | `koillection-uploads` | `/mnt/storage/nfs/stash/koillection-koillection-uploads-pvc-9c9ffcb6-90e9-4d6a-94b3-d6b2f6c04d15` | 0.008 | **back up** | images the operator uploaded; currently one empty subdirectory. The directory name carries the claim's PV id, so the row fails loudly rather than silently if the claim is recreated |
 | `pvc-nfs-audio-…` | `/mnt/storage/nfs/audio` | excluded | **exclude** | music, large, re-obtainable |
 | `pvc-plex-media` | `/mnt/storage/nfs/plexmedia` | excluded | **exclude** | media |
@@ -353,16 +356,16 @@ and the 692 GB stash library both read as the same 13.8 TB.
 | `nodes-streaming` | 12.9 | 3.7 |
 | `nodes-nuc0` | 0.94 | 0.25 |
 | `nodes-nas` | 3.10 | 0.10 |
-| `nfs` | ≈ 3 087 | 28.9 |
+| `nfs` | ≈ 3 087 | 6.9 |
 | etcd copies (bridge) | 1.11 | 1.11 |
-| **Total** | | **34.1** |
+| **Total** | | **12.2** |
 
-`nfs` on disk is almost all excluded: 2.37 TB of downloads and 692 GB of stash library. Of the 28.9 GB
-kept, 22 GB is the books library. The two music and media exports
+`nfs` on disk is almost all excluded: 2.37 TB of downloads, 692 GB of stash library and, since
+2026-11-20, the 22 GB books library. The two music and media exports
 (`/mnt/storage/nfs/audio`, `/mnt/storage/nfs/plexmedia`) were not walked at all, since they are
 excluded and their size changes nothing.
 
-The decision: **1-AZ Standard in `GRA`, €7.10 per TB per month.** 34.1 GB is €0.24 for the first
+The decision: **1-AZ Standard in `GRA`, €7.10 per TB per month.** 12.2 GB is €0.09 for the first
 snapshot; with the 7/4/12 retention tail the repository is expected to settle between 45 and 70 GB,
 i.e. €0.32–0.50 a month. It is nowhere near the 200 GB where the class question reopens, and
 Infrequent Access stays rejected: it charges for retrieval and bills a 30-day minimum per object,
@@ -388,8 +391,9 @@ so a restore costs nothing but time.
 | 3 TB | €21.30 |
 
 The cluster side of the repository — configs, PostgreSQL dumps, Grafana, Plex's database, etcd copies
-— measures 5.1 GB, so the earlier guess of "under 10 GB" holds. The bill is decided by `nfs`: books is
-22 GB of the 28.9 GB it carries. Measured total is 34.1 GB, and the 200 GB line where the class
+— measures 5.1 GB, so the earlier guess of "under 10 GB" holds. The bill is decided by `nfs`, 6.9 GB
+after the books library left scope, plus 1.11 GB of etcd copies. Measured total is 12.2 GB, and the
+200 GB line where the class
 decision would reopen is nowhere in sight.
 
 Growth is bounded by three things, and each is a card: retention is 7 daily, 4 weekly, 12 monthly, so

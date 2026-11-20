@@ -145,6 +145,15 @@ class NfsJobTests(unittest.TestCase):
         paths = [row["path"] for row in values()["nfs"]["paths"]]
         self.assertTrue(any(p.startswith("/mnt/storage/nfs/stash/koillection-") for p in paths))
 
+    def test_excluded_exports_are_absent_not_excluded(self):
+        # The operator's decisions: music, media, stash's library, downloads and (2026-11-20) the
+        # books library stay on `nas`. An out-of-scope export is a row that does not exist, so the
+        # job cannot reach it; an `exclude` is for files inside an export that is backed up.
+        paths = [row["path"] for row in values()["nfs"]["paths"]]
+        for out_of_scope in ("/mnt/storage/nfs/books", "/mnt/storage/nfs/audio",
+                             "/mnt/storage/nfs/plexmedia", "/mnt/storage/nfs/stash"):
+            self.assertNotIn(out_of_scope, paths)
+
 
 class PruneTests(unittest.TestCase):
     def test_runs_sunday_at_noon_outside_every_backup(self):
