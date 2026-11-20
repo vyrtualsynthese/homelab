@@ -7,7 +7,7 @@
 > ever been rehearsed · **Verified** 2026-11-17 · **Kind:** living page
 
 A runbook exists only after it has been performed at least once; a procedure nobody has run is a
-guess with a title. This page lists only files that exist. Seven are procedures — four of them
+guess with a title. This page lists only files that exist. Eight are procedures — four of them
 pending their first run — and five are completed records, kept because each is the only write-up of
 something that happened once; their status says so.
 
@@ -22,6 +22,7 @@ something that happened once; their status says so.
 | [`postgres-restore.md`](postgres-restore.md) | pending — the dumps were verified 2026-11-13, the restore itself has not been run | a database is lost, or the drill that proves the dumps restore is due. |
 | [`alert-relay.md`](alert-relay.md) | pending — one synthetic alert through Grafana is its proof | Grafana alerts must reach the board, or the relay needs rebuilding. |
 | [`renovate.md`](renovate.md) | proved 2026-11-19 | Renovate stopped opening pull requests, its token has to be rotated, or the nightly slot has to move. |
+| [`gpu-operator.md`](gpu-operator.md) | pending — the chart is in git; the host driver step has not been run since | the GPU disappears from a pod, Plex stops transcoding, the DCGM GPU panels go empty, or someone asks about `nvidia.com/gpu-driver-upgrade-state`. |
 | [`vikunja-database.md`](vikunja-database.md) | completed record 2026-11-16 | the board's database is rebuilt. |
 | [`vikunja-first-start.md`](vikunja-first-start.md) | completed record 2026-11-16 | the board is built again from nothing, or you need what its first start checked. |
 | [`vikunja-board-seed.md`](vikunja-board-seed.md) | completed record 2026-11-16 | the boards' shape must be recreated from the tracked seed, after a loss. |
