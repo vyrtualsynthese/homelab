@@ -48,6 +48,9 @@ spec:
             {{- with .Values.extraEnv }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
+          # One key today: the inert admin password. Kept as envFrom because that
+          # is what the previous chart rendered; any key added to this Secret
+          # becomes an environment variable in the container.
           envFrom:
             - secretRef:
                 name: {{ include "app.fullname" . }}
