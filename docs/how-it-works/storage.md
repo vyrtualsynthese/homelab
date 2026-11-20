@@ -50,6 +50,15 @@ classes, `nfs-plex` and `nfs-ssd`, belonged to provisioners that existed only in
 chart, no Application, no claim on either. They were uninstalled on 2026-11-19 with
 `helm uninstall nfs-hdd nfs-ssd -n default`.
 
+**Helm does not deploy the eight.** They were installed by hand in 2023 and 2024, before ArgoCD, so
+the cluster also carried eight Helm release records — Helm's own note of what it installed, kept as
+Secrets — each claiming the same nine objects the chart renders. All eight were deleted on
+2026-11-20 with `kubectl -n <namespace> delete secret -l owner=helm,name=<release>`, which removes
+the note and leaves the objects to ArgoCD. Running `helm uninstall` there would have deleted the
+live provisioner Deployment, its RBAC and its class, and only a sync would bring them back. The two
+stray provisioners above are the opposite case: nothing in git declared their objects, so
+`helm uninstall` was the right tool for them and is not for these eight.
+
 `local-path` is hostPath-backed: `fsGroup` does nothing, and `runAsUser` on a claim another UID wrote
 makes `/config` unreadable. The safe order is in the chart contract —
 [changing the UID breaks the config volume](../charts/README.md#changing-the-uid-breaks-the-config-volume).
@@ -92,6 +101,12 @@ Two facts keep them safe. Each volume is bound to a live claim, so its only fina
 `Retain`, so the directory on the NAS survives even a deletion that does complete. All four are
 declared by the provisioner chart (`cluster/helm/nfs/provisioner/values/*.yaml`, with
 `nfs.mountOptions` non-empty), so git still owns them and a sync recreates them.
+
+Their four Applications — `plex-media`, `nfs-qbittorrent-download`, `stash-nfs`, `traefik-nfs` — read
+`Progressing` and never `Healthy`. That is the deletion timestamp and nothing else: ArgoCD reads an
+object marked for deletion as still going away, and the four classes whose volume is not marked
+(`books-media`, `nfs-audio`, `nfs-qbittorrent-config`, `nfs-syncthing`) read `Healthy`. All four
+still sync, and every pod under them is `1/1`.
 
 **Their finalizers must never be patched.** They carry no `spec.csi`, which is exactly what the
 Longhorn recipe filtered on, so a loop written for that cleanup cannot reach them; a hand-run patch
