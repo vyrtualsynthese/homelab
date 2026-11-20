@@ -1,0 +1,14 @@
+# Charts whose application refuses to start on a config key it does not know.
+# Each entry renders the chart and compares its config file against the key tree
+# the pinned dependency's own values.yaml declares — that file is written against
+# the release's schema, so a key missing there is a key the release rejects.
+#
+# Only list a chart whose app validates its whole config file at startup. A chart
+# whose upstream defaults are not a complete schema would report false failures.
+#
+# The rule is requirement 20 of docs/charts/README.md.
+
+- chart: cluster/helm/filebrowser
+  dependency: filebrowser-quantum
+  schema: config        # the values.yaml subtree that declares the config file's keys
+  key: config.yaml      # the ConfigMap data key holding the rendered file
