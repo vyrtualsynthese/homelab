@@ -37,9 +37,9 @@ serve an LDAP provider.
   Plex has none until one is set. With one human account today this is a note, not a migration.
 - **MFA is optional in this cluster and no account has a device enrolled** (checked 2026-11-20).
   authentik's `default-authentication-flow` includes an authenticator-validation stage that skips when
-  no device is enrolled, so a password bind works today. If somebody enrols TOTP later, the bind
-  starts demanding the code; the provider's `mfa_support` flag lets it be appended to the password
-  (`password;123456`). Leaving that off would fail the login with no useful error.
+  no device is enrolled, so a password bind works today. `mfa_support` stays **off**: with nothing
+  enrolled it changes nothing, and on, it would read a `;` in a password as the start of a code and
+  reject the bind. The flip belongs with the first enrolment, not with this change.
 
 ## Goals
 
@@ -135,9 +135,10 @@ have.
       # password or a revoked account takes effect on the next bind.
       bind_mode: direct
       search_mode: direct
-      # A password with a TOTP code appended still works if someone enrols a
-      # device later; without this the bind fails once MFA is enrolled.
-      mfa_support: true
+      # Off on purpose: no device is enrolled, so the flow's MFA stage skips
+      # anyway, and on it would split a password at a `;`. Turn it on with the
+      # first enrolment, and tell that person to type password;code.
+      mfa_support: false
 ```
 
 ```yaml
@@ -245,24 +246,51 @@ needed.
 - `docs/runbooks/authentik-apps.md`: a section for adding an LDAP outpost, with the token one-liner.
 - `cluster/helm/thelounge/README.md`: the gate section becomes the sign-in section.
 
-## Rollout, in the order that keeps the app reachable
+## Before anything is built: two facts only the operator holds
 
-1. **Land the authentik side.** Blueprint rewrite, outpost Deployment and Service, chart bump, docs
-   for the Secret. The old application and proxy provider stay untouched, so the gate keeps working.
-   ArgoCD syncs authentik; the worker restarts and applies the blueprint; the outpost pod starts and
-   waits for its Secret.
-2. **Create the Secret** (operator), then confirm the outpost reports healthy:
-   `GET /api/v3/outposts/instances/?name=ashulab-ldap` and its `health/` endpoint. MCP-read the pod
-   logs for the LDAP listener line.
-3. **Land the The Lounge side.** `config.js`, the middleware list, the chart bump, the docs. ArgoCD
-   syncs; the pod rolls; the gate is gone and the form now checks against authentik.
-4. **Verify the real login** (operator, browser): the authentik username and password get in, and the
-   account shown is the one that existed.
-5. **Retire the gate.** Drop the `thelounge` proxy provider line from `outpost-embedded.yaml` and
-   delete the application `thelounge` and the provider `thelounge` through the authentik API — in
-   that order, app first, because the application holds the provider's foreign key, and after the
-   outpost list has applied, because a `!Find` on a missing provider rolls the whole file back.
-   Blueprints do not prune, so these two deletions are by hand and belong in the runbook.
+The bind validates against authentik's password table, and The Lounge keys everything by username.
+Neither is readable from here, and a wrong assumption in either breaks the verification step rather
+than the build.
+
+1. **Is the The Lounge account's username exactly the authentik username?** If it differs, the LDAP
+   login lands under the authentik name and opens a fresh empty account; the existing one, with its
+   networks and stored IRC passwords, is orphaned. The answer decides whether the plan carries a
+   migration step (rename in The Lounge after the first login, or rename in authentik — which changes
+   the username every OIDC app sees) or records the old account as abandoned.
+2. **Does the authentik account have a local password today, and can it sign in with it?** A
+   Discord/Plex-only identity has no password and the bind cannot succeed. The pre-step is setting
+   one in authentik, before the The Lounge change merges.
+
+A third, cheap to answer: are there Lounge accounts besides the operator's? Every local password stops
+working, so each one needs an authentik account with the same username.
+
+## Rollout: three pull requests, with the operator at each gate
+
+Both Applications sync `develop` automatically and independently, so a git order between them is not
+a deployment order. The gates are what make the order real.
+
+**PR 1 — the authentik side.** Blueprint rewrite, outpost Deployment and Service, chart bump,
+`docs/secrets.md` and the runbook section. The old application and proxy provider are untouched, so
+the gate keeps working. On merge ArgoCD syncs authentik, the worker restarts and applies the
+blueprint, and the outpost pod starts and waits for its Secret.
+
+*Gate:* the operator creates Secret `authentik-ldap` from the token, using the runbook one-liner. The
+outpost must then report healthy (`GET /api/v3/outposts/instances/?name=ashulab-ldap`, then its
+`health/` endpoint; the pod log shows the LDAP listener). Nothing proceeds until it does.
+
+**PR 2 — the The Lounge side.** `config.js`, the middleware list, the chart bump, and the reference
+docs and chart README. On merge the pod rolls, the gate is gone, and the form checks against
+authentik.
+
+*Gate:* the operator signs in with the authentik username and password in a browser and confirms the
+account is the right one, with its networks. This is the only end-to-end proof.
+
+**PR 3 — retire the gate.** Drop the `thelounge` proxy provider line from `outpost-embedded.yaml`,
+then delete the application `thelounge` and the provider `thelounge` through the authentik API, in
+that order: the application holds the provider's foreign key, and the outpost list must have applied
+first because a `!Find` on a missing provider rolls the whole file back. Blueprints do not prune, so
+those two deletions are by hand and belong in the runbook. If the browser check in PR 2 fails, this PR
+does not open and the task stays in `Doing` with the blocker named in a comment.
 
 ## Verification
 
@@ -285,17 +313,18 @@ Needs the operator:
 
 ## Rollback
 
-Before step 2, nothing has changed for a user. After step 3, putting `authentik-forwardauth` back in
-the middleware list restores the gate; the old application and provider are still there until step 5.
-After step 5, rollback means re-running the old blueprint entries (the provider and app are
-recreated) and re-adding the middleware — slower, which is why step 5 waits for a verified login.
+Before the Secret, nothing has changed for a user. After PR 2, putting `authentik-forwardauth` back in
+the middleware list restores the gate; the old application and provider are still there until PR 3.
+After PR 3, rollback means re-running the old blueprint entries (the provider and app are recreated)
+and re-adding the middleware — slower, which is why PR 3 waits for a verified login.
 
 ## Limits recorded
 
 - Local Lounge passwords stop working; the authentik password replaces them.
 - A person with no authentik password (Discord/Plex-only identity) cannot sign in until one is set.
-- If MFA is enrolled later, the code is appended to the password (`password;123456`), because
-  `mfa_support` is on; a password containing a semicolon would be split — accepted, and written down.
+- If MFA is enrolled later, `mfa_support` flips on and the code is appended to the password
+  (`password;123456`); a password containing a semicolon would then be split. Written down next to the
+  provider, and the flip is not part of this change.
 - Plain LDAP on the pod network: the password is not encrypted on the wire, but both ends are pods on
   `nuc0` and the Service is ClusterIP. LDAPS would need a certificate on the provider and the internal
   CA in the app's trust store — debt, not this change.
@@ -305,7 +334,8 @@ recreated) and re-adding the middleware — slower, which is why step 5 waits fo
 
 - **No service account** (approach A): access lives in the application binding.
 - **A new application slug** `thelounge-ldap`, so the gate stays up until the route stops using it.
-- **`mfa_support: true`**, so an MFA enrolment later does not break the login silently.
+- **`mfa_support: false`**, because nothing is enrolled and the flag only adds a way for a password
+  containing `;` to be split; it flips with the first enrolment.
 - **Direct bind and search modes**, so a password change or a revoked account takes effect at once.
 - **Plain LDAP in-cluster**, not LDAPS, with the reason above.
 - **The outpost in the authentik wrapper chart**, so its image moves with the server version.
