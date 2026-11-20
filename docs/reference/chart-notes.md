@@ -354,20 +354,23 @@ the app's own image rather than another `busybox`, and the Deployment still hash
 `checksum/config`, because the copy happens at pod start and an edit otherwise waits for a restart
 nobody planned.
 
-The gate is forward auth, not OIDC: The Lounge has none, and the LDAP provider its own integration
-guide uses needs an LDAP outpost this cluster does not run. So the route is `lan-only` then
-`authentik-forwardauth` (blueprint `app-thelounge`, Admins only for now — `homelab-users` has no
-members and an empty group denies the one human who signs in), and the app still asks for its
-own account behind it — the two sign-ins are the known cost of the mechanism, not an oversight. The
-two chart-local Middlewares (`thelounge-security`, `thelounge-redirect-https`) are replaced by the
-shared `kube-system-*` copies; the `TLSOption` stays per-app, because it belongs to the
-`*.kub.home.ashudev.com` certificate, not to the internal `*.kub.local` policy.
+The sign-in is LDAP since 2026-11-20, not a gate. The Lounge has no OIDC, but its own LDAP plugin is
+native, so authentik runs an LDAP outpost (`authentik-ldap`, port 3389, rendered by the authentik
+chart) and `config.js` binds directly as the person — `baseDN` with `primaryKey: "cn"` and no
+`searchDN`, so no service account and no bind password exist to store. The route is `lan-only` then
+`security`; the forward-auth gate is gone because a gate in front of an app that authenticates is a
+second prompt that carries no identity. The app's local passwords stop working and the authentik
+password replaces them. The two chart-local Middlewares (`thelounge-security`,
+`thelounge-redirect-https`) are replaced by the shared `kube-system-*` copies; the `TLSOption` stays
+per-app, because it belongs to the `*.kub.home.ashudev.com` certificate, not to the internal
+`*.kub.local` policy.
 
 Sizing came from the pod that had run 98 days: p95 76Mi, peak 81Mi working set, CPU peak 2m. Request
 64Mi → 80Mi, limit 128Mi unchanged. There is no log-level knob — console output follows the `debug`
 object in `config.js`, both keys off — so the chart sets nothing and says so next to `env`.
 
-Debt: no metrics exporter in the image, and the LDAP path to one sign-in is a follow-up card.
+Debt: no metrics exporter in the image, and the outpost listens on plain LDAP inside the pod network
+(a certificate on the provider plus the internal CA in the app's trust store is what LDAPS would need).
 
 ### qbittorrent
 

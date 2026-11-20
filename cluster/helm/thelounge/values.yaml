@@ -64,18 +64,13 @@ ingressRoute:
   pathPrefix: /
   # Plain-HTTP mirror that redirects to the router above.
   redirectToHttps: true
-  # The gate. The Lounge has no OIDC support of its own, so authentik stands in
-  # front of it with a forward-auth provider (`cluster/helm/authentik/files/
-  # app-thelounge.yaml`). The app still asks for its own account afterwards:
-  # forward auth proves the browser passed authentik, it does not carry an
-  # identity into The Lounge.
-  #
-  # `lan-only` stays first: the hostname answers whether or not it resolves
-  # publicly, so the allowlist is the boundary and authentik is the credential.
+  # `lan-only` only: The Lounge now authenticates people itself, with LDAP
+  # against the authentik outpost (`config.js`, `ldap` block), so the forward-auth
+  # gate would be a second prompt that carries no identity. The hostname answers
+  # whether or not it resolves publicly, so `lan-only` is the boundary and the
+  # app's own login is the credential.
   middlewares:
     - name: lan-only
-      namespace: kube-system
-    - name: authentik-forwardauth
       namespace: kube-system
     - name: security
       namespace: kube-system
@@ -133,8 +128,9 @@ env:
   # firehose to turn down, and no knob to turn down anyway — recorded as debt in
   # the chart README.
 
-# Variables sourced from a Secret, as `{ name, valueFrom }`. The Lounge
-# currently needs none: it has no LDAP or OIDC client of its own.
+# Variables sourced from a Secret, as `{ name, valueFrom }`. The list stays
+# empty: the app speaks LDAP to the authentik outpost, and that connection needs
+# no credential of its own — the person's own password is the bind.
 extraEnv: []
 
 # Bulk `envFrom` sources, usually `secretRef`.

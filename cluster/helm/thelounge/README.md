@@ -14,7 +14,7 @@ shape is [`cluster/helm/media-stack/autobrr`](../media-stack/autobrr).
 | PersistentVolumeClaim | `thelounge-config` | `local-path`, `128Mi` |
 | ConfigMap | `thelounge` | `config.js`; an init container copies it into the claim as UID 1000 |
 | ServiceAccount | `thelounge` | its token is not mounted; the app never calls the API |
-| IngressRoute | `thelounge-public` | `websecure`, `lan-only` then `authentik-forwardauth` |
+| IngressRoute | `thelounge-public` | `websecure`, `lan-only` then `security` |
 | IngressRoute | `thelounge-public-redirect` | `web`, `lan-only` then the HTTPS redirect |
 | TLSOption | `thelounge-tlsoption` | unchanged from the previous chart |
 
@@ -36,16 +36,27 @@ After the sync, re-create the accounts and the networks in The Lounge, then rest
 confirm they survive it. That restart is the test: everything The Lounge keeps lives in
 `/var/opt/thelounge`, which is the claim.
 
-## The gate
+## Signing in
 
-The Lounge has no OIDC support, so there is nothing native to wire to authentik. Its one built-in
-identity mechanism is LDAP, which needs an LDAP outpost that this cluster does not run. The gate is
-therefore the shared `kube-system-authentik-forwardauth` middleware, bound by the blueprint
-`cluster/helm/authentik/files/app-thelounge.yaml` to `authentik Admins`.
+The Lounge has no OIDC support, so there is nothing to wire through a proxy provider. Its one built-in
+identity mechanism is LDAP, and the cluster now runs authentik's LDAP outpost for it:
+`authentik-ldap` in namespace `authentik`, port `3389`, created by
+`cluster/helm/authentik/files/app-thelounge-ldap.yaml` and
+`cluster/helm/authentik/templates/ldap-outpost.yaml`.
 
-The consequence is a second sign-in: the outpost proves the browser is signed in, but it cannot carry
-that identity into the app, which keeps its own accounts. Turning on the LDAP path later is a
-follow-up card, not part of this rebuild.
+`config.js` binds directly as the person — `baseDN` with `primaryKey: "cn"` and no `searchDN` — so
+authentik validates their own password and the application binding decides who may sign in. The route
+therefore carries `lan-only` and `security` only: the forward-auth gate is gone, because a gate in
+front of an app that authenticates is a second prompt that carries no identity.
+
+Two consequences worth knowing:
+
+- **The local passwords stop working.** The LDAP plugin replaces the local login; accounts, networks
+  and history are keyed by username and survive, but each person signs in with their authentik
+  password.
+- **MFA is appended to the password.** No device is enrolled today and the provider's `mfa_support`
+  is off, which is the only state that works while nothing is enrolled. When somebody enrols, flip
+  `mfa_support` on the provider in the same change, and they type `password;123456`.
 
 ## Probes and the missing log level
 
@@ -81,8 +92,9 @@ hostPath-backed and the kubelet does not apply it.
 
 ## Values that matter
 
-- `ingressRoute.middlewares` — the gate. Removing `authentik-forwardauth` leaves `lan-only` and the
-  app's own password form.
+- `ingressRoute.middlewares` — `lan-only` and `security`. The app authenticates itself over LDAP, so
+  there is no forward-auth gate; re-adding `authentik-forwardauth` would only put a second prompt in
+  front of the form.
 - `storage.size` — `128Mi`. The previous 20 GiB was a guess; this holds `users.json`, logs and
   settings.
 - `nodeSelector` — `nuc0`. The claim binds to the node the pod schedules on, and there is no failover.
