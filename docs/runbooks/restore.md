@@ -17,13 +17,15 @@ it holds the file list, the encryption and the history. There is no other way in
 | Repository | Written by | Holds |
 |---|---|---|
 | `nodes-nas` | `backup-node-nas`, 04:30 | the PostgreSQL dumps (`globals.sql` and `<db>-<UTC>.dump`), Grafana's database |
-| `nodes-nuc0` | `backup-node-nuc0`, 05:00 | eleven applications' configuration, the node's `/etc`, and the etcd snapshot copy |
+| `nodes-nuc0` | `backup-node-nuc0`, 05:00 | ten claims from nine applications, the node's `/etc`, and the etcd snapshot copy |
 | `nodes-streaming` | `backup-node-streaming`, 05:30 | the media stack's configuration, the node's `/etc`, and the etcd snapshot copy |
 | `nfs` | `backup-nfs`, 06:00 | syncthing, koillection's uploads, the ACME certificate store, the qBittorrent config |
 
-Every snapshot carries `stream=<name>` and `node=<name>`, and the NFS ones also carry
-`path=<tag>`. Retention is 7 daily, 4 weekly and 12 monthly, pruned on Sunday at noon: anything older
-than three months is gone, and a file that was deleted three weeks ago is still in a weekly snapshot.
+A node job's snapshot carries `stream=<name>` and `node=<name>`; an NFS one carries `stream=nfs`
+and `path=<tag>` instead of a node, because it is one job reading `nas` directly rather than a
+per-node stream. Retention is 7 daily, 4 weekly and 12 monthly, pruned on Sunday at noon: anything
+older than three months is gone, and a file that was deleted three weeks ago is still in a weekly
+snapshot.
 
 ## Preconditions
 

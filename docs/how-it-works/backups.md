@@ -20,7 +20,7 @@ own restic repository inside it, so a broken stream cannot damage another's hist
 | Repository | Written by | Runs (Europe/Paris) | Holds |
 |---|---|---|---|
 | `nodes-nas` | `backup-node-nas` | 04:30 | the PostgreSQL dumps and their `globals.sql`, Grafana's database |
-| `nodes-nuc0` | `backup-node-nuc0` | 05:00 | eleven applications' configuration, the node's `/etc`, the etcd copy |
+| `nodes-nuc0` | `backup-node-nuc0` | 05:00 | ten claims from nine applications, the node's `/etc`, the etcd copy |
 | `nodes-streaming` | `backup-node-streaming` | 05:30 | the media stack's configuration, the node's `/etc`, the etcd copy |
 | `nfs` | `backup-nfs` | 06:00 | syncthing, koillection's uploads, the ACME store, the qBittorrent config |
 
@@ -72,8 +72,13 @@ Measured on 2026-11-20, after every exclusion: **12.2 GB** in scope. The first m
 | `nfs` | ≈ 3 087 GB | 6.9 GB |
 | etcd copies | 1.11 GB | 1.11 GB |
 
-The first snapshot costs about €0.09; with the retention tail the repositories settle between 22 and
-48 GB, roughly €0.16–0.34 a month. Egress is free, so a restore costs nothing but time.
+The first snapshot costs about €0.09; with the 7/4/12 tail the repositories settle between 15 and
+25 GB, roughly €0.11–0.18 a month. The only data that grows night over night is the etcd copies.
+Egress is free, so a restore costs nothing but time.
+
+`budgetGiB` in `values.yaml` is the same number as a ceiling: the verifier fails a stream whose
+repository passes it. The four budgets sum to 25 GiB, the top of the expected range, so a stream that
+picks up a directory it should not have trips the check long before the bill notices.
 
 ## The three ways it fails
 

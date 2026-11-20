@@ -22,7 +22,10 @@ import sys
 from datetime import datetime, timedelta, timezone
 
 STALE_AFTER = timedelta(hours=26)
-ETCD_PREFIX = "/etcd-snapshots/"
+# The node job hands restic the value of etcdSnapshotsPath, so the paths stored in the
+# snapshot start there; /etc/rancher/k3s is mounted at /host/etc/rancher/k3s for the
+# same reason.
+ETCD_PREFIX = "/host/etcd-snapshots/"
 GIB = 1024**3
 
 
@@ -81,7 +84,7 @@ def check_stream(name: str, snapshots: list[dict], bytes_used: int, budget_bytes
 
 
 def newest_etcd(entries: list[dict], now: datetime) -> dict | None:
-    """The newest file the nightly copy left under /etcd-snapshots/."""
+    """The newest file the nightly copy left under /host/etcd-snapshots/."""
     files = [
         entry for entry in entries
         if entry.get("path", "").startswith(ETCD_PREFIX)

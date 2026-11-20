@@ -25,8 +25,12 @@ data:
     # Runs on Sunday at noon, after every night's backup has finished. One repository at a
     # time: two restic processes on one repository would fight over the lock instead of
     # pruning it.
-    set -eu
+    # Not `set -e`: one repository that fails must not leave the other three unpruned for the
+    # week. Each failure is remembered, the loop finishes, and the last test fails the job.
+    # `forget` carries no --host because each repository holds exactly one host.
+    set -u
     : "${RESTIC_PASSWORD:?}"
+    failed=0
     echo "prune {{ .Values.streams | len }} repositories: daily {{ .Values.retention.keepDaily }}, weekly {{ .Values.retention.keepWeekly }}, monthly {{ .Values.retention.keepMonthly }}"
     {{- range .Values.streams }}
     echo "prune {{ .name }}"
@@ -35,5 +39,6 @@ data:
       --keep-daily {{ $.Values.retention.keepDaily }} \
       --keep-weekly {{ $.Values.retention.keepWeekly }} \
       --keep-monthly {{ $.Values.retention.keepMonthly }} \
-      --prune
+      --prune || failed=1
     {{- end }}
+    [ "$failed" -eq 0 ]
