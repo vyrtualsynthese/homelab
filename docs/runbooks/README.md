@@ -4,10 +4,10 @@
 > — so that nobody runs a guess with a title.
 >
 > **Use it when** a routine operation needs its procedure, or you want to know whether a restore has
-> ever been rehearsed · **Verified** 2026-11-17 · **Kind:** living page
+> ever been rehearsed · **Verified** 2026-11-20 · **Kind:** living page
 
 A runbook exists only after it has been performed at least once; a procedure nobody has run is a
-guess with a title. This page lists only files that exist. Eight are procedures — four of them
+guess with a title. This page lists only files that exist. Nine are procedures — four of them
 pending their first run — and five are completed records, kept because each is the only write-up of
 something that happened once; their status says so.
 
@@ -28,6 +28,7 @@ something that happened once; their status says so.
 | [`vikunja-board-seed.md`](vikunja-board-seed.md) | completed record 2026-11-16 | the boards' shape must be recreated from the tracked seed, after a loss. |
 | [`books-cutover.md`](books-cutover.md) | completed record 2026-11-13 | the books stack is rebuilt from nothing; it is the only write-up of the move to Calibre-Web Automated. |
 | [`docs-site-first-run.md`](docs-site-first-run.md) | completed record 2026-11-17 | the docs site is rebuilt from nothing; it holds the measured first run. |
+| [`cloud-monitoring.md`](cloud-monitoring.md) | proved 2026-11-20 for the probes, the alerts and the OVH configuration; the `ashuvidz.com` delegation flip has not been run | a `Cloud*` alert fires, a public name or DNS record changes, or a zone's delegation moves. |
 
 ## Not written yet
 

@@ -5,7 +5,7 @@
 > watches.
 >
 > **Use it when** an alert fired and you want to know what it means, you are writing or editing a
-> rule, or you are asking whether something is monitored at all · **Verified** 2026-11-19 · **Kind:**
+> rule, or you are asking whether something is monitored at all · **Verified** 2026-11-20 · **Kind:**
 > living page
 
 The overview — what runs where, its sizing, and how to query the stack:
@@ -14,20 +14,21 @@ The overview — what runs where, its sizing, and how to query the stack:
 ## Alerting
 
 Grafana unified alerting, folder `Homelab`, **two rule groups split by cadence
-on 2026-11-18**: `homelab-core-fast` at **60 s** (17 rules) and `homelab-core` at
-**300 s** (18 rules). **35 rules**, one contact point, two routes by severity.
+on 2026-11-18**: `homelab-core-fast` at **60 s** (19 rules) and `homelab-core` at
+**300 s** (19 rules). **38 rules**, one contact point, two routes by severity.
 
 The split rule is the `for` duration: a rule sits in the fast group when its `for`
 is 5 minutes or less, or when it reports that something is down and its `for` is
 10 minutes (`NodeDown`, `KubeNodeNotReady`, `MonitoringDown`,
 `KubeStateMetricsDown`, `CoreDeploymentDown`, `CoreStatefulSetDown`,
-`CoreDaemonSetDown`, `MediaDeploymentDown`) — `ScrapeTargetDown` joins them
+`CoreDaemonSetDown`, `MediaDeploymentDown`, and since 2026-11-20
+`CloudEndpointDown` and `CloudDnsCheckFailing`) — `ScrapeTargetDown` joins them
 because its whole job is noticing that data stopped arriving. Everything else is
-checked every five minutes: `CertificateExpiring` (`for: 1h`), the three disk-fill
-predictions (`for: 30m`), the temperature and SLO-ish checks (`for: 10m` and
-above). No rule is evaluated slower than a fifth of its own `for`, so no alert is
-delayed by more than a few minutes. Measured: 35.0 rule evaluations per minute
-before the split, 20.5 after.
+checked every five minutes: `CertificateExpiring` and `CloudTlsCertificateExpiring`
+(`for: 1h`), the three disk-fill predictions (`for: 30m`), the temperature and
+SLO-ish checks (`for: 10m` and above). No rule is evaluated slower than a fifth
+of its own `for`, so no alert is delayed by more than a few minutes. Measured:
+35.0 rule evaluations per minute before the split, 20.5 after.
 
 **Delivery**: contact point `discord-homelab` (type `discord`).
 `group_by [alertname, instance]`, `group_wait 30s`, `group_interval 5m`.
@@ -36,7 +37,8 @@ repeats every **1 h**. The webhook URL is not readable through the API (it is a
 secure field), so the contact point is never rewritten by automation. The Discord
 webhook exists only in that contact point.
 
-**Rule set and live state on 2026-11-13:**
+**Rule set and live state on 2026-11-13 (the three `Cloud*` rows read back on
+2026-11-20):**
 
 | Rule | Condition | for | Severity | State |
 |---|---|---|---|---|
@@ -75,6 +77,9 @@ webhook exists only in that contact point.
 | `SwitchLinkFlapping` | >5 link-down events in 1 h on a port | 10m | warning | inactive |
 | `LokiWriteFailing` | sustained 5xx on the Loki push route | 10m | warning | inactive |
 | `GrafanaAlertEvaluationFailing` | sustained rule-evaluation errors | 10m | warning | inactive |
+| `CloudEndpointDown` | `1 - probe_success{job="blackbox-http"}` — a public name answered something other than 200 | 5m | critical | inactive |
+| `CloudDnsCheckFailing` | `1 - probe_success{job="blackbox-dns"}` — a zone's check failed at one authoritative server | 10m | critical | inactive |
+| `CloudTlsCertificateExpiring` | days to the earliest public certificate, firing below 21 | 1h | warning | inactive |
 
 **`JobFailed`** is the batch-workload rule. Its expression is
 `((kube_job_status_failed > 0) unless on(namespace, job_name) (kube_job_status_succeeded > 0)) and on(namespace, job_name) ((time() - kube_job_status_start_time) < 7200)`:
@@ -164,6 +169,31 @@ had `NodeDown` and `MonitoringDown` silently dead this way, and
 `delta(max by (...)(metric)[1h:]) > 0`. The previous form without the colon was
 invalid PromQL and never evaluated.
 
+**Three rules added on 2026-11-20 watch the internet-facing side** — the three public names,
+both DNS zones and the certificates a stranger is served. They read a `blackbox_exporter` on
+`nas`, whose two static jobs, 3 + 28 targets and public-resolver choice are in
+[`observability-conventions.md`](../observability-conventions.md#how-metrics-get-in). Their
+procedure, including how to add a target: [`runbooks/cloud-monitoring.md`](../runbooks/cloud-monitoring.md).
+
+`CloudTlsCertificateExpiring` is the one rule here whose value is **not** "higher means worse": its
+value is the number of days remaining and it fires **below 21**, so a reader comparing it with its
+neighbours — all of which return a positive number when firing — should expect the opposite shape.
+It stays a warning at 21 days, matching `CertificateExpiring`, and lives in `homelab-core` because a
+certificate is not an outage.
+
+`CloudDnsCheckFailing` asserts the records mail needs (MX, SPF, DKIM, DMARC) at **every**
+authoritative server the zone publishes, because a dead secondary is invisible to a probe that only
+asks the primary. `dns_ns_ashuvidz` is the exception: it asserts only that `ashuvidz.com`'s
+delegation answers, not which provider answers it, because the zone is mid-transfer from AWS Route 53
+to OVHcloud — asserting either provider today would be throwaway work or a guaranteed false page.
+The runbook owns the target-list edit for the day of the flip.
+
+Because all three are `noDataState: OK`, a selector that stops matching looks exactly like a healthy
+rule: the proof they still look at something is `count(probe_success{job="blackbox-http"})` = 3 and
+`count(probe_success{job="blackbox-dns"})` = 28. A dead prober is the one case where that silence is
+intended, and [`runbooks/cloud-monitoring.md` §8](../runbooks/cloud-monitoring.md#8-known-limits)
+explains why.
+
 **Silences** (each has an expiry and a comment):
 
 - Until 2027-03-01: `host="streaming"`, `severity="warning"`,
@@ -210,8 +240,6 @@ reports `firing` on the Health dashboard.
   images, so there is no metric to alert on. Design and cost are recorded in
   [`superpowers/specs/2026-11-14-vulnerability-alerting-design.md`](../superpowers/specs/2026-11-14-vulnerability-alerting-design.md);
   it is deferred, not built.
-- **No blackbox probe, no certificate check outside Traefik.** A public hostname
-  that resolves but serves nothing is not detected.
 - **No GPU XID/ECC alert.** The NVIDIA exporter on this cluster does not publish
   those families; only temperature, utilisation and frame-buffer use exist.
 - **Application coverage is limited to pods, restarts, `media-stack` and the

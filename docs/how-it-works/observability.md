@@ -4,7 +4,7 @@
 > draws both and decides to alert; the gaps matter as much as the components.
 >
 > **Use it when** you want to know whether a fault would be noticed, or where an alert came from ·
-> **Verified** 2026-11-19 · **Kind:** living page
+> **Verified** 2026-11-20 · **Kind:** living page
 
 ## What watches what
 
@@ -66,6 +66,8 @@ Dashboards live in Grafana's database, not in git, one question each:
 | Logs | what is logged, and what is failing |
 | Disks | drive health, life left, temperature, wear |
 | Media | queues, downloads, Plex sessions |
+| Network | switches: what is plugged in, and are the optics healthy |
+| Cloud | is the internet-facing side healthy? |
 | Showcase | a screen for a spare display |
 
 Panels, query quirks, how to change one: [reference/dashboards.md](../reference/dashboards.md).
@@ -90,8 +92,9 @@ Health.
   rules watch that disk coarser.
 - **No backup-freshness metric**: backups do not run, so an alert on them would lie.
 - **No vulnerability scanning**: nothing reports which flaws the running images carry.
-- **No blackbox probe, no certificate check outside Traefik**: a public name serving nothing goes
-  unnoticed.
+- **The public names are probed, narrowly**: a blackbox prober on `nas` checks three HTTPS endpoints
+  and 28 DNS records ([runbooks/cloud-monitoring.md](../runbooks/cloud-monitoring.md)); mail delivery,
+  spend history and zone-versus-git drift are not checked.
 - **No GPU XID or ECC alert**; the NVIDIA exporter publishes temperature, utilisation and framebuffer
   only.
 - **No metrics for the NFS provisioners or the Pi-hole resolver itself**, only its exporter.
