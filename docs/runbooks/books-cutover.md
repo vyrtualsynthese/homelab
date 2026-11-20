@@ -525,11 +525,10 @@ Then the checks that need eyes:
 The fallback the cutover leaves behind is a claim and a tarball; both are cleared here, once the new
 stack has run.
 
-**Checked and closed out on 2026-11-20**, one week after the cutover, except the tarball: the
-`calibre` Application, the `calibre-config` PV and its PVC are all `NotFound`; CWA and Kavita are
-`Synced`/`Healthy` with one `1/1 Running` pod each; and `MediaDeploymentDown` carries no exclusion, so
-Kavita is covered by it. The tarball is the one step that needs a shell — the read-only MCP cannot
-`exec` — so its command is still to be run.
+**Checked and closed out on 2026-11-20**, one week after the cutover: the `calibre` Application, the
+`calibre-config` PV and its PVC are all `NotFound`; CWA and Kavita are `Synced`/`Healthy` with one
+`1/1 Running` pod each; `MediaDeploymentDown` carries no exclusion, so Kavita is covered by it; and no
+`calibre-config-*.tgz` is left on the share.
 
 **Kavita's exclusion from the alerting is gone**, retired by 2026-11-18, before this pass: the rule's
 expression is `1 - kube_deployment_status_replicas_available{namespace="media-stack"}` with no
@@ -556,9 +555,11 @@ kubectl -n media-stack patch pvc calibre-config -p '{"metadata":{"finalizers":nu
 kubectl get pv calibre-config   # expect: NotFound (confirmed 2026-11-20)
 ```
 
-**Delete the tarball** if step 2 wrote one; this is the step still outstanding. The glob has to expand
-inside the container, so it runs under `sh -c`, and the command doubles as the check: a file prints
-`removed`, while no file makes `rm` fail on the unexpanded pattern.
+**Delete the tarball** if step 2 wrote one. The glob has to expand inside the container, so it runs
+under `sh -c`, and the command doubles as the check: a file prints `removed`, while no file makes `rm`
+fail on the unexpanded pattern. Run on 2026-11-20, it printed `rm: cannot remove
+'/calibre-library/calibre-config-*.tgz': No such file or directory` and exited 1 — nothing was left to
+delete.
 
 ```bash
 kubectl -n media-stack exec deploy/calibre-web-automated -- sh -c 'rm -v /calibre-library/calibre-config-*.tgz'
