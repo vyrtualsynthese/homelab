@@ -144,7 +144,7 @@ StorageClass. Two live breakages:
 | K3s datastore | `scripts/backup-scripts/k3s/backup.sh` | `sqlite3 .../server/db/state.db` dump, then restic | **Wrong for this cluster.** A 3-server K3s runs on etcd; there is no `state.db` to dump. The only control-plane backup script cannot back up the control plane. |
 | NAS | `scripts/backup-scripts/nas/backup.sh` | unclear | see Ansible audit |
 | PostgreSQL | `cluster/helm/databases/postgres/values.yaml:39-41` | `pg_dumpall` CronJob, 30 dumps, into `databases-postgres-backup` | The destination claim is one of the dead Longhorn volumes. |
-| Syncthing config | `cluster/helm/syncthing/templates/deployment-backup.yaml` | restic CronJob `restic/restic:0.18.1`, Secret `syncthing-backup` | Runs. Only covers syncthing's own config. |
+| Syncthing config | removed 2026-11-20 | the chart carried a restic CronJob against an AWS bucket that never existed | **Gone.** The NFS export it read is covered by the `nfs` stream of `cluster/helm/backup`. |
 | Metrics | — | nothing | No remote write; TSDB lives on a `Terminating` claim. |
 | Longhorn volumes | — | nothing defined in git | Gone with Longhorn. |
 

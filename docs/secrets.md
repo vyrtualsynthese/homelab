@@ -32,7 +32,6 @@ database passwords.
 | `filebrowser-oidc` | `filebrowser` | `CLIENTSECRET` → `FILEBROWSER_OIDC_CLIENT_SECRET`, the authentik OAuth2 provider's client secret |
 | `vikunja-oidc` | `vikunja` | `CLIENTSECRET` → `VIKUNJA_AUTH_OPENID_PROVIDERS_AUTHENTIK_CLIENTSECRET`, the authentik OAuth2 provider's client secret; the same value is `VIKUNJA_CLIENT_SECRET` in `authentik-sso` |
 | `koillection` | `koillection` | `DB_NAME`, `DB_HOST`, `DB_USER`, `DB_PASSWORD` |
-| `syncthing-backup` | `syncthing` | `envFrom` (restic credentials) |
 | `authentik-env` | `authentik` | `envFrom` |
 | `dashy-conf` | `dashy` | rendered by `cluster/helm/dashy/templates/secret-config.yaml` from `files/conf.yml`; holds no credentials |
 | `postgres-secrets` | `databases` | Bitnami PostgreSQL `existingSecret` |
