@@ -34,6 +34,10 @@ All notable changes to this repository. The format follows
 
 ### Added
 
+- `hack/check-config-keys.sh`, which renders each chart listed in `hack/config-key-checks.yaml` and
+  fails any key in its config file that the pinned dependency's own `values.yaml` does not declare,
+  naming the key and its line — the class of failure that cost the FileBrowser cutover three syncs.
+  Requirement 20 of the chart contract names the manifest, and AGENTS.md §6 runs the check.
 - `hack/freshrss_sync.py drop <url>…`, which unsubscribes a feed so an OPML import can re-create it
   with the settings the file carries. A poll interval, a CSS selector and `#force_feed` are stored on
   the feed and applied only when it is created, so they cannot be edited in place.

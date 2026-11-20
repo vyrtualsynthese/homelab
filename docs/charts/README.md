@@ -280,6 +280,7 @@ helm lint . --namespace <ns>
 helm template <release> . --namespace <ns> | kubeconform -strict -summary
 hack/check-exposure.sh --only cluster/helm/<area>/<app>   # non-public routes carry the LAN gate
 hack/check-app-version.sh --only cluster/helm/<area>/<app> # appVersion names the version in image.tag
+hack/check-config-keys.sh --only cluster/helm/<area>/<app> # every config key exists in the pinned chart's schema
 
 # the checks that grep can still do
 grep -rnP '\t' templates/ || echo "no tabs"
