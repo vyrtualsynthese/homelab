@@ -203,9 +203,11 @@ Two things follow a successful install, both on the config claim:
   then chowned to `PUID`/`PGID`. qBittorrent clears that preference itself when it finds no UI, and
   it rewrites the whole file from memory on exit, so the only moment it can be set safely is here,
   before the app starts. It is written **only after an install**, so an operator who turns the
-  alternative UI off in the WebUI keeps it off across restarts. An existing file is rewritten through
-  its own inode, so a root-run init container cannot leave the app a file it is unable to save into;
-  a file the installer creates and cannot hand over is removed instead, and the log says so.
+  alternative UI off in the WebUI keeps it off across restarts, and a file that already reads `true`
+  is not touched. An existing file is rewritten through its own inode, so a root-run init container
+  cannot leave the app a file it is unable to save into — the chown after it is best-effort, and the
+  file keeps whatever owner it had if the export refuses the change. A file the installer creates and
+  cannot hand over is removed instead, and the log says so.
 - the archive is kept as `/config/vuetorrent-<version>.zip`; a later install of that same version
   uses it when github.com is unreachable.
 
