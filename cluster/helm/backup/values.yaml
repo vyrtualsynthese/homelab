@@ -43,6 +43,13 @@ streams:
   - name: nfs
     budgetGiB: 36
 
+# The one place the retention policy is written. The prune job renders its flags from these
+# numbers, so the schedule and the flags cannot disagree.
+retention:
+  keepDaily: 7
+  keepWeekly: 4
+  keepMonthly: 12
+
 # Host configuration no backup held before. Mounted as one directory rather than four paths:
 # /etc/netplan does not exist on every node, and a missing hostPath fails the pod.
 hostPaths:

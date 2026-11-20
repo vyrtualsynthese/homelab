@@ -15,3 +15,22 @@ data:
   # One restic run per NFS export.
   backup-nfs.sh: |
 {{ .Files.Get "files/backup-nfs.sh" | indent 4 }}
+  # Weekly forget + prune, rendered here so the retention numbers come from values.yaml and
+  # exist in one place only.
+  prune.sh: |
+    #!/bin/sh
+    # Runs on Sunday at noon, after every night's backup has finished. One repository at a
+    # time: two restic processes on one repository would fight over the lock instead of
+    # pruning it.
+    set -eu
+    : "${RESTIC_PASSWORD:?}"
+    echo "prune {{ .Values.streams | len }} repositories: daily {{ .Values.retention.keepDaily }}, weekly {{ .Values.retention.keepWeekly }}, monthly {{ .Values.retention.keepMonthly }}"
+    {{- range .Values.streams }}
+    echo "prune {{ .name }}"
+    restic -r "{{ include "backup.repository" (dict "root" $ "name" .name) }}" forget \
+      --retry-lock 6h \
+      --keep-daily {{ $.Values.retention.keepDaily }} \
+      --keep-weekly {{ $.Values.retention.keepWeekly }} \
+      --keep-monthly {{ $.Values.retention.keepMonthly }} \
+      --prune
+    {{- end }}
