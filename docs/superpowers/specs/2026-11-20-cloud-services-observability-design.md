@@ -295,18 +295,23 @@ emails. The AWS budget is not touched; migration Task 16 destroys it.
 ## 10. Verification
 
 1. `helm template` renders the new chart, and the existing chart sweep still
-   passes (the loop in `AGENTS.md` §6).
+   passes (the loop in `AGENTS.md` §6). **Done 2026-11-20:** 39 charts
+   rendered, 0 failed.
 2. ArgoCD sync leaves the pod Running on `nas`, and Prometheus `/api/v1/targets`
-   lists the new jobs with no down target.
+   lists the new jobs with no down target. **Done 2026-11-20:** 3/3 HTTP and
+   28/28 DNS probes pass, `sum(probe_success{job="blackbox-dns"})` is 28.
 3. Each panel query is executed through the Grafana datasource API and returns
    data; no panel ships on a query that has never returned a row.
-4. Each rule is made to fire once against a deliberately broken target (a
-   non-existent name added to the values, then removed), showing the target,
-   check and server in the message, then resolves.
+4. The firing path is proven without paging anyone: a throwaway `vector(1)`
+   rule in the same group reaches `firing` under a silence, then both are
+   deleted. (A broken target in the values was the original plan; injecting a
+   series is not possible here, and a rule that fires for a fake reason proves
+   the same path.)
 5. The missing-data case is checked: a module that returns no answer renders
    blank, not zero, in the table and never fires `CloudEndpointDown`.
-6. `ovhcloud cloud alerting list --cloud-project <id>` shows both
-   configurations.
+6. `ovhcloud cloud alerting list --cloud-project <id>` shows the one
+   configuration that exists: `all-20`, €20, `valentin.ronteix@ashudev.com`,
+   delay 3600. The €50 configuration is refused by the provider; see §8.
 
 ## 11. Rollback
 
