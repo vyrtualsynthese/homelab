@@ -11,6 +11,17 @@ spec:
   syncPolicy:
     syncOptions:
       - CreateNamespace=true
+  # The Job controller writes four labels into the pod template: controller-uid
+  # and job-name, each also under batch.kubernetes.io/. They are not in git and
+  # cannot be removed, so without this the bootstrap Job is OutOfSync forever.
+  ignoreDifferences:
+    - group: batch
+      kind: Job
+      jsonPointers:
+        - /spec/template/metadata/labels/controller-uid
+        - /spec/template/metadata/labels/job-name
+        - /spec/template/metadata/labels/batch.kubernetes.io~1controller-uid
+        - /spec/template/metadata/labels/batch.kubernetes.io~1job-name
   source:
     repoURL: 'https://github.com/vyrtualsynthese/homelab.git'
     targetRevision: develop

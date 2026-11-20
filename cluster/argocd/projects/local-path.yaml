@@ -21,4 +21,14 @@ spec:
     - repoURL: "https://github.com/vyrtualsynthese/homelab.git"
       targetRevision: develop
       ref: values
+  # The API server drops `spec.template.spec.hostUsers` on this version: the
+  # chart renders `hostUsers: true` and Kubernetes 1.30 with user namespaces off
+  # stores neither true nor false, so the live Deployment can never match it.
+  # Ignore that one field; every other difference still reports.
+  ignoreDifferences:
+    - group: apps
+      kind: Deployment
+      name: local-path-local-path-provisioner
+      jsonPointers:
+        - /spec/template/spec/hostUsers
   revisionHistoryLimit: 3
