@@ -34,7 +34,6 @@ database passwords.
 | `koillection` | `koillection` | `DB_NAME`, `DB_HOST`, `DB_USER`, `DB_PASSWORD` |
 | `syncthing-backup` | `syncthing` | `envFrom` (restic credentials) |
 | `authentik-env` | `authentik` | `envFrom` |
-| `atlantis-env` | `atlantis` | `OVH_ENDPOINT`, `OVH_APPLICATION_KEY`, `OVH_APPLICATION_SECRET`, `OVH_CONSUMER_KEY` → the `ovh` provider; `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_DEFAULT_REGION` → the OVH Object Storage state backend, which is S3-compatible but not AWS; `ATLANTIS_GH_TOKEN` → both `ATLANTIS_GH_TOKEN` and `TF_VAR_GIT_TOKEN`; `ATLANTIS_GH_WEBHOOK_SECRET` → the webhook HMAC |
 | `dashy-conf` | `dashy` | rendered by `cluster/helm/dashy/templates/secret-config.yaml` from `files/conf.yml`; holds no credentials |
 | `postgres-secrets` | `databases` | Bitnami PostgreSQL `existingSecret` |
 | `pgadmin` | `databases` | external chart `existingSecret` |

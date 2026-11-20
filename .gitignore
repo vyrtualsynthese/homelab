@@ -45,10 +45,6 @@ cluster/helm/renovate/Chart.lock
 cluster/helm/argocd/charts/
 cluster/helm/argocd/Chart.lock
 
-# Built by ArgoCD at sync time
-cluster/helm/atlantis/charts/
-cluster/helm/atlantis/Chart.lock
-
 # Built by ArgoCD at sync time (see the GPU operator design §Decisions)
 cluster/helm/platform/gpu-operator/charts/
 cluster/helm/platform/gpu-operator/Chart.lock
