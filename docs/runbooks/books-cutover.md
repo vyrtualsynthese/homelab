@@ -4,7 +4,8 @@
 > Calibre-Web Automated as its single writer, with Kavita reading the same share.
 >
 > **Use it when** the books stack is rebuilt from nothing, or you need the record of what that move
-> did and the `metadata.db` copy it left · **Kind:** completed record 2026-11-13
+> did and the `metadata.db` copy it left · **Kind:** completed record 2026-11-13, step 11 closed
+> 2026-11-20
 
 > **Destructive.** This deletes the running Calibre Deployment and every other object its
 > Application created, and it is the moment the library's single writer changes hands. The books
@@ -524,33 +525,40 @@ Then the checks that need eyes:
 The fallback the cutover leaves behind is a claim and a tarball; both are cleared here, once the new
 stack has run.
 
-**Remove Kavita's exclusion from the alerting as soon as Kavita is green** — that one does not wait
-the week: Grafana → Alerting → Alert rules → `MediaDeploymentDown` → drop `kavita` from the exclusion,
-save. Then update the two mentions in
-[`docs/observability-conventions.md`](../observability-conventions.md) in a small PR — dashboards and
-alert rules live in Grafana's database, never in git, so the document is the only record.
+**Checked and closed out on 2026-11-20**, one week after the cutover, except the tarball: the
+`calibre` Application, the `calibre-config` PV and its PVC are all `NotFound`; CWA and Kavita are
+`Synced`/`Healthy` with one `1/1 Running` pod each; and `MediaDeploymentDown` carries no exclusion, so
+Kavita is covered by it. The tarball is the one step that needs a shell — the read-only MCP cannot
+`exec` — so its command is still to be run.
 
-Everything below waits a week.
+**Kavita's exclusion from the alerting is gone**, retired by 2026-11-18, before this pass: the rule's
+expression is `1 - kube_deployment_status_replicas_available{namespace="media-stack"}` with no
+`deployment!~` matcher. Its description still said "readarr and kavita are excluded", which was no
+longer true, and that sentence was dropped on 2026-11-20 through the provisioning API
+(`PUT /api/v1/provisioning/alert-rules/cg4583it3l7ggd`). Alert rules and dashboards live in Grafana's
+database, never in git, so [`docs/reference/alerts.md`](../reference/alerts.md) is the record of the
+live set — the page that used to carry it, `docs/observability-conventions.md`, now only links there.
 
 **The old Application and its chart are already retired** — `cluster/argocd/projects/media-stack/calibre.yaml`
-and `cluster/helm/media-stack/calibre/` were removed once CWA had the collection. Confirm the root app
-pruned them, and only then clear the claim, so no root-app sync can re-apply anything:
+and `cluster/helm/media-stack/calibre/` were removed once CWA had the collection. The root app pruned
+them, which is what made the claim safe to clear:
 
 ```bash
-kubectl -n argocd get application calibre    # expect: NotFound
+kubectl -n argocd get application calibre    # expect: NotFound (confirmed 2026-11-20)
 ```
 
-**Clear the dead claim**, PV first and then its claim — their finalizers name a CSI driver that no
-longer exists, so they will never clear on their own:
+**The dead claim is gone.** It was cleared PV first and then claim, because its finalizers named a
+CSI driver that no longer exists and it would never clear on its own:
 
 ```bash
 kubectl patch pv calibre-config -p '{"metadata":{"finalizers":null}}' --type=merge
 kubectl -n media-stack patch pvc calibre-config -p '{"metadata":{"finalizers":null}}' --type=merge
-kubectl get pv calibre-config   # expect: NotFound
+kubectl get pv calibre-config   # expect: NotFound (confirmed 2026-11-20)
 ```
 
-**Delete the tarball** if step 2 wrote one. The glob has to expand inside the container, so it runs
-under `sh -c`:
+**Delete the tarball** if step 2 wrote one; this is the step still outstanding. The glob has to expand
+inside the container, so it runs under `sh -c`, and the command doubles as the check: a file prints
+`removed`, while no file makes `rm` fail on the unexpanded pattern.
 
 ```bash
 kubectl -n media-stack exec deploy/calibre-web-automated -- sh -c 'rm -v /calibre-library/calibre-config-*.tgz'
