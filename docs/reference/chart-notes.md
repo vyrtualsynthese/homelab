@@ -513,7 +513,8 @@ database with the OIDC users and scopes. `nodeSelector` pins `nuc0`; the claim w
 and `local-path` binds on first consumer, so any other node would leave it unschedulable. Liveness
 and readiness share `/health` — the only dependency is the local SQLite database, which fails with
 the process — and `server.logging` keeps `warning|error`. Uploads run as uid 1100 with primary gid
-1000; the primary group is the mergerfs requirement, not a preference. Debt: none recorded; the 1 Gi
+1000; the primary group is the mergerfs requirement, not a preference. Debt: the four startup lines
+the app logs before it reads its config stay at `INFO`; the level applies after that. The 1 Gi
 claims are the ones the previous chart created and a `local-path` claim cannot shrink.
 
 ## Charts still to align
