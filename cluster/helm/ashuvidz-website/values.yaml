@@ -100,6 +100,16 @@ ingressRoute:
   tls:
     # -- Let's Encrypt through Traefik's ACME resolver.
     certResolver: myresolver
+  # -- `www`, which only redirects. A name that resolves without a router of its
+  # -- own gets no certificate and answers with a TLS name mismatch — which is
+  # -- what `www.ashuvidz.com` did until this block existed. Hence a real router
+  # -- with `tls`; the redirect is only what it does once the certificate exists.
+  www:
+    enabled: true
+    host: www.ashuvidz.com
+    # -- `$1` is everything after the leading slash, so a path survives the hop.
+    replacement: https://ashuvidz.com/$1
+    permanent: true
   # -- The plain-HTTP router. It answers on `web` and hands back a redirect; the
   # -- live route used Traefik's no-op service for that, and this chart keeps it.
   redirectToHttps: true

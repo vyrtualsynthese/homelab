@@ -25,7 +25,7 @@ the hostname is public or a `*.kub.home.ashudev.com` name the LAN resolves to `1
 
 ## Public
 
-These seven are on the allowlist and are meant to answer the internet. Only Dashy carries a gate; the
+These nine are on the allowlist and are meant to answer the internet. Only Dashy carries a gate; the
 others set response headers — and, for Plex and Seerr, a rate limit of 100 requests per second on
 average — and neither of those is authentication. FileBrowser is open so the editor can sign in from
 outside and its share links can be opened by people with no account, and it authenticates inside the
@@ -34,7 +34,9 @@ app through authentik. The authentik page Dashy signs in through is public for t
 | Host | Application | Namespace | Gate | TLS | Public? |
 |---|---|---|---|---|---|
 | `ashuvidz.com` | ashuvidz website (nginx) | `ashuvidz` | none — `security` headers | Let's Encrypt | yes |
+| `www.ashuvidz.com` | ashuvidz website (301 to the apex) | `ashuvidz` | none — redirect | Let's Encrypt | yes |
 | `ashudev.com` | ashudev website (nginx) | `ashudev` | none — `security` headers | Let's Encrypt | yes |
+| `www.ashudev.com` | ashudev website (301 to the apex) | `ashudev` | none — redirect | Let's Encrypt | yes |
 | `authentik.kub.home.ashudev.com` | Authentik | `authentik` | none — `security` headers; each application's own policy is the gate | Let's Encrypt | yes |
 | `dashy.ashudev.com` | Dashy | `dashy` | `authentik-forwardauth` (admins only) then `security` | Let's Encrypt | yes |
 | `filebrowser.kub.home.ashudev.com` | FileBrowser | `filebrowser` | none — `security` headers; the app redirects to authentik | Let's Encrypt | yes |
