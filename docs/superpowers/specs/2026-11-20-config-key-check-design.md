@@ -3,6 +3,12 @@
 > **In one line.** A checker that renders a wrapper chart and fails any key in the rendered config
 > file that the pinned upstream chart's own `values.yaml` does not declare.
 > **Card:** Vikunja #431 (`#347`), `homelab` project.
+>
+> **Status 2026-11-20.** The mechanism is built and the manifest ships empty. FileBrowser's chart
+> became hand-written on 2026-11-20 (commit `6e61060a`), so there is no pinned dependency left to
+> read a schema from, and no other wrapper chart has an app that rejects an unknown config key. The
+> first entry lands with the next such chart; the FileBrowser entry that proved the checker was
+> removed at the rebase.
 
 ## Why
 

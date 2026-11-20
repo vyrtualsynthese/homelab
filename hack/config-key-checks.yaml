@@ -7,8 +7,13 @@
 # whose upstream defaults are not a complete schema would report false failures.
 #
 # The rule is requirement 20 of docs/charts/README.md.
-
-- chart: cluster/helm/filebrowser
-  dependency: filebrowser-quantum
-  schema: config        # the values.yaml subtree that declares the config file's keys
-  key: config.yaml      # the ConfigMap data key holding the rendered file
+#
+# The manifest is empty on purpose. FileBrowser was the first subject, but on
+# 2026-11-20 its chart became hand-written (commit 6e61060a) and there is no
+# pinned dependency left to read a schema from; no other wrapper chart has an app
+# that rejects an unknown config key. The next chart that does opts in with:
+#
+#   - chart: cluster/helm/<area>/<app>   # path from the repo root
+#     dependency: <subchart name>        # as pinned in Chart.yaml
+#     schema: config                     # the values.yaml subtree holding the file's keys
+#     key: config.yaml                   # the ConfigMap data key holding the rendered file
