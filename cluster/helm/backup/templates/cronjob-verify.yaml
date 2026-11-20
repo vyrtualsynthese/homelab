@@ -36,6 +36,17 @@ spec:
             - name: config
               configMap:
                 name: backup-streams
+            # restic is a static binary and the python image has no package manager worth
+            # trusting at 08:30, so the binary is copied out of the pinned restic image.
+            - name: bin
+              emptyDir: {}
+          initContainers:
+            - name: restic-binary
+              image: {{ include "backup.image" (dict "root" . "name" "restic") }}
+              command: ["cp"]
+              args: ["/usr/bin/restic", "/shared/restic"]
+              volumeMounts:
+                - {name: bin, mountPath: /shared}
           containers:
             - name: verify
               image: {{ include "backup.image" (dict "root" . "name" "python") }}
@@ -45,6 +56,8 @@ spec:
                 - secretRef:
                     name: {{ .Values.repository.secretName }}
               env:
+                - name: PATH
+                  value: /shared:/usr/local/bin:/usr/bin:/bin
                 - name: RESTIC_CACHE_DIR
                   value: /tmp/restic-cache
                 - name: TZ
@@ -59,3 +72,4 @@ spec:
               volumeMounts:
                 - {name: scripts, mountPath: /scripts, readOnly: true}
                 - {name: config, mountPath: /config, readOnly: true}
+                - {name: bin, mountPath: /shared, readOnly: true}

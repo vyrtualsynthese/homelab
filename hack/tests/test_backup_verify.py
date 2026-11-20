@@ -6,6 +6,8 @@ a snapshot too old to be last night's, a repository that grew past its budget, a
 the etcd copy that lags behind the backups it ships with.
 """
 
+import contextlib
+import io
 import pathlib
 import tempfile
 import unittest
@@ -152,6 +154,34 @@ class MainTests(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertIn("problem stream=nodes-nuc0 newest snapshot", out)
         self.assertIn("problem stream=nodes-nuc0 etcd copy", out)
+
+    def test_an_etcd_stream_with_no_snapshot_names_the_stream_and_does_not_abort(self):
+        # `restic ls latest` exits 1 with "no snapshot found" on an empty repository: the
+        # verifier must report the empty stream, not die on the etcd query.
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp = pathlib.Path(tmp_dir)
+            fake = tmp / "restic"
+            fake.write_text(
+                "#!/bin/sh\n"
+                'case "$3" in\n'
+                "  snapshots) echo '[]' ;;\n"
+                "  stats) echo '{\"total_size\": 0}' ;;\n"
+                "  ls) echo 'no snapshot found' >&2; exit 1 ;;\n"
+                "  *) exit 9 ;;\n"
+                "esac\n"
+            )
+            fake.chmod(0o755)
+            config = tmp / "streams.json"
+            config.write_text(
+                '[{"name": "nodes-nuc0", "repository": "s3:x/nodes-nuc0",'
+                ' "budgetGiB": 1, "etcd": true}]'
+            )
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                code = load().main(["--config", str(config), "--restic", str(fake)])
+        self.assertEqual(code, 1)
+        self.assertIn("problem stream=nodes-nuc0 no snapshot", out.getvalue())
+        self.assertIn("etcd stream=nodes-nuc0 file=-", out.getvalue())
 
     def test_a_missing_repository_is_reported_not_swallowed(self):
         with tempfile.TemporaryDirectory() as tmp_dir:
