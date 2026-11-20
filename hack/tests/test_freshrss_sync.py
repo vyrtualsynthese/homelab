@@ -239,11 +239,13 @@ class PlanTests(unittest.TestCase):
 
 class FakeTransport:
     def __init__(self, token="TOK", subs=None, login_body="SID=x\nLSID=y\nAuth=AUTH123\n",
-                 edit_status=200, refuse=()):
+                 edit_status=200, refuse=(), stored=None):
         self.calls = []
         self.token, self.subs, self.login_body = token, list(subs or []), login_body
         self.edit_status = edit_status
         self.refuse = set(refuse)
+        # feed address -> the items the instance holds for it, newest first as the API answers
+        self.stored = dict(stored or {})
 
     def __call__(self, method, url, headers=None, data=None):
         self.calls.append((method, url, headers or {}, data))
@@ -251,6 +253,9 @@ class FakeTransport:
             return 200, self.login_body
         if url.endswith("/reader/api/0/token"):
             return 200, self.token
+        if "/stream/contents/feed/" in url:
+            address = urllib.parse.unquote(url.split("/stream/contents/feed/", 1)[1].split("?")[0])
+            return 200, json.dumps({"items": self.stored.get(address, [])})
         if "/subscription/list" in url:
             subscriptions = []
             for i, (u, t, labels) in enumerate(self.subs):
@@ -402,6 +407,59 @@ class SelectorTests(unittest.TestCase):
     def test_a_descendant_selector_is_reported_as_unsupported(self):
         with self.assertRaises(ValueError):
             mod.select_text("<main><article>hi</article></main>", "main article")
+
+
+class StateTests(unittest.TestCase):
+    """`state` answers "has a poll landed?" from the instance's own store."""
+
+    ENV = {"FRESHRSS_USER": "u", "FRESHRSS_API_PASSWORD": "p"}
+    KBD = "https://kbdfans.com/collections/new-arrival.atom"
+    ROG = "https://riseofgunpla.com/feed?post_type=product"
+
+    def test_a_feed_with_a_stored_item_reports_when_it_arrived_and_its_title(self):
+        t = FakeTransport(subs=[(self.ROG, "ROG", "Boutiques")],
+                          stored={self.ROG: [{"crawlTimeMsec": "1795136004000",
+                                              "title": "MG 1/100 Gundam Astray"}]})
+        c = mod.Client(base="https://x.test", user="u", password="p", transport=t)
+        rows = mod.state([mod.Feed(category="Boutiques", title="ROG", url=self.ROG)], c)
+        self.assertEqual(rows, [("2026-11-20T00:53Z",
+                                 mod.Feed(category="Boutiques", title="ROG", url=self.ROG),
+                                 "MG 1/100 Gundam Astray")])
+
+    def test_a_feed_with_no_stored_item_has_never_completed_a_fetch(self):
+        t = FakeTransport(subs=[(self.KBD, "KBDfans", "Boutiques")])
+        c = mod.Client(base="https://x.test", user="u", password="p", transport=t)
+        rows = mod.state([mod.Feed(category="Boutiques", title="KBDfans", url=self.KBD)], c)
+        self.assertEqual(rows[0][0], "never")
+
+    def test_a_feed_the_instance_does_not_hold_is_not_asked_for_its_items(self):
+        t = FakeTransport(subs=[])
+        c = mod.Client(base="https://x.test", user="u", password="p", transport=t)
+        rows = mod.state([mod.Feed(category="Boutiques", title="KBDfans", url=self.KBD)], c)
+        self.assertEqual(rows[0][0], "not subscribed")
+        self.assertFalse([call for call in t.calls if "/stream/contents" in call[1]])
+
+    def test_state_reads_the_instance_and_never_the_publisher(self):
+        t = FakeTransport(subs=[(self.KBD, "KBDfans", "Boutiques")])
+        c = mod.Client(base="https://x.test", user="u", password="p", transport=t)
+        mod.state([mod.Feed(category="Boutiques", title="KBDfans", url=self.KBD)], c)
+        self.assertEqual({call[1].split("/", 3)[2] for call in t.calls}, {"x.test"})
+
+    def test_the_newest_item_wins_when_the_instance_answers_more_than_one(self):
+        t = FakeTransport(subs=[(self.ROG, "ROG", "Boutiques")],
+                          stored={self.ROG: [{"crawlTimeMsec": "1795136004000", "title": "old"},
+                                             {"crawlTimeMsec": "1795136504000", "title": "new"}]})
+        c = mod.Client(base="https://x.test", user="u", password="p", transport=t)
+        rows = mod.state([mod.Feed(category="Boutiques", title="ROG", url=self.ROG)], c)
+        self.assertEqual(rows[0][0], "2026-11-20T01:01Z")
+
+    def test_state_exits_zero_even_when_a_feed_holds_nothing(self):
+        feeds = mod.parse_opml(OPML_PATH.read_text())
+        t = FakeTransport(subs=[(f.url, f.title, f.category) for f in feeds])
+        with contextlib.redirect_stdout(io.StringIO()) as out:
+            code = mod.main(["state"], transport=t, env=self.ENV)
+        self.assertEqual(code, 0)
+        self.assertIn("never", out.getvalue())
 
 
 class CliTests(unittest.TestCase):
