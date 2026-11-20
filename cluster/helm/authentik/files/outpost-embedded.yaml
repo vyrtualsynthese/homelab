@@ -93,11 +93,6 @@ entries:
   - model: authentik_blueprints.metaapplyblueprint
     attrs:
       identifiers:
-        name: ashulab-app-thelounge
-      required: true
-  - model: authentik_blueprints.metaapplyblueprint
-    attrs:
-      identifiers:
         name: ashulab-app-syncthing
       required: true
 
@@ -120,5 +115,4 @@ entries:
         - !Find [authentik_providers_proxy.proxyprovider, [name, prowlarr]]
         - !Find [authentik_providers_proxy.proxyprovider, [name, docs]]
         - !Find [authentik_providers_proxy.proxyprovider, [name, dashy]]
-        - !Find [authentik_providers_proxy.proxyprovider, [name, thelounge]]
         - !Find [authentik_providers_proxy.proxyprovider, [name, syncthing]]
