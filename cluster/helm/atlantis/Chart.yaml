@@ -1,0 +1,11 @@
+apiVersion: v2
+name: atlantis
+description: Atlantis - plans every OpenTofu stack a pull request to infra-main touches
+type: application
+version: 0.1.0
+# appVersion-check: exempt — the image tag belongs to the `atlantis` dependency,
+# which pins it in values.yaml; this chart adds routes and nothing versioned.
+dependencies:
+  - name: atlantis
+    version: 7.4.0
+    repository: https://runatlantis.github.io/helm-charts

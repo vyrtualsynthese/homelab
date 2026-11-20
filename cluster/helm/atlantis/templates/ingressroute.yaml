@@ -1,0 +1,87 @@
+{{- if .Values.ingressRoute.enabled | default true }}
+{{- $svc := .Values.ingressRoute.service }}
+{{- $port := .Values.ingressRoute.port }}
+{{- /* The UI. No secretName and no certResolver on purpose: the cluster's
+internal certificate is the Traefik default (TLSStore in kube-system), and the
+policy object `kube-system-internal-tls` is applied here. `lan-only` is the
+whole gate: Atlantis has no sign-in of its own beyond basic auth, and this host
+answers the LAN only. */}}
+apiVersion: {{ .Values.ingressRoute.apiVersion }}
+kind: IngressRoute
+metadata:
+  name: {{ include "atlantis.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: {{ .Chart.Name }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - kind: Rule
+      match: Host(`{{ .Values.ingressRoute.host }}`)
+      middlewares:
+        - name: kube-system-lan-only@kubernetescrd
+      services:
+        - name: {{ $svc }}
+          port: {{ $port }}
+  {{- if .Values.ingressRoute.tls.options }}
+  tls:
+    options:
+      name: {{ .Values.ingressRoute.tls.options }}
+      namespace: {{ .Values.ingressRoute.tls.optionsNamespace | default .Release.Namespace }}
+  {{- end }}
+---
+{{- /* The webhook. GitHub cannot complete a sign-in redirect, so this route
+carries no middleware at all; it is narrowed to /events so the UI is not
+reachable through it. Let's Encrypt, because GitHub validates the certificate
+and does not trust the cluster's internal CA. */}}
+apiVersion: {{ .Values.ingressRoute.apiVersion }}
+kind: IngressRoute
+metadata:
+  name: {{ include "atlantis.fullname" . }}-webhook
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: {{ .Chart.Name }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - kind: Rule
+      match: Host(`{{ .Values.ingressRoute.webhookHost }}`) && PathPrefix(`{{ .Values.ingressRoute.webhookPath }}`)
+      services:
+        - name: {{ $svc }}
+          port: {{ $port }}
+  tls:
+    certResolver: {{ .Values.ingressRoute.certResolver }}
+    options:
+      name: {{ include "atlantis.fullname" . }}-tlsoption
+      namespace: {{ .Release.Namespace }}
+{{- if .Values.ingressRoute.redirectToHttps }}
+---
+{{- /* Plain-HTTP mirror for the LAN host only: the public one is reached over
+HTTPS by GitHub, and a redirect there would be a second public route with no
+reason to exist. */}}
+apiVersion: {{ .Values.ingressRoute.apiVersion }}
+kind: IngressRoute
+metadata:
+  name: {{ include "atlantis.fullname" . }}-redirect
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: {{ .Chart.Name }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  entryPoints:
+    - web
+  routes:
+    - kind: Rule
+      match: Host(`{{ .Values.ingressRoute.host }}`)
+      middlewares:
+        - name: kube-system-lan-only@kubernetescrd
+        - name: kube-system-redirect-to-https@kubernetescrd
+      services:
+        - name: {{ $svc }}
+          port: {{ $port }}
+{{- end }}
+{{- end }}
