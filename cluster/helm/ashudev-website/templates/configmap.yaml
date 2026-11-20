@@ -65,8 +65,12 @@ data:
           deny all;
         }
 
+        # `$uri.html` is what GitHub Pages did with an extensionless path: it
+        # served `/services` as `services.html`, and that is how the name is
+        # still linked from outside. Without the second term every such URL that
+        # works today would answer 404 the moment the site moved.
         location / {
-          try_files $uri $uri/ =404;
+          try_files $uri $uri.html $uri/ =404;
         }
       }
     }
