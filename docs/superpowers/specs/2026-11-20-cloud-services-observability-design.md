@@ -26,7 +26,7 @@ rejected; see §4.
 | Cloud piece | Live state, verified 2026-11-20 | Watched by |
 |---|---|---|
 | `ashudev.com` zone | OVHcloud, nameservers `dns13.ovh.net` / `ns13.ovh.net` | nothing |
-| `ashudev.com` website | GitHub Pages; apex A `185.199.10{8,9,10,11}.153`, `www` CNAME `vyrtualsynthese.github.io.` | nothing |
+| `ashudev.com` website | the homelab: apex A `80.14.57.209`, `www` CNAME to the apex, served by Traefik | nothing |
 | Mail records | Google Workspace: five MX, SPF `_spf.google.com`, DKIM at `google._domainkey`, DMARC `p=none` | nothing |
 | `ashuvidz.com` zone | still AWS Route 53 (`ns-1029.awsdns-00.org` and three others); apex and wildcard A `80.14.57.209` | nothing |
 | `ashuvidz.com` website | homelab public IP; from the LAN the NAT hairpin works (HTTP 200) | nothing |
@@ -37,7 +37,7 @@ Two facts decide the shape of the prober:
 
 - **The local resolver rewrites `ashudev.com` to `192.168.1.46`.** A pod using
   cluster DNS would land on Traefik, whose certificate does not cover the
-  name, and report a TLS failure that has nothing to do with GitHub Pages.
+  name, and report a TLS failure that has nothing to do with the site.
 - **The props must be answered by the authoritative servers**, not the local
   resolver, or a DNS assertion tests the Pi-hole rather than the zone.
 
@@ -136,8 +136,8 @@ the granularity):
 | Module | Query | Assertion |
 |---|---|---|
 | `dns_soa_ashudev` | `ashudev.com` SOA | answers (liveness of the server) |
-| `dns_a_ashudev` | `ashudev.com` A | any answer containing `185.199.1` |
-| `dns_www_ashudev` | `www.ashudev.com` CNAME | `vyrtualsynthese\.github\.io` |
+| `dns_a_ashudev` | `ashudev.com` A | `80\.14\.57\.209` |
+| `dns_www_ashudev` | `www.ashudev.com` CNAME | `ashudev\.com` |
 | `dns_mx_ashudev` | `ashudev.com` MX | at least one `(aspmx\|alt\d\.aspmx)\.l\.google\.com` |
 | `dns_spf_ashudev` | `ashudev.com` TXT | `_spf\.google\.com` |
 | `dns_dkim_ashudev` | `google._domainkey.ashudev.com` TXT | `v=DKIM1; k=rsa` |
@@ -148,10 +148,14 @@ the granularity):
 | `dns_ns_ashuvidz` | `ashuvidz.com` NS | answers (provider not asserted; see below) |
 
 Assertions use `validate_answer_rrs.fail_if_none_matches_regexp`, which the
-exporter applies to each answer in its wire form. The apex A record is asserted
-loosely (`185.199.1`) because GitHub owns those four addresses and may add a
-fifth; the HTTP probe is what proves the site, and `www`'s CNAME is
-contractual.
+exporter applies to each answer in its wire form.
+
+**Corrected 2026-11-20, during live verification.** The site moved off GitHub
+Pages to the homelab that evening: the authoritative servers and all three
+public resolvers return `80.14.57.209`, and `www` is a CNAME to the apex. The
+first version of this table was read from `infra-main`, which still declares
+the GitHub addresses; the live zone is the authority. The apex A is asserted
+exactly at the router address, and `www` at the apex it points to.
 
 `dns_ns_ashuvidz` deliberately asserts only that the delegation answers, not
 who answers it. The zone is mid-transfer from AWS to OVHcloud, and asserting
@@ -210,8 +214,8 @@ notification policy, grouping and Discord contact point are reused unchanged.
   Goal 1's "roughly five minutes" means this number.
 - Summaries name the target, the check and the server, and say what to do:
   `CloudEndpointDown` — "https://ashudev.com did not answer from the public
-  internet (GitHub Pages). Check githubstatus.com, then the DNS records in
-  infra-main." `CloudDnsCheckFailing` — "ashudev.com MX answered by
+  internet (homelab router and Traefik). Check the route, the public
+  certificate and the WAN address." `CloudDnsCheckFailing` — "ashudev.com MX answered by
   ns13.ovh.net does not match Google Workspace's hosts. Read the zone with
   `ovhcloud domain-zone record list ashudev.com`, then compare with
   infra-main."
