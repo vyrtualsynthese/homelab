@@ -92,7 +92,10 @@ Health.
 
 - **`local-path` claims publish no per-claim bytes**, so the claim-full rule is NFS-only; the filesystem
   rules watch that disk coarser.
-- **No backup-freshness metric**: backups do not run, so an alert on them would lie.
+- **Backup freshness is a CronJob age, not a repository fact**: `BackupStreamStale` reads
+  `kube_cronjob_status_last_successful_time`, and the verifier reads each repository's newest
+  snapshot. Neither proves a restored file, which is why the drill log matters
+  ([Backups](backups.md), [`runbooks/restore.md`](../runbooks/restore.md)).
 - **No vulnerability scanning**: nothing reports which flaws the running images carry.
 - **The public names are probed, narrowly**: a blackbox prober on `nas` checks three HTTPS endpoints
   and 28 DNS records ([runbooks/cloud-monitoring.md](../runbooks/cloud-monitoring.md)); mail delivery,
