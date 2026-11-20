@@ -1,9 +1,9 @@
 # Disaster recovery
 
-> **In one line.** The configuration, the databases, the books and syncthing leave the machine every
-> night for one OVH bucket; the media library, the music and the stash library stay on one disk by
-> decision; and no restore has been drilled yet, so what is proved is that the copies are written, not
-> that they come back.
+> **In one line.** The configuration, the databases and syncthing leave the machine every night for
+> one OVH bucket; the media library, the music, the stash library and the books stay on one disk by
+> decision; and no restore has been drilled yet, so what is proved is that the copies are written,
+> not that they come back.
 >
 > **Use it when** a risk needs weighing, a disk died, or you need to know what is left ·
 > **Verified** 2026-11-20 · **Kind:** living page
@@ -18,7 +18,7 @@ The nightly mechanism is [Backups](../how-it-works/backups.md); the procedure is
 | `nodes-nas` | the PostgreSQL dumps and their `globals.sql`, Grafana's database and alert rules | OVH bucket, nightly 04:30 |
 | `nodes-nuc0` | eleven applications' configuration, the node's `/etc`, an etcd snapshot copy | OVH bucket, nightly 05:00 |
 | `nodes-streaming` | the media stack's configuration, the node's `/etc`, an etcd snapshot copy | OVH bucket, nightly 05:30 |
-| `nfs` | syncthing, the books library, koillection's uploads, the ACME certificate store, the qBittorrent config | OVH bucket, nightly 06:00 |
+| `nfs` | syncthing, koillection's uploads, the ACME certificate store, the qBittorrent config | OVH bucket, nightly 06:00 |
 
 Every application's configuration is a `local-path` claim, so a node's disk dying costs that day's
 changes and not the settings themselves — as long as the claim has a row in
@@ -29,7 +29,7 @@ what is covered.
 
 | Where | Lost with it |
 |---|---|
-| `nas`: the mechanical array, and the music and stash exports | the media library, one copy, by decision |
+| `nas`: the mechanical array, and the music, stash, books and media exports | the media library and the books, one copy each, by decision |
 | the etcd snapshot copy | **not** officially uploaded yet: the copy is a file that rides in the two control-plane streams, and restoring one has not been drilled. The official K3s S3 upload lands with the 1.31 upgrade (W5) |
 | anything a row does not name | a claim added since the last edit of `values.yaml`, a host directory outside the four in the matrix |
 | the two edge Pis | their own state, unchanged: outside the cluster, and their restic path is in the [Ansible audit](../audit/ansible-hosts.md) |
@@ -38,7 +38,8 @@ what is covered.
 | a file changed after 06:00 | up to a day of it, which is what the schedule costs |
 
 The bucket does not change the shape of a NAS failure: one machine, one power supply, and the media
-library offsite is out of scope, so a fire still ends it.
+library and the books offsite are out of scope, so a fire still ends them. What the bucket buys is
+the configuration and the databases — the parts a rebuild cannot invent — not the bulk.
 
 ## What is proved, and what is not
 

@@ -15,7 +15,7 @@ while IFS='|' read -r tag path exclude; do
   echo "path=$tag"
   # </dev/null: the loop reads the path list from stdin, and a restic that inherited it would
   # swallow the next export. --host nas: without it restic names every snapshot after the pod,
-  # finds no parent and rescans all of the books every night.
+  # finds no parent and rescans every path from scratch each night.
   restic backup \
     --retry-lock 2h \
     --host nas \
