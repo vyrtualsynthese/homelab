@@ -72,6 +72,7 @@ nav:
       - Observability: how-it-works/observability.md
       - Media: how-it-works/media.md
       - Applications: how-it-works/applications.md
+      - Backups: how-it-works/backups.md
   - Running it:
       - running-it/README.md
       - What is broken right now: status.md

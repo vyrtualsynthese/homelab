@@ -72,6 +72,7 @@ the ones to leave alone.
 
 Instead: leave it alone. Scale the application to zero if it must stop, fix the template in git, and
 treat "an empty claim would let it start" as a data decision. When a claim really must go, retire the
-application in git first, so the next sync does not recreate it. Copy the volume out with a throwaway
-pod first — no backup of this cluster works
+application in git first, so the next sync does not recreate it. Copy what the nightly backup did not
+keep out with a throwaway pod first, and check the row in `cluster/helm/backup/values.yaml` to know
+which files those are
 ([storage.md](../how-it-works/storage.md#backups)).

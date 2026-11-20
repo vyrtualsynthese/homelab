@@ -59,7 +59,8 @@ consumed, and the one application that does record automation.
    `nodeSelector: kubernetes.io/hostname`. The DaemonSets are the deliberate exception: one pod per
    machine is their point.
 2. **Configuration lives on `local-path`**: a directory on one machine's disk, created where the first
-   pod lands. There is no replicated volume and no failover. Losing that disk loses the data.
+   pod lands. There is no replicated volume and no failover. Losing that disk loses the data on it
+   since the last nightly backup — [Backups](backups.md) says which directories those are.
 3. **GitOps is the only door for applications.** A merge to `develop` is a deployment; a hand edit is
    drift that gets reverted. Secrets and `cluster/infrastructure/` are the documented exceptions.
 4. **Every non-public route carries `lan-only`.** The router forwards 80 and 443 to the cluster and
@@ -79,7 +80,8 @@ Rules 1 to 3, and what broke in 2026, are argued in
 | [The shape and why](the-shape-and-why.md) | what failed, and the constraints that became rules |
 | [Nodes](nodes.md) | which machines exist, placement, heat, what one loss costs |
 | [GitOps](gitops.md) | how a commit becomes a pod, and what to edit for a change |
-| [Storage](storage.md) | `local-path` against NFS, claim naming, Longhorn's corpse, backups |
+| [Storage](storage.md) | `local-path` against NFS, claim naming, Longhorn's corpse |
+| [Backups](backups.md) | what leaves the machine each night, what is deliberately left, and how a stream is proved alive |
 | [Network](network.md) | DNS names, the LAN gate, TLS with the internal CA, public hostnames |
 | [Identity](identity.md) | authentik, the groups, and the three ways a route can be protected |
 | [Observability](observability.md) | what watches the cluster, what alerts, and what it misses |

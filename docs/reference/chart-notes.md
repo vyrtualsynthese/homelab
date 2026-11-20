@@ -559,8 +559,32 @@ the process — and `server.logging` keeps `warning|error`. Uploads run as uid 1
 the app logs before it reads its config stay at `INFO`; the level applies after that. The 1 Gi
 claims are the ones the previous chart created and a `local-path` claim cannot shrink.
 
-## Charts still to align
+### backup
 
+As of 2026-11-20: one chart, six CronJobs, no library, and the only chart in the repo whose values
+file is also a document — `values.yaml` is the coverage matrix, so adding a stateful application means
+adding a row in the same change. Three node jobs read their node's `local-path` root as a `hostPath`,
+because the claims they cover live in eleven namespaces and a claim mount per namespace would be
+eleven pods; nothing is ever mounted read-write except the staging `emptyDir`.
+
+Two containers per node job, and the split is the point: a Python `initContainer` copies each SQLite
+database through the module's backup API into staging and writes the two path lists restic reads,
+then the restic container does one backup run. That is the only place a claim is read through a copy
+rather than directly, and it exists because a database read as bytes while it is being written
+restores to a file that opens and is missing its last minutes.
+
+Both containers run as root with `DAC_OVERRIDE` and `DAC_READ_SEARCH` and nothing else. A `hostPath`
+mount ignores `fsGroup`, so a configuration directory written by `PUID` 1100 is readable as 1100 or as
+root; dropping all capabilities from root would leave it unreadable, and the mounts are read-only so
+there is nothing for those two capabilities to write.
+
+No job runs `restic init`. The four repositories are created once by hand: a job that could create one
+could create an empty repository where a lost one used to be, and the next night would look healthy.
+The prune job renders its retention flags from `values.yaml`, so the schedule and the policy cannot
+drift apart, and the verifier is a script rather than a rule so its line can be the dashboard's input
+as well as the alert's.
+
+## Charts still to align
 Only non-public apps with hand-maintained charts are in scope for now. Public-facing apps wait,
 because their ingress, TLS and auth wiring is what changes first in W5 and W7; `ashuvidz-website` is
 the exception, aligned on 2026-11-18 with its routes untouched because its card asked for exactly
