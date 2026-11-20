@@ -231,15 +231,16 @@ are in `docs/superpowers/plans/`.
    The inventory, the dispositions and the patch loop that was used are kept as the record in
    [`docs/cleanup/longhorn-disposition.md`](docs/cleanup/longhorn-disposition.md).
 
-   **One trap survives the cleanup.** Four externally-provisioned NFS volumes still show a deletion
-   timestamp. They are **kept as they are, by decision on 2026-11-20**, and must never be patched:
-   `pv-traefik-nfs` (the ACME certificate store), `pv-plex-media` (the film and television library),
-   `pv-stash-nfs-nfs-stash` (the assets export koillection writes to and FileBrowser reads) and
-   `pv-nfs-qbittorrent-download-nfs-subdir-external-provisioner` (the downloads queue). All four are
-   declared by the provisioner chart, so git still owns them and a sync recreates them. They appear
-   in `kubectl get pv` and in namespace health counts and nothing else; that is expected, not a
-   leftover to clear. The per-volume reasons and the replacement procedure are in
-   [`docs/how-it-works/storage.md`](docs/how-it-works/storage.md).
+   **The last trap is cleared (2026-11-21).** Four externally-provisioned NFS volumes had carried a
+   deletion timestamp since 2023-12-06 — `pv-traefik-nfs` (the ACME certificate store), `pv-plex-media`
+   (the film and television library), `pv-stash-nfs-nfs-stash` (the assets export koillection writes
+   to and FileBrowser reads) and `pv-nfs-qbittorrent-download-nfs-subdir-external-provisioner` (the
+   downloads queue). They were kept by decision on 2026-11-20, then rebuilt: the claim is deleted,
+   the volume's pending deletion completes, self-heal recreates the pair from the provisioner chart,
+   and the data stays on `nas` because every volume is `Retain`. No pod restarts and
+   `kubectl get pv` must now print **no** `Terminating` volume; a name in that list is a rebuild, not
+   a mark to tolerate. A finalizer is never cleared on its own — the claim has to go with it. The
+   order and the evidence are in [`docs/how-it-works/storage.md`](docs/how-it-works/storage.md).
 
 **Broken references**
 

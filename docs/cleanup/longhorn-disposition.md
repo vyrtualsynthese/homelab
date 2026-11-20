@@ -230,7 +230,8 @@ recipe:
   `spec.csi` is empty, which is the one thing that keeps the phase 3 filter from selecting them.
   Patch their finalizers away and the live mount goes with the object. They were decided to be kept
   on 2026-11-20; the per-volume reasons and the replacement procedure are in
-  [`../how-it-works/storage.md`](../how-it-works/storage.md).
+  [`../how-it-works/storage.md`](../how-it-works/storage.md). **Update 2026-11-21:** all four were
+  rebuilt with that procedure, so no volume carries a deletion timestamp now.
 - **Four `local-path` volumes are `Released`** and hold no claim: `pvc-51a71183…`
   (`calibre-web-automated-config`), `pvc-61023024…` (`pgadmin-config`), `pvc-76b5d66d…`
   (`cross-seed2`), `pvc-801276ae…` (`plex-transcode`). Deleting the objects is safe; the directories
