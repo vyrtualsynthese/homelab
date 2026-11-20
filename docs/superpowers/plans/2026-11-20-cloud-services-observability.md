@@ -74,8 +74,8 @@ Under `blackbox.config.modules`:
 | Module | `query_name` | `query_type` | regex |
 |---|---|---|---|
 | `dns_soa_ashudev` | `ashudev.com` | `SOA` | none (liveness) |
-| `dns_a_ashudev` | `ashudev.com` | `A` | `185\.199\.1` |
-| `dns_www_ashudev` | `www.ashudev.com` | `CNAME` | `vyrtualsynthese\.github\.io` |
+| `dns_a_ashudev` | `ashudev.com` | `A` | `80\.14\.57\.209` |
+| `dns_www_ashudev` | `www.ashudev.com` | `CNAME` | `ashudev\.com` |
 | `dns_mx_ashudev` | `ashudev.com` | `MX` | `(aspmx\|alt[0-9]\.aspmx)\.l\.google\.com` |
 | `dns_spf_ashudev` | `ashudev.com` | `TXT` | `_spf\.google\.com` |
 | `dns_dkim_ashudev` | `google._domainkey.ashudev.com` | `TXT` | `v=DKIM1; k=rsa` |
@@ -294,9 +294,9 @@ Every new rule reuses that object's `data` array (refIds `A` and `C`, `__expr__`
 
 Each expression returns a positive number when firing; the threshold stays `gt 0`. Annotations:
 
-- `CloudEndpointDown` — summary `{{ $labels.instance }} did not answer over HTTPS`, description `The public endpoint failed to answer from inside the cluster, which sees the public internet. For ashudev.com this is GitHub Pages: check githubstatus.com, then the A records in infra-main. For ashuvidz.com it is the homelab router: check Traefik and the public TLS certificate.`
+- `CloudEndpointDown` — summary `{{ $labels.instance }} did not answer over HTTPS`, description `The public endpoint failed to answer from inside the cluster, which sees the public internet. For ashudev.com and ashuvidz.com this is the same homelab router: check Traefik, the public TLS certificate and the WAN address.`
 - `CloudDnsCheckFailing` — summary `{{ $labels.check }} check on {{ $labels.zone }} failed at {{ $labels.instance }}`, description `The authoritative server answered with nothing, an error, or a record that does not match. Read the zone with 'ovhcloud domain-zone record list {{ $labels.zone }}', then compare with infra-main/dns. A missing MX, SPF, DKIM or DMARC record breaks mail silently.`
-- `CloudTlsCertificateExpiring` — summary `{{ $labels.instance }} certificate expires in {{ $value }} days`, description `Renewal happens well before 21 days for both GitHub Pages and Let's Encrypt. If this fires, the issuer is failing, not the site.`
+- `CloudTlsCertificateExpiring` — summary `{{ $labels.instance }} certificate expires in {{ $value }} days`, description `Renewal happens well before 21 days for Let's Encrypt through Traefik. If this fires, the issuer is failing, not the site.`
 
 POST each to `/api/v1/provisioning/alert-rules`.
 
