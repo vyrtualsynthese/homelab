@@ -186,6 +186,12 @@ spec:
                   [ "$made_dir" = 0 ] || rmdir /config/qBittorrent 2>/dev/null
                   return 1
                 fi
+                # The rewrite truncates the real file and writes it again. Skip it
+                # when the value is already there, so the window only opens for a
+                # config that actually needs the repair.
+                if grep -qF 'WebUI\AlternativeUIEnabled=true' "$conf" 2>/dev/null; then
+                  return 0
+                fi
                 new="$conf.new"
                 awk '
                   BEGIN { line = "WebUI\\AlternativeUIEnabled=true"; key = "WebUI\\AlternativeUIEnabled=" }
@@ -242,10 +248,10 @@ spec:
                 mv /config/ui /config/ui.prev || give_up "cannot move the current UI aside"
               fi
               if ! mv /config/ui.next /config/ui; then
-                if [ -d /config/ui.prev ]; then
-                  mv /config/ui.prev /config/ui
+                if [ -d /config/ui.prev ] && mv /config/ui.prev /config/ui; then
+                  give_up "cannot move the staged UI into place; the previous UI is back"
                 fi
-                give_up "cannot move the staged UI into place; the previous UI is back"
+                give_up "cannot move the staged UI into place and the previous UI did not come back; /config/ui is missing"
               fi
               rm -rf /config/ui.prev
               if cp "$tmp/vuetorrent.zip" "$cache" 2>/dev/null; then

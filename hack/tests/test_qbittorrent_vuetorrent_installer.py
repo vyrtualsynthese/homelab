@@ -188,6 +188,28 @@ class InstallerPrefTests(unittest.TestCase):
         self.assertLess(lines.index("[Preferences]"), lines.index(PREF + "=true"))
         self.assertLess(lines.index(PREF + "=true"), lines.index("[BitTorrent]"))
 
+    def test_preferences_as_the_last_section_takes_the_key(self):
+        box = self.sandbox(conf="[Preferences]\nWebUI\\Address=*\n")
+        self.run_ok(box)
+        lines = box.conf_file.read_text().splitlines()
+        self.assertEqual(lines.count("[Preferences]"), 1)
+        self.assertEqual(lines[-1], PREF + "=true")
+
+    def test_an_empty_conf_gets_the_section(self):
+        box = self.sandbox(conf="")
+        self.run_ok(box)
+        lines = box.conf_file.read_text().splitlines()
+        self.assertEqual(lines, ["[Preferences]", PREF + "=true"])
+
+    def test_a_conf_that_already_reads_true_is_left_alone(self):
+        conf = f"[Preferences]\n{PREF}=true\n[BitTorrent]\nSession\\Port=1\n"
+        box = self.sandbox(conf=conf)
+        before = box.conf_file.stat()
+        self.run_ok(box)
+        after = box.conf_file.stat()
+        self.assertEqual(box.conf_file.read_text(), conf)
+        self.assertEqual((after.st_ino, after.st_mtime_ns), (before.st_ino, before.st_mtime_ns))
+
     def test_no_preferences_section_is_added(self):
         box = self.sandbox(conf="[BitTorrent]\nSession\\Port=18515\n")
         self.run_ok(box)
