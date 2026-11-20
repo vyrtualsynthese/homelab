@@ -249,15 +249,19 @@ monthly, €50 is the "something is running that should not be" line. The API
 allows one configuration per service and threshold, and repeats no more than
 once an hour.
 
-The credentials already exist and were proved read-only on 2026-11-20:
-`OVH_APPLICATION_KEY`, `OVH_APPLICATION_SECRET` and `OVH_CONSUMER_KEY` in
-`~/.config/secrets/keys.env` authenticate `ovhcloud` and signed API calls
-against `ovh-eu`; `GET /cloud/project/<id>/usage/current`, `GET /me/bill` and
-`cloud project list` all answered. The builder runs the two `alerting create`
-calls and verifies with `alerting list`; nothing reads or writes the consumer
-key into the repository. This is the repository's normal agent path
-(`AGENTS.md` §9, "Configure through the API, not the operator's mouse"), and
-the only OVH writes are the two configurations named in the table.
+The credentials are the legacy application-key trio in `~/ovh.conf` (mode
+600; section `[ovh-eu]`): `application_key`, `application_secret`,
+`consumer_key`. They are mirrored into `~/.config/secrets/keys.env` as
+`OVH_APPLICATION_KEY`, `OVH_APPLICATION_SECRET`, `OVH_CONSUMER_KEY`, which is
+what the shell and the OpenCode wrapper load; the two files were compared on
+2026-11-20 and hold the same three values. With them loaded, `ovhcloud` and
+signed API calls authenticate against `ovh-eu`: `cloud project list`,
+`GET /cloud/project/<id>/usage/current` and `GET /me/bill` all answered. The
+builder runs the two `alerting create` calls and verifies with `alerting
+list`; no credential value is copied into the repository. This is the
+repository's normal agent path (`AGENTS.md` §9, "Configure through the API,
+not the operator's mouse"), and the only OVH writes are the two configurations
+named in the table.
 
 What stays with OVH, unchanged, and is written down rather than replaced:
 domain renewal and expiry notices, unpaid-bill dunning, and the invoice
