@@ -1,10 +1,10 @@
-# Dashboards: the nine Homelab screens
+# Dashboards: the ten Homelab screens
 
-> **In one line.** The nine Grafana dashboards in the `Homelab` folder, what each is for, and the API
+> **In one line.** The ten Grafana dashboards in the `Homelab` folder, what each is for, and the API
 > calls that change one.
 >
 > **Use it when** you need to know where to look, are adding or editing a panel, or are explaining why
-> a dashboard is not backed up · **Verified** 2026-11-20 · **Kind:** living page
+> a dashboard is not in git · **Verified** 2026-11-20 · **Kind:** living page
 
 ## Dashboards
 
@@ -21,6 +21,7 @@ Folder **Homelab**, created through the HTTP API:
 | Homelab · Showcase | `homelab-showcase` | 13 | Presentation screen: drawn topology, four big numbers, network, storage, GPU |
 | Homelab · Media | `homelab-media` | 9 + rows | Media stack: app health issues, queues, missing items, indexers, release intake, qBittorrent transfer, Plex sessions and library |
 | Cloud | `cloud-services` | 6 | Internet-facing side: endpoints answering, DNS checks passing, days to the earliest certificate, per-probe success and latency, every check in one table |
+| Homelab · Backups | `homelab-backups` | 6 | Backup health: stream age, repository size, snapshot count, etcd copy age, estimated monthly cost, failed jobs |
 
 The old `homelab-investigate` was replaced by `homelab-platform` on 2026-11-12: its workload
 row duplicated the new Applications dashboard, and its node/control-plane/Prometheus panels are
@@ -60,9 +61,24 @@ with failures first. That table is the panel to read when a `CloudDnsCheckFailin
 zone, a check and a server. The two denominators in the top-row titles are written into those titles
 by hand, not computed by a query: adding a target means editing the title as well.
 
-All nine refresh every 1 m and hold a 6 h–24 h default range. They are not
-backed up: Grafana's 5 GiB claim is the only copy. A `docker save` of the
-dashboard JSON is not a backup either — the SQLite file is what would be lost.
+All ten refresh every 1 m and hold a 6 h–24 h default range, except Homelab · Backups: it refreshes
+every 30 minutes over 7 days, because a backup ages in hours and the panels read the verifier's
+nightly log lines rather than a scrape.
+
+The dashboards are not in git: they live in Grafana's database, and the API is how they change.
+That database is no longer a single copy — the `grafana` claim is one row of the nightly
+`nodes-nas` backup — but the row holds a database, not a reviewable diff, so a dashboard change is
+still described here and applied through the API.
+
+**Homelab · Backups** was added on 2026-11-20 with the backup work. Two of its panels read
+Prometheus (`kube_cronjob_status_last_successful_time`, `kube_job_status_failed`) and four read the
+verifier's log lines in Loki: `{namespace="backup"} | logfmt`, unwrapping `bytes`, `snapshots` and
+`age_h`. The stream name cannot come from a CronJob label: kube-state-metrics
+does not expose custom labels on `kube_cronjob_status_last_successful_time`, so it is derived from the
+job name with two `label_replace` calls (`backup-node-nas` → `nodes-nas`, `backup-nfs` → `nfs`). The
+cost panel is arithmetic on the measured size — 34.1 GB at €7.10 per TB-month — not a bill, and it is
+the number to watch: a stream that grows by an order of magnitude is a media directory added to a row
+by mistake, which is what `budgetGiB` and the verifier already fail on.
 
 ## Changing things
 
