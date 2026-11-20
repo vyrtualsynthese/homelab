@@ -1,0 +1,5 @@
+# Dependencies of the hack/ checker suite.
+# Run it from the repository root with:
+#   uv run --with-requirements hack/tests/requirements.txt python -m pytest -q hack/tests
+pytest
+pyyaml

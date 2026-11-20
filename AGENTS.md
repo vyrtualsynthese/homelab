@@ -179,6 +179,12 @@ while read -r v; do [ -f ".$v" ] || echo "BROKEN VALUES $v"; done < <(
   grep -rh '\$values/' cluster/argocd/projects | sed 's/.*\$values//' | tr -d "\"' \r" | sort -u)
 ```
 
+Run the `hack/` checker suite (its dependencies are declared in `hack/tests/requirements.txt`):
+
+```bash
+uv run --with-requirements hack/tests/requirements.txt python -m pytest -q hack/tests
+```
+
 ## 7. Known issues
 
 Verified against the cluster on 2026-11-10. Evidence in `docs/audit/`; the plans that fix each item
