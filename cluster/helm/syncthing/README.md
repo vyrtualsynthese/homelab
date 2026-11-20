@@ -1,7 +1,8 @@
 # syncthing
 
-Syncthing and its nightly restic backup. The chart owns the Deployment, the Service, the four
-Traefik routes, the config claim, the backup CronJob and its script ConfigMap.
+Syncthing. The chart owns the Deployment, the Service, the four Traefik routes and the config
+claim. The shared folder is backed up by the `nfs` stream of `cluster/helm/backup`, not by this
+chart.
 
 ## Why this chart was rebuilt
 
@@ -47,16 +48,11 @@ it never is, is a route from the LAN.
 
 ## Backup
 
-`syncthing-backup` runs at 05:00, backs up `/data` (the `nfs-syncthing` export) with restic, then
-runs `forget --keep-within-daily 7d --keep-within-weekly 1m --prune`. Credentials come from the
-`syncthing-backup` Secret. The container runs as root to read files written by older UIDs; it drops
-all capabilities and refuses privilege escalation.
-
-**A failed run fails the Job.** The script runs under `set -euo pipefail` and has no `exit 0`, so a
-repository that cannot be opened, or a backup that aborts, leaves the Job `Failed` instead of
-`Complete`. The 2026-11-19 05:00 run was `Complete` while restic was printing `Fatal: unable to open
-config file: The specified bucket does not exist` — that is what the masking `exit 0` cost. A Job is
-only evidence of a backup when its log ends with a snapshot line.
+This chart carries none. The old `syncthing-backup` CronJob wrote to
+`s3:s3.amazonaws.com/ashudev-homelab-syncthing-backup`, a bucket that never existed, so it had
+never written a snapshot; the CronJob, its script ConfigMap and the `backup` values were removed
+on 2026-11-20. The folder at `/data` is the `/mnt/storage/nfs/syncthing` export, which the `nfs`
+stream of `cluster/helm/backup` backs up at 06:00 — `docs/how-it-works/backups.md` is the page.
 
 ## After the first sync
 

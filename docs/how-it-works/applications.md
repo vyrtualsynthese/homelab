@@ -80,7 +80,7 @@ belong to is [media.md](media.md).
 | `n8n` | `n8n` | nuc0 | A | workflow automation |
 | `news-freshrss` | `news` | nuc0 | A | RSS reader, on a claim the chart creates |
 | `renovate` | `renovate` | nas | D | nightly pull requests that bump dependencies |
-| `syncthing` | `syncthing` | nuc0 | A | file sync between devices, with a restic backup job |
+| `syncthing` | `syncthing` | nuc0 | A | file sync between devices |
 | `thelounge` | `thelounge` | nuc0 | A | web IRC client |
 | `vikunja` | `vikunja` | nuc0 | D | the task board, where the state of every ticket lives |
 
