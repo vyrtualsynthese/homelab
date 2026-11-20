@@ -130,6 +130,23 @@ class StageTests(unittest.TestCase):
             self.assertIn(str(claim / "sonarr.db-wal"), text)
             self.assertIn(str(claim / "logs.db"), text)
 
+    def test_a_wide_pattern_does_not_stage_a_databases_side_files(self):
+        # seerr's row globs db/*.sqlite*, which also matches db.sqlite-wal. Staging that file
+        # raises "file is not a database" and fails the whole node job.
+        with tempfile.TemporaryDirectory() as tmp:
+            src = pathlib.Path(tmp) / "seerr"
+            (src / "db").mkdir(parents=True)
+            conn = sqlite3.connect(src / "db" / "db.sqlite")
+            conn.execute("PRAGMA journal_mode=WAL")
+            conn.execute("CREATE TABLE t (v TEXT)")
+            conn.commit()
+            conn.close()
+            for suffix in ("-wal", "-shm"):
+                (src / "db" / f"db.sqlite{suffix}").write_bytes(b"not a database")
+            out = pathlib.Path(tmp) / "out"
+            written = load().stage_databases(src, out, ["db/*.sqlite*"])
+            self.assertEqual([p.name for p in written], ["db.sqlite"])
+
     def test_a_file_that_is_not_a_database_raises_a_row_error(self):
         with tempfile.TemporaryDirectory() as tmp:
             (pathlib.Path(tmp) / "broken.db").write_text("not a database")

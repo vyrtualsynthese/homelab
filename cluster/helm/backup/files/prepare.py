@@ -24,6 +24,7 @@ import sys
 from typing import Sequence
 
 DEFAULT_DB_PATTERNS = ("*.db", "*.sqlite", "*.sqlite3")
+SIDECAR_SUFFIXES = ("-wal", "-shm", "-journal")
 
 
 class RowError(RuntimeError):
@@ -73,8 +74,13 @@ def _copy_sqlite(source: pathlib.Path, destination: pathlib.Path) -> None:
             live = sqlite3.connect(f"file:{source}?mode=ro", uri=True)
             live.execute("SELECT count(*) FROM sqlite_master").fetchone()
         except sqlite3.OperationalError:
-            # A WAL database on a read-only mount can refuse the read-only open; the plain open
-            # is the fallback the design records. It still reads, and backup() still snapshots.
+            # A WAL database on a read-only mount can refuse the read-only open. The fallback is
+            # a read-write open of the same file, which works when the mount itself is writable;
+            # on a read-only mount it raises, which is a RowError and fails the job loudly.
+            try:
+                live.close()
+            except (NameError, sqlite3.Error):
+                pass
             live = sqlite3.connect(f"file:{source}", uri=True)
             live.execute("SELECT count(*) FROM sqlite_master").fetchone()
         try:
@@ -103,7 +109,13 @@ def stage_databases(
     """
     found: list[pathlib.Path] = []
     for pattern in patterns:
-        found.extend(sorted(p for p in source.glob(pattern) if p.is_file()))
+        for candidate in sorted(source.glob(pattern)):
+            # A pattern wide enough to catch a database's side files (``db/*.sqlite*`` matches
+            # ``db.sqlite-wal``) must not stage them: they are not databases, and copying one
+            # raises "file is not a database" and fails the whole node job.
+            if not candidate.is_file() or candidate.name.endswith(SIDECAR_SUFFIXES):
+                continue
+            found.append(candidate)
     unique = [p for p in dict.fromkeys(found) if not matches_any(p.relative_to(source), exclude)]
     if not unique:
         raise RowError(f"no database matched {', '.join(patterns)} in {source}")

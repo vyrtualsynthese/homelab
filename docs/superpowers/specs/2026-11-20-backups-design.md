@@ -275,7 +275,8 @@ advertised size is never used: several advertise 128 MiB and hold a gigabyte.
 
 | Claim | App | Kind | Size (MB) | Decision | Why |
 |---|---|---|---|---|---|
-| `sonarr-config`, `sonarr-anime-config`, `radarr-config`, `radarr-anime-config`, `lidarr-config`, `prowlarr-config`, `bazarr-config`, `bazarr-anime-config` | *arr stack | sqlite | 2 310.9 → 473.5 | **back up**, excluding `MediaCover/`, `logs/`, `logs.db*`, `Backups/` | library definitions, indexers, quality profiles, API keys; weeks of tuning. The excluded four are poster art, rolling logs and the app's own rotating db copies: 80 % of the row, all of it rebuilt from the metadata providers |
+| `sonarr-config`, `sonarr-anime-config`, `radarr-config`, `radarr-anime-config`, `lidarr-config`, `prowlarr-config` | *arr stack | sqlite | 2 310.9 → 473.5 | **back up**, excluding `MediaCover/`, `logs/`, `logs.db*`, `Backups/` | library definitions, indexers, quality profiles, API keys; weeks of tuning. The excluded four are poster art, rolling logs and the app's own rotating db copies: 80 % of the row, all of it rebuilt from the metadata providers |
+| `bazarr-config`, `bazarr-anime-config` | Bazarr | sqlite | 43.6 → 25.0 | **back up**, the database only (`db/*.db`), excluding `cache/`, `backup/`, `log/` | subtitle language profiles and history; the 18.6 MB excluded is cache and the app's own copies |
 | `autobrr-config` | autobrr | sqlite | 2 544.4 → 1 373.0 | **back up**, excluding `*_sv*_*.backup` | filters, IRC announce state and the announce history in `autobrr.db`. The excluded file is autobrr's own 1.17 GB db copy |
 | `cross-seed-config` | cross-seed | sqlite | 135.2 → 10.6 | **back up**, excluding `torrent_cache/`, `logs/` | match database; the cache refills from the indexers |
 | `seerr-config` | seerr | sqlite | 4.7 | **back up** | requests and users |
@@ -366,10 +367,11 @@ and the 692 GB stash library both read as the same 13.8 TB.
 excluded and their size changes nothing.
 
 The decision: **1-AZ Standard in `GRA`, €7.10 per TB per month.** 12.2 GB is €0.09 for the first
-snapshot; with the 7/4/12 retention tail the repository is expected to settle between 45 and 70 GB,
-i.e. €0.32–0.50 a month. It is nowhere near the 200 GB where the class question reopens, and
-Infrequent Access stays rejected: it charges for retrieval and bills a 30-day minimum per object,
-which is wrong for data restored during a drill.
+snapshot; with the 7/4/12 retention tail the repositories are expected to settle between 15 and
+25 GB, i.e. €0.11–0.18 a month — the etcd copies are the only data that grows night over night. It is
+nowhere near the 200 GB where the class question reopens, and Infrequent Access stays rejected: it
+charges for retrieval and bills a 30-day minimum per object, which is wrong for data restored during
+a drill.
 
 ### Host configuration
 
@@ -399,7 +401,9 @@ decision would reopen is nowhere in sight.
 Growth is bounded by three things, and each is a card: retention is 7 daily, 4 weekly, 12 monthly, so
 the tail grows by one monthly increment, not by 30 more dailies; `.stversions` and application log
 directories are excluded; and the verifier fails when the repository passes its budget, which fires
-the same alert as a stale stream.
+the same alert as a stale stream. `budgetGiB` is that ceiling, measured on the whole repository
+(`restic stats --mode raw-data`), so it is the number the bill is computed from; the four budgets sum
+to 25 GiB, the top of the expected range.
 
 ## Monitoring
 
@@ -424,24 +428,29 @@ push gateway, no scrape config.
 
 One new rule, plus one already existing:
 
-- **`BackupStreamStale`** — fires when a CronJob carrying the label `homelab.io/backup-stream` has not
-  succeeded in **26 hours** (one daily slot plus two hours of slack):
+- **`BackupStreamStale`** — fires when a CronJob in the `backup` namespace has not succeeded in
+  **26 hours** (one daily slot plus two hours of slack):
 
   ```
-  (time() - kube_cronjob_status_last_successful_time{label_homelab_io_backup_stream!=""}) > 93600
+  (time() - kube_cronjob_status_last_successful_time{namespace="backup"}) > 93600
   ```
 
-  A label rather than one rule per stream, because every restic stream is daily and kube-state-metrics
-  2.20 no longer publishes the cron schedule — the same constraint that made `RecyclarrNotSucceeding`
-  a single hard-coded rule. Severity warning; resolves on the next success. The alert's labels name the
-  stream.
+  A namespace selector rather than one rule per stream, because every job there is daily and
+  kube-state-metrics 2.20 no longer publishes the cron schedule — the same constraint that made
+  `RecyclarrNotSucceeding` a single hard-coded rule. The namespace is the right key and the chart's
+  `homelab.io/backup-stream` label is not: **kube-state-metrics does not publish CronJob labels on
+  `kube_cronjob_status_last_successful_time`** (checked live on 2026-11-20), so a label selector would
+  match nothing. The summary therefore names `{{ $labels.cronjob }}` — `backup-node-nas` is the job and
+  `nodes-nas` the stream. Severity warning, `for: 10m`; resolves on the next success. A stale
+  *repository* is the verifier's job; this rule is about the job not running.
 - **`JobFailed`** already covers the other half: a run that fails and does not retry into a success.
 - **The verifier is the third alert without a rule of its own.** It fails when the newest etcd
   snapshot is older than 26 h, when any restic repository reports no snapshot, or when the repository
   is over budget. A failed verifier means the verifier's own CronJob is stale, so `BackupStreamStale`
   fires for it, and the verifier's log in Loki says which stream and why.
 
-Rules live in the `homelab-core` group at 300 s; nothing here needs a 60 s cadence. They are created
+The rule lives in the `homelab-core` group at 300 s with `for: 10m`; nothing here needs a 60 s
+cadence, and a `for` of 5 minutes would put it in the fast group by the rule `alerts.md` states. They are created
 through the Grafana API and recorded in `docs/reference/alerts.md`, like every other rule.
 
 ## Restore, and the proof

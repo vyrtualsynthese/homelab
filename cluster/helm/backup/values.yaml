@@ -5,7 +5,9 @@
 # claim to an application's chart means adding a row here in the same change; the sizes in
 # the comments are the measurements taken on 2026-11-20, and `kind` decides whether the
 # databases in the row are copied through SQLite's backup API (`sqlite`) or the directory is
-# handed over as it is (`files`).
+# handed over as it is (`files`). Only the files a row's `db` patterns match are copied through
+# SQLite; everything else in a `sqlite` claim is byte-copied as part of the directory, which is
+# consistent because the app is not writing it between dumps.
 
 repository:
   bucket: ashudev-homelab-backup
@@ -29,19 +31,22 @@ staging:
   sizeLimit: 8Gi
 
 # Read by the prune job, the verifier and the dashboard: this is the only place a repository
-# is named. budgetGiB is the measured size plus about a quarter — passing it fails the
-# stream, so it is a canary for an accidental media directory as much as for real growth.
+# is named. budgetGiB is the ceiling of the repository's raw data as `restic stats --mode
+# raw-data` reports it: the stream's measured size, plus the churn the 7/4/12 retention keeps,
+# plus headroom. Passing it fails the stream, so it is a canary for an accidental media
+# directory appearing in a row as much as for real growth. The control-plane budgets carry the
+# etcd copies, which are the only data that adds a fresh gigabyte-class file every night.
 streams:
   - name: nodes-nas
-    budgetGiB: 1
+    budgetGiB: 2
   - name: nodes-nuc0
-    budgetGiB: 1
+    budgetGiB: 4
     etcd: true
   - name: nodes-streaming
-    budgetGiB: 5
+    budgetGiB: 7
     etcd: true
   - name: nfs
-    budgetGiB: 9
+    budgetGiB: 12
 
 # The one place the retention policy is written. The prune job renders its flags from these
 # numbers, so the schedule and the flags cannot disagree.
@@ -163,5 +168,6 @@ nodes:
       - {claim: kavita-config, namespace: media-stack, kind: sqlite, exclude: ["covers/", "logs/", "cache*", "backups/"]}
       # Pinned for the same reason as pgAdmin: a released claim of this name left a directory.
       - {claim: calibre-web-automated-config, namespace: media-stack, kind: sqlite, pv: pvc-44eefd64-dcd4-4161-ab69-6e36151e7213, exclude: ["log/", "log_archive/", "thumbnails/"]}
-      # 150 MB of thumbnails → 0: books waiting to be filed are not on the share yet.
+      # 4 KB: books waiting to be filed are not on the share yet. The thumbnails live in the
+      # config claim above, where they are excluded, not here.
       - {claim: calibre-web-automated-ingest, namespace: media-stack, kind: files, exclude: ["thumbnails/"]}
