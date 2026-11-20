@@ -58,7 +58,7 @@ blackbox:
           query_type: A
           validate_answer_rrs:
             fail_if_none_matches_regexp:
-              - 185\.199\.1
+              - 80\.14\.57\.209
       dns_www_ashudev:
         prober: dns
         timeout: 10s
@@ -68,7 +68,7 @@ blackbox:
           query_type: CNAME
           validate_answer_rrs:
             fail_if_none_matches_regexp:
-              - vyrtualsynthese\.github\.io
+              - ashudev\.com
       dns_mx_ashudev:
         prober: dns
         timeout: 10s
