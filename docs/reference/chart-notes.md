@@ -457,6 +457,44 @@ Debt: the access log is on — on a public host the request record is the only e
 arrived, and the error log is the part that runs at `warn` — and there is no metrics exporter, which
 is the chart-at-a-time metrics work the repo has not reached here.
 
+### ashudev-website
+
+As of 2026-11-20: the second public site, and the first one that was never anything but a
+hand-written chart. It exists to take `ashudev.com` off GitHub Pages without touching the site
+itself — the content is still the repository's `gh-pages` branch, and the migration is hosting only.
+It is `ashuvidz-website` with the same three containers (`nginx-unprivileged` on 8080, an
+`alpine/git` init container that clones, a sidecar that refreshes), the same `emptyDir` at `/site`,
+the same hardening (UID 101, dropped capabilities, read-only root, `/site` read-only in nginx,
+dotfiles denied so `/.git` is not downloadable) and the same probe pair: liveness on the chart's
+`/healthz`, readiness on `/`, which is the site. The pod is on `nuc0`.
+
+**Two deliberate divergences from the chart it was copied from.** The sidecar fetches and resets
+rather than pulling `--ff-only`, because Pages rewrites `gh-pages` on every publish and a
+fast-forward-only pull against a rewritten branch fails forever, which serves yesterday's site with
+nothing red anywhere. And the config resolves `/name` to `name.html` before giving up, because that
+is what Pages did — `/services` answered 200 there and would have answered 404 here, and it is
+linked from outside. `/index.html` is served rather than redirected to `/`; that costs a duplicate
+URL, not a working one.
+
+**The reset is not atomic.** `git reset --hard` rewrites `/site` file by file while nginx serves it,
+so a request in that window can read a new `index.html` beside a bundle that is not written yet. The
+window is one reset of a small tree; an atomic version needs a second directory and a symlink swap,
+which this site does not earn yet. A failed fetch leaves the previous tree; a failed reset leaves a
+half-written one, and the sidecar now says which of the two happened instead of reporting the
+misleading one for both.
+
+**`www.ashudev.com` has its own router and certificate**, which is the defect `ashuvidz-website` still
+carries: Traefik asks the ACME resolver for a name only when a router matches it, so a `www` that
+resolves without a router answers with the default certificate and a name mismatch. The redirect is
+a `redirectRegex` that keeps path and query, and the `www` router carries `tls.certResolver:
+myresolver` on `websecure`. The host match is case-sensitive where Traefik's `Host()` is not, so an
+uppercased `www` URL falls through to the no-op service rather than redirecting; that is filed with
+the sibling's two defects rather than fixed here.
+
+Sizing is carried from `ashuvidz-website`, not measured: no pod had run when the chart was written.
+Debt: the access log is on for the same reason as the sibling — on a public host the request record
+is the only evidence of what arrived — and there is no metrics exporter.
+
 ### minecraft-server
 
 As of 2026-11-19: repaired but deliberately not running. Five objects render — Deployment, Service,

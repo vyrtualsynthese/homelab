@@ -60,6 +60,11 @@ All notable changes to this repository. The format follows
 
 ### Fixed
 
+- `ashudev.com` serves `/name` as `name.html`, the way GitHub Pages did: the site links to
+  extensionless paths from outside, and they would have answered 404 on the first day of the move.
+- The `ashudev-website` sidecar reports which git command failed. A failed fetch leaves the previous
+  content in place; a failed `reset --hard` leaves a half-written tree. Both used to print the
+  fetch message, so the log claimed the old content was still being served when it was not.
 - `freshrss_sync.py verify` reads the Elite Dangerous item expression: it now honours a container
   class (`//*[contains(@class,'…')]//`) and an exclusion (`and not(contains(@href,'…'))`), so the
   feed is checked automatically instead of printing `sel main unchecked`.

@@ -31,8 +31,11 @@ flowchart LR
 `*.kub.local` is the internal space. The edge Pi-hole answers that whole wildcard with one address,
 `192.168.1.46`, and public DNS has no entry, so they never resolve for an off-LAN client.
 
-Three hostnames are public, and only these: `plex.kub.home.ashudev.com`, `seerr.kub.home.ashudev.com`,
-`ashuvidz.com`.
+The public set is the allowlist in `hack/check_exposure.py`, listed host by host in
+[`reference/routes.md`](../reference/routes.md): `plex.kub.home.ashudev.com`,
+`seerr.kub.home.ashudev.com`, `ashuvidz.com`, `ashudev.com` with its `www`,
+`dashy.ashudev.com`, `filebrowser.kub.home.ashudev.com` and `authentik.kub.home.ashudev.com`.
+Nothing else answers the internet ungated.
 
 The awkward middle is the rest of `*.kub.home.ashudev.com`: a real domain, publicly resolvable, which
 the Pi-hole overrides to `192.168.1.46` *on the LAN only*. A name under that suffix therefore answers
