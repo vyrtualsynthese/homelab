@@ -66,4 +66,43 @@ spec:
         - kind: TraefikService
           name: noop@internal
 {{- end }}
+{{- if .Values.ingressRoute.www.enabled }}
+---
+{{- /* `www` exists as a router of its own for one reason: Traefik only asks the
+resolver for a certificate for a name some router matches. The redirect is the
+middleware; the `tls` block is what makes `https://www` work at all. */}}
+apiVersion: {{ .Values.ingressRoute.apiVersion }}
+kind: Middleware
+metadata:
+  name: {{ include "app.fullname" . }}-www
+  labels:
+    {{- include "app.labels" . | nindent 4 }}
+spec:
+  redirectRegex:
+    regex: ^https?://{{ .Values.ingressRoute.www.host | replace "." "\\." }}/(.*)
+    replacement: {{ .Values.ingressRoute.www.replacement }}
+    permanent: {{ .Values.ingressRoute.www.permanent }}
+---
+apiVersion: {{ .Values.ingressRoute.apiVersion }}
+kind: IngressRoute
+metadata:
+  name: {{ default .Release.Name .Values.ingressRoute.name }}-www
+  labels:
+    {{- include "app.labels" . | nindent 4 }}
+spec:
+  entryPoints:
+    - web
+    - websecure
+  routes:
+    - kind: Rule
+      match: Host(`{{ .Values.ingressRoute.www.host }}`)
+      middlewares:
+        - name: {{ include "app.fullname" . }}-www
+          namespace: {{ .Release.Namespace }}
+      services:
+        - kind: TraefikService
+          name: noop@internal
+  tls:
+    certResolver: {{ .Values.ingressRoute.tls.certResolver }}
+{{- end }}
 {{- end }}

@@ -89,6 +89,11 @@ All notable changes to this repository. The format follows
   now lives in one `define`, which is rendered into the Job and hashed into its name; a change
   therefore creates a new Job and prunes the completed one, and the idempotent SQL re-runs harmlessly.
 
+- `www.ashuvidz.com` answers again. The name resolved to the cluster with no router of its own, so
+  Traefik never asked for a certificate and every request ended in a TLS name mismatch. It now has
+  the same `www` pair as `ashudev.com` — a redirect to the apex that carries its own `tls` — and it
+  is on the public allowlist in `hack/check_exposure.py`.
+
 - `local-path` and `postgres` report `Synced` again, and for a reason rather than a forced sync.
   `local-path`'s upstream chart renders `spec.template.spec.hostUsers: true`, which this API server
   (1.30, user namespaces off) drops from the stored object whether it is true or false, so the
