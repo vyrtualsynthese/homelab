@@ -115,8 +115,11 @@ SQLite database, which stays up with the process, so there is no second endpoint
 dependency. Sharing an endpoint only turns a blip into a restart loop when the dependency is remote;
 this one is not.
 
-`server.logging` enables `warning|error` only, because Fluent Bit ships every line to Loki with no
-filter. Startup failures and request errors still appear at those two levels.
+`server.logging` sets both levels to `warning|error`, because Fluent Bit ships every line to Loki with
+no filter. The app reads its config after it has already logged four startup lines — the SQLite
+driver, the admin password and the two OIDC variables — so those four appear at `INFO` on every
+start, before the level takes effect. Everything after config load follows the configured level, and
+startup failures still land at `warning` or `error`.
 
 `config.yaml` is a ConfigMap mounted with `subPath`, which does not update when the ConfigMap changes.
 The `checksum/config` pod annotation rolls the pod on the next sync; a manual edit to the mounted file
