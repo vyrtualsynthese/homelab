@@ -161,8 +161,9 @@ sync, not a repair.
 
 Nothing sits `Healthy` and `OutOfSync`. The two that did were settled on 2026-11-21 rather than
 accepted: `local-path` ignores `/spec/template/spec/hostUsers`, which this API server drops from the
-stored Deployment, and the `postgres` bootstrap Job now carries the image tag in its name so a bump
-replaces it instead of failing on an immutable pod template.
+stored Deployment, and the `postgres` bootstrap Job is named after the digest of its whole pod
+template, so an image bump or any other template edit replaces it instead of failing on an immutable
+pod template.
 
 ## Storage
 
