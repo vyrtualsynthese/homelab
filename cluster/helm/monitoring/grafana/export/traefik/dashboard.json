@@ -269,7 +269,7 @@
           "type": "prometheus",
           "uid": "PBFA97CFB590B2093"
         },
-        "description": "Broken backend responses as a share of that router's traffic. The rule paints above 10 % for ten minutes.",
+        "description": "Broken backend responses as a share of that router's traffic. The panel shows every router; the rule needs the same 10 % and a router above 0.01 req/s, so a single 5xx on an idle router is visible here and stays quiet there.",
         "fieldConfig": {
           "defaults": {
             "custom": {
@@ -479,7 +479,7 @@
           "type": "prometheus",
           "uid": "PBFA97CFB590B2093"
         },
-        "description": "Days left before each certificate expires. The store holds eighteen names no route serves any more (docs/audit/traefik-2026-11-21.md); they renew like the rest and are the cleanup on board task 409.",
+        "description": "Days left before each certificate expires. The store holds eighteen names no route serves any more (docs/audit/traefik-2026-11-21.md); they renew like the rest and are the cleanup on task 543.",
         "fieldConfig": {
           "defaults": {
             "decimals": 0,
@@ -502,7 +502,22 @@
             },
             "unit": "short"
           },
-          "overrides": []
+          "overrides": [
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "days left"
+              },
+              "properties": [
+                {
+                  "id": "custom.cellOptions",
+                  "value": {
+                    "type": "color-text"
+                  }
+                }
+              ]
+            }
+          ]
         },
         "gridPos": {
           "h": 8,
@@ -587,7 +602,7 @@
           "type": "prometheus",
           "uid": "PBFA97CFB590B2093"
         },
-        "description": "Age of the newest successful configuration load. A router that stops reloading keeps serving the last good config, so this is the only early sign that a change never landed.",
+        "description": "Age of the newest successful configuration load. Routes change several times an hour here, so a day without a reload means the provider went silent or the router is stuck; the orange line is the rule's 24 h.",
         "fieldConfig": {
           "defaults": {
             "color": {
@@ -602,7 +617,7 @@
                 },
                 {
                   "color": "orange",
-                  "value": 604800
+                  "value": 86400
                 }
               ]
             },
@@ -717,7 +732,7 @@
           "type": "prometheus",
           "uid": "PBFA97CFB590B2093"
         },
-        "description": "1 means Prometheus is reading the pod's 9100. 0 means every panel on this page is about to go blank, and ScrapeTargetDown says so.",
+        "description": "1 means Prometheus is reading the pod's 9100. 0 means it cannot, and every other panel here goes stale; a target that disappears entirely reads No data instead. ScrapeTargetDown is the alert either way.",
         "fieldConfig": {
           "defaults": {
             "color": {

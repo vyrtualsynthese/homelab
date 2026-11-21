@@ -2,10 +2,11 @@
 
 > **In one line.** The metric and log side of the `monitoring` stack: the traps in each exporter, what
 > Prometheus and Fluent Bit throw away before storing, how long data is kept, and the numbers taken
-> from the live cluster on 2026-11-19.
+> from the live cluster on 2026-11-19, with the
+> Traefik bucket change and the dashboard reader counts re-checked on 2026-11-21.
 >
 > **Use it when** a panel is blank or a metric reads wrong, before trusting a series or volume count
-> or a retention claim, or before proposing a new metric · **Verified** 2026-11-19 · **Kind:** living page
+> or a retention claim, or before proposing a new metric · **Verified** 2026-11-21 · **Kind:** living page
 
 The overview — what runs where, its sizing, and how to query the stack:
 [`observability-conventions.md`](../observability-conventions.md).
