@@ -8,7 +8,8 @@
 
 ## Dashboards
 
-Folder **Homelab**, created through the HTTP API:
+Folder **Homelab**, created through the HTTP API — except Health, Applications, Logs, Media and
+Showcase, which still sit in the default `General` folder:
 
 | Dashboard | uid | Panels | Purpose |
 |---|---|---|---|
