@@ -1,0 +1,266 @@
+apiVersion: helm.cattle.io/v1
+kind: HelmChartConfig
+metadata:
+  annotations:
+    kubectl.kubernetes.io/last-applied-configuration: |
+      {"apiVersion":"helm.cattle.io/v1","kind":"HelmChartConfig","metadata":{"annotations":{},"name":"traefik","namespace":"kube-system"},"spec":{"valuesContent":"deployment:\n  # -- Enable deployment\n  enabled: true\n  # -- One pod, not a DaemonSet on every node (task 482). Traefik and Let's\n  # -- Encrypt agree on one owner per certificate store, and the open-source\n  # -- image has no lock: two instances writing `/data/acme.json` at once\n  # -- corrupt the file and re-request every name. Let's Encrypt allows five\n  # -- duplicate certificates a week, so a morning of that takes every public\n  # -- name down until the quota window passes.\n  kind: Deployment\n  replicas: 1\n# -- `Recreate`, not a rolling update: a rolling one runs the old and the new\n# -- pod together for a few seconds on the same node, which is two certificate\n# -- owners again. The cost is a few seconds without ingress, on the one node\n# -- that serves it.\nupdateStrategy:\n  type: Recreate\n  rollingUpdate: null\n# -- The house router forwards 80, 443, 25565, 22000 TCP/UDP and 21027 UDP to\n# -- this address only, so this is where every external byte lands. Another\n# -- node's address still answers — K3s's service load balancer forwards it —\n# -- but the packet then crosses the LAN to here. `streaming` and `nas` are\n# -- 10 GbE, `nuc0` and `rbp2` are 1 GbE, and Plex and qBittorrent already run\n# -- on this one, so their bytes never touch a wire.\nnodeSelector:\n  kubernetes.io/hostname: streaming\nproviders:\n  kubernetesCRD:\n    # -- The live router has this on, and every route depends on it: a gate or\n    # -- a redirect is referenced as `kube-system-\u003cname\u003e@kubernetescrd`, which\n    # -- only resolves into another namespace when this is true. It was set on\n    # -- the running pods but never in this file, so a successful upgrade would\n    # -- have silently dropped every gate.\n    allowCrossNamespace: true\ningressRoute:\n  dashboard:\n    enabled: true\n    # Additional ingressRoute annotations (e.g. for kubernetes.io/ingress.class)\n    annotations: {}\n    # Additional ingressRoute labels (e.g. for filtering IngressRoute by custom labels)\n    labels: {}\n    # The router match rule used for the dashboard ingressRoute\n    matchRule: Host(`traefik.kub.local`) \u0026\u0026 (PathPrefix(`/dashboard`) || PathPrefix(`/api`))\n    # Specify the allowed entrypoints to use for the dashboard ingress route, (e.g. traefik, web, websecure).\n    # By default, it's using traefik entrypoint, which is not exposed.\n    # /!\\ Do not expose your dashboard without any protection over the internet /!\\\n    entryPoints: [\"web\"]\n    # Additional ingressRoute middlewares (e.g. for authentication)\n    middlewares:\n      - name: lan-only\n        namespace: kube-system\n      - name: traefik-dashboard\n        namespace: kube-system\n    # TLS options (e.g. secret containing certificate)\n    # tls: {}\n\nmetrics:\n  # -- Prometheus is enabled by default.\n  # -- It can be disabled by setting \"prometheus: null\"\n  prometheus:\n    # -- Entry point used to expose metrics.\n    entryPoint: metrics\n    # Enable metrics on entry points. Default=true\n    addEntryPointsLabels: false\n    # Enable metrics on routers. Default=false\n    addRoutersLabels: true\n    # Enable metrics on services. Default=true\n    addServicesLabels: false\n    # Buckets for latency metrics. Default=\"0.1,0.3,1.2,5.0\"\n    buckets: \"0.5,1.0,2.5\"\n    # When manualRouting is true, it disables the default internal router in\n    # order to allow creating a custom router for prometheus@internal service.\n    manualRouting: true\n\n# -- Certificates resolvers configuration.\n# Ref: https://doc.traefik.io/traefik/https/acme/#certificate-resolvers\n# See EXAMPLES.md for more details.\n# -- The chart reads `certResolvers` and renders `--certificatesresolvers.*`.\n# -- The old `certificatesResolvers` name configures nothing at all, and then\n# -- Traefik never loads /data/acme.json: every public name answers with the\n# -- internal default certificate. The challenge options sit directly under the\n# -- resolver; there is no extra `acme:` level.\ncertResolvers:\n  myresolver:\n    email: valentin.ronteix@ashudev.com\n    tlsChallenge: true\n    # It has to match the path with a persistent volume\n    storage: /data/acme.json\n\nports:\n  web:\n    ## Enable this entrypoint as a default entrypoint. When a service doesn't explicity set an entrypoint it will only use this entrypoint.\n    # asDefault: true\n    port: 8000\n    # hostPort: 8000\n    # containerPort: 8000\n    expose: true\n    exposedPort: 80\n    ## Different target traefik port on the cluster, useful for IP type LB\n    # targetPort: 80\n    # The port protocol (TCP/UDP)\n    protocol: TCP\n    # Use nodeport if set. This is useful if you have configured Traefik in a\n    # LoadBalancer.\n    # nodePort: 32080\n    # Port Redirections\n    # Added in 2.2, you can make permanent redirects via entrypoints.\n    # https://docs.traefik.io/routing/entrypoints/#redirection\n    # redirectTo: websecure\n    #\n    # Trust forwarded  headers information (X-Forwarded-*).\n    forwardedHeaders:\n      insecure: true\n    #\n    # Enable the Proxy Protocol header parsing for the entry point\n    proxyProtocol:\n    #   trustedIPs: []\n      insecure: true\n  websecure:\n    ## Enable this entrypoint as a default entrypoint. When a service doesn't explicity set an entrypoint it will only use this entrypoint.\n    # asDefault: true\n    port: 8443\n    # hostPort: 8443\n    # containerPort: 8443\n    expose: true\n    exposedPort: 443\n    ## Different target traefik port on the cluster, useful for IP type LB\n    # targetPort: 80\n    ## The port protocol (TCP/UDP)\n    protocol: TCP\n    # nodePort: 32443\n    #\n    ## Enable HTTP/3 on the entrypoint\n    ## Enabling it will also enable http3 experimental feature\n    ## https://doc.traefik.io/traefik/routing/entrypoints/#http3\n    ## There are known limitations when trying to listen on same ports for\n    ## TCP \u0026 UDP (Http3). There is a workaround in this chart using dual Service.\n    ## https://github.com/kubernetes/kubernetes/issues/47249#issuecomment-587960741\n    # Trust forwarded  headers information (X-Forwarded-*).\n    forwardedHeaders:\n      insecure: true\n    #\n    # Enable the Proxy Protocol header parsing for the entry point\n    proxyProtocol:\n    #   trustedIPs: []\n      insecure: true\n\n  mc:\n    port: 25565\n    expose: true\n    exposedPort: 25565\n    protocol: TCP\n\n  # -- Syncthing: file transfer (22000 TCP and UDP) and local discovery\n  # -- (21027 UDP). Their Services name these entry points, and until now they\n  # -- existed only on the live Service, added by hand in 2023. An upgrade\n  # -- from this file alone would have removed them and broken Syncthing\n  # -- between devices, silently, everywhere.\n  sttcp:\n    port: 22000\n    expose: true\n    exposedPort: 22000\n    protocol: TCP\n  studp:\n    port: 22000\n    expose: true\n    exposedPort: 22000\n    protocol: UDP\n  stdiscovery:\n    port: 21027\n    expose: true\n    exposedPort: 21027\n    protocol: UDP\n\n  metrics:\n  # When using hostNetwork, use another port to avoid conflict with node exporter:\n  # https://github.com/prometheus/prometheus/wiki/Default-port-allocations\n    port: 9100\n  # hostPort: 9100\n  # Defines whether the port is exposed if service.type is LoadBalancer or\n  # NodePort.\n  #\n  # You may not want to expose the metrics port on production deployments.\n  # If you want to access it from outside of your cluster,\n  # use `kubectl port-forward` or create a secure ingress\n    expose: true\n  # The exposed port for this service\n    exposedPort: 9101\n  # The port protocol (TCP/UDP)\n    protocol: TCP\n\npersistence:\n  enabled: true\n  name: data\n  # -- The claim the live router already mounts. This line used to be indented\n  # -- under `name`, which made the whole values block invalid YAML, which is\n  # -- why no upgrade has run since 2023. The name matters: this claim holds\n  # -- /data/acme.json, the certificate store. A different claim means the\n  # -- store is empty and every name is re-issued against Let's Encrypt's quota.\n  existingClaim: \"pvc-traefik-nfs\"\n  path: /data\n\nservice:\n  enabled: true\n  ## Single service is using `MixedProtocolLBService` feature gate.\n  ## When set to false, it will create two Service, one for TCP and one for UDP.\n  single: true\n  type: LoadBalancer\n  # Additional annotations applied to both TCP and UDP services (e.g. for cloud provider specific config)\n  #annotations: {}\n  # Additional annotations for TCP service only\n  #annotationsTCP: {}\n  # Additional annotations for UDP service only\n  #annotationsUDP: {}\n  # Additional service labels (e.g. for filtering Service by custom labels)\n  #labels: {}\n  # Additional entries here will be added to the service spec.\n  # Cannot contain type, selector or ports entries.\n  spec:\n    externalTrafficPolicy: Local\n    # loadBalancerIP: \"1.2.3.4\"\n    # clusterIP: \"2.3.4.5\"\n  #loadBalancerSourceRanges: []\n    # - 192.168.0.1/32\n    # - 172.16.0.0/16\n  #externalIPs: []\n    # - 1.2.3.4\n  ## One of SingleStack, PreferDualStack, or RequireDualStack.\n  # ipFamilyPolicy: SingleStack\n  ## List of IP families (e.g. IPv4 and/or IPv6).\n  ## ref: https://kubernetes.io/docs/concepts/services-networking/dual-stack/#services\n  # ipFamilies:\n  #   - IPv4\n  #   - IPv6\n  ##\n  ## An additionnal and optional internal Service.\n  ## Same parameters as external Service\n  # internal:\n  #   type: ClusterIP\n  #   # labels: {}\n  #   # annotations: {}\n  #   # spec: {}\n  #   # loadBalancerSourceRanges: []\n  #   # externalIPs: []\n  #   # ipFamilies: [ \"IPv4\",\"IPv6\" ]"}}
+    objectset.rio.cattle.io/applied: H4sIAAAAAAAA/4SRT08yMRDGv8pmzgvvC8q/Jh4MHky8aeKJy7SdZeu2M5t2wBDCdzeLMZEDcnzaPr/+JnME7MM75RKEwUBLMY0dqkYaB/m3n0ANXWAPBp4ppnWLWdfCTdhCDYkUPSqCOQIyi6IG4TJEsR/ktJCOc5BfwDCQoL56L59MebTdd2CguysXKnX1Etg/PHovfBPBmAgMaEZqQjdyP863W6VHN1S7naVRORSlBKcaIlqKf87WYmnBANrlYubINxNcLKf03+F8NXcrXNnZpLHThccGG7r3A/TSEr4PrgiUntzw/R7jjspaWIkVDHjqoxwSsZoNV9WwLVM9ISXhN9INB95mKuVVdkrnFx5LawWzP6eqIkY4nb4CAAD//9UD+54JAgAA
+    objectset.rio.cattle.io/id: ""
+    objectset.rio.cattle.io/owner-gvk: k3s.cattle.io/v1, Kind=Addon
+    objectset.rio.cattle.io/owner-name: traefik-config
+    objectset.rio.cattle.io/owner-namespace: kube-system
+  creationTimestamp: "2023-08-06T18:00:03Z"
+  generation: 9
+  labels:
+    objectset.rio.cattle.io/hash: ab875cedf1a782e0ca696c9a9b51fb27dafafe4d
+  name: traefik
+  namespace: kube-system
+  resourceVersion: "1227531430"
+  uid: 743ef7c2-87e9-4fec-b1ee-3dbbe668cb71
+spec:
+  valuesContent: |-
+    deployment:
+      # -- Enable deployment
+      enabled: true
+      # -- One pod, not a DaemonSet on every node (task 482). Traefik and Let's
+      # -- Encrypt agree on one owner per certificate store, and the open-source
+      # -- image has no lock: two instances writing `/data/acme.json` at once
+      # -- corrupt the file and re-request every name. Let's Encrypt allows five
+      # -- duplicate certificates a week, so a morning of that takes every public
+      # -- name down until the quota window passes.
+      kind: Deployment
+      replicas: 1
+    # -- `Recreate`, not a rolling update: a rolling one runs the old and the new
+    # -- pod together for a few seconds on the same node, which is two certificate
+    # -- owners again. The cost is a few seconds without ingress, on the one node
+    # -- that serves it.
+    updateStrategy:
+      type: Recreate
+      rollingUpdate: null
+    # -- The house router forwards 80, 443, 25565, 22000 TCP/UDP and 21027 UDP to
+    # -- this address only, so this is where every external byte lands. Another
+    # -- node's address still answers — K3s's service load balancer forwards it —
+    # -- but the packet then crosses the LAN to here. `streaming` and `nas` are
+    # -- 10 GbE, `nuc0` and `rbp2` are 1 GbE, and Plex and qBittorrent already run
+    # -- on this one, so their bytes never touch a wire.
+    nodeSelector:
+      kubernetes.io/hostname: streaming
+    providers:
+      kubernetesCRD:
+        # -- The live router has this on, and every route depends on it: a gate or
+        # -- a redirect is referenced as `kube-system-<name>@kubernetescrd`, which
+        # -- only resolves into another namespace when this is true. It was set on
+        # -- the running pods but never in this file, so a successful upgrade would
+        # -- have silently dropped every gate.
+        allowCrossNamespace: true
+    ingressRoute:
+      dashboard:
+        enabled: true
+        # Additional ingressRoute annotations (e.g. for kubernetes.io/ingress.class)
+        annotations: {}
+        # Additional ingressRoute labels (e.g. for filtering IngressRoute by custom labels)
+        labels: {}
+        # The router match rule used for the dashboard ingressRoute
+        matchRule: Host(`traefik.kub.local`) && (PathPrefix(`/dashboard`) || PathPrefix(`/api`))
+        # Specify the allowed entrypoints to use for the dashboard ingress route, (e.g. traefik, web, websecure).
+        # By default, it's using traefik entrypoint, which is not exposed.
+        # /!\ Do not expose your dashboard without any protection over the internet /!\
+        entryPoints: ["web"]
+        # Additional ingressRoute middlewares (e.g. for authentication)
+        middlewares:
+          - name: lan-only
+            namespace: kube-system
+          - name: traefik-dashboard
+            namespace: kube-system
+        # TLS options (e.g. secret containing certificate)
+        # tls: {}
+
+    metrics:
+      # -- Prometheus is enabled by default.
+      # -- It can be disabled by setting "prometheus: null"
+      prometheus:
+        # -- Entry point used to expose metrics.
+        entryPoint: metrics
+        # Enable metrics on entry points. Default=true
+        addEntryPointsLabels: false
+        # Enable metrics on routers. Default=false
+        addRoutersLabels: true
+        # Enable metrics on services. Default=true
+        addServicesLabels: false
+        # Buckets for latency metrics. Default="0.1,0.3,1.2,5.0"
+        buckets: "0.5,1.0,2.5"
+        # When manualRouting is true, it disables the default internal router in
+        # order to allow creating a custom router for prometheus@internal service.
+        manualRouting: true
+
+    # -- Certificates resolvers configuration.
+    # Ref: https://doc.traefik.io/traefik/https/acme/#certificate-resolvers
+    # See EXAMPLES.md for more details.
+    # -- The chart reads `certResolvers` and renders `--certificatesresolvers.*`.
+    # -- The old `certificatesResolvers` name configures nothing at all, and then
+    # -- Traefik never loads /data/acme.json: every public name answers with the
+    # -- internal default certificate. The challenge options sit directly under the
+    # -- resolver; there is no extra `acme:` level.
+    certResolvers:
+      myresolver:
+        email: valentin.ronteix@ashudev.com
+        tlsChallenge: true
+        # It has to match the path with a persistent volume
+        storage: /data/acme.json
+
+    ports:
+      web:
+        ## Enable this entrypoint as a default entrypoint. When a service doesn't explicity set an entrypoint it will only use this entrypoint.
+        # asDefault: true
+        port: 8000
+        # hostPort: 8000
+        # containerPort: 8000
+        expose: true
+        exposedPort: 80
+        ## Different target traefik port on the cluster, useful for IP type LB
+        # targetPort: 80
+        # The port protocol (TCP/UDP)
+        protocol: TCP
+        # Use nodeport if set. This is useful if you have configured Traefik in a
+        # LoadBalancer.
+        # nodePort: 32080
+        # Port Redirections
+        # Added in 2.2, you can make permanent redirects via entrypoints.
+        # https://docs.traefik.io/routing/entrypoints/#redirection
+        # redirectTo: websecure
+        #
+        # Trust forwarded  headers information (X-Forwarded-*).
+        forwardedHeaders:
+          insecure: true
+        #
+        # Enable the Proxy Protocol header parsing for the entry point
+        proxyProtocol:
+        #   trustedIPs: []
+          insecure: true
+      websecure:
+        ## Enable this entrypoint as a default entrypoint. When a service doesn't explicity set an entrypoint it will only use this entrypoint.
+        # asDefault: true
+        port: 8443
+        # hostPort: 8443
+        # containerPort: 8443
+        expose: true
+        exposedPort: 443
+        ## Different target traefik port on the cluster, useful for IP type LB
+        # targetPort: 80
+        ## The port protocol (TCP/UDP)
+        protocol: TCP
+        # nodePort: 32443
+        #
+        ## Enable HTTP/3 on the entrypoint
+        ## Enabling it will also enable http3 experimental feature
+        ## https://doc.traefik.io/traefik/routing/entrypoints/#http3
+        ## There are known limitations when trying to listen on same ports for
+        ## TCP & UDP (Http3). There is a workaround in this chart using dual Service.
+        ## https://github.com/kubernetes/kubernetes/issues/47249#issuecomment-587960741
+        # Trust forwarded  headers information (X-Forwarded-*).
+        forwardedHeaders:
+          insecure: true
+        #
+        # Enable the Proxy Protocol header parsing for the entry point
+        proxyProtocol:
+        #   trustedIPs: []
+          insecure: true
+
+      mc:
+        port: 25565
+        expose: true
+        exposedPort: 25565
+        protocol: TCP
+
+      # -- Syncthing: file transfer (22000 TCP and UDP) and local discovery
+      # -- (21027 UDP). Their Services name these entry points, and until now they
+      # -- existed only on the live Service, added by hand in 2023. An upgrade
+      # -- from this file alone would have removed them and broken Syncthing
+      # -- between devices, silently, everywhere.
+      sttcp:
+        port: 22000
+        expose: true
+        exposedPort: 22000
+        protocol: TCP
+      studp:
+        port: 22000
+        expose: true
+        exposedPort: 22000
+        protocol: UDP
+      stdiscovery:
+        port: 21027
+        expose: true
+        exposedPort: 21027
+        protocol: UDP
+
+      metrics:
+      # When using hostNetwork, use another port to avoid conflict with node exporter:
+      # https://github.com/prometheus/prometheus/wiki/Default-port-allocations
+        port: 9100
+      # hostPort: 9100
+      # Defines whether the port is exposed if service.type is LoadBalancer or
+      # NodePort.
+      #
+      # You may not want to expose the metrics port on production deployments.
+      # If you want to access it from outside of your cluster,
+      # use `kubectl port-forward` or create a secure ingress
+        expose: true
+      # The exposed port for this service
+        exposedPort: 9101
+      # The port protocol (TCP/UDP)
+        protocol: TCP
+
+    persistence:
+      enabled: true
+      name: data
+      # -- The claim the live router already mounts. This line used to be indented
+      # -- under `name`, which made the whole values block invalid YAML, which is
+      # -- why no upgrade has run since 2023. The name matters: this claim holds
+      # -- /data/acme.json, the certificate store. A different claim means the
+      # -- store is empty and every name is re-issued against Let's Encrypt's quota.
+      existingClaim: "pvc-traefik-nfs"
+      path: /data
+
+    service:
+      enabled: true
+      ## Single service is using `MixedProtocolLBService` feature gate.
+      ## When set to false, it will create two Service, one for TCP and one for UDP.
+      single: true
+      type: LoadBalancer
+      # Additional annotations applied to both TCP and UDP services (e.g. for cloud provider specific config)
+      #annotations: {}
+      # Additional annotations for TCP service only
+      #annotationsTCP: {}
+      # Additional annotations for UDP service only
+      #annotationsUDP: {}
+      # Additional service labels (e.g. for filtering Service by custom labels)
+      #labels: {}
+      # Additional entries here will be added to the service spec.
+      # Cannot contain type, selector or ports entries.
+      spec:
+        externalTrafficPolicy: Local
+        # loadBalancerIP: "1.2.3.4"
+        # clusterIP: "2.3.4.5"
+      #loadBalancerSourceRanges: []
+        # - 192.168.0.1/32
+        # - 172.16.0.0/16
+      #externalIPs: []
+        # - 1.2.3.4
+      ## One of SingleStack, PreferDualStack, or RequireDualStack.
+      # ipFamilyPolicy: SingleStack
+      ## List of IP families (e.g. IPv4 and/or IPv6).
+      ## ref: https://kubernetes.io/docs/concepts/services-networking/dual-stack/#services
+      # ipFamilies:
+      #   - IPv4
+      #   - IPv6
+      ##
+      ## An additionnal and optional internal Service.
+      ## Same parameters as external Service
+      # internal:
+      #   type: ClusterIP
+      #   # labels: {}
+      #   # annotations: {}
+      #   # spec: {}
+      #   # loadBalancerSourceRanges: []
+      #   # externalIPs: []
+      #   # ipFamilies: [ "IPv4","IPv6" ]

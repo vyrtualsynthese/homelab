@@ -1,0 +1,349 @@
+---
+# Source: traefik/templates/rbac/serviceaccount.yaml
+kind: ServiceAccount
+apiVersion: v1
+metadata:
+  name: traefik
+  namespace: kube-system
+  labels:
+    app.kubernetes.io/name: traefik
+    app.kubernetes.io/instance: traefik-kube-system
+    helm.sh/chart: traefik-25.0.3_up25.0.0
+    app.kubernetes.io/managed-by: Helm
+  annotations:
+---
+# Source: traefik/templates/rbac/clusterrole.yaml
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: traefik-kube-system
+  labels:
+    app.kubernetes.io/name: traefik
+    app.kubernetes.io/instance: traefik-kube-system
+    helm.sh/chart: traefik-25.0.3_up25.0.0
+    app.kubernetes.io/managed-by: Helm
+rules:
+  - apiGroups:
+      - extensions
+      - networking.k8s.io
+    resources:
+      - ingressclasses
+      - ingresses
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - ""
+    resources:
+      - services
+      - endpoints
+      - secrets
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - extensions
+      - networking.k8s.io
+    resources:
+      - ingresses/status
+    verbs:
+      - update
+  - apiGroups:
+      - traefik.io
+      - traefik.containo.us
+    resources:
+      - ingressroutes
+      - ingressroutetcps
+      - ingressrouteudps
+      - middlewares
+      - middlewaretcps
+      - tlsoptions
+      - tlsstores
+      - traefikservices
+      - serverstransports
+    verbs:
+      - get
+      - list
+      - watch
+---
+# Source: traefik/templates/rbac/clusterrolebinding.yaml
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: traefik-kube-system
+  labels:
+    app.kubernetes.io/name: traefik
+    app.kubernetes.io/instance: traefik-kube-system
+    helm.sh/chart: traefik-25.0.3_up25.0.0
+    app.kubernetes.io/managed-by: Helm
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: traefik-kube-system
+subjects:
+  - kind: ServiceAccount
+    name: traefik
+    namespace: kube-system
+---
+# Source: traefik/templates/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: traefik
+  namespace: kube-system
+  labels:
+    app.kubernetes.io/name: traefik
+    app.kubernetes.io/instance: traefik-kube-system
+    helm.sh/chart: traefik-25.0.3_up25.0.0
+    app.kubernetes.io/managed-by: Helm
+  annotations:
+spec:
+  type: LoadBalancer
+  externalTrafficPolicy: Local
+  selector:
+    app.kubernetes.io/name: traefik
+    app.kubernetes.io/instance: traefik-kube-system
+  ipFamilyPolicy: PreferDualStack
+  ports:
+  - port: 25565
+    name: "mc"
+    targetPort: mc
+    protocol: TCP
+  - port: 9101
+    name: "metrics"
+    targetPort: metrics
+    protocol: TCP
+  - port: 22000
+    name: "sttcp"
+    targetPort: sttcp
+    protocol: TCP
+  - port: 80
+    name: "web"
+    targetPort: web
+    protocol: TCP
+  - port: 443
+    name: "websecure"
+    targetPort: websecure
+    protocol: TCP
+  - port: 21027
+    name: "stdiscovery"
+    targetPort: stdiscovery
+    protocol: UDP
+  - port: 22000
+    name: "studp"
+    targetPort: studp
+    protocol: UDP
+---
+# Source: traefik/templates/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: traefik
+  namespace: kube-system
+  labels:
+    app.kubernetes.io/name: traefik
+    app.kubernetes.io/instance: traefik-kube-system
+    helm.sh/chart: traefik-25.0.3_up25.0.0
+    app.kubernetes.io/managed-by: Helm
+  annotations:
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: traefik
+      app.kubernetes.io/instance: traefik-kube-system
+  strategy: 
+    type: Recreate
+  minReadySeconds: 0
+  template: 
+    metadata:
+      annotations:
+        prometheus.io/port: "8082"
+        prometheus.io/scrape: "true"
+        prometheus.io/scrape: "true"
+        prometheus.io/path: "/metrics"
+        prometheus.io/port: "9100"
+      labels:
+        app.kubernetes.io/name: traefik
+        app.kubernetes.io/instance: traefik-kube-system
+        helm.sh/chart: traefik-25.0.3_up25.0.0
+        app.kubernetes.io/managed-by: Helm
+    spec:
+      serviceAccountName: traefik
+      terminationGracePeriodSeconds: 60
+      hostNetwork: false
+      containers:
+      - image: "rancher/mirrored-library-traefik:2.10.7"
+        imagePullPolicy: IfNotPresent
+        name: traefik
+        resources:
+        readinessProbe:
+          httpGet:
+            path: /ping
+            port: 9000
+            scheme: HTTP
+          failureThreshold: 1
+          initialDelaySeconds: 2
+          periodSeconds: 10
+          successThreshold: 1
+          timeoutSeconds: 2
+        livenessProbe:
+          httpGet:
+            path: /ping
+            port: 9000
+            scheme: HTTP
+          failureThreshold: 3
+          initialDelaySeconds: 2
+          periodSeconds: 10
+          successThreshold: 1
+          timeoutSeconds: 2
+        lifecycle:
+        ports:
+        - name: "mc"
+          containerPort: 25565
+          protocol: "TCP"
+        - name: "metrics"
+          containerPort: 9100
+          protocol: "TCP"
+        - name: "stdiscovery"
+          containerPort: 21027
+          protocol: "UDP"
+        - name: "sttcp"
+          containerPort: 22000
+          protocol: "TCP"
+        - name: "studp"
+          containerPort: 22000
+          protocol: "UDP"
+        - name: "traefik"
+          containerPort: 9000
+          protocol: "TCP"
+        - name: "web"
+          containerPort: 8000
+          protocol: "TCP"
+        - name: "websecure"
+          containerPort: 8443
+          protocol: "TCP"
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
+        volumeMounts:
+          - name: data
+            mountPath: /data
+          - name: tmp
+            mountPath: /tmp
+        args:
+          - "--global.checknewversion"
+          - "--global.sendanonymoususage"
+          - "--entrypoints.mc.address=:25565/tcp"
+          - "--entrypoints.metrics.address=:9100/tcp"
+          - "--entrypoints.stdiscovery.address=:21027/udp"
+          - "--entrypoints.sttcp.address=:22000/tcp"
+          - "--entrypoints.studp.address=:22000/udp"
+          - "--entrypoints.traefik.address=:9000/tcp"
+          - "--entrypoints.web.address=:8000/tcp"
+          - "--entrypoints.websecure.address=:8443/tcp"
+          - "--api.dashboard=true"
+          - "--ping=true"
+          - "--metrics.prometheus=true"
+          - "--metrics.prometheus.entrypoint=metrics"
+          - "--metrics.prometheus.addRoutersLabels=true"
+          - "--metrics.prometheus.addEntryPointsLabels=false"
+          - "--metrics.prometheus.addServicesLabels=false"
+          - "--metrics.prometheus.buckets=0.5,1.0,2.5"
+          - "--metrics.prometheus.manualrouting=true"
+          - "--providers.kubernetescrd"
+          - "--providers.kubernetescrd.allowCrossNamespace=true"
+          - "--providers.kubernetesingress"
+          - "--providers.kubernetesingress.ingressendpoint.publishedservice=kube-system/traefik"
+          - "--entrypoints.web.forwardedHeaders.insecure"
+          - "--entrypoints.web.proxyProtocol.insecure"
+          - "--entrypoints.websecure.http.tls=true"
+          - "--entrypoints.websecure.forwardedHeaders.insecure"
+          - "--entrypoints.websecure.proxyProtocol.insecure"
+          - "--certificatesresolvers.myresolver.acme.email=valentin.ronteix@ashudev.com"
+          - "--certificatesresolvers.myresolver.acme.storage=/data/acme.json"
+          - "--certificatesresolvers.myresolver.acme.tlsChallenge=true"
+        env:
+          - name: POD_NAME
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.name
+          - name: POD_NAMESPACE
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.namespace
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: pvc-traefik-nfs
+        - name: tmp
+          emptyDir: {}
+      tolerations:
+        - key: CriticalAddonsOnly
+          operator: Exists
+        - effect: NoSchedule
+          key: node-role.kubernetes.io/control-plane
+          operator: Exists
+        - effect: NoSchedule
+          key: node-role.kubernetes.io/master
+          operator: Exists
+      nodeSelector:
+        kubernetes.io/hostname: streaming
+      priorityClassName: system-cluster-critical
+      securityContext:
+        fsGroupChangePolicy: OnRootMismatch
+        runAsGroup: 65532
+        runAsNonRoot: true
+        runAsUser: 65532
+
+---
+# Source: traefik/templates/ingressclass.yaml
+apiVersion: networking.k8s.io/v1
+kind: IngressClass
+metadata:
+  annotations:
+    ingressclass.kubernetes.io/is-default-class: "true"
+  labels:
+    app.kubernetes.io/name: traefik
+    app.kubernetes.io/instance: traefik-kube-system
+    helm.sh/chart: traefik-25.0.3_up25.0.0
+    app.kubernetes.io/managed-by: Helm
+  name: traefik
+spec:
+  controller: traefik.io/ingress-controller
+---
+# Source: traefik/templates/validate-install-crd.yaml
+###map[traefik.containo.us/v1alpha1/IngressRoute:false]#map[traefik.containo.us/v1alpha1/IngressRoute:false traefik.containo.us/v1alpha1/IngressRouteTCP:false]#map[traefik.containo.us/v1alpha1/IngressRoute:false traefik.containo.us/v1alpha1/IngressRouteTCP:false traefik.containo.us/v1alpha1/IngressRouteUDP:false]#map[traefik.containo.us/v1alpha1/IngressRoute:false traefik.containo.us/v1alpha1/IngressRouteTCP:false traefik.containo.us/v1alpha1/IngressRouteUDP:false traefik.containo.us/v1alpha1/Middleware:false]#map[traefik.containo.us/v1alpha1/IngressRoute:false traefik.containo.us/v1alpha1/IngressRouteTCP:false traefik.containo.us/v1alpha1/IngressRouteUDP:false traefik.containo.us/v1alpha1/Middleware:false traefik.containo.us/v1alpha1/MiddlewareTCP:false]#map[traefik.containo.us/v1alpha1/IngressRoute:false traefik.containo.us/v1alpha1/IngressRouteTCP:false traefik.containo.us/v1alpha1/IngressRouteUDP:false traefik.containo.us/v1alpha1/Middleware:false traefik.containo.us/v1alpha1/MiddlewareTCP:false traefik.containo.us/v1alpha1/ServersTransport:false]#map[traefik.containo.us/v1alpha1/IngressRoute:false traefik.containo.us/v1alpha1/IngressRouteTCP:false traefik.containo.us/v1alpha1/IngressRouteUDP:false traefik.containo.us/v1alpha1/Middleware:false traefik.containo.us/v1alpha1/MiddlewareTCP:false traefik.containo.us/v1alpha1/ServersTransport:false traefik.containo.us/v1alpha1/TLSOption:false]#map[traefik.containo.us/v1alpha1/IngressRoute:false traefik.containo.us/v1alpha1/IngressRouteTCP:false traefik.containo.us/v1alpha1/IngressRouteUDP:false traefik.containo.us/v1alpha1/Middleware:false traefik.containo.us/v1alpha1/MiddlewareTCP:false traefik.containo.us/v1alpha1/ServersTransport:false traefik.containo.us/v1alpha1/TLSOption:false traefik.containo.us/v1alpha1/TLSStore:false]#map[traefik.containo.us/v1alpha1/IngressRoute:false traefik.containo.us/v1alpha1/IngressRouteTCP:false traefik.containo.us/v1alpha1/IngressRouteUDP:false traefik.containo.us/v1alpha1/Middleware:false traefik.containo.us/v1alpha1/MiddlewareTCP:false traefik.containo.us/v1alpha1/ServersTransport:false traefik.containo.us/v1alpha1/TLSOption:false traefik.containo.us/v1alpha1/TLSStore:false traefik.containo.us/v1alpha1/TraefikService:false]#map[traefik.containo.us/v1alpha1/IngressRoute:false traefik.containo.us/v1alpha1/IngressRouteTCP:false traefik.containo.us/v1alpha1/IngressRouteUDP:false traefik.containo.us/v1alpha1/Middleware:false traefik.containo.us/v1alpha1/MiddlewareTCP:false traefik.containo.us/v1alpha1/ServersTransport:false traefik.containo.us/v1alpha1/TLSOption:false traefik.containo.us/v1alpha1/TLSStore:false traefik.containo.us/v1alpha1/TraefikService:false traefik.io/v1alpha1/IngressRoute:false]#map[traefik.containo.us/v1alpha1/IngressRoute:false traefik.containo.us/v1alpha1/IngressRouteTCP:false traefik.containo.us/v1alpha1/IngressRouteUDP:false traefik.containo.us/v1alpha1/Middleware:false traefik.containo.us/v1alpha1/MiddlewareTCP:false traefik.containo.us/v1alpha1/ServersTransport:false traefik.containo.us/v1alpha1/TLSOption:false traefik.containo.us/v1alpha1/TLSStore:false traefik.containo.us/v1alpha1/TraefikService:false traefik.io/v1alpha1/IngressRoute:false traefik.io/v1alpha1/IngressRouteTCP:false]#map[traefik.containo.us/v1alpha1/IngressRoute:false traefik.containo.us/v1alpha1/IngressRouteTCP:false traefik.containo.us/v1alpha1/IngressRouteUDP:false traefik.containo.us/v1alpha1/Middleware:false traefik.containo.us/v1alpha1/MiddlewareTCP:false traefik.containo.us/v1alpha1/ServersTransport:false traefik.containo.us/v1alpha1/TLSOption:false traefik.containo.us/v1alpha1/TLSStore:false traefik.containo.us/v1alpha1/TraefikService:false traefik.io/v1alpha1/IngressRoute:false traefik.io/v1alpha1/IngressRouteTCP:false traefik.io/v1alpha1/IngressRouteUDP:false]#map[traefik.containo.us/v1alpha1/IngressRoute:false traefik.containo.us/v1alpha1/IngressRouteTCP:false traefik.containo.us/v1alpha1/IngressRouteUDP:false traefik.containo.us/v1alpha1/Middleware:false traefik.containo.us/v1alpha1/MiddlewareTCP:false traefik.containo.us/v1alpha1/ServersTransport:false traefik.containo.us/v1alpha1/TLSOption:false traefik.containo.us/v1alpha1/TLSStore:false traefik.containo.us/v1alpha1/TraefikService:false traefik.io/v1alpha1/IngressRoute:false traefik.io/v1alpha1/IngressRouteTCP:false traefik.io/v1alpha1/IngressRouteUDP:false traefik.io/v1alpha1/Middleware:false]#map[traefik.containo.us/v1alpha1/IngressRoute:false traefik.containo.us/v1alpha1/IngressRouteTCP:false traefik.containo.us/v1alpha1/IngressRouteUDP:false traefik.containo.us/v1alpha1/Middleware:false traefik.containo.us/v1alpha1/MiddlewareTCP:false traefik.containo.us/v1alpha1/ServersTransport:false traefik.containo.us/v1alpha1/TLSOption:false traefik.containo.us/v1alpha1/TLSStore:false traefik.containo.us/v1alpha1/TraefikService:false traefik.io/v1alpha1/IngressRoute:false traefik.io/v1alpha1/IngressRouteTCP:false traefik.io/v1alpha1/IngressRouteUDP:false traefik.io/v1alpha1/Middleware:false traefik.io/v1alpha1/MiddlewareTCP:false]#map[traefik.containo.us/v1alpha1/IngressRoute:false traefik.containo.us/v1alpha1/IngressRouteTCP:false traefik.containo.us/v1alpha1/IngressRouteUDP:false traefik.containo.us/v1alpha1/Middleware:false traefik.containo.us/v1alpha1/MiddlewareTCP:false traefik.containo.us/v1alpha1/ServersTransport:false traefik.containo.us/v1alpha1/TLSOption:false traefik.containo.us/v1alpha1/TLSStore:false traefik.containo.us/v1alpha1/TraefikService:false traefik.io/v1alpha1/IngressRoute:false traefik.io/v1alpha1/IngressRouteTCP:false traefik.io/v1alpha1/IngressRouteUDP:false traefik.io/v1alpha1/Middleware:false traefik.io/v1alpha1/MiddlewareTCP:false traefik.io/v1alpha1/ServersTransport:false]#map[traefik.containo.us/v1alpha1/IngressRoute:false traefik.containo.us/v1alpha1/IngressRouteTCP:false traefik.containo.us/v1alpha1/IngressRouteUDP:false traefik.containo.us/v1alpha1/Middleware:false traefik.containo.us/v1alpha1/MiddlewareTCP:false traefik.containo.us/v1alpha1/ServersTransport:false traefik.containo.us/v1alpha1/TLSOption:false traefik.containo.us/v1alpha1/TLSStore:false traefik.containo.us/v1alpha1/TraefikService:false traefik.io/v1alpha1/IngressRoute:false traefik.io/v1alpha1/IngressRouteTCP:false traefik.io/v1alpha1/IngressRouteUDP:false traefik.io/v1alpha1/Middleware:false traefik.io/v1alpha1/MiddlewareTCP:false traefik.io/v1alpha1/ServersTransport:false traefik.io/v1alpha1/ServersTransportTCP:false]#map[traefik.containo.us/v1alpha1/IngressRoute:false traefik.containo.us/v1alpha1/IngressRouteTCP:false traefik.containo.us/v1alpha1/IngressRouteUDP:false traefik.containo.us/v1alpha1/Middleware:false traefik.containo.us/v1alpha1/MiddlewareTCP:false traefik.containo.us/v1alpha1/ServersTransport:false traefik.containo.us/v1alpha1/TLSOption:false traefik.containo.us/v1alpha1/TLSStore:false traefik.containo.us/v1alpha1/TraefikService:false traefik.io/v1alpha1/IngressRoute:false traefik.io/v1alpha1/IngressRouteTCP:false traefik.io/v1alpha1/IngressRouteUDP:false traefik.io/v1alpha1/Middleware:false traefik.io/v1alpha1/MiddlewareTCP:false traefik.io/v1alpha1/ServersTransport:false traefik.io/v1alpha1/ServersTransportTCP:false traefik.io/v1alpha1/TLSOption:false]#map[traefik.containo.us/v1alpha1/IngressRoute:false traefik.containo.us/v1alpha1/IngressRouteTCP:false traefik.containo.us/v1alpha1/IngressRouteUDP:false traefik.containo.us/v1alpha1/Middleware:false traefik.containo.us/v1alpha1/MiddlewareTCP:false traefik.containo.us/v1alpha1/ServersTransport:false traefik.containo.us/v1alpha1/TLSOption:false traefik.containo.us/v1alpha1/TLSStore:false traefik.containo.us/v1alpha1/TraefikService:false traefik.io/v1alpha1/IngressRoute:false traefik.io/v1alpha1/IngressRouteTCP:false traefik.io/v1alpha1/IngressRouteUDP:false traefik.io/v1alpha1/Middleware:false traefik.io/v1alpha1/MiddlewareTCP:false traefik.io/v1alpha1/ServersTransport:false traefik.io/v1alpha1/ServersTransportTCP:false traefik.io/v1alpha1/TLSOption:false traefik.io/v1alpha1/TLSStore:false]#map[traefik.containo.us/v1alpha1/IngressRoute:false traefik.containo.us/v1alpha1/IngressRouteTCP:false traefik.containo.us/v1alpha1/IngressRouteUDP:false traefik.containo.us/v1alpha1/Middleware:false traefik.containo.us/v1alpha1/MiddlewareTCP:false traefik.containo.us/v1alpha1/ServersTransport:false traefik.containo.us/v1alpha1/TLSOption:false traefik.containo.us/v1alpha1/TLSStore:false traefik.containo.us/v1alpha1/TraefikService:false traefik.io/v1alpha1/IngressRoute:false traefik.io/v1alpha1/IngressRouteTCP:false traefik.io/v1alpha1/IngressRouteUDP:false traefik.io/v1alpha1/Middleware:false traefik.io/v1alpha1/MiddlewareTCP:false traefik.io/v1alpha1/ServersTransport:false traefik.io/v1alpha1/ServersTransportTCP:false traefik.io/v1alpha1/TLSOption:false traefik.io/v1alpha1/TLSStore:false traefik.io/v1alpha1/TraefikService:false]#####map[traefik.containo.us/v1alpha1/IngressRoute:false traefik.containo.us/v1alpha1/IngressRouteTCP:false traefik.containo.us/v1alpha1/IngressRouteUDP:false traefik.containo.us/v1alpha1/Middleware:false traefik.containo.us/v1alpha1/MiddlewareTCP:false traefik.containo.us/v1alpha1/ServersTransport:false traefik.containo.us/v1alpha1/TLSOption:false traefik.containo.us/v1alpha1/TLSStore:false traefik.containo.us/v1alpha1/TraefikService:false traefik.io/v1alpha1/IngressRoute:false traefik.io/v1alpha1/IngressRouteTCP:false traefik.io/v1alpha1/IngressRouteUDP:false traefik.io/v1alpha1/Middleware:false traefik.io/v1alpha1/MiddlewareTCP:false traefik.io/v1alpha1/ServersTransport:false traefik.io/v1alpha1/ServersTransportTCP:false traefik.io/v1alpha1/TLSOption:true traefik.io/v1alpha1/TLSStore:false traefik.io/v1alpha1/TraefikService:false]######################map[traefik.containo.us/v1alpha1/IngressRoute:false traefik.containo.us/v1alpha1/IngressRouteTCP:false traefik.containo.us/v1alpha1/IngressRouteUDP:false traefik.containo.us/v1alpha1/Middleware:false traefik.containo.us/v1alpha1/MiddlewareTCP:false traefik.containo.us/v1alpha1/ServersTransport:false traefik.containo.us/v1alpha1/TLSOption:false traefik.containo.us/v1alpha1/TLSStore:false traefik.containo.us/v1alpha1/TraefikService:false traefik.io/v1alpha1/IngressRoute:false traefik.io/v1alpha1/IngressRouteTCP:false traefik.io/v1alpha1/IngressRouteUDP:false traefik.io/v1alpha1/Middleware:false traefik.io/v1alpha1/MiddlewareTCP:false traefik.io/v1alpha1/ServersTransport:true traefik.io/v1alpha1/ServersTransportTCP:false traefik.io/v1alpha1/TLSOption:true traefik.io/v1alpha1/TLSStore:false traefik.io/v1alpha1/TraefikService:false]##########map[traefik.containo.us/v1alpha1/IngressRoute:false traefik.containo.us/v1alpha1/IngressRouteTCP:false traefik.containo.us/v1alpha1/IngressRouteUDP:false traefik.containo.us/v1alpha1/Middleware:false traefik.containo.us/v1alpha1/MiddlewareTCP:false traefik.containo.us/v1alpha1/ServersTransport:false traefik.containo.us/v1alpha1/TLSOption:false traefik.containo.us/v1alpha1/TLSStore:false traefik.containo.us/v1alpha1/TraefikService:false traefik.io/v1alpha1/IngressRoute:false traefik.io/v1alpha1/IngressRouteTCP:false traefik.io/v1alpha1/IngressRouteUDP:false traefik.io/v1alpha1/Middleware:false traefik.io/v1alpha1/MiddlewareTCP:false traefik.io/v1alpha1/ServersTransport:true traefik.io/v1alpha1/ServersTransportTCP:true traefik.io/v1alpha1/TLSOption:true traefik.io/v1alpha1/TLSStore:false traefik.io/v1alpha1/TraefikService:false]##############map[traefik.containo.us/v1alpha1/IngressRoute:false traefik.containo.us/v1alpha1/IngressRouteTCP:false traefik.containo.us/v1alpha1/IngressRouteUDP:false traefik.containo.us/v1alpha1/Middleware:true traefik.containo.us/v1alpha1/MiddlewareTCP:false traefik.containo.us/v1alpha1/ServersTransport:false traefik.containo.us/v1alpha1/TLSOption:false traefik.containo.us/v1alpha1/TLSStore:false traefik.containo.us/v1alpha1/TraefikService:false traefik.io/v1alpha1/IngressRoute:false traefik.io/v1alpha1/IngressRouteTCP:false traefik.io/v1alpha1/IngressRouteUDP:false traefik.io/v1alpha1/Middleware:false traefik.io/v1alpha1/MiddlewareTCP:false traefik.io/v1alpha1/ServersTransport:true traefik.io/v1alpha1/ServersTransportTCP:true traefik.io/v1alpha1/TLSOption:true traefik.io/v1alpha1/TLSStore:false traefik.io/v1alpha1/TraefikService:false]####map[traefik.containo.us/v1alpha1/IngressRoute:false traefik.containo.us/v1alpha1/IngressRouteTCP:false traefik.containo.us/v1alpha1/IngressRouteUDP:false traefik.containo.us/v1alpha1/Middleware:true traefik.containo.us/v1alpha1/MiddlewareTCP:false traefik.containo.us/v1alpha1/ServersTransport:false traefik.containo.us/v1alpha1/TLSOption:false traefik.containo.us/v1alpha1/TLSStore:false traefik.containo.us/v1alpha1/TraefikService:false traefik.io/v1alpha1/IngressRoute:false traefik.io/v1alpha1/IngressRouteTCP:false traefik.io/v1alpha1/IngressRouteUDP:false traefik.io/v1alpha1/Middleware:true traefik.io/v1alpha1/MiddlewareTCP:false traefik.io/v1alpha1/ServersTransport:true traefik.io/v1alpha1/ServersTransportTCP:true traefik.io/v1alpha1/TLSOption:true traefik.io/v1alpha1/TLSStore:false traefik.io/v1alpha1/TraefikService:false]############map[traefik.containo.us/v1alpha1/IngressRoute:false traefik.containo.us/v1alpha1/IngressRouteTCP:false traefik.containo.us/v1alpha1/IngressRouteUDP:false traefik.containo.us/v1alpha1/Middleware:true traefik.containo.us/v1alpha1/MiddlewareTCP:false traefik.containo.us/v1alpha1/ServersTransport:false traefik.containo.us/v1alpha1/TLSOption:false traefik.containo.us/v1alpha1/TLSStore:false traefik.containo.us/v1alpha1/TraefikService:false traefik.io/v1alpha1/IngressRoute:false traefik.io/v1alpha1/IngressRouteTCP:false traefik.io/v1alpha1/IngressRouteUDP:false traefik.io/v1alpha1/Middleware:true traefik.io/v1alpha1/MiddlewareTCP:false traefik.io/v1alpha1/ServersTransport:true traefik.io/v1alpha1/ServersTransportTCP:true traefik.io/v1alpha1/TLSOption:true traefik.io/v1alpha1/TLSStore:true traefik.io/v1alpha1/TraefikService:false]################################map[traefik.containo.us/v1alpha1/IngressRoute:false traefik.containo.us/v1alpha1/IngressRouteTCP:true traefik.containo.us/v1alpha1/IngressRouteUDP:false traefik.containo.us/v1alpha1/Middleware:true traefik.containo.us/v1alpha1/MiddlewareTCP:false traefik.containo.us/v1alpha1/ServersTransport:false traefik.containo.us/v1alpha1/TLSOption:false traefik.containo.us/v1alpha1/TLSStore:false traefik.containo.us/v1alpha1/TraefikService:false traefik.io/v1alpha1/IngressRoute:false traefik.io/v1alpha1/IngressRouteTCP:false traefik.io/v1alpha1/IngressRouteUDP:false traefik.io/v1alpha1/Middleware:true traefik.io/v1alpha1/MiddlewareTCP:false traefik.io/v1alpha1/ServersTransport:true traefik.io/v1alpha1/ServersTransportTCP:true traefik.io/v1alpha1/TLSOption:true traefik.io/v1alpha1/TLSStore:true traefik.io/v1alpha1/TraefikService:false]####map[traefik.containo.us/v1alpha1/IngressRoute:false traefik.containo.us/v1alpha1/IngressRouteTCP:true traefik.containo.us/v1alpha1/IngressRouteUDP:false traefik.containo.us/v1alpha1/Middleware:true traefik.containo.us/v1alpha1/MiddlewareTCP:true traefik.containo.us/v1alpha1/ServersTransport:false traefik.containo.us/v1alpha1/TLSOption:false traefik.containo.us/v1alpha1/TLSStore:false traefik.containo.us/v1alpha1/TraefikService:false traefik.io/v1alpha1/IngressRoute:false traefik.io/v1alpha1/IngressRouteTCP:false traefik.io/v1alpha1/IngressRouteUDP:false traefik.io/v1alpha1/Middleware:true traefik.io/v1alpha1/MiddlewareTCP:false traefik.io/v1alpha1/ServersTransport:true traefik.io/v1alpha1/ServersTransportTCP:true traefik.io/v1alpha1/TLSOption:true traefik.io/v1alpha1/TLSStore:true traefik.io/v1alpha1/TraefikService:false]##########map[traefik.containo.us/v1alpha1/IngressRoute:false traefik.containo.us/v1alpha1/IngressRouteTCP:true traefik.containo.us/v1alpha1/IngressRouteUDP:false traefik.containo.us/v1alpha1/Middleware:true traefik.containo.us/v1alpha1/MiddlewareTCP:true traefik.containo.us/v1alpha1/ServersTransport:true traefik.containo.us/v1alpha1/TLSOption:false traefik.containo.us/v1alpha1/TLSStore:false traefik.containo.us/v1alpha1/TraefikService:false traefik.io/v1alpha1/IngressRoute:false traefik.io/v1alpha1/IngressRouteTCP:false traefik.io/v1alpha1/IngressRouteUDP:false traefik.io/v1alpha1/Middleware:true traefik.io/v1alpha1/MiddlewareTCP:false traefik.io/v1alpha1/ServersTransport:true traefik.io/v1alpha1/ServersTransportTCP:true traefik.io/v1alpha1/TLSOption:true traefik.io/v1alpha1/TLSStore:true traefik.io/v1alpha1/TraefikService:false]########map[traefik.containo.us/v1alpha1/IngressRoute:false traefik.containo.us/v1alpha1/IngressRouteTCP:true traefik.containo.us/v1alpha1/IngressRouteUDP:false traefik.containo.us/v1alpha1/Middleware:true traefik.containo.us/v1alpha1/MiddlewareTCP:true traefik.containo.us/v1alpha1/ServersTransport:true traefik.containo.us/v1alpha1/TLSOption:false traefik.containo.us/v1alpha1/TLSStore:false traefik.containo.us/v1alpha1/TraefikService:false traefik.io/v1alpha1/IngressRoute:false traefik.io/v1alpha1/IngressRouteTCP:false traefik.io/v1alpha1/IngressRouteUDP:true traefik.io/v1alpha1/Middleware:true traefik.io/v1alpha1/MiddlewareTCP:false traefik.io/v1alpha1/ServersTransport:true traefik.io/v1alpha1/ServersTransportTCP:true traefik.io/v1alpha1/TLSOption:true traefik.io/v1alpha1/TLSStore:true traefik.io/v1alpha1/TraefikService:false]##########################map[traefik.containo.us/v1alpha1/IngressRoute:false traefik.containo.us/v1alpha1/IngressRouteTCP:true traefik.containo.us/v1alpha1/IngressRouteUDP:true traefik.containo.us/v1alpha1/Middleware:true traefik.containo.us/v1alpha1/MiddlewareTCP:true traefik.containo.us/v1alpha1/ServersTransport:true traefik.containo.us/v1alpha1/TLSOption:false traefik.containo.us/v1alpha1/TLSStore:false traefik.containo.us/v1alpha1/TraefikService:false traefik.io/v1alpha1/IngressRoute:false traefik.io/v1alpha1/IngressRouteTCP:false traefik.io/v1alpha1/IngressRouteUDP:true traefik.io/v1alpha1/Middleware:true traefik.io/v1alpha1/MiddlewareTCP:false traefik.io/v1alpha1/ServersTransport:true traefik.io/v1alpha1/ServersTransportTCP:true traefik.io/v1alpha1/TLSOption:true traefik.io/v1alpha1/TLSStore:true traefik.io/v1alpha1/TraefikService:false]####map[traefik.containo.us/v1alpha1/IngressRoute:false traefik.containo.us/v1alpha1/IngressRouteTCP:true traefik.containo.us/v1alpha1/IngressRouteUDP:true traefik.containo.us/v1alpha1/Middleware:true traefik.containo.us/v1alpha1/MiddlewareTCP:true traefik.containo.us/v1alpha1/ServersTransport:true traefik.containo.us/v1alpha1/TLSOption:false traefik.containo.us/v1alpha1/TLSStore:false traefik.containo.us/v1alpha1/TraefikService:false traefik.io/v1alpha1/IngressRoute:false traefik.io/v1alpha1/IngressRouteTCP:true traefik.io/v1alpha1/IngressRouteUDP:true traefik.io/v1alpha1/Middleware:true traefik.io/v1alpha1/MiddlewareTCP:false traefik.io/v1alpha1/ServersTransport:true traefik.io/v1alpha1/ServersTransportTCP:true traefik.io/v1alpha1/TLSOption:true traefik.io/v1alpha1/TLSStore:true traefik.io/v1alpha1/TraefikService:false]########################map[traefik.containo.us/v1alpha1/IngressRoute:false traefik.containo.us/v1alpha1/IngressRouteTCP:true traefik.containo.us/v1alpha1/IngressRouteUDP:true traefik.containo.us/v1alpha1/Middleware:true traefik.containo.us/v1alpha1/MiddlewareTCP:true traefik.containo.us/v1alpha1/ServersTransport:true traefik.containo.us/v1alpha1/TLSOption:false traefik.containo.us/v1alpha1/TLSStore:true traefik.containo.us/v1alpha1/TraefikService:false traefik.io/v1alpha1/IngressRoute:false traefik.io/v1alpha1/IngressRouteTCP:true traefik.io/v1alpha1/IngressRouteUDP:true traefik.io/v1alpha1/Middleware:true traefik.io/v1alpha1/MiddlewareTCP:false traefik.io/v1alpha1/ServersTransport:true traefik.io/v1alpha1/ServersTransportTCP:true traefik.io/v1alpha1/TLSOption:true traefik.io/v1alpha1/TLSStore:true traefik.io/v1alpha1/TraefikService:false]########################map[traefik.containo.us/v1alpha1/IngressRoute:false traefik.containo.us/v1alpha1/IngressRouteTCP:true traefik.containo.us/v1alpha1/IngressRouteUDP:true traefik.containo.us/v1alpha1/Middleware:true traefik.containo.us/v1alpha1/MiddlewareTCP:true traefik.containo.us/v1alpha1/ServersTransport:true traefik.containo.us/v1alpha1/TLSOption:false traefik.containo.us/v1alpha1/TLSStore:true traefik.containo.us/v1alpha1/TraefikService:false traefik.io/v1alpha1/IngressRoute:false traefik.io/v1alpha1/IngressRouteTCP:true traefik.io/v1alpha1/IngressRouteUDP:true traefik.io/v1alpha1/Middleware:true traefik.io/v1alpha1/MiddlewareTCP:true traefik.io/v1alpha1/ServersTransport:true traefik.io/v1alpha1/ServersTransportTCP:true traefik.io/v1alpha1/TLSOption:true traefik.io/v1alpha1/TLSStore:true traefik.io/v1alpha1/TraefikService:false]##########map[traefik.containo.us/v1alpha1/IngressRoute:false traefik.containo.us/v1alpha1/IngressRouteTCP:true traefik.containo.us/v1alpha1/IngressRouteUDP:true traefik.containo.us/v1alpha1/Middleware:true traefik.containo.us/v1alpha1/MiddlewareTCP:true traefik.containo.us/v1alpha1/ServersTransport:true traefik.containo.us/v1alpha1/TLSOption:true traefik.containo.us/v1alpha1/TLSStore:true traefik.containo.us/v1alpha1/TraefikService:false traefik.io/v1alpha1/IngressRoute:false traefik.io/v1alpha1/IngressRouteTCP:true traefik.io/v1alpha1/IngressRouteUDP:true traefik.io/v1alpha1/Middleware:true traefik.io/v1alpha1/MiddlewareTCP:true traefik.io/v1alpha1/ServersTransport:true traefik.io/v1alpha1/ServersTransportTCP:true traefik.io/v1alpha1/TLSOption:true traefik.io/v1alpha1/TLSStore:true traefik.io/v1alpha1/TraefikService:false]####map[traefik.containo.us/v1alpha1/IngressRoute:false traefik.containo.us/v1alpha1/IngressRouteTCP:true traefik.containo.us/v1alpha1/IngressRouteUDP:true traefik.containo.us/v1alpha1/Middleware:true traefik.containo.us/v1alpha1/MiddlewareTCP:true traefik.containo.us/v1alpha1/ServersTransport:true traefik.containo.us/v1alpha1/TLSOption:true traefik.containo.us/v1alpha1/TLSStore:true traefik.containo.us/v1alpha1/TraefikService:false traefik.io/v1alpha1/IngressRoute:false traefik.io/v1alpha1/IngressRouteTCP:true traefik.io/v1alpha1/IngressRouteUDP:true traefik.io/v1alpha1/Middleware:true traefik.io/v1alpha1/MiddlewareTCP:true traefik.io/v1alpha1/ServersTransport:true traefik.io/v1alpha1/ServersTransportTCP:true traefik.io/v1alpha1/TLSOption:true traefik.io/v1alpha1/TLSStore:true traefik.io/v1alpha1/TraefikService:true]################map[traefik.containo.us/v1alpha1/IngressRoute:true traefik.containo.us/v1alpha1/IngressRouteTCP:true traefik.containo.us/v1alpha1/IngressRouteUDP:true traefik.containo.us/v1alpha1/Middleware:true traefik.containo.us/v1alpha1/MiddlewareTCP:true traefik.containo.us/v1alpha1/ServersTransport:true traefik.containo.us/v1alpha1/TLSOption:true traefik.containo.us/v1alpha1/TLSStore:true traefik.containo.us/v1alpha1/TraefikService:false traefik.io/v1alpha1/IngressRoute:false traefik.io/v1alpha1/IngressRouteTCP:true traefik.io/v1alpha1/IngressRouteUDP:true traefik.io/v1alpha1/Middleware:true traefik.io/v1alpha1/MiddlewareTCP:true traefik.io/v1alpha1/ServersTransport:true traefik.io/v1alpha1/ServersTransportTCP:true traefik.io/v1alpha1/TLSOption:true traefik.io/v1alpha1/TLSStore:true traefik.io/v1alpha1/TraefikService:true]############map[traefik.containo.us/v1alpha1/IngressRoute:true traefik.containo.us/v1alpha1/IngressRouteTCP:true traefik.containo.us/v1alpha1/IngressRouteUDP:true traefik.containo.us/v1alpha1/Middleware:true traefik.containo.us/v1alpha1/MiddlewareTCP:true traefik.containo.us/v1alpha1/ServersTransport:true traefik.containo.us/v1alpha1/TLSOption:true traefik.containo.us/v1alpha1/TLSStore:true traefik.containo.us/v1alpha1/TraefikService:false traefik.io/v1alpha1/IngressRoute:true traefik.io/v1alpha1/IngressRouteTCP:true traefik.io/v1alpha1/IngressRouteUDP:true traefik.io/v1alpha1/Middleware:true traefik.io/v1alpha1/MiddlewareTCP:true traefik.io/v1alpha1/ServersTransport:true traefik.io/v1alpha1/ServersTransportTCP:true traefik.io/v1alpha1/TLSOption:true traefik.io/v1alpha1/TLSStore:true traefik.io/v1alpha1/TraefikService:true]################################################map[traefik.containo.us/v1alpha1/IngressRoute:true traefik.containo.us/v1alpha1/IngressRouteTCP:true traefik.containo.us/v1alpha1/IngressRouteUDP:true traefik.containo.us/v1alpha1/Middleware:true traefik.containo.us/v1alpha1/MiddlewareTCP:true traefik.containo.us/v1alpha1/ServersTransport:true traefik.containo.us/v1alpha1/TLSOption:true traefik.containo.us/v1alpha1/TLSStore:true traefik.containo.us/v1alpha1/TraefikService:true traefik.io/v1alpha1/IngressRoute:true traefik.io/v1alpha1/IngressRouteTCP:true traefik.io/v1alpha1/IngressRouteUDP:true traefik.io/v1alpha1/Middleware:true traefik.io/v1alpha1/MiddlewareTCP:true traefik.io/v1alpha1/ServersTransport:true traefik.io/v1alpha1/ServersTransportTCP:true traefik.io/v1alpha1/TLSOption:true traefik.io/v1alpha1/TLSStore:true traefik.io/v1alpha1/TraefikService:true]####################################################################################
+---
+# Source: traefik/templates/dashboard-ingressroute.yaml
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: traefik-dashboard
+  namespace: kube-system
+  annotations:
+  labels:
+    app.kubernetes.io/name: traefik
+    app.kubernetes.io/instance: traefik-kube-system
+    helm.sh/chart: traefik-25.0.3_up25.0.0
+    app.kubernetes.io/managed-by: Helm
+spec:
+  entryPoints:
+  - web
+  routes:
+  - match: Host(`traefik.kub.local`) && (PathPrefix(`/dashboard`) || PathPrefix(`/api`))
+    kind: Rule
+    services:
+    - name: api@internal
+      kind: TraefikService
+    middlewares:
+      - name: lan-only
+        namespace: kube-system
+      - name: traefik-dashboard
+        namespace: kube-system
+

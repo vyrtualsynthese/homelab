@@ -1,0 +1,3686 @@
+apiVersion: v1
+items:
+- apiVersion: traefik.containo.us/v1alpha1
+  kind: IngressRoute
+  metadata:
+    annotations:
+      argocd.argoproj.io/tracking-id: argocd:traefik.containo.us/IngressRoute:argocd/argocd-server
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"traefik.containo.us/v1alpha1","kind":"IngressRoute","metadata":{"annotations":{"argocd.argoproj.io/tracking-id":"argocd:traefik.containo.us/IngressRoute:argocd/argocd-server"},"name":"argocd-server","namespace":"argocd"},"spec":{"entryPoints":["websecure"],"routes":[{"kind":"Rule","match":"Host(`argocd.kub.local`)","middlewares":[{"name":"kube-system-lan-only@kubernetescrd"}],"services":[{"name":"argocd-server","port":"http"}]}],"tls":{"options":{"name":"internal-tls","namespace":"kube-system"}}}}
+      meta.helm.sh/release-name: argocd
+      meta.helm.sh/release-namespace: argocd
+    creationTimestamp: "2026-11-16T14:26:25Z"
+    generation: 1
+    labels:
+      app.kubernetes.io/managed-by: Helm
+    name: argocd-server
+    namespace: argocd
+    resourceVersion: "1225335056"
+    uid: 2cae2c56-d232-453c-a0b5-167264712aa6
+  spec:
+    entryPoints:
+    - websecure
+    routes:
+    - kind: Rule
+      match: Host(`argocd.kub.local`)
+      middlewares:
+      - name: kube-system-lan-only@kubernetescrd
+      services:
+      - name: argocd-server
+        port: http
+    tls:
+      options:
+        name: internal-tls
+        namespace: kube-system
+- apiVersion: traefik.containo.us/v1alpha1
+  kind: IngressRoute
+  metadata:
+    annotations:
+      argocd.argoproj.io/tracking-id: argocd:traefik.containo.us/IngressRoute:argocd/argocd-server-redirect
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"traefik.containo.us/v1alpha1","kind":"IngressRoute","metadata":{"annotations":{"argocd.argoproj.io/tracking-id":"argocd:traefik.containo.us/IngressRoute:argocd/argocd-server-redirect"},"name":"argocd-server-redirect","namespace":"argocd"},"spec":{"entryPoints":["web"],"routes":[{"kind":"Rule","match":"Host(`argocd.kub.local`)","middlewares":[{"name":"kube-system-lan-only@kubernetescrd"},{"name":"kube-system-redirect-to-https@kubernetescrd"}],"services":[{"name":"argocd-server","port":"http"}]}]}}
+      meta.helm.sh/release-name: argocd
+      meta.helm.sh/release-namespace: argocd
+    creationTimestamp: "2026-11-16T14:26:25Z"
+    generation: 1
+    labels:
+      app.kubernetes.io/managed-by: Helm
+    name: argocd-server-redirect
+    namespace: argocd
+    resourceVersion: "1225335073"
+    uid: a7c41f94-a235-474a-a5fb-a9c41c03c35a
+  spec:
+    entryPoints:
+    - web
+    routes:
+    - kind: Rule
+      match: Host(`argocd.kub.local`)
+      middlewares:
+      - name: kube-system-lan-only@kubernetescrd
+      - name: kube-system-redirect-to-https@kubernetescrd
+      services:
+      - name: argocd-server
+        port: http
+- apiVersion: traefik.containo.us/v1alpha1
+  kind: IngressRoute
+  metadata:
+    annotations:
+      argocd.argoproj.io/tracking-id: ashudev:traefik.containo.us/IngressRoute:ashudev/ashudev
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"traefik.containo.us/v1alpha1","kind":"IngressRoute","metadata":{"annotations":{"argocd.argoproj.io/tracking-id":"ashudev:traefik.containo.us/IngressRoute:ashudev/ashudev"},"labels":{"app.kubernetes.io/instance":"ashudev","app.kubernetes.io/managed-by":"Helm","app.kubernetes.io/name":"nginx","app.kubernetes.io/version":"1.31.7","helm.sh/chart":"ashudev-website-1.0.0"},"name":"ashudev","namespace":"ashudev"},"spec":{"entryPoints":["websecure"],"routes":[{"kind":"Rule","match":"Host(`ashudev.com`) \u0026\u0026 PathPrefix(`/`)","middlewares":[{"name":"security","namespace":"kube-system"}],"services":[{"name":"ashudev-nginx","port":80}]}],"tls":{"certResolver":"myresolver"}}}
+    creationTimestamp: "2026-11-20T19:58:15Z"
+    generation: 3
+    labels:
+      app.kubernetes.io/instance: ashudev
+      app.kubernetes.io/managed-by: Helm
+      app.kubernetes.io/name: nginx
+      app.kubernetes.io/version: 1.31.7
+      helm.sh/chart: ashudev-website-1.0.0
+    name: ashudev
+    namespace: ashudev
+    resourceVersion: "1226822737"
+    uid: abefaed7-814f-4af1-abca-4fb6c9943a69
+  spec:
+    entryPoints:
+    - websecure
+    routes:
+    - kind: Rule
+      match: Host(`ashudev.com`) && PathPrefix(`/`)
+      middlewares:
+      - name: security
+        namespace: kube-system
+      services:
+      - name: ashudev-nginx
+        port: 80
+    tls:
+      certResolver: myresolver
+- apiVersion: traefik.containo.us/v1alpha1
+  kind: IngressRoute
+  metadata:
+    annotations:
+      argocd.argoproj.io/tracking-id: ashudev:traefik.containo.us/IngressRoute:ashudev/ashudev-redirect
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"traefik.containo.us/v1alpha1","kind":"IngressRoute","metadata":{"annotations":{"argocd.argoproj.io/tracking-id":"ashudev:traefik.containo.us/IngressRoute:ashudev/ashudev-redirect"},"labels":{"app.kubernetes.io/instance":"ashudev","app.kubernetes.io/managed-by":"Helm","app.kubernetes.io/name":"nginx","app.kubernetes.io/version":"1.31.7","helm.sh/chart":"ashudev-website-1.0.0"},"name":"ashudev-redirect","namespace":"ashudev"},"spec":{"entryPoints":["web"],"routes":[{"kind":"Rule","match":"Host(`ashudev.com`)","middlewares":[{"name":"redirect-https","namespace":"kube-system"}],"services":[{"kind":"TraefikService","name":"noop@internal"}]}]}}
+    creationTimestamp: "2026-11-20T19:58:15Z"
+    generation: 1
+    labels:
+      app.kubernetes.io/instance: ashudev
+      app.kubernetes.io/managed-by: Helm
+      app.kubernetes.io/name: nginx
+      app.kubernetes.io/version: 1.31.7
+      helm.sh/chart: ashudev-website-1.0.0
+    name: ashudev-redirect
+    namespace: ashudev
+    resourceVersion: "1226814394"
+    uid: 13b0af81-f988-4107-9e2e-f7ad5a84ea7e
+  spec:
+    entryPoints:
+    - web
+    routes:
+    - kind: Rule
+      match: Host(`ashudev.com`)
+      middlewares:
+      - name: redirect-https
+        namespace: kube-system
+      services:
+      - kind: TraefikService
+        name: noop@internal
+- apiVersion: traefik.containo.us/v1alpha1
+  kind: IngressRoute
+  metadata:
+    annotations:
+      argocd.argoproj.io/tracking-id: ashudev:traefik.containo.us/IngressRoute:ashudev/ashudev-www
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"traefik.containo.us/v1alpha1","kind":"IngressRoute","metadata":{"annotations":{"argocd.argoproj.io/tracking-id":"ashudev:traefik.containo.us/IngressRoute:ashudev/ashudev-www"},"labels":{"app.kubernetes.io/instance":"ashudev","app.kubernetes.io/managed-by":"Helm","app.kubernetes.io/name":"nginx","app.kubernetes.io/version":"1.31.7","helm.sh/chart":"ashudev-website-1.0.0"},"name":"ashudev-www","namespace":"ashudev"},"spec":{"entryPoints":["web","websecure"],"routes":[{"kind":"Rule","match":"Host(`www.ashudev.com`)","middlewares":[{"name":"ashudev-nginx-www","namespace":"ashudev"}],"services":[{"kind":"TraefikService","name":"noop@internal"}]}],"tls":{"certResolver":"myresolver"}}}
+    creationTimestamp: "2026-11-20T19:58:15Z"
+    generation: 1
+    labels:
+      app.kubernetes.io/instance: ashudev
+      app.kubernetes.io/managed-by: Helm
+      app.kubernetes.io/name: nginx
+      app.kubernetes.io/version: 1.31.7
+      helm.sh/chart: ashudev-website-1.0.0
+    name: ashudev-www
+    namespace: ashudev
+    resourceVersion: "1226814395"
+    uid: a42e14fb-c08c-4d22-ae83-19cef1b18563
+  spec:
+    entryPoints:
+    - web
+    - websecure
+    routes:
+    - kind: Rule
+      match: Host(`www.ashudev.com`)
+      middlewares:
+      - name: ashudev-nginx-www
+        namespace: ashudev
+      services:
+      - kind: TraefikService
+        name: noop@internal
+    tls:
+      certResolver: myresolver
+- apiVersion: traefik.containo.us/v1alpha1
+  kind: IngressRoute
+  metadata:
+    annotations:
+      argocd.argoproj.io/tracking-id: ashuvidz:traefik.containo.us/IngressRoute:ashuvidz/ashuvidz
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"traefik.containo.us/v1alpha1","kind":"IngressRoute","metadata":{"annotations":{"argocd.argoproj.io/tracking-id":"ashuvidz:traefik.containo.us/IngressRoute:ashuvidz/ashuvidz"},"labels":{"app.kubernetes.io/instance":"ashuvidz","app.kubernetes.io/managed-by":"Helm","app.kubernetes.io/name":"nginx","app.kubernetes.io/version":"1.31.7","helm.sh/chart":"ashuvidz-website-1.0.0"},"name":"ashuvidz","namespace":"ashuvidz"},"spec":{"entryPoints":["websecure"],"routes":[{"kind":"Rule","match":"Host(`ashuvidz.com`) \u0026\u0026 PathPrefix(`/`)","middlewares":[{"name":"security","namespace":"kube-system"}],"services":[{"name":"ashuvidz-nginx","port":80}]}],"tls":{"certResolver":"myresolver"}}}
+    creationTimestamp: "2025-04-28T16:09:23Z"
+    generation: 5
+    labels:
+      app.kubernetes.io/instance: ashuvidz
+      app.kubernetes.io/managed-by: Helm
+      app.kubernetes.io/name: nginx
+      app.kubernetes.io/version: 1.31.7
+      helm.sh/chart: ashuvidz-website-1.0.0
+    name: ashuvidz
+    namespace: ashuvidz
+    resourceVersion: "1225188269"
+    uid: d0490f16-604a-4821-bdb0-708743796698
+  spec:
+    entryPoints:
+    - websecure
+    routes:
+    - kind: Rule
+      match: Host(`ashuvidz.com`) && PathPrefix(`/`)
+      middlewares:
+      - name: security
+        namespace: kube-system
+      services:
+      - name: ashuvidz-nginx
+        port: 80
+    tls:
+      certResolver: myresolver
+- apiVersion: traefik.containo.us/v1alpha1
+  kind: IngressRoute
+  metadata:
+    annotations:
+      argocd.argoproj.io/tracking-id: ashuvidz:traefik.containo.us/IngressRoute:ashuvidz/ashuvidz-redirect
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"traefik.containo.us/v1alpha1","kind":"IngressRoute","metadata":{"annotations":{"argocd.argoproj.io/tracking-id":"ashuvidz:traefik.containo.us/IngressRoute:ashuvidz/ashuvidz-redirect"},"labels":{"app.kubernetes.io/instance":"ashuvidz","app.kubernetes.io/managed-by":"Helm","app.kubernetes.io/name":"nginx","app.kubernetes.io/version":"1.31.7","helm.sh/chart":"ashuvidz-website-1.0.0"},"name":"ashuvidz-redirect","namespace":"ashuvidz"},"spec":{"entryPoints":["web"],"routes":[{"kind":"Rule","match":"Host(`ashuvidz.com`)","middlewares":[{"name":"redirect-https","namespace":"kube-system"}],"services":[{"kind":"TraefikService","name":"noop@internal"}]}]}}
+    creationTimestamp: "2025-04-28T16:09:23Z"
+    generation: 1
+    labels:
+      app.kubernetes.io/instance: ashuvidz
+      app.kubernetes.io/managed-by: Helm
+      app.kubernetes.io/name: nginx
+      app.kubernetes.io/version: 1.31.7
+      helm.sh/chart: ashuvidz-website-1.0.0
+    name: ashuvidz-redirect
+    namespace: ashuvidz
+    resourceVersion: "1225188270"
+    uid: 1e661a67-3acc-442c-89fa-ddb4f34a8104
+  spec:
+    entryPoints:
+    - web
+    routes:
+    - kind: Rule
+      match: Host(`ashuvidz.com`)
+      middlewares:
+      - name: redirect-https
+        namespace: kube-system
+      services:
+      - kind: TraefikService
+        name: noop@internal
+- apiVersion: traefik.containo.us/v1alpha1
+  kind: IngressRoute
+  metadata:
+    annotations:
+      argocd.argoproj.io/tracking-id: ashuvidz:traefik.containo.us/IngressRoute:ashuvidz/ashuvidz-www
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"traefik.containo.us/v1alpha1","kind":"IngressRoute","metadata":{"annotations":{"argocd.argoproj.io/tracking-id":"ashuvidz:traefik.containo.us/IngressRoute:ashuvidz/ashuvidz-www"},"labels":{"app.kubernetes.io/instance":"ashuvidz","app.kubernetes.io/managed-by":"Helm","app.kubernetes.io/name":"nginx","app.kubernetes.io/version":"1.31.7","helm.sh/chart":"ashuvidz-website-1.0.0"},"name":"ashuvidz-www","namespace":"ashuvidz"},"spec":{"entryPoints":["web","websecure"],"routes":[{"kind":"Rule","match":"Host(`www.ashuvidz.com`)","middlewares":[{"name":"ashuvidz-nginx-www","namespace":"ashuvidz"}],"services":[{"kind":"TraefikService","name":"noop@internal"}]}],"tls":{"certResolver":"myresolver"}}}
+    creationTimestamp: "2026-11-21T00:39:06Z"
+    generation: 1
+    labels:
+      app.kubernetes.io/instance: ashuvidz
+      app.kubernetes.io/managed-by: Helm
+      app.kubernetes.io/name: nginx
+      app.kubernetes.io/version: 1.31.7
+      helm.sh/chart: ashuvidz-website-1.0.0
+    name: ashuvidz-www
+    namespace: ashuvidz
+    resourceVersion: "1226975620"
+    uid: df404c19-2384-4aa5-9d9e-2fcb293c1a60
+  spec:
+    entryPoints:
+    - web
+    - websecure
+    routes:
+    - kind: Rule
+      match: Host(`www.ashuvidz.com`)
+      middlewares:
+      - name: ashuvidz-nginx-www
+        namespace: ashuvidz
+      services:
+      - kind: TraefikService
+        name: noop@internal
+    tls:
+      certResolver: myresolver
+- apiVersion: traefik.containo.us/v1alpha1
+  kind: IngressRoute
+  metadata:
+    annotations:
+      argocd.argoproj.io/tracking-id: authentik:traefik.containo.us/IngressRoute:authentik/authentik-kub-home
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"traefik.containo.us/v1alpha1","kind":"IngressRoute","metadata":{"annotations":{"argocd.argoproj.io/tracking-id":"authentik:traefik.containo.us/IngressRoute:authentik/authentik-kub-home"},"labels":{"app.kubernetes.io/instance":"authentik","app.kubernetes.io/name":"authentik"},"name":"authentik-kub-home","namespace":"authentik"},"spec":{"entryPoints":["websecure"],"routes":[{"kind":"Rule","match":"Host(`authentik.kub.home.ashudev.com`)","middlewares":[{"name":"kube-system-security@kubernetescrd"}],"services":[{"name":"authentik-server","port":"http"}]}],"tls":{"certResolver":"myresolver","options":{"name":"authentik-tlsoption"}}}}
+    creationTimestamp: "2026-11-14T02:55:53Z"
+    generation: 3
+    labels:
+      app.kubernetes.io/instance: authentik
+      app.kubernetes.io/name: authentik
+    name: authentik-kub-home
+    namespace: authentik
+    resourceVersion: "1226003438"
+    uid: c4132a5e-0e72-4c5c-8ee4-553a853c6700
+  spec:
+    entryPoints:
+    - websecure
+    routes:
+    - kind: Rule
+      match: Host(`authentik.kub.home.ashudev.com`)
+      middlewares:
+      - name: kube-system-security@kubernetescrd
+      services:
+      - name: authentik-server
+        port: http
+    tls:
+      certResolver: myresolver
+      options:
+        name: authentik-tlsoption
+- apiVersion: traefik.containo.us/v1alpha1
+  kind: IngressRoute
+  metadata:
+    annotations:
+      argocd.argoproj.io/tracking-id: authentik:traefik.containo.us/IngressRoute:authentik/authentik-kub-home-redirect
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"traefik.containo.us/v1alpha1","kind":"IngressRoute","metadata":{"annotations":{"argocd.argoproj.io/tracking-id":"authentik:traefik.containo.us/IngressRoute:authentik/authentik-kub-home-redirect"},"labels":{"app.kubernetes.io/instance":"authentik","app.kubernetes.io/name":"authentik"},"name":"authentik-kub-home-redirect","namespace":"authentik"},"spec":{"entryPoints":["web"],"routes":[{"kind":"Rule","match":"Host(`authentik.kub.home.ashudev.com`)","middlewares":[{"name":"kube-system-redirect-https@kubernetescrd"}],"services":[{"name":"authentik-server","port":"http"}]}]}}
+    creationTimestamp: "2026-11-14T02:55:53Z"
+    generation: 3
+    labels:
+      app.kubernetes.io/instance: authentik
+      app.kubernetes.io/name: authentik
+    name: authentik-kub-home-redirect
+    namespace: authentik
+    resourceVersion: "1226003437"
+    uid: bb414b3c-6238-4ff1-bfea-e5bae35df0b8
+  spec:
+    entryPoints:
+    - web
+    routes:
+    - kind: Rule
+      match: Host(`authentik.kub.home.ashudev.com`)
+      middlewares:
+      - name: kube-system-redirect-https@kubernetescrd
+      services:
+      - name: authentik-server
+        port: http
+- apiVersion: traefik.containo.us/v1alpha1
+  kind: IngressRoute
+  metadata:
+    annotations:
+      argocd.argoproj.io/tracking-id: dashy:traefik.containo.us/IngressRoute:dashy/dashy
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"traefik.containo.us/v1alpha1","kind":"IngressRoute","metadata":{"annotations":{"argocd.argoproj.io/tracking-id":"dashy:traefik.containo.us/IngressRoute:dashy/dashy"},"name":"dashy","namespace":"dashy"},"spec":{"entryPoints":["websecure"],"routes":[{"kind":"Rule","match":"Host(`dashy.ashudev.com`)","middlewares":[{"name":"authentik-forwardauth","namespace":"kube-system"},{"name":"security","namespace":"kube-system"}],"services":[{"name":"dashy","port":8080}]}],"tls":{"certResolver":"myresolver","options":{"name":"dashy-tlsoption","namespace":"dashy"}}}}
+    creationTimestamp: "2025-04-26T00:14:55Z"
+    generation: 5
+    name: dashy
+    namespace: dashy
+    resourceVersion: "1226004448"
+    uid: e3f4adbe-a924-4250-a8f6-ebcc7bd253b4
+  spec:
+    entryPoints:
+    - websecure
+    routes:
+    - kind: Rule
+      match: Host(`dashy.ashudev.com`)
+      middlewares:
+      - name: authentik-forwardauth
+        namespace: kube-system
+      - name: security
+        namespace: kube-system
+      services:
+      - name: dashy
+        port: 8080
+    tls:
+      certResolver: myresolver
+      options:
+        name: dashy-tlsoption
+        namespace: dashy
+- apiVersion: traefik.containo.us/v1alpha1
+  kind: IngressRoute
+  metadata:
+    annotations:
+      argocd.argoproj.io/tracking-id: dashy:traefik.containo.us/IngressRoute:dashy/dashy-local
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"traefik.containo.us/v1alpha1","kind":"IngressRoute","metadata":{"annotations":{"argocd.argoproj.io/tracking-id":"dashy:traefik.containo.us/IngressRoute:dashy/dashy-local"},"name":"dashy-local","namespace":"dashy"},"spec":{"entryPoints":["websecure"],"routes":[{"kind":"Rule","match":"Host(`dashy.kub.local`)","middlewares":[{"name":"lan-only","namespace":"kube-system"},{"name":"redirect-to-dashy","namespace":"dashy"}],"services":[{"kind":"TraefikService","name":"noop@internal"}]}],"tls":{"options":{"name":"internal-tls","namespace":"kube-system"}}}}
+    creationTimestamp: "2026-11-19T20:16:44Z"
+    generation: 1
+    name: dashy-local
+    namespace: dashy
+    resourceVersion: "1226004445"
+    uid: db4a5d5a-8be0-46cf-89ba-3a06d4ddbbbb
+  spec:
+    entryPoints:
+    - websecure
+    routes:
+    - kind: Rule
+      match: Host(`dashy.kub.local`)
+      middlewares:
+      - name: lan-only
+        namespace: kube-system
+      - name: redirect-to-dashy
+        namespace: dashy
+      services:
+      - kind: TraefikService
+        name: noop@internal
+    tls:
+      options:
+        name: internal-tls
+        namespace: kube-system
+- apiVersion: traefik.containo.us/v1alpha1
+  kind: IngressRoute
+  metadata:
+    annotations:
+      argocd.argoproj.io/tracking-id: dashy:traefik.containo.us/IngressRoute:dashy/dashy-public-redirect
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"traefik.containo.us/v1alpha1","kind":"IngressRoute","metadata":{"annotations":{"argocd.argoproj.io/tracking-id":"dashy:traefik.containo.us/IngressRoute:dashy/dashy-public-redirect"},"name":"dashy-public-redirect","namespace":"dashy"},"spec":{"entryPoints":["web"],"routes":[{"kind":"Rule","match":"Host(`dashy.ashudev.com`)","middlewares":[{"name":"redirect-https","namespace":"kube-system"}],"services":[{"kind":"TraefikService","name":"noop@internal"}]}]}}
+    creationTimestamp: "2026-11-19T20:16:44Z"
+    generation: 1
+    name: dashy-public-redirect
+    namespace: dashy
+    resourceVersion: "1226004446"
+    uid: 0195bff9-5073-42ca-b653-d619e9246741
+  spec:
+    entryPoints:
+    - web
+    routes:
+    - kind: Rule
+      match: Host(`dashy.ashudev.com`)
+      middlewares:
+      - name: redirect-https
+        namespace: kube-system
+      services:
+      - kind: TraefikService
+        name: noop@internal
+- apiVersion: traefik.containo.us/v1alpha1
+  kind: IngressRoute
+  metadata:
+    annotations:
+      argocd.argoproj.io/tracking-id: dashy:traefik.containo.us/IngressRoute:dashy/dashy-redirect
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"traefik.containo.us/v1alpha1","kind":"IngressRoute","metadata":{"annotations":{"argocd.argoproj.io/tracking-id":"dashy:traefik.containo.us/IngressRoute:dashy/dashy-redirect"},"name":"dashy-redirect","namespace":"dashy"},"spec":{"entryPoints":["web"],"routes":[{"kind":"Rule","match":"Host(`dashy.kub.local`)","middlewares":[{"name":"lan-only","namespace":"kube-system"},{"name":"redirect-to-dashy","namespace":"dashy"}],"services":[{"kind":"TraefikService","name":"noop@internal"}]}]}}
+    creationTimestamp: "2025-04-26T00:31:20Z"
+    generation: 4
+    name: dashy-redirect
+    namespace: dashy
+    resourceVersion: "1226004449"
+    uid: d783669c-9b76-4346-b5ce-e243910a6a24
+  spec:
+    entryPoints:
+    - web
+    routes:
+    - kind: Rule
+      match: Host(`dashy.kub.local`)
+      middlewares:
+      - name: lan-only
+        namespace: kube-system
+      - name: redirect-to-dashy
+        namespace: dashy
+      services:
+      - kind: TraefikService
+        name: noop@internal
+- apiVersion: traefik.containo.us/v1alpha1
+  kind: IngressRoute
+  metadata:
+    annotations:
+      argocd.argoproj.io/tracking-id: dashy:traefik.containo.us/IngressRoute:dashy/redirect-kub-to-dashy
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"traefik.containo.us/v1alpha1","kind":"IngressRoute","metadata":{"annotations":{"argocd.argoproj.io/tracking-id":"dashy:traefik.containo.us/IngressRoute:dashy/redirect-kub-to-dashy"},"name":"redirect-kub-to-dashy","namespace":"dashy"},"spec":{"entryPoints":["web"],"routes":[{"kind":"Rule","match":"Host(`kub.home.ashudev.com`)","middlewares":[{"name":"lan-only","namespace":"kube-system"},{"name":"redirect-to-dashy","namespace":"dashy"}],"services":[{"kind":"TraefikService","name":"noop@internal"}]}]}}
+    creationTimestamp: "2025-04-26T00:05:01Z"
+    generation: 5
+    name: redirect-kub-to-dashy
+    namespace: dashy
+    resourceVersion: "1225443099"
+    uid: 785632d3-11e8-442b-a25e-b41b1c55a6b3
+  spec:
+    entryPoints:
+    - web
+    routes:
+    - kind: Rule
+      match: Host(`kub.home.ashudev.com`)
+      middlewares:
+      - name: lan-only
+        namespace: kube-system
+      - name: redirect-to-dashy
+        namespace: dashy
+      services:
+      - kind: TraefikService
+        name: noop@internal
+- apiVersion: traefik.containo.us/v1alpha1
+  kind: IngressRoute
+  metadata:
+    annotations:
+      argocd.argoproj.io/tracking-id: dashy:traefik.containo.us/IngressRoute:dashy/redirect-kub-to-dashy-secure
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"traefik.containo.us/v1alpha1","kind":"IngressRoute","metadata":{"annotations":{"argocd.argoproj.io/tracking-id":"dashy:traefik.containo.us/IngressRoute:dashy/redirect-kub-to-dashy-secure"},"name":"redirect-kub-to-dashy-secure","namespace":"dashy"},"spec":{"entryPoints":["websecure"],"routes":[{"kind":"Rule","match":"Host(`kub.home.ashudev.com`)","middlewares":[{"name":"lan-only","namespace":"kube-system"},{"name":"redirect-to-dashy","namespace":"dashy"}],"services":[{"kind":"TraefikService","name":"noop@internal"}]}],"tls":{"certResolver":"myresolver"}}}
+    creationTimestamp: "2025-04-28T12:07:34Z"
+    generation: 2
+    name: redirect-kub-to-dashy-secure
+    namespace: dashy
+    resourceVersion: "1225443096"
+    uid: 3080fbab-f471-4102-9d8e-d248ad00d7e0
+  spec:
+    entryPoints:
+    - websecure
+    routes:
+    - kind: Rule
+      match: Host(`kub.home.ashudev.com`)
+      middlewares:
+      - name: lan-only
+        namespace: kube-system
+      - name: redirect-to-dashy
+        namespace: dashy
+      services:
+      - kind: TraefikService
+        name: noop@internal
+    tls:
+      certResolver: myresolver
+- apiVersion: traefik.containo.us/v1alpha1
+  kind: IngressRoute
+  metadata:
+    annotations:
+      argocd.argoproj.io/tracking-id: pgadmin:traefik.containo.us/IngressRoute:databases/pgadmin
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"traefik.containo.us/v1alpha1","kind":"IngressRoute","metadata":{"annotations":{"argocd.argoproj.io/tracking-id":"pgadmin:traefik.containo.us/IngressRoute:databases/pgadmin"},"labels":{"app.kubernetes.io/instance":"pgadmin","app.kubernetes.io/name":"pgadmin"},"name":"pgadmin","namespace":"databases"},"spec":{"entryPoints":["web"],"routes":[{"kind":"Rule","match":"Host(`pgadmin.kub.local`)","middlewares":[{"name":"kube-system-lan-only@kubernetescrd"}],"services":[{"name":"pgadmin","port":80}]}]}}
+    creationTimestamp: "2026-11-13T21:26:49Z"
+    generation: 2
+    labels:
+      app.kubernetes.io/instance: pgadmin
+      app.kubernetes.io/name: pgadmin
+    name: pgadmin
+    namespace: databases
+    resourceVersion: "1221899410"
+    uid: 513f603a-34e7-44af-9525-d9b9a3909dd1
+  spec:
+    entryPoints:
+    - web
+    routes:
+    - kind: Rule
+      match: Host(`pgadmin.kub.local`)
+      middlewares:
+      - name: kube-system-lan-only@kubernetescrd
+      services:
+      - name: pgadmin
+        port: 80
+- apiVersion: traefik.containo.us/v1alpha1
+  kind: IngressRoute
+  metadata:
+    annotations:
+      argocd.argoproj.io/tracking-id: docs-site:traefik.containo.us/IngressRoute:docs/docs-site
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"traefik.containo.us/v1alpha1","kind":"IngressRoute","metadata":{"annotations":{"argocd.argoproj.io/tracking-id":"docs-site:traefik.containo.us/IngressRoute:docs/docs-site"},"labels":{"app.kubernetes.io/instance":"docs-site","app.kubernetes.io/managed-by":"Helm","app.kubernetes.io/name":"docs-site","helm.sh/chart":"docs-site-0.1.0"},"name":"docs-site","namespace":"docs"},"spec":{"entryPoints":["websecure"],"routes":[{"kind":"Rule","match":"Host(`docs.kub.local`)","middlewares":[{"name":"kube-system-lan-only@kubernetescrd"},{"name":"kube-system-authentik-forwardauth@kubernetescrd"}],"services":[{"name":"docs-site","port":8080}]}],"tls":{"options":{"name":"internal-tls","namespace":"kube-system"}}}}
+    creationTimestamp: "2026-11-16T23:22:20Z"
+    generation: 1
+    labels:
+      app.kubernetes.io/instance: docs-site
+      app.kubernetes.io/managed-by: Helm
+      app.kubernetes.io/name: docs-site
+      helm.sh/chart: docs-site-0.1.0
+    name: docs-site
+    namespace: docs
+    resourceVersion: "1226171734"
+    uid: c623697f-305c-42d7-8e32-5def58dc752c
+  spec:
+    entryPoints:
+    - websecure
+    routes:
+    - kind: Rule
+      match: Host(`docs.kub.local`)
+      middlewares:
+      - name: kube-system-lan-only@kubernetescrd
+      - name: kube-system-authentik-forwardauth@kubernetescrd
+      services:
+      - name: docs-site
+        port: 8080
+    tls:
+      options:
+        name: internal-tls
+        namespace: kube-system
+- apiVersion: traefik.containo.us/v1alpha1
+  kind: IngressRoute
+  metadata:
+    annotations:
+      argocd.argoproj.io/tracking-id: docs-site:traefik.containo.us/IngressRoute:docs/docs-site-redirect
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"traefik.containo.us/v1alpha1","kind":"IngressRoute","metadata":{"annotations":{"argocd.argoproj.io/tracking-id":"docs-site:traefik.containo.us/IngressRoute:docs/docs-site-redirect"},"labels":{"app.kubernetes.io/instance":"docs-site","app.kubernetes.io/managed-by":"Helm","app.kubernetes.io/name":"docs-site","helm.sh/chart":"docs-site-0.1.0"},"name":"docs-site-redirect","namespace":"docs"},"spec":{"entryPoints":["web"],"routes":[{"kind":"Rule","match":"Host(`docs.kub.local`)","middlewares":[{"name":"kube-system-lan-only@kubernetescrd"},{"name":"kube-system-redirect-to-https@kubernetescrd"}],"services":[{"name":"docs-site","port":8080}]}]}}
+    creationTimestamp: "2026-11-16T23:22:20Z"
+    generation: 1
+    labels:
+      app.kubernetes.io/instance: docs-site
+      app.kubernetes.io/managed-by: Helm
+      app.kubernetes.io/name: docs-site
+      helm.sh/chart: docs-site-0.1.0
+    name: docs-site-redirect
+    namespace: docs
+    resourceVersion: "1226171733"
+    uid: 9f887d55-e7d6-47b0-b325-ae8a4dc6e20e
+  spec:
+    entryPoints:
+    - web
+    routes:
+    - kind: Rule
+      match: Host(`docs.kub.local`)
+      middlewares:
+      - name: kube-system-lan-only@kubernetescrd
+      - name: kube-system-redirect-to-https@kubernetescrd
+      services:
+      - name: docs-site
+        port: 8080
+- apiVersion: traefik.containo.us/v1alpha1
+  kind: IngressRoute
+  metadata:
+    annotations:
+      argocd.argoproj.io/tracking-id: filebrowser:traefik.containo.us/IngressRoute:filebrowser/filebrowser
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"traefik.containo.us/v1alpha1","kind":"IngressRoute","metadata":{"annotations":{"argocd.argoproj.io/tracking-id":"filebrowser:traefik.containo.us/IngressRoute:filebrowser/filebrowser"},"labels":{"app.kubernetes.io/instance":"filebrowser","app.kubernetes.io/name":"filebrowser"},"name":"filebrowser","namespace":"filebrowser"},"spec":{"entryPoints":["websecure"],"routes":[{"kind":"Rule","match":"Host(`filebrowser.kub.home.ashudev.com`)","middlewares":[{"name":"kube-system-security@kubernetescrd"}],"services":[{"name":"filebrowser-filebrowser-quantum","port":8080}]}],"tls":{"certResolver":"myresolver","options":{"name":"filebrowser-tlsoption"}}}}
+    creationTimestamp: "2026-11-14T23:26:52Z"
+    generation: 3
+    labels:
+      app.kubernetes.io/instance: filebrowser
+      app.kubernetes.io/name: filebrowser
+    name: filebrowser
+    namespace: filebrowser
+    resourceVersion: "1226069298"
+    uid: 15613973-1461-4cc5-aa68-0c094ff2b08b
+  spec:
+    entryPoints:
+    - websecure
+    routes:
+    - kind: Rule
+      match: Host(`filebrowser.kub.home.ashudev.com`)
+      middlewares:
+      - name: kube-system-security@kubernetescrd
+      services:
+      - name: filebrowser-filebrowser-quantum
+        port: 8080
+    tls:
+      certResolver: myresolver
+      options:
+        name: filebrowser-tlsoption
+- apiVersion: traefik.containo.us/v1alpha1
+  kind: IngressRoute
+  metadata:
+    annotations:
+      argocd.argoproj.io/tracking-id: koillection:traefik.containo.us/IngressRoute:koillection/koillection-app-public
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"traefik.containo.us/v1alpha1","kind":"IngressRoute","metadata":{"annotations":{"argocd.argoproj.io/tracking-id":"koillection:traefik.containo.us/IngressRoute:koillection/koillection-app-public"},"labels":{"app.kubernetes.io/instance":"koillection","app.kubernetes.io/managed-by":"Helm","app.kubernetes.io/name":"koillection-app","app.kubernetes.io/version":"1.8.6","helm.sh/chart":"koillection-0.2.2"},"name":"koillection-app-public","namespace":"koillection"},"spec":{"entryPoints":["websecure"],"routes":[{"kind":"Rule","match":"Host(`koillection.kub.home.ashudev.com`)","middlewares":[{"name":"kube-system-lan-only@kubernetescrd"}],"services":[{"name":"koillection-app","port":"http"}]}],"tls":{"certResolver":"myresolver","options":{"name":"koillection-app-tlsoption"}}}}
+      meta.helm.sh/release-name: koillection
+      meta.helm.sh/release-namespace: koillection
+    creationTimestamp: "2023-04-03T22:45:37Z"
+    generation: 4
+    labels:
+      app.kubernetes.io/instance: koillection
+      app.kubernetes.io/managed-by: Helm
+      app.kubernetes.io/name: koillection-app
+      app.kubernetes.io/version: 1.8.6
+      helm.sh/chart: koillection-0.2.2
+    name: koillection-app-public
+    namespace: koillection
+    resourceVersion: "1225373767"
+    uid: 47c7160d-c529-4e20-9dfe-0850af2f2e25
+  spec:
+    entryPoints:
+    - websecure
+    routes:
+    - kind: Rule
+      match: Host(`koillection.kub.home.ashudev.com`)
+      middlewares:
+      - name: kube-system-lan-only@kubernetescrd
+      services:
+      - name: koillection-app
+        port: http
+    tls:
+      certResolver: myresolver
+      options:
+        name: koillection-app-tlsoption
+- apiVersion: traefik.containo.us/v1alpha1
+  kind: IngressRoute
+  metadata:
+    annotations:
+      argocd.argoproj.io/tracking-id: koillection:traefik.containo.us/IngressRoute:koillection/koillection-app-public-redirect
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"traefik.containo.us/v1alpha1","kind":"IngressRoute","metadata":{"annotations":{"argocd.argoproj.io/tracking-id":"koillection:traefik.containo.us/IngressRoute:koillection/koillection-app-public-redirect"},"labels":{"app.kubernetes.io/instance":"koillection","app.kubernetes.io/managed-by":"Helm","app.kubernetes.io/name":"koillection-app","app.kubernetes.io/version":"1.8.6","helm.sh/chart":"koillection-0.2.2"},"name":"koillection-app-public-redirect","namespace":"koillection"},"spec":{"entryPoints":["web"],"routes":[{"kind":"Rule","match":"Host(`koillection.kub.home.ashudev.com`)","middlewares":[{"name":"kube-system-lan-only@kubernetescrd"},{"name":"koillection-app-redirect-https"}],"services":[{"name":"koillection-app","port":"http"}]}]}}
+      meta.helm.sh/release-name: koillection
+      meta.helm.sh/release-namespace: koillection
+    creationTimestamp: "2023-04-03T22:45:37Z"
+    generation: 4
+    labels:
+      app.kubernetes.io/instance: koillection
+      app.kubernetes.io/managed-by: Helm
+      app.kubernetes.io/name: koillection-app
+      app.kubernetes.io/version: 1.8.6
+      helm.sh/chart: koillection-0.2.2
+    name: koillection-app-public-redirect
+    namespace: koillection
+    resourceVersion: "1225373769"
+    uid: 6fcf68f9-778c-4b75-b66f-b927f85955c0
+  spec:
+    entryPoints:
+    - web
+    routes:
+    - kind: Rule
+      match: Host(`koillection.kub.home.ashudev.com`)
+      middlewares:
+      - name: kube-system-lan-only@kubernetescrd
+      - name: koillection-app-redirect-https
+      services:
+      - name: koillection-app
+        port: http
+- apiVersion: traefik.containo.us/v1alpha1
+  kind: IngressRoute
+  metadata:
+    annotations:
+      argocd.argoproj.io/tracking-id: autobrr:traefik.containo.us/IngressRoute:media-stack/autobrr
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"traefik.containo.us/v1alpha1","kind":"IngressRoute","metadata":{"annotations":{"argocd.argoproj.io/tracking-id":"autobrr:traefik.containo.us/IngressRoute:media-stack/autobrr"},"labels":{"app.kubernetes.io/instance":"autobrr","app.kubernetes.io/managed-by":"Helm","app.kubernetes.io/name":"autobrr","app.kubernetes.io/version":"1.90.0","helm.sh/chart":"autobrr-1.6.1"},"name":"autobrr","namespace":"media-stack"},"spec":{"entryPoints":["websecure"],"routes":[{"kind":"Rule","match":"Host(`autobrr.kub.local`)","middlewares":[{"name":"kube-system-lan-only@kubernetescrd"}],"services":[{"name":"autobrr","port":7474}]}],"tls":{"options":{"name":"internal-tls","namespace":"kube-system"}}}}
+    creationTimestamp: "2026-09-09T16:32:10Z"
+    generation: 5
+    labels:
+      app.kubernetes.io/instance: autobrr
+      app.kubernetes.io/managed-by: Helm
+      app.kubernetes.io/name: autobrr
+      app.kubernetes.io/version: 1.90.0
+      helm.sh/chart: autobrr-1.6.1
+    name: autobrr
+    namespace: media-stack
+    resourceVersion: "1226171644"
+    uid: 658c3daa-1f83-4f2d-b489-ad319442b60b
+  spec:
+    entryPoints:
+    - websecure
+    routes:
+    - kind: Rule
+      match: Host(`autobrr.kub.local`)
+      middlewares:
+      - name: kube-system-lan-only@kubernetescrd
+      services:
+      - name: autobrr
+        port: 7474
+    tls:
+      options:
+        name: internal-tls
+        namespace: kube-system
+- apiVersion: traefik.containo.us/v1alpha1
+  kind: IngressRoute
+  metadata:
+    annotations:
+      argocd.argoproj.io/tracking-id: autobrr:traefik.containo.us/IngressRoute:media-stack/autobrr-redirect
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"traefik.containo.us/v1alpha1","kind":"IngressRoute","metadata":{"annotations":{"argocd.argoproj.io/tracking-id":"autobrr:traefik.containo.us/IngressRoute:media-stack/autobrr-redirect"},"labels":{"app.kubernetes.io/instance":"autobrr","app.kubernetes.io/managed-by":"Helm","app.kubernetes.io/name":"autobrr","app.kubernetes.io/version":"1.90.0","helm.sh/chart":"autobrr-1.6.1"},"name":"autobrr-redirect","namespace":"media-stack"},"spec":{"entryPoints":["web"],"routes":[{"kind":"Rule","match":"Host(`autobrr.kub.local`)","middlewares":[{"name":"kube-system-lan-only@kubernetescrd"},{"name":"kube-system-redirect-to-https@kubernetescrd"}],"services":[{"name":"autobrr","port":7474}]}]}}
+    creationTimestamp: "2026-11-15T03:15:58Z"
+    generation: 1
+    labels:
+      app.kubernetes.io/instance: autobrr
+      app.kubernetes.io/managed-by: Helm
+      app.kubernetes.io/name: autobrr
+      app.kubernetes.io/version: 1.90.0
+      helm.sh/chart: autobrr-1.6.1
+    name: autobrr-redirect
+    namespace: media-stack
+    resourceVersion: "1226171643"
+    uid: b9e7670a-40a9-4f3e-9c78-e2ef0ab14f65
+  spec:
+    entryPoints:
+    - web
+    routes:
+    - kind: Rule
+      match: Host(`autobrr.kub.local`)
+      middlewares:
+      - name: kube-system-lan-only@kubernetescrd
+      - name: kube-system-redirect-to-https@kubernetescrd
+      services:
+      - name: autobrr
+        port: 7474
+- apiVersion: traefik.containo.us/v1alpha1
+  kind: IngressRoute
+  metadata:
+    annotations:
+      argocd.argoproj.io/tracking-id: bazarr:traefik.containo.us/IngressRoute:media-stack/bazarr
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"traefik.containo.us/v1alpha1","kind":"IngressRoute","metadata":{"annotations":{"argocd.argoproj.io/tracking-id":"bazarr:traefik.containo.us/IngressRoute:media-stack/bazarr"},"labels":{"app.kubernetes.io/instance":"bazarr","app.kubernetes.io/managed-by":"Helm","app.kubernetes.io/name":"bazarr","app.kubernetes.io/version":"1.6.2","helm.sh/chart":"bazarr-1.2.0"},"name":"bazarr","namespace":"media-stack"},"spec":{"entryPoints":["websecure"],"routes":[{"kind":"Rule","match":"Host(`bazarr.kub.local`)","middlewares":[{"name":"kube-system-lan-only@kubernetescrd"},{"name":"kube-system-authentik-forwardauth@kubernetescrd"}],"services":[{"name":"bazarr","port":6767}]},{"kind":"Rule","match":"Host(`bazarr.kub.local`) \u0026\u0026 PathPrefix(`/api`)","middlewares":[{"name":"kube-system-lan-only@kubernetescrd"}],"priority":100,"services":[{"name":"bazarr","port":6767}]}],"tls":{"options":{"name":"internal-tls","namespace":"kube-system"}}}}
+    creationTimestamp: "2026-11-13T03:13:19Z"
+    generation: 5
+    labels:
+      app.kubernetes.io/instance: bazarr
+      app.kubernetes.io/managed-by: Helm
+      app.kubernetes.io/name: bazarr
+      app.kubernetes.io/version: 1.6.2
+      helm.sh/chart: bazarr-1.2.0
+    name: bazarr
+    namespace: media-stack
+    resourceVersion: "1222029255"
+    uid: fddaca49-df6d-486f-9f55-f18282b5e939
+  spec:
+    entryPoints:
+    - websecure
+    routes:
+    - kind: Rule
+      match: Host(`bazarr.kub.local`)
+      middlewares:
+      - name: kube-system-lan-only@kubernetescrd
+      - name: kube-system-authentik-forwardauth@kubernetescrd
+      services:
+      - name: bazarr
+        port: 6767
+    - kind: Rule
+      match: Host(`bazarr.kub.local`) && PathPrefix(`/api`)
+      middlewares:
+      - name: kube-system-lan-only@kubernetescrd
+      priority: 100
+      services:
+      - name: bazarr
+        port: 6767
+    tls:
+      options:
+        name: internal-tls
+        namespace: kube-system
+- apiVersion: traefik.containo.us/v1alpha1
+  kind: IngressRoute
+  metadata:
+    annotations:
+      argocd.argoproj.io/tracking-id: bazarr-anime:traefik.containo.us/IngressRoute:media-stack/bazarr-anime
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"traefik.containo.us/v1alpha1","kind":"IngressRoute","metadata":{"annotations":{"argocd.argoproj.io/tracking-id":"bazarr-anime:traefik.containo.us/IngressRoute:media-stack/bazarr-anime"},"labels":{"app.kubernetes.io/instance":"bazarr-anime","app.kubernetes.io/managed-by":"Helm","app.kubernetes.io/name":"bazarr-anime","app.kubernetes.io/version":"1.6.2","helm.sh/chart":"bazarr-anime-1.2.0"},"name":"bazarr-anime","namespace":"media-stack"},"spec":{"entryPoints":["websecure"],"routes":[{"kind":"Rule","match":"Host(`bazarr-anime.kub.local`)","middlewares":[{"name":"kube-system-lan-only@kubernetescrd"},{"name":"kube-system-authentik-forwardauth@kubernetescrd"}],"services":[{"name":"bazarr-anime","port":6767}]},{"kind":"Rule","match":"Host(`bazarr-anime.kub.local`) \u0026\u0026 PathPrefix(`/api`)","middlewares":[{"name":"kube-system-lan-only@kubernetescrd"}],"priority":100,"services":[{"name":"bazarr-anime","port":6767}]}],"tls":{"options":{"name":"internal-tls","namespace":"kube-system"}}}}
+    creationTimestamp: "2026-11-13T03:13:09Z"
+    generation: 4
+    labels:
+      app.kubernetes.io/instance: bazarr-anime
+      app.kubernetes.io/managed-by: Helm
+      app.kubernetes.io/name: bazarr-anime
+      app.kubernetes.io/version: 1.6.2
+      helm.sh/chart: bazarr-anime-1.2.0
+    name: bazarr-anime
+    namespace: media-stack
+    resourceVersion: "1222029380"
+    uid: d759c558-e1bc-42c4-9f11-8985b79aa871
+  spec:
+    entryPoints:
+    - websecure
+    routes:
+    - kind: Rule
+      match: Host(`bazarr-anime.kub.local`)
+      middlewares:
+      - name: kube-system-lan-only@kubernetescrd
+      - name: kube-system-authentik-forwardauth@kubernetescrd
+      services:
+      - name: bazarr-anime
+        port: 6767
+    - kind: Rule
+      match: Host(`bazarr-anime.kub.local`) && PathPrefix(`/api`)
+      middlewares:
+      - name: kube-system-lan-only@kubernetescrd
+      priority: 100
+      services:
+      - name: bazarr-anime
+        port: 6767
+    tls:
+      options:
+        name: internal-tls
+        namespace: kube-system
+- apiVersion: traefik.containo.us/v1alpha1
+  kind: IngressRoute
+  metadata:
+    annotations:
+      argocd.argoproj.io/tracking-id: bazarr-anime:traefik.containo.us/IngressRoute:media-stack/bazarr-anime-redirect
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"traefik.containo.us/v1alpha1","kind":"IngressRoute","metadata":{"annotations":{"argocd.argoproj.io/tracking-id":"bazarr-anime:traefik.containo.us/IngressRoute:media-stack/bazarr-anime-redirect"},"labels":{"app.kubernetes.io/instance":"bazarr-anime","app.kubernetes.io/managed-by":"Helm","app.kubernetes.io/name":"bazarr-anime","app.kubernetes.io/version":"1.6.2","helm.sh/chart":"bazarr-anime-1.2.0"},"name":"bazarr-anime-redirect","namespace":"media-stack"},"spec":{"entryPoints":["web"],"routes":[{"kind":"Rule","match":"Host(`bazarr-anime.kub.local`)","middlewares":[{"name":"kube-system-lan-only@kubernetescrd"},{"name":"kube-system-redirect-to-https@kubernetescrd"}],"services":[{"name":"bazarr-anime","port":6767}]}]}}
+    creationTimestamp: "2026-11-15T03:16:16Z"
+    generation: 1
+    labels:
+      app.kubernetes.io/instance: bazarr-anime
+      app.kubernetes.io/managed-by: Helm
+      app.kubernetes.io/name: bazarr-anime
+      app.kubernetes.io/version: 1.6.2
+      helm.sh/chart: bazarr-anime-1.2.0
+    name: bazarr-anime-redirect
+    namespace: media-stack
+    resourceVersion: "1222029381"
+    uid: aa91e142-4b59-4482-8d79-acb7b0432ebe
+  spec:
+    entryPoints:
+    - web
+    routes:
+    - kind: Rule
+      match: Host(`bazarr-anime.kub.local`)
+      middlewares:
+      - name: kube-system-lan-only@kubernetescrd
+      - name: kube-system-redirect-to-https@kubernetescrd
+      services:
+      - name: bazarr-anime
+        port: 6767
+- apiVersion: traefik.containo.us/v1alpha1
+  kind: IngressRoute
+  metadata:
+    annotations:
+      argocd.argoproj.io/tracking-id: bazarr:traefik.containo.us/IngressRoute:media-stack/bazarr-redirect
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"traefik.containo.us/v1alpha1","kind":"IngressRoute","metadata":{"annotations":{"argocd.argoproj.io/tracking-id":"bazarr:traefik.containo.us/IngressRoute:media-stack/bazarr-redirect"},"labels":{"app.kubernetes.io/instance":"bazarr","app.kubernetes.io/managed-by":"Helm","app.kubernetes.io/name":"bazarr","app.kubernetes.io/version":"1.6.2","helm.sh/chart":"bazarr-1.2.0"},"name":"bazarr-redirect","namespace":"media-stack"},"spec":{"entryPoints":["web"],"routes":[{"kind":"Rule","match":"Host(`bazarr.kub.local`)","middlewares":[{"name":"kube-system-lan-only@kubernetescrd"},{"name":"kube-system-redirect-to-https@kubernetescrd"}],"services":[{"name":"bazarr","port":6767}]}]}}
+    creationTimestamp: "2026-11-15T03:16:12Z"
+    generation: 1
+    labels:
+      app.kubernetes.io/instance: bazarr
+      app.kubernetes.io/managed-by: Helm
+      app.kubernetes.io/name: bazarr
+      app.kubernetes.io/version: 1.6.2
+      helm.sh/chart: bazarr-1.2.0
+    name: bazarr-redirect
+    namespace: media-stack
+    resourceVersion: "1222029254"
+    uid: 3708c112-781a-4a99-a626-3a5ab0bebdd4
+  spec:
+    entryPoints:
+    - web
+    routes:
+    - kind: Rule
+      match: Host(`bazarr.kub.local`)
+      middlewares:
+      - name: kube-system-lan-only@kubernetescrd
+      - name: kube-system-redirect-to-https@kubernetescrd
+      services:
+      - name: bazarr
+        port: 6767
+- apiVersion: traefik.containo.us/v1alpha1
+  kind: IngressRoute
+  metadata:
+    annotations:
+      argocd.argoproj.io/tracking-id: calibre-web-automated:traefik.containo.us/IngressRoute:media-stack/calibre-web-automated
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"traefik.containo.us/v1alpha1","kind":"IngressRoute","metadata":{"annotations":{"argocd.argoproj.io/tracking-id":"calibre-web-automated:traefik.containo.us/IngressRoute:media-stack/calibre-web-automated"},"labels":{"app.kubernetes.io/instance":"calibre-web-automated","app.kubernetes.io/managed-by":"Helm","app.kubernetes.io/name":"calibre-web-automated","app.kubernetes.io/version":"4.0.8","helm.sh/chart":"calibre-web-automated-0.5.0"},"name":"calibre-web-automated","namespace":"media-stack"},"spec":{"entryPoints":["websecure"],"routes":[{"kind":"Rule","match":"Host(`calibre.kub.local`) \u0026\u0026 PathPrefix(`/`)","middlewares":[{"name":"kube-system-lan-only@kubernetescrd"}],"services":[{"name":"calibre-web-automated","port":8083}]}],"tls":{"options":{"name":"internal-tls","namespace":"kube-system"}}}}
+    creationTimestamp: "2026-11-13T20:34:46Z"
+    generation: 6
+    labels:
+      app.kubernetes.io/instance: calibre-web-automated
+      app.kubernetes.io/managed-by: Helm
+      app.kubernetes.io/name: calibre-web-automated
+      app.kubernetes.io/version: 4.0.8
+      helm.sh/chart: calibre-web-automated-0.5.0
+    name: calibre-web-automated
+    namespace: media-stack
+    resourceVersion: "1226172789"
+    uid: 41ccadb0-bd34-4161-9bcc-3e9b567eebc3
+  spec:
+    entryPoints:
+    - websecure
+    routes:
+    - kind: Rule
+      match: Host(`calibre.kub.local`) && PathPrefix(`/`)
+      middlewares:
+      - name: kube-system-lan-only@kubernetescrd
+      services:
+      - name: calibre-web-automated
+        port: 8083
+    tls:
+      options:
+        name: internal-tls
+        namespace: kube-system
+- apiVersion: traefik.containo.us/v1alpha1
+  kind: IngressRoute
+  metadata:
+    annotations:
+      argocd.argoproj.io/tracking-id: calibre-web-automated:traefik.containo.us/IngressRoute:media-stack/calibre-web-automated-redirect
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"traefik.containo.us/v1alpha1","kind":"IngressRoute","metadata":{"annotations":{"argocd.argoproj.io/tracking-id":"calibre-web-automated:traefik.containo.us/IngressRoute:media-stack/calibre-web-automated-redirect"},"labels":{"app.kubernetes.io/instance":"calibre-web-automated","app.kubernetes.io/managed-by":"Helm","app.kubernetes.io/name":"calibre-web-automated","app.kubernetes.io/version":"4.0.8","helm.sh/chart":"calibre-web-automated-0.5.0"},"name":"calibre-web-automated-redirect","namespace":"media-stack"},"spec":{"entryPoints":["web"],"routes":[{"kind":"Rule","match":"Host(`calibre.kub.local`) \u0026\u0026 PathPrefix(`/`)","middlewares":[{"name":"kube-system-lan-only@kubernetescrd"},{"name":"kube-system-redirect-to-https@kubernetescrd"}],"services":[{"name":"calibre-web-automated","port":8083}]}]}}
+    creationTimestamp: "2026-11-15T02:05:03Z"
+    generation: 2
+    labels:
+      app.kubernetes.io/instance: calibre-web-automated
+      app.kubernetes.io/managed-by: Helm
+      app.kubernetes.io/name: calibre-web-automated
+      app.kubernetes.io/version: 4.0.8
+      helm.sh/chart: calibre-web-automated-0.5.0
+    name: calibre-web-automated-redirect
+    namespace: media-stack
+    resourceVersion: "1226172791"
+    uid: 04ad6d2c-0a22-43f8-940e-c59732fde008
+  spec:
+    entryPoints:
+    - web
+    routes:
+    - kind: Rule
+      match: Host(`calibre.kub.local`) && PathPrefix(`/`)
+      middlewares:
+      - name: kube-system-lan-only@kubernetescrd
+      - name: kube-system-redirect-to-https@kubernetescrd
+      services:
+      - name: calibre-web-automated
+        port: 8083
+- apiVersion: traefik.containo.us/v1alpha1
+  kind: IngressRoute
+  metadata:
+    annotations:
+      argocd.argoproj.io/tracking-id: kavita:traefik.containo.us/IngressRoute:media-stack/kavita-public
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"traefik.containo.us/v1alpha1","kind":"IngressRoute","metadata":{"annotations":{"argocd.argoproj.io/tracking-id":"kavita:traefik.containo.us/IngressRoute:media-stack/kavita-public"},"labels":{"app.kubernetes.io/instance":"kavita","app.kubernetes.io/managed-by":"Helm","app.kubernetes.io/name":"kavita","app.kubernetes.io/version":"0.9.1.4","helm.sh/chart":"kavita-1.0.0"},"name":"kavita-public","namespace":"media-stack"},"spec":{"entryPoints":["websecure"],"routes":[{"kind":"Rule","match":"Host(`kavita.kub.home.ashudev.com`)","middlewares":[{"name":"kube-system-lan-only@kubernetescrd"}],"services":[{"name":"kavita","port":5000}]}],"tls":{"certResolver":"myresolver","options":{"name":"kavita-tlsoption","namespace":"media-stack"}}}}
+      meta.helm.sh/release-name: kavita
+      meta.helm.sh/release-namespace: media-stack
+    creationTimestamp: "2023-04-03T17:23:43Z"
+    generation: 4
+    labels:
+      app.kubernetes.io/instance: kavita
+      app.kubernetes.io/managed-by: Helm
+      app.kubernetes.io/name: kavita
+      app.kubernetes.io/version: 0.9.1.4
+      helm.sh/chart: kavita-1.0.0
+    name: kavita-public
+    namespace: media-stack
+    resourceVersion: "1226171812"
+    uid: f16b1a5b-bc2c-48f1-8c03-c18079a9936d
+  spec:
+    entryPoints:
+    - websecure
+    routes:
+    - kind: Rule
+      match: Host(`kavita.kub.home.ashudev.com`)
+      middlewares:
+      - name: kube-system-lan-only@kubernetescrd
+      services:
+      - name: kavita
+        port: 5000
+    tls:
+      certResolver: myresolver
+      options:
+        name: kavita-tlsoption
+        namespace: media-stack
+- apiVersion: traefik.containo.us/v1alpha1
+  kind: IngressRoute
+  metadata:
+    annotations:
+      argocd.argoproj.io/tracking-id: kavita:traefik.containo.us/IngressRoute:media-stack/kavita-public-redirect
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"traefik.containo.us/v1alpha1","kind":"IngressRoute","metadata":{"annotations":{"argocd.argoproj.io/tracking-id":"kavita:traefik.containo.us/IngressRoute:media-stack/kavita-public-redirect"},"labels":{"app.kubernetes.io/instance":"kavita","app.kubernetes.io/managed-by":"Helm","app.kubernetes.io/name":"kavita","app.kubernetes.io/version":"0.9.1.4","helm.sh/chart":"kavita-1.0.0"},"name":"kavita-public-redirect","namespace":"media-stack"},"spec":{"entryPoints":["web"],"routes":[{"kind":"Rule","match":"Host(`kavita.kub.home.ashudev.com`)","middlewares":[{"name":"kube-system-lan-only@kubernetescrd"},{"name":"kavita-redirect-https"}],"services":[{"name":"kavita","port":5000}]}]}}
+      meta.helm.sh/release-name: kavita
+      meta.helm.sh/release-namespace: media-stack
+    creationTimestamp: "2023-04-03T17:23:43Z"
+    generation: 4
+    labels:
+      app.kubernetes.io/instance: kavita
+      app.kubernetes.io/managed-by: Helm
+      app.kubernetes.io/name: kavita
+      app.kubernetes.io/version: 0.9.1.4
+      helm.sh/chart: kavita-1.0.0
+    name: kavita-public-redirect
+    namespace: media-stack
+    resourceVersion: "1226171813"
+    uid: 06e8ef01-0123-4870-9639-09193399ad9f
+  spec:
+    entryPoints:
+    - web
+    routes:
+    - kind: Rule
+      match: Host(`kavita.kub.home.ashudev.com`)
+      middlewares:
+      - name: kube-system-lan-only@kubernetescrd
+      - name: kavita-redirect-https
+      services:
+      - name: kavita
+        port: 5000
+- apiVersion: traefik.containo.us/v1alpha1
+  kind: IngressRoute
+  metadata:
+    annotations:
+      argocd.argoproj.io/tracking-id: lidarr:traefik.containo.us/IngressRoute:media-stack/lidarr
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"traefik.containo.us/v1alpha1","kind":"IngressRoute","metadata":{"annotations":{"argocd.argoproj.io/tracking-id":"lidarr:traefik.containo.us/IngressRoute:media-stack/lidarr"},"labels":{"app.kubernetes.io/instance":"lidarr","app.kubernetes.io/managed-by":"Helm","app.kubernetes.io/name":"lidarr","app.kubernetes.io/version":"3.1.6.5079","helm.sh/chart":"lidarr-1.3.0"},"name":"lidarr","namespace":"media-stack"},"spec":{"entryPoints":["websecure"],"routes":[{"kind":"Rule","match":"Host(`lidarr.kub.local`)","middlewares":[{"name":"kube-system-lan-only@kubernetescrd"},{"name":"kube-system-authentik-forwardauth@kubernetescrd"}],"services":[{"name":"lidarr","port":8686}]},{"kind":"Rule","match":"Host(`lidarr.kub.local`) \u0026\u0026 PathPrefix(`/api`)","middlewares":[{"name":"kube-system-lan-only@kubernetescrd"}],"priority":100,"services":[{"name":"lidarr","port":8686}]}],"tls":{"options":{"name":"internal-tls","namespace":"kube-system"}}}}
+    creationTimestamp: "2024-03-06T13:36:49Z"
+    generation: 6
+    labels:
+      app.kubernetes.io/instance: lidarr
+      app.kubernetes.io/managed-by: Helm
+      app.kubernetes.io/name: lidarr
+      app.kubernetes.io/version: 3.1.6.5079
+      helm.sh/chart: lidarr-1.3.0
+    name: lidarr
+    namespace: media-stack
+    resourceVersion: "1226172991"
+    uid: 184bd003-7553-47ad-97a8-30705b10b1d1
+  spec:
+    entryPoints:
+    - websecure
+    routes:
+    - kind: Rule
+      match: Host(`lidarr.kub.local`)
+      middlewares:
+      - name: kube-system-lan-only@kubernetescrd
+      - name: kube-system-authentik-forwardauth@kubernetescrd
+      services:
+      - name: lidarr
+        port: 8686
+    - kind: Rule
+      match: Host(`lidarr.kub.local`) && PathPrefix(`/api`)
+      middlewares:
+      - name: kube-system-lan-only@kubernetescrd
+      priority: 100
+      services:
+      - name: lidarr
+        port: 8686
+    tls:
+      options:
+        name: internal-tls
+        namespace: kube-system
+- apiVersion: traefik.containo.us/v1alpha1
+  kind: IngressRoute
+  metadata:
+    annotations:
+      argocd.argoproj.io/tracking-id: lidarr:traefik.containo.us/IngressRoute:media-stack/lidarr-redirect
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"traefik.containo.us/v1alpha1","kind":"IngressRoute","metadata":{"annotations":{"argocd.argoproj.io/tracking-id":"lidarr:traefik.containo.us/IngressRoute:media-stack/lidarr-redirect"},"labels":{"app.kubernetes.io/instance":"lidarr","app.kubernetes.io/managed-by":"Helm","app.kubernetes.io/name":"lidarr","app.kubernetes.io/version":"3.1.6.5079","helm.sh/chart":"lidarr-1.3.0"},"name":"lidarr-redirect","namespace":"media-stack"},"spec":{"entryPoints":["web"],"routes":[{"kind":"Rule","match":"Host(`lidarr.kub.local`)","middlewares":[{"name":"kube-system-lan-only@kubernetescrd"},{"name":"kube-system-redirect-to-https@kubernetescrd"}],"services":[{"name":"lidarr","port":8686}]}]}}
+    creationTimestamp: "2026-11-15T03:16:58Z"
+    generation: 1
+    labels:
+      app.kubernetes.io/instance: lidarr
+      app.kubernetes.io/managed-by: Helm
+      app.kubernetes.io/name: lidarr
+      app.kubernetes.io/version: 3.1.6.5079
+      helm.sh/chart: lidarr-1.3.0
+    name: lidarr-redirect
+    namespace: media-stack
+    resourceVersion: "1226172987"
+    uid: 131e12f7-8546-4c30-a51d-8631bc2c2b96
+  spec:
+    entryPoints:
+    - web
+    routes:
+    - kind: Rule
+      match: Host(`lidarr.kub.local`)
+      middlewares:
+      - name: kube-system-lan-only@kubernetescrd
+      - name: kube-system-redirect-to-https@kubernetescrd
+      services:
+      - name: lidarr
+        port: 8686
+- apiVersion: traefik.containo.us/v1alpha1
+  kind: IngressRoute
+  metadata:
+    annotations:
+      argocd.argoproj.io/tracking-id: maintainerr:traefik.containo.us/IngressRoute:media-stack/maintainerr
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"traefik.containo.us/v1alpha1","kind":"IngressRoute","metadata":{"annotations":{"argocd.argoproj.io/tracking-id":"maintainerr:traefik.containo.us/IngressRoute:media-stack/maintainerr"},"labels":{"app.kubernetes.io/instance":"maintainerr","app.kubernetes.io/managed-by":"Helm","app.kubernetes.io/name":"maintainerr","app.kubernetes.io/version":"3.32.0","helm.sh/chart":"maintainerr-1.2.0"},"name":"maintainerr","namespace":"media-stack"},"spec":{"entryPoints":["websecure"],"routes":[{"kind":"Rule","match":"Host(`maintainerr.kub.local`)","middlewares":[{"name":"kube-system-lan-only@kubernetescrd"},{"name":"kube-system-authentik-forwardauth@kubernetescrd"}],"services":[{"name":"maintainerr","port":6246}]},{"kind":"Rule","match":"Host(`maintainerr.kub.local`) \u0026\u0026 PathPrefix(`/api`)","middlewares":[{"name":"kube-system-lan-only@kubernetescrd"}],"priority":100,"services":[{"name":"maintainerr","port":6246}]}],"tls":{"options":{"name":"internal-tls","namespace":"kube-system"}}}}
+      meta.helm.sh/release-name: maintainerr
+      meta.helm.sh/release-namespace: media-stack
+    creationTimestamp: "2024-01-28T12:34:06Z"
+    generation: 6
+    labels:
+      app.kubernetes.io/instance: maintainerr
+      app.kubernetes.io/managed-by: Helm
+      app.kubernetes.io/name: maintainerr
+      app.kubernetes.io/version: 3.32.0
+      helm.sh/chart: maintainerr-1.2.0
+    name: maintainerr
+    namespace: media-stack
+    resourceVersion: "1222596067"
+    uid: 74270cef-a172-4d83-8232-6b7fe9ec2fc0
+  spec:
+    entryPoints:
+    - websecure
+    routes:
+    - kind: Rule
+      match: Host(`maintainerr.kub.local`)
+      middlewares:
+      - name: kube-system-lan-only@kubernetescrd
+      - name: kube-system-authentik-forwardauth@kubernetescrd
+      services:
+      - name: maintainerr
+        port: 6246
+    - kind: Rule
+      match: Host(`maintainerr.kub.local`) && PathPrefix(`/api`)
+      middlewares:
+      - name: kube-system-lan-only@kubernetescrd
+      priority: 100
+      services:
+      - name: maintainerr
+        port: 6246
+    tls:
+      options:
+        name: internal-tls
+        namespace: kube-system
+- apiVersion: traefik.containo.us/v1alpha1
+  kind: IngressRoute
+  metadata:
+    annotations:
+      argocd.argoproj.io/tracking-id: maintainerr:traefik.containo.us/IngressRoute:media-stack/maintainerr-redirect
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"traefik.containo.us/v1alpha1","kind":"IngressRoute","metadata":{"annotations":{"argocd.argoproj.io/tracking-id":"maintainerr:traefik.containo.us/IngressRoute:media-stack/maintainerr-redirect"},"labels":{"app.kubernetes.io/instance":"maintainerr","app.kubernetes.io/managed-by":"Helm","app.kubernetes.io/name":"maintainerr","app.kubernetes.io/version":"3.32.0","helm.sh/chart":"maintainerr-1.2.0"},"name":"maintainerr-redirect","namespace":"media-stack"},"spec":{"entryPoints":["web"],"routes":[{"kind":"Rule","match":"Host(`maintainerr.kub.local`)","middlewares":[{"name":"kube-system-lan-only@kubernetescrd"},{"name":"kube-system-redirect-to-https@kubernetescrd"}],"services":[{"name":"maintainerr","port":6246}]}]}}
+    creationTimestamp: "2026-11-15T03:17:10Z"
+    generation: 1
+    labels:
+      app.kubernetes.io/instance: maintainerr
+      app.kubernetes.io/managed-by: Helm
+      app.kubernetes.io/name: maintainerr
+      app.kubernetes.io/version: 3.32.0
+      helm.sh/chart: maintainerr-1.2.0
+    name: maintainerr-redirect
+    namespace: media-stack
+    resourceVersion: "1222596064"
+    uid: fe9ed5f3-6a2c-4d7f-9628-8cbff19d3361
+  spec:
+    entryPoints:
+    - web
+    routes:
+    - kind: Rule
+      match: Host(`maintainerr.kub.local`)
+      middlewares:
+      - name: kube-system-lan-only@kubernetescrd
+      - name: kube-system-redirect-to-https@kubernetescrd
+      services:
+      - name: maintainerr
+        port: 6246
+- apiVersion: traefik.containo.us/v1alpha1
+  kind: IngressRoute
+  metadata:
+    annotations:
+      argocd.argoproj.io/tracking-id: plex:traefik.containo.us/IngressRoute:media-stack/plex-public
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"traefik.containo.us/v1alpha1","kind":"IngressRoute","metadata":{"annotations":{"argocd.argoproj.io/tracking-id":"plex:traefik.containo.us/IngressRoute:media-stack/plex-public"},"labels":{"app.kubernetes.io/instance":"plex","app.kubernetes.io/managed-by":"Helm","app.kubernetes.io/name":"plex","app.kubernetes.io/version":"1.43.5.11079","helm.sh/chart":"plex-2.0.0"},"name":"plex-public","namespace":"media-stack"},"spec":{"entryPoints":["websecure"],"routes":[{"kind":"Rule","match":"Host(`plex.kub.home.ashudev.com`)","middlewares":[{"name":"plex-security"},{"name":"plex-ratelimit"}],"services":[{"name":"plex","passHostHeader":true,"port":32400,"scheme":"http"}]}],"tls":{"certResolver":"myresolver","options":{"name":"plex-tlsoption","namespace":"media-stack"}}}}
+      meta.helm.sh/release-name: plex
+      meta.helm.sh/release-namespace: media-stack
+    creationTimestamp: "2023-04-03T13:58:45Z"
+    generation: 6
+    labels:
+      app.kubernetes.io/instance: plex
+      app.kubernetes.io/managed-by: Helm
+      app.kubernetes.io/name: plex
+      app.kubernetes.io/version: 1.43.5.11079
+      helm.sh/chart: plex-2.0.0
+    name: plex-public
+    namespace: media-stack
+    resourceVersion: "1226171438"
+    uid: 79c9404e-211a-4f7f-97d7-d0744eae5ef4
+  spec:
+    entryPoints:
+    - websecure
+    routes:
+    - kind: Rule
+      match: Host(`plex.kub.home.ashudev.com`)
+      middlewares:
+      - name: plex-security
+      - name: plex-ratelimit
+      services:
+      - name: plex
+        passHostHeader: true
+        port: 32400
+        scheme: http
+    tls:
+      certResolver: myresolver
+      options:
+        name: plex-tlsoption
+        namespace: media-stack
+- apiVersion: traefik.containo.us/v1alpha1
+  kind: IngressRoute
+  metadata:
+    annotations:
+      argocd.argoproj.io/tracking-id: plex:traefik.containo.us/IngressRoute:media-stack/plex-public-redirect
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"traefik.containo.us/v1alpha1","kind":"IngressRoute","metadata":{"annotations":{"argocd.argoproj.io/tracking-id":"plex:traefik.containo.us/IngressRoute:media-stack/plex-public-redirect"},"labels":{"app.kubernetes.io/instance":"plex","app.kubernetes.io/managed-by":"Helm","app.kubernetes.io/name":"plex","app.kubernetes.io/version":"1.43.5.11079","helm.sh/chart":"plex-2.0.0"},"name":"plex-public-redirect","namespace":"media-stack"},"spec":{"entryPoints":["web"],"routes":[{"kind":"Rule","match":"Host(`plex.kub.home.ashudev.com`)","middlewares":[{"name":"plex-redirect-https"}],"services":[{"name":"plex","passHostHeader":true,"port":32400,"scheme":"http"}]}]}}
+      meta.helm.sh/release-name: plex
+      meta.helm.sh/release-namespace: media-stack
+    creationTimestamp: "2023-04-03T13:58:45Z"
+    generation: 4
+    labels:
+      app.kubernetes.io/instance: plex
+      app.kubernetes.io/managed-by: Helm
+      app.kubernetes.io/name: plex
+      app.kubernetes.io/version: 1.43.5.11079
+      helm.sh/chart: plex-2.0.0
+    name: plex-public-redirect
+    namespace: media-stack
+    resourceVersion: "1226171440"
+    uid: d907dcf7-6741-49c0-a656-fb6788d89173
+  spec:
+    entryPoints:
+    - web
+    routes:
+    - kind: Rule
+      match: Host(`plex.kub.home.ashudev.com`)
+      middlewares:
+      - name: plex-redirect-https
+      services:
+      - name: plex
+        passHostHeader: true
+        port: 32400
+        scheme: http
+- apiVersion: traefik.containo.us/v1alpha1
+  kind: IngressRoute
+  metadata:
+    annotations:
+      argocd.argoproj.io/tracking-id: prowlarr:traefik.containo.us/IngressRoute:media-stack/prowlarr
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"traefik.containo.us/v1alpha1","kind":"IngressRoute","metadata":{"annotations":{"argocd.argoproj.io/tracking-id":"prowlarr:traefik.containo.us/IngressRoute:media-stack/prowlarr"},"labels":{"app.kubernetes.io/instance":"prowlarr","app.kubernetes.io/managed-by":"Helm","app.kubernetes.io/name":"prowlarr","app.kubernetes.io/version":"2.7.0.5723","helm.sh/chart":"prowlarr-1.3.0"},"name":"prowlarr","namespace":"media-stack"},"spec":{"entryPoints":["websecure"],"routes":[{"kind":"Rule","match":"Host(`prowlarr.kub.local`)","middlewares":[{"name":"kube-system-lan-only@kubernetescrd"},{"name":"kube-system-authentik-forwardauth@kubernetescrd"}],"services":[{"name":"prowlarr","port":9696}]},{"kind":"Rule","match":"Host(`prowlarr.kub.local`) \u0026\u0026 PathPrefix(`/api`)","middlewares":[{"name":"kube-system-lan-only@kubernetescrd"}],"priority":100,"services":[{"name":"prowlarr","port":9696}]}],"tls":{"options":{"name":"internal-tls","namespace":"kube-system"}}}}
+      meta.helm.sh/release-name: prowlarr
+      meta.helm.sh/release-namespace: media-stack
+    creationTimestamp: "2023-09-14T18:36:55Z"
+    generation: 6
+    labels:
+      app.kubernetes.io/instance: prowlarr
+      app.kubernetes.io/managed-by: Helm
+      app.kubernetes.io/name: prowlarr
+      app.kubernetes.io/version: 2.7.0.5723
+      helm.sh/chart: prowlarr-1.3.0
+    name: prowlarr
+    namespace: media-stack
+    resourceVersion: "1226171876"
+    uid: 05a6417a-668a-471c-87df-f8201847d062
+  spec:
+    entryPoints:
+    - websecure
+    routes:
+    - kind: Rule
+      match: Host(`prowlarr.kub.local`)
+      middlewares:
+      - name: kube-system-lan-only@kubernetescrd
+      - name: kube-system-authentik-forwardauth@kubernetescrd
+      services:
+      - name: prowlarr
+        port: 9696
+    - kind: Rule
+      match: Host(`prowlarr.kub.local`) && PathPrefix(`/api`)
+      middlewares:
+      - name: kube-system-lan-only@kubernetescrd
+      priority: 100
+      services:
+      - name: prowlarr
+        port: 9696
+    tls:
+      options:
+        name: internal-tls
+        namespace: kube-system
+- apiVersion: traefik.containo.us/v1alpha1
+  kind: IngressRoute
+  metadata:
+    annotations:
+      argocd.argoproj.io/tracking-id: prowlarr:traefik.containo.us/IngressRoute:media-stack/prowlarr-redirect
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"traefik.containo.us/v1alpha1","kind":"IngressRoute","metadata":{"annotations":{"argocd.argoproj.io/tracking-id":"prowlarr:traefik.containo.us/IngressRoute:media-stack/prowlarr-redirect"},"labels":{"app.kubernetes.io/instance":"prowlarr","app.kubernetes.io/managed-by":"Helm","app.kubernetes.io/name":"prowlarr","app.kubernetes.io/version":"2.7.0.5723","helm.sh/chart":"prowlarr-1.3.0"},"name":"prowlarr-redirect","namespace":"media-stack"},"spec":{"entryPoints":["web"],"routes":[{"kind":"Rule","match":"Host(`prowlarr.kub.local`)","middlewares":[{"name":"kube-system-lan-only@kubernetescrd"},{"name":"kube-system-redirect-to-https@kubernetescrd"}],"services":[{"name":"prowlarr","port":9696}]}]}}
+    creationTimestamp: "2026-11-15T03:17:03Z"
+    generation: 1
+    labels:
+      app.kubernetes.io/instance: prowlarr
+      app.kubernetes.io/managed-by: Helm
+      app.kubernetes.io/name: prowlarr
+      app.kubernetes.io/version: 2.7.0.5723
+      helm.sh/chart: prowlarr-1.3.0
+    name: prowlarr-redirect
+    namespace: media-stack
+    resourceVersion: "1226171875"
+    uid: 315e72b5-bb7b-4f76-a391-ab909976e8bb
+  spec:
+    entryPoints:
+    - web
+    routes:
+    - kind: Rule
+      match: Host(`prowlarr.kub.local`)
+      middlewares:
+      - name: kube-system-lan-only@kubernetescrd
+      - name: kube-system-redirect-to-https@kubernetescrd
+      services:
+      - name: prowlarr
+        port: 9696
+- apiVersion: traefik.containo.us/v1alpha1
+  kind: IngressRoute
+  metadata:
+    annotations:
+      argocd.argoproj.io/tracking-id: qbittorrent:traefik.containo.us/IngressRoute:media-stack/qbittorrent
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"traefik.containo.us/v1alpha1","kind":"IngressRoute","metadata":{"annotations":{"argocd.argoproj.io/tracking-id":"qbittorrent:traefik.containo.us/IngressRoute:media-stack/qbittorrent"},"labels":{"app.kubernetes.io/instance":"qbittorrent","app.kubernetes.io/managed-by":"Helm","app.kubernetes.io/name":"qbittorrent","app.kubernetes.io/version":"5.3.0","helm.sh/chart":"qbittorrent-0.3.0"},"name":"qbittorrent","namespace":"media-stack"},"spec":{"entryPoints":["websecure"],"routes":[{"kind":"Rule","match":"Host(`qbittorrent.kub.local`)","middlewares":[{"name":"kube-system-lan-only@kubernetescrd"},{"name":"kube-system-authentik-forwardauth@kubernetescrd"}],"services":[{"name":"qbittorrent","port":8080}]}],"tls":{"options":{"name":"internal-tls","namespace":"kube-system"}}}}
+      meta.helm.sh/release-name: qbittorrent
+      meta.helm.sh/release-namespace: media-stack
+    creationTimestamp: "2023-09-14T18:44:10Z"
+    generation: 5
+    labels:
+      app.kubernetes.io/instance: qbittorrent
+      app.kubernetes.io/managed-by: Helm
+      app.kubernetes.io/name: qbittorrent
+      app.kubernetes.io/version: 5.3.0
+      helm.sh/chart: qbittorrent-0.3.0
+    name: qbittorrent
+    namespace: media-stack
+    resourceVersion: "1225027755"
+    uid: 7479b76c-66fc-46e1-924b-8c3607b44ab0
+  spec:
+    entryPoints:
+    - websecure
+    routes:
+    - kind: Rule
+      match: Host(`qbittorrent.kub.local`)
+      middlewares:
+      - name: kube-system-lan-only@kubernetescrd
+      - name: kube-system-authentik-forwardauth@kubernetescrd
+      services:
+      - name: qbittorrent
+        port: 8080
+    tls:
+      options:
+        name: internal-tls
+        namespace: kube-system
+- apiVersion: traefik.containo.us/v1alpha1
+  kind: IngressRoute
+  metadata:
+    annotations:
+      argocd.argoproj.io/tracking-id: qbittorrent:traefik.containo.us/IngressRoute:media-stack/qbittorrent-redirect
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"traefik.containo.us/v1alpha1","kind":"IngressRoute","metadata":{"annotations":{"argocd.argoproj.io/tracking-id":"qbittorrent:traefik.containo.us/IngressRoute:media-stack/qbittorrent-redirect"},"labels":{"app.kubernetes.io/instance":"qbittorrent","app.kubernetes.io/managed-by":"Helm","app.kubernetes.io/name":"qbittorrent","app.kubernetes.io/version":"5.3.0","helm.sh/chart":"qbittorrent-0.3.0"},"name":"qbittorrent-redirect","namespace":"media-stack"},"spec":{"entryPoints":["web"],"routes":[{"kind":"Rule","match":"Host(`qbittorrent.kub.local`)","middlewares":[{"name":"kube-system-lan-only@kubernetescrd"},{"name":"kube-system-redirect-to-https@kubernetescrd"}],"services":[{"name":"qbittorrent","port":8080}]}]}}
+    creationTimestamp: "2026-11-15T03:17:26Z"
+    generation: 2
+    labels:
+      app.kubernetes.io/instance: qbittorrent
+      app.kubernetes.io/managed-by: Helm
+      app.kubernetes.io/name: qbittorrent
+      app.kubernetes.io/version: 5.3.0
+      helm.sh/chart: qbittorrent-0.3.0
+    name: qbittorrent-redirect
+    namespace: media-stack
+    resourceVersion: "1225027757"
+    uid: c38c7dc8-9e49-47d5-9312-a6042719d3ec
+  spec:
+    entryPoints:
+    - web
+    routes:
+    - kind: Rule
+      match: Host(`qbittorrent.kub.local`)
+      middlewares:
+      - name: kube-system-lan-only@kubernetescrd
+      - name: kube-system-redirect-to-https@kubernetescrd
+      services:
+      - name: qbittorrent
+        port: 8080
+- apiVersion: traefik.containo.us/v1alpha1
+  kind: IngressRoute
+  metadata:
+    annotations:
+      argocd.argoproj.io/tracking-id: radarr:traefik.containo.us/IngressRoute:media-stack/radarr
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"traefik.containo.us/v1alpha1","kind":"IngressRoute","metadata":{"annotations":{"argocd.argoproj.io/tracking-id":"radarr:traefik.containo.us/IngressRoute:media-stack/radarr"},"labels":{"app.kubernetes.io/instance":"radarr","app.kubernetes.io/managed-by":"Helm","app.kubernetes.io/name":"radarr","app.kubernetes.io/version":"7.0.3.10918","helm.sh/chart":"radarr-1.4.0"},"name":"radarr","namespace":"media-stack"},"spec":{"entryPoints":["websecure"],"routes":[{"kind":"Rule","match":"Host(`radarr.kub.local`)","middlewares":[{"name":"kube-system-lan-only@kubernetescrd"}],"services":[{"name":"radarr","port":7878}]},{"kind":"Rule","match":"Host(`radarr.kub.local`) \u0026\u0026 PathPrefix(`/api`)","middlewares":[{"name":"kube-system-lan-only@kubernetescrd"}],"priority":100,"services":[{"name":"radarr","port":7878}]}],"tls":{"options":{"name":"internal-tls","namespace":"kube-system"}}}}
+      meta.helm.sh/release-name: radarr
+      meta.helm.sh/release-namespace: media-stack
+    creationTimestamp: "2023-09-14T18:46:51Z"
+    generation: 7
+    labels:
+      app.kubernetes.io/instance: radarr
+      app.kubernetes.io/managed-by: Helm
+      app.kubernetes.io/name: radarr
+      app.kubernetes.io/version: 7.0.3.10918
+      helm.sh/chart: radarr-1.4.0
+    name: radarr
+    namespace: media-stack
+    resourceVersion: "1226171507"
+    uid: 55b582eb-0db0-4419-8e1b-67bb6f78485b
+  spec:
+    entryPoints:
+    - websecure
+    routes:
+    - kind: Rule
+      match: Host(`radarr.kub.local`)
+      middlewares:
+      - name: kube-system-lan-only@kubernetescrd
+      services:
+      - name: radarr
+        port: 7878
+    - kind: Rule
+      match: Host(`radarr.kub.local`) && PathPrefix(`/api`)
+      middlewares:
+      - name: kube-system-lan-only@kubernetescrd
+      priority: 100
+      services:
+      - name: radarr
+        port: 7878
+    tls:
+      options:
+        name: internal-tls
+        namespace: kube-system
+- apiVersion: traefik.containo.us/v1alpha1
+  kind: IngressRoute
+  metadata:
+    annotations:
+      argocd.argoproj.io/tracking-id: radarr-anime:traefik.containo.us/IngressRoute:media-stack/radarr-anime
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"traefik.containo.us/v1alpha1","kind":"IngressRoute","metadata":{"annotations":{"argocd.argoproj.io/tracking-id":"radarr-anime:traefik.containo.us/IngressRoute:media-stack/radarr-anime"},"labels":{"app.kubernetes.io/instance":"radarr-anime","app.kubernetes.io/managed-by":"Helm","app.kubernetes.io/name":"radarr-anime","app.kubernetes.io/version":"7.0.3.10918","helm.sh/chart":"radarr-anime-1.2.4"},"name":"radarr-anime","namespace":"media-stack"},"spec":{"entryPoints":["websecure"],"routes":[{"kind":"Rule","match":"Host(`radarr-anime.kub.local`)","middlewares":[{"name":"kube-system-lan-only@kubernetescrd"}],"services":[{"name":"radarr-anime","port":7878}]},{"kind":"Rule","match":"Host(`radarr-anime.kub.local`) \u0026\u0026 PathPrefix(`/api`)","middlewares":[{"name":"kube-system-lan-only@kubernetescrd"}],"priority":100,"services":[{"name":"radarr-anime","port":7878}]}],"tls":{"options":{"name":"internal-tls","namespace":"kube-system"}}}}
+    creationTimestamp: "2026-09-03T14:44:02Z"
+    generation: 6
+    labels:
+      app.kubernetes.io/instance: radarr-anime
+      app.kubernetes.io/managed-by: Helm
+      app.kubernetes.io/name: radarr-anime
+      app.kubernetes.io/version: 7.0.3.10918
+      helm.sh/chart: radarr-anime-1.2.4
+    name: radarr-anime
+    namespace: media-stack
+    resourceVersion: "1226171941"
+    uid: 26f38386-0e8d-41be-a365-546ea7c3a441
+  spec:
+    entryPoints:
+    - websecure
+    routes:
+    - kind: Rule
+      match: Host(`radarr-anime.kub.local`)
+      middlewares:
+      - name: kube-system-lan-only@kubernetescrd
+      services:
+      - name: radarr-anime
+        port: 7878
+    - kind: Rule
+      match: Host(`radarr-anime.kub.local`) && PathPrefix(`/api`)
+      middlewares:
+      - name: kube-system-lan-only@kubernetescrd
+      priority: 100
+      services:
+      - name: radarr-anime
+        port: 7878
+    tls:
+      options:
+        name: internal-tls
+        namespace: kube-system
+- apiVersion: traefik.containo.us/v1alpha1
+  kind: IngressRoute
+  metadata:
+    annotations:
+      argocd.argoproj.io/tracking-id: radarr-anime:traefik.containo.us/IngressRoute:media-stack/radarr-anime-redirect
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"traefik.containo.us/v1alpha1","kind":"IngressRoute","metadata":{"annotations":{"argocd.argoproj.io/tracking-id":"radarr-anime:traefik.containo.us/IngressRoute:media-stack/radarr-anime-redirect"},"labels":{"app.kubernetes.io/instance":"radarr-anime","app.kubernetes.io/managed-by":"Helm","app.kubernetes.io/name":"radarr-anime","app.kubernetes.io/version":"7.0.3.10918","helm.sh/chart":"radarr-anime-1.2.4"},"name":"radarr-anime-redirect","namespace":"media-stack"},"spec":{"entryPoints":["web"],"routes":[{"kind":"Rule","match":"Host(`radarr-anime.kub.local`)","middlewares":[{"name":"kube-system-lan-only@kubernetescrd"},{"name":"kube-system-redirect-to-https@kubernetescrd"}],"services":[{"name":"radarr-anime","port":7878}]}]}}
+    creationTimestamp: "2026-11-15T03:17:30Z"
+    generation: 1
+    labels:
+      app.kubernetes.io/instance: radarr-anime
+      app.kubernetes.io/managed-by: Helm
+      app.kubernetes.io/name: radarr-anime
+      app.kubernetes.io/version: 7.0.3.10918
+      helm.sh/chart: radarr-anime-1.2.4
+    name: radarr-anime-redirect
+    namespace: media-stack
+    resourceVersion: "1226171942"
+    uid: caedfd2a-55cd-4abb-9b6f-c14c29b227d9
+  spec:
+    entryPoints:
+    - web
+    routes:
+    - kind: Rule
+      match: Host(`radarr-anime.kub.local`)
+      middlewares:
+      - name: kube-system-lan-only@kubernetescrd
+      - name: kube-system-redirect-to-https@kubernetescrd
+      services:
+      - name: radarr-anime
+        port: 7878
+- apiVersion: traefik.containo.us/v1alpha1
+  kind: IngressRoute
+  metadata:
+    annotations:
+      argocd.argoproj.io/tracking-id: radarr:traefik.containo.us/IngressRoute:media-stack/radarr-redirect
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"traefik.containo.us/v1alpha1","kind":"IngressRoute","metadata":{"annotations":{"argocd.argoproj.io/tracking-id":"radarr:traefik.containo.us/IngressRoute:media-stack/radarr-redirect"},"labels":{"app.kubernetes.io/instance":"radarr","app.kubernetes.io/managed-by":"Helm","app.kubernetes.io/name":"radarr","app.kubernetes.io/version":"7.0.3.10918","helm.sh/chart":"radarr-1.4.0"},"name":"radarr-redirect","namespace":"media-stack"},"spec":{"entryPoints":["web"],"routes":[{"kind":"Rule","match":"Host(`radarr.kub.local`)","middlewares":[{"name":"kube-system-lan-only@kubernetescrd"},{"name":"kube-system-redirect-to-https@kubernetescrd"}],"services":[{"name":"radarr","port":7878}]}]}}
+    creationTimestamp: "2026-11-15T03:17:29Z"
+    generation: 1
+    labels:
+      app.kubernetes.io/instance: radarr
+      app.kubernetes.io/managed-by: Helm
+      app.kubernetes.io/name: radarr
+      app.kubernetes.io/version: 7.0.3.10918
+      helm.sh/chart: radarr-1.4.0
+    name: radarr-redirect
+    namespace: media-stack
+    resourceVersion: "1226171505"
+    uid: 72dfd5ae-a9ee-4f67-bc00-9ed0594fc28a
+  spec:
+    entryPoints:
+    - web
+    routes:
+    - kind: Rule
+      match: Host(`radarr.kub.local`)
+      middlewares:
+      - name: kube-system-lan-only@kubernetescrd
+      - name: kube-system-redirect-to-https@kubernetescrd
+      services:
+      - name: radarr
+        port: 7878
+- apiVersion: traefik.containo.us/v1alpha1
+  kind: IngressRoute
+  metadata:
+    annotations:
+      argocd.argoproj.io/tracking-id: seerr:traefik.containo.us/IngressRoute:media-stack/seerr-public
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"traefik.containo.us/v1alpha1","kind":"IngressRoute","metadata":{"annotations":{"argocd.argoproj.io/tracking-id":"seerr:traefik.containo.us/IngressRoute:media-stack/seerr-public"},"labels":{"app.kubernetes.io/instance":"seerr","app.kubernetes.io/managed-by":"Helm","app.kubernetes.io/name":"seerr","app.kubernetes.io/version":"3.5.2","helm.sh/chart":"seerr-1.1.3"},"name":"seerr-public","namespace":"media-stack"},"spec":{"entryPoints":["websecure"],"routes":[{"kind":"Rule","match":"Host(`seerr.kub.home.ashudev.com`)","middlewares":[{"name":"seerr-security"},{"name":"seerr-ratelimit"}],"services":[{"name":"seerr","passHostHeader":true,"port":5055,"scheme":"http"}]}],"tls":{"certResolver":"myresolver","options":{"name":"seerr-tlsoption","namespace":"media-stack"}}}}
+    creationTimestamp: "2026-09-08T01:32:16Z"
+    generation: 2
+    labels:
+      app.kubernetes.io/instance: seerr
+      app.kubernetes.io/managed-by: Helm
+      app.kubernetes.io/name: seerr
+      app.kubernetes.io/version: 3.5.2
+      helm.sh/chart: seerr-1.1.3
+    name: seerr-public
+    namespace: media-stack
+    resourceVersion: "1226173288"
+    uid: 6ae50e97-8648-41fd-8fd0-179e7204267f
+  spec:
+    entryPoints:
+    - websecure
+    routes:
+    - kind: Rule
+      match: Host(`seerr.kub.home.ashudev.com`)
+      middlewares:
+      - name: seerr-security
+      - name: seerr-ratelimit
+      services:
+      - name: seerr
+        passHostHeader: true
+        port: 5055
+        scheme: http
+    tls:
+      certResolver: myresolver
+      options:
+        name: seerr-tlsoption
+        namespace: media-stack
+- apiVersion: traefik.containo.us/v1alpha1
+  kind: IngressRoute
+  metadata:
+    annotations:
+      argocd.argoproj.io/tracking-id: seerr:traefik.containo.us/IngressRoute:media-stack/seerr-public-redirect
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"traefik.containo.us/v1alpha1","kind":"IngressRoute","metadata":{"annotations":{"argocd.argoproj.io/tracking-id":"seerr:traefik.containo.us/IngressRoute:media-stack/seerr-public-redirect"},"labels":{"app.kubernetes.io/instance":"seerr","app.kubernetes.io/managed-by":"Helm","app.kubernetes.io/name":"seerr","app.kubernetes.io/version":"3.5.2","helm.sh/chart":"seerr-1.1.3"},"name":"seerr-public-redirect","namespace":"media-stack"},"spec":{"entryPoints":["web"],"routes":[{"kind":"Rule","match":"Host(`seerr.kub.home.ashudev.com`)","middlewares":[{"name":"seerr-redirect-https"}],"services":[{"name":"seerr","passHostHeader":true,"port":5055,"scheme":"http"}]}]}}
+    creationTimestamp: "2026-09-08T01:32:16Z"
+    generation: 2
+    labels:
+      app.kubernetes.io/instance: seerr
+      app.kubernetes.io/managed-by: Helm
+      app.kubernetes.io/name: seerr
+      app.kubernetes.io/version: 3.5.2
+      helm.sh/chart: seerr-1.1.3
+    name: seerr-public-redirect
+    namespace: media-stack
+    resourceVersion: "1226173289"
+    uid: 6c615fc2-4a9a-4571-b4b7-4cdad46f616d
+  spec:
+    entryPoints:
+    - web
+    routes:
+    - kind: Rule
+      match: Host(`seerr.kub.home.ashudev.com`)
+      middlewares:
+      - name: seerr-redirect-https
+      services:
+      - name: seerr
+        passHostHeader: true
+        port: 5055
+        scheme: http
+- apiVersion: traefik.containo.us/v1alpha1
+  kind: IngressRoute
+  metadata:
+    annotations:
+      argocd.argoproj.io/tracking-id: sonarr:traefik.containo.us/IngressRoute:media-stack/sonarr
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"traefik.containo.us/v1alpha1","kind":"IngressRoute","metadata":{"annotations":{"argocd.argoproj.io/tracking-id":"sonarr:traefik.containo.us/IngressRoute:media-stack/sonarr"},"labels":{"app.kubernetes.io/instance":"sonarr","app.kubernetes.io/managed-by":"Helm","app.kubernetes.io/name":"sonarr","app.kubernetes.io/version":"4.0.20.3014","helm.sh/chart":"sonarr-1.3.0"},"name":"sonarr","namespace":"media-stack"},"spec":{"entryPoints":["websecure"],"routes":[{"kind":"Rule","match":"Host(`sonarr.kub.local`)","middlewares":[{"name":"kube-system-lan-only@kubernetescrd"},{"name":"kube-system-authentik-forwardauth@kubernetescrd"}],"services":[{"name":"sonarr","port":8989}]},{"kind":"Rule","match":"Host(`sonarr.kub.local`) \u0026\u0026 PathPrefix(`/api`)","middlewares":[{"name":"kube-system-lan-only@kubernetescrd"}],"priority":100,"services":[{"name":"sonarr","port":8989}]}],"tls":{"options":{"name":"internal-tls","namespace":"kube-system"}}}}
+    creationTimestamp: "2026-09-02T22:47:03Z"
+    generation: 6
+    labels:
+      app.kubernetes.io/instance: sonarr
+      app.kubernetes.io/managed-by: Helm
+      app.kubernetes.io/name: sonarr
+      app.kubernetes.io/version: 4.0.20.3014
+      helm.sh/chart: sonarr-1.3.0
+    name: sonarr
+    namespace: media-stack
+    resourceVersion: "1226172923"
+    uid: 2c71b112-09e5-4a7e-a6a7-02bf4578075b
+  spec:
+    entryPoints:
+    - websecure
+    routes:
+    - kind: Rule
+      match: Host(`sonarr.kub.local`)
+      middlewares:
+      - name: kube-system-lan-only@kubernetescrd
+      - name: kube-system-authentik-forwardauth@kubernetescrd
+      services:
+      - name: sonarr
+        port: 8989
+    - kind: Rule
+      match: Host(`sonarr.kub.local`) && PathPrefix(`/api`)
+      middlewares:
+      - name: kube-system-lan-only@kubernetescrd
+      priority: 100
+      services:
+      - name: sonarr
+        port: 8989
+    tls:
+      options:
+        name: internal-tls
+        namespace: kube-system
+- apiVersion: traefik.containo.us/v1alpha1
+  kind: IngressRoute
+  metadata:
+    annotations:
+      argocd.argoproj.io/tracking-id: sonarr-anime:traefik.containo.us/IngressRoute:media-stack/sonarr-anime
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"traefik.containo.us/v1alpha1","kind":"IngressRoute","metadata":{"annotations":{"argocd.argoproj.io/tracking-id":"sonarr-anime:traefik.containo.us/IngressRoute:media-stack/sonarr-anime"},"labels":{"app.kubernetes.io/instance":"sonarr-anime","app.kubernetes.io/managed-by":"Helm","app.kubernetes.io/name":"sonarr-anime","app.kubernetes.io/version":"4.0.20.3014","helm.sh/chart":"sonarr-anime-1.2.2"},"name":"sonarr-anime","namespace":"media-stack"},"spec":{"entryPoints":["websecure"],"routes":[{"kind":"Rule","match":"Host(`sonarr-anime.kub.local`)","middlewares":[{"name":"kube-system-lan-only@kubernetescrd"},{"name":"kube-system-authentik-forwardauth@kubernetescrd"}],"services":[{"name":"sonarr-anime","port":8989}]},{"kind":"Rule","match":"Host(`sonarr-anime.kub.local`) \u0026\u0026 PathPrefix(`/api`)","middlewares":[{"name":"kube-system-lan-only@kubernetescrd"}],"priority":100,"services":[{"name":"sonarr-anime","port":8989}]}],"tls":{"options":{"name":"internal-tls","namespace":"kube-system"}}}}
+      meta.helm.sh/release-name: sonarr-anime
+      meta.helm.sh/release-namespace: media-stack
+    creationTimestamp: "2024-01-20T18:14:37Z"
+    generation: 5
+    labels:
+      app.kubernetes.io/instance: sonarr-anime
+      app.kubernetes.io/managed-by: Helm
+      app.kubernetes.io/name: sonarr-anime
+      app.kubernetes.io/version: 4.0.20.3014
+      helm.sh/chart: sonarr-anime-1.2.2
+    name: sonarr-anime
+    namespace: media-stack
+    resourceVersion: "1226173444"
+    uid: e018198b-d8a6-4189-b496-8907aebd7f31
+  spec:
+    entryPoints:
+    - websecure
+    routes:
+    - kind: Rule
+      match: Host(`sonarr-anime.kub.local`)
+      middlewares:
+      - name: kube-system-lan-only@kubernetescrd
+      - name: kube-system-authentik-forwardauth@kubernetescrd
+      services:
+      - name: sonarr-anime
+        port: 8989
+    - kind: Rule
+      match: Host(`sonarr-anime.kub.local`) && PathPrefix(`/api`)
+      middlewares:
+      - name: kube-system-lan-only@kubernetescrd
+      priority: 100
+      services:
+      - name: sonarr-anime
+        port: 8989
+    tls:
+      options:
+        name: internal-tls
+        namespace: kube-system
+- apiVersion: traefik.containo.us/v1alpha1
+  kind: IngressRoute
+  metadata:
+    annotations:
+      argocd.argoproj.io/tracking-id: sonarr-anime:traefik.containo.us/IngressRoute:media-stack/sonarr-anime-redirect
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"traefik.containo.us/v1alpha1","kind":"IngressRoute","metadata":{"annotations":{"argocd.argoproj.io/tracking-id":"sonarr-anime:traefik.containo.us/IngressRoute:media-stack/sonarr-anime-redirect"},"labels":{"app.kubernetes.io/instance":"sonarr-anime","app.kubernetes.io/managed-by":"Helm","app.kubernetes.io/name":"sonarr-anime","app.kubernetes.io/version":"4.0.20.3014","helm.sh/chart":"sonarr-anime-1.2.2"},"name":"sonarr-anime-redirect","namespace":"media-stack"},"spec":{"entryPoints":["web"],"routes":[{"kind":"Rule","match":"Host(`sonarr-anime.kub.local`)","middlewares":[{"name":"kube-system-lan-only@kubernetescrd"},{"name":"kube-system-redirect-to-https@kubernetescrd"}],"services":[{"name":"sonarr-anime","port":8989}]}]}}
+    creationTimestamp: "2026-11-15T03:16:40Z"
+    generation: 1
+    labels:
+      app.kubernetes.io/instance: sonarr-anime
+      app.kubernetes.io/managed-by: Helm
+      app.kubernetes.io/name: sonarr-anime
+      app.kubernetes.io/version: 4.0.20.3014
+      helm.sh/chart: sonarr-anime-1.2.2
+    name: sonarr-anime-redirect
+    namespace: media-stack
+    resourceVersion: "1226173445"
+    uid: a3030aaf-5483-45d8-9cac-be5deee73060
+  spec:
+    entryPoints:
+    - web
+    routes:
+    - kind: Rule
+      match: Host(`sonarr-anime.kub.local`)
+      middlewares:
+      - name: kube-system-lan-only@kubernetescrd
+      - name: kube-system-redirect-to-https@kubernetescrd
+      services:
+      - name: sonarr-anime
+        port: 8989
+- apiVersion: traefik.containo.us/v1alpha1
+  kind: IngressRoute
+  metadata:
+    annotations:
+      argocd.argoproj.io/tracking-id: sonarr:traefik.containo.us/IngressRoute:media-stack/sonarr-redirect
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"traefik.containo.us/v1alpha1","kind":"IngressRoute","metadata":{"annotations":{"argocd.argoproj.io/tracking-id":"sonarr:traefik.containo.us/IngressRoute:media-stack/sonarr-redirect"},"labels":{"app.kubernetes.io/instance":"sonarr","app.kubernetes.io/managed-by":"Helm","app.kubernetes.io/name":"sonarr","app.kubernetes.io/version":"4.0.20.3014","helm.sh/chart":"sonarr-1.3.0"},"name":"sonarr-redirect","namespace":"media-stack"},"spec":{"entryPoints":["web"],"routes":[{"kind":"Rule","match":"Host(`sonarr.kub.local`)","middlewares":[{"name":"kube-system-lan-only@kubernetescrd"},{"name":"kube-system-redirect-to-https@kubernetescrd"}],"services":[{"name":"sonarr","port":8989}]}]}}
+    creationTimestamp: "2026-11-15T03:17:12Z"
+    generation: 1
+    labels:
+      app.kubernetes.io/instance: sonarr
+      app.kubernetes.io/managed-by: Helm
+      app.kubernetes.io/name: sonarr
+      app.kubernetes.io/version: 4.0.20.3014
+      helm.sh/chart: sonarr-1.3.0
+    name: sonarr-redirect
+    namespace: media-stack
+    resourceVersion: "1226172924"
+    uid: 0ce015c9-77c4-49c9-b290-86c283c21284
+  spec:
+    entryPoints:
+    - web
+    routes:
+    - kind: Rule
+      match: Host(`sonarr.kub.local`)
+      middlewares:
+      - name: kube-system-lan-only@kubernetescrd
+      - name: kube-system-redirect-to-https@kubernetescrd
+      services:
+      - name: sonarr
+        port: 8989
+- apiVersion: traefik.containo.us/v1alpha1
+  kind: IngressRoute
+  metadata:
+    annotations:
+      argocd.argoproj.io/tracking-id: tautulli:traefik.containo.us/IngressRoute:media-stack/tautulli
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"traefik.containo.us/v1alpha1","kind":"IngressRoute","metadata":{"annotations":{"argocd.argoproj.io/tracking-id":"tautulli:traefik.containo.us/IngressRoute:media-stack/tautulli"},"labels":{"app.kubernetes.io/instance":"tautulli","app.kubernetes.io/managed-by":"Helm","app.kubernetes.io/name":"tautulli","app.kubernetes.io/version":"2.19.1","helm.sh/chart":"tautulli-1.3.0"},"name":"tautulli","namespace":"media-stack"},"spec":{"entryPoints":["websecure"],"routes":[{"kind":"Rule","match":"Host(`tautulli.kub.local`)","middlewares":[{"name":"kube-system-lan-only@kubernetescrd"}],"services":[{"name":"tautulli","port":8181}]}],"tls":{"options":{"name":"internal-tls","namespace":"kube-system"}}}}
+    creationTimestamp: "2026-11-12T23:23:21Z"
+    generation: 6
+    labels:
+      app.kubernetes.io/instance: tautulli
+      app.kubernetes.io/managed-by: Helm
+      app.kubernetes.io/name: tautulli
+      app.kubernetes.io/version: 2.19.1
+      helm.sh/chart: tautulli-1.3.0
+    name: tautulli
+    namespace: media-stack
+    resourceVersion: "1226171244"
+    uid: 3ce5ba8a-cea7-439f-85c9-7bf3759e66d0
+  spec:
+    entryPoints:
+    - websecure
+    routes:
+    - kind: Rule
+      match: Host(`tautulli.kub.local`)
+      middlewares:
+      - name: kube-system-lan-only@kubernetescrd
+      services:
+      - name: tautulli
+        port: 8181
+    tls:
+      options:
+        name: internal-tls
+        namespace: kube-system
+- apiVersion: traefik.containo.us/v1alpha1
+  kind: IngressRoute
+  metadata:
+    annotations:
+      argocd.argoproj.io/tracking-id: tautulli:traefik.containo.us/IngressRoute:media-stack/tautulli-redirect
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"traefik.containo.us/v1alpha1","kind":"IngressRoute","metadata":{"annotations":{"argocd.argoproj.io/tracking-id":"tautulli:traefik.containo.us/IngressRoute:media-stack/tautulli-redirect"},"labels":{"app.kubernetes.io/instance":"tautulli","app.kubernetes.io/managed-by":"Helm","app.kubernetes.io/name":"tautulli","app.kubernetes.io/version":"2.19.1","helm.sh/chart":"tautulli-1.3.0"},"name":"tautulli-redirect","namespace":"media-stack"},"spec":{"entryPoints":["web"],"routes":[{"kind":"Rule","match":"Host(`tautulli.kub.local`)","middlewares":[{"name":"kube-system-lan-only@kubernetescrd"},{"name":"kube-system-redirect-to-https@kubernetescrd"}],"services":[{"name":"tautulli","port":8181}]}]}}
+    creationTimestamp: "2026-11-15T03:18:12Z"
+    generation: 1
+    labels:
+      app.kubernetes.io/instance: tautulli
+      app.kubernetes.io/managed-by: Helm
+      app.kubernetes.io/name: tautulli
+      app.kubernetes.io/version: 2.19.1
+      helm.sh/chart: tautulli-1.3.0
+    name: tautulli-redirect
+    namespace: media-stack
+    resourceVersion: "1226171243"
+    uid: 7312378d-9ad4-4d42-8df2-56b00e543deb
+  spec:
+    entryPoints:
+    - web
+    routes:
+    - kind: Rule
+      match: Host(`tautulli.kub.local`)
+      middlewares:
+      - name: kube-system-lan-only@kubernetescrd
+      - name: kube-system-redirect-to-https@kubernetescrd
+      services:
+      - name: tautulli
+        port: 8181
+- apiVersion: traefik.containo.us/v1alpha1
+  kind: IngressRoute
+  metadata:
+    annotations:
+      argocd.argoproj.io/tracking-id: grafana:traefik.containo.us/IngressRoute:monitoring/grafana
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"traefik.containo.us/v1alpha1","kind":"IngressRoute","metadata":{"annotations":{"argocd.argoproj.io/tracking-id":"grafana:traefik.containo.us/IngressRoute:monitoring/grafana"},"labels":{"app.kubernetes.io/instance":"grafana","app.kubernetes.io/name":"grafana"},"name":"grafana","namespace":"monitoring"},"spec":{"entryPoints":["websecure"],"routes":[{"kind":"Rule","match":"Host(`grafana.kub.local`)","middlewares":[{"name":"kube-system-lan-only@kubernetescrd"}],"services":[{"name":"grafana","port":80}]}],"tls":{"options":{"name":"internal-tls","namespace":"kube-system"}}}}
+      meta.helm.sh/release-name: grafana
+      meta.helm.sh/release-namespace: monitoring
+    creationTimestamp: "2023-09-14T19:04:08Z"
+    generation: 4
+    labels:
+      app.kubernetes.io/instance: grafana
+      app.kubernetes.io/name: grafana
+    name: grafana
+    namespace: monitoring
+    resourceVersion: "1223539732"
+    uid: d7eadc2c-1fa7-49b2-a6a9-747684e6c805
+  spec:
+    entryPoints:
+    - websecure
+    routes:
+    - kind: Rule
+      match: Host(`grafana.kub.local`)
+      middlewares:
+      - name: kube-system-lan-only@kubernetescrd
+      services:
+      - name: grafana
+        port: 80
+    tls:
+      options:
+        name: internal-tls
+        namespace: kube-system
+- apiVersion: traefik.containo.us/v1alpha1
+  kind: IngressRoute
+  metadata:
+    annotations:
+      argocd.argoproj.io/tracking-id: grafana:traefik.containo.us/IngressRoute:monitoring/grafana-redirect
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"traefik.containo.us/v1alpha1","kind":"IngressRoute","metadata":{"annotations":{"argocd.argoproj.io/tracking-id":"grafana:traefik.containo.us/IngressRoute:monitoring/grafana-redirect"},"labels":{"app.kubernetes.io/instance":"grafana","app.kubernetes.io/name":"grafana"},"name":"grafana-redirect","namespace":"monitoring"},"spec":{"entryPoints":["web"],"routes":[{"kind":"Rule","match":"Host(`grafana.kub.local`)","middlewares":[{"name":"kube-system-lan-only@kubernetescrd"},{"name":"kube-system-redirect-to-https@kubernetescrd"}],"services":[{"name":"grafana","port":80}]}]}}
+    creationTimestamp: "2026-11-16T23:18:53Z"
+    generation: 1
+    labels:
+      app.kubernetes.io/instance: grafana
+      app.kubernetes.io/name: grafana
+    name: grafana-redirect
+    namespace: monitoring
+    resourceVersion: "1223539731"
+    uid: 91256943-ee18-4136-8f64-e2f535506953
+  spec:
+    entryPoints:
+    - web
+    routes:
+    - kind: Rule
+      match: Host(`grafana.kub.local`)
+      middlewares:
+      - name: kube-system-lan-only@kubernetescrd
+      - name: kube-system-redirect-to-https@kubernetescrd
+      services:
+      - name: grafana
+        port: 80
+- apiVersion: traefik.containo.us/v1alpha1
+  kind: IngressRoute
+  metadata:
+    annotations:
+      argocd.argoproj.io/tracking-id: loki:traefik.containo.us/IngressRoute:monitoring/loki
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"traefik.containo.us/v1alpha1","kind":"IngressRoute","metadata":{"annotations":{"argocd.argoproj.io/tracking-id":"loki:traefik.containo.us/IngressRoute:monitoring/loki"},"labels":{"app.kubernetes.io/instance":"loki","app.kubernetes.io/name":"loki"},"name":"loki","namespace":"monitoring"},"spec":{"entryPoints":["web"],"routes":[{"kind":"Rule","match":"Host(`loki.kub.local`)","middlewares":[{"name":"kube-system-lan-only@kubernetescrd"}],"services":[{"name":"loki","port":3100}]}]}}
+    creationTimestamp: "2026-11-12T01:40:31Z"
+    generation: 2
+    labels:
+      app.kubernetes.io/instance: loki
+      app.kubernetes.io/name: loki
+    name: loki
+    namespace: monitoring
+    resourceVersion: "1221898133"
+    uid: 6aa75a92-710e-4b54-8eb6-d67bda901b56
+  spec:
+    entryPoints:
+    - web
+    routes:
+    - kind: Rule
+      match: Host(`loki.kub.local`)
+      middlewares:
+      - name: kube-system-lan-only@kubernetescrd
+      services:
+      - name: loki
+        port: 3100
+- apiVersion: traefik.containo.us/v1alpha1
+  kind: IngressRoute
+  metadata:
+    annotations:
+      argocd.argoproj.io/tracking-id: prometheus:traefik.containo.us/IngressRoute:monitoring/prometheus
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"traefik.containo.us/v1alpha1","kind":"IngressRoute","metadata":{"annotations":{"argocd.argoproj.io/tracking-id":"prometheus:traefik.containo.us/IngressRoute:monitoring/prometheus"},"labels":{"app.kubernetes.io/instance":"prometheus","app.kubernetes.io/name":"prometheus"},"name":"prometheus","namespace":"monitoring"},"spec":{"entryPoints":["web"],"routes":[{"kind":"Rule","match":"Host(`prometheus.kub.local`)","middlewares":[{"name":"kube-system-lan-only@kubernetescrd"}],"services":[{"name":"prometheus-server","port":80}]}]}}
+    creationTimestamp: "2026-11-12T01:41:54Z"
+    generation: 2
+    labels:
+      app.kubernetes.io/instance: prometheus
+      app.kubernetes.io/name: prometheus
+    name: prometheus
+    namespace: monitoring
+    resourceVersion: "1221899069"
+    uid: bf87b508-6afe-45e2-ae76-13a87730091d
+  spec:
+    entryPoints:
+    - web
+    routes:
+    - kind: Rule
+      match: Host(`prometheus.kub.local`)
+      middlewares:
+      - name: kube-system-lan-only@kubernetescrd
+      services:
+      - name: prometheus-server
+        port: 80
+- apiVersion: traefik.containo.us/v1alpha1
+  kind: IngressRoute
+  metadata:
+    annotations:
+      argocd.argoproj.io/tracking-id: n8n:traefik.containo.us/IngressRoute:n8n/n8n-public
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"traefik.containo.us/v1alpha1","kind":"IngressRoute","metadata":{"annotations":{"argocd.argoproj.io/tracking-id":"n8n:traefik.containo.us/IngressRoute:n8n/n8n-public"},"labels":{"app.kubernetes.io/instance":"n8n","app.kubernetes.io/managed-by":"Helm","app.kubernetes.io/name":"n8n","app.kubernetes.io/version":"2.48.5","helm.sh/chart":"n8n-0.2.0"},"name":"n8n-public","namespace":"n8n"},"spec":{"entryPoints":["websecure"],"routes":[{"kind":"Rule","match":"Host(`n8n.kub.home.ashudev.com`)","middlewares":[{"name":"kube-system-lan-only@kubernetescrd"}],"services":[{"name":"n8n","port":"n8n"}]}],"tls":{"certResolver":"myresolver","options":{"name":"n8n-tlsoption"}}}}
+      meta.helm.sh/release-name: n8n
+      meta.helm.sh/release-namespace: n8n
+    creationTimestamp: "2023-07-26T13:47:13Z"
+    generation: 3
+    labels:
+      app.kubernetes.io/instance: n8n
+      app.kubernetes.io/managed-by: Helm
+      app.kubernetes.io/name: n8n
+      app.kubernetes.io/version: 2.48.5
+      helm.sh/chart: n8n-0.2.0
+    name: n8n-public
+    namespace: n8n
+    resourceVersion: "1225384560"
+    uid: fee1d0fd-ce9e-470f-9b52-a1a5d8300916
+  spec:
+    entryPoints:
+    - websecure
+    routes:
+    - kind: Rule
+      match: Host(`n8n.kub.home.ashudev.com`)
+      middlewares:
+      - name: kube-system-lan-only@kubernetescrd
+      services:
+      - name: n8n
+        port: n8n
+    tls:
+      certResolver: myresolver
+      options:
+        name: n8n-tlsoption
+- apiVersion: traefik.containo.us/v1alpha1
+  kind: IngressRoute
+  metadata:
+    annotations:
+      argocd.argoproj.io/tracking-id: n8n:traefik.containo.us/IngressRoute:n8n/n8n-public-redirect
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"traefik.containo.us/v1alpha1","kind":"IngressRoute","metadata":{"annotations":{"argocd.argoproj.io/tracking-id":"n8n:traefik.containo.us/IngressRoute:n8n/n8n-public-redirect"},"labels":{"app.kubernetes.io/instance":"n8n","app.kubernetes.io/managed-by":"Helm","app.kubernetes.io/name":"n8n","app.kubernetes.io/version":"2.48.5","helm.sh/chart":"n8n-0.2.0"},"name":"n8n-public-redirect","namespace":"n8n"},"spec":{"entryPoints":["web"],"routes":[{"kind":"Rule","match":"Host(`n8n.kub.home.ashudev.com`)","middlewares":[{"name":"kube-system-lan-only@kubernetescrd"},{"name":"n8n-redirect-https"}],"services":[{"name":"n8n","port":"n8n"}]}]}}
+      meta.helm.sh/release-name: n8n
+      meta.helm.sh/release-namespace: n8n
+    creationTimestamp: "2023-07-26T13:47:13Z"
+    generation: 3
+    labels:
+      app.kubernetes.io/instance: n8n
+      app.kubernetes.io/managed-by: Helm
+      app.kubernetes.io/name: n8n
+      app.kubernetes.io/version: 2.48.5
+      helm.sh/chart: n8n-0.2.0
+    name: n8n-public-redirect
+    namespace: n8n
+    resourceVersion: "1225384562"
+    uid: e8fe1faf-a61d-4714-9ba4-830251a1cdb0
+  spec:
+    entryPoints:
+    - web
+    routes:
+    - kind: Rule
+      match: Host(`n8n.kub.home.ashudev.com`)
+      middlewares:
+      - name: kube-system-lan-only@kubernetescrd
+      - name: n8n-redirect-https
+      services:
+      - name: n8n
+        port: n8n
+- apiVersion: traefik.containo.us/v1alpha1
+  kind: IngressRoute
+  metadata:
+    annotations:
+      argocd.argoproj.io/tracking-id: news-freshrss:traefik.containo.us/IngressRoute:news/news-freshrss-public
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"traefik.containo.us/v1alpha1","kind":"IngressRoute","metadata":{"annotations":{"argocd.argoproj.io/tracking-id":"news-freshrss:traefik.containo.us/IngressRoute:news/news-freshrss-public"},"labels":{"app.kubernetes.io/instance":"news-freshrss","app.kubernetes.io/managed-by":"Helm","app.kubernetes.io/name":"freshrss","app.kubernetes.io/version":"1.30.4","helm.sh/chart":"freshrss-1.1.0"},"name":"news-freshrss-public","namespace":"news"},"spec":{"entryPoints":["websecure"],"routes":[{"kind":"Rule","match":"Host(`freshrss.kub.home.ashudev.com`)","middlewares":[{"name":"kube-system-lan-only@kubernetescrd"}],"services":[{"name":"news-freshrss","port":"webui"}]}],"tls":{"certResolver":"myresolver","options":{"name":"news-freshrss-tlsoption"}}}}
+    creationTimestamp: "2024-06-19T12:18:49Z"
+    generation: 3
+    labels:
+      app.kubernetes.io/instance: news-freshrss
+      app.kubernetes.io/managed-by: Helm
+      app.kubernetes.io/name: freshrss
+      app.kubernetes.io/version: 1.30.4
+      helm.sh/chart: freshrss-1.1.0
+    name: news-freshrss-public
+    namespace: news
+    resourceVersion: "1226040642"
+    uid: 43b6248e-73ae-49cd-ae2c-e5a6d4268529
+  spec:
+    entryPoints:
+    - websecure
+    routes:
+    - kind: Rule
+      match: Host(`freshrss.kub.home.ashudev.com`)
+      middlewares:
+      - name: kube-system-lan-only@kubernetescrd
+      services:
+      - name: news-freshrss
+        port: webui
+    tls:
+      certResolver: myresolver
+      options:
+        name: news-freshrss-tlsoption
+- apiVersion: traefik.containo.us/v1alpha1
+  kind: IngressRoute
+  metadata:
+    annotations:
+      argocd.argoproj.io/tracking-id: news-freshrss:traefik.containo.us/IngressRoute:news/news-freshrss-public-redirect
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"traefik.containo.us/v1alpha1","kind":"IngressRoute","metadata":{"annotations":{"argocd.argoproj.io/tracking-id":"news-freshrss:traefik.containo.us/IngressRoute:news/news-freshrss-public-redirect"},"labels":{"app.kubernetes.io/instance":"news-freshrss","app.kubernetes.io/managed-by":"Helm","app.kubernetes.io/name":"freshrss","app.kubernetes.io/version":"1.30.4","helm.sh/chart":"freshrss-1.1.0"},"name":"news-freshrss-public-redirect","namespace":"news"},"spec":{"entryPoints":["web"],"routes":[{"kind":"Rule","match":"Host(`freshrss.kub.home.ashudev.com`)","middlewares":[{"name":"kube-system-lan-only@kubernetescrd"},{"name":"news-freshrss-redirect-https"}],"services":[{"name":"news-freshrss","port":"webui"}]}]}}
+    creationTimestamp: "2024-06-19T12:18:49Z"
+    generation: 2
+    labels:
+      app.kubernetes.io/instance: news-freshrss
+      app.kubernetes.io/managed-by: Helm
+      app.kubernetes.io/name: freshrss
+      app.kubernetes.io/version: 1.30.4
+      helm.sh/chart: freshrss-1.1.0
+    name: news-freshrss-public-redirect
+    namespace: news
+    resourceVersion: "1226040641"
+    uid: 327f7b50-c6b2-4b4a-98a7-590092cf328e
+  spec:
+    entryPoints:
+    - web
+    routes:
+    - kind: Rule
+      match: Host(`freshrss.kub.home.ashudev.com`)
+      middlewares:
+      - name: kube-system-lan-only@kubernetescrd
+      - name: news-freshrss-redirect-https
+      services:
+      - name: news-freshrss
+        port: webui
+- apiVersion: traefik.containo.us/v1alpha1
+  kind: IngressRoute
+  metadata:
+    annotations:
+      argocd.argoproj.io/tracking-id: syncthing:traefik.containo.us/IngressRoute:syncthing/syncthing-public
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"traefik.containo.us/v1alpha1","kind":"IngressRoute","metadata":{"annotations":{"argocd.argoproj.io/tracking-id":"syncthing:traefik.containo.us/IngressRoute:syncthing/syncthing-public"},"labels":{"app.kubernetes.io/instance":"syncthing","app.kubernetes.io/managed-by":"Helm","app.kubernetes.io/name":"syncthing","app.kubernetes.io/version":"2.1.7","helm.sh/chart":"syncthing-0.2.3"},"name":"syncthing-public","namespace":"syncthing"},"spec":{"entryPoints":["websecure"],"routes":[{"kind":"Rule","match":"Host(`syncthing.kub.home.ashudev.com`)","middlewares":[{"name":"kube-system-lan-only@kubernetescrd"},{"name":"kube-system-authentik-forwardauth@kubernetescrd"}],"services":[{"name":"syncthing","port":"webui"}]}],"tls":{"certResolver":"myresolver","options":{"name":"syncthing-tlsoption"}}}}
+      meta.helm.sh/release-name: syncthing
+      meta.helm.sh/release-namespace: syncthing
+    creationTimestamp: "2023-12-18T14:23:25Z"
+    generation: 6
+    labels:
+      app.kubernetes.io/instance: syncthing
+      app.kubernetes.io/managed-by: Helm
+      app.kubernetes.io/name: syncthing
+      app.kubernetes.io/version: 2.1.7
+      helm.sh/chart: syncthing-0.2.3
+    name: syncthing-public
+    namespace: syncthing
+    resourceVersion: "1226920537"
+    uid: ef85847a-358f-41d3-bbda-f68d56e3036a
+  spec:
+    entryPoints:
+    - websecure
+    routes:
+    - kind: Rule
+      match: Host(`syncthing.kub.home.ashudev.com`)
+      middlewares:
+      - name: kube-system-lan-only@kubernetescrd
+      - name: kube-system-authentik-forwardauth@kubernetescrd
+      services:
+      - name: syncthing
+        port: webui
+    tls:
+      certResolver: myresolver
+      options:
+        name: syncthing-tlsoption
+- apiVersion: traefik.containo.us/v1alpha1
+  kind: IngressRoute
+  metadata:
+    annotations:
+      argocd.argoproj.io/tracking-id: syncthing:traefik.containo.us/IngressRoute:syncthing/syncthing-public-redirect
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"traefik.containo.us/v1alpha1","kind":"IngressRoute","metadata":{"annotations":{"argocd.argoproj.io/tracking-id":"syncthing:traefik.containo.us/IngressRoute:syncthing/syncthing-public-redirect"},"labels":{"app.kubernetes.io/instance":"syncthing","app.kubernetes.io/managed-by":"Helm","app.kubernetes.io/name":"syncthing","app.kubernetes.io/version":"2.1.7","helm.sh/chart":"syncthing-0.2.3"},"name":"syncthing-public-redirect","namespace":"syncthing"},"spec":{"entryPoints":["web"],"routes":[{"kind":"Rule","match":"Host(`syncthing.kub.home.ashudev.com`)","middlewares":[{"name":"kube-system-lan-only@kubernetescrd"},{"name":"syncthing-redirect-https"}],"services":[{"name":"syncthing","port":"webui"}]}]}}
+      meta.helm.sh/release-name: syncthing
+      meta.helm.sh/release-namespace: syncthing
+    creationTimestamp: "2023-12-18T14:23:25Z"
+    generation: 5
+    labels:
+      app.kubernetes.io/instance: syncthing
+      app.kubernetes.io/managed-by: Helm
+      app.kubernetes.io/name: syncthing
+      app.kubernetes.io/version: 2.1.7
+      helm.sh/chart: syncthing-0.2.3
+    name: syncthing-public-redirect
+    namespace: syncthing
+    resourceVersion: "1226920536"
+    uid: 3f9463f7-184f-4ebf-b433-c51f8bf2228c
+  spec:
+    entryPoints:
+    - web
+    routes:
+    - kind: Rule
+      match: Host(`syncthing.kub.home.ashudev.com`)
+      middlewares:
+      - name: kube-system-lan-only@kubernetescrd
+      - name: syncthing-redirect-https
+      services:
+      - name: syncthing
+        port: webui
+- apiVersion: traefik.containo.us/v1alpha1
+  kind: IngressRoute
+  metadata:
+    annotations:
+      argocd.argoproj.io/tracking-id: thelounge:traefik.containo.us/IngressRoute:thelounge/thelounge-public
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"traefik.containo.us/v1alpha1","kind":"IngressRoute","metadata":{"annotations":{"argocd.argoproj.io/tracking-id":"thelounge:traefik.containo.us/IngressRoute:thelounge/thelounge-public"},"labels":{"app.kubernetes.io/instance":"thelounge","app.kubernetes.io/managed-by":"Helm","app.kubernetes.io/name":"thelounge","app.kubernetes.io/version":"4.5.2","helm.sh/chart":"thelounge-0.3.0"},"name":"thelounge-public","namespace":"thelounge"},"spec":{"entryPoints":["websecure"],"routes":[{"kind":"Rule","match":"Host(`thelounge.kub.home.ashudev.com`)","middlewares":[{"name":"kube-system-lan-only@kubernetescrd"},{"name":"kube-system-security@kubernetescrd"}],"services":[{"name":"thelounge","port":9000}]}],"tls":{"certResolver":"myresolver","options":{"name":"thelounge-tlsoption"}}}}
+      meta.helm.sh/release-name: thelounge
+      meta.helm.sh/release-namespace: thelounge
+    creationTimestamp: "2023-04-05T11:47:26Z"
+    generation: 4
+    labels:
+      app.kubernetes.io/instance: thelounge
+      app.kubernetes.io/managed-by: Helm
+      app.kubernetes.io/name: thelounge
+      app.kubernetes.io/version: 4.5.2
+      helm.sh/chart: thelounge-0.3.0
+    name: thelounge-public
+    namespace: thelounge
+    resourceVersion: "1226225124"
+    uid: 03e0dd2a-6416-4edc-83e6-7f24469f5588
+  spec:
+    entryPoints:
+    - websecure
+    routes:
+    - kind: Rule
+      match: Host(`thelounge.kub.home.ashudev.com`)
+      middlewares:
+      - name: kube-system-lan-only@kubernetescrd
+      - name: kube-system-security@kubernetescrd
+      services:
+      - name: thelounge
+        port: 9000
+    tls:
+      certResolver: myresolver
+      options:
+        name: thelounge-tlsoption
+- apiVersion: traefik.containo.us/v1alpha1
+  kind: IngressRoute
+  metadata:
+    annotations:
+      argocd.argoproj.io/tracking-id: thelounge:traefik.containo.us/IngressRoute:thelounge/thelounge-public-redirect
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"traefik.containo.us/v1alpha1","kind":"IngressRoute","metadata":{"annotations":{"argocd.argoproj.io/tracking-id":"thelounge:traefik.containo.us/IngressRoute:thelounge/thelounge-public-redirect"},"labels":{"app.kubernetes.io/instance":"thelounge","app.kubernetes.io/managed-by":"Helm","app.kubernetes.io/name":"thelounge","app.kubernetes.io/version":"4.5.2","helm.sh/chart":"thelounge-0.3.0"},"name":"thelounge-public-redirect","namespace":"thelounge"},"spec":{"entryPoints":["web"],"routes":[{"kind":"Rule","match":"Host(`thelounge.kub.home.ashudev.com`)","middlewares":[{"name":"kube-system-lan-only@kubernetescrd"},{"name":"kube-system-redirect-to-https@kubernetescrd"}],"services":[{"name":"thelounge","port":9000}]}]}}
+      meta.helm.sh/release-name: thelounge
+      meta.helm.sh/release-namespace: thelounge
+    creationTimestamp: "2023-04-05T11:47:26Z"
+    generation: 3
+    labels:
+      app.kubernetes.io/instance: thelounge
+      app.kubernetes.io/managed-by: Helm
+      app.kubernetes.io/name: thelounge
+      app.kubernetes.io/version: 4.5.2
+      helm.sh/chart: thelounge-0.3.0
+    name: thelounge-public-redirect
+    namespace: thelounge
+    resourceVersion: "1226225123"
+    uid: a8dd7312-2172-4269-bc1c-94c6d6e6aa37
+  spec:
+    entryPoints:
+    - web
+    routes:
+    - kind: Rule
+      match: Host(`thelounge.kub.home.ashudev.com`)
+      middlewares:
+      - name: kube-system-lan-only@kubernetescrd
+      - name: kube-system-redirect-to-https@kubernetescrd
+      services:
+      - name: thelounge
+        port: 9000
+- apiVersion: traefik.containo.us/v1alpha1
+  kind: IngressRoute
+  metadata:
+    annotations:
+      argocd.argoproj.io/tracking-id: vikunja:traefik.containo.us/IngressRoute:vikunja/vikunja
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"traefik.containo.us/v1alpha1","kind":"IngressRoute","metadata":{"annotations":{"argocd.argoproj.io/tracking-id":"vikunja:traefik.containo.us/IngressRoute:vikunja/vikunja"},"labels":{"app.kubernetes.io/instance":"vikunja","app.kubernetes.io/name":"vikunja"},"name":"vikunja","namespace":"vikunja"},"spec":{"entryPoints":["websecure"],"routes":[{"kind":"Rule","match":"Host(`vikunja.kub.local`)","middlewares":[{"name":"kube-system-lan-only@kubernetescrd"}],"services":[{"name":"vikunja","port":3456}]},{"kind":"Rule","match":"Host(`vikunja.kub.local`) \u0026\u0026 PathPrefix(`/api`)","middlewares":[{"name":"kube-system-lan-only@kubernetescrd"}],"priority":100,"services":[{"name":"vikunja","port":3456}]}],"tls":{"options":{"name":"internal-tls","namespace":"kube-system"}}}}
+    creationTimestamp: "2026-11-16T14:24:56Z"
+    generation: 2
+    labels:
+      app.kubernetes.io/instance: vikunja
+      app.kubernetes.io/name: vikunja
+    name: vikunja
+    namespace: vikunja
+    resourceVersion: "1223486722"
+    uid: 43031178-db86-479a-a825-d542b507df24
+  spec:
+    entryPoints:
+    - websecure
+    routes:
+    - kind: Rule
+      match: Host(`vikunja.kub.local`)
+      middlewares:
+      - name: kube-system-lan-only@kubernetescrd
+      services:
+      - name: vikunja
+        port: 3456
+    - kind: Rule
+      match: Host(`vikunja.kub.local`) && PathPrefix(`/api`)
+      middlewares:
+      - name: kube-system-lan-only@kubernetescrd
+      priority: 100
+      services:
+      - name: vikunja
+        port: 3456
+    tls:
+      options:
+        name: internal-tls
+        namespace: kube-system
+- apiVersion: traefik.containo.us/v1alpha1
+  kind: IngressRoute
+  metadata:
+    annotations:
+      argocd.argoproj.io/tracking-id: vikunja:traefik.containo.us/IngressRoute:vikunja/vikunja-redirect
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"traefik.containo.us/v1alpha1","kind":"IngressRoute","metadata":{"annotations":{"argocd.argoproj.io/tracking-id":"vikunja:traefik.containo.us/IngressRoute:vikunja/vikunja-redirect"},"labels":{"app.kubernetes.io/instance":"vikunja","app.kubernetes.io/name":"vikunja"},"name":"vikunja-redirect","namespace":"vikunja"},"spec":{"entryPoints":["web"],"routes":[{"kind":"Rule","match":"Host(`vikunja.kub.local`)","middlewares":[{"name":"kube-system-lan-only@kubernetescrd"},{"name":"kube-system-redirect-to-https@kubernetescrd"}],"services":[{"name":"vikunja","port":3456}]}]}}
+    creationTimestamp: "2026-11-16T14:24:56Z"
+    generation: 1
+    labels:
+      app.kubernetes.io/instance: vikunja
+      app.kubernetes.io/name: vikunja
+    name: vikunja-redirect
+    namespace: vikunja
+    resourceVersion: "1223233262"
+    uid: e51315e8-8724-45e2-9e52-9cc55df9190a
+  spec:
+    entryPoints:
+    - web
+    routes:
+    - kind: Rule
+      match: Host(`vikunja.kub.local`)
+      middlewares:
+      - name: kube-system-lan-only@kubernetescrd
+      - name: kube-system-redirect-to-https@kubernetescrd
+      services:
+      - name: vikunja
+        port: 3456
+kind: List
+metadata:
+  resourceVersion: ""
+---
+apiVersion: v1
+items:
+- apiVersion: traefik.containo.us/v1alpha1
+  kind: Middleware
+  metadata:
+    annotations:
+      argocd.argoproj.io/tracking-id: ashudev:traefik.containo.us/Middleware:ashudev/ashudev-nginx-www
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"traefik.containo.us/v1alpha1","kind":"Middleware","metadata":{"annotations":{"argocd.argoproj.io/tracking-id":"ashudev:traefik.containo.us/Middleware:ashudev/ashudev-nginx-www"},"labels":{"app.kubernetes.io/instance":"ashudev","app.kubernetes.io/managed-by":"Helm","app.kubernetes.io/name":"nginx","app.kubernetes.io/version":"1.31.7","helm.sh/chart":"ashudev-website-1.0.0"},"name":"ashudev-nginx-www","namespace":"ashudev"},"spec":{"redirectRegex":{"permanent":true,"regex":"^https?://www\\.ashudev\\.com/(.*)","replacement":"https://ashudev.com/$1"}}}
+    creationTimestamp: "2026-11-20T19:58:15Z"
+    generation: 1
+    labels:
+      app.kubernetes.io/instance: ashudev
+      app.kubernetes.io/managed-by: Helm
+      app.kubernetes.io/name: nginx
+      app.kubernetes.io/version: 1.31.7
+      helm.sh/chart: ashudev-website-1.0.0
+    name: ashudev-nginx-www
+    namespace: ashudev
+    resourceVersion: "1226814392"
+    uid: ae9d4f17-5f70-4b7c-bd63-3875e58f24a8
+  spec:
+    redirectRegex:
+      permanent: true
+      regex: ^https?://www\.ashudev\.com/(.*)
+      replacement: https://ashudev.com/$1
+- apiVersion: traefik.containo.us/v1alpha1
+  kind: Middleware
+  metadata:
+    annotations:
+      argocd.argoproj.io/tracking-id: ashuvidz:traefik.containo.us/Middleware:ashuvidz/ashuvidz-nginx-www
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"traefik.containo.us/v1alpha1","kind":"Middleware","metadata":{"annotations":{"argocd.argoproj.io/tracking-id":"ashuvidz:traefik.containo.us/Middleware:ashuvidz/ashuvidz-nginx-www"},"labels":{"app.kubernetes.io/instance":"ashuvidz","app.kubernetes.io/managed-by":"Helm","app.kubernetes.io/name":"nginx","app.kubernetes.io/version":"1.31.7","helm.sh/chart":"ashuvidz-website-1.0.0"},"name":"ashuvidz-nginx-www","namespace":"ashuvidz"},"spec":{"redirectRegex":{"permanent":true,"regex":"^https?://www\\.ashuvidz\\.com/(.*)","replacement":"https://ashuvidz.com/$1"}}}
+    creationTimestamp: "2026-11-21T00:39:05Z"
+    generation: 1
+    labels:
+      app.kubernetes.io/instance: ashuvidz
+      app.kubernetes.io/managed-by: Helm
+      app.kubernetes.io/name: nginx
+      app.kubernetes.io/version: 1.31.7
+      helm.sh/chart: ashuvidz-website-1.0.0
+    name: ashuvidz-nginx-www
+    namespace: ashuvidz
+    resourceVersion: "1226975619"
+    uid: 8def65fa-7c89-475b-8af4-e957e0c487bc
+  spec:
+    redirectRegex:
+      permanent: true
+      regex: ^https?://www\.ashuvidz\.com/(.*)
+      replacement: https://ashuvidz.com/$1
+- apiVersion: traefik.containo.us/v1alpha1
+  kind: Middleware
+  metadata:
+    annotations:
+      argocd.argoproj.io/tracking-id: dashy:traefik.containo.us/Middleware:dashy/redirect-to-dashy
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"traefik.containo.us/v1alpha1","kind":"Middleware","metadata":{"annotations":{"argocd.argoproj.io/tracking-id":"dashy:traefik.containo.us/Middleware:dashy/redirect-to-dashy"},"name":"redirect-to-dashy","namespace":"dashy"},"spec":{"redirectRegex":{"permanent":true,"regex":"^https?://(?:dashy\\.kub\\.local|kub\\.home\\.ashudev\\.com)(/.*)?$","replacement":"https://dashy.ashudev.com$1"}}}
+    creationTimestamp: "2025-04-25T23:49:18Z"
+    generation: 3
+    name: redirect-to-dashy
+    namespace: dashy
+    resourceVersion: "1226004456"
+    uid: 0e630899-06ea-4c9e-80de-3d790c313193
+  spec:
+    redirectRegex:
+      permanent: true
+      regex: ^https?://(?:dashy\.kub\.local|kub\.home\.ashudev\.com)(/.*)?$
+      replacement: https://dashy.ashudev.com$1
+- apiVersion: traefik.containo.us/v1alpha1
+  kind: Middleware
+  metadata:
+    annotations:
+      argocd.argoproj.io/tracking-id: koillection:traefik.containo.us/Middleware:koillection/koillection-app-redirect-https
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"traefik.containo.us/v1alpha1","kind":"Middleware","metadata":{"annotations":{"argocd.argoproj.io/tracking-id":"koillection:traefik.containo.us/Middleware:koillection/koillection-app-redirect-https"},"labels":{"app.kubernetes.io/instance":"koillection","app.kubernetes.io/managed-by":"Helm","app.kubernetes.io/name":"koillection-app","app.kubernetes.io/version":"1.8.6","helm.sh/chart":"koillection-0.2.2"},"name":"koillection-app-redirect-https","namespace":"koillection"},"spec":{"redirectScheme":{"permanent":true,"scheme":"https"}}}
+      meta.helm.sh/release-name: koillection
+      meta.helm.sh/release-namespace: koillection
+    creationTimestamp: "2023-04-03T22:45:37Z"
+    generation: 1
+    labels:
+      app.kubernetes.io/instance: koillection
+      app.kubernetes.io/managed-by: Helm
+      app.kubernetes.io/name: koillection-app
+      app.kubernetes.io/version: 1.8.6
+      helm.sh/chart: koillection-0.2.2
+    name: koillection-app-redirect-https
+    namespace: koillection
+    resourceVersion: "1225373772"
+    uid: fc1ef651-d9c1-45e3-9422-6b182d54cf48
+  spec:
+    redirectScheme:
+      permanent: true
+      scheme: https
+- apiVersion: traefik.containo.us/v1alpha1
+  kind: Middleware
+  metadata:
+    annotations:
+      argocd.argoproj.io/tracking-id: koillection:traefik.containo.us/Middleware:koillection/koillection-app-security
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"traefik.containo.us/v1alpha1","kind":"Middleware","metadata":{"annotations":{"argocd.argoproj.io/tracking-id":"koillection:traefik.containo.us/Middleware:koillection/koillection-app-security"},"labels":{"app.kubernetes.io/instance":"koillection","app.kubernetes.io/managed-by":"Helm","app.kubernetes.io/name":"koillection-app","app.kubernetes.io/version":"1.8.6","helm.sh/chart":"koillection-0.2.2"},"name":"koillection-app-security","namespace":"koillection"},"spec":{"headers":{"browserXssFilter":true,"contentTypeNosniff":true,"frameDeny":true,"sslRedirect":true,"stsIncludeSubdomains":true,"stsPreload":true,"stsSeconds":31536000}}}
+      meta.helm.sh/release-name: koillection
+      meta.helm.sh/release-namespace: koillection
+    creationTimestamp: "2023-04-03T22:45:37Z"
+    generation: 1
+    labels:
+      app.kubernetes.io/instance: koillection
+      app.kubernetes.io/managed-by: Helm
+      app.kubernetes.io/name: koillection-app
+      app.kubernetes.io/version: 1.8.6
+      helm.sh/chart: koillection-0.2.2
+    name: koillection-app-security
+    namespace: koillection
+    resourceVersion: "1225373773"
+    uid: 6878ce60-b465-4917-a59c-fea9c82f1c97
+  spec:
+    headers:
+      browserXssFilter: true
+      contentTypeNosniff: true
+      frameDeny: true
+      sslRedirect: true
+      stsIncludeSubdomains: true
+      stsPreload: true
+      stsSeconds: 31536000
+- apiVersion: traefik.containo.us/v1alpha1
+  kind: Middleware
+  metadata:
+    annotations:
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"traefik.containo.us/v1alpha1","kind":"Middleware","metadata":{"annotations":{},"name":"authentik","namespace":"kube-system"},"spec":{"headers":{"accessControlAllowHeaders":["*"],"accessControlAllowMethods":["*"],"accessControlAllowOriginList":["https://authentik\\.kub\\.home\\.ashudev\\.com.*"],"accessControlMaxAge":100,"addVaryHeader":true}}}
+    creationTimestamp: "2024-07-08T21:45:12Z"
+    generation: 26
+    name: authentik
+    namespace: kube-system
+    resourceVersion: "271615065"
+    uid: 6c3f3c2c-6db6-45e7-9bfb-d9e46e810eeb
+  spec:
+    headers:
+      accessControlAllowHeaders:
+      - '*'
+      accessControlAllowMethods:
+      - '*'
+      accessControlAllowOriginList:
+      - https://authentik\.kub\.home\.ashudev\.com.*
+      accessControlMaxAge: 100
+      addVaryHeader: true
+- apiVersion: traefik.containo.us/v1alpha1
+  kind: Middleware
+  metadata:
+    annotations:
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"traefik.containo.us/v1alpha1","kind":"Middleware","metadata":{"annotations":{},"name":"authentik-forwardauth","namespace":"kube-system"},"spec":{"forwardAuth":{"address":"http://authentik-server.authentik.svc.cluster.local/outpost.goauthentik.io/auth/traefik","authResponseHeaders":["X-authentik-username","X-authentik-groups","X-authentik-email","X-authentik-name","X-authentik-uid"],"trustForwardHeader":true}}}
+    creationTimestamp: "2026-11-14T20:05:25Z"
+    generation: 1
+    name: authentik-forwardauth
+    namespace: kube-system
+    resourceVersion: "1221779939"
+    uid: a55c9d23-4189-4bcf-8bbd-baf437d7b1a2
+  spec:
+    forwardAuth:
+      address: http://authentik-server.authentik.svc.cluster.local/outpost.goauthentik.io/auth/traefik
+      authResponseHeaders:
+      - X-authentik-username
+      - X-authentik-groups
+      - X-authentik-email
+      - X-authentik-name
+      - X-authentik-uid
+      trustForwardHeader: true
+- apiVersion: traefik.containo.us/v1alpha1
+  kind: Middleware
+  metadata:
+    annotations:
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"traefik.containo.us/v1alpha1","kind":"Middleware","metadata":{"annotations":{},"name":"discord","namespace":"kube-system"},"spec":{"headers":{"accessControlAllowHeaders":["*"],"accessControlAllowMethods":["*"],"accessControlAllowOriginListRegex":["https://discord\\.com.*"],"accessControlMaxAge":100,"addVaryHeader":true}}}
+    creationTimestamp: "2024-07-09T20:13:19Z"
+    generation: 2
+    name: discord
+    namespace: kube-system
+    resourceVersion: "271615406"
+    uid: 1c39b7ff-3188-4895-9b41-2864116e6dcb
+  spec:
+    headers:
+      accessControlAllowHeaders:
+      - '*'
+      accessControlAllowMethods:
+      - '*'
+      accessControlAllowOriginListRegex:
+      - https://discord\.com.*
+      accessControlMaxAge: 100
+      addVaryHeader: true
+- apiVersion: traefik.containo.us/v1alpha1
+  kind: Middleware
+  metadata:
+    annotations:
+      argocd.argoproj.io/tracking-id: traefik-gate:traefik.containo.us/Middleware:kube-system/lan-only
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"traefik.containo.us/v1alpha1","kind":"Middleware","metadata":{"annotations":{"argocd.argoproj.io/tracking-id":"traefik-gate:traefik.containo.us/Middleware:kube-system/lan-only"},"labels":{"app.kubernetes.io/instance":"traefik-gate","app.kubernetes.io/name":"traefik-gate"},"name":"lan-only","namespace":"kube-system"},"spec":{"ipWhiteList":{"sourceRange":["192.168.1.0/24","10.8.0.0/24","10.42.0.0/16"]}}}
+    creationTimestamp: "2026-11-14T23:31:18Z"
+    generation: 2
+    labels:
+      app.kubernetes.io/instance: traefik-gate
+      app.kubernetes.io/name: traefik-gate
+    name: lan-only
+    namespace: kube-system
+    resourceVersion: "1221944712"
+    uid: 24e6fa3b-fae5-4528-99b0-f50b60253234
+  spec:
+    ipWhiteList:
+      sourceRange:
+      - 192.168.1.0/24
+      - 10.8.0.0/24
+      - 10.42.0.0/16
+- apiVersion: traefik.containo.us/v1alpha1
+  kind: Middleware
+  metadata:
+    annotations:
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"traefik.containo.us/v1alpha1","kind":"Middleware","metadata":{"annotations":{},"name":"redirect-https","namespace":"kube-system"},"spec":{"redirectScheme":{"permanent":true,"scheme":"https"}}}
+    creationTimestamp: "2024-02-06T23:17:15Z"
+    generation: 1
+    name: redirect-https
+    namespace: kube-system
+    resourceVersion: "63841660"
+    uid: b6c16a4a-6c64-4053-97ef-4a147a8faf2c
+  spec:
+    redirectScheme:
+      permanent: true
+      scheme: https
+- apiVersion: traefik.containo.us/v1alpha1
+  kind: Middleware
+  metadata:
+    annotations:
+      argocd.argoproj.io/tracking-id: traefik-gate:traefik.containo.us/Middleware:kube-system/redirect-to-https
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"traefik.containo.us/v1alpha1","kind":"Middleware","metadata":{"annotations":{"argocd.argoproj.io/tracking-id":"traefik-gate:traefik.containo.us/Middleware:kube-system/redirect-to-https"},"labels":{"app.kubernetes.io/instance":"traefik-gate","app.kubernetes.io/name":"traefik-gate"},"name":"redirect-to-https","namespace":"kube-system"},"spec":{"redirectScheme":{"permanent":true,"scheme":"https"}}}
+    creationTimestamp: "2026-11-15T03:17:23Z"
+    generation: 1
+    labels:
+      app.kubernetes.io/instance: traefik-gate
+      app.kubernetes.io/name: traefik-gate
+    name: redirect-to-https
+    namespace: kube-system
+    resourceVersion: "1222030500"
+    uid: 660b137e-84d0-422f-81a5-c377d50b3fc7
+  spec:
+    redirectScheme:
+      permanent: true
+      scheme: https
+- apiVersion: traefik.containo.us/v1alpha1
+  kind: Middleware
+  metadata:
+    annotations:
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"traefik.containo.us/v1alpha1","kind":"Middleware","metadata":{"annotations":{},"name":"security","namespace":"kube-system"},"spec":{"headers":{"browserXssFilter":true,"contentTypeNosniff":true,"frameDeny":true,"sslRedirect":true,"stsIncludeSubdomains":true,"stsPreload":true,"stsSeconds":31536000}}}
+    creationTimestamp: "2024-07-10T13:22:20Z"
+    generation: 1
+    name: security
+    namespace: kube-system
+    resourceVersion: "272596831"
+    uid: d188eb07-dd59-478d-bde8-fd0c3cd713d4
+  spec:
+    headers:
+      browserXssFilter: true
+      contentTypeNosniff: true
+      frameDeny: true
+      sslRedirect: true
+      stsIncludeSubdomains: true
+      stsPreload: true
+      stsSeconds: 31536000
+- apiVersion: traefik.containo.us/v1alpha1
+  kind: Middleware
+  metadata:
+    annotations:
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"traefik.containo.us/v1alpha1","kind":"Middleware","metadata":{"annotations":{},"name":"strip-authentik-header","namespace":"kube-system"},"spec":{"headers":{"customRequestHeaders":{"X-authentik-username":""}}}}
+    creationTimestamp: "2026-11-14T20:05:25Z"
+    generation: 1
+    name: strip-authentik-header
+    namespace: kube-system
+    resourceVersion: "1221779940"
+    uid: c45ddf38-12f6-463e-9efa-0b0437483995
+  spec:
+    headers:
+      customRequestHeaders:
+        X-authentik-username: ""
+- apiVersion: traefik.containo.us/v1alpha1
+  kind: Middleware
+  metadata:
+    annotations:
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"traefik.containo.us/v1alpha1","kind":"Middleware","metadata":{"annotations":{},"name":"traefik-dashboard","namespace":"kube-system"},"spec":{"basicAuth":{"secret":"traefik-dashboard"}}}
+    creationTimestamp: "2023-04-02T17:39:57Z"
+    generation: 2
+    name: traefik-dashboard
+    namespace: kube-system
+    resourceVersion: "248"
+    uid: 856de3b3-8f2f-4d17-a347-828fd5f85852
+  spec:
+    basicAuth:
+      secret: traefik-dashboard
+- apiVersion: traefik.containo.us/v1alpha1
+  kind: Middleware
+  metadata:
+    annotations:
+      argocd.argoproj.io/tracking-id: kavita:traefik.containo.us/Middleware:media-stack/kavita-redirect-https
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"traefik.containo.us/v1alpha1","kind":"Middleware","metadata":{"annotations":{"argocd.argoproj.io/tracking-id":"kavita:traefik.containo.us/Middleware:media-stack/kavita-redirect-https"},"labels":{"app.kubernetes.io/instance":"kavita","app.kubernetes.io/managed-by":"Helm","app.kubernetes.io/name":"kavita","app.kubernetes.io/version":"0.9.1.4","helm.sh/chart":"kavita-1.0.0"},"name":"kavita-redirect-https","namespace":"media-stack"},"spec":{"redirectScheme":{"permanent":true,"scheme":"https"}}}
+      meta.helm.sh/release-name: kavita
+      meta.helm.sh/release-namespace: media-stack
+    creationTimestamp: "2023-04-03T17:23:43Z"
+    generation: 1
+    labels:
+      app.kubernetes.io/instance: kavita
+      app.kubernetes.io/managed-by: Helm
+      app.kubernetes.io/name: kavita
+      app.kubernetes.io/version: 0.9.1.4
+      helm.sh/chart: kavita-1.0.0
+    name: kavita-redirect-https
+    namespace: media-stack
+    resourceVersion: "1226171822"
+    uid: e887798f-0200-4727-a5e7-e229c168c304
+  spec:
+    redirectScheme:
+      permanent: true
+      scheme: https
+- apiVersion: traefik.containo.us/v1alpha1
+  kind: Middleware
+  metadata:
+    annotations:
+      argocd.argoproj.io/tracking-id: plex:traefik.containo.us/Middleware:media-stack/plex-ratelimit
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"traefik.containo.us/v1alpha1","kind":"Middleware","metadata":{"annotations":{"argocd.argoproj.io/tracking-id":"plex:traefik.containo.us/Middleware:media-stack/plex-ratelimit"},"labels":{"app.kubernetes.io/instance":"plex","app.kubernetes.io/managed-by":"Helm","app.kubernetes.io/name":"plex","app.kubernetes.io/version":"1.43.5.11079","helm.sh/chart":"plex-2.0.0"},"name":"plex-ratelimit","namespace":"media-stack"},"spec":{"rateLimit":{"average":100,"burst":200,"period":1}}}
+    creationTimestamp: "2026-11-12T21:45:03Z"
+    generation: 1
+    labels:
+      app.kubernetes.io/instance: plex
+      app.kubernetes.io/managed-by: Helm
+      app.kubernetes.io/name: plex
+      app.kubernetes.io/version: 1.43.5.11079
+      helm.sh/chart: plex-2.0.0
+    name: plex-ratelimit
+    namespace: media-stack
+    resourceVersion: "1226171451"
+    uid: 3091b638-4b99-427d-b52b-6b1966573ce2
+  spec:
+    rateLimit:
+      average: 100
+      burst: 200
+      period: 1
+- apiVersion: traefik.containo.us/v1alpha1
+  kind: Middleware
+  metadata:
+    annotations:
+      argocd.argoproj.io/tracking-id: plex:traefik.containo.us/Middleware:media-stack/plex-redirect-https
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"traefik.containo.us/v1alpha1","kind":"Middleware","metadata":{"annotations":{"argocd.argoproj.io/tracking-id":"plex:traefik.containo.us/Middleware:media-stack/plex-redirect-https"},"labels":{"app.kubernetes.io/instance":"plex","app.kubernetes.io/managed-by":"Helm","app.kubernetes.io/name":"plex","app.kubernetes.io/version":"1.43.5.11079","helm.sh/chart":"plex-2.0.0"},"name":"plex-redirect-https","namespace":"media-stack"},"spec":{"redirectScheme":{"permanent":true,"scheme":"https"}}}
+      meta.helm.sh/release-name: plex
+      meta.helm.sh/release-namespace: media-stack
+    creationTimestamp: "2023-04-03T13:58:45Z"
+    generation: 1
+    labels:
+      app.kubernetes.io/instance: plex
+      app.kubernetes.io/managed-by: Helm
+      app.kubernetes.io/name: plex
+      app.kubernetes.io/version: 1.43.5.11079
+      helm.sh/chart: plex-2.0.0
+    name: plex-redirect-https
+    namespace: media-stack
+    resourceVersion: "1226171453"
+    uid: fd28e784-ec44-491d-bf3c-f7ef6406dc75
+  spec:
+    redirectScheme:
+      permanent: true
+      scheme: https
+- apiVersion: traefik.containo.us/v1alpha1
+  kind: Middleware
+  metadata:
+    annotations:
+      argocd.argoproj.io/tracking-id: plex:traefik.containo.us/Middleware:media-stack/plex-security
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"traefik.containo.us/v1alpha1","kind":"Middleware","metadata":{"annotations":{"argocd.argoproj.io/tracking-id":"plex:traefik.containo.us/Middleware:media-stack/plex-security"},"labels":{"app.kubernetes.io/instance":"plex","app.kubernetes.io/managed-by":"Helm","app.kubernetes.io/name":"plex","app.kubernetes.io/version":"1.43.5.11079","helm.sh/chart":"plex-2.0.0"},"name":"plex-security","namespace":"media-stack"},"spec":{"headers":{"allowedHosts":["plex.kub.home.ashudev.com","plex.kub.home.ashudev.com:443"],"browserXssFilter":true,"contentTypeNosniff":true,"frameDeny":true,"permissionsPolicy":"camera=(), microphone=(), geolocation=(), payment=(), usb=()","referrerPolicy":"no-referrer","stsIncludeSubdomains":true,"stsPreload":true,"stsSeconds":31536000}}}
+      meta.helm.sh/release-name: plex
+      meta.helm.sh/release-namespace: media-stack
+    creationTimestamp: "2023-04-03T13:58:45Z"
+    generation: 3
+    labels:
+      app.kubernetes.io/instance: plex
+      app.kubernetes.io/managed-by: Helm
+      app.kubernetes.io/name: plex
+      app.kubernetes.io/version: 1.43.5.11079
+      helm.sh/chart: plex-2.0.0
+    name: plex-security
+    namespace: media-stack
+    resourceVersion: "1226171452"
+    uid: 18e0b70e-a9c1-4183-ab62-176deab1c2f4
+  spec:
+    headers:
+      allowedHosts:
+      - plex.kub.home.ashudev.com
+      - plex.kub.home.ashudev.com:443
+      browserXssFilter: true
+      contentTypeNosniff: true
+      frameDeny: true
+      permissionsPolicy: camera=(), microphone=(), geolocation=(), payment=(), usb=()
+      referrerPolicy: no-referrer
+      stsIncludeSubdomains: true
+      stsPreload: true
+      stsSeconds: 31536000
+- apiVersion: traefik.containo.us/v1alpha1
+  kind: Middleware
+  metadata:
+    annotations:
+      argocd.argoproj.io/tracking-id: seerr:traefik.containo.us/Middleware:media-stack/seerr-ratelimit
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"traefik.containo.us/v1alpha1","kind":"Middleware","metadata":{"annotations":{"argocd.argoproj.io/tracking-id":"seerr:traefik.containo.us/Middleware:media-stack/seerr-ratelimit"},"labels":{"app.kubernetes.io/instance":"seerr","app.kubernetes.io/managed-by":"Helm","app.kubernetes.io/name":"seerr","app.kubernetes.io/version":"3.5.2","helm.sh/chart":"seerr-1.1.3"},"name":"seerr-ratelimit","namespace":"media-stack"},"spec":{"rateLimit":{"average":100,"burst":200,"period":1}}}
+    creationTimestamp: "2026-11-12T23:20:47Z"
+    generation: 1
+    labels:
+      app.kubernetes.io/instance: seerr
+      app.kubernetes.io/managed-by: Helm
+      app.kubernetes.io/name: seerr
+      app.kubernetes.io/version: 3.5.2
+      helm.sh/chart: seerr-1.1.3
+    name: seerr-ratelimit
+    namespace: media-stack
+    resourceVersion: "1226173291"
+    uid: bc413343-5aaa-4a4e-85d3-9e8f63f83fc3
+  spec:
+    rateLimit:
+      average: 100
+      burst: 200
+      period: 1
+- apiVersion: traefik.containo.us/v1alpha1
+  kind: Middleware
+  metadata:
+    annotations:
+      argocd.argoproj.io/tracking-id: seerr:traefik.containo.us/Middleware:media-stack/seerr-redirect-https
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"traefik.containo.us/v1alpha1","kind":"Middleware","metadata":{"annotations":{"argocd.argoproj.io/tracking-id":"seerr:traefik.containo.us/Middleware:media-stack/seerr-redirect-https"},"labels":{"app.kubernetes.io/instance":"seerr","app.kubernetes.io/managed-by":"Helm","app.kubernetes.io/name":"seerr","app.kubernetes.io/version":"3.5.2","helm.sh/chart":"seerr-1.1.3"},"name":"seerr-redirect-https","namespace":"media-stack"},"spec":{"redirectScheme":{"permanent":true,"scheme":"https"}}}
+    creationTimestamp: "2026-09-08T01:32:16Z"
+    generation: 1
+    labels:
+      app.kubernetes.io/instance: seerr
+      app.kubernetes.io/managed-by: Helm
+      app.kubernetes.io/name: seerr
+      app.kubernetes.io/version: 3.5.2
+      helm.sh/chart: seerr-1.1.3
+    name: seerr-redirect-https
+    namespace: media-stack
+    resourceVersion: "1226173292"
+    uid: 1ffc5b2b-e28a-4fea-80fe-13f87b6c5624
+  spec:
+    redirectScheme:
+      permanent: true
+      scheme: https
+- apiVersion: traefik.containo.us/v1alpha1
+  kind: Middleware
+  metadata:
+    annotations:
+      argocd.argoproj.io/tracking-id: seerr:traefik.containo.us/Middleware:media-stack/seerr-security
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"traefik.containo.us/v1alpha1","kind":"Middleware","metadata":{"annotations":{"argocd.argoproj.io/tracking-id":"seerr:traefik.containo.us/Middleware:media-stack/seerr-security"},"labels":{"app.kubernetes.io/instance":"seerr","app.kubernetes.io/managed-by":"Helm","app.kubernetes.io/name":"seerr","app.kubernetes.io/version":"3.5.2","helm.sh/chart":"seerr-1.1.3"},"name":"seerr-security","namespace":"media-stack"},"spec":{"headers":{"allowedHosts":["seerr.kub.home.ashudev.com","seerr.kub.home.ashudev.com:443"],"browserXssFilter":true,"contentTypeNosniff":true,"frameDeny":true,"permissionsPolicy":"camera=(), microphone=(), geolocation=(), payment=(), usb=()","referrerPolicy":"no-referrer","stsIncludeSubdomains":true,"stsPreload":true,"stsSeconds":31536000}}}
+    creationTimestamp: "2026-09-08T01:32:16Z"
+    generation: 2
+    labels:
+      app.kubernetes.io/instance: seerr
+      app.kubernetes.io/managed-by: Helm
+      app.kubernetes.io/name: seerr
+      app.kubernetes.io/version: 3.5.2
+      helm.sh/chart: seerr-1.1.3
+    name: seerr-security
+    namespace: media-stack
+    resourceVersion: "1226173293"
+    uid: 6f640134-a005-4fb5-8300-31dedd073185
+  spec:
+    headers:
+      allowedHosts:
+      - seerr.kub.home.ashudev.com
+      - seerr.kub.home.ashudev.com:443
+      browserXssFilter: true
+      contentTypeNosniff: true
+      frameDeny: true
+      permissionsPolicy: camera=(), microphone=(), geolocation=(), payment=(), usb=()
+      referrerPolicy: no-referrer
+      stsIncludeSubdomains: true
+      stsPreload: true
+      stsSeconds: 31536000
+- apiVersion: traefik.containo.us/v1alpha1
+  kind: Middleware
+  metadata:
+    annotations:
+      argocd.argoproj.io/tracking-id: n8n:traefik.containo.us/Middleware:n8n/n8n-redirect-https
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"traefik.containo.us/v1alpha1","kind":"Middleware","metadata":{"annotations":{"argocd.argoproj.io/tracking-id":"n8n:traefik.containo.us/Middleware:n8n/n8n-redirect-https"},"labels":{"app.kubernetes.io/instance":"n8n","app.kubernetes.io/managed-by":"Helm","app.kubernetes.io/name":"n8n","app.kubernetes.io/version":"2.48.5","helm.sh/chart":"n8n-0.2.0"},"name":"n8n-redirect-https","namespace":"n8n"},"spec":{"redirectScheme":{"permanent":true,"scheme":"https"}}}
+      meta.helm.sh/release-name: n8n
+      meta.helm.sh/release-namespace: n8n
+    creationTimestamp: "2023-07-26T13:47:13Z"
+    generation: 1
+    labels:
+      app.kubernetes.io/instance: n8n
+      app.kubernetes.io/managed-by: Helm
+      app.kubernetes.io/name: n8n
+      app.kubernetes.io/version: 2.48.5
+      helm.sh/chart: n8n-0.2.0
+    name: n8n-redirect-https
+    namespace: n8n
+    resourceVersion: "1225384566"
+    uid: 84e6c0c5-5c18-4030-9463-3060b00ed5ed
+  spec:
+    redirectScheme:
+      permanent: true
+      scheme: https
+- apiVersion: traefik.containo.us/v1alpha1
+  kind: Middleware
+  metadata:
+    annotations:
+      argocd.argoproj.io/tracking-id: n8n:traefik.containo.us/Middleware:n8n/n8n-security
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"traefik.containo.us/v1alpha1","kind":"Middleware","metadata":{"annotations":{"argocd.argoproj.io/tracking-id":"n8n:traefik.containo.us/Middleware:n8n/n8n-security"},"labels":{"app.kubernetes.io/instance":"n8n","app.kubernetes.io/managed-by":"Helm","app.kubernetes.io/name":"n8n","app.kubernetes.io/version":"2.48.5","helm.sh/chart":"n8n-0.2.0"},"name":"n8n-security","namespace":"n8n"},"spec":{"headers":{"browserXssFilter":true,"contentTypeNosniff":true,"frameDeny":true,"sslRedirect":true,"stsIncludeSubdomains":true,"stsPreload":true,"stsSeconds":31536000}}}
+      meta.helm.sh/release-name: n8n
+      meta.helm.sh/release-namespace: n8n
+    creationTimestamp: "2023-07-26T13:47:13Z"
+    generation: 1
+    labels:
+      app.kubernetes.io/instance: n8n
+      app.kubernetes.io/managed-by: Helm
+      app.kubernetes.io/name: n8n
+      app.kubernetes.io/version: 2.48.5
+      helm.sh/chart: n8n-0.2.0
+    name: n8n-security
+    namespace: n8n
+    resourceVersion: "1225384563"
+    uid: b752d2e5-3241-411d-b157-75d6d64f4e0d
+  spec:
+    headers:
+      browserXssFilter: true
+      contentTypeNosniff: true
+      frameDeny: true
+      sslRedirect: true
+      stsIncludeSubdomains: true
+      stsPreload: true
+      stsSeconds: 31536000
+- apiVersion: traefik.containo.us/v1alpha1
+  kind: Middleware
+  metadata:
+    annotations:
+      argocd.argoproj.io/tracking-id: news-freshrss:traefik.containo.us/Middleware:news/news-freshrss-redirect-https
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"traefik.containo.us/v1alpha1","kind":"Middleware","metadata":{"annotations":{"argocd.argoproj.io/tracking-id":"news-freshrss:traefik.containo.us/Middleware:news/news-freshrss-redirect-https"},"labels":{"app.kubernetes.io/instance":"news-freshrss","app.kubernetes.io/managed-by":"Helm","app.kubernetes.io/name":"freshrss","app.kubernetes.io/version":"1.30.4","helm.sh/chart":"freshrss-1.1.0"},"name":"news-freshrss-redirect-https","namespace":"news"},"spec":{"redirectScheme":{"permanent":true,"scheme":"https"}}}
+    creationTimestamp: "2024-06-19T12:18:49Z"
+    generation: 1
+    labels:
+      app.kubernetes.io/instance: news-freshrss
+      app.kubernetes.io/managed-by: Helm
+      app.kubernetes.io/name: freshrss
+      app.kubernetes.io/version: 1.30.4
+      helm.sh/chart: freshrss-1.1.0
+    name: news-freshrss-redirect-https
+    namespace: news
+    resourceVersion: "1226040644"
+    uid: 83cc408e-9bfa-4d59-9f4e-312cf7f0ce29
+  spec:
+    redirectScheme:
+      permanent: true
+      scheme: https
+- apiVersion: traefik.containo.us/v1alpha1
+  kind: Middleware
+  metadata:
+    annotations:
+      argocd.argoproj.io/tracking-id: news-freshrss:traefik.containo.us/Middleware:news/news-freshrss-security
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"traefik.containo.us/v1alpha1","kind":"Middleware","metadata":{"annotations":{"argocd.argoproj.io/tracking-id":"news-freshrss:traefik.containo.us/Middleware:news/news-freshrss-security"},"labels":{"app.kubernetes.io/instance":"news-freshrss","app.kubernetes.io/managed-by":"Helm","app.kubernetes.io/name":"freshrss","app.kubernetes.io/version":"1.30.4","helm.sh/chart":"freshrss-1.1.0"},"name":"news-freshrss-security","namespace":"news"},"spec":{"headers":{"browserXssFilter":true,"contentTypeNosniff":true,"frameDeny":true,"sslRedirect":true,"stsIncludeSubdomains":true,"stsPreload":true,"stsSeconds":31536000}}}
+    creationTimestamp: "2024-06-19T12:18:49Z"
+    generation: 1
+    labels:
+      app.kubernetes.io/instance: news-freshrss
+      app.kubernetes.io/managed-by: Helm
+      app.kubernetes.io/name: freshrss
+      app.kubernetes.io/version: 1.30.4
+      helm.sh/chart: freshrss-1.1.0
+    name: news-freshrss-security
+    namespace: news
+    resourceVersion: "1226040645"
+    uid: a85699e6-c9ae-4020-afd9-d8dbc2ac5fa5
+  spec:
+    headers:
+      browserXssFilter: true
+      contentTypeNosniff: true
+      frameDeny: true
+      sslRedirect: true
+      stsIncludeSubdomains: true
+      stsPreload: true
+      stsSeconds: 31536000
+- apiVersion: traefik.containo.us/v1alpha1
+  kind: Middleware
+  metadata:
+    annotations:
+      argocd.argoproj.io/tracking-id: syncthing:traefik.containo.us/Middleware:syncthing/syncthing-redirect-https
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"traefik.containo.us/v1alpha1","kind":"Middleware","metadata":{"annotations":{"argocd.argoproj.io/tracking-id":"syncthing:traefik.containo.us/Middleware:syncthing/syncthing-redirect-https"},"labels":{"app.kubernetes.io/instance":"syncthing","app.kubernetes.io/managed-by":"Helm","app.kubernetes.io/name":"syncthing","app.kubernetes.io/version":"2.1.7","helm.sh/chart":"syncthing-0.2.3"},"name":"syncthing-redirect-https","namespace":"syncthing"},"spec":{"redirectScheme":{"permanent":true,"scheme":"https"}}}
+      meta.helm.sh/release-name: syncthing
+      meta.helm.sh/release-namespace: syncthing
+    creationTimestamp: "2023-12-18T14:23:25Z"
+    generation: 1
+    labels:
+      app.kubernetes.io/instance: syncthing
+      app.kubernetes.io/managed-by: Helm
+      app.kubernetes.io/name: syncthing
+      app.kubernetes.io/version: 2.1.7
+      helm.sh/chart: syncthing-0.2.3
+    name: syncthing-redirect-https
+    namespace: syncthing
+    resourceVersion: "1226920541"
+    uid: 39603dde-bf76-4f84-b476-46b2a355e8ad
+  spec:
+    redirectScheme:
+      permanent: true
+      scheme: https
+- apiVersion: traefik.containo.us/v1alpha1
+  kind: Middleware
+  metadata:
+    annotations:
+      argocd.argoproj.io/tracking-id: syncthing:traefik.containo.us/Middleware:syncthing/syncthing-security
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"traefik.containo.us/v1alpha1","kind":"Middleware","metadata":{"annotations":{"argocd.argoproj.io/tracking-id":"syncthing:traefik.containo.us/Middleware:syncthing/syncthing-security"},"labels":{"app.kubernetes.io/instance":"syncthing","app.kubernetes.io/managed-by":"Helm","app.kubernetes.io/name":"syncthing","app.kubernetes.io/version":"2.1.7","helm.sh/chart":"syncthing-0.2.3"},"name":"syncthing-security","namespace":"syncthing"},"spec":{"headers":{"browserXssFilter":true,"contentTypeNosniff":true,"frameDeny":true,"sslRedirect":true,"stsIncludeSubdomains":true,"stsPreload":true,"stsSeconds":31536000}}}
+      meta.helm.sh/release-name: syncthing
+      meta.helm.sh/release-namespace: syncthing
+    creationTimestamp: "2023-12-18T14:23:25Z"
+    generation: 1
+    labels:
+      app.kubernetes.io/instance: syncthing
+      app.kubernetes.io/managed-by: Helm
+      app.kubernetes.io/name: syncthing
+      app.kubernetes.io/version: 2.1.7
+      helm.sh/chart: syncthing-0.2.3
+    name: syncthing-security
+    namespace: syncthing
+    resourceVersion: "1226920539"
+    uid: 64c1f41d-9c60-452d-8ffb-8fa0e453fcc6
+  spec:
+    headers:
+      browserXssFilter: true
+      contentTypeNosniff: true
+      frameDeny: true
+      sslRedirect: true
+      stsIncludeSubdomains: true
+      stsPreload: true
+      stsSeconds: 31536000
+kind: List
+metadata:
+  resourceVersion: ""
+---
+apiVersion: v1
+items:
+- apiVersion: traefik.containo.us/v1alpha1
+  kind: TLSOption
+  metadata:
+    annotations:
+      argocd.argoproj.io/tracking-id: authentik:traefik.containo.us/TLSOption:authentik/authentik-tlsoption
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"traefik.containo.us/v1alpha1","kind":"TLSOption","metadata":{"annotations":{"argocd.argoproj.io/tracking-id":"authentik:traefik.containo.us/TLSOption:authentik/authentik-tlsoption"},"labels":{"app.kubernetes.io/instance":"authentik","app.kubernetes.io/name":"authentik"},"name":"authentik-tlsoption","namespace":"authentik"},"spec":{"cipherSuites":["TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256","TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256","TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384","TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305","TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384","TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305","TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305","TLS_AES_256_GCM_SHA384","TLS_AES_128_GCM_SHA256","TLS_CHACHA20_POLY1305_SHA256","TLS_FALLBACK_SCSV"],"curvePreferences":["CurveP521","CurveP384"],"minVersion":"VersionTLS12","sniStrict":false}}
+    creationTimestamp: "2026-11-14T02:55:53Z"
+    generation: 1
+    labels:
+      app.kubernetes.io/instance: authentik
+      app.kubernetes.io/name: authentik
+    name: authentik-tlsoption
+    namespace: authentik
+    resourceVersion: "1221191721"
+    uid: 9b5b10ef-d7a7-4b1a-9255-32543c6d2a0f
+  spec:
+    cipherSuites:
+    - TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256
+    - TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256
+    - TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384
+    - TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305
+    - TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384
+    - TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305
+    - TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305
+    - TLS_AES_256_GCM_SHA384
+    - TLS_AES_128_GCM_SHA256
+    - TLS_CHACHA20_POLY1305_SHA256
+    - TLS_FALLBACK_SCSV
+    curvePreferences:
+    - CurveP521
+    - CurveP384
+    minVersion: VersionTLS12
+    sniStrict: false
+- apiVersion: traefik.containo.us/v1alpha1
+  kind: TLSOption
+  metadata:
+    annotations:
+      argocd.argoproj.io/tracking-id: dashy:traefik.containo.us/TLSOption:dashy/dashy-tlsoption
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"traefik.containo.us/v1alpha1","kind":"TLSOption","metadata":{"annotations":{"argocd.argoproj.io/tracking-id":"dashy:traefik.containo.us/TLSOption:dashy/dashy-tlsoption"},"name":"dashy-tlsoption","namespace":"dashy"},"spec":{"cipherSuites":["TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256","TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256","TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384","TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384","TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305","TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305"],"curvePreferences":["X25519","CurveP256","CurveP384"],"minVersion":"VersionTLS12","sniStrict":true}}
+    creationTimestamp: "2026-11-19T20:16:44Z"
+    generation: 1
+    name: dashy-tlsoption
+    namespace: dashy
+    resourceVersion: "1226004450"
+    uid: 97e2f0a4-43bf-4544-9e00-adb3953ffff9
+  spec:
+    cipherSuites:
+    - TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256
+    - TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256
+    - TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384
+    - TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384
+    - TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305
+    - TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305
+    curvePreferences:
+    - X25519
+    - CurveP256
+    - CurveP384
+    minVersion: VersionTLS12
+    sniStrict: true
+- apiVersion: traefik.containo.us/v1alpha1
+  kind: TLSOption
+  metadata:
+    annotations:
+      argocd.argoproj.io/tracking-id: filebrowser:traefik.containo.us/TLSOption:filebrowser/filebrowser-tlsoption
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"traefik.containo.us/v1alpha1","kind":"TLSOption","metadata":{"annotations":{"argocd.argoproj.io/tracking-id":"filebrowser:traefik.containo.us/TLSOption:filebrowser/filebrowser-tlsoption"},"labels":{"app.kubernetes.io/instance":"filebrowser","app.kubernetes.io/name":"filebrowser"},"name":"filebrowser-tlsoption","namespace":"filebrowser"},"spec":{"cipherSuites":["TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256","TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256","TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384","TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305","TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384","TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305","TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305","TLS_AES_256_GCM_SHA384","TLS_AES_128_GCM_SHA256","TLS_CHACHA20_POLY1305_SHA256","TLS_FALLBACK_SCSV"],"curvePreferences":["CurveP521","CurveP384"],"minVersion":"VersionTLS12","sniStrict":false}}
+    creationTimestamp: "2026-11-14T23:26:52Z"
+    generation: 1
+    labels:
+      app.kubernetes.io/instance: filebrowser
+      app.kubernetes.io/name: filebrowser
+    name: filebrowser-tlsoption
+    namespace: filebrowser
+    resourceVersion: "1221895241"
+    uid: d238bff5-a295-4ae4-a155-6af5cb4884fe
+  spec:
+    cipherSuites:
+    - TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256
+    - TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256
+    - TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384
+    - TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305
+    - TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384
+    - TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305
+    - TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305
+    - TLS_AES_256_GCM_SHA384
+    - TLS_AES_128_GCM_SHA256
+    - TLS_CHACHA20_POLY1305_SHA256
+    - TLS_FALLBACK_SCSV
+    curvePreferences:
+    - CurveP521
+    - CurveP384
+    minVersion: VersionTLS12
+    sniStrict: false
+- apiVersion: traefik.containo.us/v1alpha1
+  kind: TLSOption
+  metadata:
+    annotations:
+      argocd.argoproj.io/tracking-id: koillection:traefik.containo.us/TLSOption:koillection/koillection-app-tlsoption
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"traefik.containo.us/v1alpha1","kind":"TLSOption","metadata":{"annotations":{"argocd.argoproj.io/tracking-id":"koillection:traefik.containo.us/TLSOption:koillection/koillection-app-tlsoption"},"labels":{"app.kubernetes.io/instance":"koillection","app.kubernetes.io/managed-by":"Helm","app.kubernetes.io/name":"koillection-app","app.kubernetes.io/version":"1.8.6","helm.sh/chart":"koillection-0.2.2"},"name":"koillection-app-tlsoption","namespace":"koillection"},"spec":{"cipherSuites":["TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256","TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256","TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384","TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305","TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384","TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305","TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305","TLS_AES_256_GCM_SHA384","TLS_AES_128_GCM_SHA256","TLS_CHACHA20_POLY1305_SHA256","TLS_FALLBACK_SCSV"],"curvePreferences":["CurveP521","CurveP384"],"minVersion":"VersionTLS12","sniStrict":false}}
+      meta.helm.sh/release-name: koillection
+      meta.helm.sh/release-namespace: koillection
+    creationTimestamp: "2023-04-03T22:45:37Z"
+    generation: 1
+    labels:
+      app.kubernetes.io/instance: koillection
+      app.kubernetes.io/managed-by: Helm
+      app.kubernetes.io/name: koillection-app
+      app.kubernetes.io/version: 1.8.6
+      helm.sh/chart: koillection-0.2.2
+    name: koillection-app-tlsoption
+    namespace: koillection
+    resourceVersion: "1225373781"
+    uid: c1eea35f-0183-446f-88d7-7e1a65e823c9
+  spec:
+    cipherSuites:
+    - TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256
+    - TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256
+    - TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384
+    - TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305
+    - TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384
+    - TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305
+    - TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305
+    - TLS_AES_256_GCM_SHA384
+    - TLS_AES_128_GCM_SHA256
+    - TLS_CHACHA20_POLY1305_SHA256
+    - TLS_FALLBACK_SCSV
+    curvePreferences:
+    - CurveP521
+    - CurveP384
+    minVersion: VersionTLS12
+    sniStrict: false
+- apiVersion: traefik.containo.us/v1alpha1
+  kind: TLSOption
+  metadata:
+    annotations:
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"traefik.containo.us/v1alpha1","kind":"TLSOption","metadata":{"annotations":{},"name":"default-tlsoption","namespace":"kube-system"},"spec":{"cipherSuites":["TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256","TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256","TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384","TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305","TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384","TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305","TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305","TLS_AES_256_GCM_SHA384","TLS_AES_128_GCM_SHA256","TLS_CHACHA20_POLY1305_SHA256","TLS_FALLBACK_SCSV"],"curvePreferences":["CurveP521","CurveP384"],"minVersion":"VersionTLS12","sniStrict":false}}
+    creationTimestamp: "2024-02-06T09:27:38Z"
+    generation: 1
+    name: default-tlsoption
+    namespace: kube-system
+    resourceVersion: "63041413"
+    uid: 7d8e1398-21a2-4129-89f1-c8d09e92e2f0
+  spec:
+    cipherSuites:
+    - TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256
+    - TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256
+    - TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384
+    - TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305
+    - TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384
+    - TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305
+    - TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305
+    - TLS_AES_256_GCM_SHA384
+    - TLS_AES_128_GCM_SHA256
+    - TLS_CHACHA20_POLY1305_SHA256
+    - TLS_FALLBACK_SCSV
+    curvePreferences:
+    - CurveP521
+    - CurveP384
+    minVersion: VersionTLS12
+    sniStrict: false
+- apiVersion: traefik.containo.us/v1alpha1
+  kind: TLSOption
+  metadata:
+    annotations:
+      argocd.argoproj.io/tracking-id: traefik-gate:traefik.containo.us/TLSOption:kube-system/internal-tls
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"traefik.containo.us/v1alpha1","kind":"TLSOption","metadata":{"annotations":{"argocd.argoproj.io/tracking-id":"traefik-gate:traefik.containo.us/TLSOption:kube-system/internal-tls"},"labels":{"app.kubernetes.io/instance":"traefik-gate","app.kubernetes.io/name":"traefik-gate"},"name":"internal-tls","namespace":"kube-system"},"spec":{"cipherSuites":["TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256","TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256","TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384","TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305","TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384","TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305","TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305","TLS_AES_256_GCM_SHA384","TLS_AES_128_GCM_SHA256","TLS_CHACHA20_POLY1305_SHA256","TLS_FALLBACK_SCSV"],"curvePreferences":["CurveP521","CurveP384"],"minVersion":"VersionTLS12","sniStrict":false}}
+    creationTimestamp: "2026-11-15T03:17:23Z"
+    generation: 1
+    labels:
+      app.kubernetes.io/instance: traefik-gate
+      app.kubernetes.io/name: traefik-gate
+    name: internal-tls
+    namespace: kube-system
+    resourceVersion: "1222030498"
+    uid: 378cd99c-2fe9-41e3-a3f5-8be530384cab
+  spec:
+    cipherSuites:
+    - TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256
+    - TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256
+    - TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384
+    - TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305
+    - TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384
+    - TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305
+    - TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305
+    - TLS_AES_256_GCM_SHA384
+    - TLS_AES_128_GCM_SHA256
+    - TLS_CHACHA20_POLY1305_SHA256
+    - TLS_FALLBACK_SCSV
+    curvePreferences:
+    - CurveP521
+    - CurveP384
+    minVersion: VersionTLS12
+    sniStrict: false
+- apiVersion: traefik.containo.us/v1alpha1
+  kind: TLSOption
+  metadata:
+    annotations:
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"traefik.containo.us/v1alpha1","kind":"TLSOption","metadata":{"annotations":{},"name":"tlsoption","namespace":"kube-system"},"spec":{"cipherSuites":["TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256","TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256","TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384","TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305","TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384","TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305","TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305","TLS_AES_256_GCM_SHA384","TLS_AES_128_GCM_SHA256","TLS_CHACHA20_POLY1305_SHA256","TLS_FALLBACK_SCSV"],"curvePreferences":["CurveP521","CurveP384"],"minVersion":"VersionTLS12","sniStrict":false}}
+    creationTimestamp: "2024-07-10T13:22:30Z"
+    generation: 1
+    name: tlsoption
+    namespace: kube-system
+    resourceVersion: "272596985"
+    uid: 4d6b777f-a48e-4d07-ab56-96bec880861f
+  spec:
+    cipherSuites:
+    - TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256
+    - TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256
+    - TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384
+    - TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305
+    - TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384
+    - TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305
+    - TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305
+    - TLS_AES_256_GCM_SHA384
+    - TLS_AES_128_GCM_SHA256
+    - TLS_CHACHA20_POLY1305_SHA256
+    - TLS_FALLBACK_SCSV
+    curvePreferences:
+    - CurveP521
+    - CurveP384
+    minVersion: VersionTLS12
+    sniStrict: false
+- apiVersion: traefik.containo.us/v1alpha1
+  kind: TLSOption
+  metadata:
+    annotations:
+      argocd.argoproj.io/tracking-id: kavita:traefik.containo.us/TLSOption:media-stack/kavita-tlsoption
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"traefik.containo.us/v1alpha1","kind":"TLSOption","metadata":{"annotations":{"argocd.argoproj.io/tracking-id":"kavita:traefik.containo.us/TLSOption:media-stack/kavita-tlsoption"},"labels":{"app.kubernetes.io/instance":"kavita","app.kubernetes.io/managed-by":"Helm","app.kubernetes.io/name":"kavita","app.kubernetes.io/version":"0.9.1.4","helm.sh/chart":"kavita-1.0.0"},"name":"kavita-tlsoption","namespace":"media-stack"},"spec":{"cipherSuites":["TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256","TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256","TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384","TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305","TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384","TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305","TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305","TLS_AES_256_GCM_SHA384","TLS_AES_128_GCM_SHA256","TLS_CHACHA20_POLY1305_SHA256","TLS_FALLBACK_SCSV"],"curvePreferences":["CurveP521","CurveP384"],"minVersion":"VersionTLS12","sniStrict":false}}
+      meta.helm.sh/release-name: kavita
+      meta.helm.sh/release-namespace: media-stack
+    creationTimestamp: "2023-04-03T17:23:43Z"
+    generation: 1
+    labels:
+      app.kubernetes.io/instance: kavita
+      app.kubernetes.io/managed-by: Helm
+      app.kubernetes.io/name: kavita
+      app.kubernetes.io/version: 0.9.1.4
+      helm.sh/chart: kavita-1.0.0
+    name: kavita-tlsoption
+    namespace: media-stack
+    resourceVersion: "1226171827"
+    uid: 5b2c2ec4-9c65-4f43-b81a-35ed4db53947
+  spec:
+    cipherSuites:
+    - TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256
+    - TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256
+    - TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384
+    - TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305
+    - TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384
+    - TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305
+    - TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305
+    - TLS_AES_256_GCM_SHA384
+    - TLS_AES_128_GCM_SHA256
+    - TLS_CHACHA20_POLY1305_SHA256
+    - TLS_FALLBACK_SCSV
+    curvePreferences:
+    - CurveP521
+    - CurveP384
+    minVersion: VersionTLS12
+    sniStrict: false
+- apiVersion: traefik.containo.us/v1alpha1
+  kind: TLSOption
+  metadata:
+    annotations:
+      argocd.argoproj.io/tracking-id: plex:traefik.containo.us/TLSOption:media-stack/plex-tlsoption
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"traefik.containo.us/v1alpha1","kind":"TLSOption","metadata":{"annotations":{"argocd.argoproj.io/tracking-id":"plex:traefik.containo.us/TLSOption:media-stack/plex-tlsoption"},"labels":{"app.kubernetes.io/instance":"plex","app.kubernetes.io/managed-by":"Helm","app.kubernetes.io/name":"plex","app.kubernetes.io/version":"1.43.5.11079","helm.sh/chart":"plex-2.0.0"},"name":"plex-tlsoption","namespace":"media-stack"},"spec":{"cipherSuites":["TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256","TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256","TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384","TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384","TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305","TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305"],"curvePreferences":["X25519","CurveP256","CurveP384"],"minVersion":"VersionTLS12","sniStrict":true}}
+      meta.helm.sh/release-name: plex
+      meta.helm.sh/release-namespace: media-stack
+    creationTimestamp: "2023-04-03T13:58:45Z"
+    generation: 2
+    labels:
+      app.kubernetes.io/instance: plex
+      app.kubernetes.io/managed-by: Helm
+      app.kubernetes.io/name: plex
+      app.kubernetes.io/version: 1.43.5.11079
+      helm.sh/chart: plex-2.0.0
+    name: plex-tlsoption
+    namespace: media-stack
+    resourceVersion: "1226171457"
+    uid: caa52349-f260-4a7e-be3c-baf6d5ceaff6
+  spec:
+    cipherSuites:
+    - TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256
+    - TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256
+    - TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384
+    - TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384
+    - TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305
+    - TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305
+    curvePreferences:
+    - X25519
+    - CurveP256
+    - CurveP384
+    minVersion: VersionTLS12
+    sniStrict: true
+- apiVersion: traefik.containo.us/v1alpha1
+  kind: TLSOption
+  metadata:
+    annotations:
+      argocd.argoproj.io/tracking-id: seerr:traefik.containo.us/TLSOption:media-stack/seerr-tlsoption
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"traefik.containo.us/v1alpha1","kind":"TLSOption","metadata":{"annotations":{"argocd.argoproj.io/tracking-id":"seerr:traefik.containo.us/TLSOption:media-stack/seerr-tlsoption"},"labels":{"app.kubernetes.io/instance":"seerr","app.kubernetes.io/managed-by":"Helm","app.kubernetes.io/name":"seerr","app.kubernetes.io/version":"3.5.2","helm.sh/chart":"seerr-1.1.3"},"name":"seerr-tlsoption","namespace":"media-stack"},"spec":{"cipherSuites":["TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256","TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256","TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384","TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384","TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305","TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305"],"curvePreferences":["X25519","CurveP256","CurveP384"],"minVersion":"VersionTLS12","sniStrict":true}}
+    creationTimestamp: "2026-09-08T01:32:16Z"
+    generation: 2
+    labels:
+      app.kubernetes.io/instance: seerr
+      app.kubernetes.io/managed-by: Helm
+      app.kubernetes.io/name: seerr
+      app.kubernetes.io/version: 3.5.2
+      helm.sh/chart: seerr-1.1.3
+    name: seerr-tlsoption
+    namespace: media-stack
+    resourceVersion: "1226173299"
+    uid: ff306a87-6954-4198-b6c3-909dc6c2614a
+  spec:
+    cipherSuites:
+    - TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256
+    - TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256
+    - TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384
+    - TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384
+    - TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305
+    - TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305
+    curvePreferences:
+    - X25519
+    - CurveP256
+    - CurveP384
+    minVersion: VersionTLS12
+    sniStrict: true
+- apiVersion: traefik.containo.us/v1alpha1
+  kind: TLSOption
+  metadata:
+    annotations:
+      argocd.argoproj.io/tracking-id: n8n:traefik.containo.us/TLSOption:n8n/n8n-tlsoption
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"traefik.containo.us/v1alpha1","kind":"TLSOption","metadata":{"annotations":{"argocd.argoproj.io/tracking-id":"n8n:traefik.containo.us/TLSOption:n8n/n8n-tlsoption"},"labels":{"app.kubernetes.io/instance":"n8n","app.kubernetes.io/managed-by":"Helm","app.kubernetes.io/name":"n8n","app.kubernetes.io/version":"2.48.5","helm.sh/chart":"n8n-0.2.0"},"name":"n8n-tlsoption","namespace":"n8n"},"spec":{"cipherSuites":["TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256","TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256","TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384","TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305","TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384","TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305","TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305","TLS_AES_256_GCM_SHA384","TLS_AES_128_GCM_SHA256","TLS_CHACHA20_POLY1305_SHA256","TLS_FALLBACK_SCSV"],"curvePreferences":["CurveP521","CurveP384"],"minVersion":"VersionTLS12","sniStrict":false}}
+      meta.helm.sh/release-name: n8n
+      meta.helm.sh/release-namespace: n8n
+    creationTimestamp: "2023-07-26T13:47:13Z"
+    generation: 1
+    labels:
+      app.kubernetes.io/instance: n8n
+      app.kubernetes.io/managed-by: Helm
+      app.kubernetes.io/name: n8n
+      app.kubernetes.io/version: 2.48.5
+      helm.sh/chart: n8n-0.2.0
+    name: n8n-tlsoption
+    namespace: n8n
+    resourceVersion: "1225384573"
+    uid: 5933812f-ab1f-401c-888f-ae8c0eae9701
+  spec:
+    cipherSuites:
+    - TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256
+    - TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256
+    - TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384
+    - TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305
+    - TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384
+    - TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305
+    - TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305
+    - TLS_AES_256_GCM_SHA384
+    - TLS_AES_128_GCM_SHA256
+    - TLS_CHACHA20_POLY1305_SHA256
+    - TLS_FALLBACK_SCSV
+    curvePreferences:
+    - CurveP521
+    - CurveP384
+    minVersion: VersionTLS12
+    sniStrict: false
+- apiVersion: traefik.containo.us/v1alpha1
+  kind: TLSOption
+  metadata:
+    annotations:
+      argocd.argoproj.io/tracking-id: news-freshrss:traefik.containo.us/TLSOption:news/news-freshrss-tlsoption
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"traefik.containo.us/v1alpha1","kind":"TLSOption","metadata":{"annotations":{"argocd.argoproj.io/tracking-id":"news-freshrss:traefik.containo.us/TLSOption:news/news-freshrss-tlsoption"},"labels":{"app.kubernetes.io/instance":"news-freshrss","app.kubernetes.io/managed-by":"Helm","app.kubernetes.io/name":"freshrss","app.kubernetes.io/version":"1.30.4","helm.sh/chart":"freshrss-1.1.0"},"name":"news-freshrss-tlsoption","namespace":"news"},"spec":{"cipherSuites":["TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256","TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256","TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384","TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305","TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384","TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305","TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305","TLS_AES_256_GCM_SHA384","TLS_AES_128_GCM_SHA256","TLS_CHACHA20_POLY1305_SHA256","TLS_FALLBACK_SCSV"],"curvePreferences":["CurveP521","CurveP384"],"minVersion":"VersionTLS12","sniStrict":false}}
+    creationTimestamp: "2024-06-19T12:18:49Z"
+    generation: 1
+    labels:
+      app.kubernetes.io/instance: news-freshrss
+      app.kubernetes.io/managed-by: Helm
+      app.kubernetes.io/name: freshrss
+      app.kubernetes.io/version: 1.30.4
+      helm.sh/chart: freshrss-1.1.0
+    name: news-freshrss-tlsoption
+    namespace: news
+    resourceVersion: "1226040646"
+    uid: 85882fb1-665e-46d8-895a-b646a76787f0
+  spec:
+    cipherSuites:
+    - TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256
+    - TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256
+    - TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384
+    - TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305
+    - TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384
+    - TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305
+    - TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305
+    - TLS_AES_256_GCM_SHA384
+    - TLS_AES_128_GCM_SHA256
+    - TLS_CHACHA20_POLY1305_SHA256
+    - TLS_FALLBACK_SCSV
+    curvePreferences:
+    - CurveP521
+    - CurveP384
+    minVersion: VersionTLS12
+    sniStrict: false
+- apiVersion: traefik.containo.us/v1alpha1
+  kind: TLSOption
+  metadata:
+    annotations:
+      argocd.argoproj.io/tracking-id: syncthing:traefik.containo.us/TLSOption:syncthing/syncthing-tlsoption
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"traefik.containo.us/v1alpha1","kind":"TLSOption","metadata":{"annotations":{"argocd.argoproj.io/tracking-id":"syncthing:traefik.containo.us/TLSOption:syncthing/syncthing-tlsoption"},"labels":{"app.kubernetes.io/instance":"syncthing","app.kubernetes.io/managed-by":"Helm","app.kubernetes.io/name":"syncthing","app.kubernetes.io/version":"2.1.7","helm.sh/chart":"syncthing-0.2.3"},"name":"syncthing-tlsoption","namespace":"syncthing"},"spec":{"cipherSuites":["TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256","TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256","TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384","TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305","TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384","TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305","TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305","TLS_AES_256_GCM_SHA384","TLS_AES_128_GCM_SHA256","TLS_CHACHA20_POLY1305_SHA256","TLS_FALLBACK_SCSV"],"curvePreferences":["CurveP521","CurveP384"],"minVersion":"VersionTLS12","sniStrict":false}}
+      meta.helm.sh/release-name: syncthing
+      meta.helm.sh/release-namespace: syncthing
+    creationTimestamp: "2023-12-18T14:23:25Z"
+    generation: 1
+    labels:
+      app.kubernetes.io/instance: syncthing
+      app.kubernetes.io/managed-by: Helm
+      app.kubernetes.io/name: syncthing
+      app.kubernetes.io/version: 2.1.7
+      helm.sh/chart: syncthing-0.2.3
+    name: syncthing-tlsoption
+    namespace: syncthing
+    resourceVersion: "1226920544"
+    uid: 3062eaf9-72f9-42ad-8342-37ff7e3975d6
+  spec:
+    cipherSuites:
+    - TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256
+    - TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256
+    - TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384
+    - TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305
+    - TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384
+    - TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305
+    - TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305
+    - TLS_AES_256_GCM_SHA384
+    - TLS_AES_128_GCM_SHA256
+    - TLS_CHACHA20_POLY1305_SHA256
+    - TLS_FALLBACK_SCSV
+    curvePreferences:
+    - CurveP521
+    - CurveP384
+    minVersion: VersionTLS12
+    sniStrict: false
+- apiVersion: traefik.containo.us/v1alpha1
+  kind: TLSOption
+  metadata:
+    annotations:
+      argocd.argoproj.io/tracking-id: thelounge:traefik.containo.us/TLSOption:thelounge/thelounge-tlsoption
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"traefik.containo.us/v1alpha1","kind":"TLSOption","metadata":{"annotations":{"argocd.argoproj.io/tracking-id":"thelounge:traefik.containo.us/TLSOption:thelounge/thelounge-tlsoption"},"labels":{"app.kubernetes.io/instance":"thelounge","app.kubernetes.io/managed-by":"Helm","app.kubernetes.io/name":"thelounge","app.kubernetes.io/version":"4.5.2","helm.sh/chart":"thelounge-0.3.0"},"name":"thelounge-tlsoption","namespace":"thelounge"},"spec":{"cipherSuites":["TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256","TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256","TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384","TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305","TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384","TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305","TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305","TLS_AES_256_GCM_SHA384","TLS_AES_128_GCM_SHA256","TLS_CHACHA20_POLY1305_SHA256","TLS_FALLBACK_SCSV"],"curvePreferences":["CurveP521","CurveP384"],"minVersion":"VersionTLS12","sniStrict":false}}
+      meta.helm.sh/release-name: thelounge
+      meta.helm.sh/release-namespace: thelounge
+    creationTimestamp: "2023-04-05T11:47:26Z"
+    generation: 1
+    labels:
+      app.kubernetes.io/instance: thelounge
+      app.kubernetes.io/managed-by: Helm
+      app.kubernetes.io/name: thelounge
+      app.kubernetes.io/version: 4.5.2
+      helm.sh/chart: thelounge-0.3.0
+    name: thelounge-tlsoption
+    namespace: thelounge
+    resourceVersion: "1226225127"
+    uid: f464324d-37ff-462e-8180-4c06e544a054
+  spec:
+    cipherSuites:
+    - TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256
+    - TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256
+    - TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384
+    - TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305
+    - TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384
+    - TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305
+    - TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305
+    - TLS_AES_256_GCM_SHA384
+    - TLS_AES_128_GCM_SHA256
+    - TLS_CHACHA20_POLY1305_SHA256
+    - TLS_FALLBACK_SCSV
+    curvePreferences:
+    - CurveP521
+    - CurveP384
+    minVersion: VersionTLS12
+    sniStrict: false
+kind: List
+metadata:
+  resourceVersion: ""
+---
+apiVersion: v1
+items:
+- apiVersion: traefik.containo.us/v1alpha1
+  kind: TLSStore
+  metadata:
+    annotations:
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"traefik.containo.us/v1alpha1","kind":"TLSStore","metadata":{"annotations":{},"name":"default","namespace":"kube-system"},"spec":{"defaultCertificate":{"secretName":"local-cert"}}}
+    creationTimestamp: "2024-02-06T15:25:33Z"
+    generation: 2
+    name: default
+    namespace: kube-system
+    resourceVersion: "63426257"
+    uid: 53906e47-e466-4ffb-86a4-1ed4c9ecdd2d
+  spec:
+    defaultCertificate:
+      secretName: local-cert
+kind: List
+metadata:
+  resourceVersion: ""
+---
+apiVersion: v1
+items:
+- apiVersion: traefik.containo.us/v1alpha1
+  kind: IngressRouteTCP
+  metadata:
+    annotations:
+      argocd.argoproj.io/tracking-id: minecraft-server:traefik.containo.us/IngressRouteTCP:minecraft/minecraft-server-public
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"traefik.containo.us/v1alpha1","kind":"IngressRouteTCP","metadata":{"annotations":{"argocd.argoproj.io/tracking-id":"minecraft-server:traefik.containo.us/IngressRouteTCP:minecraft/minecraft-server-public"},"labels":{"app.kubernetes.io/instance":"minecraft-server","app.kubernetes.io/managed-by":"Helm","app.kubernetes.io/name":"minecraft-server","app.kubernetes.io/version":"2026.11.0","helm.sh/chart":"minecraft-server-0.2.0"},"name":"minecraft-server-public","namespace":"minecraft"},"spec":{"entryPoints":["mc"],"routes":[{"match":"HostSNI(`*`)","services":[{"name":"minecraft-server","port":"mc"}]}]}}
+    creationTimestamp: "2024-08-26T00:56:04Z"
+    generation: 1
+    labels:
+      app.kubernetes.io/instance: minecraft-server
+      app.kubernetes.io/managed-by: Helm
+      app.kubernetes.io/name: minecraft-server
+      app.kubernetes.io/version: 2026.11.0
+      helm.sh/chart: minecraft-server-0.2.0
+    name: minecraft-server-public
+    namespace: minecraft
+    resourceVersion: "1226171602"
+    uid: f4296725-6077-4850-b384-b11ce450926d
+  spec:
+    entryPoints:
+    - mc
+    routes:
+    - match: HostSNI(`*`)
+      services:
+      - name: minecraft-server
+        port: mc
+- apiVersion: traefik.containo.us/v1alpha1
+  kind: IngressRouteTCP
+  metadata:
+    annotations:
+      argocd.argoproj.io/tracking-id: syncthing:traefik.containo.us/IngressRouteTCP:syncthing/syncthing-tcp
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"traefik.containo.us/v1alpha1","kind":"IngressRouteTCP","metadata":{"annotations":{"argocd.argoproj.io/tracking-id":"syncthing:traefik.containo.us/IngressRouteTCP:syncthing/syncthing-tcp"},"labels":{"app.kubernetes.io/instance":"syncthing","app.kubernetes.io/managed-by":"Helm","app.kubernetes.io/name":"syncthing","app.kubernetes.io/version":"2.1.7","helm.sh/chart":"syncthing-0.2.3"},"name":"syncthing-tcp","namespace":"syncthing"},"spec":{"entryPoints":["sttcp"],"routes":[{"match":"HostSNI(`*`)","services":[{"name":"syncthing","port":"sttcp"}]}]}}
+    creationTimestamp: "2024-05-22T15:01:28Z"
+    generation: 1
+    labels:
+      app.kubernetes.io/instance: syncthing
+      app.kubernetes.io/managed-by: Helm
+      app.kubernetes.io/name: syncthing
+      app.kubernetes.io/version: 2.1.7
+      helm.sh/chart: syncthing-0.2.3
+    name: syncthing-tcp
+    namespace: syncthing
+    resourceVersion: "1226920543"
+    uid: 84d32be6-73ca-4626-93c2-b16b2de77250
+  spec:
+    entryPoints:
+    - sttcp
+    routes:
+    - match: HostSNI(`*`)
+      services:
+      - name: syncthing
+        port: sttcp
+kind: List
+metadata:
+  resourceVersion: ""
+---
+apiVersion: v1
+items:
+- apiVersion: traefik.containo.us/v1alpha1
+  kind: IngressRouteUDP
+  metadata:
+    annotations:
+      argocd.argoproj.io/tracking-id: syncthing:traefik.containo.us/IngressRouteUDP:syncthing/syncthing-discovery
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"traefik.containo.us/v1alpha1","kind":"IngressRouteUDP","metadata":{"annotations":{"argocd.argoproj.io/tracking-id":"syncthing:traefik.containo.us/IngressRouteUDP:syncthing/syncthing-discovery"},"labels":{"app.kubernetes.io/instance":"syncthing","app.kubernetes.io/managed-by":"Helm","app.kubernetes.io/name":"syncthing","app.kubernetes.io/version":"2.1.7","helm.sh/chart":"syncthing-0.2.3"},"name":"syncthing-discovery","namespace":"syncthing"},"spec":{"entryPoints":["stdiscovery"],"routes":[{"services":[{"name":"syncthing","port":"stdiscovery"}]}]}}
+      meta.helm.sh/release-name: syncthing
+      meta.helm.sh/release-namespace: syncthing
+    creationTimestamp: "2023-12-20T13:22:26Z"
+    generation: 1
+    labels:
+      app.kubernetes.io/instance: syncthing
+      app.kubernetes.io/managed-by: Helm
+      app.kubernetes.io/name: syncthing
+      app.kubernetes.io/version: 2.1.7
+      helm.sh/chart: syncthing-0.2.3
+    name: syncthing-discovery
+    namespace: syncthing
+    resourceVersion: "1226920534"
+    uid: 12503740-68cd-478b-8932-b0911f6d1e8d
+  spec:
+    entryPoints:
+    - stdiscovery
+    routes:
+    - services:
+      - name: syncthing
+        port: stdiscovery
+- apiVersion: traefik.containo.us/v1alpha1
+  kind: IngressRouteUDP
+  metadata:
+    annotations:
+      argocd.argoproj.io/tracking-id: syncthing:traefik.containo.us/IngressRouteUDP:syncthing/syncthing-udp
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"traefik.containo.us/v1alpha1","kind":"IngressRouteUDP","metadata":{"annotations":{"argocd.argoproj.io/tracking-id":"syncthing:traefik.containo.us/IngressRouteUDP:syncthing/syncthing-udp"},"labels":{"app.kubernetes.io/instance":"syncthing","app.kubernetes.io/managed-by":"Helm","app.kubernetes.io/name":"syncthing","app.kubernetes.io/version":"2.1.7","helm.sh/chart":"syncthing-0.2.3"},"name":"syncthing-udp","namespace":"syncthing"},"spec":{"entryPoints":["studp"],"routes":[{"services":[{"name":"syncthing","port":"studp"}]}]}}
+      meta.helm.sh/release-name: syncthing
+      meta.helm.sh/release-namespace: syncthing
+    creationTimestamp: "2023-12-20T13:22:26Z"
+    generation: 1
+    labels:
+      app.kubernetes.io/instance: syncthing
+      app.kubernetes.io/managed-by: Helm
+      app.kubernetes.io/name: syncthing
+      app.kubernetes.io/version: 2.1.7
+      helm.sh/chart: syncthing-0.2.3
+    name: syncthing-udp
+    namespace: syncthing
+    resourceVersion: "1226920546"
+    uid: ab8698a1-5636-4194-8c88-5bf6433183bb
+  spec:
+    entryPoints:
+    - studp
+    routes:
+    - services:
+      - name: syncthing
+        port: studp
+kind: List
+metadata:
+  resourceVersion: ""
+---
+apiVersion: v1
+items: []
+kind: List
+metadata:
+  resourceVersion: ""
+---
+apiVersion: v1
+items: []
+kind: List
+metadata:
+  resourceVersion: ""
+---
+apiVersion: v1
+items: []
+kind: List
+metadata:
+  resourceVersion: ""
+---
+apiVersion: v1
+items:
+- apiVersion: traefik.io/v1alpha1
+  kind: IngressRoute
+  metadata:
+    annotations:
+      meta.helm.sh/release-name: traefik
+      meta.helm.sh/release-namespace: kube-system
+    creationTimestamp: "2026-11-21T00:30:05Z"
+    generation: 1
+    labels:
+      app.kubernetes.io/instance: traefik-kube-system
+      app.kubernetes.io/managed-by: Helm
+      app.kubernetes.io/name: traefik
+      helm.sh/chart: traefik-25.0.3_up25.0.0
+    name: traefik-dashboard
+    namespace: kube-system
+    resourceVersion: "1226970196"
+    uid: 8ec1824e-60d4-41b5-ada0-97d5e1d82250
+  spec:
+    entryPoints:
+    - web
+    routes:
+    - kind: Rule
+      match: Host(`traefik.kub.local`) && (PathPrefix(`/dashboard`) || PathPrefix(`/api`))
+      middlewares:
+      - name: lan-only
+        namespace: kube-system
+      - name: traefik-dashboard
+        namespace: kube-system
+      services:
+      - kind: TraefikService
+        name: api@internal
+kind: List
+metadata:
+  resourceVersion: ""
+---
+apiVersion: v1
+items: []
+kind: List
+metadata:
+  resourceVersion: ""
+---
+apiVersion: v1
+items: []
+kind: List
+metadata:
+  resourceVersion: ""
+---
+apiVersion: v1
+items: []
+kind: List
+metadata:
+  resourceVersion: ""
+---
+apiVersion: v1
+items: []
+kind: List
+metadata:
+  resourceVersion: ""
+---
+apiVersion: v1
+items: []
+kind: List
+metadata:
+  resourceVersion: ""
+---
+apiVersion: v1
+items: []
+kind: List
+metadata:
+  resourceVersion: ""
+---
+apiVersion: v1
+items: []
+kind: List
+metadata:
+  resourceVersion: ""
+---
+apiVersion: v1
+items: []
+kind: List
+metadata:
+  resourceVersion: ""
+---
+apiVersion: v1
+items: []
+kind: List
+metadata:
+  resourceVersion: ""
+---

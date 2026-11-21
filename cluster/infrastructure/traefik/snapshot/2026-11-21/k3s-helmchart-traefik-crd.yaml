@@ -1,0 +1,26 @@
+apiVersion: helm.cattle.io/v1
+kind: HelmChart
+metadata:
+  annotations:
+    helmcharts.cattle.io/managed-by: helm-controller
+    kubectl.kubernetes.io/last-applied-configuration: |
+      {"apiVersion":"helm.cattle.io/v1","kind":"HelmChart","metadata":{"annotations":{},"name":"traefik-crd","namespace":"kube-system"},"spec":{"chart":"https://%{KUBERNETES_API}%/static/charts/traefik-crd-25.0.2+up25.0.0.tgz"}}
+    objectset.rio.cattle.io/applied: H4sIAAAAAAAA/4yRTUszMRDHv8rDQE/PvrSbxrYBD1UKSkHEt6vMJlM37m6ybKYVKfvdJfXSHqoek/zzm9/M7AE7+0J9sN6BgoqaNtPI3FBmfb6bQAK1dQYU3FDTXlfYMyTQEqNBRlB7QOc8I1vvQjz68p00B+Kst/4IZSMDkrPv/sNRn77talBQi3AikfxbW2cul8Z49yvCYUuggHukja3/FA8d6vin3paUhs/A1MKQQIMlNT82VWGoQIGRUxTa0HwhdbFBKcy4lJOpnOMMabIoxEzMaHMhIvRUL9W9ge/LMxKhIx0V9GH0CirmLqg8H+3Xz1erh7vV0+rxdXl/O4zyENeg80My5EcV0kJm40z833aFhGH4CgAA//9My7wf9AEAAA
+    objectset.rio.cattle.io/id: ""
+    objectset.rio.cattle.io/owner-gvk: k3s.cattle.io/v1, Kind=Addon
+    objectset.rio.cattle.io/owner-name: traefik
+    objectset.rio.cattle.io/owner-namespace: kube-system
+  creationTimestamp: "2023-04-02T17:02:04Z"
+  finalizers:
+  - wrangler.cattle.io/on-helm-chart-remove
+  generation: 6
+  labels:
+    objectset.rio.cattle.io/hash: d54a3cde895c2fa53d0b51458a7ae1923737ef63
+  name: traefik-crd
+  namespace: kube-system
+  resourceVersion: "176610760"
+  uid: f217b294-4617-4f18-826e-608e00fd28df
+spec:
+  chart: https://%{KUBERNETES_API}%/static/charts/traefik-crd-25.0.3+up25.0.0.tgz
+status:
+  jobName: helm-install-traefik-crd
