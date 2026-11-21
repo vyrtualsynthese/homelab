@@ -9,6 +9,14 @@ spec:
       # -- Enable deployment
       enabled: true
       kind: DaemonSet
+    providers:
+      kubernetesCRD:
+        # -- The live router has this on, and every route depends on it: a gate or
+        # -- a redirect is referenced as `kube-system-<name>@kubernetescrd`, which
+        # -- only resolves into another namespace when this is true. It was set on
+        # -- the running pods but never in this file, so a successful upgrade would
+        # -- have silently dropped every gate.
+        allowCrossNamespace: true
     ingressRoute:
       dashboard:
         enabled: true
@@ -17,7 +25,7 @@ spec:
         # Additional ingressRoute labels (e.g. for filtering IngressRoute by custom labels)
         labels: {}
         # The router match rule used for the dashboard ingressRoute
-        matchRule: Host(`traefik.app.local`) && (PathPrefix(`/dashboard`) || PathPrefix(`/api`))
+        matchRule: Host(`traefik.kub.local`) && (PathPrefix(`/dashboard`) || PathPrefix(`/api`))
         # Specify the allowed entrypoints to use for the dashboard ingress route, (e.g. traefik, web, websecure).
         # By default, it's using traefik entrypoint, which is not exposed.
         # /!\ Do not expose your dashboard without any protection over the internet /!\
@@ -52,13 +60,17 @@ spec:
     # -- Certificates resolvers configuration.
     # Ref: https://doc.traefik.io/traefik/https/acme/#certificate-resolvers
     # See EXAMPLES.md for more details.
-    certificatesResolvers:
+    # -- The chart reads `certResolvers` and renders `--certificatesresolvers.*`.
+    # -- The old `certificatesResolvers` name configures nothing at all, and then
+    # -- Traefik never loads /data/acme.json: every public name answers with the
+    # -- internal default certificate. The challenge options sit directly under the
+    # -- resolver; there is no extra `acme:` level.
+    certResolvers:
       myresolver:
-        acme:
-          email: valentin.ronteix@ashudev.com
-          tlsChallenge: true
-          # It has to match the path with a persistent volume
-          storage: /data/acme.json
+        email: valentin.ronteix@ashudev.com
+        tlsChallenge: true
+        # It has to match the path with a persistent volume
+        storage: /data/acme.json
 
     ports:
       web:
@@ -123,7 +135,28 @@ spec:
         expose: true
         exposedPort: 25565
         protocol: TCP
-      
+
+      # -- Syncthing: file transfer (22000 TCP and UDP) and local discovery
+      # -- (21027 UDP). Their Services name these entry points, and until now they
+      # -- existed only on the live Service, added by hand in 2023. An upgrade
+      # -- from this file alone would have removed them and broken Syncthing
+      # -- between devices, silently, everywhere.
+      sttcp:
+        port: 22000
+        expose: true
+        exposedPort: 22000
+        protocol: TCP
+      studp:
+        port: 22000
+        expose: true
+        exposedPort: 22000
+        protocol: UDP
+      stdiscovery:
+        port: 21027
+        expose: true
+        exposedPort: 21027
+        protocol: UDP
+
       metrics:
       # When using hostNetwork, use another port to avoid conflict with node exporter:
       # https://github.com/prometheus/prometheus/wiki/Default-port-allocations
@@ -144,7 +177,12 @@ spec:
     persistence:
       enabled: true
       name: data
-        existingClaim: "traefik-pvc"
+      # -- The claim the live router already mounts. This line used to be indented
+      # -- under `name`, which made the whole values block invalid YAML, which is
+      # -- why no upgrade has run since 2023. The name matters: this claim holds
+      # -- /data/acme.json, the certificate store. A different claim means the
+      # -- store is empty and every name is re-issued against Let's Encrypt's quota.
+      existingClaim: "pvc-traefik-nfs"
       path: /data
 
     service:
