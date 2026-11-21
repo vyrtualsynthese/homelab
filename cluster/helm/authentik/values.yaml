@@ -24,7 +24,7 @@ authentik:
     image:
       repository: ghcr.io/goauthentik/server
       # Pinned with the chart version: both are 2026.8.5.
-      tag: "2026.8.5"
+      tag: "2026.8.6"
       pullPolicy: IfNotPresent
     envFrom:
       - secretRef:
