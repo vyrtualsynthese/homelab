@@ -84,6 +84,9 @@ All notable changes to this repository. The format follows
 - `freshrss_sync.py verify` reads the Elite Dangerous item expression: it now honours a container
   class (`//*[contains(@class,'…')]//`) and an exclusion (`and not(contains(@href,'…'))`), so the
   feed is checked automatically instead of printing `sel main unchecked`.
+- `local-path` provisions new claims on `nuc0` under `/mnt/ssd0`. The node map named `nuc`, a node
+  that does not exist, so every claim on `nuc0` fell through to `/opt/local-path-provisioner` on the
+  root disk. The thirteen claims already there are left where they are.
 
 ### Removed
 
