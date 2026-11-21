@@ -120,9 +120,9 @@ time. Examples:
   - A route that keeps `lan-only` and no gate must say why in the chart, next to the middleware list,
     the way `qbittorrent` and `autobrr` do.
 - **Every non-public route carries `kube-system-lan-only@kubernetescrd`.** The router forwards 80/443 to
-  the cluster and Traefik routes on the `Host` header alone, so an ungated route answers the internet
-  whether or not its hostname resolves publicly. The public list is `plex`, `seerr`,
-  `ashuvidz.com`, `ashudev.com` with `www.ashudev.com`, `dashy.ashudev.com`,
+  one cluster address, `192.168.1.46` (`streaming`), and Traefik routes on the `Host` header alone, so
+  an ungated route answers the internet whether or not its hostname resolves publicly. The public list
+  is `plex`, `seerr`, `ashuvidz.com`, `ashudev.com` with `www.ashudev.com`, `dashy.ashudev.com`,
   `filebrowser.kub.home.ashudev.com` and `authentik.kub.home.ashudev.com` — the last one because it
   is the sign-in page of the page before it, and a gate whose login lives on the LAN cannot be used
   from outside. FileBrowser is public because the editor signs in from outside and its share links
@@ -148,6 +148,9 @@ time. Examples:
   NFS. The NAS's `/mnt/ultrafaststorage` is reserved for the qbittorrent download export; nothing
   else goes there. DaemonSets (`fluent-bit`, `prometheus-node-exporter`) are not pinned: they must
   run on every node, including `rbp2`. The old `node-type` label is retired; do not reintroduce it.
+  Traefik is the exception in the other direction: one `Deployment` replica pinned to `streaming`,
+  never a DaemonSet. The certificate store is one file with no lock, so a second router alongside the
+  first re-requests every name and burns the weekly quota (task 482).
 - Never pin a workload to `rbp2`. It is an ARM64 Raspberry Pi and several images have no ARM build.
 - Resources: every container sets memory requests/limits; CPU requests are tiny (1m–100m).
 - Monitoring: exporters expose 9707 (exportarr) with `prometheus.io/scrape` annotations; Prometheus

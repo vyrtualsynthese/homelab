@@ -126,11 +126,25 @@ kubectl -n kube-system delete ingressroute.traefik.containo.us traefik-dashboard
 Two copies of one rule on one host produce a duplicate-router error and no visible breakage, which
 is exactly the kind of thing that waits months to confuse someone.
 
+## One pod, not a DaemonSet
+
+Since 2026-11-21 the same values run `deployment.kind: Deployment`, `replicas: 1`,
+`updateStrategy: Recreate`, pinned to `streaming`. Task 482.
+
+Two routers on one `acme.json` corrupt the file and re-request every name, and Let's Encrypt issues at
+most five duplicates a week — so one morning of that takes every public hostname down until the window
+passes. Traefik's open-source image has no lock on the file. `Recreate` matters for the same reason: a
+rolling update runs the old and the new pod together for a few seconds.
+
+Spreading the router is not an option that exists here either. The house router forwards to
+`192.168.1.46` alone, so a second pod would see no external traffic; the measured load does not ask for
+one (busiest hour of the seven days to 2026-11-21: 792 Mbit/s in, 248 Mbit/s out, on a 10 GbE link).
+
 ## Rolling back
 
 `helm rollback traefik 5` is **not** the rollback here. Release `v5` carries the values of 2023 —
-claim `traefik` rather than `pvc-traefik-nfs`, no Syncthing entry points — and the DaemonSet has been
-hand-edited since. Rolling back to it would bring up pods on a claim that does not exist.
+claim `traefik` rather than `pvc-traefik-nfs`, no Syncthing entry points — and the pod shape has been
+changed by hand since. Rolling back to it would bring up pods on a claim that does not exist.
 
 Roll back by upgrading again with the previous chart and today's values:
 
