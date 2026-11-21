@@ -10,5 +10,5 @@ appVersion: v26.3.1
 # `operator.version` by the same change that bumps it.
 dependencies:
   - name: gpu-operator
-    version: v26.3.1
+    version: v26.7.3
     repository: https://helm.ngc.nvidia.com/nvidia
