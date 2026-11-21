@@ -29,6 +29,7 @@ decision — the audit reads the same in all three cases.
 | [ArgoCD and Helm drift](argocd-helm.md) | What ArgoCD actually manages, broken `path:` and `$values` references, the chart patterns and their versions, ingress, the secrets the charts expect, and the known chart defects |
 | [Observability and storage](observability-storage.md) | The Prometheus, Grafana, Loki and exporter inventory as it stood, the abandoned Longhorn layer and what the data loss took, the NFS provisioners, and the backup story |
 | [Media stack (2026-11-18)](media-stack-2026-11-18.md) | The 21 `media-stack` charts against the chart contract: gate coverage per route, probes, sizing, secrets, exporter health, and the stale documents the pass corrected |
+| [Traefik (2026-11-21)](traefik-2026-11-21.md) | The Traefik install the day ownership moved from the K3s addon to the repository: readiness for v3, the dashboard's exposure, metric and alert coverage, and the eighteen orphaned certificates in the store |
 
 ## How to read one
 
