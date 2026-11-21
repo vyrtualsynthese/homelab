@@ -33,7 +33,10 @@ Consequences:
 - Editing `cluster/helm/**` only takes effect after the commit lands on `develop`.
 - Never `kubectl edit/apply` a GitOps-managed resource; automated `selfHeal` reverts it.
 - `cluster/infrastructure/**` is **not referenced by any Application** → applied by hand. That includes
-  the Traefik `HelmChartConfig`, middlewares and TLSStore. **[verify]** intent.
+  the Traefik middlewares and TLSStore, and the Traefik release itself: it is installed from
+  `cluster/infrastructure/traefik/values.yaml` and moved with `helm` (see
+  [`docs/runbooks/traefik-release.md`](docs/runbooks/traefik-release.md)). K3s's Traefik addon is
+  disabled in the node config.
 
 ## 3. App patterns
 
@@ -281,7 +284,9 @@ are in `docs/superpowers/plans/`.
    render until the `traefik.io/v1alpha1/ServersTransportTCP` CRD exists (the CRDs were 2.9-era and
    applied by hand), and the K3s helm-controller runs no job for any HelmChart or HelmChartConfig, so
    the two releases were moved with `helm` directly. That controller is the subject of homelab task
-   530 (`#398`).
+   530 (`#398`). **Ownership followed the same day**: the addon is disabled on the three servers, the
+   packaged `HelmChart`/`HelmChartConfig` objects are gone, and the release is installed from
+   `cluster/infrastructure/traefik/values.yaml` — `traefik-config.yaml` is deleted.
 10. **Resolved 2026-11-18:** the two duplicate `lh-performance` StorageClass files under
     `cluster/infrastructure/storageclass/` are deleted with the rest of the Longhorn leftovers.
 11. **Resolved 2026-11-18:** `firefly` and `postiz` were the two charts that rendered a
@@ -307,9 +312,10 @@ are in `docs/superpowers/plans/`.
 
 15. **Resolved 2026-11-21:** the Traefik Helm release was stuck at chart `20.3.1` / Traefik `2.9.4`
     (June 2023) because `traefik-config.yaml` never parsed. It now runs chart `25.0.3` / Traefik
-    `2.10.7`, with CRDs from the same chart applied first; the procedure and the two blockers that
-    shaped it are in [`docs/runbooks/traefik-release.md`](docs/runbooks/traefik-release.md). K3s
-    `1.30.1` against a `1.36.x` stable is unchanged.
+    `2.10.7`, with CRDs from the same chart applied first, and the release is this repository's
+    rather than the K3s addon's; the procedure, the ownership steps and the two blockers that shaped
+    it are in [`docs/runbooks/traefik-release.md`](docs/runbooks/traefik-release.md). K3s `1.30.1`
+    against a `1.36.x` stable is unchanged.
 16. **Resolved for the monitoring charts:** the vendored `prometheus` 14.8.0 and `grafana` 6.52.5 are
     replaced by wrapper charts on current upstream versions. No vendored charts are to be added;
     migrate the remaining ones on their next touch.
