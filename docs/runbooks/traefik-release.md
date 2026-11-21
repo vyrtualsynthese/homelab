@@ -271,6 +271,7 @@ not a visible outage.
 | `helm uninstall traefik-crd` looks harmless and deletes every route | that release's chart carries the nine CRDs in `templates/`; uninstalling it removes them. Never run it |
 | a `HelmChart` deletion hangs, or runs an uninstall | `wrangler.cattle.io/on-helm-chart-remove`; strip it before anything else deletes the object |
 | the release moves but the dashboard route appears twice | chart 25 renders it on `traefik.io`; the 2023 `traefik.containo.us` copy has to be deleted by hand, once |
+| an object renamed to `traefik.io` leaves its twin behind | an Argo CD sync without `prune` creates the new object and keeps the old one. Delete the `containo.us` copy by hand, after the routes and gates answer on the new one |
 | Syncthing stops between devices after an upgrade | the `sttcp`, `studp` and `stdiscovery` entry points are missing from the values |
 | every gate stops resolving, or routes are rejected | `providers.kubernetesCRD.allowCrossNamespace` is off; every gate is referenced as `kube-system-<name>@kubernetescrd` |
 | a K3s node does not come back after the config edit | a second top-level `disable:` key; K3s refuses the file. Restore `/root/config.yaml.bak-*` |
