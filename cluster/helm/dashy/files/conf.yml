@@ -173,7 +173,7 @@ sections:
         icon: https://raw.githubusercontent.com/pgadmin-org/pgadmin4/master/docs/en_US/images/logo-128.png
       - title: Traefik
         description: routes
-        url: http://traefik.kub.local/dashboard/
+        url: https://traefik.kub.local/dashboard/
         icon: https://raw.githubusercontent.com/traefik/traefik/master/docs/content/assets/img/traefikproxy-icon-color.png
 
   - name: Elsewhere
