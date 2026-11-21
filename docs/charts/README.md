@@ -41,7 +41,7 @@ templates where the image demands it; it is not allowed to diverge from the cont
 | 8 | Ingress is a Traefik `IngressRoute` with the API group in a value | This repo never uses `networking.k8s.io/v1`, and v3 needs a rename |
 | 9 | Labels from `app.labels` on every object | Selectors and dashboards depend on them |
 | 10 | No tabs, and no tab indentation in any template | Invisible in review, fatal in YAML |
-| 11 | `helm lint` and `helm template <release> . --namespace <ns>` both pass | The only local test these charts have |
+| 11 | `helm lint` and `helm template <release> . --namespace <ns>` both pass | The only local test these charts have; `hack/check-charts.sh` runs both on every chart |
 | 12 | A chart whose route carries the authentik gate sets `apiBypassMiddlewares` when the app authenticates `/api` itself | An API client sends a key, not a browser session, and cannot complete a sign-in redirect. `lan-only` is a boundary, not a credential |
 
 ### How `appVersion` relates to `image.tag`
@@ -280,6 +280,7 @@ cd cluster/helm/<area>/<app>
 helm lint . --namespace <ns>
 helm template <release> . --namespace <ns> | kubeconform -strict -summary
 hack/check-exposure.sh --only cluster/helm/<area>/<app>   # non-public routes carry the LAN gate
+hack/check-charts.sh --only cluster/helm/<area>/<app>      # requirement 11: helm lint and helm template
 hack/check-app-version.sh --only cluster/helm/<area>/<app> # appVersion names the version in image.tag
 hack/check-config-keys.sh --only cluster/helm/<area>/<app> # every config key exists in the pinned chart's schema
 
