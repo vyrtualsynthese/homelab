@@ -16,7 +16,7 @@ strategy: Recreate
 image:
   repository: ghcr.io/autobrr/autobrr
   # -- Pin the tag. Never `latest`. Renovate manages this.
-  tag: "v1.90.0"
+  tag: "v1.91.1"
   pullPolicy: IfNotPresent
 
 imagePullSecrets: []
