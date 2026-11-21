@@ -182,10 +182,15 @@ simply be cleared are in [`how-it-works/storage.md`](how-it-works/storage.md).
 No `Released` volume remains. The six from the previous read (`plex-transcode`, `cross-seed2`, the
 old `calibre-web-automated-config`, the old `pgadmin-config`, `filebrowser-config` and
 `filebrowser-database`) and `atlantis-data`, which appeared on 2026-11-20 after its namespace was
-already gone, were deleted on 2026-11-21, oldest first. `local-path` used retain policy, so deleting
+already gone, were deleted on 2026-11-21, oldest first. `local-path` uses retain policy, so deleting
 a volume leaves its directory behind instead of freeing the space: `/mnt/ssd0` on `streaming` for the
-three media-stack volumes, `/opt/local-path-provisioner` on `nuc0` for the rest, until someone
-removes each by hand. Housekeeping, not breakage.
+three media-stack volumes, `/opt/local-path-provisioner` on `nuc0` for the rest. Those seven
+directories were removed by hand the same day, 0.7 MiB between them, which is all they held.
+
+Three older directories on `nuc0` still have no volume and no claim behind them:
+`pvc-49c911f7…radarr-anime-config`, `pvc-69af512a…lidarr-config` and
+`pvc-753a7f13…sonarr-config`, 1.6 MiB together. They are housekeeping, not breakage, and no
+`Released` volume explains them: they predate the volumes above.
 
 Each of the eight classes is a directory on a `nas` export, served by one release of
 `cluster/helm/nfs/provisioner/`. `nfs-ssd` and `nfs-plex` no longer exist as classes or as

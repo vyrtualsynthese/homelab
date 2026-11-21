@@ -35,6 +35,10 @@ All notable changes to this repository. The format follows
 - The Longhorn cleanup is closed: no volume, claim, StorageClass, namespace or custom resource
   remains. The disposition page is kept as the record of what was removed, and the chart comments
   that named a Terminating claim to explain a claim name now describe that as history.
+- The seven `Released` `local-path` volumes from earlier rebuilds, and the directories they left on
+  `streaming` and `nuc0`, are gone. `local-path` keeps a deleted volume's directory (retain policy),
+  so removing the volume and removing the bytes are two steps; three older `nuc0` directories with
+  no volume or claim behind them are left as housekeeping.
 - The four NFS volumes that had carried a deletion timestamp since 2023-12-06 are rebuilt, not
   tolerated: each claim was deleted, the volume's pending deletion completed, and self-heal
   recreated the pair from the provisioner chart. `traefik-nfs`, `plex-media`, `stash-nfs` and
