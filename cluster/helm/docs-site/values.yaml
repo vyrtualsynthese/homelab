@@ -13,7 +13,7 @@ schedule: "* * * * *" # also printed on the index page, so it cannot drift
 builder:
   # Docker Hub. The project publishes no other registry, so this is the §8.7
   # exception recorded in the design document. Pinned by tag, never `latest`.
-  image: squidfunk/mkdocs-material:9.8.1
+  image: squidfunk/mkdocs-material:9.8.2
   # Bump when anything about the build *environment* changes — the pod's
   # capabilities, the mount layout, the image — not only the script. The
   # builder records this in its state so a deploy retries the pairs the
