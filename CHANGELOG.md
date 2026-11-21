@@ -47,6 +47,10 @@ All notable changes to this repository. The format follows
 - `hack/freshrss_sync.py state` reports what the instance holds per feed — the date it last stored an
   item and that item's title, or `never` — so a feed whose publisher rate-limits can be watched
   without spending the same address's request budget.
+- The `local-path` helper pod no longer runs `busybox:latest`. It is pinned to `1.38.0` with a
+  `# renovate: datasource=docker` annotation, which closes the one image in the storage path that
+  could change without a commit: the helper runs the setup and teardown scripts as root on whichever
+  node provisions next.
 
 ### Added
 

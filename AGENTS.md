@@ -268,11 +268,13 @@ are in `docs/superpowers/plans/`.
 11. **Resolved 2026-11-18:** `firefly` and `postiz` were the two charts that rendered a
     `networking.k8s.io/v1` Ingress, against the Traefik-CRD-only rule in §4. Both were retired, so no
     chart in the repo breaks that rule.
-12. Floating `latest` tags remain in two places: the `local-path` **helper** image (the
-    provisioner itself is `v0.0.37`) and `mktxp` (upstream publishes no usable semver tags; staying
-    on `latest` was decided on 2026-11-19). `dashy` (`4.9.19`) and the minecraft `mc-monitor`
-    sidecar (`1.21.0`) are pinned now. (`alpine:latest` in qBittorrent's VueTorrent installer was
-    pinned on 2026-11-18: `vueTorrent.initTag` plus a `# renovate: datasource=docker` annotation.)
+12. **Resolved 2026-11-21:** the `local-path` **helper** image was `busybox:latest`; it is pinned to
+    `1.38.0` with a `# renovate: datasource=docker` annotation in
+    `cluster/helm/local-path/values.yaml`. One floating `latest` remains, `mktxp` (upstream publishes
+    no usable semver tags; staying on `latest` was decided on 2026-11-19). `dashy` (`4.9.19`) and the
+    minecraft `mc-monitor` sidecar (`1.21.0`) are pinned now. (`alpine:latest` in qBittorrent's
+    VueTorrent installer was pinned on 2026-11-18: `vueTorrent.initTag` plus a
+    `# renovate: datasource=docker` annotation.)
 
 **Ingress**
 

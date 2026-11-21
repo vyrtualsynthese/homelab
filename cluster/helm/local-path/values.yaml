@@ -11,7 +11,12 @@ image:
 
 helperImage:
   repository: docker.io/library/busybox
-  tag: latest
+  # The helper pod runs the setup/teardown scripts as root on the node for every
+  # volume create and delete, so its image is the last unpinned code path in the
+  # storage stack: a new `latest` would be root code on whichever node provisions
+  # next, unreviewed. Pin a version, and let Renovate move it.
+  # renovate: datasource=docker depName=busybox
+  tag: 1.38.0
 
 defaultSettings:
   registrySecret: ~
