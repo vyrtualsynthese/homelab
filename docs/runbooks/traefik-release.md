@@ -1,14 +1,16 @@
 # Owning and moving the Traefik release
 
 Date: 2026-11-21 · **Ownership moved** 2026-11-21 at chart `25.0.3`, revision 8 · **Moved to 2.11**
-the same day, chart `27.0.2` (Traefik `2.11.63`), revision 10 · **Kind:** living runbook
+the same day, chart `27.0.2` (Traefik `2.11.63`), revision 10 · **Moved to v3** the same day, chart
+`42.4.1` (Traefik `3.7.19`), revision 11 · **Kind:** living runbook
 
 > **In one line.** The Traefik release is this repository's; K3s's addon is disabled, and the
 > release is moved with `helm` from one values file.
 >
 > **Use it when** Traefik has to move to a newer chart, its values change, or the release has to be
-> inspected or rolled back · **Verified** 2026-11-21 on chart `27.0.2`: digest unchanged, every route
-> count unchanged, every host answering, `/metrics` serving 173 series.
+> inspected or rolled back · **Verified** 2026-11-21 on chart `42.4.1`: digest unchanged, every route
+> count unchanged, every host answering, `/metrics` serving 111 series, and the 2023 `containo.us`
+> CRDs gone.
 
 ## The shape of the problem
 
@@ -17,10 +19,10 @@ Traefik is not a chart in this repository. It is the upstream Traefik chart, ins
 
 | What | Where |
 |---|---|
-| The values the release runs with | `cluster/infrastructure/traefik/values-2.11.yaml` (chart `27.0.2`) |
+| The values the release runs with | `cluster/infrastructure/traefik/values-v3.yaml` (chart `42.4.1`) |
+| The values a rollback to revision 10 needs | `values-2.11.yaml` (chart `27.0.2`) |
 | The values a rollback to revision 9 needs | `values.yaml` (chart `25.0.3`) |
-| The values for v3, written and not applied | `values-v3.yaml` (chart `42.4.1`) |
-| The chart | `traefik` `27.0.2` from the upstream index; `25.0.3+up25.0.0` came from K3s's static path (see below) |
+| The chart | `traefik` `42.4.1` from the upstream index; `25.0.3+up25.0.0` came from K3s's static path (see below) |
 | The certificate store | claim `pvc-traefik-nfs` mounted at `/data`; PV `pv-traefik-nfs`, NFS, `Retain` |
 | The objects it owns | `Deployment`, `Service`, `IngressClass`, `IngressRoute traefik-dashboard`, `ClusterRole`, `ClusterRoleBinding`, `ServiceAccount` |
 
@@ -127,6 +129,54 @@ the claim, the `prometheus.io/*` annotations, the dashboard `IngressRoute` and t
 Rollback is `helm -n kube-system rollback traefik 9`: chart `25.0.3` with the stored values. The
 chart 27 CRDs stay behind and are a superset of the 2.10 schemas, so the older router keeps working
 against them.
+
+## Moving to v3, chart `42.4.1`
+
+Done 2026-11-21, revision 10 → 11, with `values-v3.yaml` and `docker.io/traefik:v3.7.19`.
+
+**Check the CRDs before applying them.** Chart 42's schemas are a strict superset of chart 27's:
+`scripts`-free comparison of both trees found no removed property and no changed type on any shared
+path. That is what makes this order safe — the v3 CRDs go in while 2.11 is still serving.
+
+```bash
+helm pull traefik/traefik --version 42.4.1 --untar --untardir /tmp/traefik-v3
+for f in /tmp/traefik-v3/traefik/crds/traefik.io_*.yaml; do kubectl apply -f "$f"; done
+curl -s -o /dev/null -w '%{http_code}\n' --resolve dashy.ashudev.com:443:192.168.1.46 \
+  https://dashy.ashudev.com/                      # 302: 2.11 still routing
+helm upgrade traefik /tmp/traefik-v3/traefik -n kube-system --reset-values \
+  -f cluster/infrastructure/traefik/values-v3.yaml --dry-run=server > /tmp/dryrun.yaml
+helm upgrade traefik /tmp/traefik-v3/traefik -n kube-system --reset-values \
+  -f cluster/infrastructure/traefik/values-v3.yaml --wait --timeout 5m
+```
+
+The chart also ships fifteen `hub.traefik.io` CRDs. They are the Hub API gateway, need a licence and
+gate nothing here: apply only the `traefik.io_*` files.
+
+Measured that day: the pod spec was identical except the image, `seccompProfile: RuntimeDefault`
+(added), `--global.checknewversion` (gone with v3) and five chart-42 defaults — `log.level=INFO`,
+`allowEmptyServices=true` on both providers, and `requestAcceptGraceTimeout=5s` on `web` and
+`websecure`. The `Recreate` strategy, the `streaming` pin, the claim, the probes, the scrape
+annotations, the dashboard route and the six Service ports with their `nodePort` values all held.
+`/data/acme.json` kept `f074495fb3b8ad9f…`.
+
+**Then retire the 2023 CRDs.** They hold no objects any more, and the Helm release that owned them
+lost its chart years ago:
+
+```bash
+kubectl -n kube-system delete secret sh.helm.release.v1.traefik-crd.v1   # forgets, deletes nothing
+helm -n kube-system list                                                 # only `traefik`
+kubectl delete crd ingressroutes.traefik.containo.us ingressroutetcps.traefik.containo.us \
+  ingressrouteudps.traefik.containo.us middlewares.traefik.containo.us \
+  middlewaretcps.traefik.containo.us serverstransports.traefik.containo.us \
+  tlsoptions.traefik.containo.us tlsstores.traefik.containo.us traefikservices.traefik.containo.us
+```
+
+Rollback is `helm -n kube-system rollback traefik 10` — 2.11.63 under chart `27.0.2`, which runs
+against the v3 CRDs. It is **not** safe once the `containo.us` CRDs are deleted to go back to chart
+`25.0.3`: every object has been on `traefik.io` since the rename, and the older chart expects its
+own group. The metrics change with v3 as well: 111 series instead of 173, `traefik_open_connections`
+loses its `router_` prefix, and `traefik_config_reloads_failure_total` no longer exists — two
+Traefik dashboard panels read those names.
 
 ## The ownership cutover, as it was done
 
@@ -268,7 +318,10 @@ not a visible outage.
 | a CRD apply written as a hand-list fails and applies nothing | `traefik.containo.us` carries nine CRDs and `traefik.io` ten; `serverstransporttcps` exists only in `traefik.io`. Use the per-group globs |
 | the upgrade succeeds but the image stays on the previous line | `--reset-values` was missing, so Helm merged with the release's stored values |
 | a Middleware edit to `ipAllowList` disappears | the installed CRD predates the field; apply chart 27's CRDs first, or the schema prunes it and an empty allowlist lets everyone in |
-| `helm uninstall traefik-crd` looks harmless and deletes every route | that release's chart carries the nine CRDs in `templates/`; uninstalling it removes them. Never run it |
+| `helm uninstall traefik-crd` looks harmless and deletes every route | that release's chart carried the nine CRDs in `templates/`; uninstalling it removes them. The release is gone since 2026-11-21 — never recreate it |
+| the v3 CRD apply pulls in fifteen `hub.traefik.io` resources | chart 42 ships the Hub API gateway too; they need a licence and gate nothing. Apply only `traefik.io_*` |
+| a Traefik dashboard panel goes empty after v3 | v3 renamed `traefik_router_open_connections` to `traefik_open_connections` and dropped `traefik_config_reloads_failure_total`; fix the query, not the scrape |
+| a `forwardAuth` route logs `maxResponseBodySize is not configured` | v3 warns once per router; the auth server is internal, but set `maxResponseBodySize` on the middleware to silence it and cap the body |
 | a `HelmChart` deletion hangs, or runs an uninstall | `wrangler.cattle.io/on-helm-chart-remove`; strip it before anything else deletes the object |
 | the release moves but the dashboard route appears twice | chart 25 renders it on `traefik.io`; the 2023 `traefik.containo.us` copy has to be deleted by hand, once |
 | an object renamed to `traefik.io` leaves its twin behind | an Argo CD sync without `prune` creates the new object and keeps the old one. Delete the `containo.us` copy by hand, after the routes and gates answer on the new one |
