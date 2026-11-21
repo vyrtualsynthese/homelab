@@ -9,7 +9,7 @@
 > **Verified** 2026-11-20 · **Kind:** living page
 
 Read from the live cluster on 2026-11-17 through the read-only Kubernetes MCP: every
-`traefik.containo.us/v1alpha1` `IngressRoute` in every namespace, plus the `Middleware` objects in
+`traefik.io/v1alpha1` `IngressRoute` in every namespace, plus the `Middleware` objects in
 `kube-system`. The three concept layers behind the columns are
 [how-it-works/network.md](../how-it-works/network.md); who signs in where is
 [reference/sso-applications.md](sso-applications.md).
@@ -125,7 +125,7 @@ The generator, run where the human kubeconfig is (the MCP server is read-only an
 only):
 
 ```bash
-kubectl get ingressroute.traefik.containo.us -A -o json \
+kubectl get ingressroute.traefik.io -A -o json \
 | jq -r '.items[] | .metadata as $m | .spec as $s | $s.routes[]
     | [ $m.namespace, $m.name,
         (.match | capture("Host\\(`(?<h>[^`]+)`\\)").h),

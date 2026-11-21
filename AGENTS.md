@@ -102,7 +102,8 @@ time. Examples:
 - YAML: 2 spaces, lowercase keys.
 - **CRLF**: every file in `cluster/argocd/**` uses CRLF. Strip `\r` when scripting
   (`... | tr -d '\r'`) and preserve CRLF when editing those files.
-- Ingress is Traefik v2 CRDs only (`traefik.containo.us/v1alpha1`), never `networking.k8s.io/v1`.
+- Ingress is Traefik CRDs only (`traefik.io/v1alpha1` since 2026-11-21; the `traefik.containo.us`
+  group is served by 2.11 but is not used in new work), never `networking.k8s.io/v1`.
   - Internal, no TLS: `entryPoints: [web]`, host `app.kub.local`.
   - Internal TLS: `entryPoints: [websecure]` on the same `app.kub.local` host, with neither
     `secretName` nor `certResolver` (Traefik serves the default `kube-system/local-cert`, the
@@ -309,8 +310,10 @@ are in `docs/superpowers/plans/`.
 
 **Ingress**
 
-13. All 65 live IngressRoutes and 82 repo files use `traefik.containo.us/v1alpha1`. Both CRD groups
-    are installed; the v3 upgrade requires moving to `traefik.io/v1alpha1` while still on 2.11.
+13. **Resolved 2026-11-21:** every route and middleware is on `traefik.io/v1alpha1` — 69
+    `IngressRoute`, 2 `IngressRouteTCP` and 2 `IngressRouteUDP`, from 72 files under `cluster/` outside
+    the historical snapshot. The `traefik.containo.us` CRDs stay installed and the four snapshot files
+    keep the old group by design; both go when the v3 upgrade deletes them.
 14. **Resolved for the monitoring charts**: `cluster/helm/monitoring/loki` is now a wrapper chart with
     an Application. **Resolved 2026-11-19**: the `cluster/helm/nfs/minio-nfs` orphan chart is deleted
     with the rest of the old NFS packaging.
