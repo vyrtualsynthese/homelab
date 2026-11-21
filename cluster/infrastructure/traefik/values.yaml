@@ -52,6 +52,17 @@ tolerations:
 global:
   systemDefaultRegistry: ""
 
+# Measured 2026-11-21: 2 m CPU and 63 MiB working set. The house rule is a
+# memory request and a memory limit, no CPU limit, and a small CPU request; the
+# 256 MiB ceiling is four times the measured set, the same headroom the
+# observability stack carries.
+resources:
+  requests:
+    cpu: 10m
+    memory: 64Mi
+  limits:
+    memory: 256Mi
+
 providers:
   kubernetesCRD:
     # Every gate and redirect is referenced as kube-system-<name>@kubernetescrd;
@@ -64,12 +75,23 @@ providers:
 ingressRoute:
   dashboard:
     enabled: true
-    entryPoints: ["web"]
+    # websecure, not web: the dashboard's basic-auth password has no business
+    # crossing the LAN in clear. The chart renders this route as
+    # traefik.io/v1alpha1 (its own group); the sibling routes stay on the legacy
+    # group until the v3 PR. The HTTP host still answers: dashboard/redirect.yaml
+    # in this directory is its redirect twin (task 2 of the stability plan).
+    entryPoints: ["websecure"]
     matchRule: Host(`traefik.kub.local`) && (PathPrefix(`/dashboard`) || PathPrefix(`/api`))
     middlewares:
       - name: lan-only
         namespace: kube-system
       - name: traefik-dashboard
+        namespace: kube-system
+    # Neither a secretName nor a certResolver: Traefik serves the default
+    # kube-system/local-cert, the *.kub.local leaf of the ashulab internal CA.
+    tls:
+      options:
+        name: internal-tls
         namespace: kube-system
 
 metrics:
@@ -78,7 +100,11 @@ metrics:
     addEntryPointsLabels: false
     addRoutersLabels: true
     addServicesLabels: false
-    buckets: "0.5,1.0,2.5"
+    # 0.1,0.25,0.5,1.0,2.5,5.0,10.0 rather than the chart's 0.5,1.0,2.5: a p95
+    # panel saturates at the last finite bucket, so with three buckets there is
+    # no usable tail. Prometheus keeps the buckets since 2026-11-21 (it used to
+    # drop traefik_*_bucket); the cost is 336 series, 0.4 % of the head.
+    buckets: "0.1,0.25,0.5,1.0,2.5,5.0,10.0"
     # false restores the default internal router that serves prometheus@internal
     # on the metrics entry point. It was true with no custom router, so /metrics
     # answered 404 and no traefik_* series were stored (task 531).
@@ -136,7 +162,11 @@ ports:
     protocol: UDP
   metrics:
     port: 9100
-    expose: true
+    # Not published on the Service. Prometheus scrapes the pod's 9100 through
+    # the chart's prometheus.io/* annotations, so a load-balancer port only put
+    # unauthenticated metrics on the LAN for no reader. The container port and
+    # the annotations are unaffected.
+    expose: false
     exposedPort: 9101
     protocol: TCP
 
