@@ -119,7 +119,8 @@ buckets and the stored `_bucket` series all come from that release.
 - New `cluster/infrastructure/traefik/dashboard/redirect.yaml`: an `IngressRoute` in `kube-system`
   on `traefik.containo.us/v1alpha1` (the group rename is deferred) for `traefik.kub.local`, carrying
   `{name: lan-only, namespace: kube-system}` and `{name: redirect-to-https, namespace: kube-system}`,
-  so the HTTP URL keeps answering with a 308. `redirect-to-https` is the `traefik-gate` object the 18
+  so the HTTP URL keeps answering with a `301` to `https://` (measured 2026-11-21:
+  `redirectScheme.permanent: true` makes Traefik permanent-redirect with `301`). `redirect-to-https` is the `traefik-gate` object the 18
   other redirect routers already name; `redirect-https` stays for the charts that name it.
 - Delete `dashboard/middleware.yaml` (the `#532` dead file), `common/middleware-security.yaml`
   (`default-security`, no reader, never applied) and `common/redirect-https.yaml` (same object as
@@ -136,7 +137,7 @@ buckets and the stored `_bucket` series all come from that release.
   router/code/method/protocol combinations × 8 `le` values on the wire today.
 - Docs: the trap table in `docs/runbooks/traefik-release.md` gains the traps this run found
   (dashboard served on `web` only, metrics published on 9101, orphans keep renewing), and its
-  after-check line "dashboard 401" becomes "http 308 → https 401" with the HTTPS URL named;
+  after-check line "dashboard 401" becomes "http 301 → https 401" with the HTTPS URL named;
   `AGENTS.md` §4's internal-TLS paragraph gains the dashboard as an example;
   `docs/reference/routes.md` names it.
 - Checks: `helm template` against the chart already extracted at `/tmp/traefik-25.0.3/traefik`
