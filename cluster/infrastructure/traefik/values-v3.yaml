@@ -13,8 +13,8 @@
 # Apply the chart's `traefik.io` CRDs before `helm upgrade`: an existing CRD is
 # never replaced by Helm, and v3 reads only `traefik.io`.
 #
-# The `ipWhiteList` -> `ipAllowList` rename is not here: it landed on 2.11
-# (task 7), because chart 27 already declares the field.
+# The allow-list field is already the v3 name: chart 27 declared it on 2.11, so
+# there is no rename left here.
 
 deployment:
   # One pod, not a DaemonSet (task 482). Two processes writing /data/acme.json
