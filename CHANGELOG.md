@@ -31,6 +31,14 @@ All notable changes to this repository. The format follows
   verification and its rollback are in [`docs/runbooks/traefik-release.md`](docs/runbooks/traefik-release.md);
   it also records why the release is moved with `helm` by hand — K3s's helm-controller runs no job for
   any `HelmChart` in this cluster (task 530, `#398`).
+- The Traefik release is this repository's, not the K3s addon's. K3s's `traefik` and `traefik-crd`
+  `HelmChart` objects, its `HelmChartConfig` and the node drop-in are gone, and the addon is disabled
+  in `/etc/rancher/k3s/config.yaml` on the three servers. The release was adopted at the version it
+  already ran — chart `25.0.3` / Traefik `2.10.7`, revision 8 — from
+  [`cluster/infrastructure/traefik/values.yaml`](cluster/infrastructure/traefik/values.yaml), which
+  renders what served with one argument removed: `manualRouting` is off, so `/metrics` answers
+  `traefik_*` again (task 531). `traefik-config.yaml` is deleted, and the pre-cutover capture is kept
+  in `cluster/infrastructure/traefik/snapshot/2026-11-21/`.
 - The restore runbook's drill log has its first three entries. On 2026-11-21 a scratch restic pod
   restored the PostgreSQL dump directory from `nodes-nas` (26 dumps plus `globals.sql`), Sonarr's
   database from `nodes-streaming` (which passed `pragma integrity_check`) and one Syncthing photo
