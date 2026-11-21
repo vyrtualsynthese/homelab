@@ -1,0 +1,8 @@
+# acme.json as it was on 2026-11-21, before the ownership cutover.
+# The file is not committed: it holds TLS private keys. It lives on the Retain
+# NFS volume pv-traefik-nfs (nas:/mnt/storage/traefik), a row of the backup
+# matrix in cluster/helm/backup/values.yaml.
+pod=traefik-68554c769b-xgt8t
+f074495fb3b8ad9f032a10412e7b5a6cd59f0bedbe45d9433a770150bf9ffbf9  /data/acme.json
+size=429905 mode=600 owner=65532:65532
+domains=34

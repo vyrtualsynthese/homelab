@@ -1,0 +1,379 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+    deployment.kubernetes.io/revision: "1"
+    meta.helm.sh/release-name: traefik
+    meta.helm.sh/release-namespace: kube-system
+  creationTimestamp: "2026-11-21T00:54:50Z"
+  generation: 1
+  labels:
+    app.kubernetes.io/instance: traefik-kube-system
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: traefik
+    helm.sh/chart: traefik-25.0.3_up25.0.0
+  name: traefik
+  namespace: kube-system
+  resourceVersion: "1226984566"
+  uid: 33357903-ebb5-474c-8b52-77fef1c7479c
+spec:
+  progressDeadlineSeconds: 600
+  replicas: 1
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: traefik-kube-system
+      app.kubernetes.io/name: traefik
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      annotations:
+        prometheus.io/path: /metrics
+        prometheus.io/port: "9100"
+        prometheus.io/scrape: "true"
+      creationTimestamp: null
+      labels:
+        app.kubernetes.io/instance: traefik-kube-system
+        app.kubernetes.io/managed-by: Helm
+        app.kubernetes.io/name: traefik
+        helm.sh/chart: traefik-25.0.3_up25.0.0
+    spec:
+      containers:
+      - args:
+        - --global.checknewversion
+        - --global.sendanonymoususage
+        - --entrypoints.mc.address=:25565/tcp
+        - --entrypoints.metrics.address=:9100/tcp
+        - --entrypoints.stdiscovery.address=:21027/udp
+        - --entrypoints.sttcp.address=:22000/tcp
+        - --entrypoints.studp.address=:22000/udp
+        - --entrypoints.traefik.address=:9000/tcp
+        - --entrypoints.web.address=:8000/tcp
+        - --entrypoints.websecure.address=:8443/tcp
+        - --api.dashboard=true
+        - --ping=true
+        - --metrics.prometheus=true
+        - --metrics.prometheus.entrypoint=metrics
+        - --metrics.prometheus.addRoutersLabels=true
+        - --metrics.prometheus.addEntryPointsLabels=false
+        - --metrics.prometheus.addServicesLabels=false
+        - --metrics.prometheus.buckets=0.5,1.0,2.5
+        - --metrics.prometheus.manualrouting=true
+        - --providers.kubernetescrd
+        - --providers.kubernetescrd.allowCrossNamespace=true
+        - --providers.kubernetesingress
+        - --providers.kubernetesingress.ingressendpoint.publishedservice=kube-system/traefik
+        - --entrypoints.web.forwardedHeaders.insecure
+        - --entrypoints.web.proxyProtocol.insecure
+        - --entrypoints.websecure.http.tls=true
+        - --entrypoints.websecure.forwardedHeaders.insecure
+        - --entrypoints.websecure.proxyProtocol.insecure
+        - --certificatesresolvers.myresolver.acme.email=valentin.ronteix@ashudev.com
+        - --certificatesresolvers.myresolver.acme.storage=/data/acme.json
+        - --certificatesresolvers.myresolver.acme.tlsChallenge=true
+        env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: metadata.name
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: metadata.namespace
+        image: rancher/mirrored-library-traefik:2.10.7
+        imagePullPolicy: IfNotPresent
+        livenessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /ping
+            port: 9000
+            scheme: HTTP
+          initialDelaySeconds: 2
+          periodSeconds: 10
+          successThreshold: 1
+          timeoutSeconds: 2
+        name: traefik
+        ports:
+        - containerPort: 25565
+          name: mc
+          protocol: TCP
+        - containerPort: 9100
+          name: metrics
+          protocol: TCP
+        - containerPort: 21027
+          name: stdiscovery
+          protocol: UDP
+        - containerPort: 22000
+          name: sttcp
+          protocol: TCP
+        - containerPort: 22000
+          name: studp
+          protocol: UDP
+        - containerPort: 9000
+          name: traefik
+          protocol: TCP
+        - containerPort: 8000
+          name: web
+          protocol: TCP
+        - containerPort: 8443
+          name: websecure
+          protocol: TCP
+        readinessProbe:
+          failureThreshold: 1
+          httpGet:
+            path: /ping
+            port: 9000
+            scheme: HTTP
+          initialDelaySeconds: 2
+          periodSeconds: 10
+          successThreshold: 1
+          timeoutSeconds: 2
+        resources: {}
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+        volumeMounts:
+        - mountPath: /data
+          name: data
+        - mountPath: /tmp
+          name: tmp
+      dnsPolicy: ClusterFirst
+      nodeSelector:
+        kubernetes.io/hostname: streaming
+      priorityClassName: system-cluster-critical
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      securityContext:
+        fsGroupChangePolicy: OnRootMismatch
+        runAsGroup: 65532
+        runAsNonRoot: true
+        runAsUser: 65532
+      serviceAccount: traefik
+      serviceAccountName: traefik
+      terminationGracePeriodSeconds: 60
+      tolerations:
+      - key: CriticalAddonsOnly
+        operator: Exists
+      - effect: NoSchedule
+        key: node-role.kubernetes.io/control-plane
+        operator: Exists
+      - effect: NoSchedule
+        key: node-role.kubernetes.io/master
+        operator: Exists
+      volumes:
+      - name: data
+        persistentVolumeClaim:
+          claimName: pvc-traefik-nfs
+      - emptyDir: {}
+        name: tmp
+status:
+  availableReplicas: 1
+  conditions:
+  - lastTransitionTime: "2026-11-21T00:54:52Z"
+    lastUpdateTime: "2026-11-21T00:54:52Z"
+    message: Deployment has minimum availability.
+    reason: MinimumReplicasAvailable
+    status: "True"
+    type: Available
+  - lastTransitionTime: "2026-11-21T00:54:50Z"
+    lastUpdateTime: "2026-11-21T00:54:52Z"
+    message: ReplicaSet "traefik-68554c769b" has successfully progressed.
+    reason: NewReplicaSetAvailable
+    status: "True"
+    type: Progressing
+  observedGeneration: 1
+  readyReplicas: 1
+  replicas: 1
+  updatedReplicas: 1
+---
+apiVersion: v1
+kind: Service
+metadata:
+  annotations:
+    meta.helm.sh/release-name: traefik
+    meta.helm.sh/release-namespace: kube-system
+  creationTimestamp: "2023-06-11T13:17:38Z"
+  finalizers:
+  - service.kubernetes.io/load-balancer-cleanup
+  labels:
+    app.kubernetes.io/instance: traefik-kube-system
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: traefik
+    helm.sh/chart: traefik-25.0.3_up25.0.0
+    k8slens-edit-resource-version: v1
+  name: traefik
+  namespace: kube-system
+  resourceVersion: "1226984564"
+  uid: 49be4368-c979-40a1-b51a-b32431020ac7
+spec:
+  allocateLoadBalancerNodePorts: true
+  clusterIP: 10.43.93.35
+  clusterIPs:
+  - 10.43.93.35
+  externalTrafficPolicy: Local
+  healthCheckNodePort: 30334
+  internalTrafficPolicy: Cluster
+  ipFamilies:
+  - IPv4
+  ipFamilyPolicy: PreferDualStack
+  ports:
+  - name: mc
+    nodePort: 32076
+    port: 25565
+    protocol: TCP
+    targetPort: mc
+  - name: metrics
+    nodePort: 32360
+    port: 9101
+    protocol: TCP
+    targetPort: metrics
+  - name: sttcp
+    nodePort: 32077
+    port: 22000
+    protocol: TCP
+    targetPort: sttcp
+  - name: studp
+    nodePort: 32078
+    port: 22000
+    protocol: UDP
+    targetPort: studp
+  - name: web
+    nodePort: 30022
+    port: 80
+    protocol: TCP
+    targetPort: web
+  - name: websecure
+    nodePort: 32075
+    port: 443
+    protocol: TCP
+    targetPort: websecure
+  - name: stdiscovery
+    nodePort: 32079
+    port: 21027
+    protocol: UDP
+    targetPort: stdiscovery
+  selector:
+    app.kubernetes.io/instance: traefik-kube-system
+    app.kubernetes.io/name: traefik
+  sessionAffinity: None
+  type: LoadBalancer
+status:
+  loadBalancer:
+    ingress:
+    - ip: 192.168.1.46
+      ipMode: VIP
+---
+apiVersion: networking.k8s.io/v1
+kind: IngressClass
+metadata:
+  annotations:
+    ingressclass.kubernetes.io/is-default-class: "true"
+    meta.helm.sh/release-name: traefik
+    meta.helm.sh/release-namespace: kube-system
+  creationTimestamp: "2023-06-11T13:17:38Z"
+  generation: 1
+  labels:
+    app.kubernetes.io/instance: traefik-kube-system
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: traefik
+    helm.sh/chart: traefik-25.0.3_up25.0.0
+  name: traefik
+  resourceVersion: "1226970194"
+  uid: b6e1bd5c-a541-4e16-a8bb-e02637bbdf17
+spec:
+  controller: traefik.io/ingress-controller
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  annotations:
+    argocd.argoproj.io/tracking-id: traefik-nfs:/PersistentVolumeClaim:kube-system/pvc-traefik-nfs
+    kubectl.kubernetes.io/last-applied-configuration: |
+      {"apiVersion":"v1","kind":"PersistentVolumeClaim","metadata":{"annotations":{"argocd.argoproj.io/tracking-id":"traefik-nfs:/PersistentVolumeClaim:kube-system/pvc-traefik-nfs"},"labels":{"app":"traefik-nfs","chart":"nfs-subdir-external-provisioner-4.0.18","heritage":"Helm","release":"traefik-nfs"},"name":"pvc-traefik-nfs","namespace":"kube-system"},"spec":{"accessModes":["ReadWriteOnce"],"resources":{"requests":{"storage":"10Mi"}},"selector":{"matchLabels":{"nfs-subdir-external-provisioner":"traefik-nfs"}},"storageClassName":"","volumeMode":"Filesystem"}}
+    pv.kubernetes.io/bind-completed: "yes"
+    pv.kubernetes.io/bound-by-controller: "yes"
+  creationTimestamp: "2026-11-20T23:21:24Z"
+  finalizers:
+  - kubernetes.io/pvc-protection
+  labels:
+    app: traefik-nfs
+    chart: nfs-subdir-external-provisioner-4.0.18
+    heritage: Helm
+    release: traefik-nfs
+  name: pvc-traefik-nfs
+  namespace: kube-system
+  resourceVersion: "1226930747"
+  uid: c8b3154a-e386-44f7-884c-53ff0420a1aa
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Mi
+  selector:
+    matchLabels:
+      nfs-subdir-external-provisioner: traefik-nfs
+  storageClassName: ""
+  volumeMode: Filesystem
+  volumeName: pv-traefik-nfs
+status:
+  accessModes:
+  - ReadWriteOnce
+  capacity:
+    storage: 10Mi
+  phase: Bound
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  annotations:
+    argocd.argoproj.io/tracking-id: traefik-nfs:/PersistentVolume:kube-system/pv-traefik-nfs
+    kubectl.kubernetes.io/last-applied-configuration: |
+      {"apiVersion":"v1","kind":"PersistentVolume","metadata":{"annotations":{"argocd.argoproj.io/tracking-id":"traefik-nfs:/PersistentVolume:kube-system/pv-traefik-nfs"},"labels":{"app":"traefik-nfs","chart":"nfs-subdir-external-provisioner-4.0.18","heritage":"Helm","nfs-subdir-external-provisioner":"traefik-nfs","release":"traefik-nfs"},"name":"pv-traefik-nfs"},"spec":{"accessModes":["ReadWriteOnce"],"capacity":{"storage":"10Mi"},"mountOptions":["nfsvers=4.2","rsize=1048576","wsize=1048576","nolock","async"],"nfs":{"path":"/mnt/storage/traefik","server":"192.168.1.41"},"persistentVolumeReclaimPolicy":"Retain","storageClassName":"","volumeMode":"Filesystem"}}
+    pv.kubernetes.io/bound-by-controller: "yes"
+  creationTimestamp: "2026-11-20T23:21:24Z"
+  finalizers:
+  - kubernetes.io/pv-protection
+  labels:
+    app: traefik-nfs
+    chart: nfs-subdir-external-provisioner-4.0.18
+    heritage: Helm
+    nfs-subdir-external-provisioner: traefik-nfs
+    release: traefik-nfs
+  name: pv-traefik-nfs
+  resourceVersion: "1226930744"
+  uid: c2fa335f-1bc6-4094-a7a3-bd2804317ce3
+spec:
+  accessModes:
+  - ReadWriteOnce
+  capacity:
+    storage: 10Mi
+  claimRef:
+    apiVersion: v1
+    kind: PersistentVolumeClaim
+    name: pvc-traefik-nfs
+    namespace: kube-system
+    resourceVersion: "1226930740"
+    uid: c8b3154a-e386-44f7-884c-53ff0420a1aa
+  mountOptions:
+  - nfsvers=4.2
+  - rsize=1048576
+  - wsize=1048576
+  - nolock
+  - async
+  nfs:
+    path: /mnt/storage/traefik
+    server: 192.168.1.41
+  persistentVolumeReclaimPolicy: Retain
+  volumeMode: Filesystem
+status:
+  lastPhaseTransitionTime: "2026-11-20T23:21:24Z"
+  phase: Bound
