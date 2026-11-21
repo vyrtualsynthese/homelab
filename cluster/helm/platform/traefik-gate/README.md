@@ -41,14 +41,19 @@ reference to their `traefik.ingress.kubernetes.io/router.middlewares` annotation
 from another namespace does nothing, which is why the full reference is the only accepted form.
 
 `hack/check-exposure.sh` enforces it: it renders every chart, reads every route, and fails when a
-non-public route lacks the gate or a public route carries it.
+non-public route lacks the gate or a public route carries it. It also rejects the old
+`ipWhiteList` field name, so a chart cannot drift back.
 
 ## The trap this chart exists to avoid repeating
 
-The CRD installed on this cluster (`middlewares.traefik.io` v1alpha1) declares
-`ipWhiteList`. Traefik v3 renamed it to `ipAllowList`, and the API server **silently prunes a field
-it does not know** — the object is created with an empty `spec`, the allowlist enforces nothing, and
-nothing reports an error. That happened once already, in the pgAdmin chart.
+The API server **silently prunes a field it does not know**: the object is created with an empty
+`spec`, the allowlist enforces nothing, and nothing reports an error. That happened once already, in
+the pgAdmin chart: the template wrote `ipAllowList` against a 2.9 CRD that declared only
+`ipWhiteList`.
 
-So: verify the live object after every change (`spec.ipWhiteList.sourceRange` must hold two
-entries), and rename the field in this template and the CRDs together in W5, never before.
+The field here is `ipAllowList`, the v3 name. It works because chart `27.0.2` was installed on
+2026-11-21 — its CRDs declare both names in both API groups — and that install came before this
+rename, never after it.
+
+So: verify the live object after every change (`spec.ipAllowList.sourceRange` must hold all three
+ranges), and check the installed CRD before renaming a field in this template.
