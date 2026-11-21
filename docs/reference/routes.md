@@ -113,9 +113,9 @@ seven public hosts above carry no `lan-only` by design instead, which is the oth
 
 **The Traefik dashboard hostname is `traefik.kub.local`.** The live route answers that name; the only
 copy in git, `cluster/infrastructure/traefik/traefik-config.yaml`, used to set
-`` Host(`traefik.app.local`) ``. It now matches the live name, and the values parse: the file is
-applied by hand, no Application references it, so the route changes only when the operator applies
-it.
+`` Host(`traefik.app.local`) ``. It now matches the live name: the file parses, it carries the values
+the release runs with, and it was applied on 2026-11-21 alongside the move to chart `25.0.3`
+(Traefik `2.10.7`) — see [`runbooks/traefik-release.md`](../runbooks/traefik-release.md).
 
 ## Regenerating this list
 
