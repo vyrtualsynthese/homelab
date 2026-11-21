@@ -116,6 +116,7 @@ nav:
       - The books cutover: runbooks/books-cutover.md
       - First run of the docs site: runbooks/docs-site-first-run.md
       - Cloud monitoring: runbooks/cloud-monitoring.md
+      - Moving K3s to a new minor: runbooks/k3s-upgrade.md
   - History:
       - Decisions: decisions/README.md
       - nuc0 throttling: decisions/2026-11-13-nuc0-throttling-accepted.md
