@@ -30,10 +30,13 @@ class GateTests(unittest.TestCase):
     def test_bare_middleware_name_is_not_a_gate(self):
         self.assertEqual(len(violations("bare-name.yaml")), 1)
 
-    def test_v3_field_is_reported(self):
-        found = violations("ipallowlist.yaml")
+    def test_v3_field_is_accepted(self):
+        self.assertEqual(violations("ipallowlist.yaml"), [])
+
+    def test_the_old_field_name_is_reported(self):
+        found = violations("ipwhitelist-gate.yaml")
         self.assertEqual(len(found), 1)
-        self.assertIn("ipAllowList", found[0])
+        self.assertIn("ipWhiteList", found[0])
 
     def test_core_ingress_annotation_is_checked(self):
         found = violations("ingress-annotation.yaml")

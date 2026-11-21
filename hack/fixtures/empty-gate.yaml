@@ -4,5 +4,5 @@ metadata:
   name: lan-only
   namespace: kube-system
 spec:
-  ipWhiteList:
+  ipAllowList:
     sourceRange: []

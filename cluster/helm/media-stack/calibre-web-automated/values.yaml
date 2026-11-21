@@ -281,9 +281,8 @@ ingressRoute:
   # -- Render the IngressRoute and its allow list. Traefik CRDs only: this chart
   # never renders a `networking.k8s.io/v1` Ingress.
   enabled: true
-  # -- API group. `traefik.io/v1alpha1` is what the cluster's Traefik 2.x
-  # watches today; flip this to `traefik.io/v1alpha1` when Traefik v3 lands (the
-  # allow-list field is renamed `ipAllowList` in the same move).
+  # -- API group. `traefik.io/v1alpha1` is what the cluster's Traefik serves since
+  # the 2.11 move on 2026-11-21; the allow-list field is `ipAllowList` from that day.
   apiVersion: traefik.io/v1alpha1
   # -- Traefik entry points. `websecure` only: the app holds its OIDC session in a
   # `Secure` cookie and refuses to sign in over plain HTTP (see `tls` below). The

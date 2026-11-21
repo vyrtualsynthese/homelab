@@ -44,14 +44,6 @@ MIDDLEWARE_ANNOTATION = "traefik.ingress.kubernetes.io/router.middlewares"
 HOST_RE = re.compile(r"Host\(`([^`]+)`\)")
 
 
-def _has_key(obj, key):
-    if isinstance(obj, dict):
-        return key in obj or any(_has_key(value, key) for value in obj.values())
-    if isinstance(obj, list):
-        return any(_has_key(value, key) for value in obj)
-    return False
-
-
 def _where(doc):
     metadata = doc.get("metadata") or {}
     kind = doc.get("kind", "object")
@@ -139,7 +131,14 @@ def _check_helm_chart_config(doc, violations):
 def _check_gate_middleware(doc, violations):
     if (doc.get("metadata") or {}).get("name") != GATE_NAME:
         return
-    ranges = ((doc.get("spec") or {}).get("ipWhiteList") or {}).get("sourceRange") or []
+    spec = doc.get("spec") or {}
+    if "ipWhiteList" in spec:
+        violations.append(
+            f"{_where(doc)}: ipWhiteList is the pre-2.11 name; use ipAllowList "
+            "(2.11 and the chart 27 CRDs accept it, v3 drops the old one)"
+        )
+    allow = spec["ipAllowList"] if "ipAllowList" in spec else spec.get("ipWhiteList")
+    ranges = (allow or {}).get("sourceRange") or []
     ranges = [item for item in ranges if item]
     if len(ranges) < 2:
         violations.append(
@@ -152,12 +151,6 @@ def check_documents(docs):
     violations = []
     for doc in docs:
         if not isinstance(doc, dict):
-            continue
-        if _has_key(doc, "ipAllowList"):
-            violations.append(
-                f"{_where(doc)}: ipAllowList is pruned by the installed CRD; "
-                "the allowlist would be empty and allow everyone. Use ipWhiteList until W5."
-            )
             continue
         api_version = doc.get("apiVersion", "")
         kind = doc.get("kind")
