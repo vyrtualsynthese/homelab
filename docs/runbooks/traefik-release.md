@@ -18,6 +18,7 @@ Traefik is not a chart in this repository. It is the upstream Traefik chart, ins
 | What | Where |
 |---|---|
 | The values the release runs with | `cluster/infrastructure/traefik/values.yaml` |
+| The values for the next chart lines, written and not applied | `values-2.11.yaml` (chart `27.0.2`), `values-v3.yaml` (chart `42.4.1`) |
 | The chart | `traefik` `25.0.3+up25.0.0`, taken from K3s's static path (see below) |
 | The certificate store | claim `pvc-traefik-nfs` mounted at `/data`; PV `pv-traefik-nfs`, NFS, `Retain` |
 | The objects it owns | `Deployment`, `Service`, `IngressClass`, `IngressRoute traefik-dashboard`, `ClusterRole`, `ClusterRoleBinding`, `ServiceAccount` |
