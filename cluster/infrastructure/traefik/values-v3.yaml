@@ -1,0 +1,184 @@
+# Chart 42.4.1, Traefik 3.7.19. The v3 release of W5 task 8.
+#
+# Derived from values-2.11.yaml, one key at a time, because chart 42 validates
+# its values with `additionalProperties: false` and renames more than the ACME
+# key:
+#   - `certResolvers` -> `certificatesResolvers`;
+#   - `service.type` -> `service.spec.type`; `ipFamilyPolicy` is now a spec
+#     entry too, since the chart no longer reads it from the top level;
+#   - `ports.traefik.port` defaults to 8080 here, so it is pinned back to 9000
+#     to keep the health probes and the internal API where they are;
+#   - `global.systemDefaultRegistry` does not exist.
+#
+# Apply the chart's `traefik.io` CRDs before `helm upgrade`: an existing CRD is
+# never replaced by Helm, and v3 reads only `traefik.io`.
+#
+# The `ipWhiteList` -> `ipAllowList` rename is not here: it landed on 2.11
+# (task 7), because chart 27 already declares the field.
+
+deployment:
+  # One pod, not a DaemonSet (task 482). Two processes writing /data/acme.json
+  # corrupt it and re-request every name.
+  kind: Deployment
+  replicas: 1
+
+# Recreate, not a rolling update: a rolling one runs both pods together for a
+# few seconds, which is two certificate owners again.
+updateStrategy:
+  type: Recreate
+
+# The house router forwards 80, 443, 25565, 22000 TCP/UDP and 21027 UDP to
+# 192.168.1.46.
+nodeSelector:
+  kubernetes.io/hostname: streaming
+
+image:
+  repository: traefik
+  tag: "v3.7.19"
+
+priorityClassName: system-cluster-critical
+
+tolerations:
+  - key: CriticalAddonsOnly
+    operator: Exists
+  - key: node-role.kubernetes.io/control-plane
+    operator: Exists
+    effect: NoSchedule
+  - key: node-role.kubernetes.io/master
+    operator: Exists
+    effect: NoSchedule
+
+# The release sends anonymous usage data today (the chart default of its line).
+# Keeping it explicit means the upgrade does not change a second thing.
+global:
+  checkNewVersion: true
+  sendAnonymousUsage: true
+
+resources:
+  requests:
+    cpu: 10m
+    memory: 64Mi
+  limits:
+    memory: 256Mi
+
+providers:
+  kubernetesCRD:
+    # Every gate and redirect is referenced as kube-system-<name>@kubernetescrd;
+    # without this no cross-namespace reference resolves and every gate vanishes.
+    allowCrossNamespace: true
+  kubernetesIngress:
+    publishedService:
+      enabled: true
+
+ingressRoute:
+  dashboard:
+    enabled: true
+    entryPoints: ["websecure"]
+    matchRule: Host(`traefik.kub.local`) && (PathPrefix(`/dashboard`) || PathPrefix(`/api`))
+    middlewares:
+      - name: lan-only
+        namespace: kube-system
+      - name: traefik-dashboard
+        namespace: kube-system
+    # Neither a secretName nor a certResolver: Traefik serves the default
+    # kube-system/local-cert through the `default` TLSStore.
+    tls:
+      options:
+        name: internal-tls
+        namespace: kube-system
+
+metrics:
+  prometheus:
+    entryPoint: metrics
+    addEntryPointsLabels: false
+    addRoutersLabels: true
+    addServicesLabels: false
+    buckets: "0.1,0.25,0.5,1.0,2.5,5.0,10.0"
+    manualRouting: false
+
+certificatesResolvers:
+  myresolver:
+    acme:
+      email: valentin.ronteix@ashudev.com
+      tlsChallenge: true
+      # Must match the mounted claim; a different path means the store is empty
+      # and every name is re-issued.
+      storage: /data/acme.json
+
+ports:
+  # Pinned back to the 2.11 value: chart 42 moved the default to 8080.
+  traefik:
+    port: 9000
+    expose:
+      default: false
+  web:
+    port: 8000
+    expose:
+      default: true
+    exposedPort: 80
+    protocol: TCP
+    forwardedHeaders:
+      insecure: true
+    proxyProtocol:
+      insecure: true
+  websecure:
+    port: 8443
+    expose:
+      default: true
+    exposedPort: 443
+    protocol: TCP
+    forwardedHeaders:
+      insecure: true
+    proxyProtocol:
+      insecure: true
+  mc:
+    port: 25565
+    expose:
+      default: true
+    exposedPort: 25565
+    protocol: TCP
+  # Syncthing: file transfer (22000 TCP and UDP) and local discovery (21027 UDP).
+  sttcp:
+    port: 22000
+    expose:
+      default: true
+    exposedPort: 22000
+    protocol: TCP
+  studp:
+    port: 22000
+    expose:
+      default: true
+    exposedPort: 22000
+    protocol: UDP
+  stdiscovery:
+    port: 21027
+    expose:
+      default: true
+    exposedPort: 21027
+    protocol: UDP
+  metrics:
+    port: 9100
+    # Not published on the Service: Prometheus scrapes the pod's 9100 through
+    # the chart's prometheus.io/* annotations.
+    expose:
+      default: false
+    exposedPort: 9101
+    protocol: TCP
+
+persistence:
+  enabled: true
+  name: data
+  # Holds /data/acme.json, the certificate store; a different claim means every
+  # name is re-issued.
+  existingClaim: pvc-traefik-nfs
+  path: /data
+
+service:
+  enabled: true
+  single: true
+  spec:
+    type: LoadBalancer
+    # Rendered only when set: without it the API server defaults the Service to
+    # SingleStack, which is not the object that serves today.
+    ipFamilyPolicy: PreferDualStack
+    externalTrafficPolicy: Local
