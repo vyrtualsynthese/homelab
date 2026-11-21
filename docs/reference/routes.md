@@ -109,10 +109,11 @@ its LDAP sign-in replaced it. The
 seven public hosts above carry no `lan-only` by design instead, which is the other case
 `hack/check-exposure.sh` allows; it passes on both.
 
-**The Traefik dashboard hostname disagrees with itself.** The live router answers `traefik.kub.local`;
-the only copy in git, `cluster/infrastructure/traefik/traefik-config.yaml`, sets
-`` Host(`traefik.app.local`) ``. That file is applied by hand, no Application references it, and it
-carries a mis-indented key, so neither spelling is authoritative until it is fixed and applied.
+**The Traefik dashboard hostname is `traefik.kub.local`.** The live route answers that name; the only
+copy in git, `cluster/infrastructure/traefik/traefik-config.yaml`, used to set
+`` Host(`traefik.app.local`) ``. It now matches the live name, and the values parse: the file is
+applied by hand, no Application references it, so the route changes only when the operator applies
+it.
 
 ## Regenerating this list
 
