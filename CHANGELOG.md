@@ -68,6 +68,13 @@ All notable changes to this repository. The format follows
 
 ### Fixed
 
+- The `postgres` bootstrap Job is named after the digest of its whole pod template, not of the SQL
+  ConfigMap and the image tag alone. The narrower digest left the env, the resources, the security
+  context and the node selector out of the name, so editing any of them was refused by the API
+  server on an immutable pod template and the sync could not converge. Every field of the template
+  now lives in one `define`, which is rendered into the Job and hashed into its name; a change
+  therefore creates a new Job and prunes the completed one, and the idempotent SQL re-runs harmlessly.
+
 - `local-path` and `postgres` report `Synced` again, and for a reason rather than a forced sync.
   `local-path`'s upstream chart renders `spec.template.spec.hostUsers: true`, which this API server
   (1.30, user namespaces off) drops from the stored object whether it is true or false, so the
