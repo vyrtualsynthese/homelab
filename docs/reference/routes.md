@@ -45,7 +45,7 @@ app through authentik. The authentik page Dashy signs in through is public for t
 
 ## Internal over TLS
 
-Twenty-three hostnames. Seventeen use the internal CA on a `*.kub.local` name; six carry their
+Twenty-four hostnames. Eighteen use the internal CA on a `*.kub.local` name; six carry their
 own certificate on a `*.kub.home.ashudev.com` or `*.ashudev.com` name.
 
 | Host | Application | Namespace | Gate | TLS | Public? |
@@ -72,18 +72,18 @@ own certificate on a `*.kub.home.ashudev.com` or `*.ashudev.com` name.
 | `syncthing.kub.home.ashudev.com` | Syncthing | `syncthing` | `lan-only` then forward-auth, Admins only | Let's Encrypt | no |
 | `tautulli.kub.local` | Tautulli | `media-stack` | `lan-only`; no gate, its own login | internal CA | no |
 | `thelounge.kub.home.ashudev.com` | The Lounge | `thelounge` | `lan-only`; LDAP sign-in in the app, no gate | Let's Encrypt | no |
+| `traefik.kub.local` | Traefik dashboard (`/dashboard`, `/api`) | `kube-system` | `lan-only`, then basic auth | internal CA | no |
 | `vikunja.kub.local` | Vikunja | `vikunja` | `lan-only` | internal CA | no |
 
 ## Internal without TLS
 
-Four routes serve plain HTTP. The LAN allowlist or a password is all that stands in front of them.
+Three routes serve plain HTTP. The LAN allowlist or a password is all that stands in front of them.
 
 | Host | Application | Namespace | Gate | TLS | Public? |
 |---|---|---|---|---|---|
 | `loki.kub.local` | Loki, query frontend | `monitoring` | `lan-only` | none | no |
 | `pgadmin.kub.local` | pgAdmin | `databases` | `lan-only` | none | no |
 | `prometheus.kub.local` | Prometheus | `monitoring` | `lan-only` | none | no |
-| `traefik.kub.local` | Traefik dashboard (`/dashboard`, `/api`) | `kube-system` | basic auth | none | no |
 
 ## What the table does not list
 
@@ -91,7 +91,7 @@ Four routes serve plain HTTP. The LAN allowlist or a password is all that stands
 name that only redirects to HTTPS, carrying `lan-only` and nothing else. The public hosts' `web`
 routers carry `redirect-https` and no gate, because a gate there would refuse the browser before it
 ever asked for the certificate. FileBrowser has no `web` router at all: it answers `websecure` only.
-The four rows in the last table are served on `web` itself. Three hostnames exist only to redirect and
+The three rows in the last table are served on `web` itself. Three hostnames exist only to redirect and
 are rows in no table: `kub.home.ashudev.com` and `dashy.kub.local`, both to
 `https://dashy.ashudev.com`, and `www.ashudev.com` to `https://ashudev.com`, path and query kept. The
 first two answer on `web` alone; `www.ashudev.com` also has a `websecure` router and carries its own
@@ -116,6 +116,8 @@ values file that owns it, `cluster/infrastructure/traefik/values.yaml`, sets the
 earlier copy, `traefik-config.yaml`, said `` Host(`traefik.app.local`) ``; the release was moved to
 chart `25.0.3` (Traefik `2.10.7`) on 2026-11-21, and ownership moved from the K3s addon to that
 values file in the same change — see [`runbooks/traefik-release.md`](../runbooks/traefik-release.md).
+Since 2026-11-21 the route is on `websecure` with the `internal-tls` option, and
+`cluster/infrastructure/traefik/dashboard/redirect.yaml` is its `web` twin.
 
 ## Regenerating this list
 
