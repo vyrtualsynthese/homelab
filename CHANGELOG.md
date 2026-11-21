@@ -31,6 +31,13 @@ All notable changes to this repository. The format follows
   verification and its rollback are in [`docs/runbooks/traefik-release.md`](docs/runbooks/traefik-release.md);
   it also records why the release is moved with `helm` by hand — K3s's helm-controller runs no job for
   any `HelmChart` in this cluster (task 530, `#398`).
+- Ingress runs on Traefik v3: chart `42.4.1`, Traefik `3.7.19`, reached through 2.11 the same day
+  because the CRD API group had to move first. Every route, middleware, TLS option and TLS store is
+  on `traefik.io/v1alpha1`, the gate writes `ipAllowList` and the exposure checker rejects the old
+  `ipWhiteList` name, and the nine `traefik.containo.us` CRDs that had served since 2023 are deleted
+  — the last of them held no objects. `/data/acme.json` was byte-identical through both moves, every
+  route count and every `nodePort` held, and every host answered as before. Rollback is
+  `helm -n kube-system rollback traefik 10`, which is 2.11 on the v3 schemas.
 - The Traefik release is this repository's, not the K3s addon's. K3s's `traefik` and `traefik-crd`
   `HelmChart` objects, its `HelmChartConfig` and the node drop-in are gone, and the addon is disabled
   in `/etc/rancher/k3s/config.yaml` on the three servers. The release was adopted at the version it

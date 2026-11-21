@@ -102,8 +102,8 @@ time. Examples:
 - YAML: 2 spaces, lowercase keys.
 - **CRLF**: every file in `cluster/argocd/**` uses CRLF. Strip `\r` when scripting
   (`... | tr -d '\r'`) and preserve CRLF when editing those files.
-- Ingress is Traefik CRDs only (`traefik.io/v1alpha1` since 2026-11-21; the `traefik.containo.us`
-  group is served by 2.11 but is not used in new work), never `networking.k8s.io/v1`.
+- Ingress is Traefik CRDs only (`traefik.io/v1alpha1`; the `traefik.containo.us` group that 2.x also
+  served was deleted on 2026-11-21 with the v3 move), never `networking.k8s.io/v1`.
   - Internal, no TLS: `entryPoints: [web]`, host `app.kub.local`.
   - Internal TLS: `entryPoints: [websecure]` on the same `app.kub.local` host, with neither
     `secretName` nor `certResolver` (Traefik serves the default `kube-system/local-cert`, the
@@ -280,21 +280,20 @@ are in `docs/superpowers/plans/`.
 8. `media-stack/sonarr/templates/deployment.yaml:77`: exportarr `URL` uses port `7878`; Sonarr listens
    on `8989` (`sonarr-anime` has it right).
 9. **Resolved 2026-11-21, applied:** `infrastructure/traefik/traefik-config.yaml` parses again and
-   the release is on chart `25.0.3` / Traefik `2.10.7`. The over-indented `existingClaim` was one of
-   five defects that had kept every apply failing since 2023: the file also used
-   `certificatesResolvers` where the chart reads `certResolvers` (which configures no ACME resolver
-   at all, so `acme.json` is never loaded), named `traefik-pvc` instead of the live
-   `pvc-traefik-nfs` (the certificate store), omitted the Syncthing entry points that only the
-   hand-edited live Service had, and omitted `providers.kubernetesCRD.allowCrossNamespace` (every
-   gate and redirect is referenced as `kube-system-<name>@kubernetescrd`).
-   Applying it hit two further blockers, both now recorded in
-   [`docs/runbooks/traefik-release.md`](docs/runbooks/traefik-release.md): chart `25.0.3` refuses to
-   render until the `traefik.io/v1alpha1/ServersTransportTCP` CRD exists (the CRDs were 2.9-era and
-   applied by hand), and the K3s helm-controller runs no job for any HelmChart or HelmChartConfig, so
-   the two releases were moved with `helm` directly. That controller is the subject of homelab task
-   530 (`#398`). **Ownership followed the same day**: the addon is disabled on the three servers, the
-   packaged `HelmChart`/`HelmChartConfig` objects are gone, and the release is installed from
-   `cluster/infrastructure/traefik/values.yaml` — `traefik-config.yaml` is deleted.
+   the release moved off it: it is on chart `42.4.1` / Traefik `3.7.19` since the same day, with the
+   v3 procedure in [`docs/runbooks/traefik-release.md`](docs/runbooks/traefik-release.md). The
+   over-indented `existingClaim` was one of five defects that had kept every apply failing since
+   2023: the file also used `certificatesResolvers` where the chart reads `certResolvers` (which
+   configures no ACME resolver at all, so `acme.json` is never loaded), named `traefik-pvc` instead
+   of the live `pvc-traefik-nfs` (the certificate store), omitted the Syncthing entry points that
+   only the hand-edited live Service had, and omitted `providers.kubernetesCRD.allowCrossNamespace`
+   (every gate and redirect is referenced as `kube-system-<name>@kubernetescrd`). Applying it hit two
+   further blockers: chart `25.0.3` refuses to render until the
+   `traefik.io/v1alpha1/ServersTransportTCP` CRD exists, and the K3s helm-controller runs no job for
+   any HelmChart or HelmChartConfig, so the two releases were moved with `helm` directly. That
+   controller is the subject of homelab task 530 (`#398`). **Ownership followed the same day**: the
+   addon is disabled on the three servers, the packaged `HelmChart`/`HelmChartConfig` objects are
+   gone, and `traefik-config.yaml` is deleted.
 10. **Resolved 2026-11-18:** the two duplicate `lh-performance` StorageClass files under
     `cluster/infrastructure/storageclass/` are deleted with the rest of the Longhorn leftovers.
 11. **Resolved 2026-11-18:** `firefly` and `postiz` were the two charts that rendered a
@@ -310,10 +309,11 @@ are in `docs/superpowers/plans/`.
 
 **Ingress**
 
-13. **Resolved 2026-11-21:** every route and middleware is on `traefik.io/v1alpha1` — 69
+13. **Resolved 2026-11-21:** every route and middleware is on `traefik.io/v1alpha1` — 70
     `IngressRoute`, 2 `IngressRouteTCP` and 2 `IngressRouteUDP`, from 72 files under `cluster/` outside
-    the historical snapshot. The `traefik.containo.us` CRDs stay installed and the four snapshot files
-    keep the old group by design; both go when the v3 upgrade deletes them.
+    the historical snapshot. The nine `traefik.containo.us` CRDs were deleted the same day, after the
+    v3 move, once they held no objects; the four files under
+    `cluster/infrastructure/traefik/snapshot/` keep the old group on purpose, as a record.
 14. **Resolved for the monitoring charts**: `cluster/helm/monitoring/loki` is now a wrapper chart with
     an Application. **Resolved 2026-11-19**: the `cluster/helm/nfs/minio-nfs` orphan chart is deleted
     with the rest of the old NFS packaging.
@@ -321,11 +321,12 @@ are in `docs/superpowers/plans/`.
 **Version drift**
 
 15. **Resolved 2026-11-21:** the Traefik Helm release was stuck at chart `20.3.1` / Traefik `2.9.4`
-    (June 2023) because `traefik-config.yaml` never parsed. It now runs chart `25.0.3` / Traefik
-    `2.10.7`, with CRDs from the same chart applied first, and the release is this repository's
-    rather than the K3s addon's; the procedure, the ownership steps and the two blockers that shaped
-    it are in [`docs/runbooks/traefik-release.md`](docs/runbooks/traefik-release.md). K3s `1.30.1`
-    against a `1.36.x` stable is unchanged.
+    (June 2023) because `traefik-config.yaml` never parsed. It ran chart `25.0.3` / Traefik `2.10.7`
+    for a few hours, then chart `27.0.2` / `2.11.63`, and is on chart `42.4.1` / Traefik `3.7.19`
+    now, each move with its CRDs applied first; the release is this repository's rather than the K3s
+    addon's, and the procedure is in
+    [`docs/runbooks/traefik-release.md`](docs/runbooks/traefik-release.md). K3s `1.30.1` against a
+    `1.36.x` stable is unchanged.
 16. **Resolved for the monitoring charts:** the vendored `prometheus` 14.8.0 and `grafana` 6.52.5 are
     replaced by wrapper charts on current upstream versions. No vendored charts are to be added;
     migrate the remaining ones on their next touch.
