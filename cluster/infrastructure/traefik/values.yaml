@@ -7,8 +7,10 @@
 # That tarball is the upstream chart 25.0.3 as K3s repackaged it, so its version
 # string is `25.0.3+up25.0.0`, exactly what the release already holds.
 #
-# Every key here was derived from the release's own values and proven equal to
-# the running object by a render diff; see ../snapshot/2026-11-21/README.md.
+# Every key here was derived from the release's own values and render-diffed
+# against the running object: with these values the render matched what serves,
+# with one deliberate difference — `metrics.prometheus.manualRouting` is off
+# (task 531). The capture it was built from is ../snapshot/2026-11-21/.
 
 deployment:
   # One pod, not a DaemonSet on every node (task 482). Two processes writing
@@ -16,6 +18,9 @@ deployment:
   # allows five duplicates a week.
   kind: Deployment
   replicas: 1
+  # No `podAnnotations`. The chart writes `prometheus.io/scrape`, `path:
+  # /metrics` and `port: 9100` on the pod whenever metrics are enabled, so the
+  # old `port: 8082` entry in the release values rendered nothing and is gone.
 
 # Recreate, not a rolling update: a rolling one runs both pods together for a
 # few seconds, which is two certificate owners again.
