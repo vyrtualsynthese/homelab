@@ -72,6 +72,16 @@ All notable changes to this repository. The format follows
 
 ### Fixed
 
+- `cluster/infrastructure/traefik/traefik-config.yaml` parses again, so the Traefik release can be
+  upgraded for the first time since 2023. The over-indented `existingClaim` was one of five defects
+  that every apply had hidden behind: the values used `certificatesResolvers` where the chart reads
+  `certResolvers` (so no ACME resolver, and `acme.json` never loaded), named `traefik-pvc` instead of
+  the live `pvc-traefik-nfs` that holds the certificate store, carried neither the Syncthing entry
+  points nor `allowCrossNamespace` — both present only on the hand-edited live objects — and pointed
+  the dashboard at `traefik.app.local` while the cluster serves `traefik.kub.local`. Applying it
+  moves the chart `20.3.1` → `25.0.3` and Traefik `2.9.4` → `2.10.7`; that apply is a manual step for
+  `cluster/infrastructure/**`, and nothing changes on merge.
+
 - The `postgres` bootstrap Job is named after the digest of its whole pod template, not of the SQL
   ConfigMap and the image tag alone. The narrower digest left the env, the resources, the security
   context and the node selector out of the name, so editing any of them was refused by the API

@@ -265,9 +265,15 @@ are in `docs/superpowers/plans/`.
 
 8. `media-stack/sonarr/templates/deployment.yaml:77`: exportarr `URL` uses port `7878`; Sonarr listens
    on `8989` (`sonarr-anime` has it right).
-9. `infrastructure/traefik/traefik-config.yaml:145`: `existingClaim` is over-indented, so YAML folds it
-   into `persistence.name`. The live DaemonSet mounts `pvc-traefik-nfs`, which is the ACME store —
-   reuse that claim or the certificate is re-issued.
+9. **Resolved 2026-11-21:** `infrastructure/traefik/traefik-config.yaml` parses again. The
+   over-indented `existingClaim` was one of five defects that kept every apply failing since 2023, so
+   the live router is still the last good render (chart `20.3.1`, Traefik `2.9.4`): the file also
+   used `certificatesResolvers` where the chart reads `certResolvers` (which configures no ACME
+   resolver at all, so `acme.json` is never loaded), named `traefik-pvc` instead of the live
+   `pvc-traefik-nfs` (the certificate store), omitted the Syncthing entry points that only the
+   hand-edited live Service had, and omitted
+   `providers.kubernetesCRD.allowCrossNamespace` (every gate and redirect is referenced as
+   `kube-system-<name>@kubernetescrd`). Nothing changes until the operator applies it.
 10. **Resolved 2026-11-18:** the two duplicate `lh-performance` StorageClass files under
     `cluster/infrastructure/storageclass/` are deleted with the rest of the Longhorn leftovers.
 11. **Resolved 2026-11-18:** `firefly` and `postiz` were the two charts that rendered a
@@ -291,7 +297,11 @@ are in `docs/superpowers/plans/`.
 
 **Version drift**
 
-15. Traefik `2.9.4` (June 2023) from the K3s bundled addon; K3s `1.30.1` against a `1.36.x` stable.
+15. **Changed 2026-11-21:** the Traefik Helm release has been stuck at chart `20.3.1` / Traefik
+    `2.9.4` (June 2023) because `traefik-config.yaml` never parsed; that file now does, and the
+    HelmChart points at chart `25.0.3` / Traefik `2.10.7`. The next apply moves the release, which is
+    a manual step for `cluster/infrastructure/**`. K3s `1.30.1` against a `1.36.x` stable is
+    unchanged.
 16. **Resolved for the monitoring charts:** the vendored `prometheus` 14.8.0 and `grafana` 6.52.5 are
     replaced by wrapper charts on current upstream versions. No vendored charts are to be added;
     migrate the remaining ones on their next touch.
