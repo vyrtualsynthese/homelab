@@ -4,7 +4,9 @@
 > ServiceAccount `kube-system/opencode-mcp`, plus the Grafana API for the one firing alert and the
 > drive number below. Refreshed on **Saturday 21 November 2026, 00:25–01:00 CET** for the storage
 > provisioners, the two drifted Applications, and the eight empty namespaces with the seven
-> `Released` volumes, all cleared that night. This is
+> `Released` volumes, all cleared that night. On **Sunday 22 November** the K3s version claim below
+> was refreshed after the move to `v1.31.14+k3s1`; the counts in this paragraph are still the 20–21
+> November ones. This is
 > **not a live view**: it is true for the moment named beside each section.
 
 The short answer: **nothing is broken.** Every application that is meant to run has a ready replica,
@@ -65,7 +67,7 @@ What the snapshot saw: **56 ArgoCD `Application` objects**, 55 of which are appl
 rest. `argocd` itself is one of the 55: since 2026-11-19 the install is a wrapper chart in
 `cluster/helm/argocd`, synced like every other app. Behind them, 63 Deployments, 3 StatefulSets,
 17 DaemonSets, 47 claims, 5 CronJobs and 120 pods (105 running, 15 finished Job pods), on four nodes
-all at `v1.30.1+k3s1`.
+all at `v1.31.14+k3s1` (moved from `v1.30.1+k3s1` on 21–22 November).
 
 Twenty of those pods sit in three namespaces no Application manages: `gpu-operator`,
 `node-feature-discovery` and `system-upgrade`. They run and they are not part of the GitOps flow —
@@ -210,8 +212,10 @@ Checked against the cluster, or explicitly marked as not visible to it:
   dump, and the `backup` namespace's six CronJobs ship it, the claims, the NFS exports and the etcd
   copies to one OVH bucket nightly. The old host-side paths in
   [`audit/ansible-hosts.md`](audit/ansible-hosts.md) are retired. What is not proved is a restore.
-- **Kubernetes version.** All four nodes are on `v1.30.1+k3s1`, behind the current stable. The
-  upgrade is W5, and it has not started.
+- **Kubernetes version.** All four nodes are on `v1.31.14+k3s1` with containerd `2.1.5-k3s1.32`,
+  moved from `1.30.1` on 21–22 November with the licence-free path in
+  [`runbooks/k3s-upgrade.md`](runbooks/k3s-upgrade.md). 1.32 and 1.33 are the next steps (cards 520
+  and 521), and nothing about them has started.
 - **Alert rules.** 132 rules exist in the Homelab folder: 1 firing (the drive above), 104 `Normal`,
   27 `Normal (NoData)`.
 
