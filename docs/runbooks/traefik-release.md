@@ -1,13 +1,14 @@
 # Owning and moving the Traefik release
 
-Date: 2026-11-21 · **Ownership moved** 2026-11-21, chart `25.0.3` (Traefik `2.10.7`) · **Kind:**
-living runbook
+Date: 2026-11-21 · **Ownership moved** 2026-11-21, chart `25.0.3` (Traefik `2.10.7`), revision 8 ·
+**Kind:** living runbook
 
 > **In one line.** The Traefik release is this repository's; K3s's addon is disabled, and the
 > release is moved with `helm` from one values file.
 >
 > **Use it when** Traefik has to move to a newer chart, its values change, or the release has to be
-> inspected or rolled back · **Verified** 2026-11-21 with the numbers below.
+> inspected or rolled back · **Verified** 2026-11-21: digest unchanged, 68 routes, every host
+> answering, `/metrics` serving 121 series.
 
 ## The shape of the problem
 
