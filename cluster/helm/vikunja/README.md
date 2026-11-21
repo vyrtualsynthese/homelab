@@ -46,7 +46,7 @@ one.
 ## Why the upstream ingress is disabled
 
 The upstream chart renders a `networking.k8s.io/v1` Ingress. This cluster routes only through
-Traefik CRDs (`traefik.containo.us/v1alpha1` IngressRoute), and an Ingress object here would be
+Traefik CRDs (`traefik.io/v1alpha1` IngressRoute), and an Ingress object here would be
 inert. So `vikunja.ingress.main.enabled` is `false` and the route lives in
 `templates/ingressroute.yaml`, outside the `vikunja:` values block.
 

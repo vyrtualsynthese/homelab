@@ -87,7 +87,7 @@ argo-cd:
   # `*.kub.local` leaf signed by the ashulab internal CA. See
   # docs/runbooks/internal-ca.md.
   extraObjects:
-    - apiVersion: traefik.containo.us/v1alpha1
+    - apiVersion: traefik.io/v1alpha1
       kind: IngressRoute
       metadata:
         name: argocd-server
@@ -108,7 +108,7 @@ argo-cd:
             namespace: kube-system
     # Plain-HTTP mirror: the LAN gate first, then a permanent redirect, so an
     # off-LAN request is refused with `403` rather than redirected.
-    - apiVersion: traefik.containo.us/v1alpha1
+    - apiVersion: traefik.io/v1alpha1
       kind: IngressRoute
       metadata:
         name: argocd-server-redirect
