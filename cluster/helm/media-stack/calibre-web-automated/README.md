@@ -422,8 +422,7 @@ snapshot of the database.
 | `templates/service.yaml` | the ClusterIP Service, 8083 → 8083 |
 | `templates/serviceaccount.yaml` | the ServiceAccount, with no token mounted |
 | `templates/persistentvolumeclaim.yaml` | the `-config` and `-ingest` claims, each gated on its own `enabled` and `existingClaim` |
-| `templates/middleware-allowlist.yaml` | the `ipWhiteList` Middleware, rendered only while the route and its `sourceRanges` both exist |
-| `templates/ingressroute.yaml` | the IngressRoute: one rule, the allow list first in the chain, then any middleware from values |
+| `templates/ingressroute.yaml` | the IngressRoute: one rule, the gate from values first in the chain, then any middleware from values |
 | `templates/_helpers.tpl` | the naming helpers, copied verbatim from `media-stack/sonarr` |
 
 `app.configClaimName` is present and unused: the helper file is deliberately identical to the

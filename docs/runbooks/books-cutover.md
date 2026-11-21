@@ -248,18 +248,20 @@ cause is a claim bound to the wrong node — rollback case C.
 ## Step 6 — Prove the allow list is attached
 
 The route is LAN-only, and DNS is not the control: Traefik routes on the `Host` header, so the proxy
-must reject requests from outside `192.168.1.0/24`. The chart renders a Middleware for that, and an
-empty or misspelled field would render no Middleware at all — leaving the admin UI open, silently.
-This check is the only proof:
+must reject requests from outside `192.168.1.0/24`. The route carries the shared gate,
+`kube-system-lan-only@kubernetescrd`, which the `traefik-gate` chart renders. A misspelled field on
+that Middleware leaves it empty — and an empty allowlist lets everyone in, silently, because the API
+server prunes a field it does not know. These checks are the proof:
 
 ```bash
-kubectl -n media-stack get middleware calibre-web-automated-allowlist -o yaml
+kubectl -n kube-system get middleware lan-only -o jsonpath='{.spec.ipAllowList.sourceRange}{"\n"}'
 kubectl -n media-stack get ingressroute calibre-web-automated \
   -o jsonpath='{.spec.routes[0].middlewares[*].name}{"\n"}'
 ```
 
-Expected: `spec.ipWhiteList.sourceRange: [192.168.1.0/24]` (the field name on Traefik 2.9.4; v3
-renames it `ipAllowList`), and the router printing `calibre-web-automated-allowlist`.
+Expected: `["192.168.1.0/24","10.8.0.0/24","10.42.0.0/16"]` under `ipAllowList` (the field is
+`ipWhiteList` on a 2.9 cluster, which this one has not been since 2026-11-21), and the router
+printing `kube-system-lan-only@kubernetescrd`.
 
 Then the routes themselves:
 
