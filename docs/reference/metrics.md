@@ -194,7 +194,7 @@ the 38 alert rules' expressions first; none of them appears in either.
 | `kubernetes-nodes` | the same treatment for the kubelet's own histograms | 4,932 | no panel reads a kubelet duration; `kubelet_volume_stats_*` is kept |
 | `kubernetes-nodes-cadvisor` | 17 `container_*` families (`tasks_state`, `memory_failures_total`, `memory_failcnt`, `memory_max_usage_bytes`, `memory_mapped_file`, `memory_swap`, `memory_kernel_usage`, `memory_cache`, `blkio_device_usage_total`, `fs_reads_total`, `fs_writes_total`, `cpu_load_average_10s`, `file_descriptors`, `processes`, `sockets`, `threads`, `threads_max`) | 10,058 | the Applications board reads CPU and memory only; the identity and limit families stay |
 | `kubernetes-service-endpoints` | `kube_secret_*`, `kube_pod_tolerations`, `kube_replicaset_*`, `kube_pod_status_qos_class` | 6,156 | one series per object: 421 Secrets, and the replica panels read Deployments and StatefulSets |
-| `kubernetes-pods` | `qbittorrent_torrent_*` (17 fields × 365 torrents), `n8n_*_bucket` and `traefik_*_bucket` | 9,393 | the Media board reads the four `qbittorrent_global_*` totals |
+| `kubernetes-pods` | `qbittorrent_torrent_*` (17 fields × 365 torrents), `n8n_*_bucket` | 7,850 | the Media board reads the four `qbittorrent_global_*` totals; Traefik's buckets stay because the Traefik board's p95 reads them |
 | `grafana`, `loki`, `prometheus` | each job's own histogram buckets | 6,968 | the two stack rules read counters, which are kept |
 
 `kubernetes-pods-slow` and `kubernetes-service-endpoints-slow` carry the same two rules as their

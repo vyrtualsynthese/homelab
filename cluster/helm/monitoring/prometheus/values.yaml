@@ -153,11 +153,15 @@ prometheus:
           regex: "kube_secret_.*|kube_pod_tolerations|kube_replicaset_.*|kube_pod_status_qos_class"
     # The pod-scraped exporters publish what they publish: qBittorrent writes
     # one series per torrent per field, 6,240 series for 365 torrents, while the
-    # Media board reads four qbittorrent_global_* totals. The n8n and Traefik
-    # histograms are 3,153 more with no panel and no rule — n8n publishes three
-    # bucket families of its own, of which the HTTP one is 1,610 series.
-    # Measured 2026-11-18: 9,393 series from this job. container_* is not
-    # touched here; the cadvisor job owns those families.
+    # Media board reads four qbittorrent_global_* totals. The n8n histogram is
+    # 1,610 series with no panel and no rule — n8n publishes three bucket
+    # families of its own, of which the HTTP one is the large one.
+    # Traefik's buckets are NOT dropped: the Homelab · Traefik board reads a p95
+    # from traefik_router_request_duration_seconds_bucket, so that family is the
+    # reader those buckets did not have before 2026-11-21. They cost 336 series
+    # once the values widen the buckets, 0.4 % of the 84,747-series head.
+    # Measured 2026-11-21: 6,240 + 1,610 series from this job. container_* is
+    # not touched here; the cadvisor job owns those families.
     #
     # The media stack's ten targets are 979 of those series and nothing reads
     # 746 of them: the five *arr sidecars publish one series per indexer,
@@ -179,7 +183,7 @@ prometheus:
         - action: drop
           source_labels:
             - __name__
-          regex: "qbittorrent_torrent_.*|n8n_.*_bucket|traefik_.*_bucket"
+          regex: "qbittorrent_torrent_.*|n8n_.*_bucket"
         # Runtime counters: no panel and no rule reads one. A pod's CPU and
         # memory are cAdvisor's `container_*` families, not the exporter's own.
         - action: drop
@@ -251,7 +255,7 @@ prometheus:
         - action: drop
           source_labels:
             - __name__
-          regex: "qbittorrent_torrent_.*|n8n_.*_bucket|traefik_.*_bucket"
+          regex: "qbittorrent_torrent_.*|n8n_.*_bucket"
         - action: drop
           source_labels:
             - namespace
