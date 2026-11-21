@@ -355,8 +355,10 @@ as the **read-only** ServiceAccount `kube-system/opencode-mcp`, using `~/.kube/m
 - To grant writes, create a scoped Role for the ServiceAccount and bind it — do not reuse admin.
 - Observability has its own document: [`docs/observability-conventions.md`](docs/observability-conventions.md)
   covers the live stack, how to query Prometheus/Loki/Grafana without cluster access, the
-  dashboards, the alert set and its known holes. Dashboards and alert rules are in Grafana's
-  database, never in git.
+  dashboards, the alert set and its known holes. Dashboards and alert rules live in Grafana's
+  database, never in git — except the one snapshot under
+  `cluster/helm/monitoring/grafana/export/traefik/`, which is a copy for review and restore and is
+  applied by nothing.
 
 ### Configure through the API, not the operator's mouse
 

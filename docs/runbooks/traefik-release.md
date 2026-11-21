@@ -167,9 +167,8 @@ Expected since 2026-11-21: `plex` `401` (Plex asking for a sign-in), `ashudev.co
 `200`, `dashy` `302` to authentik, the dashboard **`301` on http then `401` on https** from its
 basic-auth middleware over the internal CA, and Syncthing's port open. The dashboard answered `401`
 straight on `web` until that day; the redirect comes from `redirect-to-https`, whose
-`redirectScheme.permanent: true` makes Traefik answer `301` (not the `308` a hand-written redirect
-would use), `404` means the redirect twin is missing, and `401` on the https line means the route
-carries `traefik-dashboard`.
+`redirectScheme.permanent: true` makes Traefik answer `301`, `404` means the redirect twin is
+missing, and `401` on the https line means the route carries `traefik-dashboard`.
 
 Finally the routers Traefik built, and the metrics:
 

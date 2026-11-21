@@ -263,3 +263,32 @@ API and commits a copy.
 - [x] Correct the redirect code: `redirect-to-https` carries `permanent: true`, so the observed answer
   is `301`, not the `308` PR1's spec and runbook wrote. Measured with
   `curl --resolve traefik.kub.local:80:192.168.1.46` on 2026-11-21.
+
+### Task 13: the review corrections
+
+**Files:** `docs/reference/{dashboards,alerts,metrics}.md`, `docs/runbooks/traefik-release.md`,
+`AGENTS.md`, the export README and both JSON files.
+
+A review of #1388 after the merge found claims that did not survive checking. They are fixed in a
+follow-up PR rather than left in a living page:
+
+- [x] `TraefikConfigReloadFailing` was described as the rule that would have spoken during the two
+  years `traefik-config.yaml` failed to parse, and as catching the `/metrics` 404. Neither is true: a
+  Helm values file that fails to render never reaches Traefik, and a 404 on `/metrics` leaves the rule
+  with no data, which `noDataState: OK` reports as healthy. The prose and the rule's own annotation now
+  say what each half watches, and name `ScrapeTargetDown` for the scrape.
+- [x] The restore snippet in the export README used the default SSL context against the internal CA
+  and would have failed after a wipe; it passes `local-ca.pem`, like the other runbooks.
+- [x] The same README said to create a missing rule group with `POST`; that path answers 404. Creating
+  a rule recreates the group at Grafana's default interval, and a full-body `PUT` on the group sets
+  300 s back. Both verified live, and the `PUT` run once idempotently.
+- [x] Card numbers: `#399`, `#408` and `409` were GitHub-issue-shaped guesses. The board ids are 531
+  (`/metrics` 404), 542 (the audit) and 543 (the certificates).
+- [x] Links from the two reference pages to `../../cluster/...` 404 on the docs site; they are now
+  cited in backticks, as the docs rule says.
+- [x] `AGENTS.md` §9 no longer says dashboards are never in git without naming the snapshot.
+- [x] "No rule is evaluated slower than a fifth of its own `for`" was false for every `for: 10m` rule
+  in `homelab-core`; it is half, and the page says so.
+- [x] The dashboard's reload-age panel turned orange at 7 days while the rule fires at 1; the orange
+  line is now 86400 s, the certificate table colours its number, and the 5xx and scrape panels describe
+  what they actually show.

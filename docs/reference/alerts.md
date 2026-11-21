@@ -26,8 +26,9 @@ is 5 minutes or less, or when it reports that something is down and its `for` is
 because its whole job is noticing that data stopped arriving. Everything else is
 checked every five minutes: `CertificateExpiring` and `CloudTlsCertificateExpiring`
 (`for: 1h`), the three disk-fill predictions (`for: 30m`), the temperature and
-SLO-ish checks (`for: 10m` and above). No rule is evaluated slower than a fifth
-of its own `for`, so no alert is delayed by more than a few minutes. Measured at 35 rules: 35.0 rule evaluations per minute
+SLO-ish checks (`for: 10m` and above). The slowest ratio is the `for: 10m` rules in
+`homelab-core`: half their own `for` between checks, so an alert is delayed by up to five
+minutes and never by more than that. Measured at 35 rules: 35.0 rule evaluations per minute
 before the split, 20.5 after.
 
 **Delivery**: contact point `discord-homelab` (type `discord`).
@@ -219,7 +220,7 @@ intended, and [`runbooks/cloud-monitoring.md` §8](../runbooks/cloud-monitoring.
 explains why.
 
 **Three rules added on 2026-11-21 watch the router in front of everything.** They came out of the
-Traefik audit ([`audit/traefik-2026-11-21.md`](../audit/traefik-2026-11-21.md), task #408) and are the
+Traefik audit ([`audit/traefik-2026-11-21.md`](../audit/traefik-2026-11-21.md), card 542) and are the
 first rules that read the router's own traffic rather than the workload behind it. `CertificateExpiring`
 was the only Traefik rule before them.
 
@@ -233,15 +234,22 @@ was the only Traefik rule before them.
   busiest router averaged **76 ms**, so 1 s is an order of magnitude above normal and catches a
   backend that is queueing rather than slow by a little. The threshold is **provisional** by design:
   before 2026-11-21 Prometheus dropped `traefik_.*_bucket`, so no percentile existed to tune against,
-  and there was one day of history when the number was chosen. Re-read the panel after a week. Traefik
-  itself adds microseconds, so a firing here is the app behind the route, not the router.
-- **`TraefikConfigReloadFailing`** is the one that would have spoken throughout the two years the
-  release file failed to parse (2023 → 2026-11-21, item 9 of `AGENTS.md` §7): any reload failure in the
-  last 15 minutes, or no successful reload for 24 h. Traefik
-  keeps serving the last good configuration when a new one is refused, so a broken source file looks
-  healthy — the pod answers, the routes work, and only the next restart reveals the drift. The
-  24-hour half also catches the opposite fault, a file that was fixed but never reached the router
-  because the sync stopped.
+  and the number was chosen the same evening the buckets first arrived. Re-read the panel after a
+  week. Traefik itself adds microseconds, so a firing here is the app behind the route, not the
+  router.
+- **`TraefikConfigReloadFailing`** covers two faults that look the same from outside. A reload
+  failure in the last 15 minutes is a **dynamic** configuration Traefik read and refused — a
+  `Middleware` or `IngressRoute` it cannot resolve — and Traefik goes on serving the last good
+  configuration, so the routes still answer and the log line is the only evidence. No successful
+  reload for 24 h is the other shape: the provider delivered nothing for a day. That is not a quiet
+  night here — routes change several times an hour — so it means a dead watch or a router stuck
+  mid-build.
+
+  It does **not** cover the two faults the audit found in 2023, and the record should say so: a Helm
+  values file that fails to render never reaches Traefik (that is the deploy step's error, and until
+  2026-11-21 it failed silently; item 9 of `AGENTS.md` §7), and the `/metrics` endpoint answering `404`
+  (card 531) leaves this rule with no data, which `noDataState: OK` reports as healthy. `ScrapeTargetDown`
+  is what watches for a scrape target that answers nothing.
 
 None of the three carries a `TraefikDown` twin, and none needs one: the `Deployment` is in
 `kube-system`, so `CoreDeploymentDown` covers a router that stops running, and `ScrapeTargetDown`
@@ -330,8 +338,8 @@ reports `firing` on the Health dashboard.
   is one row of the nightly `nodes-nas` stream — but a restore brings back a database, not a
   reviewable change, so a rule is still edited through the API and written down here. The Traefik
   rules and their dashboard are the single exception, and it is a **copy**: a snapshot in
-  [`cluster/helm/monitoring/grafana/export/traefik/`](../../cluster/helm/monitoring/grafana/export/traefik/README.md)
-  to read in a pull request and to restore after a wipe. Nothing applies it; the database stays the
+  `cluster/helm/monitoring/grafana/export/traefik/` to read in a pull request and to restore after a
+  wipe. Nothing applies it; the database stays the
   authority.
 
 ## Changing things
