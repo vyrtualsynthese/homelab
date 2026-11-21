@@ -185,8 +185,11 @@ individually: they include Vikunja's database file and n8n's encryption key.
 A scrape returns everything an exporter publishes; Prometheus stores what something reads. Since
 2026-11-18 ten `metric_relabel_configs` entries in `cluster/helm/monitoring/prometheus/values.yaml`
 — one regex widened, nine added — drop the rest at the scrape, so those series never reach the
-head, the WAL or the SSD. Every family below was checked against the nine dashboards' PromQL and
-the 38 alert rules' expressions first; none of them appears in either.
+head, the WAL or the SSD. Every family below was checked against every dashboard's PromQL and every
+rule's expression first; none of them appears in either. The check was repeated on 2026-11-21 with the
+eleven dashboards and 42 rules that existed then, and it took `traefik_.*_bucket` **off** the list: the
+new Traefik board's p95 is the first reader those buckets ever had, which is why the pods row below
+says they stay.
 
 | Job | Dropped | Series | Why it has no reader |
 |---|---|---|---|
