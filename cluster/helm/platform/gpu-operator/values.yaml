@@ -133,7 +133,7 @@ gpu-operator:
   node-feature-discovery:
     image:
       repository: registry.k8s.io/nfd/node-feature-discovery
-      tag: v0.18.3
+      tag: v0.20.1
     # Only `streaming` has a GPU, and nothing in this repo reads NFD labels.
     # Four workers for one node was three pods of waste.
     worker:
