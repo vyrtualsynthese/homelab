@@ -2,8 +2,9 @@
 
 > **Kind: snapshot.** Read on **Friday 20 November 2026, 01:10–01:40 CET** through the read-only
 > ServiceAccount `kube-system/opencode-mcp`, plus the Grafana API for the one firing alert and the
-> drive number below. Refreshed on **Saturday 21 November 2026, 00:25 CET** for the storage
-> provisioners and the two drifted Applications, which were rebuilt and settled that night. This is
+> drive number below. Refreshed on **Saturday 21 November 2026, 00:25–01:00 CET** for the storage
+> provisioners, the two drifted Applications, and the eight empty namespaces with the seven
+> `Released` volumes, all cleared that night. This is
 > **not a live view**: it is true for the moment named beside each section.
 
 The short answer: **nothing is broken.** Every application that is meant to run has a ready replica,
@@ -177,10 +178,13 @@ provisioner chart. The data stayed on `nas` throughout: every volume is `Retain`
 and `acme.json` was byte-identical afterwards. The order, the check and why the mark could not
 simply be cleared are in [`how-it-works/storage.md`](how-it-works/storage.md).
 
-Six `Released` volumes remain from earlier rebuilds (`filebrowser-config`, `filebrowser-database`,
-the old `pgadmin-config`, the old `calibre-web-automated-config`, `cross-seed2`, `plex-transcode`).
-`local-path` keeps them on purpose (retain policy); each holds a directory on its node until someone
-deletes the volume and the directory by hand. Housekeeping, not breakage.
+No `Released` volume remains. The six from the previous read (`plex-transcode`, `cross-seed2`, the
+old `calibre-web-automated-config`, the old `pgadmin-config`, `filebrowser-config` and
+`filebrowser-database`) and `atlantis-data`, which appeared on 2026-11-20 after its namespace was
+already gone, were deleted on 2026-11-21, oldest first. `local-path` used retain policy, so deleting
+a volume leaves its directory behind instead of freeing the space: `/mnt/ssd0` on `streaming` for the
+three media-stack volumes, `/opt/local-path-provisioner` on `nuc0` for the rest, until someone
+removes each by hand. Housekeeping, not breakage.
 
 Each of the eight classes is a directory on a `nas` export, served by one release of
 `cluster/helm/nfs/provisioner/`. `nfs-ssd` and `nfs-plex` no longer exist as classes or as
@@ -200,9 +204,6 @@ Checked against the cluster, or explicitly marked as not visible to it:
   dump, and the `backup` namespace's six CronJobs ship it, the claims, the NFS exports and the etcd
   copies to one OVH bucket nightly. The old host-side paths in
   [`audit/ansible-hosts.md`](audit/ansible-hosts.md) are retired. What is not proved is a restore.
-- **Empty namespaces.** Eight hold no pod at all: `inventree`, `inventree-lego`, `minio`,
-  `nextcloud`, `orbital-sync`, `postfix`, `synapse`, `test`. They cost nothing, and they are
-  leftovers.
 - **Kubernetes version.** All four nodes are on `v1.30.1+k3s1`, behind the current stable. The
   upgrade is W5, and it has not started.
 - **Alert rules.** 132 rules exist in the Homelab folder: 1 firing (the drive above), 104 `Normal`,
@@ -228,6 +229,9 @@ and [`decisions/2026-11-19-retire-discourse.md`](decisions/2026-11-19-retire-dis
   eight releases.
 - The Longhorn claims are gone with the pods rebuilt, and so is every remaining deletion mark: on
   2026-11-21 the four NFS volumes that had carried one since 2023 were rebuilt.
+- The eight namespaces left behind by retired applications (`inventree`, `inventree-lego`, `minio`,
+  `nextcloud`, `orbital-sync`, `postfix`, `synapse`, `test`) and the seven `Released` volumes were
+  deleted on 2026-11-21. Their `local-path` directories are still on the nodes.
 - Pods fell from 149 to 120 at the read, and claims from 50 to 47.
 - The docs builder, which failed three runs on 2026-11-17, has run cleanly since: its runs complete
   and the CronJob fires every minute.
