@@ -158,13 +158,16 @@ means the certificate store was not loaded:
 for h in plex.kub.home.ashudev.com ashudev.com ashuvidz.com dashy.ashudev.com; do
   curl -s -o /dev/null -w "$h %{http_code}\n" --resolve $h:443:192.168.1.46 https://$h/
 done
-curl -s -o /dev/null -w 'dashboard %{http_code}\n' http://traefik.kub.local/dashboard/
+curl -s -o /dev/null -w 'dashboard http %{http_code}\n' --resolve traefik.kub.local:80:192.168.1.46 http://traefik.kub.local/dashboard/
+curl -sk -o /dev/null -w 'dashboard https %{http_code}\n' --resolve traefik.kub.local:443:192.168.1.46 https://traefik.kub.local/dashboard/
 timeout 5 bash -c '</dev/tcp/192.168.1.46/22000' && echo "syncthing tcp open"
 ```
 
-Expected on 2026-11-21: `plex` `401` (Plex asking for a sign-in), `ashudev.com` and `ashuvidz.com`
-`200`, `dashy` `302` to authentik, the dashboard `401` from its basic-auth middleware, and Syncthing's
-port open.
+Expected since 2026-11-21: `plex` `401` (Plex asking for a sign-in), `ashudev.com` and `ashuvidz.com`
+`200`, `dashy` `302` to authentik, the dashboard **`308` on http then `401` on https** from its
+basic-auth middleware over the internal CA, and Syncthing's port open. The dashboard answered `401`
+straight on `web` until that day; `308` means the redirect twin exists, `404` means it does not, and
+`401` on the https line means the route carries `traefik-dashboard`.
 
 Finally the routers Traefik built, and the metrics:
 
@@ -232,3 +235,8 @@ not a visible outage.
 | every gate stops resolving, or routes are rejected | `providers.kubernetesCRD.allowCrossNamespace` is off; every gate is referenced as `kube-system-<name>@kubernetescrd` |
 | a K3s node does not come back after the config edit | a second top-level `disable:` key; K3s refuses the file. Restore `/root/config.yaml.bak-*` |
 | `minecraft-minecraft-server-public … subset not found` | the minecraft Deployment is scaled to `0/0`; the error predates any upgrade |
+| the dashboard answers `404` on `http://traefik.kub.local` | the chart route lives on `websecure` only; `cluster/infrastructure/traefik/dashboard/redirect.yaml` is the `web` twin that sends the browser to TLS |
+| the dashboard answers `401` on plain HTTP, no TLS | before 2026-11-21 the route was on `web` with basic auth, so the password crossed the LAN in clear; move it to `websecure` with `tls.options: internal-tls` |
+| `https://traefik.kub.local` fails the certificate | the route has no `tls.options: internal-tls`, so it gets no certificate from `kube-system/local-cert` |
+| `acme.json` grows with names nothing serves | certificates stay in the store after their route is deleted, and Traefik renews everything it holds; the orphans are listed in `docs/audit/traefik-2026-11-21.md` |
+| metrics reachable on `192.168.1.46:9101` | `ports.metrics.expose` was `true`; Prometheus scrapes the pod's 9100 through the annotation and needs no Service port |
