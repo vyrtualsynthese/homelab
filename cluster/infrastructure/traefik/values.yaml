@@ -1,0 +1,154 @@
+# The running Traefik release. Chart 25.0.3, Traefik 2.10.7 — the version that
+# serves traffic, adopted from the K3s addon on 2026-11-21 without a version
+# change. The 2.11 bump is W5 task 6; the v3 upgrade is W5 task 8.
+#
+# Chart source, because the upstream index no longer carries this version:
+#   kubectl get --raw "/static/charts/traefik-25.0.3+up25.0.0.tgz"
+# That tarball is the upstream chart 25.0.3 as K3s repackaged it, so its version
+# string is `25.0.3+up25.0.0`, exactly what the release already holds.
+#
+# Every key here was derived from the release's own values and proven equal to
+# the running object by a render diff; see ../snapshot/2026-11-21/README.md.
+
+deployment:
+  # One pod, not a DaemonSet on every node (task 482). Two processes writing
+  # /data/acme.json corrupt it and re-request every name, and Let's Encrypt
+  # allows five duplicates a week.
+  kind: Deployment
+  replicas: 1
+
+# Recreate, not a rolling update: a rolling one runs both pods together for a
+# few seconds, which is two certificate owners again.
+updateStrategy:
+  type: Recreate
+  rollingUpdate: null
+
+# The house router forwards 80, 443, 25565, 22000 TCP/UDP and 21027 UDP to
+# 192.168.1.46, so this is where every external byte lands.
+nodeSelector:
+  kubernetes.io/hostname: streaming
+
+image:
+  repository: rancher/mirrored-library-traefik
+  tag: "2.10.7"
+
+priorityClassName: system-cluster-critical
+
+tolerations:
+  - key: CriticalAddonsOnly
+    operator: Exists
+  - key: node-role.kubernetes.io/control-plane
+    operator: Exists
+    effect: NoSchedule
+  - key: node-role.kubernetes.io/master
+    operator: Exists
+    effect: NoSchedule
+
+global:
+  systemDefaultRegistry: ""
+
+providers:
+  kubernetesCRD:
+    # Every gate and redirect is referenced as kube-system-<name>@kubernetescrd;
+    # without this no cross-namespace reference resolves and every gate vanishes.
+    allowCrossNamespace: true
+  kubernetesIngress:
+    publishedService:
+      enabled: true
+
+ingressRoute:
+  dashboard:
+    enabled: true
+    entryPoints: ["web"]
+    matchRule: Host(`traefik.kub.local`) && (PathPrefix(`/dashboard`) || PathPrefix(`/api`))
+    middlewares:
+      - name: lan-only
+        namespace: kube-system
+      - name: traefik-dashboard
+        namespace: kube-system
+
+metrics:
+  prometheus:
+    entryPoint: metrics
+    addEntryPointsLabels: false
+    addRoutersLabels: true
+    addServicesLabels: false
+    buckets: "0.5,1.0,2.5"
+    # false restores the default internal router that serves prometheus@internal
+    # on the metrics entry point. It was true with no custom router, so /metrics
+    # answered 404 and no traefik_* series were stored (task 531).
+    manualRouting: false
+
+certResolvers:
+  myresolver:
+    email: valentin.ronteix@ashudev.com
+    tlsChallenge: true
+    # Must match the mounted claim; a different path means the store is empty
+    # and every name is re-issued.
+    storage: /data/acme.json
+
+ports:
+  web:
+    port: 8000
+    expose: true
+    exposedPort: 80
+    protocol: TCP
+    forwardedHeaders:
+      insecure: true
+    proxyProtocol:
+      insecure: true
+  websecure:
+    port: 8443
+    expose: true
+    exposedPort: 443
+    protocol: TCP
+    forwardedHeaders:
+      insecure: true
+    proxyProtocol:
+      insecure: true
+  mc:
+    port: 25565
+    expose: true
+    exposedPort: 25565
+    protocol: TCP
+  # Syncthing: file transfer (22000 TCP and UDP) and local discovery (21027 UDP).
+  # These existed only on the live Service, added by hand in 2023; an upgrade
+  # without them quietly breaks Syncthing between devices.
+  sttcp:
+    port: 22000
+    expose: true
+    exposedPort: 22000
+    protocol: TCP
+  studp:
+    port: 22000
+    expose: true
+    exposedPort: 22000
+    protocol: UDP
+  stdiscovery:
+    port: 21027
+    expose: true
+    exposedPort: 21027
+    protocol: UDP
+  metrics:
+    port: 9100
+    expose: true
+    exposedPort: 9101
+    protocol: TCP
+
+persistence:
+  enabled: true
+  name: data
+  # The claim the router already mounts. It holds /data/acme.json, the
+  # certificate store; a different claim means every name is re-issued.
+  existingClaim: pvc-traefik-nfs
+  path: /data
+
+service:
+  enabled: true
+  single: true
+  type: LoadBalancer
+  # Rendered only when set: without it the API server defaults the Service to
+  # SingleStack, which is not the object that serves today.
+  ipFamilyPolicy: PreferDualStack
+  spec:
+    externalTrafficPolicy: Local

@@ -131,23 +131,24 @@ while IFS= read -r values; do
   printf '%-52s static (values-only)\n' "$rel"
 done < <(find "$ROOT/cluster/helm" -name values.yaml | sort)
 
-# The Traefik dashboard is rendered from a hand-applied HelmChartConfig, not a chart.
+# The Traefik dashboard is rendered from the chart's own values file, not a chart
+# in this repository.
 if [ -z "$ONLY" ]; then
-  dashboard="$ROOT/cluster/infrastructure/traefik/traefik-config.yaml"
+  dashboard="$ROOT/cluster/infrastructure/traefik/values.yaml"
   if ! out="$(python3 "$CHECKER" "$dashboard")"; then
-    printf 'cluster/infrastructure/traefik/traefik-config.yaml: %s\n' "$out"
+    printf 'cluster/infrastructure/traefik/values.yaml: %s\n' "$out"
     violations=1
   fi
 fi
 
-# cluster/argocd and the Traefik config are CRLF by contract; an LF rewrite is a whole-file diff.
+# cluster/argocd is CRLF by contract; an LF rewrite is a whole-file diff.
 if [ -z "$ONLY" ]; then
   while IFS= read -r file; do
     if ! file "$ROOT/$file" | grep -q CRLF; then
       echo "$file: expected CRLF line endings"
       violations=1
     fi
-  done < <(cd "$ROOT" && { git ls-files 'cluster/argocd/**'; echo 'cluster/infrastructure/traefik/traefik-config.yaml'; })
+  done < <(cd "$ROOT" && git ls-files 'cluster/argocd/**')
 fi
 
 echo "checked: $routes routes"
