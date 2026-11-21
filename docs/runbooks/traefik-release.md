@@ -8,7 +8,7 @@ Date: 2026-11-21 · **Ownership moved** 2026-11-21, chart `25.0.3` (Traefik `2.1
 >
 > **Use it when** Traefik has to move to a newer chart, its values change, or the release has to be
 > inspected or rolled back · **Verified** 2026-11-21: digest unchanged, 68 routes, every host
-> answering, `/metrics` serving 121 series.
+> answering, `/metrics` serving 150 series, 121 of them stored in Prometheus.
 
 ## The shape of the problem
 
@@ -122,6 +122,10 @@ example on a rebuilt server. **The order matters.**
      - traefik
    ```
 
+   On this cluster the key already held `local-storage`, so it ends
+   `disable: [local-storage, traefik]`. Order does not matter; a second top-level `disable:` key
+   does, because K3s refuses the file.
+
    Then remove the drop-in that fed the `HelmChartConfig`, and restart:
 
    ```bash
@@ -198,10 +202,19 @@ and an empty dashboard, not a visible outage.
   revision before the change restores that revision's stored values, which is safe only if those
   values were the current file. If in doubt, upgrade again with the snapshot:
   `helm upgrade traefik /tmp/traefik -n kube-system --reset-values -f cluster/infrastructure/traefik/snapshot/2026-11-21/release-values.yaml`.
-- **The addon**: re-enabling it takes the old path back. Remove `disable: [traefik]` from the three
-  servers, restore `/var/lib/rancher/k3s/server/manifests/traefik-config.yaml` from
-  `snapshot/2026-11-21/k3s-helmchartconfig-traefik.yaml`, and restart one node at a time. K3s
-  recreates its `HelmChart` objects. Do not do this with the current release installed: the two
+- **The addon**: re-enabling it takes the old path back. Remove `- traefik` from `disable` on the
+  three servers, restore the drop-in out of git, and restart one node at a time. K3s recreates its
+  `HelmChart` objects.
+
+  ```bash
+  git show "$(git log --diff-filter=D --format=%H -1 -- \
+    cluster/infrastructure/traefik/traefik-config.yaml)^:cluster/infrastructure/traefik/traefik-config.yaml" \
+    | sudo tee /var/lib/rancher/k3s/server/manifests/traefik-config.yaml >/dev/null
+  ```
+
+  The captured `snapshot/2026-11-21/k3s-helmchartconfig-traefik.yaml` is that object as the
+  controller held it, with its `objectset.rio.cattle.io` annotations, uid and resourceVersion: it is
+  the record, not a drop-in. Do not re-enable the addon with the current release installed — the two
   owners fight over the Service.
 - **The certificate** is never touched by any of this as long as the claim stays `pvc-traefik-nfs`
   and the file keeps its permissions (`65532:65532`, mode `600`). No rollback re-issues anything.
