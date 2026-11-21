@@ -16,6 +16,12 @@ edit a panel would have to know which one wins. The exception is recorded in
 | `dashboard.json` | A direct `POST /api/dashboards/db` body: `{dashboard, folderUid: "homelab", overwrite: true}`. Ten panels in four rows, uid `homelab-traefik`. |
 | `rules.json` | The three rules as `GET /api/v1/provisioning/alert-rules` returns them, in group `homelab-core` (300 s), severity `warning`. |
 
+Both files were re-exported the same day, after the v3 move, because the v3 router stops exporting two
+names they used: `traefik_router_open_connections` is now `traefik_open_connections` (labelled by
+entry point) and `traefik_config_reloads_failure_total` does not exist at all. The connections panel
+follows the rename; the failure panel became "Reloads, 1 h", and `TraefikConfigReloadFailing` now reads
+`traefik_config_last_reload_success == 0`, which is what a refused configuration leaves behind.
+
 ## Re-applying after a wipe
 
 ```bash

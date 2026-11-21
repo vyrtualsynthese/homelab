@@ -174,31 +174,39 @@
     "updated": "2026-11-21T19:30:13Z"
   },
   {
-    "annotations": {
-      "description": "Two faults sit behind this rule. A reload failure in the last 15 minutes is a dynamic configuration Traefik read and refused: a Middleware or IngressRoute it cannot resolve. Traefik keeps serving the last good config, so the routes still answer and the log line is the only evidence; read it with kubectl -n kube-system logs deploy/traefik --tail=100. No successful reload for 24 h is the other shape: the provider delivered nothing for a day, which is not normal here (routes change several times an hour), so the watch is dead or the router is stuck mid-build. It does not cover a Helm values file that fails to render, or the /metrics endpoint being unreachable: the first never reaches Traefik, and ScrapeTargetDown owns the second.",
-      "summary": "Traefik is not reloading its configuration"
-    },
+    "id": 54,
+    "uid": "cg4zwo7xexiwwe",
+    "orgID": 1,
+    "folderUID": "homelab",
+    "ruleGroup": "homelab-core",
+    "title": "TraefikConfigReloadFailing",
     "condition": "C",
     "data": [
       {
+        "refId": "A",
+        "queryType": "",
+        "relativeTimeRange": {
+          "from": 600,
+          "to": 0
+        },
         "datasourceUid": "PBFA97CFB590B2093",
         "model": {
           "editorMode": "code",
-          "expr": "sum(increase(traefik_config_reloads_failure_total[15m])) > 0 or (time() - max(traefik_config_last_reload_success)) > 86400",
+          "expr": "max(traefik_config_last_reload_success) == 0 or (time() - max(traefik_config_last_reload_success)) > 86400",
           "instant": true,
           "intervalMs": 1000,
           "maxDataPoints": 43200,
           "range": false,
           "refId": "A"
-        },
-        "queryType": "",
-        "refId": "A",
-        "relativeTimeRange": {
-          "from": 600,
-          "to": 0
         }
       },
       {
+        "refId": "C",
+        "queryType": "",
+        "relativeTimeRange": {
+          "from": 0,
+          "to": 0
+        },
         "datasourceUid": "__expr__",
         "model": {
           "conditions": [
@@ -232,32 +240,24 @@
           "maxDataPoints": 43200,
           "refId": "C",
           "type": "threshold"
-        },
-        "queryType": "",
-        "refId": "C",
-        "relativeTimeRange": {
-          "from": 0,
-          "to": 0
         }
       }
     ],
+    "updated": "2026-11-21T22:27:41Z",
+    "noDataState": "OK",
     "execErrState": "OK",
-    "folderUID": "homelab",
-    "for": "10m",
-    "id": 54,
-    "isPaused": false,
-    "keep_firing_for": "0s",
+    "annotations": {
+      "description": "Two faults sit behind this rule. A failed reload leaves traefik_config_last_reload_success at 0 until the next good one, which is how a refused dynamic configuration shows up since Traefik v3 no longer exports a failure counter: a Middleware or IngressRoute it cannot resolve. Traefik keeps serving the last good config, so the routes still answer and the log line is the only other evidence; read it with kubectl -n kube-system logs deploy/traefik --tail=100. The 10-minute hold means a failure that is corrected within that window passes silently, and the log is the record. No successful reload for 24 h is the other shape: the provider delivered nothing for a day, which is not normal here (routes change several times an hour), so the watch is dead or the router is stuck mid-build. It does not cover a Helm values file that fails to render, or the /metrics endpoint being unreachable: the first never reaches Traefik, and ScrapeTargetDown owns the second.",
+      "summary": "Traefik is not reloading its configuration"
+    },
     "labels": {
       "severity": "warning"
     },
-    "noDataState": "OK",
-    "notification_settings": null,
-    "orgID": 1,
     "provenance": "api",
+    "isPaused": false,
+    "notification_settings": null,
     "record": null,
-    "ruleGroup": "homelab-core",
-    "title": "TraefikConfigReloadFailing",
-    "uid": "cg4zwo7xexiwwe",
-    "updated": "2026-11-21T19:30:13Z"
+    "for": "10m",
+    "keep_firing_for": "0s"
   }
 ]

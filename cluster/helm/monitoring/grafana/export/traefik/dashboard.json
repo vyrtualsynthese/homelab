@@ -1,6 +1,7 @@
 {
   "dashboard": {
     "description": "The router in front of everything: traffic, latency, errors, the certificate store and the config reloads. Created 2026-11-21 and exported to cluster/helm/monitoring/grafana/export/traefik/.",
+    "id": 3022991006629888,
     "links": [
       {
         "asDropdown": false,
@@ -407,7 +408,7 @@
           "type": "prometheus",
           "uid": "PBFA97CFB590B2093"
         },
-        "description": "The same numbers the frontend keeps. A router that never comes back to zero is holding a client that will not close.",
+        "description": "Connections the proxy currently holds, per entry point. A line that never comes back to zero is holding a client that will not close.",
         "fieldConfig": {
           "defaults": {
             "custom": {
@@ -452,13 +453,13 @@
               "type": "prometheus",
               "uid": "PBFA97CFB590B2093"
             },
-            "expr": "sum by (router) (traefik_router_open_connections)",
-            "legendFormat": "{{router}}",
+            "expr": "sum by (entrypoint) (traefik_open_connections)",
+            "legendFormat": "{{entrypoint}}",
             "range": true,
             "refId": "A"
           }
         ],
-        "title": "Open connections by router",
+        "title": "Open connections by entry point",
         "type": "timeseries"
       },
       {
@@ -667,7 +668,7 @@
           "type": "prometheus",
           "uid": "PBFA97CFB590B2093"
         },
-        "description": "Any failure is a config Traefik read and refused. The rule fires on the first one.",
+        "description": "Configuration loads in the last hour. Traefik v3 exports no failure counter: a refused config shows as the last-success age climbing and as a failed reload in the log.",
         "fieldConfig": {
           "defaults": {
             "color": {
@@ -679,10 +680,6 @@
                 {
                   "color": "green",
                   "value": null
-                },
-                {
-                  "color": "red",
-                  "value": 1
                 }
               ]
             },
@@ -718,13 +715,13 @@
               "type": "prometheus",
               "uid": "PBFA97CFB590B2093"
             },
-            "expr": "sum(increase(traefik_config_reloads_failure_total[1h])) or vector(0)",
+            "expr": "sum(increase(traefik_config_reloads_total[1h]))",
             "instant": true,
             "range": false,
             "refId": "A"
           }
         ],
-        "title": "Reload failures, 1 h",
+        "title": "Reloads, 1 h",
         "type": "stat"
       },
       {
@@ -805,7 +802,8 @@
     },
     "timezone": "browser",
     "title": "Homelab \u00b7 Traefik",
-    "uid": "homelab-traefik"
+    "uid": "homelab-traefik",
+    "version": 6
   },
   "folderUid": "homelab",
   "overwrite": true
