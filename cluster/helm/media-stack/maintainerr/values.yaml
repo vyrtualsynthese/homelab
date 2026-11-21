@@ -24,7 +24,7 @@ image:
   # -- Pin the tag; a rolling tag makes every deploy a different app. Upstream
   # tags carry no `v` prefix.
   # Bumps are manual and move this tag, `appVersion` and the chart `version` together.
-  tag: "3.32.0"
+  tag: "3.33.0"
   pullPolicy: IfNotPresent
 
 imagePullSecrets: []
