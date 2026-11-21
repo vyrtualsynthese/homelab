@@ -325,8 +325,9 @@ are in `docs/superpowers/plans/`.
     for a few hours, then chart `27.0.2` / `2.11.63`, and is on chart `42.4.1` / Traefik `3.7.19`
     now, each move with its CRDs applied first; the release is this repository's rather than the K3s
     addon's, and the procedure is in
-    [`docs/runbooks/traefik-release.md`](docs/runbooks/traefik-release.md). K3s `1.30.1` against a
-    `1.36.x` stable is unchanged.
+    [`docs/runbooks/traefik-release.md`](docs/runbooks/traefik-release.md). The K3s version moved
+    separately on 22 November — item 18.
+
 16. **Resolved for the monitoring charts:** the vendored `prometheus` 14.8.0 and `grafana` 6.52.5 are
     replaced by wrapper charts on current upstream versions. No vendored charts are to be added;
     migrate the remaining ones on their next touch.
@@ -336,6 +337,16 @@ are in `docs/superpowers/plans/`.
     `cluster/infrastructure/**` are scanned by the Kubernetes manager but hold no version pin worth
     updating, the only image being a `latest` scratch pod. `docs/runbooks/renovate.md` has the
     manager-by-manager coverage.
+
+18. **K3s is on `v1.31.14+k3s1` on all four nodes (2026-11-22), containerd `2.1.5-k3s1.32`.** Moved
+    one node at a time with `system-upgrade-controller`, against plans pinned to a version *and* a
+    single hostname: `nuc0` 40 s, `rbp2` 160 s (the ARM Pi), `streaming` 20 s with a measured
+    15-second ingress blip, `nas` 20 s. etcd quorum held throughout, PostgreSQL shut down cleanly,
+    the NFS exports kept serving, and each node's backup job was re-run afterwards as the containerd
+    check. Procedure, timings, traps and the rollback caveat:
+    [`docs/runbooks/k3s-upgrade.md`](docs/runbooks/k3s-upgrade.md). Next minor: cards 520 and 521.
+    Both plans now carry `version: v1.31.14+k3s1` and a hostname selector naming the last node moved;
+    widening a selector is what starts the next node.
 
 ## 8. Rules
 

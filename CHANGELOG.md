@@ -38,6 +38,16 @@ All notable changes to this repository. The format follows
   — the last of them held no objects. `/data/acme.json` was byte-identical through both moves, every
   route count and every `nodePort` held, and every host answered as before. Rollback is
   `helm -n kube-system rollback traefik 10`, which is 2.11 on the v3 schemas.
+- K3s moves to `v1.31.14+k3s1` on all four nodes, containerd `1.7.15` → `2.1.5` with it. One node at a
+  time, each plan pinned to a version **and** a single hostname so the controller could not walk on
+  unattended: `nuc0` 40 s, `rbp2` 160 s (the ARM Pi), `streaming` 20 s, `nas` 20 s. A probe every two
+  seconds measured the only user-visible cost — **15 seconds** without ingress while Traefik restarted
+  with `streaming`, and Plex answered `503` for about three minutes afterwards while its containers
+  started. etcd quorum never dropped, an etcd snapshot went into the OVH bucket before each node,
+  PostgreSQL shut down cleanly, the NFS exports kept serving from `nas`, and every node's backup job
+  was re-run as the containerd check. No node is drained: workloads are pinned to a named node and
+  would only sit `Pending`. The procedure, its timings, traps and an honest rollback section are in
+  [`docs/runbooks/k3s-upgrade.md`](docs/runbooks/k3s-upgrade.md).
 - The Traefik release is this repository's, not the K3s addon's. K3s's `traefik` and `traefik-crd`
   `HelmChart` objects, its `HelmChartConfig` and the node drop-in are gone, and the addon is disabled
   in `/etc/rancher/k3s/config.yaml` on the three servers. The release was adopted at the version it

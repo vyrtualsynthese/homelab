@@ -7,7 +7,7 @@
 > ever been rehearsed · **Verified** 2026-11-20 · **Kind:** living page
 
 A runbook exists only after it has been performed at least once; a procedure nobody has run is a
-guess with a title. This page lists only files that exist. Eleven are procedures — several of them
+guess with a title. This page lists only files that exist. Twelve are procedures — several of them
 pending their first run — and five are completed records, kept because each is the only write-up of
 something that happened once; their status says so.
 
@@ -31,6 +31,7 @@ something that happened once; their status says so.
 | [`books-cutover.md`](books-cutover.md) | completed record 2026-11-13 | the books stack is rebuilt from nothing; it is the only write-up of the move to Calibre-Web Automated. |
 | [`docs-site-first-run.md`](docs-site-first-run.md) | completed record 2026-11-17 | the docs site is rebuilt from nothing; it holds the measured first run. |
 | [`cloud-monitoring.md`](cloud-monitoring.md) | proved 2026-11-20 for the probes, the alerts and the OVH configuration; the `ashuvidz.com` delegation flip has not been run | a `Cloud*` alert fires, a public name or DNS record changes, or a zone's delegation moves. |
+| [`k3s-upgrade.md`](k3s-upgrade.md) | proved 2026-11-21/22, four nodes to `v1.31.14+k3s1` | K3s has to move to a new minor version, or one node is stuck on an older one. Includes the per-node timings, the 15-second ingress blip on `streaming`, and why the plan is pinned to one hostname at a time. |
 
 ## Not written yet
 
@@ -38,7 +39,6 @@ No file exists for these, so there is no procedure to follow — do not run one 
 
 - `restore-etcd.md` — W5 (Platform) Task 3. It is proved on the test cluster before it is written
   down.
-- `k3s-upgrade.md` — W5 (Platform) Task 13.
 - `add-a-node.md` — W8 (Ansible and docs).
 - `rotate-a-secret.md` — W8 (Ansible and docs). No longer a gap: the procedure lives at
   `docs/running-it/rotate-a-secret.md`, which is the page the Running it tab lists.
