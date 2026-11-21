@@ -5,7 +5,7 @@
 > watches.
 >
 > **Use it when** an alert fired and you want to know what it means, you are writing or editing a
-> rule, or you are asking whether something is monitored at all · **Verified** 2026-11-20 · **Kind:**
+> rule, or you are asking whether something is monitored at all · **Verified** 2026-11-21 · **Kind:**
 > living page
 
 The overview — what runs where, its sizing, and how to query the stack:
@@ -15,7 +15,7 @@ The overview — what runs where, its sizing, and how to query the stack:
 
 Grafana unified alerting, folder `Homelab`, **two rule groups split by cadence
 on 2026-11-18**: `homelab-core-fast` at **60 s** (19 rules) and `homelab-core` at
-**300 s** (20 rules). **39 rules**, one contact point, two routes by severity.
+**300 s** (23 rules). **42 rules**, one contact point, two routes by severity.
 
 The split rule is the `for` duration: a rule sits in the fast group when its `for`
 is 5 minutes or less, or when it reports that something is down and its `for` is
@@ -68,6 +68,9 @@ webhook exists only in that contact point.
 | `RecyclarrNotSucceeding` | no successful recyclarr run in 26 h | 5m | warning | inactive |
 | `BackupStreamStale` | a CronJob in namespace `backup` whose last success is more than 26 h old | 10m | warning | inactive |
 | `CertificateExpiring` | newest Traefik cert per SAN <21 days | 1h | warning | inactive |
+| `TraefikRouterErrorRate` | 5xx share above 10 % per router, with a 0.01 req/s floor so one failed probe on an idle router cannot fire it | 10m | warning | inactive |
+| `TraefikRouterLatencyHigh` | p95 above 1 s per router, same request floor | 10m | warning | inactive |
+| `TraefikConfigReloadFailing` | any reload failure in 15 min, or no successful reload in 24 h | 10m | warning | inactive |
 | `PodCrashLooping` | CrashLoopBackOff | 15m | warning | **firing, silenced** ×3 |
 | `PodPending` | Pending, created <2 h ago | 15m | warning | **firing** on `databases/pgadmin-67c5f5c85` (missing Secret, 2026-11-14) |
 | `PodNotStarting` | Scheduled, container still not started, older than 2 h | 5m | warning | inactive |
@@ -215,6 +218,35 @@ rule: the proof they still look at something is `count(probe_success{job="blackb
 intended, and [`runbooks/cloud-monitoring.md` §8](../runbooks/cloud-monitoring.md#8-known-limits)
 explains why.
 
+**Three rules added on 2026-11-21 watch the router in front of everything.** They came out of the
+Traefik audit ([`audit/traefik-2026-11-21.md`](../audit/traefik-2026-11-21.md), task #408) and are the
+first rules that read the router's own traffic rather than the workload behind it. `CertificateExpiring`
+was the only Traefik rule before them.
+
+- **`TraefikRouterErrorRate`** is the 5xx share per router. The ratio is built inside the PromQL and
+  the 10 % comparison is inside the expression too, because the condition only tests "above 0" —
+  a rule whose expression returns the raw ratio would fire on every router with any traffic, the trap
+  under *The rule pattern matters*. The `0.01` request-per-second floor (0.6 requests a minute) is
+  what keeps a single failed health probe on an idle internal router out of the page: below the floor
+  the router is excluded from the result entirely rather than reported as 100 % failed.
+- **`TraefikRouterLatencyHigh`** is a p95 above 1 s, per router. Measured the day it was written: the
+  busiest router averaged **76 ms**, so 1 s is an order of magnitude above normal and catches a
+  backend that is queueing rather than slow by a little. The threshold is **provisional** by design:
+  before 2026-11-21 Prometheus dropped `traefik_.*_bucket`, so no percentile existed to tune against,
+  and there was one day of history when the number was chosen. Re-read the panel after a week. Traefik
+  itself adds microseconds, so a firing here is the app behind the route, not the router.
+- **`TraefikConfigReloadFailing`** is the one that would have spoken throughout the two years the
+  release file failed to parse (2023 → 2026-11-21, item 9 of `AGENTS.md` §7): any reload failure in the
+  last 15 minutes, or no successful reload for 24 h. Traefik
+  keeps serving the last good configuration when a new one is refused, so a broken source file looks
+  healthy — the pod answers, the routes work, and only the next restart reveals the drift. The
+  24-hour half also catches the opposite fault, a file that was fixed but never reached the router
+  because the sync stopped.
+
+None of the three carries a `TraefikDown` twin, and none needs one: the `Deployment` is in
+`kube-system`, so `CoreDeploymentDown` covers a router that stops running, and `ScrapeTargetDown`
+covers the pod's `:9100` scrape going quiet while the pod still answers.
+
 **Silences** (each has an expiry and a comment):
 
 - Until 2027-03-01: `host="streaming"`, `severity="warning"`,
@@ -296,7 +328,11 @@ reports `firing` on the Health dashboard.
   `LokiSilent` fires, ten minutes later.
 - Dashboards and rules are not in git. Their database is no longer unbacked up — the `grafana` claim
   is one row of the nightly `nodes-nas` stream — but a restore brings back a database, not a
-  reviewable change, so a rule is still edited through the API and written down here.
+  reviewable change, so a rule is still edited through the API and written down here. The Traefik
+  rules and their dashboard are the single exception, and it is a **copy**: a snapshot in
+  [`cluster/helm/monitoring/grafana/export/traefik/`](../../cluster/helm/monitoring/grafana/export/traefik/README.md)
+  to read in a pull request and to restore after a wipe. Nothing applies it; the database stays the
+  authority.
 
 ## Changing things
 
@@ -305,6 +341,9 @@ reports `firing` on the Health dashboard.
   `…/homelab-core`. A rule changes group with one `PUT` to its own endpoint,
   carrying the new `ruleGroup`; the group endpoint then sets the interval.
   Delivery is `/api/v1/provisioning/contact-points` and `/api/v1/provisioning/policies`.
+  To test one rule without waiting for its group: `POST /api/v1/eval` with `{condition, data}` from
+  its own object — the Traefik rules were checked that way on 2026-11-21, and it is the same check as
+  validating the PromQL by hand.
 - Testing a contact point: use its **Test** button. Grafana 13 has no working
   HTTP test route for a receiver created through the provisioning API — the
   legacy paths return 404, and the `/apis/notifications.alerting.grafana.app`
