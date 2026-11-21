@@ -16,6 +16,13 @@ All notable changes to this repository. The format follows
 
 ### Changed
 
+- The Traefik release moves to chart `25.0.3` / Traefik `2.10.7` (from `20.3.1` / `2.9.4`, June
+  2023), with the chart's CRDs applied first: the schema was 2.9-era and chart `25.0.3` refuses to
+  render without `traefik.io/v1alpha1/ServersTransportTCP`. The dashboard route is now the
+  `traefik.io/v1alpha1` object, and the stale `traefik.containo.us` copy is gone. The procedure, its
+  verification and its rollback are in [`docs/runbooks/traefik-release.md`](docs/runbooks/traefik-release.md);
+  it also records why the release is moved with `helm` by hand — K3s's helm-controller runs no job for
+  any `HelmChart` in this cluster (task 530, `#398`).
 - The restore runbook's drill log has its first three entries. On 2026-11-21 a scratch restic pod
   restored the PostgreSQL dump directory from `nodes-nas` (26 dumps plus `globals.sql`), Sonarr's
   database from `nodes-streaming` (which passed `pragma integrity_check`) and one Syncthing photo

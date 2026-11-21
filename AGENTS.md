@@ -265,15 +265,20 @@ are in `docs/superpowers/plans/`.
 
 8. `media-stack/sonarr/templates/deployment.yaml:77`: exportarr `URL` uses port `7878`; Sonarr listens
    on `8989` (`sonarr-anime` has it right).
-9. **Resolved 2026-11-21:** `infrastructure/traefik/traefik-config.yaml` parses again. The
-   over-indented `existingClaim` was one of five defects that kept every apply failing since 2023, so
-   the live router is still the last good render (chart `20.3.1`, Traefik `2.9.4`): the file also
-   used `certificatesResolvers` where the chart reads `certResolvers` (which configures no ACME
-   resolver at all, so `acme.json` is never loaded), named `traefik-pvc` instead of the live
+9. **Resolved 2026-11-21, applied:** `infrastructure/traefik/traefik-config.yaml` parses again and
+   the release is on chart `25.0.3` / Traefik `2.10.7`. The over-indented `existingClaim` was one of
+   five defects that had kept every apply failing since 2023: the file also used
+   `certificatesResolvers` where the chart reads `certResolvers` (which configures no ACME resolver
+   at all, so `acme.json` is never loaded), named `traefik-pvc` instead of the live
    `pvc-traefik-nfs` (the certificate store), omitted the Syncthing entry points that only the
-   hand-edited live Service had, and omitted
-   `providers.kubernetesCRD.allowCrossNamespace` (every gate and redirect is referenced as
-   `kube-system-<name>@kubernetescrd`). Nothing changes until the operator applies it.
+   hand-edited live Service had, and omitted `providers.kubernetesCRD.allowCrossNamespace` (every
+   gate and redirect is referenced as `kube-system-<name>@kubernetescrd`).
+   Applying it hit two further blockers, both now recorded in
+   [`docs/runbooks/traefik-release.md`](docs/runbooks/traefik-release.md): chart `25.0.3` refuses to
+   render until the `traefik.io/v1alpha1/ServersTransportTCP` CRD exists (the CRDs were 2.9-era and
+   applied by hand), and the K3s helm-controller runs no job for any HelmChart or HelmChartConfig, so
+   the two releases were moved with `helm` directly. That controller is the subject of homelab task
+   530 (`#398`).
 10. **Resolved 2026-11-18:** the two duplicate `lh-performance` StorageClass files under
     `cluster/infrastructure/storageclass/` are deleted with the rest of the Longhorn leftovers.
 11. **Resolved 2026-11-18:** `firefly` and `postiz` were the two charts that rendered a
@@ -297,11 +302,11 @@ are in `docs/superpowers/plans/`.
 
 **Version drift**
 
-15. **Changed 2026-11-21:** the Traefik Helm release has been stuck at chart `20.3.1` / Traefik
-    `2.9.4` (June 2023) because `traefik-config.yaml` never parsed; that file now does, and the
-    HelmChart points at chart `25.0.3` / Traefik `2.10.7`. The next apply moves the release, which is
-    a manual step for `cluster/infrastructure/**`. K3s `1.30.1` against a `1.36.x` stable is
-    unchanged.
+15. **Resolved 2026-11-21:** the Traefik Helm release was stuck at chart `20.3.1` / Traefik `2.9.4`
+    (June 2023) because `traefik-config.yaml` never parsed. It now runs chart `25.0.3` / Traefik
+    `2.10.7`, with CRDs from the same chart applied first; the procedure and the two blockers that
+    shaped it are in [`docs/runbooks/traefik-release.md`](docs/runbooks/traefik-release.md). K3s
+    `1.30.1` against a `1.36.x` stable is unchanged.
 16. **Resolved for the monitoring charts:** the vendored `prometheus` 14.8.0 and `grafana` 6.52.5 are
     replaced by wrapper charts on current upstream versions. No vendored charts are to be added;
     migrate the remaining ones on their next touch.
