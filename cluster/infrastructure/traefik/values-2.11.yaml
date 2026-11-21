@@ -14,8 +14,8 @@
 # from the K3s addon and stops at 2.11.50; upstream carries the 2.11 backports,
 # and this line is deleted once v3 lands.
 #
-# `ipAllowList` is not used here yet: the installed 2.9 CRDs would prune it.
-# Task 6 applies this chart's CRDs, Task 7 renames the gate.
+# `ipAllowList` is written here rather than `ipWhiteList` because chart 27.0.2's
+# CRDs declare both names; the 2.9 CRDs that pruned it were replaced on 2026-11-21.
 
 deployment:
   # One pod, not a DaemonSet (task 482). Two processes writing /data/acme.json
