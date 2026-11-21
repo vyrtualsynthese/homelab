@@ -23,7 +23,7 @@ Showcase, which still sit in the default `General` folder:
 | Homelab · Media | `homelab-media` | 9 + rows | Media stack: app health issues, queues, missing items, indexers, release intake, qBittorrent transfer, Plex sessions and library |
 | Cloud | `cloud-services` | 6 | Internet-facing side: endpoints answering, DNS checks passing, days to the earliest certificate, per-probe success and latency, every check in one table |
 | Homelab · Backups | `homelab-backups` | 6 | Backup health: stream age, repository size, snapshot count, etcd copy age, estimated monthly cost, failed jobs |
-| Homelab · Traefik | `homelab-traefik` | 10 + rows | The router in front of everything: traffic by router, status classes, p95/p99, 5xx share, bytes and open connections, the certificate store, config reloads, scrape health |
+| Homelab · Traefik | `homelab-traefik` | 10 + rows | The router in front of everything: traffic by router, status classes, p95/p99, 5xx share, bytes and open connections by entry point, the certificate store, config reloads, scrape health |
 
 The old `homelab-investigate` was replaced by `homelab-platform` on 2026-11-12: its workload
 row duplicated the new Applications dashboard, and its node/control-plane/Prometheus panels are
