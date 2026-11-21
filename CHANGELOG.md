@@ -16,6 +16,14 @@ All notable changes to this repository. The format follows
 
 ### Changed
 
+- Traefik runs as one `Deployment` replica on `streaming` instead of a DaemonSet on every node. Two
+  routers sharing `/data/acme.json`, which has no lock, corrupt it and re-request every name, and
+  Let's Encrypt allows five duplicates a week: a morning of that takes every public hostname down.
+  `updateStrategy: Recreate` keeps the old and new pod from overlapping for the same reason. The house
+  router forwards 80, 443, 25565, 22000 TCP/UDP and 21027 UDP to `192.168.1.46` only, so a second pod
+  would see no external traffic in any case; the busiest hour of the seven days to 2026-11-21 was
+  792 Mbit/s in and 248 Mbit/s out on that node's 10 GbE link. `acme.json` was byte-identical before
+  and after (`f074495f…`), and every public name kept serving its Let's Encrypt certificate.
 - The Traefik release moves to chart `25.0.3` / Traefik `2.10.7` (from `20.3.1` / `2.9.4`, June
   2023), with the chart's CRDs applied first: the schema was 2.9-era and chart `25.0.3` refuses to
   render without `traefik.io/v1alpha1/ServersTransportTCP`. The dashboard route is now the

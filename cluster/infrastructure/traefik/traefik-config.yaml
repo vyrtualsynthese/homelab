@@ -8,7 +8,29 @@ spec:
     deployment:
       # -- Enable deployment
       enabled: true
-      kind: DaemonSet
+      # -- One pod, not a DaemonSet on every node (task 482). Traefik and Let's
+      # -- Encrypt agree on one owner per certificate store, and the open-source
+      # -- image has no lock: two instances writing `/data/acme.json` at once
+      # -- corrupt the file and re-request every name. Let's Encrypt allows five
+      # -- duplicate certificates a week, so a morning of that takes every public
+      # -- name down until the quota window passes.
+      kind: Deployment
+      replicas: 1
+    # -- `Recreate`, not a rolling update: a rolling one runs the old and the new
+    # -- pod together for a few seconds on the same node, which is two certificate
+    # -- owners again. The cost is a few seconds without ingress, on the one node
+    # -- that serves it.
+    updateStrategy:
+      type: Recreate
+      rollingUpdate: null
+    # -- The house router forwards 80, 443, 25565, 22000 TCP/UDP and 21027 UDP to
+    # -- this address only, so this is where every external byte lands. Another
+    # -- node's address still answers — K3s's service load balancer forwards it —
+    # -- but the packet then crosses the LAN to here. `streaming` and `nas` are
+    # -- 10 GbE, `nuc0` and `rbp2` are 1 GbE, and Plex and qBittorrent already run
+    # -- on this one, so their bytes never touch a wire.
+    nodeSelector:
+      kubernetes.io/hostname: streaming
     providers:
       kubernetesCRD:
         # -- The live router has this on, and every route depends on it: a gate or

@@ -1,17 +1,26 @@
 # How traffic reaches an application
 
-> **In one line.** Every request lands at Traefik on one of the cluster's own addresses, and the route
-> then decides whether it may come in, who has to sign in, and which certificate answers.
+> **In one line.** Every request lands at Traefik on the one cluster address the house router forwards
+> to, and the route then decides whether it may come in, who has to sign in, and which certificate
+> answers.
 >
 > **Use it when** you are adding a route, an app answers `403` or serves the wrong certificate, or you
-> need to know whether a hostname is reachable from outside · **Verified** 2026-11-17 · **Kind:** living
+> need to know whether a hostname is reachable from outside · **Verified** 2026-11-21 · **Kind:** living
 > page
 
 ## How a request arrives
 
 Traefik is the only door. It runs as a Kubernetes `LoadBalancer` Service in `kube-system`, with no
-cloud load balancer behind the name: the house router forwards ports 80 and 443 to every cluster
-address (`192.168.1.27`, `.41`, `.46`, `.48`), so Traefik answers on whichever one the client reached.
+cloud load balancer behind the name: the house router forwards 80, 443, 25565, 22000 (TCP and UDP)
+and 21027 (UDP) to **one** cluster address, `192.168.1.46` (`streaming`), which is also what the edge
+Pi-hole answers for `*.kub.local`.
+
+One pod serves all of that, not one per node. K3s's service load balancer still puts a small proxy pod
+on every node, so the other three node addresses answer as well — those packets then cross the LAN to
+`streaming`. A second Traefik would change nothing for traffic from outside: one forwarded address is
+one entry node. It would also be the failure this page's sibling runbook exists to prevent, since two
+routers share one certificate file with no lock
+([traefik-release.md](../runbooks/traefik-release.md)).
 
 It routes on one thing: the `Host` header. A route is an `IngressRoute`: a hostname, the
 middlewares to run before the request is forwarded, and the Service behind it. Middlewares are where
