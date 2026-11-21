@@ -1,0 +1,25 @@
+# The dashboard's HTTP twin. The chart renders the dashboard route on
+# `websecure` only (cluster/infrastructure/traefik/values.yaml), so without this
+# the plain-HTTP hostname would answer 404 instead of sending the browser to TLS.
+#
+# Same shape as the redirect routers the internal charts render: `lan-only`
+# first, then the redirect, and the api@internal service the chart's own route
+# uses. Applied by hand with the rest of cluster/infrastructure.
+apiVersion: traefik.containo.us/v1alpha1
+kind: IngressRoute
+metadata:
+  name: traefik-dashboard-redirect
+  namespace: kube-system
+spec:
+  entryPoints: ["web"]
+  routes:
+    - match: Host(`traefik.kub.local`)
+      kind: Rule
+      middlewares:
+        - name: lan-only
+          namespace: kube-system
+        - name: redirect-to-https
+          namespace: kube-system
+      services:
+        - name: api@internal
+          kind: TraefikService
