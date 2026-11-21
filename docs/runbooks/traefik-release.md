@@ -193,8 +193,9 @@ one (busiest hour of the seven days to 2026-11-21: 792 Mbit/s in, 248 Mbit/s out
 `metrics.prometheus.manualRouting` must stay `false`. `true` disables Traefik's default internal
 router, which is the thing that serves `prometheus@internal` on the metrics entry point, and there is
 no custom router to replace it: `/metrics` answered 404 at 9100 and no `traefik_*` series existed
-(task 531). Prometheus scrapes the pod through its annotations on 9100, so the failure is one alert
-and an empty dashboard, not a visible outage.
+(task 531). Prometheus scrapes the pod through its annotations on 9100, which the chart writes on the
+pod itself, so the values carry no `podAnnotations`; the failure is one alert and an empty dashboard,
+not a visible outage.
 
 ## Rolling back
 
