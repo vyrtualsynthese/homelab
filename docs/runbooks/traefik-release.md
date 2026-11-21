@@ -1,135 +1,178 @@
-# Moving the Traefik release
+# Owning and moving the Traefik release
 
-Date: 2026-11-21 · **Performed** 2026-11-21, chart `20.3.1` → `25.0.3` (Traefik `2.9.4` →
-`2.10.7`) · **Kind:** living runbook
+Date: 2026-11-21 · **Ownership moved** 2026-11-21, chart `25.0.3` (Traefik `2.10.7`) · **Kind:**
+living runbook
 
-> **In one line.** How to move the cluster's Traefik release when K3s's own controller does not.
+> **In one line.** The Traefik release is this repository's; K3s's addon is disabled, and the
+> release is moved with `helm` from one values file.
 >
-> **Use it when** Traefik has to move to a newer chart, or the release has to be inspected or
-> rolled back · **Verified** 2026-11-21 with the numbers below.
+> **Use it when** Traefik has to move to a newer chart, its values change, or the release has to be
+> inspected or rolled back · **Verified** 2026-11-21 with the numbers below.
 
 ## The shape of the problem
 
-K3s ships Traefik as two `HelmChart` objects in `kube-system` — `traefik-crd` (the custom resource
-definitions) and `traefik` (the router itself) — plus a `HelmChartConfig` in this repo that carries
-the cluster-specific values. Normally K3s's helm-controller runs a Job to install or upgrade each of
-them. **In this cluster it runs nothing** (task 530, `#398`), so the two releases sit at their
-install day until someone moves them with `helm` directly. That is what this runbook does.
+Traefik is not a chart in this repository. It is the upstream Traefik chart, installed in
+`kube-system`, with one values file:
 
-Two consequences to know before starting:
+| What | Where |
+|---|---|
+| The values the release runs with | `cluster/infrastructure/traefik/values.yaml` |
+| The chart | `traefik` `25.0.3+up25.0.0`, taken from K3s's static path (see below) |
+| The certificate store | claim `pvc-traefik-nfs` mounted at `/data`; PV `pv-traefik-nfs`, NFS, `Retain` |
+| The objects it owns | `Deployment`, `Service`, `IngressClass`, `IngressRoute traefik-dashboard`, `ClusterRole`, `ClusterRoleBinding`, `ServiceAccount` |
 
-- `cluster/infrastructure/traefik/traefik-config.yaml` is not applied by Argo CD and, with the
-  controller idle, not by K3s either. Applying the file changes a Kubernetes object and nothing more;
-  the values only reach the pods through the `helm upgrade` below.
-- The chart validates the CRDs before it renders. Chart `25.0.3` refuses to install unless
-  `traefik.io/v1alpha1/ServersTransportTCP` exists, and the CRDs here were 2.9-era objects applied by
-  hand in 2024 without the ownership labels Helm looks for. The CRD step below applies the CRDs from
-  the same chart with `kubectl`, which is also what made the router chart render at all.
+Until 2026-11-21 it was the K3s addon's release. K3s shipped two `HelmChart` objects, `traefik` and
+`traefik-crd`, plus a `HelmChartConfig` applied from a drop-in file on every server, and its
+helm-controller runs no Job at all in this cluster (task 530). So the addon's chart and values were
+frozen, and the release had to be moved by hand. Ownership moved the same day: the addon is disabled
+in the node config, the packaged objects are gone, and `values.yaml` is the only input.
+
+**The chart source.** The upstream index (`https://traefik.github.io/charts`) no longer carries
+`25.0.3`; its oldest 25.x is gone and it starts at 42.x. K3s still serves the chart it was installed
+from, from its own binary:
+
+```bash
+kubectl get --raw "/static/charts/traefik-25.0.3+up25.0.0.tgz" > /tmp/traefik-25.0.3.tgz
+tar xzf /tmp/traefik-25.0.3.tgz -C /tmp     # gives /tmp/traefik
+grep -E '^version:|^appVersion:' /tmp/traefik/Chart.yaml   # 25.0.3+up25.0.0, v2.10.5
+```
+
+That tarball is the upstream chart as K3s repackaged it: same templates, version string
+`25.0.3+up25.0.0`. Using it keeps the release's stored chart version unchanged, so an adoption
+upgrade changes no label. The next move is to `27.0.2` for Traefik 2.11, which **is** on the index.
 
 ## Before
 
-Record what is running, so the after can be compared rather than assumed:
+Record what runs, so the after is compared rather than assumed:
 
 ```bash
 helm -n kube-system history traefik | tail -3
-kubectl -n kube-system get ds traefik -o jsonpath='{.spec.template.spec.containers[0].image}{"\n"}'
-POD=$(kubectl -n kube-system get pods -l app.kubernetes.io/name=traefik -o jsonpath='{.items[0].metadata.name}')
+helm -n kube-system get values traefik | head -5
+kubectl -n kube-system get deploy traefik -o jsonpath='{.spec.template.spec.containers[0].image}{"\n"}'
+POD=$(kubectl -n kube-system get pod -l app.kubernetes.io/name=traefik -o jsonpath='{.items[0].metadata.name}')
 kubectl -n kube-system exec "$POD" -- sha256sum /data/acme.json
-kubectl -n kube-system exec "$POD" -- sh -c 'grep -o "\"domain\"" /data/acme.json | wc -l'
-kubectl get crd -o yaml > /tmp/crds-before.yaml
+for g in traefik.containo.us traefik.io; do
+  for k in ingressroutes middlewares tlsoptions tlsstores; do
+    printf '%-20s %-14s %s\n' "$g" "$k" "$(kubectl get $k.$g -A --no-headers 2>/dev/null | wc -l)"
+  done
+done
 ```
 
-On 2026-11-21 that was release `v5` (2023-06-22), chart `20.3.1+up20.3.0`, image
-`rancher/mirrored-library-traefik:2.9.4`, and `/data/acme.json` at
-`dfe066c0194fe735cea212fc21911d3db2dacbf8828ff1c99b2f58ecefdcbd3e`, 417 415 bytes, 33 domains.
-**That hash is the check that the certificate store survived the move.** It must not change.
+On 2026-11-21 before the cutover: release revision 7, chart `25.0.3+up25.0.0`, image
+`rancher/mirrored-library-traefik:2.10.7`, one pod on `streaming`, `/data/acme.json`
+`f074495f…`, 68 `IngressRoute`, 27 `Middleware`, 14 `TLSOption`, 1 `TLSStore` on
+`traefik.containo.us`, and 1 `IngressRoute` on `traefik.io`. The full capture is
+`cluster/infrastructure/traefik/snapshot/2026-11-21/`.
 
-## Move the CRDs first
+## Upgrading the release
 
-```bash
-kubectl get --raw "/static/charts/traefik-crd-25.0.3+up25.0.0.tgz" > /tmp/traefik-crd.tgz
-tar xzf /tmp/traefik-crd.tgz -C /tmp
-helm template traefik-crd /tmp/traefik-crd -n kube-system > /tmp/crds.yaml
-kubectl apply --dry-run=server -f /tmp/crds.yaml     # expect "configured" on 18 and "created" on 1
-kubectl apply -f /tmp/crds.yaml
-```
-
-The chart keeps its CRDs in `templates/`, not in a `crds/` directory, which is why
-`helm upgrade traefik-crd` would work too — but only if the existing objects carried Helm's
-ownership annotations, and they do not. `kubectl apply` is the honest path, and it keeps every
-stored `IngressRoute` and `Middleware`: a CRD update changes the schema, never the objects.
-
-The one new definition on 2026-11-21 was `serverstransporttcps.traefik.io`. Everything else is an
-update, and `ipWhiteList` — which `kube-system/lan-only` uses — is still in the schema at 2.10.
-
-## Then the router
-
-Take the values from the two objects K3s and this repo own, so the release is exactly what git and
-the HelmChart declare:
+Read the section above for the chart source, then:
 
 ```bash
-kubectl -n kube-system get helmchart traefik -o jsonpath='{.spec.valuesContent}' > /tmp/k3s-values.yaml
-kubectl -n kube-system get helmchartconfig traefik -o jsonpath='{.spec.valuesContent}' > /tmp/cluster-values.yaml
-
 helm upgrade traefik /tmp/traefik -n kube-system \
-  -f /tmp/k3s-values.yaml -f /tmp/cluster-values.yaml \
-  --set global.systemDefaultRegistry="" \
-  --dry-run=server
+  --reset-values -f cluster/infrastructure/traefik/values.yaml \
+  --dry-run=server > /tmp/dryrun.yaml
 ```
 
-`/tmp/traefik` is the chart directory unpacked from
-`/static/charts/traefik-25.0.3+up25.0.0.tgz` (the same fetch as above, with `traefik` in place of
-`traefik-crd`). When the dry run ends with `Traefik Proxy 2.10.7 has been deployed successfully`,
-run the same command without `--dry-run=server` and with `--wait --timeout 5m`.
+Diff `/tmp/dryrun.yaml` against `kubectl -n kube-system get deploy traefik -o yaml` before applying
+anything. The only difference a values change should introduce is the change you meant to make. Then:
+
+```bash
+helm upgrade traefik /tmp/traefik -n kube-system \
+  --reset-values -f cluster/infrastructure/traefik/values.yaml --wait --timeout 5m
+```
+
+`--reset-values` is not optional. Without it Helm merges with the release's stored values, and a key
+removed from the file stays live — that is how `deployment.podAnnotations` and `service.ipFamilyPolicy`
+survived the 2023 values for two years.
+
+Afterwards, confirm the release holds the file rather than a merge:
+
+```bash
+helm -n kube-system get values traefik > /tmp/after.yaml
+diff <(sed 's/[[:space:]]*$//' /tmp/after.yaml) \
+     <(sed 's/[[:space:]]*$//' cluster/infrastructure/traefik/values.yaml) && echo "release == file"
+```
+
+## The ownership cutover, as it was done
+
+This is history, not a repeatable step: run it only if the addon ever has to be removed again, for
+example on a rebuilt server. **The order matters.**
+
+1. **Strip the uninstall finalizers first.** Both K3s `HelmChart` objects carried
+   `wrangler.cattle.io/on-helm-chart-remove`, whose handler runs `helm uninstall`. On the CRD chart
+   that would delete all nine `traefik.containo.us` CRDs and, by cascade, every `IngressRoute` and
+   `Middleware` in the cluster.
+
+   ```bash
+   for n in traefik traefik-crd; do
+     kubectl -n kube-system patch helmchart $n --type=merge -p '{"metadata":{"finalizers":null}}'
+   done
+   ```
+
+   The addon controller re-applies its manifest every few seconds; confirm the finalizers stay empty
+   for a minute before going on.
+
+2. **Disable the addon on the three servers**, one at a time, in the order `nuc0`, `rbp2`,
+   `streaming`. In `/etc/rancher/k3s/config.yaml`, merge — do not append a second top-level key:
+
+   ```yaml
+   disable:
+     - traefik
+   ```
+
+   Then remove the drop-in that fed the `HelmChartConfig`, and restart:
+
+   ```bash
+   sudo rm -f /var/lib/rancher/k3s/server/manifests/traefik-config.yaml
+   sudo systemctl restart k3s
+   ```
+
+   `nas` is an agent: it runs no addon controller, and `k3s agent` does not accept `disable`, so it
+   gets no change. Adding the key there can stop the service.
+
+3. **Check after each node, before the next one:** the node is `Ready`, `kubectl -n kube-system get
+   helmcharts,jobs` is empty, `helm -n kube-system list` still shows the release `deployed`, and the
+   pod still runs. A `helm-uninstall-*` Job means the controller woke up; stop and roll back.
+
+4. **Adopt the release** with the upgrade command above.
 
 ## After
 
 ```bash
 helm -n kube-system history traefik | tail -2
-kubectl -n kube-system rollout status ds/traefik --timeout=2m
-kubectl -n kube-system get ds traefik -o jsonpath='{.spec.template.spec.containers[0].image}{"\n"}'
+kubectl -n kube-system get deploy traefik -o jsonpath='{.status.readyReplicas}{"/"}{.spec.replicas}{"\n"}'
+POD=$(kubectl -n kube-system get pod -l app.kubernetes.io/name=traefik -o jsonpath='{.items[0].metadata.name}')
 kubectl -n kube-system exec "$POD" -- sha256sum /data/acme.json     # must equal the before hash
 ```
 
-Then prove the door still opens. The certificate each name serves comes out of `acme.json`, so a
-name that answers with a certificate issued by the internal CA means the store was not loaded:
+Then prove the door still opens. A name that answers with a certificate issued by the internal CA
+means the certificate store was not loaded:
 
 ```bash
 for h in plex.kub.home.ashudev.com ashudev.com ashuvidz.com dashy.ashudev.com; do
   curl -s -o /dev/null -w "$h %{http_code}\n" --resolve $h:443:192.168.1.46 https://$h/
-  echo | openssl s_client -connect 192.168.1.46:443 -servername $h 2>/dev/null |
-    openssl x509 -noout -issuer -subject
 done
+curl -s -o /dev/null -w 'dashboard %{http_code}\n' http://traefik.kub.local/dashboard/
+timeout 5 bash -c '</dev/tcp/192.168.1.46/22000' && echo "syncthing tcp open"
 ```
 
 Expected on 2026-11-21: `plex` `401` (Plex asking for a sign-in), `ashudev.com` and `ashuvidz.com`
-`200`, `dashy` `302` to authentik, and every issuer `Let's Encrypt`. A LAN gate answers too — the
-dashboard on `http://traefik.kub.local/dashboard/` returns `401` from its basic-auth middleware —
-and Syncthing's port is still open: `timeout 5 bash -c "</dev/tcp/192.168.1.46/22000"`.
+`200`, `dashy` `302` to authentik, the dashboard `401` from its basic-auth middleware, and Syncthing's
+port open.
 
-Finally check the routers Traefik built from what is now installed:
+Finally the routers Traefik built, and the metrics:
 
 ```bash
 kubectl -n kube-system logs -l app.kubernetes.io/name=traefik --since=10m |
-  grep -iE "multiple|duplicate|conflict"
+  grep -iE "multiple|duplicate|conflict" || echo "no duplicate routers"
+kubectl -n kube-system exec "$POD" -- wget -qO- http://127.0.0.1:9100/metrics | grep -c '^traefik_'
 ```
-
-Chart `25.0.3` renders its dashboard route as `traefik.io/v1alpha1`. Helm creates the new object and
-leaves the `traefik.containo.us` one behind, because the two differ by API group, so delete the old
-copy once the new one exists:
-
-```bash
-kubectl -n kube-system get ingressroutes.traefik.io -A
-kubectl -n kube-system delete ingressroute.traefik.containo.us traefik-dashboard
-```
-
-Two copies of one rule on one host produce a duplicate-router error and no visible breakage, which
-is exactly the kind of thing that waits months to confuse someone.
 
 ## One pod, not a DaemonSet
 
-Since 2026-11-21 the same values run `deployment.kind: Deployment`, `replicas: 1`,
-`updateStrategy: Recreate`, pinned to `streaming`. Task 482.
+The values run `deployment.kind: Deployment`, `replicas: 1`, `updateStrategy: Recreate`, pinned to
+`streaming`. Task 482.
 
 Two routers on one `acme.json` corrupt the file and re-request every name, and Let's Encrypt issues at
 most five duplicates a week — so one morning of that takes every public hostname down until the window
@@ -140,28 +183,37 @@ Spreading the router is not an option that exists here either. The house router 
 `192.168.1.46` alone, so a second pod would see no external traffic; the measured load does not ask for
 one (busiest hour of the seven days to 2026-11-21: 792 Mbit/s in, 248 Mbit/s out, on a 10 GbE link).
 
+## Metrics
+
+`metrics.prometheus.manualRouting` must stay `false`. `true` disables Traefik's default internal
+router, which is the thing that serves `prometheus@internal` on the metrics entry point, and there is
+no custom router to replace it: `/metrics` answered 404 at 9100 and no `traefik_*` series existed
+(task 531). Prometheus scrapes the pod through its annotations on 9100, so the failure is one alert
+and an empty dashboard, not a visible outage.
+
 ## Rolling back
 
-`helm rollback traefik 5` is **not** the rollback here. Release `v5` carries the values of 2023 —
-claim `traefik` rather than `pvc-traefik-nfs`, no Syncthing entry points — and the pod shape has been
-changed by hand since. Rolling back to it would bring up pods on a claim that does not exist.
-
-Roll back by upgrading again with the previous chart and today's values:
-
-```bash
-helm upgrade traefik /tmp/traefik-20.3.1 -n kube-system \
-  -f /tmp/k3s-values.yaml -f /tmp/cluster-values.yaml --set global.systemDefaultRegistry="" --wait
-```
-
-The CRDs stay at 2.10; a 2.9 router accepts them. If a CRD update itself has to be undone, apply
-`/tmp/crds-before.yaml`. No certificate is re-issued by any of this as long as the claim stays
-`pvc-traefik-nfs` and the file keeps its permissions (`65532:65532`, mode `600`).
+- **Values**: `helm -n kube-system get history traefik` lists the revisions. `helm rollback` to the
+  revision before the change restores that revision's stored values, which is safe only if those
+  values were the current file. If in doubt, upgrade again with the snapshot:
+  `helm upgrade traefik /tmp/traefik -n kube-system --reset-values -f cluster/infrastructure/traefik/snapshot/2026-11-21/release-values.yaml`.
+- **The addon**: re-enabling it takes the old path back. Remove `disable: [traefik]` from the three
+  servers, restore `/var/lib/rancher/k3s/server/manifests/traefik-config.yaml` from
+  `snapshot/2026-11-21/k3s-helmchartconfig-traefik.yaml`, and restart one node at a time. K3s
+  recreates its `HelmChart` objects. Do not do this with the current release installed: the two
+  owners fight over the Service.
+- **The certificate** is never touched by any of this as long as the claim stays `pvc-traefik-nfs`
+  and the file keeps its permissions (`65532:65532`, mode `600`). No rollback re-issues anything.
 
 ## Traps met on the way
 
 | Symptom | Cause |
 |---|---|
-| `Required CRDs are missing. Please install the corresponding CRD chart` | the CRDs are older than the chart and `serversTransportTCP` is absent; do the CRD step first |
-| `kubectl apply` of the `HelmChartConfig` changes nothing and no Job appears | the helm-controller is not running (task 530); moving the release by hand is the way |
-| the release moves but the dashboard route appears twice | the API group change above; delete the `traefik.containo.us` copy |
-| `minecraft-minecraft-server-public … subset not found` in the log | the minecraft Deployment is scaled to `0/0`; the error is older than the upgrade and disappears when it is started |
+| `Required CRDs are missing. Please install the corresponding CRD chart` | the CRDs are older than the chart; apply the CRD chart's templates with `kubectl` first |
+| `helm uninstall traefik-crd` looks harmless and deletes every route | that release's chart carries the nine CRDs in `templates/`; uninstalling it removes them. Never run it |
+| a `HelmChart` deletion hangs, or runs an uninstall | `wrangler.cattle.io/on-helm-chart-remove`; strip it before anything else deletes the object |
+| the release moves but the dashboard route appears twice | chart 25 renders it on `traefik.io`; the 2023 `traefik.containo.us` copy has to be deleted by hand, once |
+| Syncthing stops between devices after an upgrade | the `sttcp`, `studp` and `stdiscovery` entry points are missing from the values |
+| every gate stops resolving, or routes are rejected | `providers.kubernetesCRD.allowCrossNamespace` is off; every gate is referenced as `kube-system-<name>@kubernetescrd` |
+| a K3s node does not come back after the config edit | a second top-level `disable:` key; K3s refuses the file. Restore `/root/config.yaml.bak-*` |
+| `minecraft-minecraft-server-public … subset not found` | the minecraft Deployment is scaled to `0/0`; the error predates any upgrade |
