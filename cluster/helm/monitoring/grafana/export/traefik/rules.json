@@ -84,7 +84,7 @@
     "ruleGroup": "homelab-core",
     "title": "TraefikRouterErrorRate",
     "uid": "bg4zwo7qyoyrkc",
-    "updated": "2026-11-21T19:09:55Z"
+    "updated": "2026-11-21T19:30:13Z"
   },
   {
     "annotations": {
@@ -171,11 +171,11 @@
     "ruleGroup": "homelab-core",
     "title": "TraefikRouterLatencyHigh",
     "uid": "cg4zwo7t93m68f",
-    "updated": "2026-11-21T19:09:55Z"
+    "updated": "2026-11-21T19:30:13Z"
   },
   {
     "annotations": {
-      "description": "One of two things: a config Traefik read and refused (a failure in the last 15 minutes), or no successful reload for 24 h, which means the live config and this repository have drifted apart. Read the pod log first: kubectl -n kube-system logs deploy/traefik --tail=100 names the file and the line Traefik refused. Traefik keeps serving the last good config, so a broken source file looks healthy until the next restart. Live reloads come from the IngressRoute CRDs, so a chart change that never applied shows here and nowhere else.",
+      "description": "Two faults sit behind this rule. A reload failure in the last 15 minutes is a dynamic configuration Traefik read and refused: a Middleware or IngressRoute it cannot resolve. Traefik keeps serving the last good config, so the routes still answer and the log line is the only evidence; read it with kubectl -n kube-system logs deploy/traefik --tail=100. No successful reload for 24 h is the other shape: the provider delivered nothing for a day, which is not normal here (routes change several times an hour), so the watch is dead or the router is stuck mid-build. It does not cover a Helm values file that fails to render, or the /metrics endpoint being unreachable: the first never reaches Traefik, and ScrapeTargetDown owns the second.",
       "summary": "Traefik is not reloading its configuration"
     },
     "condition": "C",
@@ -258,6 +258,6 @@
     "ruleGroup": "homelab-core",
     "title": "TraefikConfigReloadFailing",
     "uid": "cg4zwo7xexiwwe",
-    "updated": "2026-11-21T19:09:55Z"
+    "updated": "2026-11-21T19:30:13Z"
   }
 ]

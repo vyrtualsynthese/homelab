@@ -23,7 +23,7 @@ Showcase, which still sit in the default `General` folder:
 | Homelab · Media | `homelab-media` | 9 + rows | Media stack: app health issues, queues, missing items, indexers, release intake, qBittorrent transfer, Plex sessions and library |
 | Cloud | `cloud-services` | 6 | Internet-facing side: endpoints answering, DNS checks passing, days to the earliest certificate, per-probe success and latency, every check in one table |
 | Homelab · Backups | `homelab-backups` | 6 | Backup health: stream age, repository size, snapshot count, etcd copy age, estimated monthly cost, failed jobs |
-| Homelab · Traefik | `homelab-traefik` | 14 | The router in front of everything: traffic by router, status classes, p95/p99, 5xx share, bytes and open connections, the certificate store, config reloads, scrape health |
+| Homelab · Traefik | `homelab-traefik` | 10 + rows | The router in front of everything: traffic by router, status classes, p95/p99, 5xx share, bytes and open connections, the certificate store, config reloads, scrape health |
 
 The old `homelab-investigate` was replaced by `homelab-platform` on 2026-11-12: its workload
 row duplicated the new Applications dashboard, and its node/control-plane/Prometheus panels are
@@ -67,18 +67,18 @@ by hand, not computed by a query: adding a target means editing the title as wel
 convenience: none of the ten dashboards that existed that morning read a single `traefik_*` series, so
 a router that stopped answering was visible only through the app behind it. The `/metrics` endpoint
 that had been answering `404` since the 2023 install ([audit page](../audit/traefik-2026-11-21.md),
-task #399) went unnoticed for the same reason.
+board card 531) went unnoticed for the same reason.
 
 Four rows: traffic per router and by status class; latency and errors; bytes and open connections;
 health. The latency row is new data, not a new view — the p95 and p99 (the response time under which
 95 and 99 of every 100 requests fall) only exist because Prometheus stopped dropping
 `traefik_.*_bucket` and the release widened the buckets that day, so their history starts on
-2026-11-21 and the 1 s alert threshold was chosen against one day of it. `Certificates in the store`
-lists **every** certificate
+2026-11-21 and the 1 s alert threshold was chosen the same evening, against the hours that existed.
+`Certificates in the store` lists **every** certificate
 Traefik holds, which includes the eighteen names no route serves any more: they renew like the rest
-until board task 409 removes them, so a short list is not the healthy state here. The three counters
+until card 543 removes them, so a short list is not the healthy state here. The three counters
 on the right watch the parts that fail silently: a config that stops reloading keeps serving the last
-good one, and a scrape target at 0 blanks the page without an error.
+good one, so the age of the last successful load is the only early sign.
 
 All eleven refresh on a one-minute cadence or faster — Traefik every 30 s, the rest every 1 m — and
 hold a 6 h–24 h default range, except Homelab · Backups: it refreshes
@@ -91,8 +91,7 @@ That database is no longer a single copy — the `grafana` claim is one row of t
 still described here and applied through the API.
 
 **One exception, and it is a copy, not a source.** Homelab · Traefik and its three rules are exported
-to [`cluster/helm/monitoring/grafana/export/traefik/`](../../cluster/helm/monitoring/grafana/export/traefik/README.md)
-on 2026-11-21: `dashboard.json` is a ready-to-post API body and `rules.json` the three rules as the
+to `cluster/helm/monitoring/grafana/export/traefik/` on 2026-11-21: `dashboard.json` is a ready-to-post API body and `rules.json` the three rules as the
 API returns them. They are a snapshot to read in a pull request and to restore after a wipe. Nothing
 applies them, no sidecar or configmap reads them, and editing them changes nothing in Grafana — the
 database stays authoritative for every dashboard and every rule, including these.
