@@ -44,4 +44,26 @@ At the time of the capture:
   `f074495fb3b8ad9f032a10412e7b5a6cd59f0bedbe45d9433a770150bf9ffbf9`, 429905 bytes, 34 domains;
 - the claim `pvc-traefik-nfs`, 10 MiB request, bound to `pv-traefik-nfs` (`Retain`).
 
-The after state is recorded in the same file once the cutover has run.
+The after state is recorded below.
+
+## After the cutover, same day
+
+Ownership moved and the release was adopted at revision 8 with
+`cluster/infrastructure/traefik/values.yaml`:
+
+- the K3s `traefik` and `traefik-crd` `HelmChart` objects, the `traefik-config` addon and the
+  `HelmChartConfig` are gone; `disable: [traefik, local-storage]` is in `/etc/rancher/k3s/config.yaml`
+  on the three servers, and `nas` is untouched;
+- the release still reports chart `25.0.3+up25.0.0` / app `v2.10.5`, now at revision 8, and its
+  stored values compare equal to `cluster/infrastructure/traefik/values.yaml`;
+- one pod, `traefik-79f7548b64-wqw69`, on `streaming`, image
+  `rancher/mirrored-library-traefik:2.10.7`, strategy `Recreate`;
+- `/data/acme.json` unchanged at `f074495f…`, 429905 bytes, 34 domains — no certificate re-issued;
+- the same 68 `IngressRoute`, 27 `Middleware`, 14 `TLSOption`, 1 `TLSStore` on
+  `traefik.containo.us`, and the one `traefik.io` dashboard route; the Service kept its node ports
+  (`30022`, `32075`, `32076`, `32077`, `32078`, `32079`, `32360`);
+- every public host answers as before (`plex` 401, `seerr` 307, `ashuvidz.com` 200, `ashudev.com`
+  200, `www.ashudev.com` 301, `dashy` 302, `filebrowser` 200, `authentik` 302, dashboard 401), and
+  Syncthing's 22000 is open;
+- `/metrics` answers on 9100: 150 `traefik_*` series on the endpoint, 121 stored in Prometheus, and
+  the pod scrapes `up=1`. The `manualRouting` 404 is gone.
