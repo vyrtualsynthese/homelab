@@ -173,11 +173,12 @@ directory sits on a real filesystem (`/mnt/ssd0` on `nas`, `streaming` and
 `rbp2`), and `DiskFillingUp` / `DiskWillFill` watch every filesystem. `/mnt/ssd0`
 on `nas` was 5.2 % used on 2026-11-12.
 
-The live `local-path-config` ConfigMap has a typo: its map entry is `nuc`, while
-the node is `nuc0`. `nuc0` therefore falls back to
-`/opt/local-path-provisioner` on its root filesystem instead of `/mnt/ssd0`.
-Harmless today (the root disk is monitored), wrong if that node is meant to use
-its SSD.
+The `local-path-config` ConfigMap used to name its `nuc0` entry `nuc`, while the
+node is `nuc0`, so `nuc0` fell back to `/opt/local-path-provisioner` on its root
+filesystem instead of `/mnt/ssd0`. `cluster/helm/local-path/values.yaml` names
+`nuc0` now, so a new claim on that node lands on the SSD. The thirteen claims
+provisioned before the fix stay on the root disk until they are migrated
+individually: they include Vikunja's database file and n8n's encryption key.
 
 ## What Prometheus throws away before storing
 
