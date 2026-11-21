@@ -158,6 +158,12 @@ time. Examples:
 - Resources: every container sets memory requests/limits; CPU requests are tiny (1m–100m).
 - Monitoring: exporters expose 9707 (exportarr) with `prometheus.io/scrape` annotations; Prometheus
   scrapes via annotations.
+- **Providers are European, EU member states only.** Every service holding the operator's data or the
+  cluster's identity runs on a company headquartered in an EU member state with the data inside the
+  EU: object storage, DNS, mail, registries, identity. Switzerland, the UK and Norway are out —
+  European is not the test, EU is. OVHcloud and Scaleway comply; GitHub, the container registries and
+  Let's Encrypt are open items. The record is
+  [`docs/decisions/2026-11-21-sovereign-eu-providers-only.md`](docs/decisions/2026-11-21-sovereign-eu-providers-only.md).
 - Commit messages use an emoji prefix: `⬆️` upgrade, `🐛` fix, `🚀` feature, `♻️` refactor.
 
 ## 5. Secrets (never commit)
