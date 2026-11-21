@@ -1,0 +1,115 @@
+certResolvers:
+  myresolver:
+    email: valentin.ronteix@ashudev.com
+    storage: /data/acme.json
+    tlsChallenge: true
+deployment:
+  enabled: true
+  kind: Deployment
+  podAnnotations:
+    prometheus.io/port: "8082"
+    prometheus.io/scrape: "true"
+  replicas: 1
+global:
+  systemDefaultRegistry: ""
+image:
+  repository: rancher/mirrored-library-traefik
+  tag: 2.10.7
+ingressRoute:
+  dashboard:
+    annotations: {}
+    enabled: true
+    entryPoints:
+    - web
+    labels: {}
+    matchRule: Host(`traefik.kub.local`) && (PathPrefix(`/dashboard`) || PathPrefix(`/api`))
+    middlewares:
+    - name: lan-only
+      namespace: kube-system
+    - name: traefik-dashboard
+      namespace: kube-system
+metrics:
+  prometheus:
+    addEntryPointsLabels: false
+    addRoutersLabels: true
+    addServicesLabels: false
+    buckets: 0.5,1.0,2.5
+    entryPoint: metrics
+    manualRouting: true
+nodeSelector:
+  kubernetes.io/hostname: streaming
+persistence:
+  enabled: true
+  existingClaim: pvc-traefik-nfs
+  name: data
+  path: /data
+ports:
+  mc:
+    expose: true
+    exposedPort: 25565
+    port: 25565
+    protocol: TCP
+  metrics:
+    expose: true
+    exposedPort: 9101
+    port: 9100
+    protocol: TCP
+  stdiscovery:
+    expose: true
+    exposedPort: 21027
+    port: 21027
+    protocol: UDP
+  sttcp:
+    expose: true
+    exposedPort: 22000
+    port: 22000
+    protocol: TCP
+  studp:
+    expose: true
+    exposedPort: 22000
+    port: 22000
+    protocol: UDP
+  web:
+    expose: true
+    exposedPort: 80
+    forwardedHeaders:
+      insecure: true
+    port: 8000
+    protocol: TCP
+    proxyProtocol:
+      insecure: true
+  websecure:
+    expose: true
+    exposedPort: 443
+    forwardedHeaders:
+      insecure: true
+    port: 8443
+    protocol: TCP
+    proxyProtocol:
+      insecure: true
+priorityClassName: system-cluster-critical
+providers:
+  kubernetesCRD:
+    allowCrossNamespace: true
+  kubernetesIngress:
+    publishedService:
+      enabled: true
+service:
+  enabled: true
+  ipFamilyPolicy: PreferDualStack
+  single: true
+  spec:
+    externalTrafficPolicy: Local
+  type: LoadBalancer
+tolerations:
+- key: CriticalAddonsOnly
+  operator: Exists
+- effect: NoSchedule
+  key: node-role.kubernetes.io/control-plane
+  operator: Exists
+- effect: NoSchedule
+  key: node-role.kubernetes.io/master
+  operator: Exists
+updateStrategy:
+  rollingUpdate: null
+  type: Recreate

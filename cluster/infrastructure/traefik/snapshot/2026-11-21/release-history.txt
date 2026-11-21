@@ -1,0 +1,8 @@
+REVISION	UPDATED                 	STATUS    	CHART                  	APP VERSION	DESCRIPTION     
+1       	Sun Jun 11 13:17:37 2023	superseded	traefik-20.3.1+up20.3.0	v2.9.4     	Install complete
+2       	Mon Jun 19 20:38:00 2023	superseded	traefik-20.3.1+up20.3.0	v2.9.4     	Upgrade complete
+3       	Wed Jun 21 12:37:59 2023	superseded	traefik-20.3.1+up20.3.0	v2.9.4     	Upgrade complete
+4       	Wed Jun 21 22:38:00 2023	superseded	traefik-20.3.1+up20.3.0	v2.9.4     	Upgrade complete
+5       	Thu Jun 22 08:38:00 2023	superseded	traefik-20.3.1+up20.3.0	v2.9.4     	Upgrade complete
+6       	Sat Nov 21 01:30:05 2026	superseded	traefik-25.0.3+up25.0.0	v2.10.5    	Upgrade complete
+7       	Sat Nov 21 01:54:50 2026	deployed  	traefik-25.0.3+up25.0.0	v2.10.5    	Upgrade complete

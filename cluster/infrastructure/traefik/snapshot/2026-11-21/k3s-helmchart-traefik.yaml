@@ -1,0 +1,52 @@
+apiVersion: helm.cattle.io/v1
+kind: HelmChart
+metadata:
+  annotations:
+    helmcharts.cattle.io/managed-by: helm-controller
+    kubectl.kubernetes.io/last-applied-configuration: |
+      {"apiVersion":"helm.cattle.io/v1","kind":"HelmChart","metadata":{"annotations":{},"name":"traefik","namespace":"kube-system"},"spec":{"chart":"https://%{KUBERNETES_API}%/static/charts/traefik-25.0.2+up25.0.0.tgz","set":{"global.systemDefaultRegistry":""},"valuesContent":"podAnnotations:\n  prometheus.io/port: \"8082\"\n  prometheus.io/scrape: \"true\"\nproviders:\n  kubernetesIngress:\n    publishedService:\n      enabled: true\npriorityClassName: \"system-cluster-critical\"\nimage:\n  repository: \"rancher/mirrored-library-traefik\"\n  tag: \"2.10.5\"\ntolerations:\n- key: \"CriticalAddonsOnly\"\n  operator: \"Exists\"\n- key: \"node-role.kubernetes.io/control-plane\"\n  operator: \"Exists\"\n  effect: \"NoSchedule\"\n- key: \"node-role.kubernetes.io/master\"\n  operator: \"Exists\"\n  effect: \"NoSchedule\"\nservice:\n  ipFamilyPolicy: \"PreferDualStack\""}}
+    objectset.rio.cattle.io/applied: H4sIAAAAAAAA/4yRX4vTQBTFv0q4sE+mSdtsbHfAh7oWlAWR9c9TQW4yt82Yycww96ZSSr67TBRUxNW3+XPmd87ccwUM5hNFNt6Bgo7sULQoYqkwvjyvIIfeOA0KXpMd7juMAjkMJKhRENQV0DkvKMY7TlvffKFWmKSIxv+CMokB+V/v/VdHcXE696Cgr/i3EHn2YJx+sdPau38iHA4ECiQiHU3/X3IO2KY3/djQgi8sNMCUg8WG7JOf6pA7UKDrW6xaTdu7ul0fsa70sqlXt/UWN0iru3W1qTZ0fF4l6B/xngjAgdpk385jV9CJBFZleXN9+Phy//h2/2H//vPu3ZvppuRUQVvOSi5/0BfrulgW1bMxzIsl5MAkiXiyvkFbfLd6RUccrTzSybDES+ppyuGMdiS+907IJXNNwfrLQE7UwWVZ8Hr3s/n5KMtC9ANJRyOn6QQfRWUH2C636wPMCpimbwEAAP//upPQfnICAAA
+    objectset.rio.cattle.io/id: ""
+    objectset.rio.cattle.io/owner-gvk: k3s.cattle.io/v1, Kind=Addon
+    objectset.rio.cattle.io/owner-name: traefik
+    objectset.rio.cattle.io/owner-namespace: kube-system
+  creationTimestamp: "2023-04-02T17:02:04Z"
+  finalizers:
+  - wrangler.cattle.io/on-helm-chart-remove
+  generation: 9
+  labels:
+    objectset.rio.cattle.io/hash: d54a3cde895c2fa53d0b51458a7ae1923737ef63
+  name: traefik
+  namespace: kube-system
+  resourceVersion: "176610759"
+  uid: a159b61f-e6d9-4818-b129-32524d737ce6
+spec:
+  chart: https://%{KUBERNETES_API}%/static/charts/traefik-25.0.3+up25.0.0.tgz
+  set:
+    global.systemDefaultRegistry: ""
+  valuesContent: |-
+    deployment:
+      podAnnotations:
+        prometheus.io/port: "8082"
+        prometheus.io/scrape: "true"
+    providers:
+      kubernetesIngress:
+        publishedService:
+          enabled: true
+    priorityClassName: "system-cluster-critical"
+    image:
+      repository: "rancher/mirrored-library-traefik"
+      tag: "2.10.7"
+    tolerations:
+    - key: "CriticalAddonsOnly"
+      operator: "Exists"
+    - key: "node-role.kubernetes.io/control-plane"
+      operator: "Exists"
+      effect: "NoSchedule"
+    - key: "node-role.kubernetes.io/master"
+      operator: "Exists"
+      effect: "NoSchedule"
+    service:
+      ipFamilyPolicy: "PreferDualStack"
+status:
+  jobName: helm-install-traefik
