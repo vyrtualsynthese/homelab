@@ -1,10 +1,10 @@
-# yaml-language-server: $schema=https://raw.githubusercontent.com/datreeio/CRDs-catalog/refs/heads/main/traefik.containo.us/tlsoption_v1alpha1.json
+# yaml-language-server: $schema=https://raw.githubusercontent.com/datreeio/CRDs-catalog/refs/heads/main/traefik.io/tlsoption_v1alpha1.json
 # The public router's handshake, same profile as the other internet-facing
 # applications (`seerr-tlsoption` is the reference): TLS 1.2 floor, AEAD suites
 # only, and SNI required, because the page is reached by name and never by
 # address. The internal `*.kub.local` router keeps `kube-system/internal-tls`
 # instead; this option is for the Let's Encrypt name alone.
-apiVersion: traefik.containo.us/v1alpha1
+apiVersion: traefik.io/v1alpha1
 kind: TLSOption
 metadata:
   name: dashy-tlsoption

@@ -83,9 +83,9 @@ ingressRoute:
   # -- Render a Traefik IngressRoute. The core Kubernetes Ingress API is not used
   # anywhere in this repo.
   enabled: true
-  # -- API group. `traefik.containo.us/v1alpha1` is what the cluster's Traefik
+  # -- API group. `traefik.io/v1alpha1` is what the cluster's Traefik
   # 2.x watches today; flip this to `traefik.io/v1alpha1` when Traefik v3 lands.
-  apiVersion: traefik.containo.us/v1alpha1
+  apiVersion: traefik.io/v1alpha1
   # -- Traefik entry points. `web` is plain HTTP on kub.local and only redirects;
   # `websecure` is TLS, where the real route lives. The app has no login of its own,
   # so it is served over TLS and gated by authentik rather than left on `web`.

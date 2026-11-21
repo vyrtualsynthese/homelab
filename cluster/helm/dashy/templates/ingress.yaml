@@ -1,4 +1,4 @@
-# yaml-language-server: $schema=https://raw.githubusercontent.com/datreeio/CRDs-catalog/refs/heads/main/traefik.containo.us/ingressroute_v1alpha1.json
+# yaml-language-server: $schema=https://raw.githubusercontent.com/datreeio/CRDs-catalog/refs/heads/main/traefik.io/ingressroute_v1alpha1.json
 # Public on purpose: the start page is the one door into the lab from outside.
 # The gate is `authentik-forwardauth`, bound to `authentik Admins` by
 # cluster/helm/authentik/files/app-dashy.yaml; the plain `authentik`
@@ -9,7 +9,7 @@
 #
 # The certificate is Let's Encrypt (`myresolver`), because `ashudev.com` is a
 # public zone; the internal `*.kub.local` names below cannot have one.
-apiVersion: traefik.containo.us/v1alpha1
+apiVersion: traefik.io/v1alpha1
 kind: IngressRoute
 metadata:
   name: dashy
@@ -37,7 +37,7 @@ spec:
 # Plain-HTTP mirror: one redirect to TLS, nothing proxied, and no gate. A gate
 # here would answer the off-LAN browser with a 403 before it ever asked for the
 # certificate.
-apiVersion: traefik.containo.us/v1alpha1
+apiVersion: traefik.io/v1alpha1
 kind: IngressRoute
 metadata:
   name: dashy-public-redirect

@@ -103,7 +103,7 @@ helm template minecraft-server . --namespace minecraft | kubeconform -strict -su
 ./hack/check-exposure.sh --only minecraft
 ```
 
-`kubeconform` has no schema for `traefik.containo.us/v1alpha1`, so it reports
+`kubeconform` has no schema for `traefik.io/v1alpha1`, so it reports
 `IngressRouteTCP` as an error on every chart in this repo; the other four objects
 validate. The exposure checker renders the chart and counts the TCP route, which
 is not an HTTP route and carries no middleware.
