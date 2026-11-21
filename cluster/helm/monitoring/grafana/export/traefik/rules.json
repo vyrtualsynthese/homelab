@@ -1,0 +1,263 @@
+[
+  {
+    "annotations": {
+      "description": "Check the app behind the router first: a 502 or 504 here is Traefik answering for a backend that is down or refusing the port. A 500 that is steady across several routers means the router itself is broken. The dashboard panel '5xx share by router' carries the same numbers. The router label is namespace/template-hash, so the name is the route's IngressRoute, not the hostname: get it with kubectl get ingressroute -A | grep <name>.",
+      "summary": "Traefik router {{ $labels.router }} is failing more than 10 % of its requests"
+    },
+    "condition": "C",
+    "data": [
+      {
+        "datasourceUid": "PBFA97CFB590B2093",
+        "model": {
+          "editorMode": "code",
+          "expr": "(sum by (router) (rate(traefik_router_requests_total{code=~\"5..\"}[5m])) / clamp_min(sum by (router) (rate(traefik_router_requests_total[5m])), 0.001) > 0.10) and on(router) (sum by (router) (rate(traefik_router_requests_total[5m])) > 0.01)",
+          "instant": true,
+          "intervalMs": 1000,
+          "maxDataPoints": 43200,
+          "range": false,
+          "refId": "A"
+        },
+        "queryType": "",
+        "refId": "A",
+        "relativeTimeRange": {
+          "from": 600,
+          "to": 0
+        }
+      },
+      {
+        "datasourceUid": "__expr__",
+        "model": {
+          "conditions": [
+            {
+              "evaluator": {
+                "params": [
+                  0
+                ],
+                "type": "gt"
+              },
+              "operator": {
+                "type": "and"
+              },
+              "query": {
+                "params": [
+                  "A"
+                ]
+              },
+              "reducer": {
+                "type": "last"
+              },
+              "type": "query"
+            }
+          ],
+          "datasource": {
+            "type": "__expr__",
+            "uid": "__expr__"
+          },
+          "expression": "A",
+          "intervalMs": 1000,
+          "maxDataPoints": 43200,
+          "refId": "C",
+          "type": "threshold"
+        },
+        "queryType": "",
+        "refId": "C",
+        "relativeTimeRange": {
+          "from": 0,
+          "to": 0
+        }
+      }
+    ],
+    "execErrState": "OK",
+    "folderUID": "homelab",
+    "for": "10m",
+    "id": 52,
+    "isPaused": false,
+    "keep_firing_for": "0s",
+    "labels": {
+      "severity": "warning"
+    },
+    "noDataState": "OK",
+    "notification_settings": null,
+    "orgID": 1,
+    "provenance": "api",
+    "record": null,
+    "ruleGroup": "homelab-core",
+    "title": "TraefikRouterErrorRate",
+    "uid": "bg4zwo7qyoyrkc",
+    "updated": "2026-11-21T19:09:55Z"
+  },
+  {
+    "annotations": {
+      "description": "The router itself adds microseconds; a p95 this high means the backend is slow or queueing. Compare with the app's own request duration before touching Traefik. Threshold is provisional: the busiest router averaged 76 ms on 2026-11-21, and the buckets were only widened that day, so re-tune after a week of real p95. Panel 'p95 and p99 latency by router' has the shape, and the 99th percentile separates 'one slow endpoint' from 'everything is slow'.",
+      "summary": "Traefik router {{ $labels.router }} has a p95 above 1 s"
+    },
+    "condition": "C",
+    "data": [
+      {
+        "datasourceUid": "PBFA97CFB590B2093",
+        "model": {
+          "editorMode": "code",
+          "expr": "(histogram_quantile(0.95, sum by (le, router) (rate(traefik_router_request_duration_seconds_bucket[5m]))) > 1) and on(router) (sum by (router) (rate(traefik_router_requests_total[5m])) > 0.01)",
+          "instant": true,
+          "intervalMs": 1000,
+          "maxDataPoints": 43200,
+          "range": false,
+          "refId": "A"
+        },
+        "queryType": "",
+        "refId": "A",
+        "relativeTimeRange": {
+          "from": 600,
+          "to": 0
+        }
+      },
+      {
+        "datasourceUid": "__expr__",
+        "model": {
+          "conditions": [
+            {
+              "evaluator": {
+                "params": [
+                  0
+                ],
+                "type": "gt"
+              },
+              "operator": {
+                "type": "and"
+              },
+              "query": {
+                "params": [
+                  "A"
+                ]
+              },
+              "reducer": {
+                "type": "last"
+              },
+              "type": "query"
+            }
+          ],
+          "datasource": {
+            "type": "__expr__",
+            "uid": "__expr__"
+          },
+          "expression": "A",
+          "intervalMs": 1000,
+          "maxDataPoints": 43200,
+          "refId": "C",
+          "type": "threshold"
+        },
+        "queryType": "",
+        "refId": "C",
+        "relativeTimeRange": {
+          "from": 0,
+          "to": 0
+        }
+      }
+    ],
+    "execErrState": "OK",
+    "folderUID": "homelab",
+    "for": "10m",
+    "id": 53,
+    "isPaused": false,
+    "keep_firing_for": "0s",
+    "labels": {
+      "severity": "warning"
+    },
+    "noDataState": "OK",
+    "notification_settings": null,
+    "orgID": 1,
+    "provenance": "api",
+    "record": null,
+    "ruleGroup": "homelab-core",
+    "title": "TraefikRouterLatencyHigh",
+    "uid": "cg4zwo7t93m68f",
+    "updated": "2026-11-21T19:09:55Z"
+  },
+  {
+    "annotations": {
+      "description": "One of two things: a config Traefik read and refused (a failure in the last 15 minutes), or no successful reload for 24 h, which means the live config and this repository have drifted apart. Read the pod log first: kubectl -n kube-system logs deploy/traefik --tail=100 names the file and the line Traefik refused. Traefik keeps serving the last good config, so a broken source file looks healthy until the next restart. Live reloads come from the IngressRoute CRDs, so a chart change that never applied shows here and nowhere else.",
+      "summary": "Traefik is not reloading its configuration"
+    },
+    "condition": "C",
+    "data": [
+      {
+        "datasourceUid": "PBFA97CFB590B2093",
+        "model": {
+          "editorMode": "code",
+          "expr": "sum(increase(traefik_config_reloads_failure_total[15m])) > 0 or (time() - max(traefik_config_last_reload_success)) > 86400",
+          "instant": true,
+          "intervalMs": 1000,
+          "maxDataPoints": 43200,
+          "range": false,
+          "refId": "A"
+        },
+        "queryType": "",
+        "refId": "A",
+        "relativeTimeRange": {
+          "from": 600,
+          "to": 0
+        }
+      },
+      {
+        "datasourceUid": "__expr__",
+        "model": {
+          "conditions": [
+            {
+              "evaluator": {
+                "params": [
+                  0
+                ],
+                "type": "gt"
+              },
+              "operator": {
+                "type": "and"
+              },
+              "query": {
+                "params": [
+                  "A"
+                ]
+              },
+              "reducer": {
+                "type": "last"
+              },
+              "type": "query"
+            }
+          ],
+          "datasource": {
+            "type": "__expr__",
+            "uid": "__expr__"
+          },
+          "expression": "A",
+          "intervalMs": 1000,
+          "maxDataPoints": 43200,
+          "refId": "C",
+          "type": "threshold"
+        },
+        "queryType": "",
+        "refId": "C",
+        "relativeTimeRange": {
+          "from": 0,
+          "to": 0
+        }
+      }
+    ],
+    "execErrState": "OK",
+    "folderUID": "homelab",
+    "for": "10m",
+    "id": 54,
+    "isPaused": false,
+    "keep_firing_for": "0s",
+    "labels": {
+      "severity": "warning"
+    },
+    "noDataState": "OK",
+    "notification_settings": null,
+    "orgID": 1,
+    "provenance": "api",
+    "record": null,
+    "ruleGroup": "homelab-core",
+    "title": "TraefikConfigReloadFailing",
+    "uid": "cg4zwo7xexiwwe",
+    "updated": "2026-11-21T19:09:55Z"
+  }
+]
