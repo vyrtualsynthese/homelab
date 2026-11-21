@@ -106,6 +106,20 @@ def _check_core_ingress(doc, violations):
         _check_route(where, f"Host(`{rule.get('host')}`)" if rule.get("host") else "", gated, violations)
 
 
+def _dashboard_is_gated(values):
+    dashboard = ((values.get("ingressRoute") or {}).get("dashboard") or {})
+    return any(
+        middleware.get("name") == GATE_NAME and middleware.get("namespace") == GATE_NAMESPACE
+        for middleware in dashboard.get("middlewares") or []
+        if isinstance(middleware, dict)
+    )
+
+
+def _check_dashboard_values(values, where, violations):
+    if not _dashboard_is_gated(values):
+        violations.append(f"{where}: traefik dashboard route: missing {GATE}")
+
+
 def _check_helm_chart_config(doc, violations):
     where = _where(doc)
     values = (doc.get("spec") or {}).get("valuesContent") or ""
@@ -114,17 +128,11 @@ def _check_helm_chart_config(doc, violations):
     except Exception:
         parsed = None
     if isinstance(parsed, dict):
-        dashboard = ((parsed.get("ingressRoute") or {}).get("dashboard") or {})
-        gated = any(
-            middleware.get("name") == GATE_NAME and middleware.get("namespace") == GATE_NAMESPACE
-            for middleware in dashboard.get("middlewares") or []
-            if isinstance(middleware, dict)
-        )
-    else:
-        # traefik-config.yaml carries a mis-indented key the Helm controller tolerates
-        # and PyYAML does not; the gate is still checkable as text.
-        gated = f"name: {GATE_NAME}" in values
-    if not gated:
+        _check_dashboard_values(parsed, where, violations)
+        return
+    # Older HelmChartConfig files carried a mis-indented key the Helm controller
+    # tolerated and PyYAML does not; the gate is still checkable as text.
+    if f"name: {GATE_NAME}" not in values:
         violations.append(f"{where}: traefik dashboard route: missing {GATE}")
 
 
@@ -161,6 +169,11 @@ def check_documents(docs):
             _check_gate_middleware(doc, violations)
         elif kind == "HelmChartConfig":
             _check_helm_chart_config(doc, violations)
+        elif isinstance((doc.get("ingressRoute") or {}).get("dashboard"), dict):
+            # The Traefik chart's own values file: it declares the dashboard
+            # IngressRoute under `ingressRoute.dashboard`, which other charts do
+            # not have (their `ingressRoute` key is their own route's settings).
+            _check_dashboard_values(doc, _where(doc), violations)
     return violations
 
 

@@ -1,0 +1,10 @@
+ingressRoute:
+  dashboard:
+    enabled: true
+    entryPoints: ["web"]
+    matchRule: Host(`traefik.kub.local`) && (PathPrefix(`/dashboard`) || PathPrefix(`/api`))
+    middlewares:
+      - name: lan-only
+        namespace: kube-system
+      - name: traefik-dashboard
+        namespace: kube-system
