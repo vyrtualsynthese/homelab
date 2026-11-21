@@ -2,7 +2,7 @@ dashy:
   image:
     repository: ghcr.io/lissy93/dashy
     # Pinned: Renovate bumps this. Dashy rebuilds its static bundle at container start.
-    tag: "4.9.19"
+    tag: "4.9.20"
 
   podAnnotations:
     # The config Secret is mounted with subPath, so an update to `files/conf.yml`
