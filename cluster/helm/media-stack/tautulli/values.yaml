@@ -79,9 +79,9 @@ ingressRoute:
   # -- Render a Traefik IngressRoute. This repo never uses
   # networking.k8s.io/v1 Ingress.
   enabled: true
-  # -- API group. `traefik.containo.us/v1alpha1` is what the cluster's Traefik
+  # -- API group. `traefik.io/v1alpha1` is what the cluster's Traefik
   # 2.x watches today; flip this to `traefik.io/v1alpha1` when Traefik v3 lands.
-  apiVersion: traefik.containo.us/v1alpha1
+  apiVersion: traefik.io/v1alpha1
   # -- Traefik entry points. `web` is plain HTTP on kub.local; `websecure` is TLS.
   # Tautulli is LAN-only, so it stays on `web`.
   entryPoints:

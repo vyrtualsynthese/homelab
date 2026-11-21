@@ -45,7 +45,7 @@ non-public route lacks the gate or a public route carries it.
 
 ## The trap this chart exists to avoid repeating
 
-The CRD installed on this cluster (`middlewares.traefik.containo.us` v1alpha1) declares
+The CRD installed on this cluster (`middlewares.traefik.io` v1alpha1) declares
 `ipWhiteList`. Traefik v3 renamed it to `ipAllowList`, and the API server **silently prunes a field
 it does not know** — the object is created with an empty `spec`, the allowlist enforces nothing, and
 nothing reports an error. That happened once already, in the pgAdmin chart.

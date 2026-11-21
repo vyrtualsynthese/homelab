@@ -61,7 +61,7 @@ ingressRoute:
   # -- Render a Traefik IngressRoute. This repo never uses networking.k8s.io.
   enabled: true
   # -- API group. Flip to `traefik.io/v1alpha1` when Traefik v3 lands.
-  apiVersion: traefik.containo.us/v1alpha1
+  apiVersion: traefik.io/v1alpha1
   entryPoints:
     - websecure
   host: radarr-anime.kub.local

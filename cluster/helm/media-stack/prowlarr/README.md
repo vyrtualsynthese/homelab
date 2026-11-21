@@ -137,7 +137,7 @@ indexers reported.
 
 Always a Traefik `IngressRoute`, never `networking.k8s.io/v1` Ingress. The API group is a value
 (`ingressRoute.apiVersion`) so the Traefik v3 migration becomes a values edit rather than a template
-edit. It must stay `traefik.containo.us/v1alpha1` while the cluster runs Traefik 2.x.
+edit. It must stay `traefik.io/v1alpha1` while the cluster runs Traefik 2.x.
 
 `kub.local` hosts are served over TLS since 2026-11-15, from the cluster default certificate, with `web` redirecting; they resolve through the Pi-hole wildcard
 record. Hosts under `kub.home.ashudev.com` use `websecure` with `certResolver: myresolver`.
