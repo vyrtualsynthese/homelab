@@ -17,7 +17,7 @@ something that happened once; their status says so.
 |---|---|---|
 | [`authentik-apps.md`](authentik-apps.md) | proved 2026-11-15 | an application needs signing in through authentik: native OIDC where the app speaks it, the forward-auth gate where it does not. The matrix and the traps are in [`reference/sso-applications.md`](../reference/sso-applications.md). |
 | [`internal-ca.md`](internal-ca.md) | proved 2026-11-15; the restore drill is pending | a `*.kub.local` certificate fails to validate, the root must be minted again, or a leaf signed. |
-| [`traefik-release.md`](traefik-release.md) | proved 2026-11-21 (chart `20.3.1` → `25.0.3`) | the Traefik release has to move to a newer chart, or be inspected or rolled back. K3s's helm-controller runs nothing in this cluster, so the release is moved with `helm` by hand. |
+| [`traefik-release.md`](traefik-release.md) | proved 2026-11-21 (chart `20.3.1` → `25.0.3`); W5's 2.11 rehearsal records into the same page | the Traefik release has to move to a newer chart, or be inspected or rolled back. K3s's helm-controller runs nothing in this cluster, so the release is moved with `helm` by hand. |
 | [`argocd.md`](argocd.md) | pending — the rebuild has not been run | the controller is down, or Argo CD must be rebuilt from nothing since it became self-managed on 2026-11-19. |
 | [`postgres-add-database.md`](postgres-add-database.md) | proved 2026-11-13 (acceptance database) | an application is rebuilt and needs its own role, database and Secrets. |
 | [`postgres-restore.md`](postgres-restore.md) | pending — the dumps were verified 2026-11-13, the restore itself has not been run | a database is lost, or the drill that proves the dumps restore is due. |
@@ -38,7 +38,6 @@ No file exists for these, so there is no procedure to follow — do not run one 
 
 - `restore-etcd.md` — W5 (Platform) Task 3. It is proved on the test cluster before it is written
   down.
-- `traefik-cutover.md` — W5 (Platform) Task 5.
 - `k3s-upgrade.md` — W5 (Platform) Task 13.
 - `add-a-node.md` — W8 (Ansible and docs).
 - `rotate-a-secret.md` — W8 (Ansible and docs). No longer a gap: the procedure lives at
