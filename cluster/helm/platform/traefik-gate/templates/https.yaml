@@ -22,7 +22,7 @@ spec:
     # the TLS router of the same name.
     permanent: true
 ---
-{{- /*
+{{/*
 The TLS policy for the cluster's internal names. One object, referenced from
 each router as `kube-system-internal-tls`. It is deliberately not a per-app
 object: there is one certificate and one policy for `*.kub.local`, and a copy per

@@ -173,6 +173,11 @@ for c in $(find cluster/helm -name Chart.yaml | xargs -n1 dirname); do
 done
 ```
 
+`hack/check-charts.sh` is that loop in bulk plus `helm lint`: requirement 11 of
+[`docs/charts/README.md`](docs/charts/README.md) is both commands, and `helm template` masks a broken
+document separator with the `# Source:` line it injects while lint does not. The script builds each
+dependency chart in a temporary copy, so it lints all 50.
+
 Charts that need `helm dependency build`: `monitoring/prometheus`, `monitoring/grafana`,
 `monitoring/loki`, `monitoring/fluent-bit`, `authentik`, `dashy`, `filebrowser`,
 `databases/pgadmin`, `renovate`, `nfs/provisioner`.

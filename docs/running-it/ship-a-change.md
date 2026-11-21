@@ -57,13 +57,14 @@ treat `lint` and `template` as the gate, or fetch it from
 Then, from the repo root:
 
 ```bash
+hack/check-charts.sh            # helm lint and helm template on every chart
 hack/check-exposure.sh          # a non-public route must keep its LAN gate
 hack/check-config-keys.sh       # a config key must exist in the pinned chart's schema
 python3 hack/check_docs_links.py   # when docs change
 uv run --with-requirements hack/tests/requirements.txt python -m pytest -q hack/tests
 ```
 
-The first is the gate. The last command runs the checker suite against the fixtures under
+The exposure check is the gate. The last command runs the checker suite against the fixtures under
 `hack/tests/`; its dependencies are declared in `hack/tests/requirements.txt`.
 
 The link checker exits 1 on the known `reference/` forward links until stage 3. The chart contract is
