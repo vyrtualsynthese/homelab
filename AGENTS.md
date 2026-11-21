@@ -107,8 +107,9 @@ time. Examples:
   - Internal TLS: `entryPoints: [websecure]` on the same `app.kub.local` host, with neither
     `secretName` nor `certResolver` (Traefik serves the default `kube-system/local-cert`, the
     `*.kub.local` leaf of the ashulab internal CA), `tls.options: internal-tls` from the
-    `traefik-gate` chart, and a `web` router that only redirects. See
-    `docs/runbooks/internal-ca.md`.
+    `traefik-gate` chart, and a `web` router that only redirects. The Traefik dashboard
+    (`traefik.kub.local`) is the reference case: `values.yaml` carries the route and
+    `dashboard/redirect.yaml` its `web` twin. See `docs/runbooks/internal-ca.md`.
   - TLS on a resolvable name: `entryPoints: [websecure]`, host `app.kub.home.ashudev.com`,
     `tls.certResolver: myresolver` plus a per-app `TLSOption` copied from an existing chart.
   - Public: `ashuvidz.com`.
