@@ -125,6 +125,12 @@ def stage_databases(
     A database the row excludes — ``logs.db`` for the *arr stack — is not staged either: the
     row's exclusion is the single statement of what is not backed up, and staging it anyway
     would quietly defeat it.
+
+    A claim that holds no matching database yet returns an empty list instead of raising. That
+    is a freshly installed application, not a broken setup: the claim is still backed up as it
+    stands, and failing the node's job for a database that does not exist would report a
+    working night as a broken backup. A database that *is* there and cannot be staged is the
+    opposite case and raises: it is data, and silence about it is how a backup stops being one.
     """
     found: list[pathlib.Path] = []
     for pattern in patterns:
@@ -137,7 +143,7 @@ def stage_databases(
             found.append(candidate)
     unique = [p for p in dict.fromkeys(found) if not matches_any(p.relative_to(source), exclude)]
     if not unique:
-        raise RowError(f"no database matched {', '.join(patterns)} in {source}")
+        return []
 
     written = []
     for live in unique:
@@ -260,6 +266,14 @@ def main(argv: list[str] | None = None) -> int:
                 continue
             entry["db_patterns"] = list(patterns)
             entry["databases"] = [str(p.relative_to(destination)) for p in written]
+            if not written:
+                # Not a failure: the claim exists and is backed up whole, minus the databases
+                # the row would exclude. See stage_databases for why a missing one is tolerated
+                # and an unreadable one is not.
+                print(
+                    f"row-warning {label}: no database matched {', '.join(patterns)} in "
+                    f"{claim_dir} yet; the claim is backed up without a staged copy"
+                )
 
         resolved.append(entry)
         print(f"row {label} dir={claim_dir} kind={row.get('kind', 'files')}")

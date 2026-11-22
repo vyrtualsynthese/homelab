@@ -1,13 +1,22 @@
 # The backup chart: one OVH bucket, one restic repository per stream, one job per node.
 #
 # This file is the coverage matrix in code. A claim is backed up only because a row names
-# it, and a row that matches nothing on its node fails that node's job on purpose. Adding a
-# claim to an application's chart means adding a row here in the same change; the sizes in
-# the comments are the measurements taken on 2026-11-20, and `kind` decides whether the
-# databases in the row are copied through SQLite's backup API (`sqlite`) or the directory is
-# handed over as it is (`files`). Only the files a row's `db` patterns match are copied through
-# SQLite; everything else in a `sqlite` claim is byte-copied as part of the directory, which is
-# consistent because the app is not writing it between dumps.
+# it. Three outcomes, and the line between them is deliberate:
+#
+#   * a row whose claim directory cannot be resolved fails that node's job, because the
+#     matrix and the cluster disagree and a quiet skip would back up less than this file says;
+#   * a `sqlite` row whose claim exists but holds no database yet — an application installed
+#     and never started — prints `row-warning` and the job continues, with the claim still
+#     backed up whole. A first night must not look like a broken backup;
+#   * a database that is there and cannot be staged still fails the job. That is data going
+#     unbacked, and silence about it is how a backup stops being one.
+#
+# Adding a claim to an application's chart means adding a row here in the same change; the
+# sizes in the comments are the measurements taken on 2026-11-20, and `kind` decides whether
+# the databases in the row are copied through SQLite's backup API (`sqlite`) or the directory
+# is handed over as it is (`files`). Only the files a row's `db` patterns match are copied
+# through SQLite; everything else in a `sqlite` claim is byte-copied as part of the directory,
+# which is consistent because the app is not writing it between dumps.
 
 repository:
   bucket: ashudev-homelab-backup
@@ -123,6 +132,9 @@ nodes:
       # 442.3 MB → 222.0: www/ is the application unpacked from the image and data.fresh-* is
       # an upgrade's copy. The database is per user, under data/users/<user>/.
       - {claim: news-freshrss-config, namespace: news, kind: sqlite, db: ["data/users/*/db.sqlite"], exclude: ["www/", "log/", "data.fresh-*"]}
+      # Both databases are staged: FileBrowser Quantum migrates db-v2.db from database.sqlite
+      # and the old copy stays behind. On 2026-11-20 db-v2.db existed and could not be read,
+      # which failed this job on purpose — a database that is there is not optional.
       - {claim: filebrowser-filebrowser-quantum-config, namespace: filebrowser, kind: sqlite}
       # 20.8 MB. cache/ is a rebuildable search index.
       - {claim: filebrowser-filebrowser-quantum-data, namespace: filebrowser, kind: files, exclude: ["cache/"]}
@@ -167,8 +179,15 @@ nodes:
       # manual matches. Cache, Metadata, Media, Scanners and Codecs are all regenerated.
       # Plex keeps its databases under Library/Application Support/Plex Media Server/, not at
       # the claim root, so the pattern carries the whole relative path.
+      # A Plex that has never started has written no database yet: the row then prints
+      # `row-warning` and the job carries on, because the claim is still backed up whole. This
+      # is the case the 2026-11-20 job failed on; the three rules are at the top of this file.
       - {claim: plex-config, namespace: media-stack, kind: sqlite, db: ["Library/Application Support/Plex Media Server/Plug-in Support/Databases/*.db"], exclude: ["Cache/", "Metadata/", "Media/", "Scanners/", "Codecs/"]}
       # 67.3 MB → 5.4: covers are rebuilt from the files, cache* and backups/ are copies.
+      # `kavita.db` that is present and cannot be staged fails this job — measured on 2026-11-20,
+      # while Kavita was writing its first database. It is data the backup could not read, so it
+      # stays a failure; a row with no database file at all is the tolerated case in Plex's row
+      # above.
       - {claim: kavita-config, namespace: media-stack, kind: sqlite, exclude: ["covers/", "logs/", "cache*", "backups/"]}
       # Pinned for the same reason as pgAdmin: a released claim of this name left a directory.
       - {claim: calibre-web-automated-config, namespace: media-stack, kind: sqlite, pv: pvc-44eefd64-dcd4-4161-ab69-6e36151e7213, exclude: ["log/", "log_archive/", "thumbnails/"]}

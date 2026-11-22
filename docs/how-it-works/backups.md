@@ -89,6 +89,13 @@ picks up a directory it should not have trips the check long before the bill not
 1. **A row resolves to nothing.** The claim was renamed, deleted, or moved to another node. That
    node's job fails and `JobFailed` fires; the fix is the row, not the job. The job never silently
    backs up less than the matrix says.
+
+   One shape is deliberately not a failure: a `sqlite` row whose claim exists but holds no database
+   yet, which is an application installed and never started. The job prints `row-warning` for that
+   row and backs the claim up whole, so a first night does not read as a broken backup — the case
+   that made two jobs look failed on 2026-11-20. A database that is present and cannot be staged is
+   the opposite and still fails the job: that is data the backup could not read. Both halves of the
+   rule are stated in `cluster/helm/backup/README.md` and at the top of `values.yaml`.
 2. **A stream stops advancing.** Every job can be green while a repository receives nothing. The
    verifier compares each repository's newest snapshot against 26 hours and its size against
    `budgetGiB`; `BackupStreamStale` alerts when a job's last success is older than 26 hours. A stream
