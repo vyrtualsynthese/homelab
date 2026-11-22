@@ -20,8 +20,12 @@ Columns: **Host** as the router matches it; **Application** as you would name it
 [`hack/check_exposure.py`](../../hack/check_exposure.py) allows the host to answer the internet.
 
 `internal CA` means the `*.kub.local` leaf of the ashulab CA, served by default with no
-`certResolver` on the route. `Let's Encrypt` means the route asks for its own certificate, whether
-the hostname is public or a `*.kub.home.ashudev.com` name the LAN resolves to `192.168.1.46`.
+`certResolver` on the route. `Let's Encrypt` means the name is served by one of the cluster's two
+public certificates: the `ashudev.com` wildcard (`ashudev.com`, `*.ashudev.com`,
+`*.kub.home.ashudev.com`, requested by the `ashudev.com` route) or the `ashuvidz.com` pair (apex and
+`www`, requested by the `ashuvidz.com` route). Those two routes are the only ones that ask for a
+certificate; every other route is served from the store by SNI, whether the hostname is public or a
+`*.kub.home.ashudev.com` name the LAN resolves to `192.168.1.46`.
 
 ## Public
 
@@ -45,8 +49,8 @@ app through authentik. The authentik page Dashy signs in through is public for t
 
 ## Internal over TLS
 
-Twenty-four hostnames. Eighteen use the internal CA on a `*.kub.local` name; six carry their
-own certificate on a `*.kub.home.ashudev.com` or `*.ashudev.com` name.
+Twenty-four hostnames. Eighteen use the internal CA on a `*.kub.local` name; six are covered by the
+`ashudev.com` wildcard on a `*.kub.home.ashudev.com` name.
 
 | Host | Application | Namespace | Gate | TLS | Public? |
 |---|---|---|---|---|---|
@@ -94,8 +98,8 @@ ever asked for the certificate. FileBrowser has no `web` router at all: it answe
 The three rows in the last table are served on `web` itself. Three hostnames exist only to redirect and
 are rows in no table: `kub.home.ashudev.com` and `dashy.kub.local`, both to
 `https://dashy.ashudev.com`, and `www.ashudev.com` to `https://ashudev.com`, path and query kept. The
-first two answer on `web` alone; `www.ashudev.com` also has a `websecure` router and carries its own
-certificate, because Traefik asks the resolver for a name only when a router matches it.
+first two answer on `web` alone; `www.ashudev.com` also has a `websecure` router, is in the
+`ashudev.com` wildcard's SAN list, and asks for nothing of its own.
 
 **`/api` exemptions.** Ten hosts — `bazarr`, `bazarr-anime`, `lidarr`, `maintainerr`, `prowlarr`,
 `radarr`, `radarr-anime`, `sonarr`, `sonarr-anime`, `tautulli` — carry a second rule on

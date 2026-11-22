@@ -191,6 +191,21 @@ half-minute the router is stopped.
 `/data/acme.json`, scale to one. The router re-reads the file at start; no ACME account action is
 needed, because the account block was never touched.
 
+## The two-certificate store
+
+Since 2026-11-22 the release asks for two certificates instead of one per name
+([design](../superpowers/specs/2026-11-22-traefik-acme-wildcard-design.md)):
+
+| Resolver | Names | Challenge |
+|---|---|---|
+| `ovhresolver` | `ashudev.com`, `*.ashudev.com`, `*.kub.home.ashudev.com` | DNS-01 through the OVH API, using the scoped key in `kube-system/traefik-ovh` |
+| `myresolver` | `ashuvidz.com`, `www.ashuvidz.com` | TLS on port 443, until the `ashuvidz.com` zone leaves AWS nameservers |
+
+Only the apex route of each domain carries `tls.certResolver` and `tls.domains`; every other route is
+served from this store by SNI. Once the switch is live, the fifteen per-host entries are orphans too,
+and the second prune keeps exactly three: `ashudev.com`, `ashuvidz.com` and `kub.local`. A new
+application under `ashudev.com` now orders nothing, so the store should stay at three.
+
 ## The 2026-11-22 run
 
 The store held 34 certificates, 18 of them for hosts no router served: `atlantis`, `cross-seed`,
