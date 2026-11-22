@@ -61,6 +61,7 @@ validation:
 
 nav:
   - Start here: README.md
+  - Documentation rules: documentation-rules.md
   - How it works:
       - how-it-works/README.md
       - The shape and why: how-it-works/the-shape-and-why.md
