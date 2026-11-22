@@ -74,7 +74,8 @@ spec:
 ---
 {{- /* `www` exists as a router of its own for one reason: Traefik only asks the
 resolver for a certificate for a name some router matches. The redirect is the
-middleware; the `tls` block is what makes `https://www` work at all. */}}
+middleware; the `tls` block is what makes `https://www` work at all. The HTTP hop
+is the `-www-web` router at the end of this file, which carries no `tls`. */}}
 apiVersion: {{ .Values.ingressRoute.apiVersion }}
 kind: Middleware
 metadata:
@@ -95,7 +96,6 @@ metadata:
     {{- include "app.labels" . | nindent 4 }}
 spec:
   entryPoints:
-    - web
     - websecure
   routes:
     - kind: Rule
@@ -109,5 +109,30 @@ spec:
   # `www` is in the apex certificate's SAN list; asking again would order a
   # second certificate for one name.
   tls: {}
+---
+{{- /* Plain HTTP needs a router of its own. A router that carries a `tls` block
+is attached to the TLS entry points only, so listing `web` on the router above
+changed nothing: `http://www.ashuvidz.com` matched no router and Traefik answered
+its own 404, while `https://www` redirected. `ashudev.com` was split the same
+way after the same mistake (PR #1415). */}}
+apiVersion: {{ .Values.ingressRoute.apiVersion }}
+kind: IngressRoute
+metadata:
+  name: {{ default .Release.Name .Values.ingressRoute.name }}-www-web
+  labels:
+    {{- include "app.labels" . | nindent 4 }}
+spec:
+  entryPoints:
+    - web
+  routes:
+    - kind: Rule
+      match: Host(`{{ .Values.ingressRoute.www.host }}`)
+      middlewares:
+        - name: {{ include "app.fullname" . }}-www
+          namespace: {{ .Release.Namespace }}
+      services:
+        - kind: TraefikService
+          name: noop@internal
+  # No `tls` on purpose; see above.
 {{- end }}
 {{- end }}
