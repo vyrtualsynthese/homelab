@@ -87,6 +87,11 @@ one of them is newer than the page's `Verified` date, the page is stale. A harde
 `python3 hack/check_docs_staleness.py`, reads what it prints, and files one card per stale page. It
 never edits the page in the same pass: a refresh is its own card, its own branch and its own review.
 
+The card says which page, which source moved and on what date, and it carries `priority/low` — a
+newer source file is a question, not a verdict, and a change to `AGENTS.md` rarely makes a page
+wrong. The exception is a page a person runs under pressure: a restore, a rollback, a rotation. That
+one is `priority/high`, because a wrong procedure at 3 a.m. costs more than a wrong explanation.
+
 ## What is not a rule
 
 The order of tabs and the order of pages inside a tab is taste. It is not a fact about the cluster,
