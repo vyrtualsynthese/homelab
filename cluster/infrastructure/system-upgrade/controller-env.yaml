@@ -1,0 +1,37 @@
+# The system-upgrade-controller's settings ConfigMap, captured from the live
+# cluster (applied by hand in 2023, never in git) and kept beside the Deployment
+# in `controller.yaml`, which reads it through `envFrom`. Applied by hand, like
+# the rest of `cluster/infrastructure`: Argo CD owns no Application here.
+#
+# The controller reads every value once, when its container starts. Applying
+# this file changes nothing on its own; the Deployment has to roll afterwards
+# (`kubectl -n system-upgrade rollout restart deploy/system-upgrade-controller`).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: default-controller-env
+  namespace: system-upgrade
+data:
+  SYSTEM_UPGRADE_CONTROLLER_DEBUG: "false"
+  SYSTEM_UPGRADE_CONTROLLER_THREADS: "2"
+  SYSTEM_UPGRADE_JOB_ACTIVE_DEADLINE_SECONDS: "900"
+  SYSTEM_UPGRADE_JOB_BACKOFF_LIMIT: "99"
+  SYSTEM_UPGRADE_JOB_IMAGE_PULL_POLICY: "Always"
+  # The client a job uses when a Plan sets `drain`. Both Plans here set
+  # `cordon: true`, an API call the controller makes itself, so no job has run
+  # it yet: the value was v1.25.4, three years old and six minors behind the
+  # node binary the first drain would have driven.
+  #
+  # Kept on the minor of the node binary — v1.31.14 on all four nodes
+  # (2026-11-22) — because kubectl supports one minor either side of the API
+  # server it talks to. Bump it with the climb, beside the Plans' `version`;
+  # Renovate cannot see an image named in a ConfigMap value, so nothing else
+  # moves this line.
+  SYSTEM_UPGRADE_JOB_KUBECTL_IMAGE: "rancher/kubectl:v1.31.14"
+  SYSTEM_UPGRADE_JOB_PRIVILEGED: "true"
+  SYSTEM_UPGRADE_JOB_TTL_SECONDS_AFTER_FINISH: "900"
+  # How often the controller re-reads the Plans, which is how long a plan
+  # patched onto the next node waits before anything moves.
+  SYSTEM_UPGRADE_PLAN_POLLING_INTERVAL: "15m"
+  # Upstream's manifest also sets SYSTEM_UPGRADE_JOB_KUBECTL_IMAGE_WINDOWS,
+  # which only Windows nodes read. There are none, so it is left out.
