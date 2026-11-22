@@ -55,6 +55,14 @@ rules:
       - helm.toolkit.fluxcd.io
     resources: ["*"]
     verbs: ["get", "list", "watch"]
+  # The K3s addon controllers' own objects: the chart K3s asks for, the overrides, and what was
+  # applied. Without these a session cannot see addon drift.
+  - apiGroups: ["helm.cattle.io"]
+    resources: ["helmcharts", "helmchartconfigs"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["k3s.cattle.io"]
+    resources: ["addons"]
+    verbs: ["get", "list", "watch"]
   - apiGroups: ["metrics.k8s.io"]
     resources: ["*"]
     verbs: ["get", "list"]
