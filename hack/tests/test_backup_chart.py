@@ -182,11 +182,34 @@ class PruneTests(unittest.TestCase):
         for repo in ("nodes-nas", "nodes-nuc0", "nodes-streaming", "nfs"):
             self.assertIn(repo, script)
 
+    def prune_block(self, script, name):
+        start = script.index(f'echo "prune {name}:')
+        end = script.find('echo "prune ', start + 1)
+        return script[start:end if end != -1 else len(script)]
+
+    def test_only_the_irreplaceable_stream_keeps_years(self):
+        # The operator's decision on 2026-11-22 (task #541): the Syncthing photos and the
+        # koillection uploads stay recoverable for ten years. The nfs stream inherits the
+        # daily and weekly tail and overrides the monthly one; the other three keep 7/4/12.
+        script = scripts()["prune.sh"]
+        nfs = self.prune_block(script, "nfs")
+        for flag in ("--keep-daily 7", "--keep-weekly 4", "--keep-monthly 24", "--keep-yearly 10"):
+            self.assertIn(flag, nfs)
+        for repo in ("nodes-nas", "nodes-nuc0", "nodes-streaming"):
+            block = self.prune_block(script, repo)
+            self.assertIn("--keep-monthly 12", block)
+            self.assertNotIn("--keep-yearly", block)
+
     def test_retention_comes_from_values(self):
         text = (CHART / "values.yaml").read_text()
         self.assertIn("retention:", text)
         self.assertEqual(values()["retention"],
-                         {"keepDaily": 7, "keepWeekly": 4, "keepMonthly": 12})
+                         {"keepDaily": 7, "keepWeekly": 4, "keepMonthly": 12, "keepYearly": 0})
+        nfs = next(s for s in values()["streams"] if s["name"] == "nfs")
+        self.assertEqual(nfs["retention"], {"keepMonthly": 24, "keepYearly": 10})
+        for stream in values()["streams"]:
+            if stream["name"] != "nfs":
+                self.assertNotIn("retention", stream)
 
     def test_prune_finishes_every_repository_before_failing(self):
         # A repository that fails on Sunday must not leave the other three unpruned for the

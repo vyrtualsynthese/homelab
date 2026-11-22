@@ -52,6 +52,15 @@ All notable changes to this repository. The format follows
 
 ### Changed
 
+- The `nfs` backup repository now keeps a decade: 24 monthly snapshots and 10 yearly ones on top of
+  the shared 7 daily / 4 weekly tail, where every stream used to stop at twelve months. The Syncthing
+  photos and documents and koillection's uploads are the only data no source can re-supply, so a
+  mistaken deletion there stays recoverable for ten years; the three node repositories keep their
+  year. The policy is a per-stream `retention:` override in `cluster/helm/backup/values.yaml`, the
+  prune job renders each repository's own flags, and the `nfs` budget rises from 12 to 40 GiB to hold
+  the extra versions. The horizon is stated in
+  [`docs/how-it-works/backups.md`](docs/how-it-works/backups.md).
+
 - The money alerts are one threshold, because that is what OVHcloud allows. The €50 billing alert
   was retried on 2026-11-22 and still answered HTTP 500; probes on the same endpoint show it accepts
   one configuration per service scope — a service with none took one (200), a second on a taken scope
