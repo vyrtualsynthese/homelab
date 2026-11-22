@@ -187,6 +187,40 @@ now hold 248 series and write 1.6 samples/s, because 731 are dropped at the
 scrape and eight of the ten targets moved to the 5-minute jobs
 ([`reference/metrics.md#exporter-quirks`](reference/metrics.md#exporter-quirks)).
 
+## What the router logs
+
+Traefik keeps a per-request access log since 2026-11-22: JSON on stdout, buffered 100 lines at a
+time, and carried to Loki by the same Fluent Bit pipeline as everything else. It exists for the
+question the metrics cannot answer — *which* request returned 502, or took four seconds — and it is
+deliberately narrower than a normal access log.
+
+**The URL and the client are not in it.** `RequestPath` is the URI; from 3.7.3 it can be stripped of
+its query string (`fields.queryParameters`), but not of its path, and the path alone carries
+FileBrowser's `/share/<hash>` capability links. So the whole field is dropped — the query parameters
+with it as a second lock — along with `ClientAddr`, `ClientHost`, `ClientPort` and `ClientUsername`;
+headers stay dropped by the chart default. The reason is that `loki.kub.local` has no authentication
+and a 30-day retention: a full log would put Plex's `?X-Plex-Token=`, FileBrowser's share links and
+OIDC `?code=` callbacks in front of every device on the LAN.
+
+What a line does carry: time, `RouterName`, `ServiceName`, `DownstreamStatus`, `OriginStatus`,
+`Duration` (nanoseconds), response size, TLS version and retry count. A failure Traefik answers
+itself shows `OriginStatus` 0.
+
+**Measured 2026-11-22**: about 13,300 requests a day at 434 bytes a line, so roughly **5.8 MB/day**
+before compression and 0.3 MB/day stored at Loki's 19× — against a pipeline that carries 0.09 GB/day.
+Re-measure with:
+
+```bash
+curl -sG http://loki.kub.local/loki/api/v1/query_range \
+  --data-urlencode 'query={job="fluent-bit", container="traefik"} | json' --data-urlencode 'limit=3'
+```
+
+Two panels on **Homelab · Traefik**, row *Request record*, read it: *Failed requests (4xx/5xx)* and
+*Requests slower than 1 s, by router*. A long Plex stream belongs in the second one.
+
+Gating Loki itself is a separate card: the log store is readable by every device on the LAN, and that
+is true of every application log, not only this one.
+
 ## Where the detail lives
 
 | Question | Page |
