@@ -112,8 +112,8 @@ Nothing in this repository can rebuild the platform. Missing:
 1. K3s: install method, `server`/`agent` role assignment, cluster token, `--cluster-init`,
    `/etc/rancher/k3s/config.yaml`, `disable: [traefik]`.
 2. High availability: no kube-vip or any VIP; grep returns zero hits.
-3. Node labels and taints (`node-type=general` is required by several charts and exists only on
-   the live cluster).
+3. Node labels and taints (`node-type` was one: every chart that asked for it has moved to
+   `kubernetes.io/hostname`, and the label was removed from the live cluster on 2026-11-22).
 4. NFS exports: `/etc/exports` is not in the repo.
 5. GPU host preparation — only `kubectl/gpu-operator-values.yaml` exists, no driver install.
 6. WireGuard keys and Pi-hole configuration.
