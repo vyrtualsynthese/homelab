@@ -87,8 +87,8 @@ kubectl -n kube-system delete pod acme-inspect
 ```
 
 A name in the store that appears in neither the router list nor [`reference/routes.md`](../reference/routes.md)
-is an orphan. A certificate may carry extra names in its `sans` while its `domain.main` is still
-served; keep that entry, because the served name needs it.
+is an orphan. A bundle can serve names beyond the one it is filed under, so decide from the
+certificate: `subjectAltName` on the PEM inside the entry, not the `domain` field.
 
 ## Pruning the store
 
@@ -191,6 +191,26 @@ half-minute the router is stopped.
 `/data/acme.json`, scale to one. The router re-reads the file at start; no ACME account action is
 needed, because the account block was never touched.
 
+## The 2026-11-22 second run
+
+Same day, after the wildcard switch, the sixteen per-host entries were pruned and the store
+re-ordered. Keep-list: the `ovhresolver` wildcard only, so `myresolver` was left with no entry and
+rebuilt its pair from the anchor route.
+
+- Before: 16 `myresolver` entries plus the `ovhresolver` wildcard, 220,148 bytes.
+- Backup: `/data/acme.json.pre-wildcard-cleanup-2026-11-22`; the duplicate-wildcard step left
+  `/data/acme.json.pre-duplicate-wildcard-2026-11-22` beside it.
+- After: one `ovhresolver` entry and one `myresolver` entry, 32,325 bytes.
+- The router ordered both at start: the four-name `ashudev.com` bundle (only `kub.home.ashudev.com`
+  needed a fresh DNS-01 validation; the other three authorizations were still valid) and the
+  `ashuvidz.com` + `www` pair over TLS-ALPN. Both finished inside two minutes.
+- All sixteen hostnames completed a TLS handshake with the right certificate, and `*.kub.local` stayed
+  on the internal CA.
+- One avoidable detour: a filter on `domain.sans` kept zero entries and deleted the wildcard along
+  with its duplicate. Nothing was lost — the router re-issued it at once from still-valid
+  authorizations — but the file had to be written twice. Filter on the PEM, not on `domain`.
+
+
 ## The two-certificate store
 
 Since 2026-11-22 the release asks for two certificates instead of one per name
@@ -202,9 +222,24 @@ Since 2026-11-22 the release asks for two certificates instead of one per name
 | `myresolver` | `ashuvidz.com`, `www.ashuvidz.com` | TLS on port 443, until the `ashuvidz.com` zone leaves AWS nameservers |
 
 Only the apex route of each domain carries `tls.certResolver` and `tls.domains`; every other route is
-served from this store by SNI. Once the switch is live, the fifteen per-host entries are orphans too,
-and the second prune keeps exactly three: `ashudev.com`, `ashuvidz.com` and `kub.local`. A new
-application under `ashudev.com` now orders nothing, so the store should stay at three.
+served from this store by SNI. The store therefore holds exactly **two** entries, and `kub.local` is
+not one of them — the internal leaf is the Secret `kube-system/local-cert`, never in `acme.json`. A
+new application under `ashudev.com` now orders nothing, so two is the number to expect.
+
+### When Traefik orders a certificate
+
+Two rules decide it, and both surprise.
+
+- **A bundle is re-ordered only when a name in it is uncovered.** Traefik asks the CA for the whole
+  `tls.domains` list of the router, but only after finding at least one name in that list with no
+  matching certificate in the store. Adding a name to a SAN list does nothing while the existing
+  per-host certificates still cover every old name; that is why the sixteen per-host entries had to
+  go before the `ashuvidz.com` pair could be issued at all.
+- **The stored `domain` field is not the certificate's name list.** For a bundle where one name was
+  new, the entry records that one name — `{"main": "kub.home.ashudev.com"}` with no `sans` — while
+  the PEM beside it carries four names. A keep-list built from `domain.main` drops bundle members, and
+  a filter on `domain.sans` matches nothing. Read what an entry really covers with
+  `openssl x509 -noout -ext subjectAltName` on its `certificate` field.
 
 ## The 2026-11-22 run
 
@@ -237,3 +272,5 @@ The store held 34 certificates, 18 of them for hosts no router served: `atlantis
 | `/api/rawdata` answers `404` on the pod's port 9000 | the dashboard API is not attached to that entry point; read `acme.json` instead |
 | Traefik logs an ACME error for a name you just removed | a router still sets `tls.certResolver: myresolver` for it and re-requested it; find the route, not the file |
 | a removed name still validates | another kept certificate carries it in `sans`; that is harmless until a route serves it |
+| a SAN added to a route changes nothing | every name in the bundle is already covered by an existing entry; prune that entry, the router orders the bundle at the next start |
+| a keep-list built from `domain.main` drops names the certificate carries | the stored `domain` records only the name that was newly validated; read the PEM's `subjectAltName` instead |
