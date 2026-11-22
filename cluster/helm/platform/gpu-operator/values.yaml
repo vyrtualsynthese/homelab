@@ -27,7 +27,7 @@ gpu-operator:
   operator:
     repository: nvcr.io/nvidia
     image: gpu-operator
-    version: v26.3.1
+    version: v26.7.3
     # The operator keeps its CRDs on uninstall. The cutover uninstalls the
     # hand-installed release before ArgoCD syncs this chart, and the existing
     # ClusterPolicy and operand objects have to survive that uninstall: with the
@@ -47,7 +47,7 @@ gpu-operator:
   validator:
     repository: nvcr.io/nvidia
     image: gpu-operator
-    version: v26.3.1
+    version: v26.7.3
     # The validator runs to completion per rollout; its memory is a transient.
     resources:
       requests:
