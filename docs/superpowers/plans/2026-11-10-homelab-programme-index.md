@@ -118,6 +118,12 @@ Titles only. Each becomes a full plan when its workstream is picked up.
 
 ### W5 — Platform
 
+*Changed 2026-11-23:* the throwaway three-VM cluster was never built and is not going to be (cards 7
+and 16, deleted). The Traefik cutover ran live, guarded by a schema comparison of chart 27 against
+chart 42 and by the certificate digest; the etcd restore was proved on a single-node K3s under WSL2 on
+the workstation. Items 1–3 and 11 are history — see
+[`2026-11-11-w5-platform.md`](2026-11-11-w5-platform.md).
+
 1. Build the throwaway three-VM cluster on the NAS
 2. Rehearse an etcd snapshot and restore on it
 3. Install the official Traefik chart on the test cluster, 2.11
