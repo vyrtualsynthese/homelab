@@ -137,8 +137,8 @@ app:
   # Pinned, not affinity: local-path is hostPath-backed, so the claim exists on
   # one node only and the pod cannot follow a reschedule. nuc0 is where the
   # application already ran and where AGENTS.md places the general catalogue.
-  # The old `node-type: general` affinity is retired and matched no node, which
-  # left the replacement pod Pending.
+  # The old `node-type: general` affinity is replaced by this pin. The label
+  # answered on nuc0, so the Pending pod was the Terminating claim, not placement.
   nodeSelector:
     kubernetes.io/hostname: nuc0
 

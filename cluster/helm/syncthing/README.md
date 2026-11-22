@@ -22,7 +22,7 @@ the folder re-created before sync resumes. See
 | Thing | Why |
 |---|---|
 | Claim is `syncthing-config`, size `1Gi` | `syncthing-conf` was held by a Terminating object until 2026-11-19, which is why the name changed. 1Gi rather than the contract's `128Mi`: the index database for the media tree does not fit in 128Mi |
-| Pod pinned to `nuc0` | `local-path` is hostPath-backed, so the claim lives on one node. `nuc0` is where the app already ran and where AGENTS.md places the general catalogue. The old `node-type: general` affinity is retired and matched no node, which is why a replacement pod sat `Pending` |
+| Pod pinned to `nuc0` | `local-path` is hostPath-backed, so the claim lives on one node. `nuc0` is where the app already ran and where AGENTS.md places the general catalogue. The old `node-type: general` affinity was replaced by this pin; the label answered on `nuc0`, so the `Pending` pod was the `Terminating` claim, not placement |
 | Probes on `/rest/noauth/health` | The one unauthenticated endpoint that reports the process is up and serving. Readiness shares it on purpose: a disconnected folder is a sync state, not a reason to stop routing to the WebUI — there is no dependency that can fail while the process stays healthy |
 | `PUID`/`PGID` 1100, no `runAsUser` | The LinuxServer init writes `/config` as root and then drops. `runAsUser` would stop it from starting; a fresh `local-path` claim is created `0777` owned by `1100:1100`, so the app owns its own config |
 | No log level | Syncthing has no verbosity environment variable; the level lives in the GUI settings (`STTRACE` only raises). It logs at `info`, which is debt, and the WebUI is the other record |

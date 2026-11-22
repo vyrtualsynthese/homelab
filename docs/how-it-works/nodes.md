@@ -45,12 +45,10 @@ does not move the volume. When the pin disagrees, the pod stays `Pending` with a
 volume node-affinity event. That event names the nodes the pod was rejected from, not the data's
 home; the affinity is on the PV, under `spec.nodeAffinity` (`kubectl get pv <pv> -o yaml`).
 
-Older charts are the exception: they still ask for the retired `node-type` label through
-`nodeAffinity` rather than a hostname pin. That label still constrains scheduling: the chart makes it
-a required term, not a hint, but the live object can lag the chart until ArgoCD reconciles it, so a
-chart that asks for `general` and a pod that last ran elsewhere is not a contradiction.
-[applications.md](applications.md) records which charts these are and the node each pod was
-observed on.
+No chart selects `node-type` any more. The label was never in git — it existed only on the machines,
+one value per node — and it was removed from all four on 2026-11-22; the last chart that asked for
+it, `monitoring/pihole-exporter`, moved to a hostname pin the same day. A chart that still carried
+such an affinity would now fail at scheduling instead of quietly landing on `nuc0`.
 
 ## What "no failover" costs
 

@@ -136,8 +136,9 @@ not the owner but can write. Two consequences worth knowing:
 `fsGroup` is deliberately absent: the kubelet does not apply it to hostPath-backed volumes, so it
 would look meaningful and do nothing.
 
-The old chart mounted `maintainerr-config`, which it never created — that missing object, together
-with a retired `node-type` affinity, kept the pod `Pending` for 76 days. The new claim starts empty and
+The old chart mounted `maintainerr-config`, which it never created, and that missing object kept the
+pod `Pending` for 76 days. Its `node-type: general` affinity was not the cause: `nuc0` carried the
+label, and the label was not removed until 2026-11-22. The new claim starts empty and
 the app initialises itself on first boot.
 
 ## Probes
