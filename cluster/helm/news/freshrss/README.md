@@ -28,7 +28,7 @@ helm template news-freshrss cluster/helm/news/freshrss --namespace news
 | PersistentVolumeClaim `news-freshrss-config` | the claim holding the data root, including the SQLite database and the cached articles |
 | Service `news-freshrss` | ClusterIP, port 80, port name `webui` |
 | ServiceAccount `news-freshrss` | token not mounted; the pod talks to no Kubernetes API |
-| IngressRoute `news-freshrss-public` (+ `-public-redirect`) | `freshrss.kub.home.ashudev.com`, TLS through `myresolver`, LAN allowlist only |
+| IngressRoute `news-freshrss-public` (+ `-public-redirect`) | `freshrss.kub.home.ashudev.com`, TLS from the `ashudev.com` wildcard, LAN allowlist only |
 | Middleware `news-freshrss-redirect-https` | the plain-HTTP mirror sends the browser to TLS |
 | Middleware `news-freshrss-security` | rendered because the cluster has it; **no route references it** (known debt) |
 | TLSOption `news-freshrss-tlsoption` | the per-app cipher policy the live route already uses |

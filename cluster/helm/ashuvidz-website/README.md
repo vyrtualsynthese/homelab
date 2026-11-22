@@ -56,14 +56,15 @@ The content lives in an `emptyDir` mounted at `/site`:
 
 `ashuvidz.com` is on the cluster's public list, so the route carries **no** `lan-only` middleware and
 no authentik gate: it is reachable from the internet by design. TLS is one `ashuvidz.com`
-certificate (Let's Encrypt): this route is the anchor that asks `myresolver` for it, with `www` in
-`tls.domains.sans`. The only middleware is `kube-system/security`, which sets the security headers.
+certificate (Let's Encrypt): this route is the anchor that asks `ovhresolver` for it over the DNS
+challenge, with `www` in `tls.domains.sans`. The only middleware is `kube-system/security`, which
+sets the security headers.
 
 Three routers:
 
 | Router | Entry point | What it does |
 |---|---|---|
-| `ashuvidz` | `websecure` | the site, TLS from `myresolver` |
+| `ashuvidz` | `websecure` | the site, TLS from the certificate `ovhresolver` orders for this pair |
 | `ashuvidz-redirect` | `web` | 301 to HTTPS through `kube-system/redirect-https` |
 | `ashuvidz-www` | `web`, `websecure` | 301 `www.ashuvidz.com/<path>` → `ashuvidz.com/<path>`, with its own `tls` |
 

@@ -43,7 +43,7 @@ the redirect Middleware (`kavita-redirect-https`) and the TLSOption (`kavita-tls
 | `strategy` | Deployment strategy. Must stay `Recreate` with a config volume. | `Recreate` |
 | `service.port` | Port the Service exposes, and what both IngressRoutes point at. | `5000` |
 | `container.port` | Only set when the app listens on a different port than the Service. | `null` (falls back to `service.port`) |
-| `ingressRoute.*` | Traefik CRD routing: host, TLS, and whether the HTTP redirect router renders. | `kavita.kub.home.ashudev.com`, `websecure`, `myresolver`, `kavita-tlsoption` |
+| `ingressRoute.*` | Traefik CRD routing: host, TLS, and whether the HTTP redirect router renders. | `kavita.kub.home.ashudev.com`, `websecure`, no resolver — served by the `ashudev.com` wildcard, `kavita-tlsoption` |
 | `storage.*` | The config claim: class, size, mount path, or reuse an existing claim. | `local-path`, `2Gi`, `/config` |
 | `storage.library.*` | The shared book library claim and where it is mounted. | `pvc-books-media-nfs-subdir-external-provisioner` at `/books`, read-only |
 | `env` | Non-secret variables, rendered **inline** into the container. Changing one rolls the pod. | `TZ`, `PUID`, `PGID`, the two `Logging__*`, `DOTNET_HOSTBUILDER__RELOADCONFIGONCHANGE` |
