@@ -111,8 +111,10 @@ time. Examples:
     `traefik-gate` chart, and a `web` router that only redirects. The Traefik dashboard
     (`traefik.kub.local`) is the reference case: `values.yaml` carries the route and
     `dashboard/redirect.yaml` its `web` twin. See `docs/runbooks/internal-ca.md`.
-  - TLS on a resolvable name: `entryPoints: [websecure]`, host `app.kub.home.ashudev.com`,
-    `tls.certResolver: myresolver` plus a per-app `TLSOption` copied from an existing chart.
+  - TLS on a resolvable name: `entryPoints: [websecure]`, host `app.kub.home.ashudev.com`, and
+    `tls.options` with a per-app `TLSOption` copied from an existing chart. No `certResolver`: the
+    name is a `*.kub.home.ashudev.com` one, so the `ashudev.com` wildcard already covers it and SNI
+    serves it from the store.
   - Public: `ashuvidz.com`.
   - Cross-namespace middleware refs use `kube-system-<name>@kubernetescrd`.
 - **SSO: native first.** When an application supports OIDC (or SAML, or any session-based SSO) itself,

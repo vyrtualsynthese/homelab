@@ -485,13 +485,14 @@ which this site does not earn yet. A failed fetch leaves the previous tree; a fa
 half-written one, and the sidecar now says which of the two happened instead of reporting the
 misleading one for both.
 
-**`www.ashudev.com` has its own router and certificate**, which is the defect `ashuvidz-website` still
-carries: Traefik asks the ACME resolver for a name only when a router matches it, so a `www` that
-resolves without a router answers with the default certificate and a name mismatch. The redirect is
-a `redirectRegex` that keeps path and query, and the `www` router carries `tls.certResolver:
-myresolver` on `websecure`. The host match is case-sensitive where Traefik's `Host()` is not, so an
-uppercased `www` URL falls through to the no-op service rather than redirecting; that is filed with
-the sibling's two defects rather than fixed here.
+**`www.ashudev.com` has its own router**, which is the defect `ashuvidz-website` carried: Traefik
+asks the ACME resolver for a name only when a router matches it, so a `www` that resolves without a
+router answers with the default certificate and a name mismatch. The redirect is a `redirectRegex`
+that keeps path and query, and the `www` router sets `tls: {}` on `websecure` — its name is in the
+`ashudev.com` wildcard's SAN list, so it asks for nothing of its own. The host match is
+case-sensitive where Traefik's `Host()` is not, so an uppercased `www` URL falls through to the
+no-op service rather than redirecting; that is filed with the sibling's two defects rather than
+fixed here.
 
 Sizing is carried from `ashuvidz-website`, not measured: no pod had run when the chart was written.
 Debt: the access log is on for the same reason as the sibling — on a public host the request record

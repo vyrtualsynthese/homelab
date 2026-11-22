@@ -207,6 +207,12 @@ All notable changes to this repository. The format follows
 
 ### Removed
 
+- Traefik's TLS-ALPN certificate resolver (`myresolver`), with the entry it owned in `acme.json`.
+  It existed only because `ashuvidz.com` answered from AWS nameservers, where no API can write a
+  challenge record; the zone moved to OVH nameservers on 2026-11-22, so its apex route now asks
+  `ovhresolver` for both names over DNS-01 and the store is keyed by that resolver alone. The OVH
+  consumer key behind it is scoped to both zones, which the first key was not.
+
 - Three hand-applied DaemonSets that no Application owned. `kube-system/intel-gpu-plugin` was 3y233d
   old, ran `intel/intel-gpu-plugin:devel` and warned every 5 s about a GPU no node has (17,277 lines
   a day). `node-feature-discovery` went in full: it was a second NFD beside the GPU operator's, and
