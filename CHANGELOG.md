@@ -40,6 +40,17 @@ All notable changes to this repository. The format follows
 
 ### Changed
 
+- The rightsizing pass of 2026-11-22 changed four memory numbers and removed the CPU limits that were
+  throttling. `renovate` sat at 90 % of its 1Gi ceiling — p95 915Mi, peak 917Mi across three scheduled
+  and three manual runs — so it gets a 1Gi request and a 1.5Gi limit; `filebrowser` (p95 100Mi),
+  `n8n` (385Mi) and `authentik-server` (653Mi) had requests below their working set and move to
+  128Mi, 448Mi and 768Mi. Every ArgoCD container gets its first resources block, sized from its own
+  p95 and peak, because all seven were BestEffort. `postgres` and its exporter, the dump and bootstrap
+  jobs, the four backup CronJobs, `filebrowser`, `local-path` and the GPU operator lose their CPU
+  limits: the postgres pair was throttled for 12,736 and 8,796 seconds over the seven days, measured
+  from `container_cpu_cfs_throttled_seconds_total`. The numbers, the method and the charts left alone
+  are in [`docs/reference/chart-sizing.md`](docs/reference/chart-sizing.md).
+
 - authentik, vikunja and the GPU operator log at warning/error instead of the default `info`. Their
   health checks were the visible part: 108k lines and 35 MB a day across the three. The charts now
   set `AUTHENTIK_LOG_LEVEL=warning`, `VIKUNJA_LOG_LEVEL=WARNING` and `operator.logging.level: error`;

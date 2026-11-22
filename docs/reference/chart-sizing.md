@@ -4,7 +4,7 @@
 > confirmed adequate; anything absent sets a request and a limit nobody has checked.
 >
 > **Use it when** you are setting a memory request or limit, or an audit asks which numbers are
-> evidence and which are guesses · **Verified** 2026-11-18 · **Kind:** living page
+> evidence and which are guesses · **Verified** 2026-11-22 · **Kind:** living page
 
 Requirement 14 is a floor, not a target. This table is the record of which charts have actually been
 measured against Prometheus, so a later audit can tell a settled number from an unexamined one
@@ -80,6 +80,40 @@ protection ceiling only, with the reason next to the values.
 |---|---|---|---|
 | `ashudev-website` nginx | not measured | 32Mi / 128Mi | Carried from `ashuvidz-website`, which serves the same files from disk. The clone init container has no sample to size from either way |
 | `ashudev-website` git-syncer and clone | not measured | 32Mi / 64Mi | Same reason; one `git fetch` a minute on a small tree. Re-measure once the pod has history |
+
+## Measured on 2026-11-22
+
+The 7 days to that date, the same method as the 2026-11-18 pass. This pass also
+found the limit that was actually tight: `renovate` at 90 % of its 1Gi ceiling.
+
+| Chart | p95 / peak | Request was → now | Limit was → now | Why |
+|---|---|---|---|---|
+| `renovate` | 915Mi / 917Mi | 256Mi → **1Gi** | 1Gi → **1.5Gi** | The request was a guess made when a run was shorter than the scrape interval; three scheduled and three manual runs now have samples. The 1Gi limit left 11 % of headroom for a large dependency graph |
+| `filebrowser` | 100Mi / 110Mi | 64Mi → **128Mi** | 256Mi (unchanged) | The request was below the working set. Its 500m CPU limit was removed in the same change |
+| `n8n` | 385Mi / 387Mi | 256Mi → **448Mi** | 768Mi (unchanged) | The request was below the working set; the limit already covers 2× the peak |
+| `authentik-server` | 653Mi / 653Mi | 512Mi → **768Mi** | 1Gi (unchanged) | The request was below p95; the limit is peak × 1.57 |
+| `argocd` (7 components) | controller 340/408, repo-server 227/714, server 57/74, dex 68/71, applicationSet 39/51, notifications 34/39, redis 23/24 MiB | none → p95 per component | none → peak × 1.5 per component | Every ArgoCD container was BestEffort: no request, no limit. per-component values are in `cluster/helm/argocd/values.yaml` |
+
+`media-stack/qbittorrent` was re-checked and left alone: 12,256Mi peak over the
+window, 99.4 % of its 12Gi limit, but that is the download page cache its chart
+already documents, and no container was OOM-killed.
+
+### CPU limits removed on 2026-11-22
+
+The house rule is no CPU limit, and by this pass 20 containers still carried one.
+Prometheus showed what the ceilings cost over the 7 days to 2026-11-22:
+`postgres` was throttled for 12,736 seconds, and its exporter for 8,796, which
+was 61 % of its CFS periods. The limit was removed from `postgres`, its exporter,
+the dump and bootstrap jobs, the four `backup` CronJobs, `filebrowser`,
+`local-path`, and the GPU operator (whose 500m came from the upstream chart's
+default and is dropped with `cpu: null`).
+
+The same window showed a standalone `node-feature-discovery` v0.17.1 install,
+in its own namespace and outside GitOps, throttled for tens of thousands of
+seconds across its four workers. It is not in this repo and no chart here
+creates it; it disappeared from the cluster during the pass, and its last
+Prometheus sample is 2026-11-22T02:59Z, so there is nothing left to remove. The
+GPU operator's own NFD (`v0.20.1`, in `gpu-operator`) sets no CPU limit.
 
 ## Enforced by the method, not by these numbers
 

@@ -48,8 +48,10 @@ Application each; the design is
 | Fluent Bit (per pod) | 6-9 MiB | 9.8 MiB | 11.6 MiB | 32Mi | 64Mi |
 | config-reloader | 9 MiB | 9.6 MiB | 9.9 MiB | 16Mi | 32Mi |
 
-The first three rows are the 2026-11-19 pass over the seven days the TSDB now
-retains; Fluent Bit and config-reloader are still the 2026-11-12 15-hour sample.
+The first three rows are the 2026-11-19 pass over the seven days the TSDB then
+held; it retains 90 days now (`storage.tsdb.retention.time`), with 10 days on
+disk on 2026-11-22, so the next pass can use a month. Fluent Bit and
+config-reloader are still the 2026-11-12 15-hour sample.
 Grafana was measured across the eight pod generations the rollouts left behind,
 and its row is the worst generation.
 
