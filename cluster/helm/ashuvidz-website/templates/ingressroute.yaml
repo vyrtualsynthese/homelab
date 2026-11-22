@@ -36,6 +36,10 @@ spec:
     {{- with .secretName }}
     secretName: {{ . }}
     {{- end }}
+    {{- with .domains }}
+    domains:
+      {{- toYaml . | nindent 6 }}
+    {{- end }}
   {{- end }}
 {{- if .Values.ingressRoute.redirectToHttps }}
 ---
@@ -102,7 +106,8 @@ spec:
       services:
         - kind: TraefikService
           name: noop@internal
-  tls:
-    certResolver: {{ .Values.ingressRoute.tls.certResolver }}
+  # `www` is in the apex certificate's SAN list; asking again would order a
+  # second certificate for one name.
+  tls: {}
 {{- end }}
 {{- end }}
