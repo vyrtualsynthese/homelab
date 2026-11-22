@@ -7,7 +7,8 @@
 >
 > **Use it when** you are adding a stateful application, a job went red, a stream looks stale, or you
 > are weighing what a loss would cost · **Verified** 2026-11-22: a claim was rebuilt from its snapshot
-> and the application ran from it · **Kind:** explanation
+> and the application ran from it, and a production etcd snapshot restored into a throwaway cluster ·
+> **Kind:** explanation
 >
 > **Sources** `cluster/helm/backup/values.yaml` — the matrix, one row per claim —
 > `cluster/helm/backup/files/verify.py`, `cluster/helm/backup/files/prepare.py`,
@@ -242,5 +243,13 @@ with the same 103 series and 566 episode files the database held, writing to the
 attempt (the pod selector, ArgoCD's self-heal) are in
 [`runbooks/restore.md`](../runbooks/restore.md) §2.
 
-Still not proved: restoring an etcd snapshot. That is destructive in a way the others are not — it
-replaces the cluster's whole object state — so it is rehearsed into a test cluster, and it is card #8.
+Proved on 2026-11-22, the whole object state: the newest production etcd snapshot from
+`nodes-streaming` was restored into a throwaway single-node K3s `v1.31.14+k3s1`, and 25 namespaces,
+66 Deployments, 3 StatefulSets, 47 PVCs, 115 pods, 376 Secrets and 60 ArgoCD Applications came back.
+A ConfigMap written before the restore was gone afterwards, the reset took 7 seconds and the start
+9–11 more, and `backup-restic`'s `RESTIC_PASSWORD` was byte-identical to the local copy. The
+procedure, the token requirement and the three failed attempts before it are
+[`runbooks/restore-etcd.md`](../runbooks/restore-etcd.md).
+
+Not proved: that restore on a live server, where the other two servers have to rejoin the reset node,
+and a snapshot fetched from the OVH copy rather than from the node's own stream.
