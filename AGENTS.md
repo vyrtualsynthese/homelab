@@ -207,6 +207,12 @@ any key in its config file that the pinned dependency's `values.yaml` does not d
 of failure that cost the FileBrowser cutover three syncs. A chart whose app rejects unknown config
 keys at startup belongs in that manifest; the check names the key and its line in the rendered file.
 
+`hack/check-docs.sh` runs the documentation checks: the generated pages still match their sources,
+every cited `docs/` path and every page is in the nav, the pages this branch touched carry their
+banner, the application catalogue names exactly the Applications that exist, and no page holds a
+secret-shaped value. It takes `--base <ref>` (default `origin/develop`) and ends with the staleness
+report, which prints and never fails.
+
 Check that ArgoCD references resolve (CRLF-safe):
 
 ```bash
