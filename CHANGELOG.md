@@ -114,6 +114,43 @@ All notable changes to this repository. The format follows
   `# renovate: datasource=docker` annotation, which closes the one image in the storage path that
   could change without a commit: the helper runs the setup and teardown scripts as root on whichever
   node provisions next.
+- Traefik's v3 configuration is audited against 3.7: the two startup warnings are settled, not
+  tolerated. `safeNaming` stays `false` because turning it on renames every generated object and the
+  cluster's 85 template references are written in the legacy `namespace-name@kubernetescrd` form —
+  they would all stop resolving; `global.aliasHeadersStrategy: delete` closes the header-alias
+  spoofing; `global.sendAnonymousUsage` is off. The release is revision 12 and
+  `helm -n kube-system rollback traefik 11` is the way back. Every decision, with the option it
+  replaces, is in [`docs/runbooks/traefik-release.md`](docs/runbooks/traefik-release.md).
+
+### Fixed
+
+- A Traefik upload no longer dies at 60 seconds. v3 raised the entry point's `readTimeout` default
+  from `0` to `60s`, which caps the whole request including its body: the public FileBrowser needs
+  about 800 s for a 2 GB file on a 20 Mbit/s line. `websecure` now sets `1h`. `writeTimeout` stays
+  `0`, so a Plex stream is never cut.
+
+### Security
+
+- Traefik no longer trusts a `PROXY` line or an `X-Forwarded-*` header from the client. Both
+  `proxyProtocol.insecure` flags were the chart's stock values and were measured as a `lan-only`
+  bypass on 2026-11-22: a request to an internal host carrying `PROXY TCP4 192.168.1.99 …` was
+  answered like a LAN client while the same header claiming `8.8.8.8` was refused, and the house
+  router forwards 80 and 443 to the same address, so the gate could be walked through from the
+  internet. The same request now answers `400`. `X-Forwarded-Host` and `X-Forwarded-Proto` can no
+  longer be rewritten by a caller either.
+- Traefik deletes a request header whose name aliases another one (`X_Auth_User`, `X.Auth.User` for
+  `X-Auth-User`) before routing. Backends that derive variable names from header names — authentik is
+  Python WSGI — would otherwise read a header Traefik did not write, which is how the headers the
+  gate depends on can be spoofed. `delete` is chosen over `reject` so an innocuous private header is
+  dropped instead of answering `400`.
+
+### Added
+
+- The Traefik dashboard gains "Requests per second by entry point", which needs
+  `metrics.prometheus.addEntryPointsLabels`. The metric was off, so `traefik_entrypoint_requests_total`
+  did not exist and no per-entry-point traffic panel was possible; it costs 66 series at startup on
+  five entry points. The export under `cluster/helm/monitoring/grafana/export/traefik/` is re-exported
+  at dashboard version 7.
 
 ### Added
 

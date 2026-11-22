@@ -48,11 +48,20 @@ tolerations:
     operator: Exists
     effect: NoSchedule
 
-# The release sends anonymous usage data today (the chart default of its line).
-# Keeping it explicit means the upgrade does not change a second thing.
 global:
   checkNewVersion: true
-  sendAnonymousUsage: true
+  # No telemetry leaves the house. Traefik's collection endpoint is not an EU
+  # provider under the sovereign-provider rule, and the data buys nothing on a
+  # single router.
+  sendAnonymousUsage: false
+  # v3.7.17+. A header whose name is spelled with a character other than a
+  # letter, a digit or a dash (X_Auth_User, X.Auth.User) is read as X-Auth-User
+  # by every backend that derives variable names from header names; authentik
+  # is Python WSGI and trusts the headers Traefik writes. `delete` drops the
+  # alias before routing. `reject` would answer 400 to any client that sends
+  # one, innocuous private headers included. The startup warning disappears for
+  # every entry point at once from this one key.
+  aliasHeadersStrategy: delete
 
 resources:
   requests:
@@ -61,11 +70,29 @@ resources:
   limits:
     memory: 256Mi
 
+# The chart does not expose serversTransport.maxIdleConnsPerHost, and its v3
+# default of 0 means Go's DefaultMaxIdleConnsPerHost, two idle connections per
+# host. Plex clients and qBittorrent open many short requests to one backend;
+# beyond two, every request dials again. 100 is per host and costs one open
+# connection per host, not one thousand.
+additionalArguments:
+  - "--serversTransport.maxIdleConnsPerHost=100"
+
 providers:
   kubernetesCRD:
     # Every gate and redirect is referenced as kube-system-<name>@kubernetescrd;
     # without this no cross-namespace reference resolves and every gate vanishes.
     allowCrossNamespace: true
+    # false, not true. Safe naming renames every generated router and service
+    # (names joined with `_`, e.g. kube-system_lan-only@kubernetescrd), and 85
+    # middleware references in the chart templates are written in the legacy
+    # `namespace-name@kubernetescrd` form. A reference in the wrong form does
+    # not resolve, so turning this on without rewriting all of them first
+    # removes every gate at once. The collision it prevents needs two
+    # namespace/name pairs that concatenate to the same string, which this
+    # cluster does not have. False keeps the current names and silences the
+    # startup warning.
+    safeNaming: false
   kubernetesIngress:
     publishedService:
       enabled: true
@@ -90,7 +117,11 @@ ingressRoute:
 metrics:
   prometheus:
     entryPoint: metrics
-    addEntryPointsLabels: false
+    # Six entry points, and code/method are bounded: measured at 66 series on
+    # five entry points at startup, growing only with the codes and methods
+    # actually seen. Without it the per-entry-point panel cannot exist, and
+    # `traefik_open_connections` alone cannot tell web from websecure traffic.
+    addEntryPointsLabels: true
     addRoutersLabels: true
     addServicesLabels: false
     buckets: "0.1,0.25,0.5,1.0,2.5,5.0,10.0"
@@ -117,20 +148,26 @@ ports:
       default: true
     exposedPort: 80
     protocol: TCP
-    forwardedHeaders:
-      insecure: true
-    proxyProtocol:
-      insecure: true
+    # No forwardedHeaders and no proxyProtocol on either HTTP entry point. The
+    # Orange Livebox in front is plain NAT and sends neither an X-Forwarded-*
+    # header nor a PROXY line, so trusting them only trusts the client. Both
+    # `insecure: true` flags were the chart's stock values and were a hole:
+    # on 2026-11-22 a request carrying `PROXY TCP4 192.168.1.99 …` was admitted
+    # through lan-only, while the same header claiming 8.8.8.8 answered 403.
+    # Nothing on this network sends the header, so it is removed, not scoped.
   websecure:
     port: 8443
     expose:
       default: true
     exposedPort: 443
     protocol: TCP
-    forwardedHeaders:
-      insecure: true
-    proxyProtocol:
-      insecure: true
+    transport:
+      respondingTimeouts:
+        # v3 raised this default from 0 to 60s, which caps a request at 60
+        # seconds including its body: FileBrowser is public and a 2 GB upload
+        # on a 20 Mbit/s line needs about 800s. 1h leaves every real upload
+        # inside and still bounds a slow connection.
+        readTimeout: 1h
   mc:
     port: 25565
     expose:

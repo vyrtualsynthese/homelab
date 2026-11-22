@@ -23,7 +23,7 @@ Showcase, which still sit in the default `General` folder:
 | Homelab · Media | `homelab-media` | 9 + rows | Media stack: app health issues, queues, missing items, indexers, release intake, qBittorrent transfer, Plex sessions and library |
 | Cloud | `cloud-services` | 6 | Internet-facing side: endpoints answering, DNS checks passing, days to the earliest certificate, per-probe success and latency, every check in one table |
 | Homelab · Backups | `homelab-backups` | 6 | Backup health: stream age, repository size, snapshot count, etcd copy age, estimated monthly cost, failed jobs |
-| Homelab · Traefik | `homelab-traefik` | 10 + rows | The router in front of everything: traffic by router, status classes, p95/p99, 5xx share, bytes and open connections by entry point, the certificate store, config reloads, scrape health |
+| Homelab · Traefik | `homelab-traefik` | 11 + rows | The router in front of everything: traffic by router and by entry point, status classes, p95/p99, 5xx share, bytes and open connections by entry point, the certificate store, config reloads, scrape health |
 
 The old `homelab-investigate` was replaced by `homelab-platform` on 2026-11-12: its workload
 row duplicated the new Applications dashboard, and its node/control-plane/Prometheus panels are
@@ -69,8 +69,12 @@ a router that stopped answering was visible only through the app behind it. The 
 that had been answering `404` since the 2023 install ([audit page](../audit/traefik-2026-11-21.md),
 board card 531) went unnoticed for the same reason.
 
-Four rows: traffic per router and by status class; latency and errors; bytes and open connections;
-health. The latency row is new data, not a new view — the p95 and p99 (the response time under which
+Four rows: traffic per router, traffic per entry point and by status class; latency and errors; bytes
+and open connections; health. `Requests per second by entry point` exists because
+`metrics.prometheus.addEntryPointsLabels` was turned on on 2026-11-22
+([traefik-release.md](../runbooks/traefik-release.md#the-37-configuration-audit-2026-11-22-revision-12)):
+before that, `traefik_entrypoint_requests_total` did not exist. It separates plain HTTP (redirects)
+from TLS, Minecraft and the scraper when a router panel says traffic stopped but not where. The latency row is new data, not a new view — the p95 and p99 (the response time under which
 95 and 99 of every 100 requests fall) only exist because Prometheus stopped dropping
 `traefik_.*_bucket` and the release widened the buckets that day, so their history starts on
 2026-11-21 and the 1 s alert threshold was chosen the same evening, against the hours that existed.
