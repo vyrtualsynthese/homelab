@@ -13,9 +13,14 @@
 ## What went with it
 
 Workloads are pinned by `kubernetes.io/hostname`, so the applications on that node are down until it
-returns or they are moved. What is on each node's own disk is the list below, and it is the whole list:
-a claim that is not here is not backed up, which is a defect in the matrix rather than a reason to
+returns or they are moved. The tables below are the claims that node's stream restores, and a claim
+missing from them that no sentence here explains is a defect in the matrix rather than a reason to
 improvise.
+
+Three claims are on a node's disk and deliberately in no stream: Prometheus (25 Gi) and Loki (20 Gi)
+on `nas`, whose history is worth less than a copy of it, and the PostgreSQL **data** claim on `nas`,
+which is not copied because its databases are dumped instead — that dump is `postgres-dumps`, the
+first row below.
 
 | Node | Claims on its `local-path` |
 |---|---|

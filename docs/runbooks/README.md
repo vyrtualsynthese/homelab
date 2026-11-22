@@ -10,10 +10,11 @@
 > **Sources** `mkdocs.yml`, the files in `docs/runbooks/`, `docs/backup/`, `docs/security/` and
 > `docs/running-it/`
 
-A runbook exists only after it has been performed at least once; a procedure nobody has run is a
-guess with a title. Every file below exists, and its status is the date it was proved or the fact that
-it has not been. Four are completed records, kept because each is the only write-up of something that
-happened once — History lists those.
+A runbook counts as proved only after it has been performed at least once; a procedure nobody has run
+is a guess with a title. Every file below exists, and its status is the date it was proved or the fact
+that it has not been. Five are completed records, kept because each is the only write-up of something
+that happened once — four of them are listed in History, and the fifth, the board's shape, is a
+procedure the Running it tab still sends you to.
 
 Each procedure is read where it is used, so the tab column is the route: Backups for anything that
 puts data back, Security for identity and certificates, Running it for the rest.
