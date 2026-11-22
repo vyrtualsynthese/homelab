@@ -50,11 +50,10 @@ holds in prose is [how backups work](../how-it-works/backups.md).
 | a file, a directory or a whole claim is gone | [a file, or a whole claim](a-file-or-a-claim.md) |
 | an application's database is broken but its claim is fine | [a database inside an application](a-database.md) |
 | a database on the shared PostgreSQL is broken | [PostgreSQL](postgresql.md) |
+| a whole machine is dead | [a dead node](a-node.md) |
+| the cluster is gone, and only the bucket is left | [no cluster at all](no-cluster.md) |
+| everything is gone, including the house | [everything is gone](everything.md) |
 | you want the full command sequence, or the drill log | [restore.md](../runbooks/restore.md) |
-| the cluster is gone, and only the bucket is left | [last-resort.md](../runbooks/last-resort.md) |
-
-A dead node and a total loss get their own pages in this section shortly; each lands with the
-procedure it describes, not before.
 
 One thing to know before the first real loss: a restore reads the bucket with the restic password from
 the Bitwarden item `homelab-backup-last-resort`. Without it the bucket is ciphertext, and that is the
