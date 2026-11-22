@@ -57,12 +57,12 @@ The cluster holds the bucket's S3 pair, because the backup jobs need it. Whoever
 `backup-restic` Secret can run `restic forget --prune` and delete the history the bucket holds. No
 monitoring on this page repairs that.
 
-The decision on 2026-11-22 was **object versioning with a 30-day window on previous versions**: a
+The decision on 2026-11-22 is **object versioning with a 30-day window on previous versions**: a
 delete becomes a marker, the bytes live on for thirty days, and the backup user cannot delete a
-version permanently. It is recorded in the backups design and **is not in force yet** — it is one
-console change in the OVH account (bucket → Overview → Security → Activate versioning, then a
-lifecycle rule expiring noncurrent versions after 30 days). Until it is on, treat the bucket as
-destroyable by anyone who holds the cluster.
+version permanently. **It is in force:** versioning was switched on at 01:29Z and two lifecycle rules
+were applied at 02:43Z — `expire-noncurrent-after-30-days` (`NoncurrentVersionExpiration: 30`) and
+`expire-delete-markers` (`ExpiredObjectDeleteMarker: true`) — and read back through the OVH API. The
+cluster's credential still cannot purge history inside that window; the account owner can.
 
 The second copy — one that survives losing the OVH account, not just the cluster — waits on a second
 EU provider and is card #535, frozen.

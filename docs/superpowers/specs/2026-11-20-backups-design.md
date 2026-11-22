@@ -519,8 +519,12 @@ rejected:
 - **Deferred: a copy on another provider.** That is the only one that survives losing the OVH account,
   and it waits on a second EU provider: card #535, frozen on 2026-11-22.
 
-Status: **decided, not yet in force.** It is one console change (bucket → Overview → Security →
-Activate versioning, then the lifecycle rule) and it is not recorded here as done until that has run.
+Status: **in force since 2026-11-22.** Versioning was switched on that day
+(`currentState.versioning.status = ENABLED`, updated 01:29Z) and two lifecycle rules were applied at
+02:43Z through the OVH API — `expire-noncurrent-after-30-days` (`NoncurrentVersionExpiration: 30`) and
+`expire-delete-markers` (`ExpiredObjectDeleteMarker: true`) — then read back with
+`ovhcloud cloud storage object bucket lifecycle get`. Until the first prune runs after that date, the
+30-day window has not yet been exercised.
 
 ## Decisions taken after the build review
 
