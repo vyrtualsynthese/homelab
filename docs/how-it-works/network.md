@@ -127,3 +127,6 @@ from the Applications' charts, so the one route it cannot show is the Traefik da
 `traefik.kub.local` is a value of the Traefik Helm release
 (`cluster/infrastructure/traefik/values-v3.yaml`), not an Application, and its `web` twin is
 `cluster/infrastructure/traefik/dashboard/redirect.yaml`.
+
+The guarantees this arrangement makes, what enforces each one and the command that proves it are
+[the security section](../security/README.md).
