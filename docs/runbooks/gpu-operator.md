@@ -4,8 +4,8 @@
 > host driver on `streaming` is the one thing installed by hand, and this page records both halves.
 >
 > **Use it when** the GPU disappears from a pod, Plex stops transcoding, the DCGM GPU panels go
-> empty, or someone asks why the node still carries `nvidia.com/gpu-driver-upgrade-state` ·
-> **Verified** 2026-11-20 · **Kind:** living page
+> empty, the node advertises `nvidia.com/gpu: 0` after a restart, or someone asks why the node still
+> carries `nvidia.com/gpu-driver-upgrade-state` · **Verified** 2026-11-22 · **Kind:** living page
 
 ## The two halves
 
@@ -121,8 +121,47 @@ All GPU pods on `streaming` restart with the host. Their last state reads `Unkno
 loop. Measured example: `streaming` rebooted on 2026-11-16 at 03:50 and 2026-11-17 at 04:21, and each
 time every pod in `gpu-operator` came back at that instant without intervention.
 
+A pod coming back is not the GPU coming back. On 2026-11-22 the pods were all `Running` and the
+node still advertised `nvidia.com/gpu: 0`; the section below is why.
+
 A restart count that climbs on the same days as a reboot needs no investigation. One that climbs on
 quiet days does.
+
+## The GPU drops to 0 after a restart
+
+**The fault.** A k3s restart on `streaming` leaves the node advertising `nvidia.com/gpu: 0` while
+every pod in `gpu-operator` reads `Running`. The validator writes its readiness markers to
+`/run/nvidia/validations`, which is a tmpfs: the restart clears it. The validator pod is not
+recreated by a restart, so its init containers — the steps that write the markers — do not run
+again, and the device plugin's init container waits forever for `toolkit-ready` instead of failing.
+
+Nothing else notices. Plex reaches the card through `runtimeClassName: nvidia`, so `nvidia-smi -L`
+still lists the Quadro P400 and playback works. Only a pod that **asks the scheduler** for
+`nvidia.com/gpu` is affected, and it stays `Pending`.
+
+**Detect it.** `GpuNotAllocatable` (Grafana, `homelab-core`, 10 minutes) fires when a node that has
+registered the card reports zero allocatable. The command below is also the first line of the K3s
+upgrade's `streaming` check:
+
+```bash
+kubectl get node streaming -o jsonpath='{.status.allocatable.nvidia\.com/gpu}'   # expect 1
+```
+
+**Recover it.** Delete the validator pod; the operator recreates it, its init containers run again,
+and the resource returns in about 90 seconds (measured 2026-11-22):
+
+```bash
+kubectl -n gpu-operator delete pod -l app=nvidia-operator-validator
+kubectl get node streaming -o jsonpath='{.status.allocatable.nvidia\.com/gpu}'   # 1 again
+```
+
+**Why this is accepted rather than fixed.** The marker path is hardcoded on both sides: the
+validator's `/run/nvidia/validations` is a constant, and the device plugin's gate names the same
+path. The validator reads an `OUTPUT_DIR` override, but moving only the writer would strand the
+reader, so it is unusable. There is no chart setting for either side. Keeping the markers across a
+restart would need a host bind mount onto persistent storage, which is boot-order configuration on
+one machine and outside git, next to the hand-installed driver. The alert is what closes the gap: the
+state cannot persist unnoticed for more than ten minutes.
 
 ## Related
 
