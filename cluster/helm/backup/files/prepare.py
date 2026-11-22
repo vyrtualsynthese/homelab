@@ -156,12 +156,19 @@ def stage_databases(
 
 
 def matches_any(relative: pathlib.Path, patterns: Sequence[str]) -> bool:
-    """Whether a claim-relative path is covered by one of the row's restic patterns."""
+    """Whether a claim-relative path is covered by one of the row's restic patterns.
+
+    The same reading as ``_absolute_patterns`` gives restic, so the two halves of a row agree:
+    a pattern without a slash is a name and matches a path component at any depth; a pattern
+    with a slash is relative to the claim root.
+    """
     for pattern in patterns:
         trimmed = pattern.rstrip("/")
-        if fnmatch.fnmatch(relative.name, trimmed) or fnmatch.fnmatch(str(relative), trimmed):
-            return True
-        if relative.parts and fnmatch.fnmatch(relative.parts[0], trimmed):
+        if "/" in trimmed:
+            text = str(relative)
+            if fnmatch.fnmatch(text, trimmed) or text.startswith(f"{trimmed}/"):
+                return True
+        elif any(fnmatch.fnmatch(part, trimmed) for part in relative.parts):
             return True
     return False
 
@@ -178,10 +185,31 @@ def exclude_patterns(source: pathlib.Path, database_names: Sequence[str]) -> lis
 
 
 def _absolute_patterns(base: pathlib.Path, pattern: str) -> list[str]:
-    """Turn a row's relative exclude into patterns restic matches against the full path."""
+    """Turn a row's relative exclude into patterns restic matches against the full path.
+
+    A pattern without a slash is a *name*, and it is excluded at any depth. That is the reading
+    the rows are written in — ``Cache/`` means Plex's cache, not only a directory at the claim
+    root — and it is what the 2026-11-20 matrix measured. The anchored-only reading this
+    replaced matched nothing for Plex, whose whole tree sits under ``Library/Application
+    Support/Plex Media Server/``: 6.73 GiB of poster art, transcoder cache and Plex's own
+    database copies rode in the stream from the first snapshot until 2026-11-22.
+
+    A pattern that contains a slash is a claim-relative path and stays anchored at the root,
+    because a path written out is a path, not a name to be found anywhere.
+
+    ``restic`` needs both the directory and ``/**``: the job lists explicit paths, so a
+    directory entry that matches does not by itself drop the entries beneath it.
+    """
     trimmed = pattern.rstrip("/")
-    joined = f"{base}/{trimmed}"
-    return [joined, f"{joined}/**"]
+    if "/" in trimmed:
+        joined = f"{base}/{trimmed}"
+        return [joined, f"{joined}/**"]
+    return [
+        f"{base}/{trimmed}",
+        f"{base}/{trimmed}/**",
+        f"{base}/**/{trimmed}",
+        f"{base}/**/{trimmed}/**",
+    ]
 
 
 def host_paths(candidates: Sequence[str]) -> tuple[list[str], list[str]]:

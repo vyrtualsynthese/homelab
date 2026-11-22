@@ -16,11 +16,19 @@
 #     unbacked, and silence about it is how a backup stops being one.
 #
 # Adding a claim to an application's chart means adding a row here in the same change; the
-# sizes in the comments are the measurements taken on 2026-11-20, and `kind` decides whether
-# the databases in the row are copied through SQLite's backup API (`sqlite`) or the directory
-# is handed over as it is (`files`). Only the files a row's `db` patterns match are copied
-# through SQLite; everything else in a `sqlite` claim is byte-copied as part of the directory,
-# which is consistent because the app is not writing it between dumps.
+# sizes in the comments are measurements, not estimates: the `du -sb` taken on each node on
+# 2026-11-20, and for `nodes-streaming` the snapshot of 2026-11-22, which says so above its
+# rows. `kind` decides whether the databases in the row are copied through SQLite's backup API
+# (`sqlite`) or the directory is handed over as it is (`files`). Only the files a row's `db`
+# patterns match are copied through SQLite; everything else in a `sqlite` claim is byte-copied
+# as part of the directory, which is consistent because the app is not writing it between dumps.
+#
+# An `exclude` entry without a slash is a name, and it excludes that name at any depth. An entry
+# with a slash is relative to the claim's root. The distinction is not cosmetic: Plex keeps its
+# whole tree under `Library/Application Support/Plex Media Server/`, so `Cache/` has to mean the
+# cache three levels down. Until 2026-11-22 prepare.py anchored every entry at the claim root,
+# every Plex exclusion matched nothing, and 6.73 GiB of poster art, transcoder cache and Plex's
+# own database copies rode in `nodes-streaming` from the first snapshot.
 
 repository:
   bucket: ashudev-homelab-backup
@@ -59,12 +67,18 @@ streams:
   - name: nodes-nuc0
     budgetGiB: 4
     etcd: true
-  # 6.11 GiB on the first snapshot on 2026-11-20 (the claims plus one etcd copy), then about
-  # 0.21 GiB a night: 6.35 after two snapshots, 6.99 after five on 2026-11-22. Up to ~23
-  # snapshots can be retained, so the plateau is near 11 GiB. The 7 GiB this carried until
-  # 2026-11-22 was the design's 3.7 GB of claim data with one etcd copy, and the stream passed
-  # it on the fifth night. 14 leaves the ~3 GiB of headroom the canary needs to still mean
-  # something; it is not a licence to carry a media directory, which is hundreds of GiB.
+  # 10.04 GB in the nightly snapshot of 2026-11-22 05:30 (7ac41aa9) when it was measured from
+  # the bucket: 6.73 GiB of it was Plex's claim, whose excludes had been matching nothing, 2.05
+  # GiB the staged databases, 0.57 GiB the etcd copies. With the Plex row fixed the same night a
+  # snapshot holds about 2.7 GiB. The repository itself — which is what this budget bounds — read
+  # 6.75 GiB of raw data that evening, because the snapshots taken before the fix still hold the
+  # art and the monthly retention keeps one of them for a year; forgetting those six by hand is
+  # what would reclaim it, and nothing here does that. Up to ~23 snapshots can be retained, and
+  # the repository grew 0.21 GiB a night over its first five, so the plateau is near 11–12 GiB.
+  # The 7 GiB this carried until 2026-11-22 was the design's 3.7 GB of claim data plus one etcd
+  # copy, and the stream passed it on the fifth night. 14 leaves 2–3 GiB of headroom, which is
+  # still a canary for a row that picks up a directory it should not: a media directory is
+  # hundreds of GiB.
   - name: nodes-streaming
     budgetGiB: 14
     etcd: true
@@ -162,7 +176,8 @@ nodes:
       # and the old copy stays behind. On 2026-11-20 db-v2.db existed and could not be read,
       # which failed this job on purpose — a database that is there is not optional.
       - {claim: filebrowser-filebrowser-quantum-config, namespace: filebrowser, kind: sqlite}
-      # 20.8 MB. cache/ is a rebuildable search index.
+      # 20.8 MB when measured on 2026-11-20; the snapshot of 2026-11-22 holds no file from this
+      # claim at all, so whatever the application keeps in it is already excluded or gone.
       - {claim: filebrowser-filebrowser-quantum-data, namespace: filebrowser, kind: files, exclude: ["cache/"]}
       - {claim: koillection-conf, namespace: koillection, kind: files}
       # 100 KB. index-v* rebuilds itself by rescan.
@@ -180,7 +195,12 @@ nodes:
       - /mnt/ssd0
     etcdSnapshots: true
     claims:
-      # 2 310.9 MB → 473.5 together. MediaCover is poster art, logs and logs.db the rolling
+      # Every `→` figure below is the same measurement: snapshot 7ac41aa9 of 2026-11-22, read
+      # from the bucket, in MB of 10^6 bytes. It is what the row holds there — the claim with its
+      # exclusions applied, plus the staged database a `sqlite` row copies. The number on the
+      # left of an arrow is the 2026-11-20 `du -sb` on the node, which is what an exclusion is
+      # weighed against.
+      # 2 310.9 MB → 433.7 together. MediaCover is poster art, logs and logs.db the rolling
       # logs, Backups the app's own rotating db copies: all rebuilt from the metadata providers.
       - {claim: sonarr-config, namespace: media-stack, kind: sqlite, exclude: ["MediaCover/", "logs/", "logs.db*", "Backups/"]}
       - {claim: sonarr-anime-config, namespace: media-stack, kind: sqlite, exclude: ["MediaCover/", "logs/", "logs.db*", "Backups/"]}
@@ -188,35 +208,66 @@ nodes:
       - {claim: radarr-anime-config, namespace: media-stack, kind: sqlite, exclude: ["MediaCover/", "logs/", "logs.db*", "Backups/"]}
       - {claim: lidarr-config, namespace: media-stack, kind: sqlite, exclude: ["MediaCover/", "logs/", "logs.db*", "Backups/"]}
       - {claim: prowlarr-config, namespace: media-stack, kind: sqlite, exclude: ["MediaCover/", "logs/", "logs.db*", "Backups/"]}
-      # 16.4 + 27.2 MB → 12.9 + 12.1. The database is at db/bazarr.db, the rest is cache.
+      # 16.4 + 27.2 MB → 7.8 + 6.5. The database is at db/bazarr.db, the rest is cache.
       - {claim: bazarr-config, namespace: media-stack, kind: sqlite, db: ["db/*.db"], exclude: ["cache/", "backup/", "log/"]}
       - {claim: bazarr-anime-config, namespace: media-stack, kind: sqlite, db: ["db/*.db"], exclude: ["cache/", "backup/", "log/"]}
-      # 2 544.4 MB → 1 373.0: the 1.17 GB *_sv0_*.backup is autobrr's own copy of its db.
+      # 2 544.4 MB → 1 392.1: the 1.17 GB *_sv0_*.backup is autobrr's own copy of its db.
       - {claim: autobrr-config, namespace: media-stack, kind: sqlite, exclude: ["*_sv*_*.backup"]}
-      # 135.2 MB → 10.6: torrent_cache/ refills from the indexers.
+      # 135.2 MB → 6.4: torrent_cache/ refills from the indexers.
       - {claim: cross-seed-config, namespace: media-stack, kind: sqlite, exclude: ["torrent_cache/", "logs/"]}
+      # 4.7 MB → 0.5: requests dedupe into a database this small.
       - {claim: seerr-config, namespace: media-stack, kind: sqlite, db: ["db/*.sqlite*"]}
-      # 14.0 MB → 1.8, watch history is the only copy.
+      # 14.0 MB → 1.6, watch history is the only copy.
       - {claim: tautulli-config, namespace: media-stack, kind: sqlite, exclude: ["cache/", "logs/", "backups/"]}
+      # 25.7 MB → 0.9: the interface bundle is rebuilt from the image.
       - {claim: maintainerr-config, namespace: media-stack, kind: sqlite, exclude: ["ui/", "logs/"]}
-      # 17 KB. The VPN client's keys and config; the seed state is on the NFS export below.
+      # 1.1 KB. The VPN client's keys and config; the seed state is on the NFS export below.
       - {claim: qbittorrent-vpn-config, namespace: media-stack, kind: files}
-      # 7 663.7 MB → 1 851.5: the library databases hold collections, playlists, watch state and
-      # manual matches. Cache, Metadata, Media, Scanners and Codecs are all regenerated.
-      # Plex keeps its databases under Library/Application Support/Plex Media Server/, not at
-      # the claim root, so the pattern carries the whole relative path.
+      # 7 663.7 MB on disk → 350.7 MB in the snapshot, 350.6 of it the staged databases: the
+      # claim itself keeps 26 KB of configuration. What is worth restoring is the library
+      # database (collections, playlists, watch state, manual matches) and those files;
+      # everything else is regenerated or rotated, and each entry below says which. `Metadata/`
+      # is poster art and the per-item XML, 3.0 GiB; `Cache/` is the transcode and PhotoTranscoder
+      # cache, 2.1 GiB; `Media/` the local thumbnails, 254 MiB; `Scanners/` and `Codecs/` the
+      # binaries Plex downloads or ships; `Logs/`, `Crash Reports/`, `Updates/` and
+      # `Diagnostics/` its rolling output. `*.db-*` is Plex's own eight dated copies of the two
+      # databases, 1.4 GiB: the staged copy is the consistent one and the dates are what a
+      # restore must never prefer.
+      #
+      # Measured 2026-11-22 from the bucket (snapshot 7ac41aa9): the claim held 6.73 GiB and none
+      # of these entries had ever matched, because all of it sits three levels down under
+      # `Library/Application Support/Plex Media Server/` and prepare.py anchored each entry at the
+      # claim root. The rule is now at the top of this file; the same reason is why the `db`
+      # pattern carries the whole relative path.
+      #
       # A Plex that has never started has written no database yet: the row then prints
       # `row-warning` and the job carries on, because the claim is still backed up whole. This
       # is the case the 2026-11-20 job failed on; the three rules are at the top of this file.
-      - {claim: plex-config, namespace: media-stack, kind: sqlite, db: ["Library/Application Support/Plex Media Server/Plug-in Support/Databases/*.db"], exclude: ["Cache/", "Metadata/", "Media/", "Scanners/", "Codecs/"]}
-      # 67.3 MB → 5.4: covers are rebuilt from the files, cache* and backups/ are copies.
+      - claim: plex-config
+        namespace: media-stack
+        kind: sqlite
+        db: ["Library/Application Support/Plex Media Server/Plug-in Support/Databases/*.db"]
+        exclude:
+          - Cache/
+          - Metadata/
+          - Media/
+          - Scanners/
+          - Codecs/
+          - Logs/
+          - Crash Reports/
+          - Updates/
+          - Diagnostics/
+          - "*.db-*"
+      # 67.3 MB → 2.6: covers are rebuilt from the files, cache* and backups/ are copies.
       # `kavita.db` that is present and cannot be staged fails this job — measured on 2026-11-20,
       # while Kavita was writing its first database. It is data the backup could not read, so it
       # stays a failure; a row with no database file at all is the tolerated case in Plex's row
       # above.
       - {claim: kavita-config, namespace: media-stack, kind: sqlite, exclude: ["covers/", "logs/", "cache*", "backups/"]}
       # Pinned for the same reason as pgAdmin: a released claim of this name left a directory.
+      # 152.1 MB → 1.0: `app.db`, its settings and the library's own metadata; the 151 MB of
+      # thumbnails is what the exclusion removes.
       - {claim: calibre-web-automated-config, namespace: media-stack, kind: sqlite, pv: pvc-44eefd64-dcd4-4161-ab69-6e36151e7213, exclude: ["log/", "log_archive/", "thumbnails/"]}
-      # 4 KB: books waiting to be filed are not on the share yet. The thumbnails live in the
-      # config claim above, where they are excluded, not here.
+      # No file in the 2026-11-22 snapshot: nothing was waiting to be filed. The thumbnails live
+      # in the config claim above, where they are excluded, not here.
       - {claim: calibre-web-automated-ingest, namespace: media-stack, kind: files, exclude: ["thumbnails/"]}
