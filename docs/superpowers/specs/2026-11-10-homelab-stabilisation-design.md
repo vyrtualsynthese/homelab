@@ -499,6 +499,13 @@ clean path, performed at least once; a monitoring alert fires if the newest snap
    from the same git branch, so the rehearsal exercises the real render path, not just `helm
    template`. If `nas` cannot spare three VMs alongside PostgreSQL, the TSDB and Loki, the fallback
    is a workstation; the requirement is three disposable machines, not a particular host.
+
+   *Changed 2026-11-23:* the cluster was never built, and it is not going to be — cards 7 and 16 were
+   deleted. The Traefik cutover ran live instead, guarded by a schema comparison of chart 27 against
+   chart 42 and by the certificate digest, because a lookalike cannot prove the certificate store, the
+   one file with no lock. The single step with no way back, the etcd restore, was proved on a
+   single-node K3s under WSL2 on the workstation. The plan is
+   [`../plans/2026-11-11-w5-platform.md`](../plans/2026-11-11-w5-platform.md).
 2. **Rehearse the restore** before touching production: etcd snapshot, wipe one test node, restore,
    verify quorum. A backup nobody has restored is not a backup.
 3. **The GPU node cannot be rehearsed.** The test cluster has no GPU, and `streaming` carries Plex
@@ -524,7 +531,7 @@ clean path, performed at least once; a monitoring alert fires if the newest snap
    then the `nas` agent last. Pin each step; never let the stable channel choose.
 
 Acceptance: all four nodes on the target version; zero `containo.us` references; the same
-certificate served before and after; the test cluster proved the runbook first.
+certificate served before and after; the etcd restore proved before the first node moved.
 
 ### W6 — Observability
 
@@ -607,8 +614,9 @@ W0 cleanup
 W4 offsite: not urgent, independent, take it whenever the operator wants it
 ```
 
-W3 and W7 can proceed in parallel with W5 only if the upgrades are rehearsed on the test cluster
-first; they touch the same ArgoCD applications otherwise.
+W3 and W7 touch the same ArgoCD applications as W5, so running them in parallel needs the upgrade
+sequence proved first; the test cluster that was going to prove it was withdrawn on 2026-11-23, which
+makes serialising them the simpler answer.
 
 **Operator's order (2026-11-11): W5, then W6 (superseded — see the 2026-11-12 design).** This is their call and it overrides the default
 above. It has one cost that is worth writing down rather than arguing: W5 then runs with no backup
@@ -659,7 +667,7 @@ recorded in §8.7.
 |---|---|---|
 | Rebuilding without any backup (accepted) | a mistake in W3 costs that day's work and nothing older | small waves, one app at a time, configuration in git wherever the chart allows it; take W4 as soon as it stops feeling optional |
 | A doomed-claim pod restarts before it is rebuilt | the data is lost (already accepted) and the app is left half-dead with no record | decide each of the eleven in W0 — rebuild now or stop deliberately — and never leave one to restart on its own |
-| etcd quorum lost during a control-plane upgrade | cluster down, no easy recovery | test cluster, one server at a time, etcd snapshot verified before the first step |
+| etcd quorum lost during a control-plane upgrade | cluster down, no easy recovery | one server at a time, an etcd snapshot taken before the first step, and the restore procedure proved beforehand |
 | ACME duplicate-certificate limit during the Traefik cutover | certificates unavailable for a week | reuse the existing ACME claim, single cutover window |
 | `local-path` node disk loss | app and config gone | backups from W4, monthly restore drill |
 | Backup target locked out (single account) | domains and backups lost together | keep the registrar separate, export zones to git |

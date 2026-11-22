@@ -465,8 +465,9 @@ recorded with its date, duration and result:
    its UI and database check out. The staged SQLite copy is what is used.
 3. **A file from syncthing** — one file restored and read back, proving the stream that has never
    worked.
-4. **etcd** — a snapshot restored into the W5 test cluster (card #8 owns the rehearsal); this design
-   adds "restore from the OVH copy" to that card and a check that a Secret survives.
+4. **etcd** — a snapshot restored into a throwaway single-node server, card #8, done 2026-11-22 and
+   recorded in [`restore-etcd.md`](../../runbooks/restore-etcd.md); this design adds "restore from the
+   OVH copy" to that card and a check that a Secret survives.
 
 The monthly drill repeats one of them, rotating, and the runbook keeps the log. A backup without a
 logged restore is a hope with a timestamp, which is what `docs/running-it/disaster-recovery.md` says
@@ -530,7 +531,8 @@ Status: **in force since 2026-11-22.** Versioning was switched on that day
 
 A reviewer read this design as a builder and raised seven gaps. Six are settled here, as my calls; the
 seventh was the operator's (the etcd route: wait for W5), and it settles the etcd restore drill with
-it, since that drill needs the W5 test cluster.
+it, since that drill needs a cluster to restore into. That cluster turned out to be a throwaway
+single-node server on 2026-11-22, not the W5 test cluster this paragraph assumed.
 
 | Gap | Call |
 |---|---|
