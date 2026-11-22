@@ -120,7 +120,7 @@ ingressRoute:
     enabled: true
     # -- Use a pre-existing certificate instead of asking Traefik to issue one.
     secretName: ""
-    # -- Traefik ACME resolver name, for example `myresolver`.
+    # -- Traefik ACME resolver name, for example `ovhresolver`.
     certResolver: ""
     # -- TLSOption resource name, from the `traefik-gate` chart.
     options: internal-tls

@@ -166,9 +166,9 @@ metrics:
 
 # The OVH DNS-01 provider reads its credentials from the environment. The
 # Secret holds the four values only; the two timeouts are configuration and
-# stay readable here. The consumer key behind it is scoped to
-# /domain/zone/ashudev.com/{record,record/*,refresh}, so a copy of this pod
-# cannot change delegation, storage or another domain.
+# stay readable here. Two zones, one key: the consumer key is scoped to
+# /domain/zone/{ashudev.com,ashuvidz.com}/{record,record/*,refresh}, so a copy
+# of this pod cannot change delegation, storage or another domain.
 envFrom:
   - secretRef:
       name: traefik-ovh
@@ -179,21 +179,14 @@ env:
     value: "10"
 
 certificatesResolvers:
-  myresolver:
-    acme:
-      email: valentin.ronteix@ashudev.com
-      tlsChallenge: true
-      # Must match the mounted claim; a different path means the store is empty
-      # and every name is re-issued.
-      storage: /data/acme.json
-  # The ashudev.com anchor asks this one for a wildcard: DNS-01 is the only
-  # challenge Let's Encrypt accepts for `*.ashudev.com`. ashuvidz.com stays on
-  # `myresolver` until its delegation moves off AWS nameservers.
+  # One resolver for both public certificates. It was the ashudev.com wildcard's
+  # alone until ashuvidz.com's delegation moved to OVH nameservers on
+  # 2026-11-22; the TLS-ALPN resolver it replaced, `myresolver`, is retired and
+  # its entry has left the store. DNS-01 is also the only challenge Let's
+  # Encrypt accepts for `*.ashudev.com`, which is why the wildcard forced it.
   ovhresolver:
     acme:
       email: valentin.ronteix@ashudev.com
-      # Same file as `myresolver`; the store is keyed by resolver name, so the
-      # two accounts and their certificates coexist.
       storage: /data/acme.json
       dnsChallenge:
         provider: ovh

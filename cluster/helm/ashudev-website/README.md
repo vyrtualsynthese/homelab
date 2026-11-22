@@ -81,7 +81,7 @@ Three routers:
 
 | Router | Entry point | What it does |
 |---|---|---|
-| `ashudev` | `websecure` | the site, TLS from `myresolver` |
+| `ashudev` | `websecure` | the site, TLS from the certificate `ovhresolver` orders for the wildcard |
 | `ashudev-redirect` | `web` | 301 to HTTPS through `kube-system/redirect-https` |
 | `ashudev-www` | `web`, `websecure` | 301 `www.ashudev.com/<path>` → `ashudev.com/<path>`, with its own `tls` |
 
