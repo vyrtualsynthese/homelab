@@ -6,7 +6,9 @@
 >
 > **Use it when** you arrive with a question already formed: is this hostname public, which chart do
 > I copy, why is this panel blank, what does this alert mean, which Secret is missing · **Verified**
-> 2026-11-17 · **Kind:** living page
+> 2026-11-22 · **Kind:** explanation
+>
+> **Sources** `mkdocs.yml`, the pages this one indexes, `hack/gen_docs.py`
 
 These pages are long on purpose. A reference page is a table of facts with a date attached and a
 command that rebuilds it, so that the same question gets the same answer twice; the argument for why
@@ -47,7 +49,7 @@ The inventory a rebuild reads first, and the fault that is still open.
 
 | Page | Answers | Read by |
 |---|---|---|
-| [Secrets](../secrets.md) | every Secret the charts expect to find already in the cluster, its keys, its consumer, and where its value came from — never the value | whoever is stuck in `CreateContainerConfigError`, or rebuilding a namespace |
+| [Secrets](../secrets.md) | every Secret the charts expect to find already in the cluster, its keys, its consumer, and where its value came from — never the value. It is listed under [Security](../security/README.md) | whoever is stuck in `CreateContainerConfigError`, or rebuilding a namespace |
 | [qBittorrent Web UI stalls](../qbittorrent-webui-stalls.md) | what was measured while the Web UI stopped answering, and what the evidence points at | whoever is asked to fix it next, so the session starts from data |
 
 ## How to keep a page true
