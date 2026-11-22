@@ -91,13 +91,25 @@ access_key_id` and `-raw secret_access_key` in that stack. They are not the stat
 must never be: that one reaches the OpenTofu state. The restic password is not an S3 credential at
 all — it encrypts the repository, and losing it loses the backups.
 
-Three credentials are **not** Kubernetes Secrets, and a rebuild needs all three:
+Three credentials are **not** Kubernetes Secrets, and a rebuild needs all three; the fourth row is a
+Secret that does not exist yet.
 
-| Credential | Why losing it matters | Where it is kept |
-|---|---|---|
-| the restic repository password | every repository is ciphertext under it; without it the bucket is noise, not a backup | the password manager, plus one sealed paper copy |
-| the K3s server join token (`/var/lib/rancher/k3s/server/token`) | an etcd snapshot is encrypted with a key derived from it, so restoring onto a rebuilt host with a different token produces an unreadable snapshot | the password manager |
-| `k3s-etcd-snapshot-s3-config` | reserved: the Secret the official K3s upload reads, with keys `bucket`, `endpoint`, `access-key`, `secret-key`. Created by the K3s 1.31 upgrade (W5), **not** by the restic work | does not exist yet |
+| Credential | Why losing it matters | Where it is kept | Failure domain |
+|---|---|---|---|
+| the restic repository password | every repository is ciphertext under it; without it the bucket is noise, not a backup | Bitwarden, item `homelab-backup-last-resort` (Homelab folder, master-password re-prompt on), written 2026-11-22 | cloud vault |
+| the OVH S3 pair for the bucket | the bucket cannot be opened, though its contents are intact. The cluster's copy is the `backup-restic` Secret, which dies with the cluster | the same vault item, and derivable: `tofu output -raw access_key_id` in `infra-main/infra-main/ovh` reprints it from the OVH API key | cloud vault, and re-derivable |
+| the K3s server join token (`/var/lib/rancher/k3s/server/token`) | an etcd snapshot is encrypted with a key derived from it, so restoring onto a rebuilt host with a different token produces an unreadable snapshot | the same vault item, field `K3S_SERVER_TOKEN` | cloud vault |
+| `k3s-etcd-snapshot-s3-config` | reserved: the Secret the official K3s upload reads, with keys `bucket`, `endpoint`, `access-key`, `secret-key`. Created by the K3s 1.31 upgrade (W5), **not** by the restic work | does not exist yet | — |
+
+**The first three rows above share one failure domain.** Until 2026-11-22 Bitwarden held neither the
+repository password nor a K3s token, and the note that read like one ("Kluster Backup codes") is the
+retired AWS and syncthing setup whose passwords open nothing. The paper copy the design describes
+cannot be checked from here and would not survive the fire anyway: a second copy that outlives both
+the OVH account and the vault is card #535, frozen pending a second EU provider. The Bitwarden master
+password and its 2FA recovery codes are the root of the chain and are written down nowhere.
+
+The procedure that consumes these, with the cluster assumed gone, is
+[`runbooks/last-resort.md`](runbooks/last-resort.md).
 
 ## The PostgreSQL instance (`databases` namespace)
 
