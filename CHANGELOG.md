@@ -16,6 +16,18 @@ All notable changes to this repository. The format follows
 
 ### Changed
 
+- Traefik's certificate store holds sixteen certificates instead of thirty-four. The eighteen
+  removed entries were for hosts no router has served since they were retired: `atlantis`,
+  `cross-seed`, `dashy.kub.home`, `discourse`, `firefly`, `firefly-importer`, `forum.ashuvidz.com`,
+  `ghostfolio`, `guacamole`, `linkstack`, `matrix`, `monitorss`, `overseerr`, `postiz`, `synapse`,
+  `tautulli.kub.home`, `wiki.ashuvidz.com` and `wiki.kub.home`. Traefik renews every entry it holds,
+  so each one kept consuming the weekly Let's Encrypt issuance limit. The file was backed up on its
+  own volume as `acme.json.pre-orphan-cleanup-2026-11-22` (md5 `23a5546e…`) and the trimmed file has
+  md5 `fe822754…`; all sixteen kept names still complete a TLS handshake with their own name and
+  answer over HTTPS. The procedure and its traps are in
+  [`docs/runbooks/acme-store.md`](docs/runbooks/acme-store.md). The renewal window of the earliest
+  kept certificate opens around 2026-12-07; the entry count staying at sixteen after that date is
+  what proves the orphans cannot come back.
 - Traefik runs as one `Deployment` replica on `streaming` instead of a DaemonSet on every node. Two
   routers sharing `/data/acme.json`, which has no lock, corrupt it and re-request every name, and
   Let's Encrypt allows five duplicates a week: a morning of that takes every public hostname down.
