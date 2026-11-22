@@ -88,7 +88,7 @@ repository passes it. The four budgets sum to 32 GiB, above the top of the expec
 the `nodes-streaming` one carries a separate etcd copy per retained snapshot — so a stream that
 picks up a directory it should not have still trips the check long before the bill notices.
 
-## The four ways it fails
+## The five ways it fails
 
 1. **A row resolves to nothing.** The claim was renamed, deleted, or moved to another node. That
    node's job fails and `JobFailed` fires; the fix is the row, not the job. The job never silently
@@ -121,6 +121,11 @@ picks up a directory it should not have still trips the check long before the bi
    else, and without it the bucket is ciphertext. That is the one loss no monitoring can repair, and
    it is why one vault holds the whole chain: [`runbooks/last-resort.md`](../runbooks/last-resort.md)
    is the page for the morning it happens.
+5. **Nobody drills a restore.** The drill log is the only proof the bytes come back, and a year
+   without a drill looks exactly like a healthy system. `RestoreDrillOverdue` warns when the newest
+   row of that log is more than 90 days old, or when it cannot read the log at all; the fix is a
+   drill, not a job. The log and its machine-readable copy are named in
+   [`runbooks/restore.md`](../runbooks/restore.md#the-drill-log).
 
 ## What has been proved, and what has not
 

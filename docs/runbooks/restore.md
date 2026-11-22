@@ -357,6 +357,14 @@ recently, not what is believed.
 back onto the live claim and served from it, and the bucket opens from a laptop with no cluster at all.
 Section 4's etcd rehearsal is the one left unproven.
 
+The table above is the human record; the alert reads a machine-readable copy. `restoreDrills` in
+`cluster/helm/monitoring/prometheus/values.yaml` holds one entry per row (Unix seconds;
+`date -u -d 2026-11-21 +%s` produces one), node-exporter serves them as
+`homelab_restore_drill_timestamp_seconds`, and `RestoreDrillOverdue` warns when the newest row is
+more than 90 days old — three missed monthly drills. A row added here without the matching entry is
+invisible to that alert, so the two change together; [`../reference/alerts.md`](../reference/alerts.md)
+is the rule's page.
+
 ## When a restore surprises you
 
 - **`restic: wrong password`** — the Secret changed, or was recreated with a new value. The bucket's
