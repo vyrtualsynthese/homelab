@@ -1,0 +1,9 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: fixture
+spec:
+  destination:
+    namespace: media-stack
+  source:
+    path: cluster/helm/media-stack/fixture
