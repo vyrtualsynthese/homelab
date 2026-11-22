@@ -5,8 +5,11 @@
 > answers.
 >
 > **Use it when** you are adding a route, an app answers `403` or serves the wrong certificate, or you
-> need to know whether a hostname is reachable from outside · **Verified** 2026-11-21 · **Kind:** living
-> page
+> need to know whether a hostname is reachable from outside · **Verified** 2026-11-22 ·
+> **Kind:** explanation
+>
+> **Sources** `cluster/helm/**/templates/*.yaml`, `cluster/argocd/projects/**/*.yaml`,
+> `cluster/infrastructure/traefik/`, `hack/check_exposure.py`
 
 ## How a request arrives
 
@@ -119,5 +122,9 @@ that carries the gate, since that would make it unreachable. `kavita` has a `cer
 name but is not on the allowlist, so its gate is required, not optional.
 
 The full hostname table — app, gate, certificate, public or not — is
-[reference/routes.md](../reference/routes.md), the one home for route and gate state.
+[reference/routes.md](../reference/routes.md), the one home for route and gate state. It is rendered
+from the Applications' charts, so the one route it cannot show is the Traefik dashboard's:
+`traefik.kub.local` is a value of the Traefik Helm release
+(`cluster/infrastructure/traefik/values-v3.yaml`), not an Application, and its `web` twin is
+`cluster/infrastructure/traefik/dashboard/redirect.yaml`.
 [status.md](../status.md) carries the applications that are not working.

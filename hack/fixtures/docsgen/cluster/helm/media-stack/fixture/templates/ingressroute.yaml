@@ -1,0 +1,19 @@
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: fixture
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - kind: Rule
+      match: Host(`{{ .Values.ingressRoute.host }}`)
+      middlewares:
+        - name: kube-system-lan-only@kubernetescrd
+      services:
+        - name: fixture
+          port: 80
+  tls:
+    options:
+      name: internal-tls
+      namespace: kube-system
