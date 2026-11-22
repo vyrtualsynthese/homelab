@@ -10,7 +10,9 @@ and the claim directories are mounted read-only. It does two things the shell ca
   consistent snapshot of a database that is being written, unlike ``cp``.
 
 Everything it writes lands in the staging directory, and the two files it leaves there are
-what ``backup-node.sh`` hands to restic: the paths to read and the patterns to skip.
+what ``backup-node.sh`` hands to restic: the paths to read and the patterns to skip. A third
+file, the rows' unmatched exclusions, is not read by this job at all: it sits inside the tree
+restic backs up so the nightly verifier, which never sees a claim, can report it.
 """
 
 from __future__ import annotations
@@ -18,6 +20,7 @@ from __future__ import annotations
 import argparse
 import fnmatch
 import json
+import os
 import pathlib
 import shutil
 import sqlite3
@@ -26,6 +29,9 @@ from typing import Sequence
 
 DEFAULT_DB_PATTERNS = ("*.db", "*.sqlite", "*.sqlite3")
 SIDECAR_SUFFIXES = ("-wal", "-shm", "-journal")
+# Where the rows' unmatched exclusions are written, inside the tree restic backs up: the
+# verifier reads snapshots and never a claim, so this file is how it hears about them.
+EXCLUDE_REPORT = "exclude-unused.json"
 
 
 class RowError(RuntimeError):
@@ -155,22 +161,49 @@ def stage_databases(
     return written
 
 
-def matches_any(relative: pathlib.Path, patterns: Sequence[str]) -> bool:
-    """Whether a claim-relative path is covered by one of the row's restic patterns.
+def matches(relative: pathlib.Path, pattern: str) -> bool:
+    """Whether a claim-relative path is covered by one of the row's exclude entries.
 
     The same reading as ``_absolute_patterns`` gives restic, so the two halves of a row agree:
     a pattern without a slash is a name and matches a path component at any depth; a pattern
     with a slash is relative to the claim root.
     """
-    for pattern in patterns:
-        trimmed = pattern.rstrip("/")
-        if "/" in trimmed:
-            text = str(relative)
-            if fnmatch.fnmatch(text, trimmed) or text.startswith(f"{trimmed}/"):
-                return True
-        elif any(fnmatch.fnmatch(part, trimmed) for part in relative.parts):
-            return True
-    return False
+    trimmed = pattern.rstrip("/")
+    if "/" in trimmed:
+        text = str(relative)
+        return fnmatch.fnmatch(text, trimmed) or text.startswith(f"{trimmed}/")
+    return any(fnmatch.fnmatch(part, trimmed) for part in relative.parts)
+
+
+def matches_any(relative: pathlib.Path, patterns: Sequence[str]) -> bool:
+    """Whether a claim-relative path is covered by any of the row's restic patterns."""
+    return any(matches(relative, pattern) for pattern in patterns)
+
+
+def unused_excludes(claim_dir: pathlib.Path, patterns: Sequence[str]) -> list[str]:
+    """The row's exclude entries that match nothing under its claim, in the order written.
+
+    An entry that matches nothing is a line doing nothing while the row reads as if it did: the
+    exclusions are what keep 6.73 GiB of Plex's poster art, transcoder cache and dated database
+    copies out of the stream, and from 2026-11-20 to 2026-11-22 none of them matched, because
+    they were anchored at the claim root and Plex keeps its tree three levels down (#447).
+    Nothing failed, because nothing looked.
+
+    The walk stops at the first path that satisfies the last unmatched entry, so a row whose
+    entries all match costs a directory listing rather than a full traversal, and a row with an
+    unmatched entry costs one pass over the claim.
+    """
+    pending = [pattern for pattern in patterns if pattern.rstrip("/")]
+    if not pending:
+        return []
+    for dirpath, dirnames, filenames in os.walk(claim_dir):
+        base = pathlib.Path(dirpath)
+        for name in (*dirnames, *filenames):
+            relative = (base / name).relative_to(claim_dir)
+            pending = [p for p in pending if not matches(relative, p)]
+            if not pending:
+                return []
+    return pending
 
 
 def exclude_patterns(source: pathlib.Path, database_names: Sequence[str]) -> list[str]:
@@ -270,6 +303,7 @@ def main(argv: list[str] | None = None) -> int:
 
     resolved: list[dict] = []
     failures: list[str] = []
+    unused: list[dict] = []
     for row in config.get("claims", []):
         label = f"{row['namespace']}/{row['claim']}"
         try:
@@ -278,6 +312,13 @@ def main(argv: list[str] | None = None) -> int:
             failures.append(str(exc))
             print(f"row-error {exc}", file=sys.stderr)
             continue
+
+        # A warning, not an error: a freshly installed application matches nothing either, and
+        # an exclusion that matches nothing costs space rather than data — the stream budget is
+        # what bounds that. See unused_excludes for the night this was written for.
+        for pattern in unused_excludes(claim_dir, row.get("exclude") or []):
+            print(f"exclude-unused row={label} pattern={pattern}")
+            unused.append({"row": label, "pattern": pattern})
 
         entry = dict(row)
         entry["dir"] = str(claim_dir)
@@ -309,6 +350,10 @@ def main(argv: list[str] | None = None) -> int:
     present, missing = host_paths(args.host_path or config.get("hostPaths") or [])
     for path in missing:
         print(f"host-path missing: {path}")
+
+    # Written even when every entry matched: the verifier cannot tell an old snapshot, which has
+    # no file, from a night whose entries all matched, which has this one with an empty list.
+    (claims_dir / EXCLUDE_REPORT).write_text(json.dumps(unused) + "\n")
 
     paths_file, exclude_file = write_restic_inputs(resolved, staging, present)
     print(f"restic-paths={paths_file} exclude={exclude_file} rows={len(resolved)}")

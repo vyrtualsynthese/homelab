@@ -262,6 +262,24 @@ class VerifyTests(unittest.TestCase):
         source = (CHART / "files/verify.py").read_text()
         self.assertIn(f'STAGED_PREFIX = "{staging}/claims/"', source)
 
+    def test_each_stream_says_whether_a_node_job_stages_claims_into_it(self):
+        # The verifier reads the unused-exclusion report from a snapshot a node job wrote. The
+        # nfs stream is a shell job with no prepare.py, so it must not be asked for one.
+        cms = {d["metadata"]["name"]: d["data"] for d in render() if d["kind"] == "ConfigMap"}
+        streams = {s["name"]: s for s in json.loads(cms["backup-streams"]["streams.json"])}
+        for node in values()["nodes"]:
+            self.assertIs(streams[f"nodes-{node}"]["claims"], True, node)
+        self.assertIs(streams["nfs"]["claims"], False)
+
+    def test_the_verifier_reads_the_report_the_prepare_step_writes(self):
+        # Two files, one path: the verifier dumps it, the node job writes it. A rename on one
+        # side would leave the morning check reading a file that never appears, silently.
+        name = "exclude-unused.json"
+        self.assertIn(f'EXCLUDE_REPORT = "{name}"',
+                      (CHART / "files/prepare.py").read_text())
+        self.assertIn(f'EXCLUDE_REPORT = f"{{STAGED_PREFIX}}{name}"',
+                      (CHART / "files/verify.py").read_text())
+
 
 if __name__ == "__main__":
     unittest.main()

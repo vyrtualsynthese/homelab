@@ -165,6 +165,26 @@ directory that should not be in a row.
    drill, not a job. The log and its machine-readable copy are named in
    [`runbooks/restore.md`](../runbooks/restore.md#the-drill-log).
 
+## The two warnings, and why they do not fail a night
+
+A `sqlite` row whose claim holds no database yet prints `row-warning` and the job carries on
+(case 1), and a row's `exclude` entry that matches nothing prints `exclude-unused` and the job
+carries on as well. Both answer the same question — is this application installed and running, or is
+this row describing a tree that is no longer there — and both are deliberately not failures: a
+working night must not read as a broken backup, which is what an empty `cache/` on a first night
+would look like.
+
+The unused exclusion is the one that leaves nothing to spot in the snapshot: an excluded path is
+absent whether or not it exists, so the verifier cannot see it. The node job therefore writes the
+entries it could not match beside the staged databases, and `backup-verify` repeats them at 08:30 as
+`exclude-unused stream=<name> row=<namespace>/<claim> pattern=<entry>`. It is a line, not a
+`problem`: an exclusion that matches nothing does not lose data, it carries more than the matrix
+says, and `budgetGiB` is the ceiling that bounds that. The five Plex entries that matched nothing
+from 2026-11-20 to 2026-11-22 are the case this is written for: six green nights, 6.73 GiB of
+poster art in every snapshot, and nothing anywhere that said a row's exclusion was doing nothing.
+The `nfs` stream has no prepare step — its exclusions are shell words in `backup-nfs.sh` — so its
+rows are not checked this way.
+
 ## What has been proved, and what has not
 
 Proved on 2026-11-20: a database is copied through SQLite's backup API into a clean file even when

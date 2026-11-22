@@ -9,6 +9,7 @@ in a line Loki can index:
     stream=<name> snapshots=<n> bytes=<b> newest=<iso8601|none> age_h=<h|->
     etcd stream=<name> file=<basename> age_h=<h>
     staged stream=<name> row=<namespace>/<claim> files=<n>
+    exclude-unused stream=<name> row=<namespace>/<claim> pattern=<entry>
 
 Exits non-zero when a stream is empty, older than 26 hours, or larger than its budget —
 when a control-plane stream's etcd copy is older than the same window, because the copy is
@@ -16,6 +17,12 @@ the only part of the etcd story this cluster can prove today — and when a `sql
 staged no database into the stream's newest snapshot, which is what a `db:` pattern that
 went stale looks like from outside: the job stays green and the copy the row exists for is
 gone.
+
+It also repeats the node jobs' `exclude-unused` lines — a row's exclusion that matched nothing
+in its claim. Those are warnings and do not fail the run: an application installed and not yet
+started matches nothing either, and an exclusion that matches nothing costs space rather than
+data, which the budget check is what bounds. The job cannot check them itself — it reads
+snapshots and never a claim — so it reports the answer `prepare.py` wrote into the snapshot.
 """
 
 import argparse
@@ -33,6 +40,9 @@ ETCD_PREFIX = "/host/etcd-snapshots/"
 # prepare.py is given `--staging /staging` and hands restic `<staging>/claims`, so a staged
 # database is stored under this absolute prefix, one directory per row.
 STAGED_PREFIX = "/staging/claims/"
+# The same job writes the rows' unmatched exclusions here, beside the staged databases, because
+# this script is given no claim to look at.
+EXCLUDE_REPORT = f"{STAGED_PREFIX}exclude-unused.json"
 GIB = 1024**3
 
 
@@ -160,6 +170,30 @@ def check_staged(name: str, rows: list[dict], entries: list[dict]) -> tuple[list
     return lines, problems
 
 
+def read_exclude_report(
+    repository: str, snapshot_id: str, entries: list[dict], restic: str = "restic"
+) -> list[dict]:
+    """The unused-exclusion report the node job left in the snapshot, if it left one.
+
+    A claim is never mounted where this runs, so whether an `exclude` entry still matches
+    anything is answered by the job that does have the claim, and travels with the snapshot. A
+    snapshot older than the report carries no file: absence is not a problem to report, it is a
+    night whose job did not write one, and the next night's snapshot has it.
+    """
+    if not any(entry.get("path") == EXCLUDE_REPORT for entry in entries):
+        return []
+    text = run_restic(repository, "dump", snapshot_id, EXCLUDE_REPORT, "--no-lock", restic=restic)
+    return json.loads(text)
+
+
+def exclude_lines(name: str, report: list[dict]) -> list[str]:
+    """One line per exclusion that matched nothing, in the shape the node job printed it."""
+    return [
+        f"exclude-unused stream={name} row={item['row']} pattern={item['pattern']}"
+        for item in report
+    ]
+
+
 def run_restic(repository: str, *args: str, restic: str = "restic") -> str:
     done = subprocess.run(
         [restic, "-r", repository, *args],
@@ -206,7 +240,7 @@ def main(argv: list[str] | None = None) -> int:
         # and holds none of the claims. Without a tagged one, fall back to the newest, so an
         # old repository still gets the etcd check it had.
         snapshot = stream_snapshot(snapshots, name) or newest_snapshot(snapshots)
-        if (stream.get("etcd") or rows) and snapshot:
+        if (stream.get("etcd") or rows or stream.get("claims")) and snapshot:
             # `restic ls` exits 1 when the repository holds no snapshot at all, and a
             # repository with no snapshot is what check_stream just reported; asking for the
             # file list would abort the run instead of naming the stream.
@@ -223,6 +257,13 @@ def main(argv: list[str] | None = None) -> int:
                 for line in lines:
                     print(line, flush=True)
                 problems.extend(staged_problems)
+            if stream.get("claims"):
+                # Warned, never failed: see the module docstring. The line is the point; a
+                # warning that changes the exit code would page for a working night.
+                report = read_exclude_report(
+                    repository, snapshot["id"], entries, restic=args.restic)
+                for line in exclude_lines(name, report):
+                    print(line, flush=True)
         else:
             if stream.get("etcd"):
                 print(f"etcd stream={name} file=- age_h=-", flush=True)

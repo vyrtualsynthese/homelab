@@ -201,6 +201,22 @@ class StreamSnapshotTests(unittest.TestCase):
         self.assertIsNone(load().stream_snapshot(snapshots, "nodes-nas"))
 
 
+class ExcludeReportTests(unittest.TestCase):
+    """The report `prepare.py` leaves in the snapshot, which is the verifier's only way in."""
+
+    def test_the_line_names_the_stream_the_row_and_the_pattern(self):
+        self.assertEqual(
+            load().exclude_lines(
+                "nodes-streaming",
+                [{"row": "media-stack/plex-config", "pattern": "Cache/"}]),
+            ["exclude-unused stream=nodes-streaming "
+             "row=media-stack/plex-config pattern=Cache/"],
+        )
+
+    def test_a_snapshot_taken_before_the_report_existed_is_left_alone(self):
+        self.assertEqual(load().read_exclude_report("s3:x/nfs", "a", []), [])
+
+
 class MainTests(unittest.TestCase):
     """The wiring, against a stand-in restic: argument order, exit code and output shape."""
 
@@ -375,6 +391,68 @@ class MainTests(unittest.TestCase):
                 code = load().main(["--config", str(config), "--restic", str(fake)])
         self.assertEqual(code, 0, out.getvalue())
         self.assertIn("staged stream=nodes-nuc0 row=databases/pgadmin-config files=1", out.getvalue())
+
+    def test_an_unused_exclusion_is_repeated_in_the_morning_and_does_not_fail_the_run(self):
+        # The verifier never sees a claim, so it repeats what the node job wrote into the
+        # snapshot. A warning line, not a problem: a warning that changed the exit code would
+        # page for a night that backed everything up.
+        stamp = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+        report = '[{"row": "media-stack/plex-config", "pattern": "Cache/"}]'
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp = pathlib.Path(tmp_dir)
+            fake = tmp / "restic"
+            fake.write_text(
+                "#!/bin/sh\n"
+                'case "$3" in\n'
+                f"  snapshots) echo '[{{\"id\": \"a\", \"time\": \"{stamp}\", \"tags\": [\"stream=nodes-streaming\"]}}]' ;;\n"
+                "  stats) echo '{\"total_size\": 4096}' ;;\n"
+                "  ls) echo '{\"path\": \"/staging/claims/exclude-unused.json\", \"type\": \"file\"}' ;;\n"
+                "  dump) if [ \"$5\" = \"/staging/claims/exclude-unused.json\" ]; then\n"
+                f"          echo '{report}' ;\n"
+                "        else exit 8 ; fi ;;\n"
+                "  *) exit 9 ;;\n"
+                "esac\n"
+            )
+            fake.chmod(0o755)
+            config = tmp / "streams.json"
+            config.write_text(json.dumps([{
+                "name": "nodes-streaming", "repository": "s3:x/nodes-streaming",
+                "budgetGiB": 1, "claims": True,
+            }]))
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                code = load().main(["--config", str(config), "--restic", str(fake)])
+        self.assertEqual(code, 0, out.getvalue())
+        self.assertIn(
+            "exclude-unused stream=nodes-streaming row=media-stack/plex-config pattern=Cache/",
+            out.getvalue(),
+        )
+
+    def test_a_snapshot_without_the_report_prints_no_exclude_line(self):
+        stamp = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp = pathlib.Path(tmp_dir)
+            fake = tmp / "restic"
+            fake.write_text(
+                "#!/bin/sh\n"
+                'case "$3" in\n'
+                f"  snapshots) echo '[{{\"id\": \"a\", \"time\": \"{stamp}\", \"tags\": [\"stream=nodes-nas\"]}}]' ;;\n"
+                "  stats) echo '{\"total_size\": 4096}' ;;\n"
+                "  ls) echo '{\"path\": \"/staging/claims/monitoring/grafana/grafana.db\", \"type\": \"file\"}' ;;\n"
+                "  *) exit 9 ;;\n"
+                "esac\n"
+            )
+            fake.chmod(0o755)
+            config = tmp / "streams.json"
+            config.write_text(json.dumps([{
+                "name": "nodes-nas", "repository": "s3:x/nodes-nas", "budgetGiB": 1,
+                "claims": True, "staged": [{"namespace": "monitoring", "claim": "grafana"}],
+            }]))
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                code = load().main(["--config", str(config), "--restic", str(fake)])
+        self.assertEqual(code, 0, out.getvalue())
+        self.assertNotIn("exclude-unused", out.getvalue())
 
     def test_a_missing_repository_is_reported_not_swallowed(self):
         with tempfile.TemporaryDirectory() as tmp_dir:
