@@ -112,10 +112,11 @@ seven public hosts above carry no `lan-only` by design instead, which is the oth
 `hack/check-exposure.sh` allows; it passes on both.
 
 **The Traefik dashboard hostname is `traefik.kub.local`.** The live route answers that name, and the
-values file that owns it, `cluster/infrastructure/traefik/values.yaml`, sets the same name. The
-earlier copy, `traefik-config.yaml`, said `` Host(`traefik.app.local`) ``; the release was moved to
-chart `25.0.3` (Traefik `2.10.7`) on 2026-11-21, and ownership moved from the K3s addon to that
-values file in the same change — see [`runbooks/traefik-release.md`](../runbooks/traefik-release.md).
+values file that owns it, `cluster/infrastructure/traefik/values-v3.yaml`, sets the same name. The
+earlier copy, `traefik-config.yaml`, said `` Host(`traefik.app.local`) ``; ownership moved from the
+K3s addon to this repository on 2026-11-21, and the release ran chart `25.0.3`, then `27.0.2`, and
+`42.4.1` (Traefik `3.7.19`) the same day — see
+[`runbooks/traefik-release.md`](../runbooks/traefik-release.md).
 Since 2026-11-21 the route is on `websecure` with the `internal-tls` option, and
 `cluster/infrastructure/traefik/dashboard/redirect.yaml` is its `web` twin.
 

@@ -290,10 +290,12 @@ are in `docs/superpowers/plans/`.
    (every gate and redirect is referenced as `kube-system-<name>@kubernetescrd`). Applying it hit two
    further blockers: chart `25.0.3` refuses to render until the
    `traefik.io/v1alpha1/ServersTransportTCP` CRD exists, and the K3s helm-controller runs no job for
-   any HelmChart or HelmChartConfig, so the two releases were moved with `helm` directly. That
-   controller is the subject of homelab task 530 (`#398`). **Ownership followed the same day**: the
-   addon is disabled on the three servers, the packaged `HelmChart`/`HelmChartConfig` objects are
-   gone, and `traefik-config.yaml` is deleted.
+   any HelmChart or HelmChartConfig, so the two releases were moved with `helm` directly. Task 530
+   (`#398`) recorded the controller as inert with no remaining consumer: Traefik was the only addon
+   K3s ships as a `HelmChart`, and it is disabled; `coredns`, `local-path` and `metrics-server` are
+   plain manifests applied by the addon controller. **Ownership followed the same day**: the addon is
+   disabled on the three servers, the packaged `HelmChart`/`HelmChartConfig` objects are gone, and
+   `traefik-config.yaml` is deleted.
 10. **Resolved 2026-11-18:** the two duplicate `lh-performance` StorageClass files under
     `cluster/infrastructure/storageclass/` are deleted with the rest of the Longhorn leftovers.
 11. **Resolved 2026-11-18:** `firefly` and `postiz` were the two charts that rendered a
@@ -363,7 +365,9 @@ A `kubernetes` MCP server (containers/kubernetes-mcp-server) is configured globa
 as the **read-only** ServiceAccount `kube-system/opencode-mcp`, using `~/.kube/mcp-readonly.yaml`.
 
 - RBAC lives in `kubectl/mcp-readonly-rbac.yaml` (applied by hand): built-in `view` plus read on
-  nodes/PVs/namespaces/StorageClasses and the CRDs this repo uses. `view` excludes Secrets by design.
+  nodes/PVs/namespaces/StorageClasses, the CRDs this repo uses, and the K3s addon objects
+  (`helm.cattle.io` `HelmChart`/`HelmChartConfig`, `k3s.cattle.io` `Addon`) so addon drift is
+  visible. `view` excludes Secrets by design.
 - The server config is `~/.config/opencode/kubernetes-mcp.toml` (`read_only = true`,
   `disabled_tools = ["configuration_view"]` so the token is never printed).
 - The human kubeconfig stays cluster-admin (`system:admin`). Do not point the MCP server at it.
