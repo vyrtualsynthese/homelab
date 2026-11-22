@@ -1,5 +1,14 @@
 # Restore a PostgreSQL database
 
+> **In one line.** The command sequence: find the newest dump, prove it in a scratch instance, then
+> — only when the choice is made — restore production, `globals.sql` first.
+>
+> **Use it when** a database on the shared instance is lost, or the drill that proves the dumps
+> restore is due · **Verified** 2026-11-22 · **Kind:** how-to
+>
+> **Sources** `cluster/helm/backup/values.yaml`, `docs/how-it-works/backups.md`,
+> `docs/backup/postgresql.md`, the drill log in `docs/runbooks/restore.md`
+
 **Destructive.** Restoring replaces the target database: every table, row and index in `<db>` ends
 up as the dump has it, and anything written after the dump is gone. The drill path below restores
 into a throwaway instance and only *reads* production. The same `pg_restore`, pointed at the live
@@ -355,7 +364,7 @@ after `nas` survives but the database pod or its claim did not.
    The dump is only readable through the `dumps-ls` helper pod: no dump run is in progress and
    therefore nothing else is mounting it right now, and the drill's teardown deletes it.
    **`dumps-ls` must exist before the copy runs** — create it with the manifest from
-   [Step 1](#step-1--find-the-newest-dump) when the `get` below is empty:
+   [Step 1](#step-1-find-the-newest-dump) when the `get` below is empty:
 
    ```bash
    kubectl -n databases get pod dumps-ls   # empty: create it with the manifest from Step 1

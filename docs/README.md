@@ -33,15 +33,23 @@ Most of what looks strange at first follows from five rules. Each links the page
 5. **Native SSO first.** An app that speaks OIDC uses it. The forward-auth gate treats everyone who
    passed as the same person, so it is the fallback, not the default. [Identity](how-it-works/identity.md)
 
-## Choose a path
+## Four ways in
 
 | I want to… | Start here |
 |---|---|
 | **Understand** the place | [The homelab in one page](how-it-works/README.md), then the topic pages it lists |
-| **Fix something**, or see what is broken | [Running it](running-it/README.md) opens the page for each intention; what is red right now is `kubectl get pods -A` and ArgoCD's application list |
-| **Read a plan**, or file work of my own | [How to read a plan](agent-work.md) explains the folder and indexes it; the board at [vikunja.kub.local](https://vikunja.kub.local) is the state, and [the board rule](https://docs.kub.local/config/develop/agent/board-and-worktrees/) says how a card is written |
+| **Operate** it: a change, a rollback, a pod that will not start, a procedure | [Running it](running-it/README.md) is the intention table, and [every procedure](runbooks/README.md) is the shelf behind it |
+| **Face a loss**: a file, a database, a node, the whole cluster | [Backups](backup/README.md) — what leaves the house every night, what it would cost to lose the rest, and the page per scenario |
+| **Check a fact**: is this hostname public, which chart do I copy, who can sign in where | [Reference](reference/README.md), where the tables are, each one dated and regenerable |
 
-The board is the state of the work: when a plan's checkboxes and the board disagree, the board wins.
+Two subjects are read before touching them rather than after: [Security](security/README.md) for what
+keeps the place closed, and [the rules these pages obey](documentation-rules.md) for how a page is
+written and edited.
+
+Work is not on this list because it is not a page: the board at
+[vikunja.kub.local](https://vikunja.kub.local) is the state of the work, and when a plan's checkboxes
+and the board disagree, the board wins. [How to read a plan](agent-work.md) explains the folder, and
+[the operator↔agent protocol](agent-protocol.md) how a card is written.
 
 ## The map
 
@@ -49,7 +57,7 @@ The board is the state of the work: when a plan's checkboxes and the board disag
 |---|---|---|
 | Nodes | [The machines](how-it-works/nodes.md) | which machines exist, what each is for, what a dead node takes with it |
 | Storage | [Where the data lives](how-it-works/storage.md) | `local-path` against NFS, claim naming, what a lost disk costs |
-| Backups | [Backups](how-it-works/backups.md) | what leaves the machine nightly, what is deliberately left, and how a stream is proved alive |
+| Backups | [Backups](backup/README.md) | what leaves the house nightly, what it would cost to lose, and the page for each loss |
 | Identity | [Who gets in](how-it-works/identity.md) | authentik's job, the three groups, and how a route is protected |
 | Monitoring | [What watches the cluster](how-it-works/observability.md) | metrics and logs, the dashboards, where alerts go, the known holes |
 | Media | [The media pipeline](how-it-works/media.md) | from finding releases to playback, the storage paths, the two book apps |
@@ -58,18 +66,20 @@ Two pages finish the set: [Applications](how-it-works/applications.md) is the ca
 application with its node, route and protection — and [The shape and why](how-it-works/the-shape-and-why.md)
 explains what failed in 2026 and which constraints became the five rules above.
 
-## Where each kind of knowledge lives
+## The four kinds of page
 
-| Kind | Home |
-|---|---|
-| Evergreen knowledge: architecture, runbooks, secret inventory | `docs/` in this repository, and nowhere else |
-| The rules a page obeys: its kind, its banner, its sources | [documentation-rules.md](documentation-rules.md) |
-| Work state: ideas, plans, what is being done, what awaits validation | the board, and nothing else — no second todo list |
-| Designs and plans | `docs/superpowers/`: a spec argues, a plan executes, the pair carries its date |
-| Agent recall: facts learned, preferences, past mistakes | OpenMemory |
+Every page under `docs/` is one of four things, and the kind is in its opening blockquote. The kind
+decides who may edit it and when — the rules are [documentation-rules.md](documentation-rules.md).
 
-Documentation is files in git, never a wiki as the source of truth. A task links to a decision; it does
-not contain one.
+| Kind | What it is | How it changes |
+|---|---|---|
+| **Explanation** | how a part of the place works and why it is shaped that way — How it works, the two section openings | rewritten when the understanding changes, with its `Verified` date moved |
+| **How-to** | a procedure to run: preconditions, commands, what success looks like, the rollback | proved by running it, then edited only by the change that alters the procedure |
+| **Reference** | a table of current fact: hostnames, charts, metrics, Secrets, what is covered | regenerated from its source where it can be, re-read where it cannot |
+| **Record** | what was true on a date: an audit, a decision, a completed cutover | never edited after the fact; a new record supersedes it |
+
+A page that is none of the four is a page that has not decided what it is, and the check in
+`hack/check-docs.sh` says so.
 
 ## Freshness
 

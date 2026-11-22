@@ -111,7 +111,7 @@ all.
     `docs/` → (label, renderer)
   - `main(argv: list[str] | None = None) -> int`
 
-- [ ] **Step 1: Write the failing parser test**
+- [x] **Step 1: Write the failing parser test**
 
 The test file opens with the same header as `hack/tests/test_check_config_keys.py`: `pathlib`, a
 `sys.path.insert(0, str(HACK))`, then `import gen_docs`.
@@ -156,12 +156,12 @@ spec:
         self.assertEqual(len(gen_docs.parse_rendered_routes(self.DOCS, "x", "y")), 1)
 ```
 
-- [ ] **Step 2: Run it and watch it fail**
+- [x] **Step 2: Run it and watch it fail**
 
 Run: `uv run --with-requirements hack/tests/requirements.txt python -m pytest -q hack/tests/test_gen_docs.py`
 Expected: FAIL, `ModuleNotFoundError: No module named 'gen_docs'`.
 
-- [ ] **Step 3: Implement the parser in `hack/gen_docs.py`**
+- [x] **Step 3: Implement the parser in `hack/gen_docs.py`**
 
 `yaml.safe_load_all`, skip any document whose `kind` is not `IngressRoute`, extract the host with
 `re.search(r"Host\(`([^`]+)`\)", match)` (skip a rule that has none), strip
@@ -169,7 +169,7 @@ Expected: FAIL, `ModuleNotFoundError: No module named 'gen_docs'`.
 `"internal CA"` when `spec.tls.options` is set, `"Let's Encrypt"` when `secretName` or
 `certResolver` is set, `"store (SNI)"` otherwise. `public` is `host in PUBLIC_HOSTS`.
 
-- [ ] **Step 4: Write the failing chart-render and page tests**
+- [x] **Step 4: Write the failing chart-render and page tests**
 
 ```python
 @unittest.skipUnless(shutil.which("helm"), "helm is not installed")
@@ -203,12 +203,12 @@ class RenderFailureTests(unittest.TestCase):
 (destination namespace `media-stack`, `spec.source.path: cluster/helm/media-stack/fixture`) and the
 chart itself.
 
-- [ ] **Step 5: Run them and watch them fail**
+- [x] **Step 5: Run them and watch them fail**
 
 Run: `uv run --with-requirements hack/tests/requirements.txt python -m pytest -q hack/tests/test_gen_docs.py`
 Expected: FAIL — `render_chart` not defined.
 
-- [ ] **Step 6: Implement `render_chart`, `applications`, `render_routes`, `PAGES`, `main`**
+- [x] **Step 6: Implement `render_chart`, `applications`, `render_routes`, `PAGES`, `main`**
 
 `render_chart` runs `helm template doc <dir> -f <dir>/values.yaml` and returns stdout; on non-zero
 exit it raises `GenError` naming the chart and the first stderr line. `applications` walks
@@ -221,12 +221,12 @@ and the regenerate command, then one table per group with columns Host, Applicat
 Gate, TLS, Public?. `main` accepts `--write`, `--check` and `--only <page>`; `--check` renders into
 memory and compares to the file, printing `would change: <path>` and returning 1.
 
-- [ ] **Step 7: Run the tests green**
+- [x] **Step 7: Run the tests green**
 
 Run: `uv run --with-requirements hack/tests/requirements.txt python -m pytest -q hack/tests/test_gen_docs.py`
 Expected: PASS.
 
-- [ ] **Step 8: Move the prose that is about to disappear**
+- [x] **Step 8: Move the prose that is about to disappear**
 
 Before generating, re-home the durable prose in `docs/reference/routes.md` §"What the table does
 not list": redirect twins, the `/api` exemptions, and the `web`-only redirect names belong in
@@ -234,13 +234,13 @@ not list": redirect twins, the `/api` exemptions, and the `web`-only redirect na
 from the page. Check each paragraph against `network.md` and add only what is missing, under
 "Public exposure".
 
-- [ ] **Step 9: Generate the real page and read the diff**
+- [x] **Step 9: Generate the real page and read the diff**
 
 Run: `python3 hack/gen_docs.py --write --only routes`
 Then `git diff docs/reference/routes.md` and confirm: every hostname the old page listed is present,
 none was invented, and the nine public names are the ones `hack/check_exposure.py` allows.
 
-- [ ] **Step 10: Verify and commit**
+- [x] **Step 10: Verify and commit**
 
 Run: `python3 hack/gen_docs.py --check --only routes`
 Expected: exit 0, no output.
@@ -265,7 +265,7 @@ git commit -m "🚀 feat(docs): generate the routes table from the charts"
     `--base <ref>` and `--pages <path>...`, so `hack/check-docs.sh` and a single check share one module.
 - Each problem is a string `"<path>: <message>"`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 class ReferenceTests(unittest.TestCase):
@@ -298,12 +298,12 @@ class NavTests(unittest.TestCase):
 `temp_tree`/`fixture_root` are small helpers in the test file writing files under `tempfile.mkdtemp()`;
 `fixture_root` copies `hack/fixtures/docs/` and appends `nav_extra` under `nav:`.
 
-- [ ] **Step 2: Run them and watch them fail**
+- [x] **Step 2: Run them and watch them fail**
 
 Run: `uv run --with-requirements hack/tests/requirements.txt python -m pytest -q hack/tests/test_check_docs.py`
 Expected: FAIL, module not found.
 
-- [ ] **Step 3: Implement both checks**
+- [x] **Step 3: Implement both checks**
 
 `reference_problems` walks every tracked text file outside `.git`, `node_modules`, `.venv` and
 `docs/superpowers/`, matches `docs/[A-Za-z0-9_./-]+\.md` followed by an optional `#fragment`, and
@@ -312,12 +312,12 @@ checks existence relative to the repository root. `nav_problems` loads `mkdocs.y
 `docs/`, and compares the set of `Markdown` files under `docs/` (minus `docs/superpowers/`, minus
 files matching the `not_in_nav` pattern if one is set) to the nav's set.
 
-- [ ] **Step 4: Run the tests green**
+- [x] **Step 4: Run the tests green**
 
 Run: `uv run --with-requirements hack/tests/requirements.txt python -m pytest -q hack/tests/test_check_docs.py`
 Expected: PASS.
 
-- [ ] **Step 5: Run the checks on the real tree and fix what they find**
+- [x] **Step 5: Run the checks on the real tree and fix what they find**
 
 Run: `python3 hack/check_docs.py --only references`
 Expected: a short list. Fix every hit: it is either a stale path in a comment or a real broken
@@ -325,7 +325,7 @@ citation. Then `python3 hack/check_docs.py --only nav`. Expect `docs/charts/READ
 `docs/observability-conventions.md` to be reported; add them under Reference in `mkdocs.yml` in this
 task, and re-run until clean.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add hack/check_docs.py hack/fixtures/docs hack/tests/test_check_docs.py mkdocs.yml
@@ -342,7 +342,7 @@ git commit -m "🚀 feat(docs): check cited paths and nav completeness"
 - Produces: `catalogue_problems(root: pathlib.Path) -> list[str]`,
   `secret_problems(root: pathlib.Path) -> list[str]`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 class CatalogueTests(unittest.TestCase):
@@ -371,12 +371,12 @@ class SecretsTests(unittest.TestCase):
             self.assertEqual(check_docs.secret_problems(root), [])
 ```
 
-- [ ] **Step 2: Run them and watch them fail**
+- [x] **Step 2: Run them and watch them fail**
 
 Run: `uv run --with-requirements hack/tests/requirements.txt python -m pytest -q hack/tests/test_check_docs.py -k "Catalogue or Secrets"`
 Expected: FAIL, attribute missing.
 
-- [ ] **Step 3: Implement both checks**
+- [x] **Step 3: Implement both checks**
 
 `catalogue_problems` parses the first column of the table in `docs/how-it-works/applications.md`
 between the two header rows and the next heading, strips backticks, and compares it to the set of
@@ -386,14 +386,14 @@ header). `secret_problems` walks `docs/` outside `superpowers/` and reports a PE
 `secret` or `api_key` (`= "…"`, `: …` with 16+ non-space characters that is not a placeholder such
 as `<…>`, `REDACTED` or a path).
 
-- [ ] **Step 4: Run the tests green, then the checks on the real tree**
+- [x] **Step 4: Run the tests green, then the checks on the real tree**
 
 Run: `uv run --with-requirements hack/tests/requirements.txt python -m pytest -q hack/tests/test_check_docs.py`
 Then `python3 hack/check_docs.py --only catalogue` and `--only secrets`. Fix each hit: a missing row
 is added to `applications.md` with its one-line gloss; a secret hit is a page that names a value and
 must name its location instead.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add hack/check_docs.py hack/tests/test_check_docs.py docs/how-it-works/applications.md
@@ -410,7 +410,7 @@ git commit -m "🚀 feat(docs): check the application catalogue and secret-shape
 - Produces: `banner_problems(paths: list[pathlib.Path], root: pathlib.Path) -> list[str]`,
   `changed_pages(root: pathlib.Path, base: str = "origin/develop") -> list[pathlib.Path]`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 BANNER = """> **In one line.** What it answers.
@@ -439,12 +439,12 @@ class BannerTests(unittest.TestCase):
             self.assertEqual(check_docs.banner_problems([root / "docs/a.md"], root), [])
 ```
 
-- [ ] **Step 2: Run them and watch them fail**
+- [x] **Step 2: Run them and watch them fail**
 
 Run: `uv run --with-requirements hack/tests/requirements.txt python -m pytest -q hack/tests/test_check_docs.py -k Banner`
 Expected: FAIL.
 
-- [ ] **Step 3: Implement the check and the changed-page list**
+- [x] **Step 3: Implement the check and the changed-page list**
 
 `banner_problems` reads the first 25 lines, finds the blockquote lines, and requires the five labels
 in any order; a page starting with `GENERATED_MARKER` must instead contain `Regenerate:`. Skip files
@@ -453,18 +453,18 @@ the banner, including the home page. `changed_pages` runs
 `git diff --name-only --diff-filter=ACMR <base>...HEAD -- docs`, converts to paths, keeps `.md`, and
 returns `[]` when the base cannot be resolved.
 
-- [ ] **Step 4: Run the tests green**
+- [x] **Step 4: Run the tests green**
 
 Run: `uv run --with-requirements hack/tests/requirements.txt python -m pytest -q hack/tests/test_check_docs.py`
 Expected: PASS.
 
-- [ ] **Step 5: Migrate the pages this stage touches**
+- [x] **Step 5: Migrate the pages this stage touches**
 
 Run `python3 hack/check_docs.py --only banner --base origin/develop`. Every page this branch has
 written so far must adopt the five-line banner with a true `Kind`. `routes.md` is generated and
 needs nothing.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add hack/check_docs.py hack/tests/test_check_docs.py docs/
@@ -481,7 +481,7 @@ git commit -m "🚀 feat(docs): require the five-line banner on the pages a chan
 - Consumes: `gen_docs.main`, `check_docs.main`, `check_docs_links.py`.
 - Produces: `hack/check-docs.sh [--base <ref>]`, exit 1 on any failure.
 
-- [ ] **Step 1: Write the script**
+- [x] **Step 1: Write the script**
 
 A `bash` script in the shape of `hack/check-charts.sh`: `set -euo pipefail`, a `--base` flag
 defaulting to `origin/develop`, then four calls in order —
@@ -490,24 +490,24 @@ defaulting to `origin/develop`, then four calls in order —
 (skipped in this stage, since the staleness check does not exist yet: the script notes it with a
 `TODO` line that Task 14 replaces).
 
-- [ ] **Step 2: Run it on the branch**
+- [x] **Step 2: Run it on the branch**
 
 Run: `hack/check-docs.sh --base origin/develop`
 Expected: exit 0. If a check reports, fix the page or the citation, never the check.
 
-- [ ] **Step 3: Add it to the brief**
+- [x] **Step 3: Add it to the brief**
 
 In `AGENTS.md` §6, after the `hack/check-config-keys.sh` paragraph, add: `hack/check-docs.sh` runs the
 documentation checks — generated pages match their sources, every cited path and every page is in the
 nav, the pages this branch touched carry their banner, the application catalogue names exactly the
 Applications that exist, and no page holds a secret-shaped value.
 
-- [ ] **Step 4: Run the full suite**
+- [x] **Step 4: Run the full suite**
 
 Run: `uv run --with-requirements hack/tests/requirements.txt python -m pytest -q hack/tests`
 Expected: all pass, no failures.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add hack/check-docs.sh AGENTS.md
@@ -521,7 +521,7 @@ git commit -m "🚀 feat(hack): one entry point for the documentation checks"
 - Modify: `mkdocs.yml` (Start here gains the page)
 - Modify: `docs/README.md` (the "where knowledge lives" table gains a rules row)
 
-- [ ] **Step 1: Write the page**
+- [x] **Step 1: Write the page**
 
 Opening banner with `Kind: explanation`, `Sources` naming `mkdocs.yml`, `hack/check-docs.sh` and this
 plan. Then, in this order: the four kinds as a table with who may edit each; the knowledge-routing
@@ -532,17 +532,17 @@ that the nav order is taste and may change.
 
 The rules' text is §8.5 of the spec verbatim, with the check names from this plan.
 
-- [ ] **Step 2: Add it to the nav and the home page**
+- [x] **Step 2: Add it to the nav and the home page**
 
 `mkdocs.yml`: `- Documentation rules: documentation-rules.md` under Start here. `docs/README.md`:
 one row in "Where each kind of knowledge lives" pointing at it.
 
-- [ ] **Step 3: Run the checks**
+- [x] **Step 3: Run the checks**
 
 Run: `hack/check-docs.sh --base origin/develop`
 Expected: exit 0. The new page must satisfy its own banner rule — it is the first proof of it.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add docs/documentation-rules.md mkdocs.yml docs/README.md
@@ -560,31 +560,31 @@ git commit -m "📝 docs: write the documentation rules"
 **Interfaces:**
 - Consumes: nothing. Produces: no page and no link that pointed at it.
 
-- [ ] **Step 1: Find every inbound reference**
+- [x] **Step 1: Find every inbound reference**
 
 Run: `grep -rn "status\.md" --include=* -I . --exclude-dir=.git --exclude-dir=docs/superpowers`
 Expected: a list of pages and possibly `AGENTS.md`. Every hit outside `docs/superpowers/` is edited
 in this task; a hit inside `docs/superpowers/` is a historical plan and is left alone.
 
-- [ ] **Step 2: Re-home what is still true**
+- [x] **Step 2: Re-home what is still true**
 
 The known-broken items that are not alerts and not already pages become bullet lines in
 `docs/running-it/every-day.md` under "Accepted faults", and anything that is real work becomes a
 board card filed from the task's report. Nothing is copied wholesale.
 
-- [ ] **Step 3: Delete and rewire**
+- [x] **Step 3: Delete and rewire**
 
 `git rm docs/status.md`; remove its nav entry; in `docs/README.md` replace the "only page that
 carries counts" sentence with "counts live in the generated pages and in ArgoCD", give the page its
 `Kind: explanation` and its `Sources`, and point `docs/how-it-works/applications.md`'s header at
 `running-it/every-day.md` instead.
 
-- [ ] **Step 4: Prove nothing dangles**
+- [x] **Step 4: Prove nothing dangles**
 
 Run: `hack/check-docs.sh --base origin/develop`
 Expected: exit 0 — `links` and `references` both catch a leftover citation.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add -A docs mkdocs.yml AGENTS.md
@@ -608,7 +608,7 @@ git commit -m "📝 docs: retire the status snapshot"
   `kubectl/mcp-readonly-rbac.yaml` — as sources, never copied.
 - Produces: two pages and the Security tab.
 
-- [ ] **Step 1: Write `enforcement.md`**
+- [x] **Step 1: Write `enforcement.md`**
 
 One row per guarantee, each with what enforces it and the command that proves it, taken from the
 files above: `lan-only` on every non-public route (`hack/check-exposure.sh`); the public allowlist
@@ -620,25 +620,25 @@ plus the `.gitignore`); the read-only MCP account (`kubectl auth can-i --list -n
 EU-only providers (the decision record). Every command must be one a reader can run and get output
 from; a guarantee with no command says "reviewed by hand" and why.
 
-- [ ] **Step 2: Write `README.md`**
+- [x] **Step 2: Write `README.md`**
 
 `Kind: explanation`. The model in one page — nothing public but the named list, one gate, one
 identity, no secret in git — then a table of the section's pages, then what the section does not
 cover and which page does (`network.md` for the request path, `identity.md` for the groups,
 `routes.md` for the hostname table).
 
-- [ ] **Step 3: Wire the section**
+- [x] **Step 3: Wire the section**
 
 `mkdocs.yml` gains `Security:` with README, enforcement, `secrets.md`, and the three runbooks
 (`authentik-apps`, `internal-ca`, `acme-store`); `secrets.md` leaves the Reference tab. Add one link
 sentence at the foot of `network.md` and `identity.md` pointing at the section.
 
-- [ ] **Step 4: Check**
+- [x] **Step 4: Check**
 
 Run: `hack/check-docs.sh --base origin/develop`
 Expected: exit 0; both new pages carry their banner; `secrets.md` is reachable from its new tab.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add docs/security mkdocs.yml docs/how-it-works docs/reference/README.md
@@ -651,21 +651,21 @@ git commit -m "🚀 feat(docs): the security section, and what is enforced"
 - Create: `docs/security/critical-points.md`
 - Modify: `mkdocs.yml`, `AGENTS.md` §4 (one pointer sentence)
 
-- [ ] **Step 1: Write the table**
+- [x] **Step 1: Write the table**
 
 One row per load-bearing thing, ordered by how much of the homelab goes with it: the restic password
 and the OVH tenant; the internal CA root; authentik and its database; the `lan-only` middleware; the
 single Traefik replica; the account that owns the repository; each node's `local-path` disk. Columns:
 what it is, what stops working, where its copy is, which page recovers it.
 
-- [ ] **Step 2: Mark what is not recorded, explicitly**
+- [x] **Step 2: Mark what is not recorded, explicitly**
 
 The registrar, the GitHub account's recovery, and Bitwarden's recovery code are **not** in the
 repository today. Each gets a row whose "where its copy is" cell reads
 `not recorded — a gap, see the card` and the card reference is pasted when the operator session
 fills it. No invented location, no guessed custody.
 
-- [ ] **Step 3: Check and commit**
+- [x] **Step 3: Check and commit**
 
 Run: `hack/check-docs.sh --base origin/develop` — expect exit 0.
 
@@ -690,13 +690,13 @@ git commit -m "🚀 feat(docs): name the critical points and what stops with the
 - Consumes: `docs/how-it-works/backups.md`, `docs/runbooks/restore.md`,
   `docs/runbooks/last-resort.md`, `cluster/helm/backup/values.yaml` — linked, not copied.
 
-- [ ] **Step 1: Move the page and repoint every citation**
+- [x] **Step 1: Move the page and repoint every citation**
 
 `git mv docs/running-it/disaster-recovery.md docs/backup/what-a-loss-costs.md`, then fix the four
 inbound links (`running-it/README.md`, `runbooks/cloud-monitoring.md`, `docs/README.md`, and any
 other `grep -rn "disaster-recovery" docs`). Add the banner's `Kind: explanation` and `Sources`.
 
-- [ ] **Step 2: Write `backup/README.md`**
+- [x] **Step 2: Write `backup/README.md`**
 
 `Kind: explanation`. One page that says what is protected, what is deliberately not, what a loss
 costs, and in what order to read the section — a table of the section's pages with the scenario each
@@ -704,14 +704,14 @@ one answers. It states the two honest facts in the first paragraph: the bulk med
 decision, and a fire ends it; "the data comes back and is readable" is proved, "a cluster comes
 back" is not.
 
-- [ ] **Step 3: Wire the tab**
+- [x] **Step 3: Wire the tab**
 
 `mkdocs.yml` gains `Backups:` with README, what-a-loss-costs, `how-it-works/backups.md`,
 `coverage.md` (Task 13), the four scenario pages (Tasks 11–12), and `runbooks/restore.md` +
 `runbooks/postgres-restore.md`. `running-it/README.md` loses the disaster row and gains a pointer to
 the section.
 
-- [ ] **Step 4: Check and commit**
+- [x] **Step 4: Check and commit**
 
 Run: `hack/check-docs.sh --base origin/develop` — expect exit 0.
 
@@ -731,26 +731,26 @@ git commit -m "🚀 feat(docs): the backups section, entered from a loss"
 - Consumes: `docs/runbooks/restore.md` §2 and §3, `docs/runbooks/postgres-restore.md`,
   `cluster/helm/backup/README.md`. Each page links the runbook instead of repeating its commands.
 
-- [ ] **Step 1: `a-file-or-a-claim.md`**
+- [x] **Step 1: `a-file-or-a-claim.md`**
 
 `Kind: how-to`. Preconditions (the restic password, the repository name from `coverage.md`), the
 commands as they are in `restore.md` §2, the output that means success (a hash or a tree listing),
 the rollback (nothing is overwritten until the pod is stopped), and the two traps the runbook
 records: the pod selector, and ArgoCD's self-heal replacing the pod mid-restore.
 
-- [ ] **Step 2: `a-database.md`**
+- [x] **Step 2: `a-database.md`**
 
 `Kind: how-to`. The staged SQLite copy, the `pragma integrity_check` that proves it, the swap with
 the pod stopped, and what to do when the row is a `files` row and there is no staged copy — the
 answer is a claim restore, and the page says so rather than improvising.
 
-- [ ] **Step 3: `postgresql.md`**
+- [x] **Step 3: `postgresql.md`**
 
 `Kind: how-to`. `globals.sql` first and why (roles and grants are not in the dump), then the dump,
 then the verification query. It links `postgres-restore.md` for the full command sequence and states
 which database is the identity provider's, because that one is not routine.
 
-- [ ] **Step 4: Check and commit**
+- [x] **Step 4: Check and commit**
 
 Run: `hack/check-docs.sh --base origin/develop` — expect exit 0.
 
@@ -765,20 +765,20 @@ git commit -m "🚀 feat(docs): restoring a file, a database and PostgreSQL"
 - Create: `docs/backup/a-node.md`, `docs/backup/no-cluster.md`, `docs/backup/everything.md`
 - Modify: `docs/backup/README.md`, `mkdocs.yml`
 
-- [ ] **Step 1: `a-node.md`**
+- [x] **Step 1: `a-node.md`**
 
 `Kind: how-to`. What a dead node takes with it (from `how-it-works/nodes.md` and the coverage table),
 the order to rebuild in: keep the disk, inventory, K3s role, the NFS exports, then the claims that
 landed on that node. It names the claims stranded by each node, so the reader does not have to
 derive them at 3 a.m.
 
-- [ ] **Step 2: `no-cluster.md`**
+- [x] **Step 2: `no-cluster.md`**
 
 `Kind: how-to`. `runbooks/last-resort.md` is the procedure; this page says when it applies, what it
 needs (the Bitwarden item, a machine with `restic`, the four repository names), and what it proves.
 It repeats no command.
 
-- [ ] **Step 3: `everything.md`**
+- [x] **Step 3: `everything.md`**
 
 `Kind: how-to`. The page that starts outside the cluster, in dependency order: the domain and its
 DNS, the OVH tenant, the bucket's credentials, the restic password, the password manager and its
@@ -787,7 +787,7 @@ held and who can produce it; where the repository has no answer, the row says
 `not recorded — a gap` rather than guessing. It ends with the rebuild order already in
 `what-a-loss-costs.md`, linked, not repeated.
 
-- [ ] **Step 4: Check and commit**
+- [x] **Step 4: Check and commit**
 
 Run: `hack/check-docs.sh --base origin/develop` — expect exit 0.
 
@@ -810,7 +810,7 @@ git commit -m "🚀 feat(docs): a node, no cluster, and everything"
   `render_coverage(root: pathlib.Path) -> str`, with
   `@dataclass(frozen=True) class CoverageRow: stream: str; schedule: str; node: str; claim: str; namespace: str; kind: str`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 class CoverageTests(unittest.TestCase):
@@ -832,7 +832,7 @@ class CoverageTests(unittest.TestCase):
         self.assertEqual(len(gen_docs.coverage_rows({"streams": [{"name": "nodes-nuc0"}], "nodes": {}})), 0)
 ```
 
-- [ ] **Step 2: Run them, watch them fail, implement**
+- [x] **Step 2: Run them, watch them fail, implement**
 
 Run the same pytest invocation scoped to `test_gen_docs.py -k Coverage`. Implement
 `coverage_rows` over the real file's shape: `streams[].name`, `nodes.<node>.schedule` and
@@ -841,7 +841,7 @@ node has no claim rows emits no row; `render_coverage` prints one row per claim,
 and writes the marker, the sources and the regenerate command. No sizes: they stay in the
 `values.yaml` comments beside their row.
 
-- [ ] **Step 3: Render the real page and read it**
+- [x] **Step 3: Render the real page and read it**
 
 Run: `python3 hack/gen_docs.py --write --only coverage`
 Expected: one row per claim in `cluster/helm/backup/values.yaml` and one per NFS path — 19 claims
@@ -849,7 +849,7 @@ across three nodes and four NFS paths at the time of writing. Count them against
 `grep -c "claim:" cluster/helm/backup/values.yaml` and `grep -c "tag:" cluster/helm/backup/values.yaml`
 and reconcile any difference before committing.
 
-- [ ] **Step 4: Check and commit**
+- [x] **Step 4: Check and commit**
 
 Run: `python3 hack/gen_docs.py --check` (both pages) and `hack/check-docs.sh --base origin/develop`.
 
@@ -876,7 +876,7 @@ git commit -m "🚀 feat(docs): generate the backup coverage matrix"
   `stale_pages(root: pathlib.Path) -> list[tuple[pathlib.Path, str, str]]`,
   `main(argv: list[str] | None = None) -> int` (always 0).
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 class StalenessTests(unittest.TestCase):
@@ -904,21 +904,21 @@ class StalenessTests(unittest.TestCase):
 `git_repo`/`touch_commit` build a temporary repository and commit a file with `GIT_AUTHOR_DATE` and
 `GIT_COMMITTER_DATE` set, so the dates are deterministic.
 
-- [ ] **Step 2: Run them and watch them fail, then implement**
+- [x] **Step 2: Run them and watch them fail, then implement**
 
 Implement with `subprocess.run(["git", "-C", root, "log", "-1", "--format=%cs", "--", path])`. A
 source that does not exist is reported as `missing` with today's date, because a `Sources` line
 pointing at nothing is exactly the drift the report exists for. Print
 `<page>: verified <date>, <source> changed <date>` one per line, and a final count.
 
-- [ ] **Step 3: Run the report on the tree and read it**
+- [x] **Step 3: Run the report on the tree and read it**
 
 Run: `python3 hack/check_docs_staleness.py`
 Expected: a list, not empty — most pages predate the `Sources` line and are skipped, and the ones
 this branch wrote should not appear. Read every entry; the ones that are genuinely stale become
 board cards in the stage handover, not edits here.
 
-- [ ] **Step 4: Wire it, check and commit**
+- [x] **Step 4: Wire it, check and commit**
 
 `hack/check-docs.sh` replaces its TODO with the staleness call, last and non-failing.
 
@@ -933,7 +933,7 @@ git commit -m "🚀 feat(hack): report pages older than their sources"
 - Modify: `docs/agent-protocol.md`
 - Modify: `mkdocs.yml` (banner only: the page adopts its kind)
 
-- [ ] **Step 1: Add the section**
+- [x] **Step 1: Add the section**
 
 Under the protocol's documentation section: a pass runs `python3 hack/check_docs_staleness.py`, reads
 each listed page before filing, and files one card per genuinely stale page naming the page, the
@@ -941,18 +941,18 @@ source that moved and its date, at `priority/low` unless the page is a procedure
 under pressure. A documentation refresh is its own card with its own branch, never an edit inside a
 pass.
 
-- [ ] **Step 2: Mark the page's kind**
+- [x] **Step 2: Mark the page's kind**
 
 `docs/agent-protocol.md` adopts `Kind: explanation` and a `Sources` line naming
 `hack/check_docs_staleness.py` and `opencode/skills/hardening-pass/SKILL.md`.
 
-- [ ] **Step 3: File the config card**
+- [x] **Step 3: File the config card**
 
 File one `task` in the `config` project (`priority/low`) asking for a sentence in
 `opencode/skills/hardening-pass/SKILL.md` §4 pointing at the protocol's staleness step. Record its id
 in the task's report. Do not edit the skill from this repository.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add docs/agent-protocol.md mkdocs.yml
@@ -966,7 +966,7 @@ git commit -m "📝 docs: a hardening pass files stale documentation as cards"
   `docs/running-it/README.md`, `docs/backup/README.md`, `docs/security/README.md`,
   `docs/how-it-works/README.md`, `docs/reference/README.md`, `docs/history`-listed pages' banners.
 
-- [ ] **Step 1: Dissolve the Runbooks tab**
+- [x] **Step 1: Dissolve the Runbooks tab**
 
 Move every entry into the tab that uses it: Backups gets `restore` and `postgres-restore`; Security
 gets `authentik-apps`, `internal-ca`, `acme-store`; Running it gets `traefik-release`, `k3s-upgrade`,
@@ -974,19 +974,19 @@ gets `authentik-apps`, `internal-ca`, `acme-store`; Running it gets `traefik-rel
 `vikunja-board-seed`; History gets the five completed records. `docs/runbooks/README.md` becomes the
 index those tabs link, its table rewritten with a "Tab" column and no duplicate status list.
 
-- [ ] **Step 2: Rewrite the three landing pages**
+- [x] **Step 2: Rewrite the three landing pages**
 
 `docs/README.md`: four paths (understand, operate, face a loss, check a fact), the four kinds in one
 table, and a pointer to `documentation-rules.md`. `docs/running-it/README.md`: the intention table,
 minus the rows that moved. `docs/how-it-works/README.md`: the topic table, with Backups pointing at
 the new section.
 
-- [ ] **Step 3: Measure the tab strip**
+- [x] **Step 3: Measure the tab strip**
 
 Count the top-level nav entries: eight. If the rendered site on `develop` shows an overflow menu,
 fold History into Agent work as "Records" — that decision is a nav edit, not a prose edit.
 
-- [ ] **Step 4: Full verification**
+- [x] **Step 4: Full verification**
 
 Run, in order:
 
@@ -1002,7 +1002,7 @@ checks read differently from MkDocs. If it fails on a warning from `docs/superpo
 `validation.nav.omitted_files` in `mkdocs.yml`, not a page: those files are deliberately outside the
 nav.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add -A docs mkdocs.yml
