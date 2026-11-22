@@ -6,7 +6,7 @@
 > **Use it when** you are wiring an app to single sign-on, someone cannot get in, or you need to know
 > what still works without authentik · **Verified** 2026-11-22 · **Kind:** explanation
 >
-> **Sources** `cluster/helm/authentik/`, `cluster/helm/traefik-gate/`, `docs/secrets.md`, the authentik API on 2026-11-22
+> **Sources** `cluster/helm/authentik/`, `cluster/helm/platform/traefik-gate/`, `docs/secrets.md`, the authentik API on 2026-11-22
 
 ## authentik's job
 
