@@ -42,7 +42,7 @@ database passwords.
 | `grafana` | `monitoring` | `admin-user`, `admin-password` — required; the chart reads it via `admin.existingSecret` |
 | `local-cert` | `kube-system` | Traefik default TLS cert (`TLSStore`) |
 | `traefik-dashboard` | `kube-system` | `users` — the htpasswd line(s) for the dashboard's basic auth |
-| `traefik-ovh` | `kube-system` | `OVH_ENDPOINT`, `OVH_APPLICATION_KEY`, `OVH_APPLICATION_SECRET`, `OVH_CONSUMER_KEY` → `envFrom` on the Traefik pod; the consumer key is scoped to `/domain/zone/ashudev.com/{record,record/*,refresh}` |
+| `traefik-ovh` | `kube-system` | `OVH_ENDPOINT`, `OVH_APPLICATION_KEY`, `OVH_APPLICATION_SECRET`, `OVH_CONSUMER_KEY` → `envFrom` on the Traefik pod; the consumer key is scoped to `/domain/zone/{ashudev.com,ashuvidz.com}/{record,record/*,refresh}` |
 | `n8n` | `n8n` | `encryption-key` → `N8N_ENCRYPTION_KEY`, the key n8n encrypts stored credentials with |
 | `backup-restic` | `backup` | `RESTIC_PASSWORD`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` (restic's names for any S3 store's pair; the values are OVH's) → `envFrom` in every job of `cluster/helm/backup` |
 
@@ -64,9 +64,10 @@ curl -sk -o /dev/null -w '%{http_code}\n' -u 'vronteix:<password>' \
 
 `traefik-ovh` holds the OVH API credential the DNS-01 resolver uses. The application key is the
 existing one; the consumer key was created for this purpose and is limited to creating and deleting
-TXT records under `ashudev.com` and refreshing that zone, so a copy of it cannot change delegation,
-storage, mail or another domain. It is validated once in the OVH browser, and the four values are
-kept in `~/.config/secrets/homelab.env` outside git. Rotating it is a Secret update and a pod restart.
+TXT records under `ashudev.com` and `ashuvidz.com` and refreshing those two zones, so a copy of it
+cannot change delegation, storage, mail or another domain. It is validated once in the OVH browser,
+and the four values are kept in `~/.config/secrets/homelab.env` outside git. Rotating it is a Secret
+update and a pod restart.
 
 `n8n` is the one application Secret that must exist **before** its first sync: the deployment reads
 `encryption-key` without `optional`, so a missing Secret is `CreateContainerConfigError`, not a pod
