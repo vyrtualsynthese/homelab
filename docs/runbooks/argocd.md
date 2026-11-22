@@ -103,6 +103,48 @@ Then the Applications the root app syncs reappear on their own.
 
 Why by hand: the thing that would restore Argo CD is Argo CD.
 
+## Wrapper charts and their dependency build
+
+Pattern D (`AGENTS.md` §3) keeps `charts/` and `Chart.lock` out of git, so a wrapper chart's
+dependency is downloaded at render time instead of committed. That costs one failed render per
+wrapper chart per revision, and it is expected:
+
+1. On a new revision Argo CD checks the repository out again and clears untracked files, which
+   removes `charts/` — the built dependency — and also `.argocd-helm-dep-up`, the marker that
+   records that a build has already run for that chart.
+2. The first `helm template` therefore stops with
+   `found in Chart.yaml, but missing in charts/ directory: <chart>`.
+3. Argo CD recognises that message, runs `helm dependency build`, and renders a second time. The
+   second render succeeds, and nothing is logged for it because repo-server logs at `warn`.
+
+Measured on 2026-11-22 over 24 hours: 789 of those `missing in charts/` lines, **zero**
+`helm dependency build` failures, and every Application `Synced` at the tip of `develop` — the one
+multi-source Application (`local-path`) aside, which reports no single revision.
+
+A build that does fail is the case that needs a person. It appears in the same log as
+`error building helm chart dependencies: …`, or as a failing `helm dependency build` command:
+
+```bash
+kubectl -n argocd logs deploy/argocd-repo-server --since=30m | grep -i 'helm dependency'
+```
+
+Argo CD retries on the next reconciliation, so a transient failure clears itself; a repeating one
+means the upstream chart repository is unreachable or the pinned version has moved. Committing
+`Chart.lock` without `charts/` fixes none of this — `helm template` needs the dependency's files, so
+the build still runs. Only committing `charts/` would remove it, which is what pattern D avoids.
+
+`status.operationState.startedAt` is not a liveness signal. A sync operation runs only when the
+rendered output differs from the live objects, so an Application can be `Synced` at the newest
+revision with its last operation days old. The fields that answer "is it current" are these:
+
+```bash
+kubectl -n argocd get application loki \
+  -o jsonpath='{.status.sync.status} {.status.sync.revision} {.status.reconciledAt}{"\n"}'
+```
+
+A render that is genuinely failing reads `Unknown` in the first field and carries a
+`ComparisonError` condition. `Synced` at the tip means current, whatever the operation history says.
+
 ## The one value that comes from outside git
 
 A fresh install generates `argocd-secret` with random keys, but the Dex client secret is not in git
