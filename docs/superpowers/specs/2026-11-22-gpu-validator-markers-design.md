@@ -36,9 +36,13 @@ Grafana-managed, as every rule in this cluster is (Prometheus here holds no rule
 `GpuNotAllocatable`, group `homelab-core`, `for: 10m`, severity `warning`.
 
 ```promql
-kube_node_status_allocatable{resource="nvidia_com_gpu"} == 0
+1 - kube_node_status_allocatable{resource="nvidia_com_gpu"}
 ```
 
+- The expression returns `1` when the node advertises zero, `0` when healthy, and no series on a node
+  that never had the resource. The condition is "above 0" like every other rule here; writing the
+  metric as `== 0` would return the value `0` and could never fire — the trap recorded in
+  `docs/reference/alerts.md`.
 - The resource label is sanitized (`nvidia_com_gpu`), not the `nvidia.com/gpu` printed by `kubectl`.
 - The series exists only on a node whose device plugin has registered the card, so the expression is
   self-gating; no join is needed. `kube_node_labels` is dropped by Prometheus's drop rules, and
