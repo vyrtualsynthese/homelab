@@ -5,7 +5,7 @@ type: application
 # Chart version. Bumps are manual: image.tag, appVersion and this version move together.
 version: 1.2.0
 # Must match image.tag in values.yaml.
-appVersion: "3.32.0"
+appVersion: "3.33.0"
 icon: https://raw.githubusercontent.com/Maintainerr/Maintainerr/v3.32.0/apps/ui/public/logo.png
 home: https://maintainerr.info/
 sources:

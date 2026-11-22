@@ -23,7 +23,7 @@ authentik:
   global:
     image:
       repository: ghcr.io/goauthentik/server
-      # Pinned with the chart version: both are 2026.8.5.
+      # Pinned with the chart version: both are 2026.8.6.
       tag: "2026.8.6"
       pullPolicy: IfNotPresent
     envFrom:
