@@ -153,10 +153,10 @@ A missing ConfigMap, a renamed metric or an evaluation error is exactly the sile
 that is why its no-data state is the opposite of every other rule here. Its `for` is 1 h because the
 input changes once a month, so a short gate buys nothing. The message names the newest drill's date
 and stream, so a firing rule reads as "the last drill was on this date", not as an anonymous stale
-counter. **An empty date and stream mean the log could not be read at all** — the ConfigMap or the
-metric is missing — so the fault is the exporter, not a missed drill; the description says so. When
-two drills share a UTC date, either stream may be named: `topk(1, …)` breaks a tie arbitrarily, and
-the alert reports the newest *date*, not a particular stream.
+counter. **`[no value]` in that message means the log could not be read at all** — the ConfigMap or
+the metric is missing — so the fault is the exporter, not a missed drill; the description says so,
+and the proof is on card #406. When two drills share a UTC date, either stream may be named:
+`topk(1, …)` breaks a tie arbitrarily, and the alert reports the newest *date*, not one stream.
 
 **`PodPending` and `PodNotStarting` split one symptom by cause.** `Pending` covers
 two different faults: a pod that was never scheduled (unbound claim, node selector,
