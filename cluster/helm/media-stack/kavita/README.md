@@ -71,7 +71,7 @@ One host, `kavita.kub.home.ashudev.com`, and two routers:
 
 | Object | Entry point | What it does |
 |---|---|---|
-| `kavita-public` | `websecure` | Serves the UI over TLS, with `certResolver: myresolver` and the `kavita-tlsoption` TLSOption |
+| `kavita-public` | `websecure` | Serves the UI over TLS, from the `ashudev.com` wildcard (no resolver on the route), with the `kavita-tlsoption` TLSOption |
 | `kavita-public-redirect` | `web` | Same host on plain HTTP; carries the `kavita-redirect-https` Middleware, which answers with a permanent redirect to HTTPS |
 | `kavita-tlsoption` | — | TLS 1.2 minimum, the cipher and curve list the other public charts use |
 | `kavita-redirect-https` | — | `redirectScheme: https`, permanent |
