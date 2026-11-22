@@ -5,7 +5,9 @@
 > wrong.
 >
 > **Use it when** you are about to reverse something and want to know why it was done that
-> way, or you are writing a new record · **Verified** 2026-11-17 · **Kind:** living page
+> way, or you are writing a new record · **Verified** 2026-11-23 · **Kind:** reference
+>
+> **Sources** the records in this folder, each read on the day it was written
 
 A decision record is written after the choice is made, by the person who made it, and it stays
 when the work around it is finished. It is not a plan: the plan says what to build, the record
@@ -40,6 +42,7 @@ would cost — but the four above are what every record has.
 | [Seven applications are retired, not repaired](2026-11-18-retire-seven-applications.md) | `firefly`, `ghostfolio`, `guacamole`, `linkstack`, `monitorss`, `postiz` and `wiki` leave the repo and the cluster: their data was already gone and no chart of the seven met the contract | 2026-11-18 |
 | [Discourse is retired, not repaired](2026-11-19-retire-discourse.md) | `discourse` leaves the repo and the cluster along with its public hostname `forum.ashuvidz.com`: it had been `Pending` since 2026-08-02 and its database no longer existed | 2026-11-19 |
 | [Every provider is in an EU member state](2026-11-21-sovereign-eu-providers-only.md) | Every external service holding the operator's data or the cluster's identity runs on a company headquartered in an EU member state with the data inside the EU: Switzerland, the UK and Norway are out, and so is an EU region sold by a non-EU company | 2026-11-21 |
+| [Agent shells are read-only](2026-11-23-agent-shells-read-only.md) | Every shell OpenCode spawns authenticates as `kube-system/opencode-mcp`; the operator's terminal keeps admin, and a write reaches the cluster only through git and Argo CD | 2026-11-23 |
 
 Below 80 °C on a one-hour soak at 50 % CPU is how the `streaming` record ends; a replacement
 node is how the `nuc0` one does. Until then both are facts about the hardware, not open tickets.
