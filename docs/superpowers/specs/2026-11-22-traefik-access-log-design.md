@@ -1,6 +1,6 @@
 # Traefik request record without the URLs — design
 
-**Status:** draft for approval · **Date:** 2026-11-22 · **Board:** homelab #544 (#410)
+**Status:** approved and shipped 2026-11-22 (PR #1410) · **Date:** 2026-11-22 · **Board:** homelab #544 (#410)
 **Read first:** `docs/audit/traefik-2026-11-21.md` finding "no access log"
 
 ## Intent
@@ -24,8 +24,9 @@ Three facts, verified on 2026-11-22:
    `?code=…` callbacks (query, droppable).
 
 So a full or errors-only log would put working credentials into an unauthenticated store. Cost is not
-the objection: ~12,700 requests/day at ~200 bytes is ~2.5 MB/day raw, ~0.15 MB/day stored, against a
-pipeline that carries 0.09 GB/day.
+the objection: the log measured ~15 MB/day at the night-time rate once enabled, against a pipeline that
+carries 0.09 GB/day. The planning estimate here was ~2.5 MB/day; the measurement superseded it on
+2026-11-22 and the living pages carry the measured figure.
 
 ## Approaches considered
 
@@ -46,9 +47,12 @@ timestamp — at the granularity of the router, which on this cluster is effecti
    query parameters dropped; headers stay dropped by the chart default.
 2. The live release is moved to the file with `helm` per `docs/runbooks/traefik-release.md`, and the
    release values are confirmed to equal the file.
-3. Two panels on **Homelab · Traefik**, reading Loki: failed requests (4xx/5xx) in a table with time,
-   router, service and status, and the slowest requests over a chosen window. No path column, because
-   there is no path.
+3. Two panels on **Homelab · Traefik**, reading Loki: *Failed requests (4xx/5xx)*, a logs panel of the
+   lines whose `DownstreamStatus` is 400 or more, and *Requests slower than 1 s, by router*, a bar count
+   of the lines whose `Duration` passed one second, per router. No path column, because there is no
+   path. (Planned as a table of failed requests and a "slowest requests" ranking; a logs panel keeps
+   the whole line in view, and the per-router count is what a metric query can group on without
+   promoting a high-cardinality field.)
 4. The byte/day figure is measured, and the query used is recorded so it can be re-measured.
 5. `docs/observability-conventions.md` gains a short section saying what the router logs, what it
    deliberately does not, and why; `docs/reference/metrics.md` gains the volume row;
@@ -58,6 +62,11 @@ timestamp — at the granularity of the router, which on this cluster is effecti
 
 - Logging any URL, query string, header or client address. If a path is ever needed, the fix is to
   authenticate Loki first, not to widen this log.
+- Stripping the hostname, the method or the backend's pod address. `defaultMode: keep` keeps them, and
+  the hostname is what makes a record answer *which application* failed. They are named here as the
+  residual exposure: a name and a cluster-internal address in an unauthenticated store, not a
+  credential. Narrowing further means enumerating every other field, which then breaks silently when
+  Traefik adds one.
 - Authenticating `loki.kub.local`. That is its own card, filed with this work.
 - Traefik v3, the 2.11 bump, or changing which apps are public.
 
