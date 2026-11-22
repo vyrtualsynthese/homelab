@@ -108,6 +108,7 @@ nav:
       - Add a database: runbooks/postgres-add-database.md
       - Restore a database: runbooks/postgres-restore.md
       - Restore from a backup: runbooks/restore.md
+      - When the cluster is gone: runbooks/last-resort.md
       - The alert relay: runbooks/alert-relay.md
       - Renovate: runbooks/renovate.md
       - The GPU stack: runbooks/gpu-operator.md

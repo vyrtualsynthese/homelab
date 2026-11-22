@@ -4,10 +4,11 @@
 > — so that nobody runs a guess with a title.
 >
 > **Use it when** a routine operation needs its procedure, or you want to know whether a restore has
-> ever been rehearsed · **Verified** 2026-11-20 · **Kind:** living page
+> ever been rehearsed · **Verified** 2026-11-22 · **Kind:** living page
 
 A runbook exists only after it has been performed at least once; a procedure nobody has run is a
-guess with a title. This page lists only files that exist. Thirteen are procedures — several of them
+A runbook exists only after it has been performed at least once; a procedure nobody has run is a
+guess with a title. This page lists only files that exist. Fourteen are procedures — several of them
 pending their first run — and five are completed records, kept because each is the only write-up of
 something that happened once; their status says so.
 
@@ -22,7 +23,8 @@ something that happened once; their status says so.
 | [`argocd.md`](argocd.md) | pending — the rebuild has not been run | the controller is down, or Argo CD must be rebuilt from nothing since it became self-managed on 2026-11-19. |
 | [`postgres-add-database.md`](postgres-add-database.md) | proved 2026-11-13 (acceptance database) | an application is rebuilt and needs its own role, database and Secrets. |
 | [`postgres-restore.md`](postgres-restore.md) | pending — the dumps were verified 2026-11-13, the restore itself has not been run | a database is lost, or the drill that proves the dumps restore is due. |
-| [`restore.md`](restore.md) | pending — no restore has been recorded; the bucket's layout is checked against the cluster | a file, a claim, a database or the cluster state has to come back out of the OVH bucket, or the monthly restore drill is due. |
+| [`restore.md`](restore.md) | proved 2026-11-21: sections 1–3 restored and read back; the destructive put-back and the etcd rehearsal are untried | a file, a claim, a database or the cluster state has to come back out of the OVH bucket, or the monthly restore drill is due. |
+| [`last-resort.md`](last-resort.md) | proved 2026-11-22 from a laptop with no cluster, values out of Bitwarden; not yet run from a second machine | the cluster is gone, the house is not available, or the bucket has to be proved from outside before a rebuild. |
 | [`alert-relay.md`](alert-relay.md) | pending — one synthetic alert through Grafana is its proof | Grafana alerts must reach the board, or the relay needs rebuilding. |
 | [`renovate.md`](renovate.md) | proved 2026-11-19 | Renovate stopped opening pull requests, its token has to be rotated, or the nightly slot has to move. |
 | [`gpu-operator.md`](gpu-operator.md) | pending — the chart is in git; the host driver step has not been run since | the GPU disappears from a pod, Plex stops transcoding, the DCGM GPU panels go empty, or someone asks about `nvidia.com/gpu-driver-upgrade-state`. |
