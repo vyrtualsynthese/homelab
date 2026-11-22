@@ -80,12 +80,14 @@ timing exists in the exporter, so which call timed out is inference, not observa
 curl -sG http://prometheus.kub.local/api/v1/query \
   --data-urlencode 'query=max(scrape_duration_seconds{app_kubernetes_io_instance="qbittorrent-exporter"})'
 
-# how many timeouts in the last 30 minutes
-curl -sG http://loki.kub.local/loki/api/v1/query_range \
+# how many timeouts in the last 30 minutes (Loki is gated; ask through Grafana's datasource proxy)
+curl -skG -H "Authorization: Bearer $GRAFANA_TOKEN" \
+  "https://grafana.kub.local/api/datasources/proxy/uid/P8E80F9AEF21F6940/loki/api/v1/query_range" \
   --data-urlencode 'query=sum(count_over_time({namespace="media-stack",container="qbittorrent-exporter"} |= "timing out" [30m]))'
 
 # the same symptom seen from another consumer
-curl -sG http://loki.kub.local/loki/api/v1/query_range \
+curl -skG -H "Authorization: Bearer $GRAFANA_TOKEN" \
+  "https://grafana.kub.local/api/datasources/proxy/uid/P8E80F9AEF21F6940/loki/api/v1/query_range" \
   --data-urlencode 'query={namespace="media-stack",container="cross-seed"} |= "fetch failed"'
 ```
 
