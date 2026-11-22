@@ -5,7 +5,7 @@
 > watches.
 >
 > **Use it when** an alert fired and you want to know what it means, you are writing or editing a
-> rule, or you are asking whether something is monitored at all · **Verified** 2026-11-21 · **Kind:**
+> rule, or you are asking whether something is monitored at all · **Verified** 2026-11-22 · **Kind:**
 > living page
 
 The overview — what runs where, its sizing, and how to query the stack:
@@ -39,7 +39,7 @@ secure field), so the contact point is never rewritten by automation. The Discor
 webhook exists only in that contact point.
 
 **Rule set and live state on 2026-11-13 (the three `Cloud*` rows read back on
-2026-11-20):**
+2026-11-20, the counts and `GpuNotAllocatable` on 2026-11-22):**
 
 | Rule | Condition | for | Severity | State |
 |---|---|---|---|---|
@@ -195,9 +195,11 @@ had `NodeDown` and `MonitoringDown` silently dead this way, and
 the `nvidia` runtime class after a restart, so `GpuTemperatureHigh` and Plex are unaffected and
 `nvidia-smi` still lists it; only `nvidia.com/gpu` on the node drops to 0, and a pod that requests
 it stays `Pending`. The expression is `1 - kube_node_status_allocatable{resource="nvidia_com_gpu"}`
-— the resource label is sanitized, the series exists only on a node whose device plugin registered
-the card, and the `nvidia.com/gpu.present` node label is not available because `kube_node_labels`
-is dropped at the scrape. The rule is what makes the accepted workaround safe:
+— kube-state-metrics rewrites the dots in the resource name to underscores, the series exists only
+on a node whose device plugin registered the card, and the `nvidia.com/gpu.present` node label is
+not available: kube-state-metrics adds node labels only for names in its
+`--metric-labels-allowlist`, and none is configured (adding one is a non-goal). The rule is what
+makes the accepted workaround safe:
 [`runbooks/gpu-operator.md`](../runbooks/gpu-operator.md#the-gpu-drops-to-0-after-a-restart).
 
 **`DiskReallocatingSectors`** uses a subquery,

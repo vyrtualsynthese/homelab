@@ -25,7 +25,7 @@ side.
 | Approach | Trade-off | Verdict |
 |---|---|---|
 | **A — durable markers**: host bind mount `/run/nvidia/validations` → `/var/lib/nvidia/validations` in a systemd unit | removes the cause, but adds host-side boot ordering that exists on one machine and not in git, next to the hand-installed driver | rejected |
-| **B — accept the workaround, add the alert** | GPU stays 0 after a restart until someone runs the documented pod delete; the alert says so within ten minutes | **chosen** |
+| **B — accept the workaround, add the alert** | GPU stays 0 after a restart until someone runs the documented pod delete; the alert says so within about fifteen minutes (ten of `for`, plus up to five to the next check of the group) | **chosen** |
 | **C — B plus a watchdog CronJob** that deletes the validator pod when allocatable reads 0 | automatic recovery, but adds a ServiceAccount with pod-delete rights, another pinned image, and a loop that can fight a genuine driver repair | rejected |
 
 The operator picked B on 2026-11-22.
@@ -43,15 +43,17 @@ Grafana-managed, as every rule in this cluster is (Prometheus here holds no rule
   that never had the resource. The condition is "above 0" like every other rule here; writing the
   metric as `== 0` would return the value `0` and could never fire — the trap recorded in
   `docs/reference/alerts.md`.
-- The resource label is sanitized (`nvidia_com_gpu`), not the `nvidia.com/gpu` printed by `kubectl`.
+- kube-state-metrics rewrites the dots in the resource name to underscores (`nvidia_com_gpu`), so the
+  query does not use the `nvidia.com/gpu` spelling `kubectl` prints.
 - The series exists only on a node whose device plugin has registered the card, so the expression is
-  self-gating; no join is needed. `kube_node_labels` is dropped by Prometheus's drop rules, and
-  `kube_node_info` carries no custom node labels, so the `nvidia.com/gpu.present` join in the card is
-  not available.
-- Evidence: during the 2026-11-22 failure the series stayed present and read `0` from 00:31 to 01:06
-  in Prometheus, so the shape catches the state rather than the series disappearing.
-- `noDataState: OK` and `execErrState: OK`: a healthy cluster still returns the series (value 1), and a
-  dead Prometheus is `MonitoringDown`'s job, not this rule's.
+  self-gating; no join is needed. The `nvidia.com/gpu.present` join in the card is not available:
+  kube-state-metrics adds node labels to `kube_node_labels` only for names in its
+  `--metric-labels-allowlist`, and none is configured (adding one is a non-goal).
+- Evidence: during the 2026-11-22 failure the `kube_node_status_allocatable` series stayed present and
+  read `0` from 00:31 to 01:06 in Prometheus, so the expression read `1` and the shape catches the
+  state rather than the series disappearing.
+- `noDataState: OK` and `execErrState: OK`: a healthy cluster still returns the series (value `0`), and
+  a dead Prometheus is `MonitoringDown`'s job, not this rule's.
 - The annotation names the node and the command:
   `kubectl -n gpu-operator delete pod -l app=nvidia-operator-validator`, then the allocatable check.
 
@@ -79,7 +81,8 @@ workaround or points at the runbook — it will point at the runbook and name th
 
 ## Verification
 
-- Datasource query returns one series with value `1` now, and the rule reads back Normal with no error.
+- The datasource query returns one series (`node="streaming"`) reading `0` — the healthy value of
+  `1 - allocatable` — and the rule reads back Normal with no error.
 - `POST /api/v1/eval` with the rule's payload proves the condition pipeline evaluates without sending a
   notification.
 - The docs pages render, `mkdocs.yml` needs no change (no new page), and the repository's checker suite
