@@ -100,11 +100,14 @@ probes:
     failureThreshold: 3
 
 resources:
+  # Request is the 7-day p95 (100Mi), limit peak x 1.5 rounded up (2026-11-22).
+  # No CPU limit: a burst once hit 41% of CFS periods in one five-minute window
+  # (39 seconds of throttling in the week). That is the house rule's case for
+  # leaving CPU unthrottled — the ceiling buys nothing and costs the burst.
   requests:
     cpu: 1m
-    memory: 64Mi
+    memory: 128Mi
   limits:
-    cpu: 500m
     memory: 256Mi
 
 # Claim names are app.fullname plus a suffix, so they stay the two claims the

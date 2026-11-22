@@ -48,15 +48,17 @@ renovate:
   nodeSelector:
     kubernetes.io/hostname: nas
 
-  # Unmeasured: a run is shorter than Prometheus's scrape interval, so there is
-  # no steady state to size from. The request is the image's own footprint and
-  # the limit a protection ceiling, not a measured peak.
+  # Measured 2026-11-22 over the 7 days to that date: p95 915Mi, peak 917Mi
+  # (working set) across the three scheduled runs and three manual runs since the
+  # 1Gi limit was added. The runs before that limit, unconstrained, reached 3GiB.
+  # Request = p95, limit = peak x 1.5. The 1Gi limit left 11% of headroom, too
+  # little for a large repository's dependency graph.
   resources:
     requests:
       cpu: 50m
-      memory: 256Mi
-    limits:
       memory: 1Gi
+    limits:
+      memory: 1.5Gi
 
   # Pod-level hardening. The image's own user is already non-root; naming it
   # makes that a precondition the kubelet enforces.

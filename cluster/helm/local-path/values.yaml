@@ -153,8 +153,9 @@ securityContext:
   # readOnlyRootFilesystem: true
 
 resources:
+  # No CPU limit, per the house rule: CPU is compressible, and a limit only
+  # throttles the burst that provisions a volume.
   limits:
-    cpu: 100m
     memory: 128Mi
   requests:
     cpu: 100m
@@ -173,7 +174,6 @@ resources:
 helperPod:
   resources:
     limits:
-      cpu: 100m
       memory: 128Mi
     requests:
       cpu: 100m

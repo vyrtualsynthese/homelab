@@ -11,6 +11,46 @@ argo-cd:
       # that can move apart from the chart (card 344, PR #966).
       # -- If defined, a imagePullPolicy applied to all Argo CD deployments
       imagePullPolicy: IfNotPresent
+
+  # Every component had no resources at all, so each was BestEffort: first to be
+  # evicted and with no guaranteed share of a node. Sized on 2026-11-22 from the
+  # 7 days to that date (working set): p95 / peak per container.
+  #   application-controller 340 / 408 MiB
+  #   repo-server           227 / 714 MiB (a large repo's first manifest render)
+  #   server                 57 /  74 MiB
+  #   dex                    68 /  71 MiB
+  #   applicationSet         39 /  51 MiB
+  #   notifications          34 /  39 MiB
+  #   redis                  23 /  24 MiB
+  # Request = p95, limit = peak x 1.5. No CPU limit, per the house rule.
+  controller:
+    resources:
+      requests:
+        cpu: 50m
+        memory: 384Mi
+      limits:
+        memory: 768Mi
+  repoServer:
+    resources:
+      requests:
+        cpu: 50m
+        memory: 256Mi
+      limits:
+        memory: 1.5Gi
+  applicationSet:
+    resources:
+      requests:
+        cpu: 10m
+        memory: 48Mi
+      limits:
+        memory: 96Mi
+  notifications:
+    resources:
+      requests:
+        cpu: 10m
+        memory: 48Mi
+      limits:
+        memory: 64Mi
   configs:
     params:
       server.insecure: true
@@ -80,6 +120,12 @@ argo-cd:
       # the LAN gate, the default internal certificate and a plain-HTTP router that
       # only redirects. Two Traefik IngressRoutes do it instead, in `extraObjects`.
       enabled: false
+    resources:
+      requests:
+        cpu: 10m
+        memory: 64Mi
+      limits:
+        memory: 128Mi
 
   # Traefik IngressRoutes for the server, replacing the chart's core Ingress. The
   # TLS router sets neither `secretName` nor `certResolver` on purpose: Traefik then
@@ -131,7 +177,19 @@ argo-cd:
     image:
       repository: ghcr.io/dexidp/dex
       tag: v2.46.1
+    resources:
+      requests:
+        cpu: 10m
+        memory: 80Mi
+      limits:
+        memory: 128Mi
   redis:
     image:
       repository: docker.io/library/redis
       tag: 8.10.3-alpine
+    resources:
+      requests:
+        cpu: 10m
+        memory: 32Mi
+      limits:
+        memory: 64Mi

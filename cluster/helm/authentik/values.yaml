@@ -60,9 +60,11 @@ authentik:
     ingress:
       enabled: false
     resources:
+      # Measured 2026-11-22 over 7 days: p95 653Mi, peak 653Mi. The request was
+      # 512Mi, below the working set; the 1Gi limit is peak x 1.57.
       requests:
         cpu: 10m
-        memory: 512Mi
+        memory: 768Mi
       limits:
         memory: 1Gi
 
