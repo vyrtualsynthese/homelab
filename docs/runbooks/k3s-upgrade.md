@@ -40,9 +40,11 @@ kubectl -n argocd get applications -o json \
 kubectl get --raw /healthz/etcd
 ```
 
-**2. Copy etcd off the node, because the next step restarts it.** The snapshot is written by whichever
-server you run it on, so run it on a server that is not the target. With no SSH, a privileged pod that
-mounts the host filesystem is the way in:
+**2. Copy etcd off the node, because the next step restarts it.** The copy holds the cluster's object
+state, not one node's: any server's copy restores the whole of it. What the node in the file name
+records is *which server wrote the file*, and K3s takes it from where the command runs, not from
+`--name`: a snapshot is `<name>-<node>-<time>`. Pin the pod with `nodeName` to the server whose restart
+is next, pass the version alone to `--name`, and read the printed file name back:
 
 ```bash
 kubectl apply -f - <<'YAML'
@@ -50,7 +52,7 @@ apiVersion: v1
 kind: Pod
 metadata: {name: etcd-snapshot-once, namespace: kube-system}
 spec:
-  nodeName: streaming
+  nodeName: <node>                 # the control-plane node this copy is for
   hostNetwork: true
   hostPID: true
   restartPolicy: Never
@@ -59,7 +61,7 @@ spec:
     - name: snap
       image: docker.io/rancher/k3s:v1.31.14-k3s1
       securityContext: {privileged: true}
-      command: [/bin/sh, -c, "chroot /host /usr/local/bin/k3s etcd-snapshot save --name pre-<version>-<node> && ls -l /var/lib/rancher/k3s/server/db/snapshots | tail -3"]
+      command: [/bin/sh, -c, "chroot /host /usr/local/bin/k3s etcd-snapshot save --name pre-<version> && ls -l /var/lib/rancher/k3s/server/db/snapshots | tail -3"]
       volumeMounts: [{name: host-root, mountPath: /host}]
   volumes:
     - {name: host-root, hostPath: {path: /}}
@@ -67,16 +69,38 @@ YAML
 kubectl -n kube-system logs etcd-snapshot-once
 ```
 
-Then push it into the off-site repository. Re-running the whole streaming backup job works but reads
-9 GiB to upload 60 MiB; a pod that backs up only the snapshot directory takes five seconds:
+The `ls` must show `pre-<version>-<node>-<time>`, with the node you pinned in the middle. A different
+node there means the manifest was carried over from the previous step, and the copy is not from the
+node it is for: fix the pod, not the tag.
+
+A worker has nothing to copy: `nas` has no `/var/lib/rancher/k3s/server/db/snapshots` at all, and its
+restart cannot change object state. The server copies across the run are the rollback points for the
+whole upgrade; do not take one "for the worker" on whichever server you happen to be on.
+
+Then push it into the off-site repository, from the node that holds the file. Re-running the whole
+streaming backup job works but reads 9 GiB to upload 60 MiB; a pod that backs up only the snapshot
+directory takes five seconds:
 
 ```bash
 # same container spec as the backup job's `restic` container, with:
-#   command: sh -c 'restic backup /host/etcd-snapshots --tag etcd-pre131-<node>'
+#   command: sh -c 'restic backup /host/etcd-snapshots --tag etcd-pre<version>-<node>'
 #   volumes: the `etcd-snapshots` hostPath only (/var/lib/rancher/k3s/server/db/snapshots)
-#   nodeName: streaming
+#   nodeName: <the same node as the snapshot pod>
 kubectl -n backup logs <pod>          # "snapshot <id> saved", then `restic ls` names the file
 ```
+
+`--tag` carries the node from the file name, never the plan's target, so the two cannot disagree.
+
+**What the 1.31 run left, read on 2026-11-22.** Every snapshot pod in that run was pinned to
+`streaming` while `--name` carried the node being restarted, so four files were written, all on
+`streaming`, and all said so: `pre-131-nuc0-streaming-1795301064`,
+`pre-131-rbp2-streaming-1795303043`, `pre-131-streaming-streaming-1795303491` and
+`pre-131-nas-streaming-1795303870`. The node directories confirm it: `nas` has no snapshot directory,
+and `nuc0` and `rbp2` hold no pre-1.31 file. Nothing was missing — an etcd copy is cluster state — but
+three copies sat in the bucket tagged `etcd-pre131-{rbp2,streaming,nas}`, each under a host of its own,
+so each was a `forget` group of one that no retention rule would ever drop. The two mislabelled ones
+were forgotten on 2026-11-22 (`restic forget 5a6d795d d434572d --prune`, 72 KiB of packs freed);
+`etcd-pre131-streaming` is kept as the pre-1.31 point.
 
 The NAS is not an option: `/mnt/storage` and `/mnt/storage/nfs` are handed to pods read-only, and only
 the per-claim subdirectories are writable. A copy there would land inside a backed-up stream.
