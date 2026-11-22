@@ -7,7 +7,11 @@
 >
 > **Use it when** you are adding a stateful application, a job went red, a stream looks stale, or you
 > are weighing what a loss would cost · **Verified** 2026-11-22: a claim was rebuilt from its snapshot
-> and the application ran from it · **Kind:** living page
+> and the application ran from it · **Kind:** explanation
+>
+> **Sources** `cluster/helm/backup/values.yaml` — the matrix, one row per claim —
+> `cluster/helm/backup/files/verify.py`, `cluster/helm/backup/files/prepare.py`,
+> `cluster/helm/databases/postgres/templates/configmap-dump-script.yaml`
 
 The design is [`superpowers/specs/2026-11-20-backups-design.md`](../superpowers/specs/2026-11-20-backups-design.md);
 the code is [`cluster/helm/backup/`](../../cluster/helm/backup/README.md); the restore procedure and
@@ -165,12 +169,20 @@ not be in a row.
    `sqlite` row with nothing under `claims/<namespace>/<claim>/`, naming the row, so the fix is the
    row and not the job. A freshly installed application looks the same on its first night, which is
    the point: a database that never appears is visible the next morning rather than never.
-4. **The bucket is unreachable or the password is lost.** The jobs fail loudly; the password and the
+4. **A `files` row stops holding what it exists for.** A row can resolve, be copied, and be empty:
+   the PostgreSQL dumps live on a claim whose directory survives a stopped `postgres-dump` CronJob,
+   so every stream stays green on a claim that stopped growing, and the 14-day retention removes the
+   last usable dump without a single failed night. Two alert rules watch the producer itself —
+   `PostgresDumpStale` past 26 hours and `PostgresDumpAbsent` when it is gone — and the verifier is
+   the second half: a `files` row may declare `mustMatch`, and the `postgres-dumps` row declares
+   `*.dump`, so a newest snapshot with no dump under that claim fails the morning run and names the
+   row.
+5. **The bucket is unreachable or the password is lost.** The jobs fail loudly; the password and the
    bucket's key pair are in Bitwarden (`homelab-backup-last-resort`) and, for the password, nowhere
    else, and without it the bucket is ciphertext. That is the one loss no monitoring can repair, and
    it is why one vault holds the whole chain: [`runbooks/last-resort.md`](../runbooks/last-resort.md)
    is the page for the morning it happens.
-5. **Nobody drills a restore.** The drill log is the only proof the bytes come back, and a year
+6. **Nobody drills a restore.** The drill log is the only proof the bytes come back, and a year
    without a drill looks exactly like a healthy system. `RestoreDrillOverdue` warns when the newest
    row of that log is more than 90 days old, or when it cannot read the log at all; the fix is a
    drill, not a job. The log and its machine-readable copy are named in

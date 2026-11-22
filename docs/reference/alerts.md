@@ -5,8 +5,10 @@
 > watches.
 >
 > **Use it when** an alert fired and you want to know what it means, you are writing or editing a
-> rule, or you are asking whether something is monitored at all · **Verified** 2026-11-22 · **Kind:**
-> living page
+> rule, or you are asking whether something is monitored at all · **Verified** 2026-11-22 · **Kind:** reference
+>
+> **Sources** the live rules, read from Grafana's API on 2026-11-22 ·
+> `cluster/helm/monitoring/grafana/values.yaml`, `docs/observability-conventions.md`
 
 The overview — what runs where, its sizing, and how to query the stack:
 [`observability-conventions.md`](../observability-conventions.md).
@@ -14,8 +16,8 @@ The overview — what runs where, its sizing, and how to query the stack:
 ## Alerting
 
 Grafana unified alerting, folder `Homelab`, **two rule groups split by cadence
-on 2026-11-18**: `homelab-core-fast` at **60 s** (20 rules) and `homelab-core` at
-**300 s** (27 rules). **47 rules**, one contact point, two routes by severity.
+on 2026-11-18**: `homelab-core-fast` at **60 s** (21 rules) and `homelab-core` at
+**300 s** (28 rules). **49 rules**, one contact point, two routes by severity.
 
 The split rule is the `for` duration: a rule sits in the fast group when its `for`
 is 5 minutes or less, or when it reports that something is down and its `for` is
@@ -40,7 +42,8 @@ webhook exists only in that contact point.
 
 **Rule set and live state on 2026-11-13 (the three `Cloud*` rows read back on
 2026-11-20, the counts and `GpuNotAllocatable` on 2026-11-22, and
-`ArgoAppRenderFailing` added and proved on 2026-11-22):**
+`ArgoAppRenderFailing` added and proved on 2026-11-22, the two `Postgres*` rows
+added on 2026-11-22):**
 
 | Rule | Condition | for | Severity | State |
 |---|---|---|---|---|
@@ -72,6 +75,8 @@ webhook exists only in that contact point.
 | `RecyclarrNotSucceeding` | no successful recyclarr run in 26 h | 5m | warning | inactive |
 | `BackupStreamStale` | a CronJob in namespace `backup` whose last success is more than 26 h old | 10m | warning | inactive |
 | `BackupJobAbsent` | a backup CronJob with no `kube_cronjob_status_last_successful_time` series, so it is gone or has never succeeded | 5m | warning | inactive |
+| `PostgresDumpStale` | the `databases/postgres-dump` CronJob's last success is more than 26 h old | 10m | warning | inactive |
+| `PostgresDumpAbsent` | no `kube_cronjob_status_last_successful_time` series for `databases/postgres-dump`, so it is gone or has never succeeded | 5m | warning | inactive |
 | `RestoreDrillOverdue` | newest restore-drill timestamp older than 90 days | 1h | warning | inactive |
 | `FluentBitDroppingLogs` | output batches abandoned after retries, or records dropped from the logger queue | 10m | warning | inactive |
 | `CertificateExpiring` | newest Traefik cert per SAN <21 days | 1h | warning | inactive |
@@ -163,6 +168,20 @@ left a lock behind, so the job had never recorded a success. An `absent()` term 
 first success would have fired on day one, which is the false page the delay existed to avoid. The
 lock was cleared by hand, a manual run exited 0 on all four repositories, and the sixth term went in
 the same evening.
+
+**`PostgresDumpStale` and `PostgresDumpAbsent`** (2026-11-22) close the same hole one namespace over,
+around the job that produces the only backup of every database on the instance. Until that day the
+two rules above watched namespace `backup` alone, so they saw the restic jobs and not
+`databases/postgres-dump`; `JobFailed` only fires when a pod fails, and a CronJob that stops being
+created has no pod at all. The failure that shape hides is slow and quiet: the claim directory stays,
+so every row still resolves and every stream still succeeds, a little smaller each night, and the
+14-day retention takes the last dump without anything saying so. The stale rule is the arithmetic of
+`BackupStreamStale` against that one job — `(time() -
+kube_cronjob_status_last_successful_time{namespace="databases",cronjob="postgres-dump"}) > 93600` —
+and the absent rule is its `absent()` twin in the fast group. `backup-verify` carries the content
+half: the `postgres-dumps` row declares `mustMatch: ["*.dump"]`, so the newest `nodes-nas` snapshot
+must hold a dump under that claim, and a row that resolves to an empty directory fails the run naming
+the row.
 
 **`RestoreDrillOverdue`** (2026-11-22) is the only rule whose input is a hand-written date. The drill
 log in [`../runbooks/restore.md`](../runbooks/restore.md) is prose in a repository, so the dates it
@@ -376,10 +395,12 @@ reports `firing` on the Health dashboard.
   construction; why the metric cannot exist for a `local-path` claim is in
   [`metrics.md`](metrics.md#exporter-quirks). The node filesystem rule covers the
   same disk, at a coarser grain.
-- **Backup freshness is covered, backup *contents* are not.** `BackupStreamStale` says a stream
-  stopped advancing, `BackupJobAbsent` says a job is gone or never succeeded, and `JobFailed` says a
-  run failed. None says the bytes are restorable: the verifier checks the repository's snapshot age
-  and size, not a restored file. The
+- **Backup freshness is covered, backup *contents* are covered for one row only.** `BackupStreamStale`
+  says a stream stopped advancing, `BackupJobAbsent` says a job is gone or never succeeded,
+  `PostgresDumpStale` and `PostgresDumpAbsent` say the same about the dump producer, and
+  `JobFailed` says a run failed. The verifier adds one content check, because the dumps are the only
+  copy of every database: the `postgres-dumps` row fails the night when the newest `nodes-nas`
+  snapshot holds no `*.dump` under it. No rule proves a file restores — the
   drills in [`../runbooks/restore.md`](../runbooks/restore.md) are the only proof of that: three
   read-only restores on 2026-11-21, the destructive put-back onto Sonarr's live claim and a read of
   all four repositories from a laptop on 2026-11-22; the etcd rehearsal is still untried.

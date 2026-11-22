@@ -177,6 +177,72 @@ class StagedTests(unittest.TestCase):
         self.assertEqual(problems, ["row databases/pgadmin-config staged no database"])
 
 
+class FilesRowTests(unittest.TestCase):
+    """A `files` row that must hold something: the PostgreSQL dumps, the one backup of the database."""
+
+    def entry(self, path, kind="file"):
+        return {"path": path, "type": kind, "mtime": NOW.isoformat()}
+
+    def rows(self):
+        return [{"namespace": "databases", "claim": "postgres-dumps", "mustMatch": ["*.dump"]}]
+
+    def test_a_row_whose_pattern_matches_nothing_is_a_problem(self):
+        entries = [self.entry("/mnt/ssd0/pvc-abc_databases_postgres-dumps", "dir")]
+        lines, problems = load().check_files("nodes-nas", self.rows(), entries)
+        self.assertEqual(lines, ["files stream=nodes-nas row=databases/postgres-dumps matched=0"])
+        self.assertEqual(problems, ["row databases/postgres-dumps holds no *.dump"])
+
+    def test_the_dumps_in_the_claim_are_counted(self):
+        entries = [
+            self.entry("/mnt/ssd0/pvc-abc_databases_postgres-dumps", "dir"),
+            self.entry("/mnt/ssd0/pvc-abc_databases_postgres-dumps/authentik-20261122T023000Z.dump"),
+            self.entry("/mnt/ssd0/pvc-abc_databases_postgres-dumps/globals.sql"),
+        ]
+        lines, problems = load().check_files("nodes-nas", self.rows(), entries)
+        self.assertEqual(lines, ["files stream=nodes-nas row=databases/postgres-dumps matched=1"])
+        self.assertEqual(problems, [])
+
+    def test_another_claims_files_do_not_count(self):
+        entries = [self.entry("/mnt/ssd0/pvc-xyz_databases_pgadmin-config/dump.dump")]
+        _, problems = load().check_files("nodes-nas", self.rows(), entries)
+        self.assertEqual(problems, ["row databases/postgres-dumps holds no *.dump"])
+
+    def test_a_partial_dump_alone_is_not_a_dump(self):
+        entries = [self.entry("/mnt/ssd0/pvc-abc_databases_postgres-dumps/x-1.dump.partial")]
+        _, problems = load().check_files("nodes-nas", self.rows(), entries)
+        self.assertEqual(len(problems), 1)
+
+    def test_the_run_fails_and_names_the_row_when_the_claim_holds_no_dump(self):
+        # The dump CronJob can stop while every stream keeps succeeding on an empty claim.
+        stamp = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp = pathlib.Path(tmp_dir)
+            fake = tmp / "restic"
+            fake.write_text(
+                "#!/bin/sh\n"
+                'case "$3" in\n'
+                f"  snapshots) echo '[{{\"id\": \"a\", \"time\": \"{stamp}\", \"tags\": [\"stream=nodes-nas\"]}}]' ;;\n"
+                "  stats) echo '{\"total_size\": 4096}' ;;\n"
+                f"  ls) echo '{{\"path\": \"/mnt/ssd0/pvc-abc_databases_postgres-dumps\", \"type\": \"dir\", \"mtime\": \"{stamp}\"}}' ;;\n"
+                "  *) exit 9 ;;\n"
+                "esac\n"
+            )
+            fake.chmod(0o755)
+            config = tmp / "streams.json"
+            config.write_text(json.dumps([{
+                "name": "nodes-nas", "repository": "s3:x/nodes-nas", "budgetGiB": 1,
+                "files": [{"namespace": "databases", "claim": "postgres-dumps",
+                           "mustMatch": ["*.dump"]}],
+            }]))
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                code = load().main(["--config", str(config), "--restic", str(fake)])
+        self.assertEqual(code, 1)
+        self.assertIn("files stream=nodes-nas row=databases/postgres-dumps matched=0", out.getvalue())
+        self.assertIn("problem stream=nodes-nas row databases/postgres-dumps holds no *.dump",
+                      out.getvalue())
+
+
 class StreamSnapshotTests(unittest.TestCase):
     def test_a_copy_made_outside_the_nightly_job_does_not_stand_in_for_the_stream(self):
         # `restic ls latest` picks this one: a later etcd copy, tagged for what it was,

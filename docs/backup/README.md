@@ -28,7 +28,8 @@ it is the only evidence that counts.
 One bucket, four restic repositories, six CronJobs, every night, in this order: the `nas` configuration
 and the PostgreSQL dumps at 04:30, `nuc0` at 05:00, `streaming` at 05:30, the NFS exports at 06:00, then
 a verifier and a prune. `BackupStreamStale` tells you when one stream stops advancing; a job that fails
-says so the same night.
+says so the same night, and the dump producer has its own pair of rules because it feeds the streams
+rather than being one: `PostgresDumpStale` and `PostgresDumpAbsent`.
 
 The coverage matrix — which claim, which stream, which row — is [the coverage table](coverage.md),
 generated from `cluster/helm/backup/values.yaml` so it cannot lag behind it. What each stream

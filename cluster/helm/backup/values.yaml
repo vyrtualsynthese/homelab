@@ -163,9 +163,11 @@ nodes:
       - /mnt/ssd0
     etcdSnapshots: false
     claims:
-      # 38.7 MB. The PostgreSQL backup: seven days of dumps, deduped. A dump still being
-      # written is not a dump, so the partial files are skipped.
-      - {claim: postgres-dumps, namespace: databases, kind: files, exclude: ["*.partial"]}
+      # The PostgreSQL backup, deduped. A dump still being written is not a dump, so the
+      # partial files are skipped. `mustMatch` is what catches the dump CronJob stopping: the
+      # claim directory stays, the stream keeps succeeding on it, and the verifier is the only
+      # thing that would notice it holds no dump.
+      - {claim: postgres-dumps, namespace: databases, kind: files, exclude: ["*.partial"], mustMatch: ["*.dump"]}
       # 58.4 MB, every dashboard and alert rule in the cluster.
       - {claim: grafana, namespace: monitoring, kind: sqlite}
 

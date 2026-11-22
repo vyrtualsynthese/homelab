@@ -16,15 +16,18 @@ data:
     {{- range $i, $stream := .Values.streams }}
     {{- if $i }},{{ end }}
     {{- $rows := list }}
+    {{- $files := list }}
     {{- $claims := false }}
     {{- with (index $.Values.nodes (trimPrefix "nodes-" $stream.name)) }}
     {{- $claims = true }}
     {{- range .claims }}
     {{- if eq .kind "sqlite" }}
     {{- $rows = append $rows . }}
+    {{- else if .mustMatch }}
+    {{- $files = append $files . }}
     {{- end }}
     {{- end }}
     {{- end }}
-      {"name": "{{ $stream.name }}", "repository": "{{ include "backup.repository" (dict "root" $ "name" $stream.name) }}", "budgetGiB": {{ $stream.budgetGiB }}, "etcd": {{ $stream.etcd | default false }}, "claims": {{ $claims }}, "staged": [{{- range $j, $row := $rows }}{{ if $j }}, {{ end }}{"namespace": "{{ $row.namespace }}", "claim": "{{ $row.claim }}"}{{- end }}]}
+      {"name": "{{ $stream.name }}", "repository": "{{ include "backup.repository" (dict "root" $ "name" $stream.name) }}", "budgetGiB": {{ $stream.budgetGiB }}, "etcd": {{ $stream.etcd | default false }}, "claims": {{ $claims }}, "staged": [{{- range $j, $row := $rows }}{{ if $j }}, {{ end }}{"namespace": "{{ $row.namespace }}", "claim": "{{ $row.claim }}"}{{- end }}], "files": [{{- range $j, $row := $files }}{{ if $j }}, {{ end }}{"namespace": "{{ $row.namespace }}", "claim": "{{ $row.claim }}", "mustMatch": {{ $row.mustMatch | toJson }}}{{- end }}]}
     {{- end }}
     ]

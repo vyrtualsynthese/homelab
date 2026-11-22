@@ -9,14 +9,16 @@ in a line Loki can index:
     stream=<name> snapshots=<n> bytes=<b> newest=<iso8601|none> age_h=<h|->
     etcd stream=<name> file=<basename> age_h=<h>
     staged stream=<name> row=<namespace>/<claim> files=<n>
+    files stream=<name> row=<namespace>/<claim> matched=<n>
     exclude-unused stream=<name> row=<namespace>/<claim> pattern=<entry>
 
 Exits non-zero when a stream is empty, older than 26 hours, or larger than its budget —
 when a control-plane stream's etcd copy is older than the same window, because the copy is
-the only part of the etcd story this cluster can prove today — and when a `sqlite` row has
+the only part of the etcd story this cluster can prove today — when a `sqlite` row has
 staged no database into the stream's newest snapshot, which is what a `db:` pattern that
 went stale looks like from outside: the job stays green and the copy the row exists for is
-gone.
+gone, and when a `files` row that declares `mustMatch` holds nothing matching it, which is
+a dump CronJob that stopped while its claim directory stayed.
 
 It also repeats the node jobs' `exclude-unused` lines — a row's exclusion that matched nothing
 in its claim. Those are warnings and do not fail the run: an application installed and not yet
@@ -26,6 +28,7 @@ snapshots and never a claim — so it reports the answer `prepare.py` wrote into
 """
 
 import argparse
+import fnmatch
 import json
 import pathlib
 import subprocess
@@ -170,6 +173,46 @@ def check_staged(name: str, rows: list[dict], entries: list[dict]) -> tuple[list
     return lines, problems
 
 
+def claim_files(entries: list[dict], namespace: str, claim: str) -> list[str]:
+    """The files a `files` row put in the snapshot, under its claim's own directory.
+
+    The local-path provisioner names that directory `<pvName>_<namespace>_<claim>`, and the
+    node job hands restic that path, so it is stored as it is. Matching the suffix rather
+    than a fixed root is what lets a stream cover more than one local-path root.
+    """
+    suffix = f"_{namespace}_{claim}"
+    found = []
+    for entry in entries:
+        if entry.get("type", "file") == "dir":
+            continue
+        parts = pathlib.PurePosixPath(entry.get("path", "")).parts
+        if len(parts) > 1 and parts[-2].endswith(suffix):
+            found.append(entry["path"])
+    return found
+
+
+def check_files(name: str, rows: list[dict], entries: list[dict]) -> tuple[list[str], list[str]]:
+    """A `files` row that declares what it must hold must hold it in the newest snapshot.
+
+    A job whose claim resolved and then emptied — a lost volume, a dump CronJob that stopped
+    while the claim directory stayed — leaves every stream green: the repository advances,
+    a little smaller each night. A pattern that matches nothing is that night's symptom.
+    """
+    lines, problems = [], []
+    for row in rows:
+        label = f"{row['namespace']}/{row['claim']}"
+        patterns = row.get("mustMatch") or []
+        matched = [
+            path for path in claim_files(entries, row["namespace"], row["claim"])
+            if any(fnmatch.fnmatch(pathlib.PurePosixPath(path).name, pattern)
+                   for pattern in patterns)
+        ]
+        lines.append(f"files stream={name} row={label} matched={len(matched)}")
+        if not matched:
+            problems.append(f"row {label} holds no {', '.join(patterns)}")
+    return lines, problems
+
+
 def read_exclude_report(
     repository: str, snapshot_id: str, entries: list[dict], restic: str = "restic"
 ) -> list[dict]:
@@ -236,11 +279,12 @@ def main(argv: list[str] | None = None) -> int:
 
         problems = check_stream(name, snapshots, used, budget, now)
         rows = stream.get("staged") or []
+        files_rows = stream.get("files") or []
         # The stream's own snapshot, not `latest`: a copy taken by hand in between is newer
         # and holds none of the claims. Without a tagged one, fall back to the newest, so an
         # old repository still gets the etcd check it had.
         snapshot = stream_snapshot(snapshots, name) or newest_snapshot(snapshots)
-        if (stream.get("etcd") or rows or stream.get("claims")) and snapshot:
+        if (stream.get("etcd") or rows or files_rows or stream.get("claims")) and snapshot:
             # `restic ls` exits 1 when the repository holds no snapshot at all, and a
             # repository with no snapshot is what check_stream just reported; asking for the
             # file list would abort the run instead of naming the stream.
@@ -257,6 +301,11 @@ def main(argv: list[str] | None = None) -> int:
                 for line in lines:
                     print(line, flush=True)
                 problems.extend(staged_problems)
+            if files_rows:
+                lines, files_problems = check_files(name, files_rows, entries)
+                for line in lines:
+                    print(line, flush=True)
+                problems.extend(files_problems)
             if stream.get("claims"):
                 # Warned, never failed: see the module docstring. The line is the point; a
                 # warning that changes the exit code would page for a working night.
@@ -269,6 +318,9 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"etcd stream={name} file=- age_h=-", flush=True)
             for row in rows:
                 print(f"staged stream={name} row={row['namespace']}/{row['claim']} files=-",
+                      flush=True)
+            for row in files_rows:
+                print(f"files stream={name} row={row['namespace']}/{row['claim']} matched=-",
                       flush=True)
 
         for problem in problems:
