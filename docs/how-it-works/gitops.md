@@ -96,4 +96,6 @@ helm template <release> . --namespace <ns> | kubeconform -strict -summary
 Then `hack/check-exposure.sh`, which fails if a non-public route lost the LAN gate. The full chart checklist is in
 [`charts/README.md`](../charts/README.md#checking-a-chart-against-this-list).
 
-The branch, pull request, merge and board steps are in [`agent-protocol.md`](../agent-protocol.md).
+The branch, pull request and merge steps are in the workstation contract
+(`~/.config/opencode/AGENTS.md`) §Git workflow; the board steps are in its §Task board, with the long
+form on [The board and worktrees](https://docs.kub.local/config/develop/agent/board-and-worktrees/).

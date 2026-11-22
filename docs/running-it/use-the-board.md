@@ -7,8 +7,11 @@
 > **Verified** 2026-11-17 · **Kind:** living page
 
 The board is Vikunja at [vikunja.kub.local](https://vikunja.kub.local), LAN only. It is the state of
-the work; a plan is not. The long form is
-[the operator↔agent protocol](../agent-protocol.md).
+the work; a plan is not. The rules — which column may hold what, who may move a card, what a card
+carries and where it sits in its column — are the contract every session reads,
+`~/.config/opencode/AGENTS.md` §Task board, with the long form on
+[The board and worktrees](https://docs.kub.local/config/develop/agent/board-and-worktrees/). This
+page is the walkthrough: what you will see, and what your own moves are.
 
 ## Columns
 
@@ -48,9 +51,12 @@ fixed block below, then the change and its evidence.
   card is the account, not a label.
 - The parent, so a task sits under its story.
 - The command and what it printed, not the claim it passed.
-- A label for every file or pull request a reader might open; a bare URL renders as inert text.
+- A label for every file or pull request a reader might open; a URL inside backticks renders as
+  inert text, so the link is written out.
 
-Priority is unused: `Backlog` order is the plan.
+Every card carries a `priority/*` label, and the column is ordered by it: a card sits above the first
+card at or below its band, so the top is the next thing to read. The bands are in the contract; an
+agent sets the label.
 
 ## Validating one
 
@@ -81,8 +87,8 @@ pr: [#<number>](https://github.com/owner/repository/pull/<number>)
 - **`branch:` and `pr:`** say `none` while they do not exist, so "no pull request" is
   distinguishable from "not filled in". A change that landed without one carries `commit:` instead.
 
-The rule and the shapes to copy are in
-[the protocol, *What a ticket carries*](../agent-protocol.md#what-a-ticket-carries).
+The shapes to copy, and the rule behind them, are on
+[The board and worktrees](https://docs.kub.local/config/develop/agent/board-and-worktrees/).
 
 ## The saved filters
 
@@ -99,5 +105,4 @@ Two saved filters read across the board. They are queues, not columns:
 - **Not the plan.** Plan checkboxes are ticked as an agent goes; a tick means planned and executed,
   never accepted. When a plan and the board disagree, the board wins.
 - **Not where a decision lives.** A card links a decision; it does not contain one. Decisions are
-  dated files under [`decisions/`](../decisions/README.md), and
-  [the protocol](../agent-protocol.md#where-the-board-is-and-what-it-is-not) says why.
+  dated files under [`decisions/`](../decisions/README.md).

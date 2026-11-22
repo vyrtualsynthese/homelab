@@ -137,3 +137,4 @@ nav:
   - Agent work:
       - How to read a plan: agent-work.md
       - The board protocol: agent-protocol.md
+      - Reaching the apps: agent-access.md

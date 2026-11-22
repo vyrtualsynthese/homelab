@@ -398,7 +398,7 @@ the operator wastes their turn and leaves no record of what changed.
 | authentik | `https://authentik.kub.home.ashudev.com/api/v3/` — providers, applications, api tokens, blueprint apply | `AUTHENTIK_TOKEN` |
 | n8n | `https://n8n.kub.home.ashudev.com/api/v1` — workflows, executions, credentials, tags; the key goes in the `X-N8N-API-KEY` header, not a bearer token | `N8N_API_KEY` |
 | Traefik, Grafana, anything the MCP exposes | the Kubernetes API or the app's API, read-only | the MCP ServiceAccount |
-| Vikunja | `https://vikunja.kub.local/api/v2` | `VIKUNJA_API_TOKEN` |
+| Vikunja | `https://vikunja.kub.local/api/v2` | `$VIKUNJA_MCP_TOKEN` (the bot `bot-opencode`), never `VIKUNJA_API_TOKEN`; the calls are in the `vikunja-board` skill |
 
 - **State the call in the report**, with the endpoint and the result code, so the next agent can
   repeat it instead of re-deriving it.
@@ -407,7 +407,7 @@ the operator wastes their turn and leaves no record of what changed.
 - **A browser sign-in is the other exception.** An OIDC flow needs the human once; verify everything
   up to the redirect and ask for the click.
 - **If no token exists, say which endpoint would have done it** and file that gap as a card. Argo CD
-  is the current example: the API would sync an Application, but no token has been issued, so a sync
-  waits on the merge plus the poll.
+  is the worked example: no API token has been issued, so its API calls go through the `argocd` CLI
+  and its SSO session rather than the UI — the login and its traps are on the page linked below.
 
-Long form, with the specimens: [`docs/agent-protocol.md`](docs/agent-protocol.md).
+Long form, the specimens and the Argo CD sign-in: [`docs/agent-access.md`](docs/agent-access.md).
