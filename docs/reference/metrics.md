@@ -197,7 +197,7 @@ says they stay.
 | `kubernetes-api-servers` | every histogram bucket (`apiserver_*`, `etcd_*`, `workqueue_*`, `scheduler_*`, `storage_operation_*`, `kubelet_*`, `rest_client_*`) | 28,964 | the Platform panel divides `_sum` by `_count`; a bucket is never touched |
 | `kubernetes-nodes` | the same treatment for the kubelet's own histograms | 4,932 | no panel reads a kubelet duration; `kubelet_volume_stats_*` is kept |
 | `kubernetes-nodes-cadvisor` | 17 `container_*` families (`tasks_state`, `memory_failures_total`, `memory_failcnt`, `memory_max_usage_bytes`, `memory_mapped_file`, `memory_swap`, `memory_kernel_usage`, `memory_cache`, `blkio_device_usage_total`, `fs_reads_total`, `fs_writes_total`, `cpu_load_average_10s`, `file_descriptors`, `processes`, `sockets`, `threads`, `threads_max`) | 10,058 | the Applications board reads CPU and memory only; the identity and limit families stay |
-| `kubernetes-service-endpoints` | `kube_secret_*`, `kube_pod_tolerations`, `kube_replicaset_*`, `kube_pod_status_qos_class` | 6,156 | one series per object: 421 Secrets, and the replica panels read Deployments and StatefulSets |
+| `kubernetes-service-endpoints` | `kube_secret_*`, `kube_pod_tolerations`, `kube_replicaset_*`, `kube_pod_status_qos_class`, and Argo CD's `go_*`, `process_*`, `grpc_server_*`, `argocd_kubectl_*`, `workqueue_*`, `controller_runtime_*`, `certwatcher_*` | 6,156 + 3,034 | one series per object: 421 Secrets, and the replica panels read Deployments and StatefulSets; of Argo CD's 3,384 series the 350 Application, repository, cluster, git and redis families are the readers, and the gRPC matrix is 1,938 series that stay at zero |
 | `kubernetes-pods` | `qbittorrent_torrent_*` (17 fields × 365 torrents), `n8n_*_bucket` | 7,850 | the Media board reads the four `qbittorrent_global_*` totals; Traefik's buckets stay because the Traefik board's p95 reads them |
 | `grafana`, `loki`, `prometheus` | each job's own histogram buckets | 6,968 | the two stack rules read counters, which are kept |
 
@@ -219,6 +219,12 @@ Prometheus was requesting 1 GiB and holding about 1.1 GiB at p95; the request we
 process. The request is a sizing question with its own method
 ([`chart-sizing.md`](chart-sizing.md)), not a scrape-config one; do not expect a drop rule to buy
 memory here.
+
+**Measured on 2026-11-22**, when Argo CD's three components joined the same job: they expose 3,384
+series and the rule keeps at most 350 of them. The first scrape after the restarted pods stored
+**189**, and the difference is not the regex: a process that has not yet synced publishes no
+`argocd_app_sync_total` and no `argocd_app_k8s_request_total`, so the count climbs towards the
+ceiling with activity. The job holds 18,968 stored series that evening.
 
 Two things this page teaches by being measured rather than assumed:
 

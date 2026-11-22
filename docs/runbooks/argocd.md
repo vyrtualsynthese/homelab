@@ -170,6 +170,24 @@ set on it, on purpose: `argocd-root` prunes from git, so a rename or a move of t
 otherwise delete the control plane mid-sync. The controller keeps running, untracked, and reverting
 the deletion restores the Application with no drift.
 
+## When the alert says the manifests cannot be generated
+
+`ArgoAppRenderFailing` fires on an Application carrying a `ComparisonError`: Argo CD could not
+render it, so its sync status reads `Unknown` (see the field check above). It is not the routine
+`missing in charts/` line — that one is built and retried inside a single request and leaves no
+condition behind.
+
+```bash
+kubectl -n argocd get application <name> -o jsonpath='{.status.conditions}' | jq
+kubectl -n argocd logs deploy/argocd-repo-server --since=30m | grep -i '<name>'
+```
+
+The causes seen here, in order of frequency: a `path` that does not exist at that `targetRevision`; a
+chart that fails `helm template` (the message quotes the template error); a repository the
+repo-server cannot read (credentials, or a `targetRevision` branch that was never pushed); and a
+dependency build that keeps failing (see the section above). The rule's `for: 10m` means a retry
+that succeeds clears it without a message.
+
 ## Break-glass
 
 There is no local account: `admin.enabled: "false"`, and authentik is the only way in. If SSO is
