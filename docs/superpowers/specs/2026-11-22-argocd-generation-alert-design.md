@@ -86,10 +86,15 @@ is why the scrape is a pod-to-pod connection and the network policy matters.
    records that the chart's `namespaceSelector` rule is not enforced on this k3s (measured
    2026-11-22, with the probe that showed it) and that the numeric rule is the workaround, not a
    preference. The server needs no extra policy: its own rule allows all ingress.
-3. `cluster/helm/monitoring/prometheus/values.yaml`: drop `argocd;(go_.*|process_.*)` on the
-   `kubernetes-service-endpoints` job (and its `-slow` twin, as the media rules are repeated). The
-   scrape is service-based, so the pods job is the wrong place. Raw cost is 3,384 series, most of it
-   the Go runtime's own counters; the drop follows the seven media rules and the comment convention.
+3. `cluster/helm/monitoring/prometheus/values.yaml`: drop
+   `argocd;(go_.*|process_.*|grpc_server_.*|argocd_kubectl_.*|workqueue_.*|controller_runtime_.*|certwatcher_.*)`
+   on the `kubernetes-service-endpoints` job (and its `-slow` twin, as the media rules are repeated).
+   The scrape is service-based, so the pods job is the wrong place. Raw cost is 3,384 series; the
+   largest single block is not the Go runtime but the server's pre-initialised gRPC matrix —
+   **1,938 series**, one per method/service pair × 17 status codes, most of them permanently zero —
+   followed by the controller's work-queue and client-go instrumentation. The regex keeps the
+   Application and repository families (350 series measured) and follows the seven media rules and
+   the comment convention.
 4. The rule, created through the Grafana provisioning API and recorded in
    `docs/reference/alerts.md`:
    - `argocd_app_condition{condition="ComparisonError"} > 0` — the gauge's value is the count of such
@@ -111,8 +116,9 @@ is why the scrape is a pod-to-pod connection and the network policy matters.
 ## What the builder settles
 
 - The rule title (`ArgoAppRenderFailing` is the proposal) and the exact summary/description wording.
-- The measured series after the drop; the 3,384 above is before it, and the page records what the
-  scrape shows rather than a prediction.
+- The measured series after the drop; the 3,384 (before) and 350 (after) above were sampled from the
+  live endpoints on 2026-11-22, so the page records what the scrape shows after the sync rather than
+  a prediction.
 - Whether the alert text should quote the condition message. It is not a label on the metric, so it
   cannot; the description points at the log instead.
 
