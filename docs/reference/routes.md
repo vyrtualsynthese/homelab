@@ -1,7 +1,7 @@
 # Routes: every hostname, its gate and its certificate
 
-> **In one line.** Traefik answers the 34 hostnames in this table: seven are public, twenty-four are
-> internal over TLS, three answer plain HTTP, and three more names exist only to redirect; the gate
+> **In one line.** Traefik answers the hostnames in these tables: nine are public, twenty-five are
+> internal over TLS, two answer plain HTTP, and three more names exist only to redirect; the gate
 > column — not the address — is what decides who gets in.
 >
 > **Use it when** you need to know whether a hostname is reachable from outside, what stands in
@@ -50,7 +50,7 @@ app through authentik. The authentik page Dashy signs in through is public for t
 
 ## Internal over TLS
 
-Twenty-four hostnames. Eighteen use the internal CA on a `*.kub.local` name; six are covered by the
+Twenty-five hostnames. Nineteen use the internal CA on a `*.kub.local` name; six are covered by the
 `ashudev.com` wildcard on a `*.kub.home.ashudev.com` name.
 
 | Host | Application | Namespace | Gate | TLS | Public? |
