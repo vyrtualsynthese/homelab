@@ -83,8 +83,9 @@ The first snapshot costs about €0.09; with the 7/4/12 tail the repositories se
 Egress is free, so a restore costs nothing but time.
 
 `budgetGiB` in `values.yaml` is the same number as a ceiling: the verifier fails a stream whose
-repository passes it. The four budgets sum to 25 GiB, the top of the expected range, so a stream that
-picks up a directory it should not have trips the check long before the bill notices.
+repository passes it. The four budgets sum to 32 GiB, above the top of the expected range because
+the `nodes-streaming` one carries a separate etcd copy per retained snapshot — so a stream that
+picks up a directory it should not have still trips the check long before the bill notices.
 
 ## The four ways it fails
 

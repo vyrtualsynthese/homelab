@@ -245,8 +245,10 @@ and [`decisions/2026-11-19-retire-discourse.md`](decisions/2026-11-19-retire-dis
 - The docs builder, which failed three runs on 2026-11-17, has run cleanly since: its runs complete
   and the CronJob fires every minute.
 - Backups became a cluster workload: six CronJobs in the `backup` namespace, four restic repositories
-  in one OVH bucket, a nightly verifier and a `BackupStreamStale` rule. No restore has been drilled,
-  which the drill log in [`runbooks/restore.md`](runbooks/restore.md) records by being empty.
+  in one OVH bucket, a nightly verifier and a `BackupStreamStale` rule. The first restores followed
+  on 21–22 November — three read-only ones from the cluster and all four repositories read from a
+  laptop with no cluster at all — and the drill log in
+  [`runbooks/restore.md`](runbooks/restore.md) is where those rows live.
 
 ## Related
 
