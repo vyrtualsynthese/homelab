@@ -24,8 +24,8 @@ is 5 minutes or less, or when it reports that something is down and its `for` is
 `CoreDaemonSetDown`, `MediaDeploymentDown`, and since 2026-11-20
 `CloudEndpointDown` and `CloudDnsCheckFailing`) — `ScrapeTargetDown` joins them
 because its whole job is noticing that data stopped arriving. Everything else is
-checked every five minutes: `CertificateExpiring` and `CloudTlsCertificateExpiring`
-(`for: 1h`), the three disk-fill predictions (`for: 30m`), the temperature and
+checked every five minutes: `CertificateExpiring`, `CloudTlsCertificateExpiring` and
+`RestoreDrillOverdue` (`for: 1h`), the three disk-fill predictions (`for: 30m`), the temperature and
 SLO-ish checks (`for: 10m` and above). The slowest ratio is the `for: 10m` rules in
 `homelab-core`: half their own `for` between checks, so an alert is delayed by up to five
 minutes and never by more than that. Measured at 35 rules: 35.0 rule evaluations per minute
@@ -153,7 +153,10 @@ A missing ConfigMap, a renamed metric or an evaluation error is exactly the sile
 that is why its no-data state is the opposite of every other rule here. Its `for` is 1 h because the
 input changes once a month, so a short gate buys nothing. The message names the newest drill's date
 and stream, so a firing rule reads as "the last drill was on this date", not as an anonymous stale
-counter.
+counter. **An empty date and stream mean the log could not be read at all** — the ConfigMap or the
+metric is missing — so the fault is the exporter, not a missed drill; the description says so. When
+two drills share a UTC date, either stream may be named: `topk(1, …)` breaks a tie arbitrarily, and
+the alert reports the newest *date*, not a particular stream.
 
 **`PodPending` and `PodNotStarting` split one symptom by cause.** `Pending` covers
 two different faults: a pod that was never scheduled (unbound claim, node selector,
