@@ -26,8 +26,8 @@ differences this app needed are below.
 | `limits.memory: 256Mi`, `requests.cpu: 1m` | request 128Mi / 10m, limit 512Mi | See "Sizing" below |
 | Boilerplate `Chart.yaml` (`appVersion` 1.0.0, a description nobody read) | `version` 0.2.2, `appVersion` 1.8.6 matching `image.tag` | Three numbers that disagree are worse than one number that is wrong |
 
-The route is untouched: `koillection.kub.home.ashudev.com`, `websecure` with the `myresolver`
-certificate resolver, the chart's own `TLSOption`, `lan-only` only. This is a public chart, and
+The route is untouched: `koillection.kub.home.ashudev.com`, `websecure` with the `ashudev.com`
+wildcard certificate, the chart's own `TLSOption`, `lan-only` only. This is a public chart, and
 rebuilding it is not permission to redesign the certificate or the gate. The only edit inside those
 templates is the Service port name (`koillection` → `http`), to match the renamed Service port.
 

@@ -7,8 +7,9 @@
 # No `lan-only` here, and none may be added: a public host that is gated is
 # unreachable from the internet, and `hack/check_exposure.py` reports it.
 #
-# The certificate is Let's Encrypt (`myresolver`), because `ashudev.com` is a
-# public zone; the internal `*.kub.local` names below cannot have one.
+# The certificate is Let's Encrypt, from the `ashudev.com` wildcard that the
+# `ashudev.com` anchor route orders; `dashy.ashudev.com` is covered by its
+# `*.ashudev.com` name. The internal `*.kub.local` names below cannot have one.
 apiVersion: traefik.io/v1alpha1
 kind: IngressRoute
 metadata:
