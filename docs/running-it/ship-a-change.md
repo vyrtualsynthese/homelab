@@ -4,7 +4,9 @@
 > request — then watch the Application pick the commit up and prove it with a status and a pod age.
 >
 > **Use it when** you are changing a chart, a value, a route or a secret and want it on the cluster ·
-> **Verified** 2026-11-17 · **Kind:** living page
+> **Verified** 2026-11-17 · **Kind:** how-to
+>
+> **Sources** `AGENTS.md` §2 and §6, `hack/check-charts.sh`, `cluster/argocd/projects/`
 
 The commit's journey is [gitops.md](../how-it-works/gitops.md); this page is the doing.
 
@@ -28,7 +30,7 @@ git.
 |---|---|
 | an image, a setting or a memory limit | that application's `values.yaml` |
 | a hostname, a route or an access gate | the chart's IngressRoute and its middleware list — every non-public route keeps `kube-system-lan-only@kubernetescrd` |
-| a secret | nothing in git: create or update the Secret, then restart its pod — but never an app on a borrowed volume, where a restart loses the volume ([status.md](../status.md)); [secrets.md](../secrets.md) |
+| a secret | nothing in git: create or update the Secret, then restart its pod — but never an app on a borrowed volume, where a restart loses the volume ([storage.md](../how-it-works/storage.md)); [secrets.md](../secrets.md) |
 
 Four patterns decide where the version lives:
 
@@ -120,7 +122,7 @@ time — replicas ready, restarts, memory — and
 - `OutOfSync` with no error and no new revision: the switch is off. Re-enable it in the interface.
 - `Sync failed` with a diff: the commit is wrong. Fix it in git; a `kubectl patch` is reverted.
 - `Unknown` or `Missing`: the chart path or the values file the Application names does not exist.
-  [status.md](../status.md) keeps the ones this repository knows about.
+  [applications.md](../how-it-works/applications.md) is the catalogue of what each one points at.
 
 The trap is `syncPolicy.automated` in an Application file. It reads like the honest fix and is the
 opposite: the next root-app sync rewrites the Application from git and automation turns off —

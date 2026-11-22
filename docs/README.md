@@ -38,7 +38,7 @@ Most of what looks strange at first follows from five rules. Each links the page
 | I want to… | Start here |
 |---|---|
 | **Understand** the place | [The homelab in one page](how-it-works/README.md), then the topic pages it lists |
-| **Fix something**, or see what is broken | [Running it](running-it/README.md) opens the page for each intention; [application status](status.md) is the dated snapshot of what is red |
+| **Fix something**, or see what is broken | [Running it](running-it/README.md) opens the page for each intention; what is red right now is `kubectl get pods -A` and ArgoCD's application list |
 | **Read a plan**, or file work of my own | [How to read a plan](agent-work.md) explains the folder and indexes it; the board at [vikunja.kub.local](https://vikunja.kub.local) is the state, and [the board rule](https://docs.kub.local/config/develop/agent/board-and-worktrees/) says how a card is written |
 
 The board is the state of the work: when a plan's checkboxes and the board disagree, the board wins.
@@ -73,6 +73,7 @@ not contain one.
 
 ## Freshness
 
-A living page carries the date it was last verified in its first blockquote, and is re-verified rather
-than guessed at. A snapshot says so in its opening line and is not edited afterwards: the audit set and
-`status.md` are snapshots, so read their date before trusting a claim about what is running.
+A page carries the date it was last verified and the files it was written from, and is re-verified
+rather than guessed at. A record says so in its kind and is not edited afterwards: the audit set is
+records, so read their date before trusting a claim about what is running. No page lists counts —
+[Every day](running-it/every-day.md) asks the cluster instead.

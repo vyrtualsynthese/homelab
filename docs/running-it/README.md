@@ -4,13 +4,15 @@
 > the runbook behind it when the answer is a procedure rather than an explanation.
 >
 > **Use it when** something needs doing to the cluster and you want the shortest route to the page ·
-> **Verified** 2026-11-17 · **Kind:** living page
+> **Verified** 2026-11-17 · **Kind:** explanation
+>
+> **Sources** `mkdocs.yml`, the pages this one indexes
 
 ## I want to…
 
 | I want to… | Start here |
 |---|---|
-| see what is broken right now | [Application status](../status.md) — a dated snapshot: what runs, what is `Pending`, what is broken, and the faults already owned |
+| see what is broken right now | the cluster: `kubectl get pods -A` and ArgoCD's application list; [Every day](every-day.md) is the sweep that reads them |
 | do the daily check | [Every day: the five-minute check](every-day.md) — four commands, three dashboards, one comparison |
 | ship a change | [Ship a change](ship-a-change.md) — find the value, run the checks, branch, PR, watch the sync |
 | roll back | [Roll back a change](roll-back.md) — a revert in git; the cluster-side "rollbacks" do not hold |

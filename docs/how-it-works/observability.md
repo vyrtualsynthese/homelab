@@ -4,7 +4,9 @@
 > draws both and decides to alert; the gaps matter as much as the components.
 >
 > **Use it when** you want to know whether a fault would be noticed, or where an alert came from ·
-> **Verified** 2026-11-20 · **Kind:** living page
+> **Verified** 2026-11-20 · **Kind:** explanation
+>
+> **Sources** `cluster/helm/monitoring/`, `docs/reference/alerts.md`, the Grafana API
 
 ## What watches what
 
@@ -111,4 +113,6 @@ Health.
   throttling](../decisions/2026-11-13-nuc0-throttling-accepted.md).
 
 The full list, its evidence and re-check commands: [known gaps](../reference/alerts.md#known-gaps).
-What is broken now: [status.md](../status.md).
+What is broken right now is not a page either: the firing list on
+[Homelab · Health](https://grafana.kub.local/d/homelab-health) and ArgoCD's application list are the
+answer, and [Every day](../running-it/every-day.md) is the sweep that reads them.

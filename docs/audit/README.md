@@ -5,7 +5,9 @@
 > findings are kept because they are the evidence behind the plans that fixed them.
 >
 > **Use it when** a plan or chart cites an audit, or you wonder why something was rebuilt ·
-> **Read** 2026-11-10 · **Kind:** snapshot (2026-11-10)
+> **Verified** 2026-11-10 · **Kind:** record
+>
+> **Sources** the three audits it indexes, read from the cluster on 2026-11-10
 
 Later single-subject reads join the table below with their own date in their banner. The three
 cluster-wide pages keep the 2026-11-10 date; the media-stack page is a 2026-11-18 read.
@@ -14,7 +16,7 @@ These pages are **history**. Each one describes the cluster and the repository o
 before the rebuild work started. None of them is maintained, and none of them is a statement
 about the cluster now. Where an audit and the cluster disagree, the cluster is right.
 
-For what is true today, read [What is broken right now](../status.md). That page carries the
+For what is true today, read [Every day](../running-it/every-day.md). That page carries the
 date it was read and is refreshed when a workstream lands; these are the receipts it no longer
 repeats.
 

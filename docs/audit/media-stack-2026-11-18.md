@@ -5,7 +5,9 @@
 > of stale documents and one chart that never got the contract pass.
 >
 > **Use it when** a media-stack change needs the evidence behind it, or card 225 needs its findings ·
-> **Verified** 2026-11-18 · **Kind:** snapshot (2026-11-18)
+> **Verified** 2026-11-18 · **Kind:** record
+>
+> **Sources** `cluster/helm/media-stack/`, `hack/check_exposure.py`, the live cluster on 2026-11-18
 
 This is the report card 225 asked for. It describes the repository at `2b8b9b29` on `develop` and
 the cluster as read on the same day. The findings marked **fixed here** were corrected on
@@ -88,7 +90,7 @@ already true, which is worth recording: the rebuild work landed.
 | 3 | `cluster/helm/media-stack/tautulli/README.md:42` | Values table said `256Mi`/`1Gi`; the chart has `128Mi`/`512Mi` since the same sizing pass. |
 | 4 | `cluster/helm/media-stack/unpackerr/README.md:47,186-188` | Values table and Resources section said a `512Mi` limit; the chart has `1Gi`, raised because the extraction burst reached 460Mi. |
 | 5 | `docs/charts/README.md:211` | The hardening table ended with "everything else \| no \| no \| no", which was false for `plex`, `seerr` and `qbittorrent-exporter`, and said nothing about `qbittorrent`'s privileged VPN sidecar. Four rows added; the catch-all row removed. |
-| 6 | `docs/status.md:158` | `qbittorrent` — "`alpine:latest` in the completion hook": pinned to `3.22` on 2026-11-18. |
+| 6 | the status snapshot of 2026-11-18, line 158 | `qbittorrent` — "`alpine:latest` in the completion hook": pinned to `3.22` on 2026-11-18. |
 | 7 | `docs/secrets.md:24` | The Secret inventory had no row for `autobrr-oidc` (`client-secret` → `AUTOBRR__OIDC_CLIENT_SECRET`), and the arr row did not mention unpackerr as a second consumer. |
 | 8 | `docs/reference/chart-notes.md:94` | "Both exporter sidecars still answer 401 until the operator patches the stale keys" — both `radarr` targets read `up` on 2026-11-18. |
 

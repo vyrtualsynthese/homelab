@@ -1,10 +1,12 @@
 # Every day: the five-minute check
 
-> **In one line.** Four shell commands, three dashboards and a comparison against the dated status
-> page: the whole daily sweep, short enough to repeat.
+> **In one line.** Four shell commands and three dashboards: the whole daily sweep, short enough to
+> repeat.
 >
 > **Use it when** you sit down to the cluster and want to know whether tonight needs work ·
-> **Verified** 2026-11-17 · **Kind:** living page
+> **Verified** 2026-11-22 · **Kind:** how-to
+>
+> **Sources** `AGENTS.md` §7, `docs/reference/alerts.md`, the Grafana dashboards
 
 ## Five minutes
 
@@ -30,26 +32,25 @@ Then the dashboards, from anything on fire, to whose logs are noisy, to the hard
 | 2 | [Homelab · Logs](https://grafana.kub.local/d/homelab-logs) | errors and warnings by container — an unfamiliar container name is the day's clue |
 | 3 | [Homelab · Disks](https://grafana.kub.local/d/homelab-disks) | life and temperature per drive; one is at its end, and a second going is the day's news |
 
-Read [the status page](../status.md) too: its date decides whether its lists still describe the
-cluster.
+What the commands print is the whole truth of the moment; there is no written page between you and
+the cluster, and nothing to distrust but your memory of the last look.
 
 ## What normal looks like
 
 Normal is not silence — this cluster has known faults, and they stay visible. Normal is that nothing
 has **changed**:
 
-- Every `Application` is `Synced` and `Healthy`, apart from the ones the status page names. The only
+- Every `Application` is `Synced` and `Healthy`, apart from the accepted faults below. The only
   question is whether the membership changed.
-- The pod filter prints rows. A row whose application is already on the status page is a fault you
+- The pod filter prints rows. A row whose application is one of the accepted faults is a fault you
   already own, not one you just found.
 - One Application reads `Progressing` with nothing wrong: `minecraft-server` at 0 replicas has no
   pod to become healthy. It is switched off in its values file, not broken.
-- On Health, everything firing is already known — an accepted fault below or a broken application the
-  status page names. On Disks, every other drive has life left.
+- On Health, everything firing is already known — an accepted fault below. On Disks, every other
+  drive has life left.
 
-Watch the delta: a row that was not there last time. Compare against
-[the status page](../status.md), never memory; when its date is older than the last merge on
-`develop`, distrust the page before arguing with the cluster.
+Watch the delta: a row that was not there last time. Compare against your last note of this sweep,
+never against a page — no written list survives a day on this cluster.
 
 ## The accepted faults
 
