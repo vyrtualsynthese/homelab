@@ -212,6 +212,35 @@ rebuilt its pair from the anchor route.
   with its duplicate. Nothing was lost — the router re-issued it at once from still-valid
   authorizations — but the file had to be written twice. Filter on the PEM, not on `domain`.
 
+## The 2026-11-22 third run: the TLS-ALPN resolver retired
+
+Later the same day, once `ashuvidz.com` answered from OVH nameservers. This run did not prune
+hostnames; it removed a whole resolver key.
+
+- Before: two keys. `myresolver` held one entry (the `ashuvidz.com` pair, from the 01:45 run), and
+  `ovhresolver` held two — the `ashudev.com` bundle and the pair it had just ordered. 44,935 bytes,
+  md5 `47e350d99803ba6f5a20fd53727a7078`.
+- Backup: `/data/acme.json.pre-resolver-retirement-2026-11-22`, same size and md5.
+- After: one key, `ovhresolver`, with both entries. 28,811 bytes, sha256 `3a7cabae…`; byte-identical
+  after the restart, so the router rewrote nothing on load.
+
+Two facts from it that the section below only implied:
+
+- **A changed resolver on a live router orders nothing.** The `ashuvidz.com` IngressRoute was edited
+  from `myresolver` to `ovhresolver` while the old release ran, and for four minutes the router did
+  nothing at all — no order, no error. The bundle was ordered 17 seconds after the router restarted
+  with the new values. Do not wait on a route edit; restart the router, which is what a release move
+  does anyway.
+- **The order needs the second zone in the credential, and that fails quietly in the router.** A key
+  without rights on `ashuvidz.com` answers the router's record write with `403`; the router logs a
+  failed challenge and keeps serving whatever it already had. Prove the key against both zones with a
+  throwaway TXT record before moving the release (see the retirement section below).
+
+Timeline, all UTC: router restarted 19:18:26, DNS-01 prepared 19:18:35, validations succeeded
+19:21:06, certificate 19:21:09. Let's Encrypt dates it an hour earlier than the issuance
+(`notBefore` 18:22:37, a clock-skew backdate), expiring 2027-02-20. All seven public and
+`ashudev.com` names checked completed a handshake with their own name in the certificate afterwards.
+The router was then stopped for the prune, and came back with the store above.
 
 ## The two-certificate store
 
