@@ -8,6 +8,7 @@ the etcd copy that lags behind the backups it ships with.
 
 import contextlib
 import io
+import json
 import pathlib
 import tempfile
 import unittest
@@ -104,6 +105,74 @@ class EtcdTests(unittest.TestCase):
         self.assertEqual(load().check_etcd("nodes-streaming", None, NOW), ["no etcd snapshot"])
 
 
+class StagedTests(unittest.TestCase):
+    """The other half of #416: a row tolerated on its first night must not stay empty forever."""
+
+    def entry(self, path, kind="file"):
+        return {"path": path, "type": kind, "mtime": NOW.isoformat()}
+
+    def rows(self, *labels):
+        return [{"namespace": ns, "claim": claim} for ns, claim in (label.split("/") for label in labels)]
+
+    def test_a_staged_database_is_listed_under_its_own_row(self):
+        entries = [
+            self.entry("/staging/claims/databases/pgadmin-config/sqlite.db"),
+            self.entry("/staging/claims/databases/pgadmin-config", "dir"),
+        ]
+        self.assertEqual(
+            load().staged_databases(entries, "databases", "pgadmin-config"),
+            ["/staging/claims/databases/pgadmin-config/sqlite.db"],
+        )
+
+    def test_another_rows_staged_file_does_not_count(self):
+        entries = [self.entry("/staging/claims/databases/n8n-config/database.sqlite")]
+        self.assertEqual(load().staged_databases(entries, "databases", "pgadmin-config"), [])
+
+    def test_an_empty_staging_directory_is_a_problem_that_names_the_row(self):
+        entries = [self.entry("/staging/claims/databases/pgadmin-config", "dir")]
+        lines, problems = load().check_staged(
+            "nodes-nuc0", self.rows("databases/pgadmin-config"), entries)
+        self.assertEqual(lines, ["staged stream=nodes-nuc0 row=databases/pgadmin-config files=0"])
+        self.assertEqual(problems, ["row databases/pgadmin-config staged no database"])
+
+    def test_a_row_the_snapshot_does_not_carry_at_all_is_a_problem_too(self):
+        lines, problems = load().check_staged("nodes-nuc0", self.rows("databases/n8n-config"), [])
+        self.assertEqual(lines, ["staged stream=nodes-nuc0 row=databases/n8n-config files=0"])
+        self.assertEqual(problems, ["row databases/n8n-config staged no database"])
+
+    def test_every_row_is_reported_and_only_the_empty_ones_fail(self):
+        entries = [self.entry("/staging/claims/databases/n8n-config/database.sqlite")]
+        lines, problems = load().check_staged(
+            "nodes-nuc0", self.rows("databases/pgadmin-config", "databases/n8n-config"), entries)
+        self.assertEqual(len(lines), 2)
+        self.assertIn("row=databases/n8n-config files=1", lines[1])
+        self.assertEqual(problems, ["row databases/pgadmin-config staged no database"])
+
+
+class StreamSnapshotTests(unittest.TestCase):
+    def test_a_copy_made_outside_the_nightly_job_does_not_stand_in_for_the_stream(self):
+        # `restic ls latest` picks this one: a later etcd copy, tagged for what it was,
+        # holding none of the stream's claims. The file list must come from the stream.
+        snapshots = [
+            {"id": "night", "time": (NOW - timedelta(hours=20)).isoformat(),
+             "tags": ["stream=nodes-streaming", "node=streaming"]},
+            {"id": "adhoc", "time": (NOW - timedelta(hours=1)).isoformat(),
+             "tags": ["etcd-pre131-nas"]},
+        ]
+        self.assertEqual(load().stream_snapshot(snapshots, "nodes-streaming")["id"], "night")
+
+    def test_the_newest_nightly_snapshot_wins(self):
+        snapshots = [
+            {"id": "old", "time": (NOW - timedelta(hours=44)).isoformat(), "tags": ["stream=nodes-nuc0"]},
+            {"id": "new", "time": (NOW - timedelta(hours=20)).isoformat(), "tags": ["stream=nodes-nuc0"]},
+        ]
+        self.assertEqual(load().stream_snapshot(snapshots, "nodes-nuc0")["id"], "new")
+
+    def test_a_repository_with_no_tagged_snapshot_yields_none(self):
+        snapshots = [{"id": "x", "time": NOW.isoformat(), "tags": None}]
+        self.assertIsNone(load().stream_snapshot(snapshots, "nodes-nas"))
+
+
 class MainTests(unittest.TestCase):
     """The wiring, against a stand-in restic: argument order, exit code and output shape."""
 
@@ -182,6 +251,94 @@ class MainTests(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertIn("problem stream=nodes-nuc0 no snapshot", out.getvalue())
         self.assertIn("etcd stream=nodes-nuc0 file=-", out.getvalue())
+
+    def test_a_sqlite_row_that_staged_nothing_fails_the_run_and_names_the_row(self):
+        stamp = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp = pathlib.Path(tmp_dir)
+            fake = tmp / "restic"
+            fake.write_text(
+                "#!/bin/sh\n"
+                'case "$3" in\n'
+                f"  snapshots) echo '[{{\"id\": \"a\", \"time\": \"{stamp}\"}}]' ;;\n"
+                "  stats) echo '{\"total_size\": 4096}' ;;\n"
+                f"  ls) echo '{{\"path\": \"/staging/claims/databases/pgadmin-config\", \"type\": \"dir\", \"mtime\": \"{stamp}\"}}' ;;\n"
+                "  *) exit 9 ;;\n"
+                "esac\n"
+            )
+            fake.chmod(0o755)
+            config = tmp / "streams.json"
+            config.write_text(json.dumps([{
+                "name": "nodes-nuc0", "repository": "s3:x/nodes-nuc0", "budgetGiB": 1,
+                "staged": [{"namespace": "databases", "claim": "pgadmin-config"}],
+            }]))
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                code = load().main(["--config", str(config), "--restic", str(fake)])
+        self.assertEqual(code, 1)
+        self.assertIn("staged stream=nodes-nuc0 row=databases/pgadmin-config files=0", out.getvalue())
+        self.assertIn("problem stream=nodes-nuc0 row databases/pgadmin-config staged no database",
+                      out.getvalue())
+
+    def test_a_staged_row_that_carries_its_database_passes(self):
+        stamp = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp = pathlib.Path(tmp_dir)
+            fake = tmp / "restic"
+            fake.write_text(
+                "#!/bin/sh\n"
+                'case "$3" in\n'
+                f"  snapshots) echo '[{{\"id\": \"a\", \"time\": \"{stamp}\"}}]' ;;\n"
+                "  stats) echo '{\"total_size\": 4096}' ;;\n"
+                f"  ls) echo '{{\"path\": \"/staging/claims/databases/pgadmin-config/sqlite.db\", \"type\": \"file\", \"mtime\": \"{stamp}\"}}' ;;\n"
+                "  *) exit 9 ;;\n"
+                "esac\n"
+            )
+            fake.chmod(0o755)
+            config = tmp / "streams.json"
+            config.write_text(json.dumps([{
+                "name": "nodes-nuc0", "repository": "s3:x/nodes-nuc0", "budgetGiB": 1,
+                "staged": [{"namespace": "databases", "claim": "pgadmin-config"}],
+            }]))
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                code = load().main(["--config", str(config), "--restic", str(fake)])
+        self.assertEqual(code, 0, out.getvalue())
+        self.assertIn("staged stream=nodes-nuc0 row=databases/pgadmin-config files=1", out.getvalue())
+
+    def test_the_file_list_comes_from_the_streams_snapshot_not_the_newest_anything(self):
+        # The fake prints the staged database only when restic is asked for the nightly
+        # snapshot's id, so reading `latest` would report the row as empty.
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp = pathlib.Path(tmp_dir)
+            fake = tmp / "restic"
+            fake.write_text(
+                "#!/bin/sh\n"
+                'case "$3" in\n'
+                "  snapshots) echo '["
+                '{"id": "night", "time": "2026-11-21T05:30:00+01:00", "tags": ["stream=nodes-nuc0"]},'
+                '{"id": "adhoc", "time": "2026-11-22T00:31:27+01:00", "tags": ["etcd-pre131-nas"]}'
+                "]' ;;\n"
+                "  stats) echo '{\"total_size\": 4096}' ;;\n"
+                '  ls) if [ "$5" = "night" ]; then\n'
+                '        echo \'{"path": "/staging/claims/databases/pgadmin-config/sqlite.db", "type": "file"}\' ;\n'
+                "      else\n"
+                '        echo \'{"path": "/host/etcd-snapshots/nuc0-1", "type": "file", "mtime": "2026-11-22T00:31:27+01:00"}\' ;\n'
+                "      fi ;;\n"
+                "  *) exit 9 ;;\n"
+                "esac\n"
+            )
+            fake.chmod(0o755)
+            config = tmp / "streams.json"
+            config.write_text(json.dumps([{
+                "name": "nodes-nuc0", "repository": "s3:x/nodes-nuc0", "budgetGiB": 1,
+                "staged": [{"namespace": "databases", "claim": "pgadmin-config"}],
+            }]))
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                code = load().main(["--config", str(config), "--restic", str(fake)])
+        self.assertEqual(code, 0, out.getvalue())
+        self.assertIn("staged stream=nodes-nuc0 row=databases/pgadmin-config files=1", out.getvalue())
 
     def test_a_missing_repository_is_reported_not_swallowed(self):
         with tempfile.TemporaryDirectory() as tmp_dir:

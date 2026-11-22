@@ -84,7 +84,7 @@ Egress is free, so a restore costs nothing but time.
 repository passes it. The four budgets sum to 25 GiB, the top of the expected range, so a stream that
 picks up a directory it should not have trips the check long before the bill notices.
 
-## The three ways it fails
+## The four ways it fails
 
 1. **A row resolves to nothing.** The claim was renamed, deleted, or moved to another node. That
    node's job fails and `JobFailed` fires; the fix is the row, not the job. The job never silently
@@ -95,12 +95,20 @@ picks up a directory it should not have trips the check long before the bill not
    row and backs the claim up whole, so a first night does not read as a broken backup — the case
    that made two jobs look failed on 2026-11-20. A database that is present and cannot be staged is
    the opposite and still fails the job: that is data the backup could not read. Both halves of the
-   rule are stated in `cluster/helm/backup/README.md` and at the top of `values.yaml`.
+   rule are stated in `cluster/helm/backup/README.md` and at the top of `values.yaml`, and the
+   tolerance is not permanent — case 3 is what notices.
 2. **A stream stops advancing.** Every job can be green while a repository receives nothing. The
    verifier compares each repository's newest snapshot against 26 hours and its size against
    `budgetGiB`; `BackupStreamStale` alerts when a job's last success is older than 26 hours. A stream
    that grows past its budget means a row is carrying something it should not.
-3. **The bucket is unreachable or the password is lost.** The jobs fail loudly; the password is in
+3. **A `sqlite` row stops staging its database.** The job stays green: the claim itself is still
+   backed up, so nothing fails, and a `db:` pattern that upstream moved or renamed matches nothing
+   every night from then on. What disappears is the consistent copy the row exists for, the one a
+   restore uses. The verifier reads the file list of the stream's newest snapshot and fails any
+   `sqlite` row with nothing under `claims/<namespace>/<claim>/`, naming the row, so the fix is the
+   row and not the job. A freshly installed application looks the same on its first night, which is
+   the point: a database that never appears is visible the next morning rather than never.
+4. **The bucket is unreachable or the password is lost.** The jobs fail loudly; the password is in
    the password manager and nowhere else, and without it the bucket is ciphertext. That is the one
    loss no monitoring can repair.
 

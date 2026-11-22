@@ -8,10 +8,14 @@ in a line Loki can index:
 
     stream=<name> snapshots=<n> bytes=<b> newest=<iso8601|none> age_h=<h|->
     etcd stream=<name> file=<basename> age_h=<h>
+    staged stream=<name> row=<namespace>/<claim> files=<n>
 
 Exits non-zero when a stream is empty, older than 26 hours, or larger than its budget —
-and when a control-plane stream's etcd copy is older than the same window, because the
-copy is the only part of the etcd story this cluster can prove today.
+when a control-plane stream's etcd copy is older than the same window, because the copy is
+the only part of the etcd story this cluster can prove today — and when a `sqlite` row has
+staged no database into the stream's newest snapshot, which is what a `db:` pattern that
+went stale looks like from outside: the job stays green and the copy the row exists for is
+gone.
 """
 
 import argparse
@@ -26,6 +30,9 @@ STALE_AFTER = timedelta(hours=26)
 # snapshot start there; /etc/rancher/k3s is mounted at /host/etc/rancher/k3s for the
 # same reason.
 ETCD_PREFIX = "/host/etcd-snapshots/"
+# prepare.py is given `--staging /staging` and hands restic `<staging>/claims`, so a staged
+# database is stored under this absolute prefix, one directory per row.
+STAGED_PREFIX = "/staging/claims/"
 GIB = 1024**3
 
 
@@ -50,6 +57,18 @@ def newest_snapshot(snapshots: list[dict]) -> dict | None:
     if not snapshots:
         return None
     return max(snapshots, key=lambda snap: parse_time(snap["time"]))
+
+
+def stream_snapshot(snapshots: list[dict], name: str) -> dict | None:
+    """The newest snapshot the nightly job wrote for this stream.
+
+    `latest` is not it: an etcd copy taken by hand between two nights lands in the same
+    repository with a later timestamp and tags of its own, and holds none of the stream's
+    claims. The nightly job tags every snapshot `stream=<name>`, which is what tells them
+    apart.
+    """
+    tagged = [snap for snap in snapshots if f"stream={name}" in (snap.get("tags") or [])]
+    return newest_snapshot(tagged)
 
 
 def hours(value: timedelta) -> float:
@@ -109,6 +128,34 @@ def check_etcd(name: str, newest: dict | None, now: datetime) -> list[str]:
     return []
 
 
+def staged_databases(entries: list[dict], namespace: str, claim: str) -> list[str]:
+    """The files a `sqlite` row staged into the snapshot, under claims/<namespace>/<claim>/."""
+    prefix = f"{STAGED_PREFIX}{namespace}/{claim}/"
+    return [
+        entry["path"] for entry in entries
+        if entry.get("path", "").startswith(prefix)
+        and entry.get("type", "file") != "dir"
+    ]
+
+
+def check_staged(name: str, rows: list[dict], entries: list[dict]) -> tuple[list[str], list[str]]:
+    """Every `sqlite` row's staging directory in the stream's newest snapshot must hold a database.
+
+    prepare.py creates the directory before it stages anything, so a row tolerated because
+    its claim had no database yet (#416) leaves the directory empty rather than absent. After
+    the first night that emptiness is the symptom: a `db:` pattern that upstream moved or
+    renamed matches nothing every night while the job stays green.
+    """
+    lines, problems = [], []
+    for row in rows:
+        label = f"{row['namespace']}/{row['claim']}"
+        files = staged_databases(entries, row["namespace"], row["claim"])
+        lines.append(f"staged stream={name} row={label} files={len(files)}")
+        if not files:
+            problems.append(f"row {label} staged no database")
+    return lines, problems
+
+
 def run_restic(repository: str, *args: str, restic: str = "restic") -> str:
     done = subprocess.run(
         [restic, "-r", repository, *args],
@@ -127,8 +174,9 @@ def read_repository(repository: str, restic: str = "restic") -> tuple[list[dict]
     return snapshots, int(stats.get("total_size", 0))
 
 
-def read_etcd(repository: str, restic: str = "restic") -> list[dict]:
-    text = run_restic(repository, "ls", "--json", "latest", "--no-lock", restic=restic)
+def read_snapshot_files(repository: str, snapshot_id: str, restic: str = "restic") -> list[dict]:
+    """Every entry of one snapshot, as `restic ls --json` reports it."""
+    text = run_restic(repository, "ls", "--json", snapshot_id, "--no-lock", restic=restic)
     return [json.loads(line) for line in text.splitlines() if line.strip()]
 
 
@@ -149,19 +197,34 @@ def main(argv: list[str] | None = None) -> int:
         print(stream_line(name, snapshots, used, now), flush=True)
 
         problems = check_stream(name, snapshots, used, budget, now)
-        if stream.get("etcd"):
-            # `restic ls latest` exits 1 when the repository holds no snapshot at all, and a
+        rows = stream.get("staged") or []
+        # The stream's own snapshot, not `latest`: a copy taken by hand in between is newer
+        # and holds none of the claims. Without a tagged one, fall back to the newest, so an
+        # old repository still gets the etcd check it had.
+        snapshot = stream_snapshot(snapshots, name) or newest_snapshot(snapshots)
+        if (stream.get("etcd") or rows) and snapshot:
+            # `restic ls` exits 1 when the repository holds no snapshot at all, and a
             # repository with no snapshot is what check_stream just reported; asking for the
-            # newest file would abort the run instead of naming the stream.
-            if snapshots:
-                newest = newest_etcd(read_etcd(repository, restic=args.restic), now)
+            # file list would abort the run instead of naming the stream.
+            entries = read_snapshot_files(repository, snapshot["id"], restic=args.restic)
+            if stream.get("etcd"):
+                newest = newest_etcd(entries, now)
                 if newest is None:
                     print(f"etcd stream={name} file=- age_h=-", flush=True)
                 else:
                     print(f"etcd stream={name} file={newest['file']} age_h={newest['age_h']}", flush=True)
                 problems.extend(check_etcd(name, newest, now))
-            else:
+            if rows:
+                lines, staged_problems = check_staged(name, rows, entries)
+                for line in lines:
+                    print(line, flush=True)
+                problems.extend(staged_problems)
+        else:
+            if stream.get("etcd"):
                 print(f"etcd stream={name} file=- age_h=-", flush=True)
+            for row in rows:
+                print(f"staged stream={name} row={row['namespace']}/{row['claim']} files=-",
+                      flush=True)
 
         for problem in problems:
             print(f"problem stream={name} {problem}", flush=True)

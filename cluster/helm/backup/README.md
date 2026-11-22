@@ -24,7 +24,8 @@ Storage bucket. Four restic repositories, one per stream: `nodes-nas`, `nodes-nu
 4. **Databases are copied, not read.** A `kind: sqlite` row stages each database through SQLite's
    backup API, which is consistent while the application is writing. Restic then reads the staged copy
    and skips the live file, including its `-wal`, `-shm` and `-journal` siblings. The staged copy is
-   the one a restore uses.
+   the one a restore uses. The verifier fails any `sqlite` row whose stream snapshot holds no staged
+   database, so a `db:` pattern that went stale loses the copy for one night, not forever.
 5. **A row's `exclude` means "not backed up".** It is applied to the claim copy *and* to staging, so an
    excluded database is not quietly staged back in. It is reserved for what is large and rebuilt from
    something else: poster art, logs, caches, an application's own rotating database copies.
@@ -40,7 +41,7 @@ Storage bucket. Four restic repositories, one per stream: `nodes-nas`, `nodes-nu
 | `backup-node-nas`, `backup-node-nuc0`, `backup-node-streaming` | 04:30, 05:00, 05:30 Europe/Paris | the node's `local-path` roots, its host configuration, and on the two control planes the K3s snapshot directory |
 | `backup-nfs` | 06:00 | the `nas` exports: syncthing, koillection uploads, the ACME store, the qBittorrent config export |
 | `backup-prune` | Sunday 12:00 | every repository, `forget --keep-daily 7 --keep-weekly 4 --keep-monthly 12` |
-| `backup-verify` | 08:30 | every repository: newest snapshot age, size against budget, the etcd copy's age |
+| `backup-verify` | 08:30 | every repository: newest snapshot age, size against budget, each `sqlite` row's staged database, the etcd copy's age |
 
 Each node job is two containers: `prepare` (Python, stages the databases and writes the two path
 lists) and `restic` (one backup run). The prune and verify jobs own no data; they are here so the
