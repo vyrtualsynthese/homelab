@@ -58,16 +58,12 @@ resources:
   #   cpu: 100m
   #   memory: 128Mi
 
-nodeSelector: {}
+# Pinned the way every other workload is: a hostname, not the retired
+# `node-type` label. `nuc0` is where this pod has run, and the exporter
+# reaches the Pi-holes over the network, so the node is a home, not a need.
+nodeSelector:
+  kubernetes.io/hostname: nuc0
 
 tolerations: {}
 
-affinity:
-  nodeAffinity:
-    requiredDuringSchedulingIgnoredDuringExecution:
-      nodeSelectorTerms:
-        - matchExpressions:
-            - key: node-type
-              operator: In
-              values:
-                - general
+affinity: {}
