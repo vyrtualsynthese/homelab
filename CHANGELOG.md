@@ -15,6 +15,14 @@ All notable changes to this repository. The format follows
   and Plex keeps transcoding. The workaround — delete the validator pod, about 90 seconds — is now
   recorded in `docs/runbooks/gpu-operator.md`, and the K3s upgrade's `streaming` check reads the
   allocatable value instead of trusting `nvidia-smi`.
+- [`docs/runbooks/last-resort.md`](docs/runbooks/last-resort.md): the procedure for the morning the
+  cluster is gone — a laptop, the Bitwarden item `homelab-backup-last-resort` and the OVH bucket,
+  with no `kubectl`, no `backup-restic` Secret and possibly no house. Proved 2026-11-22 from outside
+  the cluster: all four restic repositories read, and a tree from `nfs` decrypted, with the on-disk
+  copies of the password moved aside so only the vault could supply the values. The same change makes
+  `docs/secrets.md` name the failure domain of each key, and corrects a claim that had been false
+  since the bucket was built: the vault held neither the repository password nor a K3s token, so the
+  documented "password manager" copy did not exist.
 - `ashudev.com` is served by this cluster: a third static-site chart on the `ashuvidz-website`
   pattern, publishing the site's `gh-pages` branch — the same bytes GitHub Pages served, with no
   build in the cluster. `www.ashudev.com` redirects to the apex and carries its own certificate, and
@@ -50,6 +58,12 @@ All notable changes to this repository. The format follows
   [`docs/runbooks/acme-store.md`](docs/runbooks/acme-store.md). The renewal window of the earliest
   kept certificate opens around 2026-12-07; the entry count staying at sixteen after that date is
   what proves the orphans cannot come back.
+- The backups design settles what protects the bucket from the cluster itself: versioning stays on
+  with a 30-day lifecycle rule on previous versions, so a `restic prune` run by whoever holds the
+  cluster's S3 pair costs thirty days of undo instead of the history. Object Lock was rejected — OVH
+  offers it only at bucket creation, and Compliance mode makes `restic prune` fail. A copy that
+  outlives the OVH account waits on a second EU provider (card #535, frozen 2026-11-22). Decided, not
+  yet switched on in the OVH console.
 - Traefik runs as one `Deployment` replica on `streaming` instead of a DaemonSet on every node. Two
   routers sharing `/data/acme.json`, which has no lock, corrupt it and re-request every name, and
   Let's Encrypt allows five duplicates a week: a morning of that takes every public hostname down.

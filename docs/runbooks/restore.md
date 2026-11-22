@@ -8,11 +8,16 @@ neither belongs in a drill.
 > the drill log that says which of these has actually been tried.
 >
 > **Use it when** something was deleted, a claim is gone, a database has to be rebuilt, or the
-> monthly restore drill is due · **Verified** 2026-11-21: sections 1–3 restored and read back, the
-> destructive put-back and the etcd rehearsal are untried · **Kind:** living page
+> monthly restore drill is due · **Verified** 2026-11-22: sections 1–3 restored and read back, all
+> four repositories read from a laptop outside the cluster, the destructive put-back and the etcd
+> rehearsal are untried · **Kind:** living page
 
 The nightly jobs write four restic repositories into one bucket. Restic is the tool that reads them:
 it holds the file list, the encryption and the history. There is no other way in.
+
+**If the cluster itself is gone** — no restic pod, no `backup-restic` Secret, no `kubectl` — this page
+does not apply. Take [`last-resort.md`](last-resort.md): a laptop, the vault and the bucket, and the
+bucket proved before anything is pulled.
 
 | Repository | Written by | Holds |
 |---|---|---|
@@ -283,10 +288,11 @@ recently, not what is believed.
 | 2026-11-21 | Section 1 — PostgreSQL dumps (`nodes-nas`) | ~3 min | 26 dumps plus `globals.sql` (7 `CREATE ROLE`) restored from snapshot `e36ab944` into `/out`. The first attempt found no `globals.sql`: the roles capture landed after that morning's dump, so a dump and a `nodes-nas` run were made first and the restore repeated | opencode (agent) |
 | 2026-11-21 | Section 2 — Sonarr's database (`nodes-streaming`) | ~1 min | `sonarr.db` restored from `/staging` (42.9 MiB, no `-wal` beside it), `pragma integrity_check` → `ok`, 103 series and 6 212 episodes | opencode (agent) |
 | 2026-11-21 | Section 3 — a Syncthing file (`nfs`) | ~1 min | `Photos/Argentique/IMG_20240121_0008.jpg` restored from snapshot `173c4caa`; sha256 `a90eb14a…` identical to the live file read through the Syncthing pod | opencode (agent) |
+| 2026-11-22 | Outside the cluster — all four repositories ([`last-resort.md`](last-resort.md) Step 1) | ~2 min | No cluster consulted: `restic` 0.18 on a laptop listed `nodes-nas` `44e80ca9` / 108.2 MiB, `nodes-nuc0` `80f5025f` / 811.2 MiB, `nodes-streaming` `d434572d` / 652.0 MiB, `nfs` `c517d884` / 91.0 MiB, and decrypted a tree from `nfs` (`qbittorrent-config`). The password and the S3 pair came from the Bitwarden item `homelab-backup-last-resort` with the on-disk copies moved aside. That item was written from this machine the same morning, so the run proves the credentials and the procedure, not yet a second machine | opencode (agent) |
 
-**Recorded 2026-11-21.** Sections 1–3 have each been restored and read back once. Section 2's
-destructive put-back onto a live claim and section 4's etcd rehearsal are still untried, so those two
-remain unproven.
+**Recorded 2026-11-22.** Sections 1–3 have each been restored and read back, and the bucket now opens
+from a laptop with no cluster at all. Section 2's destructive put-back onto a live claim and section
+4's etcd rehearsal are still untried, so those two remain unproven.
 
 ## When a restore surprises you
 

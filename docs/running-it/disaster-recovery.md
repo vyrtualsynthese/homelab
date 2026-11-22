@@ -2,14 +2,15 @@
 
 > **In one line.** The configuration, the databases and syncthing leave the machine every night for
 > one OVH bucket; the media library, the music, the stash library and the books stay on one disk by
-> decision; and no restore has been drilled yet, so what is proved is that the copies are written,
-> not that they come back.
+> decision; and the bucket has been read back twice — once through a pod, once from a laptop with no
+> cluster.
 >
 > **Use it when** a risk needs weighing, a disk died, or you need to know what is left ·
-> **Verified** 2026-11-20 · **Kind:** living page
+> **Verified** 2026-11-22 · **Kind:** living page
 
-The nightly mechanism is [Backups](../how-it-works/backups.md); the procedure is
-[restore.md](../runbooks/restore.md). This page weighs what a loss costs.
+The nightly mechanism is [Backups](../how-it-works/backups.md); the procedure with a cluster is
+[restore.md](../runbooks/restore.md), and the one for when the cluster is gone is
+[last-resort.md](../runbooks/last-resort.md). This page weighs what a loss costs.
 
 ## What leaves the machine
 
@@ -44,12 +45,15 @@ the configuration and the databases — the parts a rebuild cannot invent — no
 ## What is proved, and what is not
 
 Proved: the jobs run, the rows resolve against the live cluster's directories, a WAL database on a
-read-only mount copies cleanly through SQLite's backup API, and the verifier reports each
-repository's age and size.
+read-only mount copies cleanly through SQLite's backup API, the verifier reports each repository's age
+and size, and a restore reads back — a PostgreSQL dump set, Sonarr's database through
+`pragma integrity_check` and a Syncthing file whose hash matched. All four repositories also open from
+a laptop with no cluster, using only the values in Bitwarden.
 
-Not proved: **that a restore works.** The drill log in
-[`restore.md`](../runbooks/restore.md#the-drill-log) is empty. Until a row exists there, the honest
-description is "the copies are written nightly", not "the data comes back".
+Not proved: **that a broken application is rebuilt from a restore.** The destructive put-back onto a
+live claim and the etcd rehearsal are untried, and the drill log in
+[`restore.md`](../runbooks/restore.md#the-drill-log) says so. The honest description is "the data
+comes back and is readable", not "a cluster comes back".
 
 ## The order to rebuild in
 

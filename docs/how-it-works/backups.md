@@ -6,11 +6,13 @@
 > syncthing, koillection's uploads, and the etcd snapshot copies.
 >
 > **Use it when** you are adding a stateful application, a job went red, a stream looks stale, or you
-> are weighing what a loss would cost · **Verified** 2026-11-20 · **Kind:** living page
+> are weighing what a loss would cost · **Verified** 2026-11-22 · **Kind:** living page
 
 The design is [`superpowers/specs/2026-11-20-backups-design.md`](../superpowers/specs/2026-11-20-backups-design.md);
 the code is [`cluster/helm/backup/`](../../cluster/helm/backup/README.md); the restore procedure and
-its drill log are [`runbooks/restore.md`](../runbooks/restore.md).
+its drill log are [`runbooks/restore.md`](../runbooks/restore.md). When the cluster itself is gone, the
+page is [`runbooks/last-resort.md`](../runbooks/last-resort.md): a laptop, the vault and the bucket,
+with no `kubectl` at all.
 
 ## One bucket, four repositories
 
@@ -111,9 +113,11 @@ picks up a directory it should not have trips the check long before the bill not
    `sqlite` row with nothing under `claims/<namespace>/<claim>/`, naming the row, so the fix is the
    row and not the job. A freshly installed application looks the same on its first night, which is
    the point: a database that never appears is visible the next morning rather than never.
-4. **The bucket is unreachable or the password is lost.** The jobs fail loudly; the password is in
-   the password manager and nowhere else, and without it the bucket is ciphertext. That is the one
-   loss no monitoring can repair.
+4. **The bucket is unreachable or the password is lost.** The jobs fail loudly; the password and the
+   bucket's key pair are in Bitwarden (`homelab-backup-last-resort`) and, for the password, nowhere
+   else, and without it the bucket is ciphertext. That is the one loss no monitoring can repair, and
+   it is why one vault holds the whole chain: [`runbooks/last-resort.md`](../runbooks/last-resort.md)
+   is the page for the morning it happens.
 
 ## What has been proved, and what has not
 
@@ -128,6 +132,12 @@ directory from `nodes-nas` (26 dumps plus `globals.sql`), Sonarr's `sonarr.db` f
 directory in `nodes-streaming` (which then passed `pragma integrity_check`), and one Syncthing photo
 from `nfs` whose sha256 matched the live file. The three rows are in the drill log of
 [`runbooks/restore.md`](../runbooks/restore.md).
+
+Proved on 2026-11-22: the same read works with no cluster at all. `restic` on a laptop, given only
+the values in the Bitwarden item, listed all four repositories and decrypted a tree from `nfs`; the
+on-disk copies of the password were moved aside for the run. The row is in the drill log of
+[`runbooks/restore.md`](../runbooks/restore.md) and the procedure is
+[`runbooks/last-resort.md`](../runbooks/last-resort.md).
 
 Still not proved: putting a restored configuration back onto a live claim, and restoring an etcd
 snapshot. Both are destructive and neither has been rehearsed, so the honest statement is that the

@@ -491,7 +491,7 @@ today; that page is rewritten to describe what this builds instead.
 | Risk | Mitigation |
 |---|---|
 | The restic password is lost | two copies, one sealed; the drill fetches it from the password manager |
-| One bucket, one credential: a mistake or a compromise can delete history | separate repositories per stream; the S3 user is scoped to this bucket; the credential is not used by anything else. There is no immutable copy — restic prune needs deletes. A removable-media third copy is left to the operator |
+| One bucket, one credential: a mistake or a compromise can delete history | separate repositories per stream; the S3 user is scoped to this bucket; the credential is not used by anything else. **Decided 2026-11-22:** versioning stays on for the bucket, with a lifecycle rule that expires noncurrent versions after 30 days, so a delete becomes a delete marker and the bytes survive a month. `restic prune` keeps working; the cluster's credential holds no `s3:DeleteObjectVersion`, so it cannot purge a version inside that window. Object Lock was rejected: it exists only at bucket creation, and Compliance mode makes `restic prune` fail outright |
 | The etcd snapshot holds every Secret in the clear | bucket private, encryption at rest, EU region; the join token stays out of the bucket |
 | A job reports success and writes nothing | the verifier checks snapshot counts and ages independently; a stream that stops adding snapshots fails within a day |
 | SQLite `.backup` cannot open a database read-only under WAL | the database and its side files are copied into the writable staging directory first and opened there, so the log is replayed and the claim stays read-only; the snapshot is still made by `.backup`, never by `cp` |
@@ -500,6 +500,27 @@ today; that page is rewritten to describe what this builds instead.
 | The etcd Secret flag is missing on 1.30.1 | decided: the official upload waits for W5, with the `etcd-local` restic bridge in the meantime |
 | W5 slips further, so the official upload is late | the bridge keeps a copy off-box; the card stays on W5's list and the runbook is already written |
 | A long NFS run holds the lock through the prune window | `--retry-lock` on every restic call, prune at Sunday noon, prune failure alerts instead of silently skipping |
+
+## Immutability, decided 2026-11-22
+
+The card that asked for the last-resort runbook (#414) also asked this design to settle what protects
+the bucket from the cluster itself. It is settled, one way, and the other two ways are recorded as
+rejected:
+
+- **Chosen: bucket versioning plus a 30-day lifecycle rule on noncurrent versions.** Every delete
+  restic performs — `forget --prune` included — writes a delete marker, and the object it removed
+  survives as a previous version for thirty days. The backup user's policy has no
+  `s3:DeleteObjectVersion`, so a stolen cluster credential cannot purge a version in that window; the
+  account owner can, which is the point. Storage grows by roughly the last month of churn, dominated
+  by the etcd copies at about a gigabyte a night: 30–40 GB, about €0.25 a month.
+- **Rejected: Object Lock (WORM).** OVH enables it only when the bucket is created, it cannot be
+  turned off, and Compliance mode makes every `restic prune` fail — a backup repository that cannot
+  be pruned stops shrinking. Governance mode is versioning with a second credential to guard.
+- **Deferred: a copy on another provider.** That is the only one that survives losing the OVH account,
+  and it waits on a second EU provider: card #535, frozen on 2026-11-22.
+
+Status: **decided, not yet in force.** It is one console change (bucket → Overview → Security →
+Activate versioning, then the lifecycle rule) and it is not recorded here as done until that has run.
 
 ## Decisions taken after the build review
 
