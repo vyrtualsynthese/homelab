@@ -25,6 +25,8 @@ in its claim. Those are warnings and do not fail the run: an application install
 started matches nothing either, and an exclusion that matches nothing costs space rather than
 data, which the budget check is what bounds. The job cannot check them itself — it reads
 snapshots and never a claim — so it reports the answer `prepare.py` wrote into the snapshot.
+The `nfs` stream has no prepare step: its job counts its own words and prints the line into its
+own log, so there is nothing here to read for that stream.
 """
 
 import argparse
