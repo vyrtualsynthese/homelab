@@ -30,8 +30,8 @@ and the PostgreSQL dumps at 04:30, `nuc0` at 05:00, `streaming` at 05:30, the NF
 a verifier and a prune. `BackupStreamStale` tells you when one stream stops advancing; a job that fails
 says so the same night.
 
-The coverage matrix — which claim, which stream, which row — is `cluster/helm/backup/values.yaml`,
-which is its source; the generated table that mirrors it lands with this section. What each stream
+The coverage matrix — which claim, which stream, which row — is [the coverage table](coverage.md),
+generated from `cluster/helm/backup/values.yaml` so it cannot lag behind it. What each stream
 holds in prose is [how backups work](../how-it-works/backups.md).
 
 ## What is not

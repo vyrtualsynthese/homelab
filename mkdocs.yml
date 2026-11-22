@@ -86,6 +86,7 @@ nav:
   - Backups:
       - backup/README.md
       - What a loss costs: backup/what-a-loss-costs.md
+      - Coverage: backup/coverage.md
       - How backups work: how-it-works/backups.md
       - A file or a claim: backup/a-file-or-a-claim.md
       - A database: backup/a-database.md

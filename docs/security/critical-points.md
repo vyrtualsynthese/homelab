@@ -23,7 +23,7 @@ never repeats the procedure.
 | **The registrar** of `ashudev.com` and `ashuvidz.com` | renewal lapses and every public name stops resolving, however healthy the cluster is | not recorded — no registrar, account or renewal date is written down here | [last resort](../runbooks/last-resort.md) |
 | **The `lan-only` middleware and the route charts** | the boundary between the LAN and the internet: a rebuilt cluster without them answers every hostname | git, and the `nfs` stream carries nothing of it — it is configuration, not data | [network](../how-it-works/network.md), [route a request](../running-it/ship-a-change.md) |
 | **The Traefik certificate store** (`acme.json` on `pv-traefik-nfs`) | public certificates until re-issued; losing it burns Let's Encrypt's weekly quota re-requesting every name | the `nfs` stream, tag `traefik` | [the certificate store](../runbooks/acme-store.md) |
-| **Each node's `local-path` disk** | the claims that landed on that node: an application's configuration, and for some, its only database | the `nodes-<node>` stream, per claim | a node, in the Backups section (not written yet) |
+| **Each node's `local-path` disk** | the claims that landed on that node: an application's configuration, and for some, its only database | the `nodes-<node>` stream, per claim | [a dead node](../backup/a-node.md) |
 | **The password manager's own recovery code** | the restic password, the CA root and every other item in it, at once | not recorded — Bitwarden's recovery code is not written down in this repository | [last resort](../runbooks/last-resort.md) |
 
 Three rows say **not recorded**, and they are the honest state on 2026-11-22: the registrar, the
@@ -41,4 +41,5 @@ cell with the fact and cites the card.
   the groups of the backup's date, and the operator re-checks who is in them.
 
 What is protected, and how, is [how backups work](../how-it-works/backups.md); what a loss costs is
-the Backups section's opening page, which lands with that section.
+[what a loss costs](../backup/what-a-loss-costs.md), and what is covered claim by claim is
+[the coverage table](../backup/coverage.md).
