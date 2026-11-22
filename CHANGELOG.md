@@ -12,8 +12,8 @@ All notable changes to this repository. The format follows
   `kube_cronjob_status_last_successful_time` series — deleted, renamed, or never once succeeded.
   `BackupStreamStale` reads that series' age, so a missing series made it green: the exact silence a
   backup system must not have. One `absent()` term per job, gated on kube-state-metrics answering so
-  a dead exporter does not also page about five backups; `backup-prune` joins once it has a first
-  success, since its 2026-11-22 first run failed on a stale `nfs` repository lock.
+  a dead exporter does not also page about six backups; `backup-prune` is the sixth term, added once
+  the lock fix below gave that job its first success.
 - `RestoreDrillOverdue` warns when the newest restore drill in `docs/runbooks/restore.md`'s log is
   more than 90 days old — three missed monthly drills — and reports Alerting rather than OK when it
   cannot read the log at all. The dates reach the rule through the chart: `restoreDrills` in the
@@ -238,6 +238,18 @@ All notable changes to this repository. The format follows
 
 ### Fixed
 
+- `backup-prune` has run and exited 0 on all four repositories, so a retention policy is applied for
+  the first time. Its only previous run, Sunday 2026-11-22 at noon, failed before touching anything:
+  the `nfs` repository was still locked by the laptop read test that morning (PID 1222890 on
+  `Val-Gaming`, lock written at 02:20:56Z), and `restic` waited six hours and then refused. Two stale
+  locks were cleared from a scratch pod holding the `backup-restic` Secret, a manual run
+  (`kubectl create job --from=cronjob/backup-prune`) pruned all four repositories in 15 s, and
+  `backup-prune` then joined `BackupJobAbsent` as its sixth term. A second manual run, once the
+  per-stream retention of task #541 had reached the cluster, pruned them again under the split policy
+  — 7 daily / 4 weekly / 24 monthly on `nfs` plus its 10 yearly — and still exited 0; `nfs` kept 12
+  snapshots, one per day per export, and no repository holds a lock. The laptop procedure in
+  [`docs/runbooks/last-resort.md`](docs/runbooks/last-resort.md) now ends with an unlock, and the
+  drill log records what one missing it cost.
 - `nodes-streaming`'s backup budget is 14 GiB instead of 7, before the stream tripped it. The
   repository held 6.99 GiB after five nights and grew about 0.21 GiB a night, so the verifier —
   which fails a stream over `budgetGiB` — was 13.5 MB from failing its 08:30 run on 2026-11-23, and
