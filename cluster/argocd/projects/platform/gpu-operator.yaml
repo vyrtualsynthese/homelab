@@ -15,3 +15,10 @@ spec:
     repoURL: "https://github.com/vyrtualsynthese/homelab.git"
     targetRevision: develop
     path: cluster/helm/platform/gpu-operator
+    # The chart's values.yaml is also passed as a Helm override, the way
+    # `dashy` and `authentik` do. A `null` in a chart's own values.yaml is a
+    # default and cannot delete an inherited subchart key; as an override it
+    # does, which is what drops the upstream 500m CPU limit on the operator.
+    helm:
+      valueFiles:
+        - values.yaml

@@ -48,8 +48,11 @@ gpu-operator:
         cpu: 50m
         memory: 96Mi
       limits:
-        # The upstream chart defaults this to 500m. `null` drops the inherited
-        # key: a CPU limit only throttles, per the house rule.
+        # The upstream chart defaults this to 500m. `null` deletes the inherited
+        # key (a CPU limit only throttles, per the house rule) — but only because
+        # the Application passes this file as a Helm override; a null in a chart's
+        # own values.yaml is a default and would leave the 500m in place. See
+        # `cluster/argocd/projects/platform/gpu-operator.yaml`.
         cpu: null
         memory: 192Mi
 

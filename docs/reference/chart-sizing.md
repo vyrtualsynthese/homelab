@@ -106,7 +106,9 @@ Prometheus showed what the ceilings cost over the 7 days to 2026-11-22:
 was 61 % of its CFS periods. The limit was removed from `postgres`, its exporter,
 the dump and bootstrap jobs, the four `backup` CronJobs, `filebrowser`,
 `local-path`, and the GPU operator (whose 500m came from the upstream chart's
-default and is dropped with `cpu: null`).
+default and is dropped with `cpu: null`, which only works because the
+Application passes the chart's `values.yaml` as a Helm override — the same way
+`dashy` and `authentik` do; as a chart default a null deletes nothing).
 
 The same window showed a standalone `node-feature-discovery` v0.17.1 install,
 in its own namespace and outside GitOps, throttled for tens of thousands of
