@@ -34,6 +34,7 @@ cluster and in the password manager, never in a file here.
 | Page | Answers |
 |---|---|
 | [What enforces what](enforcement.md) | each guarantee, what holds it, and the command that proves it |
+| [The critical points](critical-points.md) | the handful of things that take the homelab with them if lost, and where their copies are |
 | [Secrets](../secrets.md) | every Secret a chart expects, its keys, its consumer, where the value comes from |
 | [Wire an application to authentik](../runbooks/authentik-apps.md) | the procedure for native OIDC, and the traps |
 | [The internal CA](../runbooks/internal-ca.md) | the `*.kub.local` certificate, its root and the restore drill |
