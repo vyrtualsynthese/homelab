@@ -93,7 +93,14 @@ ingressRoute:
   entryPoints:
     - websecure
   middlewares:
+    # -- The house header set: nosniff, `X-Frame-Options`, HSTS.
     - name: security
+      namespace: kube-system
+    # -- The content policy: the page runs no script and loads nothing from
+    # -- another origin, so it can afford `default-src 'none'`. It lives in a
+    # -- middleware of its own because `security` is shared with every
+    # -- application behind the router, and this policy would break them.
+    - name: security-static
       namespace: kube-system
   labels: {}
   annotations: {}
