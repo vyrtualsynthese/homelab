@@ -62,8 +62,8 @@ All notable changes to this repository. The format follows
   with a 30-day lifecycle rule on previous versions, so a `restic prune` run by whoever holds the
   cluster's S3 pair costs thirty days of undo instead of the history. Object Lock was rejected — OVH
   offers it only at bucket creation, and Compliance mode makes `restic prune` fail. A copy that
-  outlives the OVH account waits on a second EU provider (card #535, frozen 2026-11-22). Decided, not
-  yet switched on in the OVH console.
+  outlives the OVH account waits on a second EU provider (card #535, frozen 2026-11-22). In force:
+  versioning on since 01:29Z and two lifecycle rules applied at 02:43Z.
 - Traefik runs as one `Deployment` replica on `streaming` instead of a DaemonSet on every node. Two
   routers sharing `/data/acme.json`, which has no lock, corrupt it and re-request every name, and
   Let's Encrypt allows five duplicates a week: a morning of that takes every public hostname down.
