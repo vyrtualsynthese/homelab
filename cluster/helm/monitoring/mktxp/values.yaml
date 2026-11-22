@@ -73,7 +73,7 @@ resources:
 
 # Pinned the way every other workload is. The old affinity required
 # `node-type=general`, a label the repo retired and a new node would not carry;
-# mktxp only scheduled because nuc0 still has it.
+# mktxp only scheduled because nuc0 carried it; the label was removed on 2026-11-22.
 nodeSelector:
   kubernetes.io/hostname: nuc0
 

@@ -307,8 +307,10 @@ Dockerfile as `curl --fail http://localhost:80/` — so the startup and liveness
 readiness is off, because nothing unauthenticated reports whether PostgreSQL is reachable. `/conf` is
 dead weight the image never writes to; it stays because the card asked for both claims and the
 deployment mounted that path, and removing it is follow-up work rather than part of getting the pod
-running. The pod is pinned to `nuc0` by `nodeSelector`, replacing an `affinity` on the retired
-`node-type: general` label that matched no node at all.
+running. The pod is pinned to `nuc0` by `nodeSelector`, replacing an `affinity` on the
+`node-type: general` label. That label was still on `nuc0` at the time, so it was never what kept the
+pod `Pending` — the two claims the chart mounted and never created were. The label itself was
+removed from the nodes on 2026-11-22.
 
 The syncs after the merge bound both claims and scheduled the pod on `nuc0`, and then found the one
 thing the chart still had wrong. The image has no `USER` instruction and its entrypoint must be root:
@@ -531,8 +533,9 @@ name cannot be reused. 1Gi rather than `128Mi`: the index database for the media
 in 128Mi, and the old claim was the same size.
 
 The pod is pinned to `nuc0` — where the app already ran, and where AGENTS.md places the general
-catalogue — instead of carrying the retired `node-type: general` affinity, which matched no node and
-left the replacement pod `Pending`. The claim is `WaitForFirstConsumer`, so it binds to whichever
+catalogue — instead of carrying the `node-type: general` affinity. That label answered on `nuc0`, so
+it was not what kept the replacement pod `Pending`: the `Terminating` claim was. The label was
+removed from the nodes on 2026-11-22. The claim is `WaitForFirstConsumer`, so it binds to whichever
 node schedules first: the stuck old pod has to be force-deleted before the first sync, or the claim
 binds to a node the new pod cannot use.
 

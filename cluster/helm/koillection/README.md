@@ -19,7 +19,7 @@ differences this app needed are below.
 | Before | Now | Why |
 |---|---|---|
 | No claim template at all; the Deployment mounted `koillection-conf` and `koillection-uploads` | Both claims are rendered here: `koillection-conf` on `local-path` (1 GiB) at `/conf`, `koillection-uploads` on `stash-nfs` (20 GiB) at `/uploads` | The chart mounted volumes nothing created. A Pending pod is not a placeholder |
-| `affinity.nodeAffinity` on the retired `node-type: general` label | `nodeSelector: kubernetes.io/hostname: nuc0` | `node-type` no longer exists anywhere, so the old affinity matched no node |
+| `affinity.nodeAffinity` on the retired `node-type: general` label | `nodeSelector: kubernetes.io/hostname: nuc0` | `node-type` answered on `nuc0` and was never the placement rule; it was removed on 2026-11-22. The old affinity was not what kept the pod `Pending` — the missing claims were |
 | `service.port: 5432` (a PostgreSQL copy-paste) | `80`, one value for container port, Service and both probes | The image serves on :80 (`FRANKENPHP_SERVER_NAME=":80"`) |
 | No probes | A startup probe and a liveness probe on `/`; no readiness probe | The image's own `HEALTHCHECK` is `curl --fail http://localhost:80/`. Koillection publishes no health route, and nothing unauthenticated reports whether the database is up, so readiness would only duplicate liveness |
 | No `securityContext` | seccomp `RuntimeDefault`, no privilege escalation, capabilities kept, root then dropping to `PUID`/`PGID` 1100 | The entrypoint must be root: it writes `php.ini` under `/usr/local/etc`, `/app/public/.env.local` and the `/uploads` symlink, rewrites its user, chowns `/uploads`, then `setpriv`s to 1100. Two live attempts pin the shape down — see "The init needs root" below |

@@ -109,15 +109,17 @@ All eight provisioners are one release each of the wrapper chart at
 The Node column records where each pod ran at verification; each row moves to `streaming` as its
 Application syncs. None of the eight selects the retired `node-type` label.
 
-## The older charts still select the retired label
+## No chart selects `node-type`
 
-Most charts pin their pod with `nodeSelector: kubernetes.io/hostname`. One was written before that
-rule and still renders a required node affinity on the retired `node-type` label:
-`monitoring/pihole-exporter`. `syncthing` and `thelounge` were the other two until their 2026-11-19
-rebuilds moved them onto hostname pins; `koillection`, `mktxp` and `news-freshrss` keep the same text
-in comments only and pin by hostname now. This is what each chart asks for, not a statement about
-where its pod is: the Node column shows where the pods actually were. Moving `pihole-exporter` onto a
-hostname pin is chart work.
+Every chart pins its pod with `nodeSelector: kubernetes.io/hostname`. `monitoring/pihole-exporter`
+was the last one that rendered a required node affinity on `node-type: general`; it moved to a
+hostname pin on 2026-11-22, the day the label was removed from the four nodes. `syncthing` and
+`thelounge` were the two before it, rebuilt onto hostname pins on 2026-11-19; `koillection`, `mktxp`
+and `news-freshrss` keep the old text in comments only and pin by hostname. `AGENTS.md` §4 keeps the
+rule: a new chart asks for a hostname, never a label.
+
+The Node column is where each pod was observed, not what the chart asks for. None of the rows above
+depends on the removed label.
 
 ## Where to look next
 
