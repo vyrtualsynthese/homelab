@@ -12,7 +12,8 @@ declares. A host with a `web` and a `websecure` router is one row, and its gate 
 A route that no Application owns is not here: the Traefik dashboard is a Helm release value, and
 it is named in [network.md](../how-it-works/network.md). One internal route is an API rather
 than a page: `loki.kub.local` serves Loki's query API and its query frontend, and the logs are
-read in Grafana.
+read in Grafana. The `IngressRouteTCP` and `IngressRouteUDP` entries Syncthing and Minecraft
+declare match on `HostSNI(*)`, carry no hostname, and are therefore not rows here.
 How a request arrives, what the gate does and which certificate answers the handshake are
 [how it works](../how-it-works/network.md); who signs in where is
 [the SSO matrix](sso-applications.md). `Public?` is what
@@ -45,7 +46,7 @@ On the allowlist, meant to answer the internet.
 | `calibre.kub.local` | calibre-web-automated | `media-stack` | `lan-only`, `redirect-to-https` | internal CA | no |
 | `dashy.kub.local` | dashy | `dashy` | `lan-only`, `redirect-to-dashy` | internal CA | no |
 | `docs.kub.local` | docs-site | `docs` | `lan-only`, `authentik-forwardauth`, `redirect-to-https` | internal CA | no |
-| `freshrss.kub.home.ashudev.com` | freshrss | `news` | `lan-only`, `doc-freshrss-redirect-https` | Let's Encrypt | no |
+| `freshrss.kub.home.ashudev.com` | news-freshrss | `news` | `lan-only`, `doc-freshrss-redirect-https` | Let's Encrypt | no |
 | `grafana.kub.local` | grafana | `monitoring` | `lan-only`, `redirect-to-https` | internal CA | no |
 | `kavita.kub.home.ashudev.com` | kavita | `media-stack` | `lan-only`, `doc-kavita-redirect-https` | Let's Encrypt | no |
 | `koillection.kub.home.ashudev.com` | koillection | `koillection` | `lan-only`, `koillection-app-redirect-https` | Let's Encrypt | no |
@@ -78,3 +79,9 @@ On the allowlist, meant to answer the internet.
 - every `cluster/helm/**/templates/*.yaml` that declares an `IngressRoute`, and a chart's
   `values.yaml` when it carries one as an `extraObjects` entry
 - `hack/check_exposure.py` — the public allowlist
+
+## Applications this table cannot see
+
+Their source is not a chart under `cluster/helm/`, so there is no `helm template` to read:
+
+- `local-path`

@@ -74,29 +74,29 @@ def parse_rendered_routes(documents: str, app: str, namespace: str) -> list[Rout
         if not isinstance(doc, dict) or doc.get("kind") != "IngressRoute":
             continue
         spec = doc.get("spec") or {}
-        host = None
-        middlewares: list[str] = []
+        entrypoints = tuple(spec.get("entryPoints") or ())
+        by_host: dict[str, list[str]] = {}
         for rule in spec.get("routes") or []:
             match = HOST_RE.search(rule.get("match") or "")
-            if match and host is None:
-                host = match.group(1)
+            if not match:
+                continue
+            middlewares = by_host.setdefault(match.group(1), [])
             for reference in rule.get("middlewares") or []:
                 name = _middleware_name(reference.get("name", ""))
                 if name and name not in middlewares:
                     middlewares.append(name)
-        if host is None:
-            continue
-        routes.append(
-            Route(
-                host=host,
-                app=app,
-                namespace=namespace,
-                entrypoints=tuple(spec.get("entryPoints") or ()),
-                middlewares=tuple(middlewares),
-                tls=_tls_label(spec, host, tuple(spec.get("entryPoints") or ())),
-                public=host in PUBLIC_HOSTS,
+        for host, middlewares in by_host.items():
+            routes.append(
+                Route(
+                    host=host,
+                    app=app,
+                    namespace=namespace,
+                    entrypoints=entrypoints,
+                    middlewares=tuple(middlewares),
+                    tls=_tls_label(spec, host, entrypoints),
+                    public=host in PUBLIC_HOSTS,
+                )
             )
-        )
     return routes
 
 
@@ -168,12 +168,31 @@ def applications(root: pathlib.Path) -> dict[str, tuple[str, pathlib.Path]]:
         chart = next((p for p in paths if str(p).startswith("cluster/helm/")), None)
         if chart is None:
             continue
-        found[path.stem] = (namespace, pathlib.Path(chart))
+        name = str((doc.get("metadata") or {}).get("name") or path.stem)
+        found[name] = (namespace, pathlib.Path(chart))
     return found
 
 
-def _is_redirect(route: Route) -> bool:
-    return route.entrypoints == ("web",) and REDIRECT in route.middlewares
+def applications_without_a_chart(root: pathlib.Path) -> list[str]:
+    """Applications whose source is not a chart in `cluster/helm/`, named so the page can say so."""
+    missing: list[str] = []
+    for path in sorted((root / "cluster" / "argocd" / "projects").rglob("*.yaml")):
+        try:
+            doc = yaml.safe_load(path.read_text(encoding="utf-8"))
+        except yaml.YAMLError:
+            continue
+        if not isinstance(doc, dict) or doc.get("kind") != "Application":
+            continue
+        spec = doc.get("spec") or {}
+        paths = []
+        if (spec.get("source") or {}).get("path"):
+            paths.append(spec["source"]["path"])
+        for source in spec.get("sources") or []:
+            if source.get("path"):
+                paths.append(source["path"])
+        if not any(str(p).startswith("cluster/helm/") for p in paths):
+            missing.append(str((doc.get("metadata") or {}).get("name") or path.stem))
+    return missing
 
 
 def _table(routes: list[Route]) -> list[str]:
@@ -236,7 +255,13 @@ def render_routes(root: pathlib.Path) -> str:
     for name, (namespace, chart_rel) in sorted(applications(root).items()):
         chart_dir = root / chart_rel
         if not (chart_dir / "Chart.yaml").is_file():
-            continue  # a values-only directory: pattern B, no templates of its own
+            # A values-only directory (pattern B) is consumed by a remote chart, so its routes would
+            # have to come from `extraObjects`; one that does is a chart this page cannot see.
+            if _declares_a_route(chart_dir):
+                raise GenError(
+                    f"{chart_rel}: {name} declares an IngressRoute but holds no Chart.yaml to render"
+                )
+            continue
         if not _declares_a_route(chart_dir):
             continue
         rendered = parse_rendered_routes(render_chart(chart_dir), name, namespace)
@@ -264,7 +289,8 @@ def render_routes(root: pathlib.Path) -> str:
         "A route that no Application owns is not here: the Traefik dashboard is a Helm release value, and",
         "it is named in [network.md](../how-it-works/network.md). One internal route is an API rather",
         "than a page: `loki.kub.local` serves Loki's query API and its query frontend, and the logs are",
-        "read in Grafana.",
+        "read in Grafana. The `IngressRouteTCP` and `IngressRouteUDP` entries Syncthing and Minecraft",
+        "declare match on `HostSNI(*)`, carry no hostname, and are therefore not rows here.",
         "How a request arrives, what the gate does and which certificate answers the handshake are",
         "[how it works](../how-it-works/network.md); who signs in where is",
         "[the SSO matrix](sso-applications.md). `Public?` is what",
@@ -292,6 +318,16 @@ def render_routes(root: pathlib.Path) -> str:
         "- `hack/check_exposure.py` — the public allowlist",
         "",
     ]
+    without_a_chart = applications_without_a_chart(root)
+    if without_a_chart:
+        lines += [
+            "## Applications this table cannot see",
+            "",
+            "Their source is not a chart under `cluster/helm/`, so there is no `helm template` to read:",
+            "",
+            *[f"- `{name}`" for name in without_a_chart],
+            "",
+        ]
     return "\n".join(lines)
 
 
