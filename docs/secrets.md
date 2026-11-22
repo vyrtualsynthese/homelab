@@ -1,17 +1,21 @@
 # Secrets
 
-Every Kubernetes Secret the in-repo charts expect to find already in the cluster, where it lives,
-who reads it and where its value is supposed to come from. This is the inventory a rebuild reads
-first: a missing Secret is not a failed sync, it is a pod stuck in `CreateContainerConfigError` or a
-bootstrap Job that never creates its roles.
+> **In one line.** Every Kubernetes Secret the in-repo charts expect to find already in the cluster,
+> where it lives, who reads it and where its value comes from — never the value itself — then the
+> PostgreSQL instance and the per-application database passwords.
+>
+> **Use it when** a pod is stuck in `CreateContainerConfigError`, a rebuild needs to know which Secret
+> to create first, or a credential is being rotated · **Verified** 2026-11-22 · **Kind:** reference
+>
+> **Sources** `docs/runbooks/last-resort.md`, `docs/security/critical-points.md`, `cluster/helm/`
 
 **Never a value.** Not a password, not a token, not an encoded substitute for one. Values live in
 the cluster and in the operator's password manager, nowhere else. Secrets are not in git and must
 not be added to it.
 
-State: 2026-11-17, read from the charts on branch `feature/docs-stage-3`. This file is the whole
-inventory: every Secret a chart expects, then the PostgreSQL instance and the per-application
-database passwords.
+State: read from the charts on 2026-11-17; the custody of the three rebuild credentials below was
+confirmed with the operator on 2026-11-22 (card #461). This file is the whole inventory: every Secret
+a chart expects, then the PostgreSQL instance and the per-application database passwords.
 
 ## Application secrets expected by the charts
 
@@ -104,10 +108,11 @@ Secret that does not exist yet.
 
 **The first three rows above share one failure domain.** Until 2026-11-22 Bitwarden held neither the
 repository password nor a K3s token, and the note that read like one ("Kluster Backup codes") is the
-retired AWS and syncthing setup whose passwords open nothing. The paper copy the design describes
-cannot be checked from here and would not survive the fire anyway: a second copy that outlives both
-the OVH account and the vault is card #535, frozen pending a second EU provider. The Bitwarden master
-password and its 2FA recovery codes are the root of the chain and are written down nowhere.
+retired AWS and syncthing setup whose passwords open nothing. The Bitwarden master password and its
+2FA recovery codes are the root of the chain: they are printed on paper and kept offline, and that
+page is the only copy (2026-11-22, card #461), so the whole table above is one page away from being
+unreachable. A second copy that outlives both the OVH account and the vault is card #535, frozen
+pending a second EU provider.
 
 The procedure that consumes these, with the cluster assumed gone, is
 [`runbooks/last-resort.md`](runbooks/last-resort.md).

@@ -6,7 +6,9 @@
 >
 > **Use it when** the cluster does not exist any more, the house is not available, or the backups
 > need proving from outside the cluster · **Verified** 2026-11-22: four repositories read from this
-> laptop with no cluster, values taken from Bitwarden · **Kind:** living page
+> laptop with no cluster, values taken from Bitwarden · **Kind:** how-to
+>
+> **Sources** `docs/secrets.md`, `docs/how-it-works/backups.md`, `cluster/helm/backup/values.yaml`
 
 Every other restore page assumes a cluster that still stands: a restic pod in `backup`, the
 `backup-restic` Secret, `kubectl` answering. [`restore.md`](restore.md) is that page. This one
@@ -25,19 +27,21 @@ exists that the house cannot take with it.
 | restic repository password | Bitwarden, item `homelab-backup-last-resort` (Homelab folder, re-prompt on) | cloud vault | the bucket is ciphertext; nothing on this page works |
 | OVH S3 key pair for the bucket | the same vault item, and the `backup-restic` Secret in the cluster | cloud vault | without it the bucket cannot be opened, though the data is intact |
 | K3s server token (`/var/lib/rancher/k3s/server/token`) | the same vault item, field `K3S_SERVER_TOKEN` | cloud vault | an etcd snapshot opens to garbage: it is encrypted under a key derived from the token |
-| Bitwarden master password and 2FA recovery codes | nowhere written down | — | every row above is sealed behind it |
+| Bitwarden master password and 2FA recovery codes | the master password and the two-step login recovery code on paper, kept offline | paper, away from the network | every row above is sealed behind it |
 
 Two honest statements about that table.
 
 **The vault copy is hours old.** Until 2026-11-22 Bitwarden held neither the repository password nor
 a K3s token: the note that reads like a backup note ("Kluster Backup codes") is the retired AWS and
 syncthing setup, and its passwords do not open this bucket. `secrets.md` promised "the password
-manager, plus one sealed paper copy" — the first half was false, and nothing in this repository can
-check the second.
+manager, plus one sealed paper copy": the first half was false until 2026-11-22, and the second is the
+operator's paper copy of the vault's master password and recovery code, which nothing in this
+repository can check.
 
 **There is one vault, and the vault is the whole chain.** Losing access to Bitwarden loses the
-backups as completely as losing the bucket. That is why the four rows above have the same failure
-domain and why the yearly proof in the last section exists.
+backups as completely as losing the bucket. That is why the first three rows above have the same
+failure domain and why the yearly proof in the last section exists. The chain does leave the vault in
+exactly one place — that paper copy — and it is a single page in a single place.
 
 The S3 key pair is the one secret that can be rebuilt: it is an output of `infra-main`'s
 `ovh/backup` stack, so with the OVH API key and the state bucket's own pair,
