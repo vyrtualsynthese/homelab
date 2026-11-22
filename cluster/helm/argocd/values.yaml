@@ -188,13 +188,14 @@ argo-cd:
                 port: http
 
     # The chart ships an ingress policy per component that allows the named
-    # `metrics` port "from any namespace" (`namespaceSelector: {}`). This k3s
-    # does not enforce that form: measured 2026-11-22, a probe pod in
-    # `monitoring` was refused on 8082 while the same pod was allowed by a rule
-    # naming a pod label or an ipBlock. The metrics Services are headless, so a
-    # scrape is a pod-to-pod connection to the pod's own address and falls under
-    # that policy. This rule is additive to the chart's, and numeric on purpose:
-    # the named port is what the namespace form failed to match.
+    # `metrics` port with `namespaceSelector: {}` as its peer (any namespace).
+    # On this k3s an empty `namespaceSelector` peer is not enforced: measured
+    # 2026-11-22 with the chart's rule as the only one on the controller, 8082
+    # refused a pod in `monitoring`; the same pod was allowed by a rule whose
+    # peer was an ipBlock, with either the named `metrics` port or 8082. The
+    # metrics Services are headless, so a scrape is a pod-to-pod connection to
+    # the pod's own address and falls under that policy. This rule is additive
+    # to the chart's, and numeric so it cannot drift from a renamed port.
     - apiVersion: networking.k8s.io/v1
       kind: NetworkPolicy
       metadata:

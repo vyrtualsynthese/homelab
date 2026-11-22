@@ -21,8 +21,26 @@ METRICS_SERVICES = {
     "argocd-server-metrics": 8083,
 }
 
+# The chart's own ingress policy for each pod the extra scrape policy selects. If a
+# dependency upgrade drops or renames one of these, `argocd-metrics-scrape` becomes the
+# only policy on the pod and default-denies its Redis and gRPC traffic while the scrape
+# stays green — so the pairing is asserted, not assumed.
+CHART_POLICIES = {
+    "argocd-application-controller": "argocd-application-controller",
+    "argocd-repo-server": "argocd-repo-server",
+}
+
+_RENDER = None
+
 
 def render():
+    global _RENDER
+    if _RENDER is None:
+        _RENDER = _render()
+    return _RENDER
+
+
+def _render():
     with tempfile.TemporaryDirectory() as tmp:
         work = pathlib.Path(tmp) / "argocd"
         shutil.copytree(CHART, work)
@@ -57,6 +75,14 @@ class ScrapeShapeTests(unittest.TestCase):
                 self.assertEqual(annotations.get("prometheus.io/scrape"), "true")
                 self.assertEqual(annotations.get("prometheus.io/port"), str(port))
 
+    def test_only_the_metrics_services_carry_the_scrape_annotation(self):
+        annotated = {
+            d["metadata"]["name"]
+            for d in by_kind("Service")
+            if (d["metadata"].get("annotations") or {}).get("prometheus.io/scrape") == "true"
+        }
+        self.assertEqual(annotated, set(METRICS_SERVICES))
+
     def test_the_scrape_policy_allows_the_two_metrics_ports_by_number(self):
         policy = next(
             d for d in by_kind("NetworkPolicy")
@@ -71,6 +97,25 @@ class ScrapeShapeTests(unittest.TestCase):
         rule = policy["spec"]["ingress"][0]
         self.assertEqual(rule["from"], [{"ipBlock": {"cidr": "10.42.0.0/16"}}])
         self.assertEqual(sorted(p["port"] for p in rule["ports"]), [8082, 8084])
+
+    def test_the_chart_still_isolates_the_scraped_pods(self):
+        docs = render()
+        policies = {d["metadata"]["name"]: d for d in docs if d["kind"] == "NetworkPolicy"}
+        workloads = {
+            d["metadata"]["name"]: d["spec"]["template"]["metadata"]["labels"]
+            for d in docs if d["kind"] in ("Deployment", "StatefulSet")
+        }
+        for policy_name, pod_name in CHART_POLICIES.items():
+            with self.subTest(policy=policy_name):
+                self.assertIn(policy_name, policies)
+                self.assertTrue(policies[policy_name]["spec"].get("ingress"))
+                labels = workloads[pod_name]
+                self.assertEqual(labels["app.kubernetes.io/name"], pod_name)
+                selector = policies[policy_name]["spec"]["podSelector"]["matchLabels"]
+                self.assertEqual(
+                    selector["app.kubernetes.io/name"],
+                    labels["app.kubernetes.io/name"],
+                )
 
     def test_the_controller_is_told_which_condition_to_publish(self):
         cm = next(
