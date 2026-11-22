@@ -32,6 +32,27 @@ pgadmin:
   env:
     email: valentin.ronteix@ashudev.com
 
+  # Gunicorn writes one access line per request to stdout, and the two probes are
+  # 12,952 of this pod's 12,963 lines in the 24 h to 2026-11-22 — effectively its
+  # whole log, at 11.3 MB a month for no reader. pgAdmin has no user-agent filter,
+  # so the access log is turned off rather than filtered: the UI is behind the
+  # Traefik allowlist and every sign-in is recorded by authentik.
+  envVarsExtra:
+    - name: GUNICORN_ACCESS_LOGFILE
+      value: "/dev/null"
+
+  # The probes no longer feed a log line, so their cadence only costs the app.
+  # A browser session does not need a readiness answer every 10 s; 60 s is still
+  # far quicker than any rollout.
+  readinessProbe:
+    periodSeconds: 60
+    timeoutSeconds: 3
+    failureThreshold: 3
+  livenessProbe:
+    periodSeconds: 60
+    timeoutSeconds: 5
+    failureThreshold: 3
+
   # The wrapper creates this claim in templates/pvc.yaml. Its name is
   # pgadmin-config, not the chart default pgadmin-pgadmin4: that name was held by
   # a Terminating Longhorn claim when the wrapper was written, and the data has

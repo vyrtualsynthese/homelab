@@ -9,11 +9,25 @@ data:
   # nginx only reads it per request. The image's own default.conf is replaced,
   # not merged — this file is the whole conf.d content.
   nginx.conf: |
+    # A kubelet probe is not a request anyone reads. In the 24 h to 2026-11-22 the
+    # site logged 11,516 probe lines out of 11,601 — 99 % of its own log — because
+    # readiness asks `/` every 10 s. Every real request keeps its line; this map
+    # only drops the ones whose user agent is the prober.
+    map $http_user_agent $loggable {
+        default 1;
+        ~*kube-probe 0;
+    }
+
     server {
         listen 8080;
         server_name _;
         root /data/site;
         index index.html;
+
+        # Declared here, not inherited: an access_log at this level replaces the
+        # image's own http-level one, which would otherwise still write every
+        # probe line.
+        access_log /dev/stdout combined if=$loggable;
 
         # A pair's directory holds a static MkDocs site. The builder guarantees
         # a root index.html for every published site, so a directory without

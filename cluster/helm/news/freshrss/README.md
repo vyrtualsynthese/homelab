@@ -105,7 +105,10 @@ FreshRSS ships no health endpoint, so the chart asks two different questions:
   broken file on disk.
 - **Readiness: `GET /i/`.** With OIDC enabled that path answers `302` to authentik, and a probe counts
   any 3xx as ready. It still boots Apache and PHP, so a dead worker fails here while the TCP check
-  would pass. It no longer reads the user table on every pass.
+  would pass. It no longer reads the user table on every pass. The probe carries the three
+  `X-Forwarded-*` headers: Traefik sets them on every proxied request, and without them
+  mod_auth_openidc warns three times per pass — 103,617 lines in the 24 h to 2026-11-22, 19 % of all
+  the lines Loki stored.
 
 `/` is deliberately not used anywhere: `index.php` is a 301 redirect to `p/`, which answers even
 when the backend is broken.
@@ -122,6 +125,9 @@ reach the pod log and Loki — but with PHP's default reporting, every notice co
 Bit ships every line with no filter. The feed-refresh cron enabled by `CRON_MIN` writes the output of
 `actualize_script.php` to `/tmp/FreshRSS.log` **inside the container**, which Fluent Bit does not
 read, so refresh failures are visible only with `kubectl exec`. That is debt, recorded below.
+
+The OIDC warnings are not part of that debt any more: they were the probe's missing headers, not the
+module misbehaving, and the readiness probe now sends them.
 
 ## Carrying the old data root over
 
