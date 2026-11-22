@@ -2,15 +2,16 @@
 
 Date: 2026-11-21 · **Ownership moved** 2026-11-21 at chart `25.0.3`, revision 8 · **Moved to 2.11**
 the same day, chart `27.0.2` (Traefik `2.11.63`), revision 10 · **Moved to v3** the same day, chart
-`42.4.1` (Traefik `3.7.19`), revision 11 · **Kind:** living runbook
+`42.4.1` (Traefik `3.7.19`), revision 11 · **Configuration audited** 2026-11-22, revision 12 ·
+**Kind:** living runbook
 
 > **In one line.** The Traefik release is this repository's; K3s's addon is disabled, and the
 > release is moved with `helm` from one values file.
 >
 > **Use it when** Traefik has to move to a newer chart, its values change, or the release has to be
-> inspected or rolled back · **Verified** 2026-11-21 on chart `42.4.1`: digest unchanged, every route
-> count unchanged, every host answering, `/metrics` serving 111 series, and the 2023 `containo.us`
-> CRDs gone.
+> inspected or rolled back · **Verified** 2026-11-22 on chart `42.4.1`, revision 12: digest
+> unchanged, 72 routes, every host answering, `/metrics` scraped (`up == 1`), and only two startup
+> warnings left, both accepted below.
 
 ## The shape of the problem
 
@@ -95,12 +96,19 @@ helm upgrade traefik "$CHART" -n kube-system \
 removed from the file stays live — that is how `deployment.podAnnotations` and `service.ipFamilyPolicy`
 survived the 2023 values for two years.
 
-Afterwards, confirm the release holds the file rather than a merge:
+Afterwards, confirm the release holds the file rather than a merge. `helm get values` re-serialises
+the YAML and prints a `USER-SUPPLIED VALUES:` header, so a text diff never matches; compare the
+parsed documents:
 
 ```bash
+FILE=cluster/infrastructure/traefik/values-v3.yaml
 helm -n kube-system get values traefik > /tmp/after.yaml
-diff <(sed 's/[[:space:]]*$//' /tmp/after.yaml) \
-     <(sed 's/[[:space:]]*$//' "$FILE") && echo "release == file"
+FILE="$FILE" python3 - <<'EOF'
+import os, yaml
+raw = open('/tmp/after.yaml').read().split('\n', 1)[1]   # drop the header line
+same = yaml.safe_load(raw) == yaml.safe_load(open(os.environ['FILE']))
+print('release == file' if same else 'DIFFERS: the release holds a merge')
+EOF
 ```
 
 ## Moving to 2.11, chart `27.0.2`
@@ -291,6 +299,39 @@ no custom router to replace it: `/metrics` answered 404 at 9100 and no `traefik_
 pod itself, so the values carry no `podAnnotations`; the failure is one alert and an empty dashboard,
 not a visible outage.
 
+## The 3.7 configuration audit (2026-11-22, revision 12)
+
+The v3 move renamed the keys; it did not review what they say. This pass read every option the
+release still inherits from the 2.x file, or from the chart's stock values, and settled the startup
+warnings. Revision 12 carries the result, and `helm -n kube-system rollback traefik 11` is the way
+back to the unaudited configuration.
+
+| What | Decision | Why |
+|---|---|---|
+| `providers.kubernetesCRD.safeNaming` | `false` | On, every generated router and service is renamed (`kube-system_lan-only@kubernetescrd`), and **85** middleware references in the chart templates are written in the legacy `namespace-name@kubernetescrd` form. A reference in the wrong form does not resolve, so the first sync would drop every gate at once. The collision it prevents needs two namespace/name pairs that concatenate to the same string; this cluster has none. `false` keeps the names and silences the warning. |
+| `global.aliasHeadersStrategy` | `delete` (v3.7.17+) | A header spelled `X_Auth_User` or `X.Auth.User` is read as `X-Auth-User` by any backend that derives variable names from header names, which lets a client spoof one Traefik manages. authentik is Python WSGI and trusts the headers it receives. `delete` drops the alias; `reject` would answer `400` to any client that sends such a header, innocuous private ones included. |
+| `ports.web.forwardedHeaders.insecure` and `ports.websecure.forwardedHeaders.insecure` | removed | The router in front is an Orange Livebox doing plain NAT, and it sets no `X-Forwarded-*` header. Trusting them only trusted the client, which could rewrite the host and scheme its backends see. With the flag gone Traefik writes the values itself. |
+| `ports.web.proxyProtocol.insecure` and `ports.websecure.proxyProtocol.insecure` | removed | **Measured hole, 2026-11-22.** A request to `calibre.kub.local` carrying `PROXY TCP4 192.168.1.99 …` was answered `301` like a LAN client; the same request claiming `8.8.8.8` was answered `403`. The header let the caller choose its own source address, and the Livebox forwards 80 and 443 while Traefik chooses the route from the `Host` header alone, so the `lan-only` gate could be walked through from the internet. Nothing on this network sends the header. The same request now answers `400`, and normal traffic is unchanged. |
+| `ports.websecure.transport.respondingTimeouts.readTimeout` | `1h` | v3 raised this default from `0` to `60s`, a cap on the whole request including its body. FileBrowser is public, and a 2 GB upload on a 20 Mbit/s line needs about 800 s, so the v3 default would cut it. `1h` leaves every real upload inside and still bounds a slow connection. |
+| `writeTimeout`, `idleTimeout` | chart defaults: `0` and `180s` | `writeTimeout: 0` puts no cap on a response, which is what a Plex stream needs. `180s` is the keep-alive idle limit the 2.x file also ran; a paused stream reconnects. |
+| `serversTransport.maxIdleConnsPerHost` | `100` via `additionalArguments` | The chart does not expose it, and its `0` means Go's default of two idle connections per host: Plex and qBittorrent reopen a connection for every request beyond two. 100 is per host, not a global pool. |
+| `serversTransport.forwardingTimeouts` | chart defaults: dial `30s`, response headers `0`, idle `90s` | A response-header timeout is the one that would cut Plex while it starts a transcode, so `0` stays. A backend that never answers holds one connection, which is the smaller cost. |
+| `metrics.prometheus.addEntryPointsLabels` | `true` | Without it `traefik_entrypoint_requests_total` does not exist and no per-entry-point traffic panel is possible. Measured after the change: five entry points carried 66 series at startup, and it grows with the status codes and methods actually seen, not with configuration. The dashboard gained "Requests per second by entry point". |
+| access log | still off | The decision belongs to card 544, not here. If it is turned on, drop query strings with `accessLog.fields.queryParameters.defaultMode: drop` (v3.7.3+): Plex and Tautulli put tokens in them. |
+| `experimental`, HTTP/3 | off | `http3.enabled` needs the experimental feature and a second, UDP Service on 443; the Livebox forwards no UDP/443. Nothing asks for QUIC here. |
+| encoded characters | accepted at the v3.6.7+ defaults (all `true`) | The warning says the option has a default now and asks the operator to choose. Rejecting encoded `%2F`, `%25`, `%3B` and the rest would break FileBrowser and Calibre paths that carry them in file names. Every route here matches on host and, at most, a path prefix, so a decoded path cannot move a request to another service. |
+| cross-namespace warning | expected | `providers.kubernetesCRD.allowCrossNamespace: true` is deliberate: every gate is referenced as `kube-system-<name>@kubernetescrd`, and without it they all vanish. Traefik warns because the option widens what a route may reference. |
+
+After the change the startup log carries the last two warnings only, both accepted above. The
+`SafeNaming` and `aliasHeadersStrategy` warnings are gone. `global.sendAnonymousUsage` also moved to
+`false`: the collection endpoint is not an EU provider under the sovereign-provider rule.
+
+**The rename sweep.** Chart 42 validates its values with `additionalProperties: false`, so a stale key
+fails the render rather than being ignored. Every key in `values-v3.yaml` exists in chart `42.4.1`'s
+own `values.yaml`; `helm lint` and `helm template` both pass. The silent-ignore risk left is a key
+the chart accepts but never reads, which `helm template` shows in the rendered arguments — the audit
+compared those against the table above.
+
 ## Rolling back
 
 - **Values**: `helm -n kube-system get history traefik` lists the revisions. `helm rollback` to the
@@ -299,7 +340,8 @@ not a visible outage.
   `helm upgrade traefik /tmp/traefik-25.0.3/traefik -n kube-system --reset-values -f cluster/infrastructure/traefik/values.yaml`
   for the 2.10 line, or the snapshot
   `cluster/infrastructure/traefik/snapshot/2026-11-21/release-values.yaml` for the values as they
-  were adopted. From revision 10 the one-liner is `helm -n kube-system rollback traefik 9`.
+  were adopted. From revision 10 the one-liner is `helm -n kube-system rollback traefik 9`. For the
+  audit, `helm -n kube-system rollback traefik 11` returns to the v3 values before it.
 - **The addon**: re-enabling it takes the old path back. Remove `- traefik` from `disable` on the
   three servers, restore the drop-in out of git, and restart one node at a time. K3s recreates its
   `HelmChart` objects.
@@ -329,6 +371,10 @@ not a visible outage.
 | the v3 CRD apply pulls in fifteen `hub.traefik.io` resources | chart 42 ships the Hub API gateway too; they need a licence and gate nothing. Apply only `traefik.io_*` |
 | a Traefik dashboard panel goes empty after v3 | v3 renamed `traefik_router_open_connections` to `traefik_open_connections` and dropped `traefik_config_reloads_failure_total`; fix the query, not the scrape |
 | a `forwardAuth` route logs `maxResponseBodySize is not configured` | v3 warns once per router; the auth server is internal, but set `maxResponseBodySize` on the middleware to silence it and cap the body |
+| a request carrying a `PROXY` line is treated as coming from the address it names | `proxyProtocol.insecure: true` on the entry point, with no proxy in front. It is a `lan-only` bypass from the internet; remove the block |
+| an upload dies at exactly 60 seconds | v3's default `readTimeout` on the entry point; raise it for the one that carries uploads |
+| `helm get values traefik` does not match the values file | it re-serialises the YAML and prints a header; compare the parsed documents, not the text |
+| every `@kubernetescrd` reference stops resolving after a naming change | `safeNaming: true` renames generated objects and the reference form becomes `namespace_name@kubernetescrd`; rewrite all 85 template references first, or leave it `false` |
 | a `HelmChart` deletion hangs, or runs an uninstall | `wrangler.cattle.io/on-helm-chart-remove`; strip it before anything else deletes the object |
 | the release moves but the dashboard route appears twice | chart 25 renders it on `traefik.io`; the 2023 `traefik.containo.us` copy has to be deleted by hand, once |
 | an object renamed to `traefik.io` leaves its twin behind | an Argo CD sync without `prune` creates the new object and keeps the old one. Delete the `containo.us` copy by hand, after the routes and gates answer on the new one |
