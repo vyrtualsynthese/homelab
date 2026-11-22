@@ -22,7 +22,8 @@ Columns: **Host** as the router matches it; **Application** as you would name it
 `internal CA` means the `*.kub.local` leaf of the ashulab CA, served by default with no
 `certResolver` on the route. `Let's Encrypt` means the name is served by one of the cluster's two
 public certificates: the `ashudev.com` wildcard (`ashudev.com`, `*.ashudev.com`,
-`*.kub.home.ashudev.com`, requested by the `ashudev.com` route) or the `ashuvidz.com` pair (apex and
+`*.kub.home.ashudev.com` and the bare `kub.home.ashudev.com`, requested by the `ashudev.com` route) or
+the `ashuvidz.com` pair (apex and
 `www`, requested by the `ashuvidz.com` route). Those two routes are the only ones that ask for a
 certificate; every other route is served from the store by SNI, whether the hostname is public or a
 `*.kub.home.ashudev.com` name the LAN resolves to `192.168.1.46`.

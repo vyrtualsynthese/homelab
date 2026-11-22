@@ -24,7 +24,9 @@ All notable changes to this repository. The format follows
 ### Changed
 
 - Traefik asks Let's Encrypt for two certificates instead of fifteen. One DNS-01 wildcard over the
-  OVH API carries `ashudev.com`, `*.ashudev.com` and `*.kub.home.ashudev.com`; one TLS-ALPN
+  OVH API carries `ashudev.com`, `*.ashudev.com`, `*.kub.home.ashudev.com` and the bare
+  `kub.home.ashudev.com` (a wildcard stands for one label, so dashy's redirect route needs the
+  fourth name); one TLS-ALPN
   certificate carries `ashuvidz.com` and `www.ashuvidz.com` while that zone is still on AWS
   nameservers. Only the apex route of each domain requests a certificate, and every other name is
   served from the store by SNI, so a new application under `ashudev.com` orders nothing. The OVH
