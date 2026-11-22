@@ -189,10 +189,10 @@ scrape and eight of the ten targets moved to the 5-minute jobs
 
 ## What the router logs
 
-Traefik keeps a per-request access log since 2026-11-22: JSON on stdout, buffered 100 lines at a
-time, and carried to Loki by the same Fluent Bit pipeline as everything else. It exists for the
-question the metrics cannot answer — *which* request returned 502, or took four seconds — and it is
-deliberately narrower than a normal access log.
+Traefik keeps a per-request access log since 2026-11-22: JSON on stdout, handed to a writer goroutine
+through a 100-slot channel, and carried to Loki by the same Fluent Bit pipeline as everything else. It
+exists for the question the metrics cannot answer — *which* request returned 502, or took four
+seconds — and it is deliberately narrower than a normal access log.
 
 **The URL and the client are not in it.** `RequestPath` is the URI; from 3.7.3 it can be stripped of
 its query string (`fields.queryParameters`), but not of its path, and the path alone carries
@@ -202,21 +202,33 @@ headers stay dropped by the chart default. The reason is that `loki.kub.local` h
 and a 30-day retention: a full log would put Plex's `?X-Plex-Token=`, FileBrowser's share links and
 OIDC `?code=` callbacks in front of every device on the LAN.
 
-What a line does carry: time, `RouterName`, `ServiceName`, `DownstreamStatus`, `OriginStatus`,
-`Duration` (nanoseconds), response size, TLS version and retry count. A failure Traefik answers
-itself shows `OriginStatus` 0.
+**Everything else is kept**, because the file uses `defaultMode: keep` and names only the drops above.
+What a line carries, measured on the live stream rather than read off the docs: the time, the entry
+point name and scheme, the router name with its Kubernetes route namespace, the service name,
+namespace and port, the requested hostname and method, the downstream and origin status, the two
+durations in nanoseconds, the response and request sizes, the retry count, the TLS version and cipher,
+the compression ratio, and the pod address Traefik forwarded the request to (`ServiceAddr`,
+`ServiceURL`). What is left in it is the hostname and cluster-internal addresses, not a credential: a
+record without the hostname cannot say which application failed. A failure Traefik answers itself
+shows `OriginStatus` 0.
 
-**Measured 2026-11-22**: about 13,300 requests a day at 434 bytes a line, so roughly **5.8 MB/day**
-before compression and 0.3 MB/day stored at Loki's 19× — against a pipeline that carries 0.09 GB/day.
-Re-measure with:
+**Measured 2026-11-22** over the twelve minutes after that day's last restart (01:20–01:32Z): 153 lines
+and 118 kB, so 769 bytes a line and **about 15 MB/day** at the night-time rate, against a pipeline that
+carries 0.09 GB/day. An evening reads higher; the day's own figure is two queries away:
 
 ```bash
-curl -sG http://loki.kub.local/loki/api/v1/query_range \
-  --data-urlencode 'query={job="fluent-bit", container="traefik"} | json' --data-urlencode 'limit=3'
+# bytes carried in the trailing 24 h — this is the day's volume
+curl -sG http://loki.kub.local/loki/api/v1/query \
+  --data-urlencode 'query=sum(bytes_over_time({job="fluent-bit", container="traefik"}[24h]))'
+# lines in the same window; divide the two for the line size
+curl -sG http://loki.kub.local/loki/api/v1/query \
+  --data-urlencode 'query=sum(count_over_time({job="fluent-bit", container="traefik"}[24h]))'
 ```
 
 Two panels on **Homelab · Traefik**, row *Request record*, read it: *Failed requests (4xx/5xx)* and
-*Requests slower than 1 s, by router*. A long Plex stream belongs in the second one.
+*Requests slower than 1 s, by router*. A long Plex stream belongs in the second one. Lines reach Loki
+a few seconds late, because Fluent Bit batches on its own flush interval; Traefik's writer does not
+wait.
 
 Gating Loki itself is a separate card: the log store is readable by every device on the LAN, and that
 is true of every application log, not only this one.

@@ -25,7 +25,7 @@
 2. A failure Traefik answers itself (502/504, `OriginStatus` 0): the failed-request query must still select it. Tasks 3 and 4.
 3. A long-lived Plex stream (duration over a second): it lands in the slow panel and is not a fault; the panel description says so. Task 4.
 4. A non-JSON line from the same container (Traefik's own error log): the `| json` queries must skip it, not break. Task 3.
-5. Buffered writes (`bufferingSize: 100`): a fresh request can take seconds to appear; an empty panel immediately after is not a bug. Task 4's description.
+5. A fresh request that is not in Loki yet: lines reach it through Fluent Bit's flush interval, a few seconds, so an empty panel immediately after a request is not a bug. `bufferingSize: 100` is a writer channel in Traefik, not a batch: it does not add a timed delay. Task 4's description.
 
 ---
 
@@ -64,14 +64,21 @@ Expected: `FAIL: access log not enabled`.
 # Traefik's `RequestPath` is the URI, and v3.7.3+ can drop its query string
 # (`queryParameters` below) but not its path. The path alone still carries
 # FileBrowser's `/share/<hash>` capability links, and Loki has no authentication
-# and a 30-day retention, so the whole field is dropped. What stays identifies
-# the request without it: time, router, service, status, duration, bytes and TLS
-# version. Plex's `?X-Plex-Token=` and OIDC `?code=` never reach the log, and
-# the query-parameter drop is a second lock in case a field is ever re-added.
+# and a 30-day retention, so the whole field is dropped. Plex's `?X-Plex-Token=`
+# and OIDC `?code=` never reach the log, and the query-parameter drop is a second
+# lock in case a field is ever re-added.
+#
+# `defaultMode: keep` keeps everything else, so a line is wider than the six
+# names below suggest: the requested hostname, the method, the entry point, both
+# statuses and durations, sizes, the retry count, the TLS version and cipher, and
+# the pod address Traefik forwarded to. No path, no query, no header, no client
+# address. `docs/observability-conventions.md` lists the fields in full.
 accessLog:
   enabled: true
   format: json
-  # One write per 100 lines or per flush tick, not one per request.
+  # Hand each line to a writer goroutine through a 100-slot channel instead of
+  # writing on the request path. There is no timed flush in Traefik: the delay
+  # between a request and its line in Loki is Fluent Bit's, a few seconds.
   bufferingSize: 100
   fields:
     # The chart always renders this key, so it must be set; `keep` is the
@@ -164,19 +171,28 @@ Expected: `STATUS: deployed`, one pod ready. Ingress blips for the few seconds t
 
 ```bash
 helm -n kube-system get values traefik > /tmp/opencode/traefik-after.yaml
-diff <(sed 's/[[:space:]]*$//' /tmp/opencode/traefik-after.yaml) \
-     <(sed 's/[[:space:]]*$//' cluster/infrastructure/traefik/values-v3.yaml) && echo "release == file"
+python3 - <<'EOF'
+import subprocess, yaml
+raw = subprocess.check_output(['helm', '-n', 'kube-system', 'get', 'values', 'traefik'], text=True)
+release = yaml.safe_load(raw.split('USER-SUPPLIED VALUES:', 1)[1])
+file = yaml.safe_load(open('cluster/infrastructure/traefik/values-v3.yaml'))
+print("release == file (semantic):", release == file)
+EOF
 kubectl -n kube-system get deploy traefik -o jsonpath='{.spec.template.spec.containers[0].args}' \
   | tr ',' '\n' | grep accesslog
 POD=$(kubectl -n kube-system get pod -l app.kubernetes.io/name=traefik -o jsonpath='{.items[0].metadata.name}')
 kubectl -n kube-system exec "$POD" -- sha256sum /data/acme.json
 kubectl get ingressroute.traefik.io -A --no-headers | wc -l
-for h in https://plex.ashuvidz.com https://filebrowser.kub.home.ashudev.com https://vikunja.kub.local; do
+for h in https://plex.kub.home.ashudev.com https://filebrowser.kub.home.ashudev.com https://vikunja.kub.local; do
   printf '%s %s\n' "$(curl -s -o /dev/null -w '%{http_code}' "$h")" "$h"
 done
 ```
 
-Expected: `release == file`; all eight flags; the same `acme.json` hash; the same route count; 200/302 on the three hosts.
+Expected: `release == file (semantic): True`; all eleven flags; the same `acme.json` hash; the same
+route count; 401 on the Plex host (its route carries `plex-security`), 200 on the other two.
+
+A textual `diff` of the two never matches — Helm re-marshals the values, so comments and key order are
+gone — which is why the comparison is parsed.
 
 - [ ] **Step 5: No commit**
 
@@ -206,12 +222,13 @@ for s in d["data"]["result"]:
 '
 ```
 
-Expected: JSON objects with `RouterName`, `DownstreamStatus`, `Duration` (a number, nanoseconds), `RequestHost`. No `RequestPath`, `ClientAddr`, `ClientHost`, `ClientPort`, `ClientUsername`, no `Request_Header` map.
+Expected: JSON objects with `RouterName`, `DownstreamStatus`, `Duration` (a number, nanoseconds), `RequestHost`. No `RequestPath`, `ClientAddr`, `ClientHost`, `ClientPort`, `ClientUsername`, no `Request_Header` map. What is expected to be present besides those: `RequestAddr`, `RequestMethod`, `RequestScheme`, `RequestProtocol`, `RouterName`, the `Kubernetes*` names, `OriginStatus`, `OriginDuration`, `Overhead`, both content sizes, `RetryAttempts`, `TLSVersion`, `TLSCipher`, `ServiceAddr` and `ServiceURL`. If a field arrives that carries a path or a query string, stop and add it to Step 2's list and to the drop set.
 
 - [ ] **Step 2: Assert nothing sensitive is present**
 
 ```bash
-for pat in 'RequestPath' 'ClientAddr' 'ClientHost' 'ClientUsername' 'X-Plex-Token' 'share/'; do
+for pat in 'RequestPath' 'RequestLine' 'ClientAddr' 'ClientHost' 'ClientPort' 'ClientUsername' \
+           'X-Plex-Token' 'share/' 'code='; do
   n=$(curl -sG http://loki.kub.local/loki/api/v1/query \
     --data-urlencode "query=sum(count_over_time({job=\"fluent-bit\", container=\"traefik\"} |~ \"$pat\" [30m]))" \
     | python3 -c 'import json,sys;r=json.load(sys.stdin)["data"]["result"];print(int(float(r[0]["value"][1])) if r else 0)')
@@ -219,7 +236,7 @@ for pat in 'RequestPath' 'ClientAddr' 'ClientHost' 'ClientUsername' 'X-Plex-Toke
 done
 ```
 
-Expected: `0` on every line. A non-zero count stops the task: the field set is wrong, fix Task 1 before going on.
+Expected: `0` on every line. A non-zero count stops the task: the field set is wrong, fix Task 1 before going on. `RequestLine` is in the list even though v3 does not emit it: it is the field the v3 adaptation rests on being gone, so it is asserted rather than assumed.
 
 - [ ] **Step 3: Check a Traefik-answered failure is selectable**
 
@@ -234,24 +251,39 @@ print(sum(len(s["values"]) for s in d["data"]["result"]), "lines")
 ```
 
 Expected: a number, possibly 0 if nothing failed in the window. If 0, generate one:
-`curl -s -o /dev/null https://traefik.kub.local/nope` (404/401), wait ~15 s for the buffer, re-run.
+`curl -s -o /dev/null https://traefik.kub.local/nope` (404/401), wait a few seconds for Fluent Bit's
+flush, re-run.
 
-- [ ] **Step 4: Measure lines and bytes over a settled hour**
+- [ ] **Step 4: Measure lines and bytes over the window that exists**
+
+Never divide by a window longer than the data: a `[1h]` query run ten minutes after the switch-on
+returns a figure that looks like a tenth of the rate. Measure the window that exists, and say which.
 
 ```bash
-END=$(date +%s); START=$((END-3600))
-for q in 'sum(count_over_time({job="fluent-bit", container="traefik"}[1h]))' \
-         'sum(bytes_over_time({job="fluent-bit", container="traefik"}[1h]))'; do
+START=$(curl -sG http://loki.kub.local/loki/api/v1/query_range \
+  --data-urlencode 'query={job="fluent-bit", container="traefik"}' \
+  --data-urlencode 'limit=1' --data-urlencode 'direction=forward' \
+  | python3 -c 'import json,sys;print(min(x[0] for s in json.load(sys.stdin)["data"]["result"] for x in s["values"])//10**9)')
+END=$(date +%s); MINS=$(( (END-START)/60 ))
+echo "window ${MINS}m from $(date -d @$START -Iseconds)"
+for q in 'sum(count_over_time({job="fluent-bit", container="traefik"}[90m]))' \
+         'sum(bytes_over_time({job="fluent-bit", container="traefik"}[90m]))'; do
   curl -sG http://loki.kub.local/loki/api/v1/query \
     --data-urlencode "query=$q" --data-urlencode "time=$END" \
-    | python3 -c 'import json,sys;print(json.load(sys.stdin)["data"]["result"][0]["value"][1])'
+    | python3 -c 'import json,sys;r=json.load(sys.stdin)["data"]["result"];print(float(r[0]["value"][1]) if r else 0)'
 done
-curl -sG http://prometheus.kub.local/api/v1/query \
-  --data-urlencode 'query=sum(increase(traefik_router_requests_total[24h]))' \
-  | python3 -c 'import json,sys;print(json.load(sys.stdin)["data"]["result"][0]["value"][1])'
 ```
 
-Compute: `avg line = bytes / lines`; `bytes/day = avg line × requests/day`; cross-check with `bytes/hour × 24`. The second figure carries the actual hour's traffic mix, so quote it as "measured over one hour on 2026-11-22, extrapolated" and keep the Prometheus cross-check beside it. Record both.
+Compute, and keep every input: `line size = bytes / lines`; `MB/day = bytes / (window seconds) × 86400
+/ 1e6`. The window is whatever the log has been running for, capped at `90m` so the query covers it.
+Quote the window and its UTC bounds with the figure, and note that a night window reads low — an
+evening carries more. Once a day of data exists, replace the measurement with the two `[24h]` queries
+in [`observability-conventions.md`](../../observability-conventions.md#what-the-router-logs) and quote
+that instead.
+
+Do not multiply a request count from Prometheus by a line size: the two do not agree (the log carries
+more lines than `traefik_router_requests_total` counts), and the byte rate measured on the stream
+needs neither.
 
 - [ ] **Step 5: No commit**
 
@@ -304,8 +336,8 @@ failed = {
     "description": "Access-log lines with a 4xx or 5xx status. The URL is not logged: "
                    "RequestPath is dropped and query parameters with it, because Loki has no "
                    "authentication and URLs carry Plex tokens and FileBrowser share capabilities. "
-                   "A failure Traefik answers itself shows OriginStatus 0. Lines arrive in "
-                   "batches of 100, so a fresh request can lag a few seconds.",
+                   "A failure Traefik answers itself shows OriginStatus 0. A line reaches Loki a "
+                   "few seconds after the request, through Fluent Bit's flush interval.",
     "gridPos": {"h": 8, "w": 12, "x": 0, "y": 19},
     "options": {"dedupStrategy": "none", "enableLogDetails": True, "prettifyLogMessage": True,
                 "showCommonLabels": False, "showLabels": False, "showTime": True,
@@ -321,7 +353,7 @@ slow = {
                    "five minutes at each step. Duration is nanoseconds in the JSON format. A Plex "
                    "stream runs for the length of the film and belongs here; read the router name "
                    "before treating a bar as a fault. The p95 panel above is the alerting view, this "
-                   "one is per-request. Buffered writes can lag a few seconds.",
+                   "one is per-request. Lines reach Loki a few seconds late, through Fluent Bit.",
     "gridPos": {"h": 8, "w": 12, "x": 12, "y": 19},
     "fieldConfig": {"defaults": {"unit": "short", "decimals": 0}, "overrides": []},
     "options": {"legend": {"displayMode": "list", "placement": "bottom", "showLegend": True},
@@ -418,20 +450,33 @@ headers stay dropped by the chart default. The reason is that `loki.kub.local` h
 and a 30-day retention: a full log would put Plex's `?X-Plex-Token=`, FileBrowser's share links and
 OIDC `?code=` callbacks in front of every device on the LAN.
 
-What a line does carry: time, `RouterName`, `ServiceName`, `DownstreamStatus`, `OriginStatus`,
-`Duration` (nanoseconds), response size, TLS version and retry count. A failure Traefik answers
-itself shows `OriginStatus` 0.
+**Everything else is kept**, because the file uses `defaultMode: keep` and names only the drops above.
+What a line carries, measured on the live stream rather than read off the docs: the time, the entry
+point name and scheme, the router name with its Kubernetes route namespace, the service name,
+namespace and port, the requested hostname and method, the downstream and origin status, the two
+durations in nanoseconds, the response and request sizes, the retry count, the TLS version and cipher,
+the compression ratio, and the pod address Traefik forwarded the request to (`ServiceAddr`,
+`ServiceURL`). What is left in it is the hostname and cluster-internal addresses, not a credential: a
+record without the hostname cannot say which application failed. A failure Traefik answers itself
+shows `OriginStatus` 0.
 
-**Measured 2026-11-22**, N requests a day at about B bytes a line: **X MB/day** before
-compression, against a pipeline that carries 0.09 GB/day. Re-measure with:
+**Measured 2026-11-22** over the twelve minutes after that day's last restart (01:20–01:32Z): 153 lines
+and 118 kB, so 769 bytes a line and **about 15 MB/day** at the night-time rate, against a pipeline that
+carries 0.09 GB/day. An evening reads higher; the day's own figure is two queries away:
 
 ```bash
-curl -sG http://loki.kub.local/loki/api/v1/query_range \
-  --data-urlencode 'query={job="fluent-bit", container="traefik"} | json' --data-urlencode 'limit=3'
+# bytes carried in the trailing 24 h — this is the day's volume
+curl -sG http://loki.kub.local/loki/api/v1/query \
+  --data-urlencode 'query=sum(bytes_over_time({job="fluent-bit", container="traefik"}[24h]))'
+# lines in the same window; divide the two for the line size
+curl -sG http://loki.kub.local/loki/api/v1/query \
+  --data-urlencode 'query=sum(count_over_time({job="fluent-bit", container="traefik"}[24h]))'
 ```
 
 Two panels on **Homelab · Traefik**, row *Request record*, read it: *Failed requests (4xx/5xx)* and
-*Requests slower than 1 s, by router*. A long Plex stream belongs in the second one.
+*Requests slower than 1 s, by router*. A long Plex stream belongs in the second one. Lines reach Loki
+a few seconds late, because Fluent Bit batches on its own flush interval; Traefik's writer does not
+wait.
 
 Gating Loki itself is a separate card: the log store is still readable by every device on the LAN,
 and that is true of every application log, not only this one.
