@@ -361,6 +361,10 @@ are in `docs/superpowers/plans/`.
 - Changes go through git. Never apply manifests by hand to "fix" drift.
 - Adding an app means adding the chart (or values-only dir) **and** the Application file; the root app
   finds it automatically via `directory.recurse`.
+- No `CHANGELOG.md`. It was deleted on 2026-11-22: the repository has never cut a tag or a GitHub
+  release, so the file was a second copy of the commit log. A change is described in its commit
+  message and its pull request; notes for a release, if one is ever cut, go in the GitHub release
+  body and nowhere in the tree.
 
 ## 9. Cluster access
 
