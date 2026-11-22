@@ -4,7 +4,9 @@
 > them, and where the answer to your question already lives.
 >
 > **Use it when** you are new to the cluster, or you cannot remember which page owns a subject ·
-> **Verified** 2026-11-17 · **Kind:** living page
+> **Verified** 2026-11-22 · **Kind:** explanation
+>
+> **Sources** `mkdocs.yml`, `AGENTS.md`, the pages under `docs/`
 
 ## What this is
 
@@ -61,6 +63,7 @@ explains what failed in 2026 and which constraints became the five rules above.
 | Kind | Home |
 |---|---|
 | Evergreen knowledge: architecture, runbooks, secret inventory | `docs/` in this repository, and nowhere else |
+| The rules a page obeys: its kind, its banner, its sources | [documentation-rules.md](documentation-rules.md) |
 | Work state: ideas, plans, what is being done, what awaits validation | the board, and nothing else — no second todo list |
 | Designs and plans | `docs/superpowers/`: a spec argues, a plan executes, the pair carries its date |
 | Agent recall: facts learned, preferences, past mistakes | OpenMemory |

@@ -212,9 +212,17 @@ def banner_problems(paths: list[pathlib.Path], root: pathlib.Path) -> list[str]:
 
 
 def changed_pages(root: pathlib.Path, base: str = "origin/develop") -> list[pathlib.Path]:
-    """The markdown pages this branch adds or changes against `base`; [] when base does not resolve."""
+    """The markdown pages this branch adds or changes against `base`, committed or not."""
+    base_ref = subprocess.run(
+        ["git", "-C", str(root), "merge-base", base, "HEAD"], capture_output=True, text=True
+    )
+    if base_ref.returncode != 0 or not base_ref.stdout.strip():
+        return []
     diff = subprocess.run(
-        ["git", "-C", str(root), "diff", "--name-only", "--diff-filter=ACMR", f"{base}...HEAD", "--", "docs"],
+        [
+            "git", "-C", str(root), "diff", "--name-only", "--diff-filter=ACMR",
+            base_ref.stdout.strip(), "--", "docs",
+        ],
         capture_output=True,
         text=True,
     )
