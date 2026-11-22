@@ -265,17 +265,24 @@ bursts alone. What is left of the 0.09 GB/day is mostly a symptom, not chatter:
   the figure above still contains errors that will stop at the next sync.
 - **monitoring, 14 MB** — `prometheus-smartctl`, which is talking about the
   failing `nas` drive.
-- **kube-system, 6 MB** — traefik errors, two sources: a device at `192.168.1.13`
+- **kube-system, 6 MB before 2026-11-22** — traefik errors, two sources: a device at `192.168.1.13`
   that resets its Syncthing connection through the `sttcp` entry point about twice a
   minute, and `Cannot create service: subset not found` for `minecraft-server` at each
   provider refresh while the server runs `0` replicas. The `koillection` and
   `news-freshrss` lines stopped when their claims bound on 2026-11-19 (#386). Since
-  2026-11-22 it also carries Traefik's access log: about 13,300 requests a day at
-  434 bytes a line, roughly **5.8 MB/day** with the URL and client fields dropped
+  2026-11-22 the same namespace carries Traefik's access log: measured over twelve minutes
+  that night (01:20–01:32Z), 153 lines and 118 kB, so 769 bytes a line and **about
+  15 MB/day** at the night-time rate, with the URL and the client address dropped
   ([`observability-conventions.md#what-the-router-logs`](../observability-conventions.md#what-the-router-logs)).
+  That puts `kube-system` near 21 MB/day, around `authentik`'s size.
 - **vikunja, 5 MB** — request logs at `info`, again including health probes.
 - **n8n, 3 MB** — the `Pruning failed` loop stopped when the app was rebuilt on
   `local-path`; what is left is a telemetry retry that cannot connect.
+
+The 0.09 GB/day quoted at the top is the 2026-11-19 measurement and is no longer the
+total: the access log adds roughly 15 MB/day from 2026-11-22. Re-measure before sizing
+anything against it — the two queries are in
+[`observability-conventions.md#what-the-router-logs`](../observability-conventions.md#what-the-router-logs).
 
 The throughput limit is 4 MB/s against an average of about 1 KB/s, so the
 ingestion limits are not the constraint either. What the line looked like before,

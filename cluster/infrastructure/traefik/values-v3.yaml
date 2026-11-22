@@ -74,14 +74,21 @@ resources:
 # Traefik's `RequestPath` is the URI, and v3.7.3+ can drop its query string
 # (`queryParameters` below) but not its path. The path alone still carries
 # FileBrowser's `/share/<hash>` capability links, and Loki has no authentication
-# and a 30-day retention, so the whole field is dropped. What stays identifies
-# the request without it: time, router, service, status, duration, bytes and TLS
-# version. Plex's `?X-Plex-Token=` and OIDC `?code=` never reach the log, and
-# the query-parameter drop is a second lock in case a field is ever re-added.
+# and a 30-day retention, so the whole field is dropped. Plex's `?X-Plex-Token=`
+# and OIDC `?code=` never reach the log, and the query-parameter drop is a second
+# lock in case a field is ever re-added.
+#
+# `defaultMode: keep` keeps everything else, so a line is wider than the six
+# names below suggest: the requested hostname, the method, the entry point, both
+# statuses and durations, sizes, the retry count, the TLS version and cipher, and
+# the pod address Traefik forwarded to. No path, no query, no header, no client
+# address. `docs/observability-conventions.md` lists the fields in full.
 accessLog:
   enabled: true
   format: json
-  # One write per 100 lines or per flush tick, not one per request.
+  # Hand each line to a writer goroutine through a 100-slot channel instead of
+  # writing on the request path. There is no timed flush in Traefik: the delay
+  # between a request and its line in Loki is Fluent Bit's, a few seconds.
   bufferingSize: 100
   fields:
     # The chart always renders this key, so it must be set; `keep` is the

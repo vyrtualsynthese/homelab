@@ -72,8 +72,9 @@ board card 531) went unnoticed for the same reason.
 Four rows: traffic per router, traffic per entry point and by status class; latency and errors; bytes
 and open connections; health. A fifth, *Request record*, was added on 2026-11-22 when Traefik got an
 access log: *Failed requests (4xx/5xx)* and *Requests slower than 1 s, by router* read Loki rather
-than Prometheus. The URL is absent from those lines by design, so the panel names the router, not the
-path — why, and what is dropped, is in
+than Prometheus. The path and the query string are absent from those lines by design, so the panel
+names the router, not the URL; the hostname and the backend's pod address are still in a line. Why,
+and what each panel expects, is in
 [observability-conventions.md](../observability-conventions.md#what-the-router-logs). `Requests per second by entry point` exists because
 `metrics.prometheus.addEntryPointsLabels` was turned on on 2026-11-22
 ([traefik-release.md](../runbooks/traefik-release.md#the-37-configuration-audit-2026-11-22-revision-12)):
