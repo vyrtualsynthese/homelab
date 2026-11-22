@@ -7,6 +7,9 @@ prefix of another, a claim whose directory is gone, and a claim that matches two
 directories because a released PV left one behind.
 """
 
+import contextlib
+import io
+import json
 import pathlib
 import shutil
 import sqlite3
@@ -116,10 +119,11 @@ class StageTests(unittest.TestCase):
             finally:
                 frozen.chmod(0o755)
 
-    def test_a_claim_with_no_database_raises(self):
+    def test_a_claim_with_no_database_yet_stages_nothing_instead_of_failing(self):
+        # A freshly installed application has created its claim and no database yet. The claim
+        # is still backed up; only the staged copy is missing, and that is not a failure.
         with tempfile.TemporaryDirectory() as tmp:
-            with self.assertRaisesRegex(load().RowError, "no database"):
-                load().stage_databases(pathlib.Path(tmp), pathlib.Path(tmp), ["*.db"])
+            self.assertEqual(load().stage_databases(pathlib.Path(tmp), pathlib.Path(tmp), ["*.db"]), [])
 
     def test_a_nested_pattern_keeps_its_relative_path(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -220,6 +224,48 @@ class ResticInputTests(unittest.TestCase):
             text = exclude.read_text()
             self.assertIn(str(claim_dir / "logs"), text)
             self.assertIn(str(claim_dir / "logs" / "**"), text)
+
+
+class MainTests(unittest.TestCase):
+    """The init container's exit code is the node job's: 0 means restic runs."""
+
+    def run_main(self, root, rows):
+        staging = pathlib.Path(root) / "staging"
+        rows_file = pathlib.Path(root) / "rows.json"
+        rows_file.write_text(rows)
+        out, err = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            code = load().main(["--rows", str(rows_file), "--staging", str(staging), "--root", root])
+        return code, out.getvalue(), err.getvalue(), staging
+
+    def test_a_sqlite_row_with_no_database_yet_warns_and_the_job_runs(self):
+        # The 2026-11-20 shape: Plex had never started, so its claim held no database. The
+        # whole node failed for it, and a night that backed up eighteen claims looked like a
+        # broken backup.
+        with tempfile.TemporaryDirectory() as root:
+            claim = pathlib.Path(root) / "pvc-abc_media-stack_plex-config"
+            claim.mkdir()
+            code, out, err, staging = self.run_main(root, json.dumps({"claims": [
+                {"namespace": "media-stack", "claim": "plex-config", "kind": "sqlite",
+                 "db": ["Plug-in Support/Databases/*.db"]},
+            ]}))
+            self.assertEqual(code, 0, err)
+            self.assertIn("row-warning", out)
+            self.assertIn("media-stack/plex-config", out)
+            self.assertEqual(err, "")
+            self.assertIn(str(claim), (staging / "restic-paths.txt").read_text())
+
+    def test_a_database_that_cannot_be_staged_still_fails_the_job(self):
+        with tempfile.TemporaryDirectory() as root:
+            claim = pathlib.Path(root) / "pvc-abc_media-stack_kavita-config"
+            claim.mkdir()
+            (claim / "kavita.db").write_text("not a database")
+            code, _, err, _ = self.run_main(root, json.dumps({"claims": [
+                {"namespace": "media-stack", "claim": "kavita-config", "kind": "sqlite"},
+            ]}))
+            self.assertEqual(code, 1)
+            self.assertIn("row-error", err)
+            self.assertIn("row-errors=1", err)
 
 
 if __name__ == "__main__":

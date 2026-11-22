@@ -8,8 +8,13 @@ Storage bucket. Four restic repositories, one per stream: `nodes-nas`, `nodes-nu
 
 1. **`values.yaml` is the coverage matrix.** A claim is backed up because a row names it, and for no
    other reason. Adding a stateful application means adding its row in the same change, with the
-   measured size beside it. A row that resolves to nothing on its node **fails that node's job** —
-   silently backing up less than the matrix says is the failure this chart exists to prevent.
+   measured size beside it. A row whose claim directory cannot be resolved on its node **fails that
+   node's job** — silently backing up less than the matrix says is the failure this chart exists to
+   prevent. The one tolerated shape is a `sqlite` row whose claim exists but holds no database yet:
+   an application installed and never started prints `row-warning` and the job carries on, with the
+   claim still backed up whole. A database that is present and cannot be staged is the opposite and
+   still fails the job, because that is data going unbacked. Decided 2026-11-22 for Plex and Kavita,
+   after the `first-streaming` job of 2026-11-20 failed on exactly those two shapes.
 2. **No job initialises a repository.** `restic init` is run once by hand, four times, and never by a
    CronJob: a job that could create a repository could also create an empty one where a lost one used
    to be, and the next night's backup would look healthy.

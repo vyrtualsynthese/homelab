@@ -155,7 +155,8 @@ being back is not the same as the apps being back.
 
 **Backups still work, proved after each node.** Re-running that node's job is the check that the host
 mounts, the SQLite staging and restic survive the containerd jump: `nuc0` 629 files, `streaming` 21 005
-files, `nas` 599 files, each ending in a new snapshot.
+files, `nas` 599 files, each ending in a new snapshot. Delete each re-run job once its log shows the
+snapshot: `kubectl -n backup delete job <name>`. Nothing else ever removes it (see the traps).
 
 **GPU survived.** `nvidia-container-toolkit`, the device plugin, `dcgm-exporter` and `intel-gpu-plugin`
 all came back, and `nvidia-smi -L` in the Plex pod still lists the Quadro P400.
@@ -169,7 +170,8 @@ all came back, and `nvidia-smi -L` in the Plex pod still lists the Quadro P400.
 | `kubectl` fails with `connection refused` on port 6443 | the target node is the backend your kubeconfig names. Use `--server` against another control plane |
 | `kubectl debug node/<node>` gives no output | the debug pod is deleted when its command exits; create the pod yourself, as above |
 | a `node-exporter` target reads `up 0` for a minute | the restart window after containerd comes back; it recovers. If it stays 0, the host port is not bound, which containerd 2.x changed |
-| `first-*` backup jobs on `nuc0`/`streaming` fail with `host-path missing: /host/etc/exports` | those are one-off jobs from 2026-11-20, not the schedule; `/etc/exports` exists only on `nas`. The nightly jobs complete normally |
+| `host-path missing: /host/etc/exports` in a `nuc0` or `streaming` job log | `/etc/exports` exists on `nas` alone. The job prints the line and carries on; it is not a failure |
+| a `backup-node-*` job created by hand sits beside the scheduled ones for days | `kubectl create job --from=cronjob/…` is not a scheduled run, and nothing prunes it as the history limits turn over: the two `first-*` jobs from 2026-11-20 were still there, `Failed`, 25 hours and five scheduled runs later, and read as a live backup failure. Read the log for `snapshot <id> saved`, then `kubectl -n backup delete job <name>` |
 
 ## Rolling back
 
