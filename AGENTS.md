@@ -392,6 +392,11 @@ as the **read-only** ServiceAccount `kube-system/opencode-mcp`, using `~/.kube/m
 - The server config is `~/.config/opencode/kubernetes-mcp.toml` (`read_only = true`,
   `disabled_tools = ["configuration_view"]` so the token is never printed).
 - The human kubeconfig stays cluster-admin (`system:admin`). Do not point the MCP server at it.
+- **Shells are read-only too.** The `opencode` wrapper exports `KUBECONFIG=~/.kube/mcp-readonly.yaml`
+  unless it is already set, so a tool shell, a child process and the `helm` it starts all authenticate
+  as `opencode-mcp`; `kubectl exec`, `cp`, `port-forward` and every write answer `403`. An admin session
+  is deliberate: `KUBECONFIG=$HOME/.kube/config opencode`. The decision is
+  [`docs/decisions/2026-11-23-agent-shells-read-only.md`](docs/decisions/2026-11-23-agent-shells-read-only.md).
 - To grant writes, create a scoped Role for the ServiceAccount and bind it — do not reuse admin.
 - Observability has its own document: [`docs/observability-conventions.md`](docs/observability-conventions.md)
   covers the live stack, how to query Prometheus/Loki/Grafana without cluster access, the
