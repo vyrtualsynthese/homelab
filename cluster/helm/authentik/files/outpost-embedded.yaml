@@ -95,6 +95,11 @@ entries:
       identifiers:
         name: ashulab-app-syncthing
       required: true
+  - model: authentik_blueprints.metaapplyblueprint
+    attrs:
+      identifiers:
+        name: ashulab-app-loki
+      required: true
 
   # The embedded outpost is a managed object. Its identifiers are `managed`, not
   # `name`: keying on the name creates a duplicate outpost and rolls back the
@@ -116,3 +121,4 @@ entries:
         - !Find [authentik_providers_proxy.proxyprovider, [name, docs]]
         - !Find [authentik_providers_proxy.proxyprovider, [name, dashy]]
         - !Find [authentik_providers_proxy.proxyprovider, [name, syncthing]]
+        - !Find [authentik_providers_proxy.proxyprovider, [name, loki]]
