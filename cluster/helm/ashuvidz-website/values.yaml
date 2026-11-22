@@ -95,6 +95,12 @@ ingressRoute:
   middlewares:
     - name: security
       namespace: kube-system
+    # -- The content policy: the site runs no script and loads nothing from
+    # -- another origin. It is `security-static`, not `security`, because the
+    # -- policy would break every application behind `security`; its `img-src`
+    # -- carries `data:` for this site's CSS noise texture.
+    - name: security-static
+      namespace: kube-system
   labels: {}
   annotations: {}
   tls:
