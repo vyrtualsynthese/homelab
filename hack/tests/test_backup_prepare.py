@@ -211,6 +211,42 @@ class HostPathTests(unittest.TestCase):
             self.assertIn(tmp, paths_file.read_text().split())
 
 
+class UnusedExcludeTests(unittest.TestCase):
+    """A row's exclusion that matches nothing is named; the ones that match are left alone."""
+
+    def test_a_bare_name_matches_a_directory_at_any_depth(self):
+        # Plex's five entries were read as paths from the claim root, and its cache sits three
+        # levels down. The reading is restic's: a name is a name wherever it is.
+        with tempfile.TemporaryDirectory() as tmp:
+            cache = pathlib.Path(tmp) / "Library/Application Support/Plex Media Server/Cache"
+            cache.mkdir(parents=True)
+            self.assertEqual(load().unused_excludes(pathlib.Path(tmp), ["Cache/"]), [])
+
+    def test_a_path_is_read_from_the_claim_root(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            nested = pathlib.Path(tmp) / "Library/Application Support/Plex Media Server/Cache"
+            nested.mkdir(parents=True)
+            self.assertEqual(
+                load().unused_excludes(
+                    pathlib.Path(tmp), ["Library/Application Support/Plex Media Server/Cache"]),
+                [],
+            )
+
+    def test_an_entry_that_matches_nothing_is_returned_in_row_order(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            (pathlib.Path(tmp) / "logs.db").touch()
+            self.assertEqual(
+                load().unused_excludes(pathlib.Path(tmp), ["Cache/", "logs.db*", "Media/"]),
+                ["Cache/", "Media/"],
+            )
+
+    def test_an_empty_claim_leaves_every_entry_unmatched(self):
+        # A freshly installed application: the entry is right and the directory is not there
+        # yet. The report says so and nothing fails, which is the whole shape of this warning.
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertEqual(load().unused_excludes(pathlib.Path(tmp), ["Cache/"]), ["Cache/"])
+
+
 class ResticInputTests(unittest.TestCase):
     def test_row_excludes_are_written_as_absolute_patterns(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -308,6 +344,43 @@ class MainTests(unittest.TestCase):
             self.assertEqual(code, 1)
             self.assertIn("row-error", err)
             self.assertIn("row-errors=1", err)
+
+    def test_an_exclusion_that_matches_nothing_is_named_once_and_the_job_runs(self):
+        # The 2026-11-20..22 shape: five Plex exclusions matched nothing for six nights and
+        # 6.73 GiB rode along. A warning, not a failure — the claim is still backed up, just
+        # larger than the matrix says.
+        with tempfile.TemporaryDirectory() as root:
+            claim = pathlib.Path(root) / "pvc-abc_media-stack_plex-config"
+            (claim / "Library/Application Support/Plex Media Server").mkdir(parents=True)
+            (claim / "Library/Application Support/Plex Media Server/Preferences.xml").touch()
+            code, out, err, staging = self.run_main(root, json.dumps({"claims": [
+                {"namespace": "media-stack", "claim": "plex-config", "kind": "files",
+                 "exclude": ["Cache/", "Preferences.xml"]},
+            ]}))
+            self.assertEqual(code, 0, err)
+            self.assertEqual(err, "")
+            self.assertEqual(
+                [line for line in out.splitlines() if line.startswith("exclude-unused")],
+                ["exclude-unused row=media-stack/plex-config pattern=Cache/"],
+            )
+            report = json.loads((staging / "claims" / "exclude-unused.json").read_text())
+            self.assertEqual(report, [{"row": "media-stack/plex-config", "pattern": "Cache/"}])
+
+    def test_a_row_whose_entries_all_match_reports_an_empty_list(self):
+        # Written even when nothing is unused: the verifier reads this file, and a missing one
+        # means an older snapshot rather than a clean night.
+        with tempfile.TemporaryDirectory() as root:
+            claim = pathlib.Path(root) / "pvc-abc_media-stack_sonarr-config"
+            claim.mkdir()
+            (claim / "logs.db").touch()
+            code, out, _, staging = self.run_main(root, json.dumps({"claims": [
+                {"namespace": "media-stack", "claim": "sonarr-config", "kind": "files",
+                 "exclude": ["logs.db*"]},
+            ]}))
+            self.assertEqual(code, 0)
+            self.assertNotIn("exclude-unused", out)
+            self.assertEqual(
+                json.loads((staging / "claims" / "exclude-unused.json").read_text()), [])
 
 
 if __name__ == "__main__":

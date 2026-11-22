@@ -32,7 +32,14 @@ Storage bucket. Four restic repositories, one per stream: `nodes-nas`, `nodes-nu
    without a slash is a name and excludes that name at any depth; an entry with a slash is relative to
    the claim's root. Until 2026-11-22 every entry was anchored at the root, which matched nothing for
    Plex and carried 6.73 GiB of its art in the stream; `files/prepare.py` and the top of `values.yaml`
-   state the rule, and `hack/tests/test_backup_prepare.py` holds both shapes.
+   state the rule, and `hack/tests/test_backup_prepare.py` holds both shapes. An entry that matches
+   nothing in the claim is now named: the node job prints `exclude-unused row=<namespace>/<claim>
+   pattern=<entry>` while the claim is mounted, and `backup-verify` repeats it at 08:30 from the report
+   the job leaves in the snapshot, because the verifier reads snapshots and never a claim. It is a
+   **warning, not a failure** — an application that has not written its `cache/` yet matches nothing
+   either, and an exclusion that matches nothing costs space rather than data, which `budgetGiB` is
+   what bounds. The `nfs` stream's exclusions are shell words in `backup-nfs.sh`, which has no prepare
+   step, and are not checked this way.
 6. **`pv:` pins a row that would otherwise be ambiguous.** The local-path provisioner names a directory
    `<pvName>_<namespace>_<claimName>`, and a deleted claim leaves its directory behind. Two rows today
    match two directories for that reason (`pgadmin-config`, `calibre-web-automated-config`); the pin
@@ -45,7 +52,7 @@ Storage bucket. Four restic repositories, one per stream: `nodes-nas`, `nodes-nu
 | `backup-node-nas`, `backup-node-nuc0`, `backup-node-streaming` | 04:30, 05:00, 05:30 Europe/Paris | the node's `local-path` roots, its host configuration, and on the two control planes the K3s snapshot directory |
 | `backup-nfs` | 06:00 | the `nas` exports: syncthing, koillection uploads, the ACME store, the qBittorrent config export |
 | `backup-prune` | Sunday 12:00 | every repository, each with its own policy: `forget --keep-daily 7 --keep-weekly 4 --keep-monthly 12`, and on the `nfs` stream `--keep-monthly 24 --keep-yearly 10` |
-| `backup-verify` | 08:30 | every repository: newest snapshot age, size against budget, each `sqlite` row's staged database, the etcd copy's age |
+| `backup-verify` | 08:30 | every repository: newest snapshot age, size against budget, each `sqlite` row's staged database, the etcd copy's age, and each row's `exclude` entries that matched nothing |
 
 Each node job is two containers: `prepare` (Python, stages the databases and writes the two path
 lists) and `restic` (one backup run). The prune and verify jobs own no data; they are here so the
