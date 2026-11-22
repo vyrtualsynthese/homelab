@@ -61,7 +61,7 @@ and the pull request says what the artifact is.
 | R4 | The nav is the reading order. A page cited from outside `docs/` keeps its path; it is listed in the nav where the reader needs it. | Check: references, nav |
 | R5 | A generated page is never hand-edited. It carries a banner, its sources and its regenerate command. | Check: `gen_docs.py --check` |
 | R6 | A change that alters behaviour updates the page that owns it, in the same pull request. | Review |
-| R7 | Shape: answer first, then why, then procedure, then links. 300–800 words for an explanation, at most 1,200 for a how-to, one Mermaid diagram where a flow is described. | Review |
+| R7 | Shape: answer first, then why, then procedure, then links, with one Mermaid diagram where a flow is described. A page whose prose passes about 1,200 words — tables are not prose — is a candidate for splitting, and the review names it. | Review |
 | R8 | Plain language, one gloss per domain term, the first time it appears. | Review |
 | R9 | No secret value ever, in any page or any example. Keys and locations only. | Check: secrets |
 | R10 | A record and a snapshot are dated and never rewritten. A correction is a new record. | Review |

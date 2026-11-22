@@ -33,6 +33,11 @@ command.
 3. **The check.** Row counts against the numbers in the drill log, and the application's own page
    listing what the database should hold.
 
+**Rollback.** There is none for the target database: once `pg_restore` runs against it, what it held
+is gone. That is why the drill restores into a scratch instance and reads production without writing
+to it. On a rebuilt instance the rollback is the claim itself — the old data directory, still on
+`nas` until something deletes it.
+
 The commands for each step, the scratch instance and its teardown are
 [postgres-restore.md](../runbooks/postgres-restore.md). This page is the order and the reasoning; that
 runbook is the sequence, and it is the one to follow with a terminal open.
