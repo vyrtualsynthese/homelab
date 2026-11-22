@@ -1,13 +1,17 @@
 # The backup chart: one OVH bucket, one restic repository per stream, one job per node.
 #
 # This file is the coverage matrix in code. A claim is backed up only because a row names
-# it. Three outcomes, and the line between them is deliberate:
+# it. Four outcomes, and the line between them is deliberate:
 #
 #   * a row whose claim directory cannot be resolved fails that node's job, because the
 #     matrix and the cluster disagree and a quiet skip would back up less than this file says;
 #   * a `sqlite` row whose claim exists but holds no database yet — an application installed
 #     and never started — prints `row-warning` and the job continues, with the claim still
 #     backed up whole. A first night must not look like a broken backup;
+#   * that tolerance is not silent: `backup-verify` reads the newest snapshot's file list and
+#     fails any `sqlite` row with nothing staged under `claims/<namespace>/<claim>/`, naming
+#     the row. A `db:` pattern that upstream moved or renamed matches nothing every night from
+#     then on, and this is what catches it;
 #   * a database that is there and cannot be staged still fails the job. That is data going
 #     unbacked, and silence about it is how a backup stops being one.
 #
