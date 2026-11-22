@@ -161,7 +161,8 @@ path. The validator reads an `OUTPUT_DIR` override, but moving only the writer w
 reader, so it is unusable. There is no chart setting for either side. Keeping the markers across a
 restart would need a host bind mount onto persistent storage, which is boot-order configuration on
 one machine and outside git, next to the hand-installed driver. The alert is what closes the gap: the
-state cannot persist unnoticed for more than ten minutes.
+state cannot persist unnoticed for more than about fifteen minutes — ten of `for`, plus up to five
+to the next check of the `homelab-core` group.
 
 ## Related
 

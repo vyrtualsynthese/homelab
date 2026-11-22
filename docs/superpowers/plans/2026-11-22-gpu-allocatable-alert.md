@@ -41,7 +41,7 @@
   `https://grafana.kub.local/api/v1/eval` (POST).
 - Produces: rule uid, folder `homelab`, group `homelab-core`, title `GpuNotAllocatable`.
 
-- [ ] **Step 1: Capture the baseline**
+- [x] **Step 1: Capture the baseline**
 
 ```bash
 set -a; . ~/.config/secrets/homelab.env; set +a
@@ -53,7 +53,7 @@ curl -sk -m 15 --resolve grafana.kub.local:443:192.168.1.46 \
 
 Expected: `42 Counter({'homelab-core': 23, 'homelab-core-fast': 19})`.
 
-- [ ] **Step 2: Confirm the query shape against Prometheus**
+- [x] **Step 2: Confirm the query shape against Prometheus**
 
 ```bash
 curl -sG -m 10 --resolve prometheus.kub.local:80:192.168.1.46 \
@@ -64,7 +64,7 @@ curl -sG -m 10 --resolve prometheus.kub.local:80:192.168.1.46 \
 Expected: one series, `node="streaming"`, value `0`. If it returns `1`, stop: the GPU has dropped
 again and the card's state is live — run the workaround, then continue.
 
-- [ ] **Step 3: Create the rule**
+- [x] **Step 3: Create the rule**
 
 ```bash
 set -a; . ~/.config/secrets/homelab.env; set +a
@@ -132,7 +132,7 @@ curl -sk -m 15 --resolve grafana.kub.local:443:192.168.1.46 \
 
 Expected: HTTP 200/201 and a body whose `uid` is new and `title` is `GpuNotAllocatable`. Note the uid.
 
-- [ ] **Step 4: Read the rule back**
+- [x] **Step 4: Read the rule back**
 
 ```bash
 UID=$(curl -sk --resolve grafana.kub.local:443:192.168.1.46 \
@@ -148,7 +148,7 @@ curl -sk --resolve grafana.kub.local:443:192.168.1.46 \
 Expected: `GpuNotAllocatable homelab-core 10m {'severity': 'warning'} OK OK`, the expression from
 Step 3, and evaluator `{'params': [0], 'type': 'gt'}`.
 
-- [ ] **Step 5: Prove the condition pipeline evaluates**
+- [x] **Step 5: Prove the condition pipeline evaluates**
 
 ```bash
 python3 - <<'PY'
@@ -165,7 +165,7 @@ Expected: HTTP 200 with frames from `A` and `C`; no error, and the `C` frame sho
 (the threshold is not met, which is the healthy result). A 400 with an expression error means the
 rule would never evaluate; fix it before leaving the task.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 Nothing to commit in this task — the rule exists only in Grafana. Record the uid in the card comment
 written in Task 4.
@@ -185,7 +185,7 @@ written in Task 4.
 - Produces: the section title `## The GPU drops to 0 after a restart`, which Task 1's alert
   description and Task 3 both point at.
 
-- [ ] **Step 1: Correct the reboot paragraph**
+- [x] **Step 1: Correct the reboot paragraph**
 
 In `## What a node reboot does to these pods`, the paragraph ending "each time every pod in
 `gpu-operator` came back at that instant without intervention" must stop implying that is enough.
@@ -194,7 +194,7 @@ Add, after it:
 > A pod coming back is not the GPU coming back. On 2026-11-22 the pods were all `Running` and the
 > node still advertised `nvidia.com/gpu: 0`; the section below is why.
 
-- [ ] **Step 2: Add the section**
+- [x] **Step 2: Add the section**
 
 Insert before `## Related`, with this content:
 
@@ -236,12 +236,12 @@ one machine and outside git, next to the hand-installed driver. The alert is wha
 state cannot persist unnoticed for more than ten minutes.
 ```
 
-- [ ] **Step 3: Update the ledger**
+- [x] **Step 3: Update the ledger**
 
 Change line 8 to read `**Verified** 2026-11-22 · **Kind:** living page`, and add to the "In one line"
 paragraph that the restart failure is one of the cases the page covers.
 
-- [ ] **Step 4: Check the links and the page**
+- [x] **Step 4: Check the links and the page**
 
 ```bash
 python3 hack/check_docs_links.py
@@ -249,7 +249,7 @@ python3 hack/check_docs_links.py
 
 Expected: `0 broken relative links` and exit 0.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add docs/runbooks/gpu-operator.md
@@ -268,7 +268,7 @@ git commit -m "📝 docs(gpu): record the allocatable-to-zero restart and its wo
 - Consumes: the section from Task 2 (`docs/runbooks/gpu-operator.md`, `## The GPU drops to 0 after a restart`).
 - Produces: nothing other tasks consume.
 
-- [ ] **Step 1: Add the check to the verify block**
+- [x] **Step 1: Add the check to the verify block**
 
 After the `curl` line in that block, add:
 
@@ -284,7 +284,7 @@ and after the "Expected:" sentence, add:
 > one pod delete and takes about 90 seconds — `runbooks/gpu-operator.md`, "The GPU drops to 0 after a
 > restart".
 
-- [ ] **Step 2: Correct the record**
+- [x] **Step 2: Correct the record**
 
 Replace the `**GPU survived.**` paragraph with:
 
@@ -292,10 +292,10 @@ Replace the `**GPU survived.**` paragraph with:
 > plugin, `dcgm-exporter` and `intel-gpu-plugin` all came back, and `nvidia-smi -L` in the Plex pod
 > still listed the Quadro P400 — but the node advertised `nvidia.com/gpu: 0` for about forty minutes,
 > and only the allocatable check noticed. Deleting the validator pod restored it in 90 seconds; cause
-> and recovery are in [`gpu-operator.md`](gpu-operator.md#the-gpu-drops-to-0-after-a-restart). The
+> and recovery are in `docs/runbooks/gpu-operator.md`, "The GPU drops to 0 after a restart". The
 > first version of this paragraph said the GPU "survived" on the strength of the pod list alone.
 
-- [ ] **Step 3: Check the links**
+- [x] **Step 3: Check the links**
 
 ```bash
 python3 hack/check_docs_links.py
@@ -303,7 +303,7 @@ python3 hack/check_docs_links.py
 
 Expected: `0 broken relative links`.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add docs/runbooks/k3s-upgrade.md
@@ -323,13 +323,13 @@ git commit -m "📝 docs(k3s): check the GPU scheduler resource, not just nvidia
 - Consumes: the rule from Task 1 (title, group, for, severity, expression).
 - Produces: nothing other tasks consume.
 
-- [ ] **Step 1: Update the counts**
+- [x] **Step 1: Update the counts**
 
 `**homelab-core-fast** at **60 s** (19 rules) and **homelab-core** at **300 s** (23 rules).
 **42 rules**` becomes `(24 rules)` and `**43 rules**`. Nothing else in that paragraph changes: a
 10-minute `for` keeps the rule in `homelab-core` by the existing split rule.
 
-- [ ] **Step 2: Add the table row**
+- [x] **Step 2: Add the table row**
 
 After the `GpuTemperatureHigh` row (line 60):
 
@@ -337,7 +337,7 @@ After the `GpuTemperatureHigh` row (line 60):
 | `GpuNotAllocatable` | allocatable `nvidia.com/gpu` reads 0 on a node that registered the card | 10m | warning | inactive |
 ```
 
-- [ ] **Step 3: Explain the shape**
+- [x] **Step 3: Explain the shape**
 
 After the `GpuTemperatureHigh` material, add a short paragraph:
 
@@ -345,12 +345,14 @@ After the `GpuTemperatureHigh` material, add a short paragraph:
 > the `nvidia` runtime class after a restart, so `GpuTemperatureHigh` and Plex are unaffected and
 > `nvidia-smi` still lists it; only `nvidia.com/gpu` on the node drops to 0, and a pod that requests
 > it stays `Pending`. The expression is `1 - kube_node_status_allocatable{resource="nvidia_com_gpu"}`
-> — the resource label is sanitized, the series exists only on a node whose device plugin registered
-> the card, and the `nvidia.com/gpu.present` node label is not available because `kube_node_labels`
-> is dropped at the scrape. The rule is what makes the accepted workaround safe:
-> [`runbooks/gpu-operator.md`](../runbooks/gpu-operator.md#the-gpu-drops-to-0-after-a-restart).
+> — kube-state-metrics rewrites the dots in the resource name to underscores, the series exists only
+> on a node whose device plugin registered the card, and the `nvidia.com/gpu.present` node label is
+> not available: kube-state-metrics adds node labels only for names in its
+> `--metric-labels-allowlist`, and none is configured (adding one is a non-goal). The rule is what
+> makes the accepted workaround safe:
+> `docs/runbooks/gpu-operator.md`, "The GPU drops to 0 after a restart".
 
-- [ ] **Step 4: Add the changelog entry**
+- [x] **Step 4: Add the changelog entry**
 
 Under `## [Unreleased]` → `### Added`, as the first bullet:
 
@@ -364,7 +366,7 @@ Under `## [Unreleased]` → `### Added`, as the first bullet:
   allocatable value instead of trusting `nvidia-smi`.
 ```
 
-- [ ] **Step 5: Verify the counts against the live API**
+- [x] **Step 5: Verify the counts against the live API**
 
 ```bash
 set -a; . ~/.config/secrets/homelab.env; set +a
@@ -377,7 +379,7 @@ curl -sk --resolve grafana.kub.local:443:192.168.1.46 \
 Expected: `43 Counter({'homelab-core': 24, 'homelab-core-fast': 19})` — the numbers now written in
 the document.
 
-- [ ] **Step 6: Run the checker suite and the link check**
+- [x] **Step 6: Run the checker suite and the link check**
 
 ```bash
 uv run --with-requirements hack/tests/requirements.txt python -m pytest -q hack/tests
@@ -386,7 +388,7 @@ python3 hack/check_docs_links.py
 
 Expected: zero failures, `0 broken relative links`.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add docs/reference/alerts.md CHANGELOG.md
@@ -406,7 +408,7 @@ git commit -m "📝 docs(alerts): record GpuNotAllocatable and the forty-third r
 - Produces: card homelab #575 in `Validation` with the branch, PR and verification in its
   description.
 
-- [ ] **Step 1: Push and open the pull request**
+- [x] **Step 1: Push and open the pull request**
 
 ```bash
 git fetch origin && git rebase origin/develop
@@ -414,13 +416,13 @@ git push -u origin feature/gpu-validator-markers
 ```
 
 Open the PR against `develop` with `github_create_pull_request`, body naming the fault, the decision
-(B) and the four commits.
+(B) and the five commits.
 
-- [ ] **Step 2: Comment on the card and move it**
+- [x] **Step 2: Comment on the card and move it**
 
 Post one comment containing: the rule uid, the read-back line, the eval result, the two doc paths and
 the PR link. Move the card to `Validation` (it is a `task`).
 
-- [ ] **Step 3: Retire the design and plan**
+- [x] **Step 3: Retire the design and plan**
 
 Leave both under `docs/superpowers/` as committed; they are the record and stay out of the nav.
