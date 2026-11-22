@@ -128,18 +128,18 @@ nobody writes to looks exactly like a healthy one until the day it is needed.
 when the CronJob is deleted, renamed, or has never once succeeded, kube-state-metrics publishes no
 `kube_cronjob_status_last_successful_time` series at all, and a threshold over a series that does not
 exist stays green. One `absent()` term per job turns the missing series into a labelled alert: the
-summary names the job, and a chart deleted altogether arrives as one notification carrying five
-instances rather than five messages. It watches the four nightlies and `backup-verify`, and is gated
-on kube-state-metrics answering — `and on() (up{service="prometheus-kube-state-metrics"} == 1)` —
-because a dead kube-state-metrics makes every term match at once, and `KubeStateMetricsDown` is the
-critical message for that morning.
+summary names the job, and a chart deleted altogether arrives as one notification carrying six
+instances rather than six messages. It watches all six jobs — the four nightlies, `backup-verify`
+and `backup-prune` — and is gated on kube-state-metrics answering —
+`and on() (up{service="prometheus-kube-state-metrics"} == 1)` — because a dead kube-state-metrics
+makes every term match at once, and `KubeStateMetricsDown` is the critical message for that morning.
 
-`backup-prune` is deliberately not in that expression yet. Its first run was Sunday 2026-11-22 at
-noon and it failed: `restic` refused the `nfs` repository because the laptop read test earlier that
-day had left a lock behind, so the job has never recorded a success. An `absent()` term added now
-would fire on day one for a job that has not had a successful run yet, which is the false page the
-delay exists to avoid. Its term is added once it succeeds; until then a failed run is
-`JobFailed`'s to report, and a prune deleted before its first success would be silent.
+`backup-prune` was the last term to arrive, on 2026-11-22. Its first scheduled run, that Sunday at
+noon, failed: `restic` refused the `nfs` repository because the laptop read test earlier that day had
+left a lock behind, so the job had never recorded a success. An `absent()` term added before that
+first success would have fired on day one, which is the false page the delay existed to avoid. The
+lock was cleared by hand, a manual run exited 0 on all four repositories, and the sixth term went in
+the same evening.
 
 **`RestoreDrillOverdue`** (2026-11-22) is the only rule whose input is a hand-written date. The drill
 log in [`../runbooks/restore.md`](../runbooks/restore.md) is prose in a repository, so the dates it
@@ -355,8 +355,8 @@ reports `firing` on the Health dashboard.
   same disk, at a coarser grain.
 - **Backup freshness is covered, backup *contents* are not.** `BackupStreamStale` says a stream
   stopped advancing, `BackupJobAbsent` says a job is gone or never succeeded, and `JobFailed` says a
-  run failed. `backup-prune` has no absence rule until it first succeeds. None says the bytes are
-  restorable: the verifier checks the repository's snapshot age and size, not a restored file. The
+  run failed. None says the bytes are restorable: the verifier checks the repository's snapshot age
+  and size, not a restored file. The
   drills in [`../runbooks/restore.md`](../runbooks/restore.md) are the only proof of that: three
   read-only restores on 2026-11-21, the destructive put-back onto Sonarr's live claim and a read of
   all four repositories from a laptop on 2026-11-22; the etcd rehearsal is still untried.

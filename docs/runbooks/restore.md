@@ -352,7 +352,7 @@ recently, not what is believed.
 | 2026-11-21 | Section 2 — Sonarr's database (`nodes-streaming`) | ~1 min | `sonarr.db` restored from `/staging` (42.9 MiB, no `-wal` beside it), `pragma integrity_check` → `ok`, 103 series and 6 212 episodes | opencode (agent) |
 | 2026-11-21 | Section 3 — a Syncthing file (`nfs`) | ~1 min | `Photos/Argentique/IMG_20240121_0008.jpg` restored from snapshot `173c4caa`; sha256 `a90eb14a…` identical to the live file read through the Syncthing pod | opencode (agent) |
 | 2026-11-22 | Section 2 — Sonarr put back on its live claim (`nodes-streaming`) | ~11 min, 32 s of that downtime | Snapshot `7ac41aa9` (05:30 Paris): `sonarr.db` 45 096 960 B from `/staging` with `pragma integrity_check` → `ok`, 103 series / 6 213 episodes / 566 files / 3 983 history rows, and the claim tree (`config.xml`, `asp/`, `Sentry/`) from its host path. ArgoCD automation paused on the Application, Deployment scaled to 0 at 18:54:26Z, old tree moved to `_drill-aside-20261122` (93.3 MiB), restored tree copied in with `MediaCover` moved back, `chown 1100:1100`; ready again at 18:54:58Z. `/api/v3/system/status` `200`, `/api/v3/series` 103 with 566 episode files, `/api/v3/health` clean apart from the pre-existing Cathode-Ray.Tube indexer warning, no `database is locked` or `no such table`, `sonarr.db` mtime advancing, ArgoCD `Synced Healthy` and `RESTARTS 0`. Aside removed once the checks passed; rollback is the same snapshot, restored again | opencode (agent) |
-| 2026-11-22 | Outside the cluster — all four repositories ([`last-resort.md`](last-resort.md) Step 1) | ~2 min | No cluster consulted: `restic` 0.18 on a laptop listed `nodes-nas` `44e80ca9` / 108.2 MiB, `nodes-nuc0` `80f5025f` / 811.2 MiB, `nodes-streaming` `d434572d` / 652.0 MiB, `nfs` `c517d884` / 91.0 MiB, and decrypted a tree from `nfs` (`qbittorrent-config`). The password and the S3 pair came from the Bitwarden item `homelab-backup-last-resort` with the on-disk copies moved aside. That item was written from this machine the same morning, so the run proves the credentials and the procedure, not yet a second machine | opencode (agent) |
+| 2026-11-22 | Outside the cluster — all four repositories ([`last-resort.md`](last-resort.md) Step 1) | ~2 min | No cluster consulted: `restic` 0.18 on a laptop listed `nodes-nas` `44e80ca9` / 108.2 MiB, `nodes-nuc0` `80f5025f` / 811.2 MiB, `nodes-streaming` `d434572d` / 652.0 MiB, `nfs` `c517d884` / 91.0 MiB, and decrypted a tree from `nfs` (`qbittorrent-config`). The password and the S3 pair came from the Bitwarden item `homelab-backup-last-resort` with the on-disk copies moved aside. That item was written from this machine the same morning, so the run proves the credentials and the procedure, not yet a second machine. The `restore` in that run left a lock behind (PID 1222890 on `Val-Gaming`, written 02:20:56Z) that nobody released: `backup-prune` failed on it at noon the same day, and it took a scratch pod and an `unlock` to clear | opencode (agent) |
 
 **Recorded 2026-11-22.** Sections 1–3 have each been restored and read back, section 2 has now been put
 back onto the live claim and served from it, and the bucket opens from a laptop with no cluster at all.
@@ -365,6 +365,25 @@ The table above is the human record; the alert reads a machine-readable copy. `r
 more than 90 days old — three missed monthly drills. A row added here without the matching entry is
 invisible to that alert, so the two change together; [`../reference/alerts.md`](../reference/alerts.md)
 is the rule's page.
+
+**A killed session leaves a lock, and the lock outlives it.** Restic holds a lock for the length of
+most commands — shared for reads, exclusive for writes — and releases it only on a clean exit. The
+laptop run on 2026-11-22 was killed before that, so the `nfs` repository stayed locked for ten hours
+and the noon `backup-prune` failed on it: the retention policy was never applied, and no rule noticed,
+because `backup-prune` had no successful run to be missing. A second lock, shared and minutes old,
+appeared on `nodes-streaming` the same evening from a read whose process had already exited. End any
+session that touched a repository, from whatever machine ran it:
+
+```bash
+for r in "$NODES_NAS" "$NODES_NUC0" "$NODES_STREAMING" "$NFS"; do restic -r "$r" unlock; done
+```
+
+`unlock` removes a lock it can judge stale, including one made on another host — run from a pod in
+`backup`, it cleared both of the 2026-11-22 `nfs` locks. It left the fresh one, which had not aged
+past its threshold; `restic -r "$NFS" unlock --remove-all` cleared that once the laptop showed the
+PID was gone. `--remove-all` is the escape hatch for exactly that case, and only when you have
+confirmed the owning process is dead and no job is writing: never during the 06:00 `backup-nfs`
+window or a running prune. [`last-resort.md`](last-resort.md) Step 2 ends the same way.
 
 ## When a restore surprises you
 
