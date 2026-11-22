@@ -1,0 +1,114 @@
+# The system-upgrade-controller Deployment, captured from the live cluster
+# (`kubectl -n system-upgrade get deploy system-upgrade-controller -o yaml`) and
+# kept here because nothing else tracks it: it is not a chart, and Argo CD owns
+# no Application for it. Applied by hand, like the rest of
+# `cluster/infrastructure`.
+#
+# This is the only thing that moves a node. It is hand-installed, so a node
+# upgrade begins by reading this file, not by trusting what is running.
+#
+# Image v0.21.1 (2026-11-14) is the current upstream stable release; it is built
+# against client-go 0.37.2 and is the version upstream tests against the current
+# K3s release line. The previous image, the rollback if this release misbehaves,
+# was `rancher/system-upgrade-controller:v0.13.4`.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: system-upgrade-controller
+  namespace: system-upgrade
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      upgrade.cattle.io/controller: system-upgrade-controller
+  # One controller, replaced rather than rolled: two of them reconciling at once
+  # would race on the same Plans, and a node upgrade must never have two.
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        upgrade.cattle.io/controller: system-upgrade-controller
+    spec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: node-role.kubernetes.io/control-plane
+                operator: Exists
+      containers:
+      - name: system-upgrade-controller
+        image: rancher/system-upgrade-controller:v0.21.1
+        imagePullPolicy: IfNotPresent
+        env:
+        - name: SYSTEM_UPGRADE_CONTROLLER_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.labels['upgrade.cattle.io/controller']
+        - name: SYSTEM_UPGRADE_CONTROLLER_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        # Added by upstream in this release line: the out-of-turn job check reads
+        # the node the controller itself runs on.
+        - name: SYSTEM_UPGRADE_CONTROLLER_NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        envFrom:
+        - configMapRef:
+            name: default-controller-env
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          runAsGroup: 65534
+          runAsNonRoot: true
+          runAsUser: 65534
+          seccompProfile:
+            type: RuntimeDefault
+        volumeMounts:
+        - mountPath: /etc/ssl
+          name: etc-ssl
+          readOnly: true
+        - mountPath: /etc/pki
+          name: etc-pki
+          readOnly: true
+        - mountPath: /etc/ca-certificates
+          name: etc-ca-certificates
+          readOnly: true
+        - mountPath: /tmp
+          name: tmp
+      serviceAccountName: system-upgrade
+      tolerations:
+      - key: CriticalAddonsOnly
+        operator: Exists
+      - effect: NoSchedule
+        key: node-role.kubernetes.io/master
+        operator: Exists
+      - effect: NoSchedule
+        key: node-role.kubernetes.io/controlplane
+        operator: Exists
+      - effect: NoSchedule
+        key: node-role.kubernetes.io/control-plane
+        operator: Exists
+      - effect: NoExecute
+        key: node-role.kubernetes.io/etcd
+        operator: Exists
+      volumes:
+      - hostPath:
+          path: /etc/ssl
+          type: DirectoryOrCreate
+        name: etc-ssl
+      - hostPath:
+          path: /etc/pki
+          type: DirectoryOrCreate
+        name: etc-pki
+      - hostPath:
+          path: /etc/ca-certificates
+          type: DirectoryOrCreate
+        name: etc-ca-certificates
+      - emptyDir: {}
+        name: tmp
