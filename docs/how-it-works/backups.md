@@ -103,10 +103,11 @@ picks up a directory it should not have still trips the check long before the bi
 2. **A stream stops advancing.** Every job can be green while a repository receives nothing. The
    verifier compares the newest snapshot *the nightly job wrote* against 26 hours and the
    repository's size against `budgetGiB`; `BackupStreamStale` alerts when a job's last success is
-   older than 26 hours. Only snapshots tagged `stream=<name>` count: a copy taken by hand in between,
-   like the etcd copy from the 1.31 upgrade, lands in the same repository with a later timestamp, and
-   reading it would make a stopped stream look fresh. A stream that grows past its budget means a row
-   is carrying something it should not.
+   older than 26 hours, and `BackupJobAbsent` when the job itself is gone or has never succeeded —
+   the case with no timestamp left to compare. Only snapshots tagged `stream=<name>` count: a copy
+   taken by hand in between, like the etcd copy from the 1.31 upgrade, lands in the same repository
+   with a later timestamp, and reading it would make a stopped stream look fresh. A stream that grows
+   past its budget means a row is carrying something it should not.
 3. **A `sqlite` row stops staging its database.** The job stays green: the claim itself is still
    backed up, so nothing fails, and a `db:` pattern that upstream moved or renamed matches nothing
    every night from then on. What disappears is the consistent copy the row exists for, the one a

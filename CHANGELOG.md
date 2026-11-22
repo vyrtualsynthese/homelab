@@ -8,6 +8,12 @@ All notable changes to this repository. The format follows
 
 ### Added
 
+- `BackupJobAbsent`: a warning in `homelab-core-fast` when one of the nightly backup CronJobs has no
+  `kube_cronjob_status_last_successful_time` series — deleted, renamed, or never once succeeded.
+  `BackupStreamStale` reads that series' age, so a missing series made it green: the exact silence a
+  backup system must not have. One `absent()` term per job, gated on kube-state-metrics answering so
+  a dead exporter does not also page about five backups; `backup-prune` joins once it has a first
+  success, since its 2026-11-22 first run failed on a stale `nfs` repository lock.
 - Fluent Bit's own metrics are scraped (`fluent-bit.monitoring.svc:2020`,
   `/api/v2/metrics/prometheus`), and one rule reads them: `FluentBitDroppingLogs` warns when output
   batches are abandoned after retries or records are dropped from the logger queue.

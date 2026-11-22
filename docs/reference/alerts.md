@@ -14,8 +14,8 @@ The overview — what runs where, its sizing, and how to query the stack:
 ## Alerting
 
 Grafana unified alerting, folder `Homelab`, **two rule groups split by cadence
-on 2026-11-18**: `homelab-core-fast` at **60 s** (19 rules) and `homelab-core` at
-**300 s** (24 rules). **43 rules**, one contact point, two routes by severity.
+on 2026-11-18**: `homelab-core-fast` at **60 s** (20 rules) and `homelab-core` at
+**300 s** (25 rules). **45 rules**, one contact point, two routes by severity.
 
 The split rule is the `for` duration: a rule sits in the fast group when its `for`
 is 5 minutes or less, or when it reports that something is down and its `for` is
@@ -69,6 +69,8 @@ webhook exists only in that contact point.
 | `JobFailed` | any Job with a failed pod, no success, and younger than 2 h | 5m | warning | inactive |
 | `RecyclarrNotSucceeding` | no successful recyclarr run in 26 h | 5m | warning | inactive |
 | `BackupStreamStale` | a CronJob in namespace `backup` whose last success is more than 26 h old | 10m | warning | inactive |
+| `BackupJobAbsent` | a backup CronJob with no `kube_cronjob_status_last_successful_time` series, so it is gone or has never succeeded | 5m | warning | inactive |
+| `FluentBitDroppingLogs` | output batches abandoned after retries, or records dropped from the logger queue | 10m | warning | inactive |
 | `CertificateExpiring` | newest Traefik cert per SAN <21 days | 1h | warning | inactive |
 | `TraefikRouterErrorRate` | 5xx share above 10 % per router, with a 0.01 req/s floor so one failed probe on an idle router cannot fire it | 10m | warning | inactive |
 | `TraefikRouterLatencyHigh` | p95 above 1 s per router, same request floor | 10m | warning | inactive |
@@ -119,6 +121,24 @@ A stale backup and a *failing* backup are different faults, and only the second 
 window and this rule 26 h later — but a job that never runs at all, because the schedule stopped or
 the sync removed it, only reaches this rule. That is the case worth having: a backup repository that
 nobody writes to looks exactly like a healthy one until the day it is needed.
+
+**`BackupJobAbsent`** (2026-11-22) covers the third shape of the same silence, and the one
+`BackupStreamStale` cannot see. That rule compares the last-success timestamp against 26 hours;
+when the CronJob is deleted, renamed, or has never once succeeded, kube-state-metrics publishes no
+`kube_cronjob_status_last_successful_time` series at all, and a threshold over a series that does not
+exist stays green. One `absent()` term per job turns the missing series into a labelled alert: the
+summary names the job, and a chart deleted altogether arrives as one notification carrying five
+instances rather than five messages. It watches the four nightlies and `backup-verify`, and is gated
+on kube-state-metrics answering — `and on() (up{service="prometheus-kube-state-metrics"} == 1)` —
+because a dead kube-state-metrics makes every term match at once, and `KubeStateMetricsDown` is the
+critical message for that morning.
+
+`backup-prune` is deliberately not in that expression yet. Its first run was Sunday 2026-11-22 at
+noon and it failed: `restic` refused the `nfs` repository because the laptop read test earlier that
+day had left a lock behind, so the job has never recorded a success. An `absent()` term added now
+would fire on day one for a job that has not had a successful run yet, which is the false page the
+delay exists to avoid. Its term is added once it succeeds; until then a failed run is
+`JobFailed`'s to report, and a prune deleted before its first success would be silent.
 
 **`PodPending` and `PodNotStarting` split one symptom by cause.** `Pending` covers
 two different faults: a pod that was never scheduled (unbound claim, node selector,
@@ -175,6 +195,13 @@ stack itself, which needed two scrape jobs that did not exist before that day.
 Both use a 5-minute rate rather than `increase`, so a single rejected write or
 one bad evaluation is not a page; `LokiSilent` remains the rule for total
 silence.
+
+`FluentBitDroppingLogs` (2026-11-22) is the third component's own counter: Fluent
+Bit publishes on `fluent-bit.monitoring.svc:2020`, and the rule sums, over ten
+minutes, the output batches abandoned after retries and the records dropped from
+its logger queue. Both counters were unscraped until then, so the pipeline that
+ships every line Loki stores could lose lines while every measurement was taken
+from what did arrive.
 
 `noDataState` is `OK` on every rule **except `LokiSilent`**, which is `Alerting`
 on no data: its expression returns an empty vector when no lines arrive, and that
@@ -308,10 +335,11 @@ reports `firing` on the Health dashboard.
   [`metrics.md`](metrics.md#exporter-quirks). The node filesystem rule covers the
   same disk, at a coarser grain.
 - **Backup freshness is covered, backup *contents* are not.** `BackupStreamStale` says a stream
-  stopped advancing; `JobFailed` says a run failed. Neither says the bytes are restorable: the
-  verifier checks the repository's snapshot age and size, not a restored file. The drills in
-  [`../runbooks/restore.md`](../runbooks/restore.md) are the only proof of that: three read-only
-  restores of one file, one database and the PostgreSQL dumps on 2026-11-21, and all four
+  stopped advancing, `BackupJobAbsent` says a job is gone or never succeeded, and `JobFailed` says a
+  run failed. `backup-prune` has no absence rule until it first succeeds. None says the bytes are
+  restorable: the verifier checks the repository's snapshot age and size, not a restored file. The
+  drills in [`../runbooks/restore.md`](../runbooks/restore.md) are the only proof of that: three
+  read-only restores of one file, one database and the PostgreSQL dumps on 2026-11-21, and all four
   repositories read from a laptop on 2026-11-22. The destructive put-back onto a live claim and the
   etcd rehearsal are still untried.
 - **No vulnerability scanning.** Nothing reports which CVEs affect the running
@@ -344,10 +372,10 @@ reports `firing` on the Health dashboard.
   and the Network dashboard map `routerboard_address`, not the identity. Any
   other MikroTik device is missing from mktxp's config, which is a Secret: adding
   one is a Secret edit, not a chart edit.
-- **Fluent Bit's own retry and error counters are not scraped.** The Service on
-  `:2020` exists, but only Loki's push replies are watched. A Fluent Bit that
-  retries forever without Loki ever answering 5xx is seen only when
-  `LokiSilent` fires, ten minutes later.
+- **Fluent Bit's counters are scraped now, but a silent retry loop is not a drop.** The `:2020`
+  Service is read since 2026-11-22, so `FluentBitDroppingLogs` sees batches abandoned after retries
+  and records dropped from the logger queue. A pipeline that retries forever without ever failing
+  or dropping is still seen only when `LokiSilent` fires, ten minutes later.
 - Dashboards and rules are not in git. Their database is no longer unbacked up — the `grafana` claim
   is one row of the nightly `nodes-nas` stream — but a restore brings back a database, not a
   reviewable change, so a rule is still edited through the API and written down here. The Traefik
