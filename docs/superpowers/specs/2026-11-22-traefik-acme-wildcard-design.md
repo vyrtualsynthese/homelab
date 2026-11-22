@@ -37,7 +37,9 @@ DNS delegation decides the mechanism: `ashudev.com` answers from `ns13/dns13.ovh
 ## Goals
 
 1. `ashudev.com` is served by **one** certificate: `ashudev.com`, `*.ashudev.com`,
-   `*.kub.home.ashudev.com`, obtained over DNS-01 through the OVH API.
+   `*.kub.home.ashudev.com` and the bare `kub.home.ashudev.com`, obtained over DNS-01 through the
+   OVH API. The bare subdomain is listed separately because `*` stands for one label and the dashy
+   redirect route answers on it.
 2. `ashuvidz.com` is served by **one** certificate: `ashuvidz.com`, `www.ashuvidz.com`, over the
    existing TLS-ALPN challenge (its zone is not on OVH yet).
 3. The OVH credential in the cluster is a dedicated consumer key limited to
@@ -125,6 +127,7 @@ tls:
       sans:
         - "*.ashudev.com"
         - "*.kub.home.ashudev.com"
+        - "kub.home.ashudev.com"   # the bare subdomain, which `*` does not cover
 ```
 
 Every other route drops `certResolver` and keeps only its `tls.options`. Traefik serves those routes

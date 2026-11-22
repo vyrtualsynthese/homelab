@@ -107,6 +107,10 @@ ingressRoute:
         sans:
           - "*.ashudev.com"
           - "*.kub.home.ashudev.com"
+          # -- The bare subdomain is matched by no wildcard: `*` stands for one
+          # -- label, so `*.kub.home.ashudev.com` does not cover it. Dashy's
+          # -- redirect route answers on it, so it has to be listed.
+          - "kub.home.ashudev.com"
   # -- `www`, which only redirects. A name that resolves without a router of its
   # -- own gets no certificate and answers with a TLS name mismatch — which is
   # -- what `www.ashuvidz.com` does today. Hence a real router with `tls`.

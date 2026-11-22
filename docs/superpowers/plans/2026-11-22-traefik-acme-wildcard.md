@@ -15,7 +15,7 @@
 - Traefik chart `42.4.1`, Traefik `3.7.19`; resolver key is `certificatesResolvers` (not `certResolvers`).
 - CRDs are `traefik.io/v1alpha1`; `traefik.containo.us` no longer exists.
 - The store is `/data/acme.json` on `pvc-traefik-nfs`; both resolvers use that one path.
-- The wildcard name list is `ashudev.com`, `*.ashudev.com`, `*.kub.home.ashudev.com`, and it appears in exactly one route.
+- The wildcard name list is `ashudev.com`, `*.ashudev.com`, `*.kub.home.ashudev.com` and `kub.home.ashudev.com`, and it appears in exactly one route.
 - The `ashuvidz.com` list is `ashuvidz.com`, `www.ashuvidz.com`, in exactly one route.
 - No route, entry point, middleware or `tls.options` changes.
 - `*.kub.local` stays on the internal CA and is not touched.
@@ -116,6 +116,7 @@ git commit -m "🚀 feat(traefik): add the OVH DNS-01 resolver"
         sans:
           - "*.ashudev.com"
           - "*.kub.home.ashudev.com"
+          - "kub.home.ashudev.com"
 ```
 
 - [ ] **Step 2: Render `domains` in the apex template**
