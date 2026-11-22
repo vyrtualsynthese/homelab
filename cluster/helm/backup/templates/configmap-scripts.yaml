@@ -19,7 +19,8 @@ data:
   verify.py: |
 {{ .Files.Get "files/verify.py" | indent 4 }}
   # Weekly forget + prune, rendered here so the retention numbers come from values.yaml and
-  # exist in one place only.
+  # exist in one place only. Each repository gets its own policy: the shared tail, with
+  # whatever that stream overrides under its `retention:`.
   prune.sh: |
     #!/bin/sh
     # Runs on Sunday at noon, after every night's backup has finished. One repository at a
@@ -31,14 +32,16 @@ data:
     set -u
     : "${RESTIC_PASSWORD:?}"
     failed=0
-    echo "prune {{ .Values.streams | len }} repositories: daily {{ .Values.retention.keepDaily }}, weekly {{ .Values.retention.keepWeekly }}, monthly {{ .Values.retention.keepMonthly }}"
+    echo "prune {{ .Values.streams | len }} repositories"
     {{- range .Values.streams }}
-    echo "prune {{ .name }}"
+    {{- $ret := include "backup.retention" (dict "root" $ "stream" .) | fromJson }}
+    echo "prune {{ .name }}: daily {{ $ret.daily }}, weekly {{ $ret.weekly }}, monthly {{ $ret.monthly }}{{ if $ret.yearly }}, yearly {{ $ret.yearly }}{{ end }}"
     restic -r "{{ include "backup.repository" (dict "root" $ "name" .name) }}" forget \
       --retry-lock 6h \
-      --keep-daily {{ $.Values.retention.keepDaily }} \
-      --keep-weekly {{ $.Values.retention.keepWeekly }} \
-      --keep-monthly {{ $.Values.retention.keepMonthly }} \
+      --keep-daily {{ $ret.daily }} \
+      --keep-weekly {{ $ret.weekly }} \
+      --keep-monthly {{ $ret.monthly }}{{ if $ret.yearly }} \
+      --keep-yearly {{ $ret.yearly }}{{ end }} \
       --prune || failed=1
     {{- end }}
     [ "$failed" -eq 0 ]

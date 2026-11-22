@@ -40,7 +40,7 @@ Storage bucket. Four restic repositories, one per stream: `nodes-nas`, `nodes-nu
 |---|---|---|
 | `backup-node-nas`, `backup-node-nuc0`, `backup-node-streaming` | 04:30, 05:00, 05:30 Europe/Paris | the node's `local-path` roots, its host configuration, and on the two control planes the K3s snapshot directory |
 | `backup-nfs` | 06:00 | the `nas` exports: syncthing, koillection uploads, the ACME store, the qBittorrent config export |
-| `backup-prune` | Sunday 12:00 | every repository, `forget --keep-daily 7 --keep-weekly 4 --keep-monthly 12` |
+| `backup-prune` | Sunday 12:00 | every repository, each with its own policy: `forget --keep-daily 7 --keep-weekly 4 --keep-monthly 12`, and on the `nfs` stream `--keep-monthly 24 --keep-yearly 10` |
 | `backup-verify` | 08:30 | every repository: newest snapshot age, size against budget, each `sqlite` row's staged database, the etcd copy's age |
 
 Each node job is two containers: `prepare` (Python, stages the databases and writes the two path
