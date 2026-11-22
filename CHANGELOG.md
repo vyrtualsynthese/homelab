@@ -23,6 +23,13 @@ All notable changes to this repository. The format follows
 
 ### Changed
 
+- Traefik asks Let's Encrypt for two certificates instead of fifteen. One DNS-01 wildcard over the
+  OVH API carries `ashudev.com`, `*.ashudev.com` and `*.kub.home.ashudev.com`; one TLS-ALPN
+  certificate carries `ashuvidz.com` and `www.ashuvidz.com` while that zone is still on AWS
+  nameservers. Only the apex route of each domain requests a certificate, and every other name is
+  served from the store by SNI, so a new application under `ashudev.com` orders nothing. The OVH
+  credential is a consumer key scoped to that zone's record and refresh endpoints, in
+  `kube-system/traefik-ovh`.
 - Traefik's certificate store holds sixteen certificates instead of thirty-four. The eighteen
   removed entries were for hosts no router has served since they were retired: `atlantis`,
   `cross-seed`, `dashy.kub.home`, `discourse`, `firefly`, `firefly-importer`, `forum.ashuvidz.com`,
