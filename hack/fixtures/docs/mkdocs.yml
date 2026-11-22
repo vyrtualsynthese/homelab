@@ -1,0 +1,5 @@
+site_name: fixture
+nav:
+  - Home: README.md
+  - Things:
+      - One: things/one.md

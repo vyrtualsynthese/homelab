@@ -91,11 +91,13 @@ nav:
       - News feeds: news-feeds.md
       - SSO applications: reference/sso-applications.md
       - Chart notes: reference/chart-notes.md
+      - Chart conventions: charts/README.md
       - Chart sizing: reference/chart-sizing.md
       - Metrics: reference/metrics.md
       - Log budget: reference/log-budget.md
       - Alerts: reference/alerts.md
       - Dashboards: reference/dashboards.md
+      - Observability conventions: observability-conventions.md
       - Secrets: secrets.md
       - qBittorrent Web UI stalls: qbittorrent-webui-stalls.md
       - authentik worker deadlocks: authentik-worker-deadlocks.md
