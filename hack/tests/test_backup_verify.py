@@ -29,8 +29,12 @@ def load():
     return load.module
 
 
-def snaps(*hours):
-    return [{"id": str(i), "time": (NOW - timedelta(hours=h)).isoformat()} for i, h in enumerate(hours)]
+def snaps(*hours, stream="nfs"):
+    return [
+        {"id": str(i), "time": (NOW - timedelta(hours=h)).isoformat(),
+         "tags": [f"stream={stream}"]}
+        for i, h in enumerate(hours)
+    ]
 
 
 class StreamTests(unittest.TestCase):
@@ -49,12 +53,36 @@ class StreamTests(unittest.TestCase):
                       load().check_stream("nfs", snaps(1), 2**30 + 1, 2**30, NOW)[0])
 
     def test_the_line_carries_every_field_the_dashboard_reads(self):
-        line = load().stream_line("nodes-nas", snaps(3), 123456, NOW)
+        line = load().stream_line("nodes-nas", snaps(3, stream="nodes-nas"), 123456, NOW)
         self.assertEqual(
             line,
             "stream=nodes-nas snapshots=1 bytes=123456 "
             f"newest={(NOW - timedelta(hours=3)):%Y-%m-%dT%H:%M:%SZ} age_h=3.0",
         )
+
+    def test_a_newer_untagged_snapshot_does_not_young_the_stream(self):
+        # nodes-streaming holds an etcd copy taken by hand (etcd-pre131-nas, 2026-11-22 00:31)
+        # beside the nightly snapshot. Counting it made the stream look fresh and inflated the
+        # snapshot count the dashboard reads.
+        untagged = {"id": "hand", "time": (NOW - timedelta(minutes=30)).isoformat(),
+                    "tags": ["etcd-pre131-nas"]}
+        line = load().stream_line("nodes-streaming", snaps(5, stream="nodes-streaming") + [untagged],
+                                  1, NOW)
+        self.assertIn("snapshots=1", line)
+        self.assertIn("age_h=5.0", line)
+        self.assertEqual(
+            load().check_stream("nodes-streaming", snaps(30, stream="nodes-streaming") + [untagged],
+                                0, 1000, NOW),
+            ["newest snapshot 30.0h old (>26h)"],
+        )
+
+    def test_a_repository_with_only_untagged_snapshots_is_an_empty_stream(self):
+        untagged = [{"id": "hand", "time": NOW.isoformat(), "tags": ["etcd-pre131-nas"]}]
+        self.assertEqual(
+            load().stream_line("nfs", untagged, 1, NOW),
+            "stream=nfs snapshots=0 bytes=1 newest=none age_h=-",
+        )
+        self.assertEqual(load().check_stream("nfs", untagged, 0, 1000, NOW), ["no snapshot"])
 
     def test_nanosecond_timestamps_from_restic_parse(self):
         parsed = load().parse_time("2026-11-20T05:03:00.123456789+01:00")
@@ -176,12 +204,16 @@ class StreamSnapshotTests(unittest.TestCase):
 class MainTests(unittest.TestCase):
     """The wiring, against a stand-in restic: argument order, exit code and output shape."""
 
-    def write_restic(self, tmp: pathlib.Path, snapshot_iso: str, ls_mtime: str) -> pathlib.Path:
+    def write_restic(self, tmp: pathlib.Path, snapshot_iso: str, ls_mtime: str,
+                     tag: str) -> pathlib.Path:
+        import json
+
+        snapshot = json.dumps([{"id": "a", "time": snapshot_iso, "tags": [f"stream={tag}"]}])
         fake = tmp / "restic"
         fake.write_text(
             "#!/bin/sh\n"
             'case "$3" in\n'
-            f"  snapshots) echo '[{{\"id\": \"a\", \"time\": \"{snapshot_iso}\"}}]' ;;\n"
+            f"  snapshots) echo '{snapshot}' ;;\n"
             "  stats) echo '{\"total_size\": 4096}' ;;\n"
             f"  ls) echo '{{\"path\": \"/host/etcd-snapshots/nuc0-1\", \"type\": \"file\", \"mtime\": \"{ls_mtime}\"}}' ;;\n"
             "  *) exit 9 ;;\n"
@@ -197,7 +229,7 @@ class MainTests(unittest.TestCase):
 
         config = tmp / "streams.json"
         config.write_text(json.dumps(streams))
-        fake = self.write_restic(tmp, snapshot_iso, ls_mtime)
+        fake = self.write_restic(tmp, snapshot_iso, ls_mtime, streams[0]["name"])
         out = io.StringIO()
         with contextlib.redirect_stdout(out):
             code = load().main(["--config", str(config), "--restic", str(fake)])
@@ -260,7 +292,7 @@ class MainTests(unittest.TestCase):
             fake.write_text(
                 "#!/bin/sh\n"
                 'case "$3" in\n'
-                f"  snapshots) echo '[{{\"id\": \"a\", \"time\": \"{stamp}\"}}]' ;;\n"
+                f"  snapshots) echo '[{{\"id\": \"a\", \"time\": \"{stamp}\", \"tags\": [\"stream=nodes-nuc0\"]}}]' ;;\n"
                 "  stats) echo '{\"total_size\": 4096}' ;;\n"
                 f"  ls) echo '{{\"path\": \"/staging/claims/databases/pgadmin-config\", \"type\": \"dir\", \"mtime\": \"{stamp}\"}}' ;;\n"
                 "  *) exit 9 ;;\n"
@@ -288,7 +320,7 @@ class MainTests(unittest.TestCase):
             fake.write_text(
                 "#!/bin/sh\n"
                 'case "$3" in\n'
-                f"  snapshots) echo '[{{\"id\": \"a\", \"time\": \"{stamp}\"}}]' ;;\n"
+                f"  snapshots) echo '[{{\"id\": \"a\", \"time\": \"{stamp}\", \"tags\": [\"stream=nodes-nuc0\"]}}]' ;;\n"
                 "  stats) echo '{\"total_size\": 4096}' ;;\n"
                 f"  ls) echo '{{\"path\": \"/staging/claims/databases/pgadmin-config/sqlite.db\", \"type\": \"file\", \"mtime\": \"{stamp}\"}}' ;;\n"
                 "  *) exit 9 ;;\n"
@@ -308,7 +340,11 @@ class MainTests(unittest.TestCase):
 
     def test_the_file_list_comes_from_the_streams_snapshot_not_the_newest_anything(self):
         # The fake prints the staged database only when restic is asked for the nightly
-        # snapshot's id, so reading `latest` would report the row as empty.
+        # snapshot's id, so reading `latest` would report the row as empty. The times are
+        # relative to now so the nightly stays inside the 26-hour window whenever it runs.
+        now = datetime.now(timezone.utc)
+        night = (now - timedelta(hours=20)).isoformat()
+        adhoc = (now - timedelta(hours=1)).isoformat()
         with tempfile.TemporaryDirectory() as tmp_dir:
             tmp = pathlib.Path(tmp_dir)
             fake = tmp / "restic"
@@ -316,14 +352,14 @@ class MainTests(unittest.TestCase):
                 "#!/bin/sh\n"
                 'case "$3" in\n'
                 "  snapshots) echo '["
-                '{"id": "night", "time": "2026-11-21T05:30:00+01:00", "tags": ["stream=nodes-nuc0"]},'
-                '{"id": "adhoc", "time": "2026-11-22T00:31:27+01:00", "tags": ["etcd-pre131-nas"]}'
+                f'{{"id": "night", "time": "{night}", "tags": ["stream=nodes-nuc0"]}},'
+                f'{{"id": "adhoc", "time": "{adhoc}", "tags": ["etcd-pre131-nas"]}}'
                 "]' ;;\n"
                 "  stats) echo '{\"total_size\": 4096}' ;;\n"
                 '  ls) if [ "$5" = "night" ]; then\n'
                 '        echo \'{"path": "/staging/claims/databases/pgadmin-config/sqlite.db", "type": "file"}\' ;\n'
                 "      else\n"
-                '        echo \'{"path": "/host/etcd-snapshots/nuc0-1", "type": "file", "mtime": "2026-11-22T00:31:27+01:00"}\' ;\n'
+                f'        echo \'{{"path": "/host/etcd-snapshots/nuc0-1", "type": "file", "mtime": "{adhoc}"}}\' ;\n'
                 "      fi ;;\n"
                 "  *) exit 9 ;;\n"
                 "esac\n"

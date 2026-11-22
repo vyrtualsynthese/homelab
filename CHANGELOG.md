@@ -172,6 +172,11 @@ All notable changes to this repository. The format follows
 
 ### Fixed
 
+- `backup-verify` reports a stream's age and its `snapshots=` count from the nightly job's own
+  snapshots only. A copy taken by hand between two nights — the etcd copy from the 1.31 upgrade was
+  one — sits in the same repository with a later timestamp, so it made a stopped stream look fresh
+  for up to the 26-hour window and inflated the count the dashboard reads. Both now count only
+  snapshots tagged `stream=<name>`; a repository holding none reports an empty stream.
 - `backup-verify` fails a `sqlite` row whose stream snapshot holds no staged database, naming the
   row. Until now nothing checked what a row had actually staged: a `db:` pattern that upstream moved
   or renamed matched nothing every night while the node job stayed green, and the consistent copy the
