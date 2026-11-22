@@ -56,6 +56,8 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: spec.nodeName
+        # Its settings, including the kubectl image a drain job would run, are
+        # in the sibling `controller-env.yaml`. They are read once, at start.
         envFrom:
         - configMapRef:
             name: default-controller-env

@@ -1,14 +1,17 @@
 # Moving K3s to a new minor
 
-Date: 2026-11-21/22 · **Proved** on `v1.30.1+k3s1` → `v1.31.14+k3s1`, four nodes, one at a time ·
-**Kind:** living procedure
-
 > **In one line.** The `system-upgrade-controller` swaps one node's k3s binary, the node restarts, and
 > the next node waits for a human to point the plan at it.
 >
 > **Use it when** K3s has to move to a new minor version (1.32 next), or a single node is stuck on an
-> older one · **Verified** 2026-11-22: all four nodes on `v1.31.14+k3s1`, containerd `2.1.5-k3s1.32`,
-> etcd quorum never lost, one 15-second ingress blip on `streaming`.
+> older one · **Verified** 2026-11-23: all four nodes on `v1.31.14+k3s1`, containerd `2.1.5-k3s1.32`,
+> Ready, etcd `ok`, both Plans `Complete`, and the controller's settings file and kubectl image checked
+> against the live cluster; the climb itself proved 2026-11-21/22, four nodes one at a time, quorum
+> never lost, one 15-second ingress blip on `streaming` · **Kind:** how-to
+>
+> **Sources** `cluster/infrastructure/system-upgrade/controller.yaml`,
+> `cluster/infrastructure/system-upgrade/controller-env.yaml`, and the live Plans, Jobs and node
+> versions, read on 2026-11-23
 
 ## What this touches
 
@@ -154,6 +157,18 @@ kubectl -n system-upgrade patch plan server-plan --type=merge -p '{"spec":{
 `spec.version` overrides `channel`; never leave `channel: stable` as the only selector. The hostname
 expression is not decoration — without it the controller upgrades the next matching node the moment the
 first one reports the new version.
+
+**5. Move the controller's kubectl client with the plan.** Both plans use `cordon: true`, an API call
+the controller makes itself, so no job has ever run `rancher/kubectl`; the pin sits unused in
+`cluster/infrastructure/system-upgrade/controller-env.yaml`, on the node binary's minor. It is a
+client, supported one minor either side of the API server, so bump it when the climb leaves that
+window — before any plan first sets `drain` — and restart the controller to pick it up, because the
+value is read once at container start:
+
+```bash
+kubectl apply -f cluster/infrastructure/system-upgrade/controller-env.yaml
+kubectl -n system-upgrade rollout restart deploy/system-upgrade-controller
+```
 
 ## Watch it
 
