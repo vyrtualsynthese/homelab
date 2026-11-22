@@ -15,7 +15,7 @@ The overview — what runs where, its sizing, and how to query the stack:
 
 Grafana unified alerting, folder `Homelab`, **two rule groups split by cadence
 on 2026-11-18**: `homelab-core-fast` at **60 s** (19 rules) and `homelab-core` at
-**300 s** (23 rules). **42 rules**, one contact point, two routes by severity.
+**300 s** (24 rules). **43 rules**, one contact point, two routes by severity.
 
 The split rule is the `for` duration: a rule sits in the fast group when its `for`
 is 5 minutes or less, or when it reports that something is down and its `for` is
@@ -58,6 +58,7 @@ webhook exists only in that contact point.
 | `NodeMemoryHigh` | >90 % of `MemAvailable` | 15m | warning | inactive |
 | `NodeTemperatureHigh` | hottest CPU or SoC sensor, selected by hwmon driver >80 °C | 10m | warning | **firing** on `streaming` |
 | `GpuTemperatureHigh` | `DCGM_FI_DEV_GPU_TEMP` >80 °C | 10m | warning | inactive |
+| `GpuNotAllocatable` | allocatable `nvidia.com/gpu` reads 0 on a node that registered the card | 10m | warning | inactive |
 | `DiskTooHot` | drive >55 °C | 15m | warning | inactive |
 | `DiskFillingUp` | filesystem >85 % | 30m | warning | inactive |
 | `DiskWillFill` | predicted full in 24 h above 80 % used | 30m | warning | inactive |
@@ -189,6 +190,15 @@ or an explicit `> 85` / `> 55` / `> 80` inside the expression. The original set
 had `NodeDown` and `MonitoringDown` silently dead this way, and
 `DriveNeedsReplacement` survived only because the failing drive also reported
 `exit_code = 32`.
+
+**`GpuNotAllocatable` watches the scheduler resource, not the card.** The card stays usable through
+the `nvidia` runtime class after a restart, so `GpuTemperatureHigh` and Plex are unaffected and
+`nvidia-smi` still lists it; only `nvidia.com/gpu` on the node drops to 0, and a pod that requests
+it stays `Pending`. The expression is `1 - kube_node_status_allocatable{resource="nvidia_com_gpu"}`
+— the resource label is sanitized, the series exists only on a node whose device plugin registered
+the card, and the `nvidia.com/gpu.present` node label is not available because `kube_node_labels`
+is dropped at the scrape. The rule is what makes the accepted workaround safe:
+[`runbooks/gpu-operator.md`](../runbooks/gpu-operator.md#the-gpu-drops-to-0-after-a-restart).
 
 **`DiskReallocatingSectors`** uses a subquery,
 `delta(max by (...)(metric)[1h:]) > 0`. The previous form without the colon was
