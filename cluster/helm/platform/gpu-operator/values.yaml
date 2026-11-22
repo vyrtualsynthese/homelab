@@ -37,6 +37,12 @@ gpu-operator:
     # its placement only has to be predictable.
     nodeSelector:
       kubernetes.io/hostname: streaming
+    # The operator reconciles its operands every 30 s and logs six info lines per
+    # pass: 23,587 in the 24 h to 2026-11-22, all `controllers.Upgrade`. This key
+    # is what the chart renders into `--zap-log-level`. The chart documents
+    # debug/info/error; zap also accepts warn. Errors stay visible either way.
+    logging:
+      level: error
     resources:
       requests:
         cpu: 50m

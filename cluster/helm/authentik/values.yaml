@@ -36,6 +36,20 @@ authentik:
       # Base URL system setting on first start. Matches the issuer used by apps.
       - name: AUTHENTIK_WEB__BASE_URL
         value: "https://authentik.kub.home.ashudev.com"
+      # The default level logs one line per request, health probes included. The
+      # chart contract (docs/charts/README.md, Logs) asks for warnings and errors;
+      # sign-ins and admin actions stay in authentik's own Events table, which is
+      # the record the UI reads, so nothing an operator acts on is lost.
+      # Measured 2026-11-22: server 28,386 lines / 16.3 MB and worker 23,508 /
+      # 12.4 MB over 24 h, 17,267 of them the health checks — 24.6 % of every
+      # byte Loki stored that day.
+      #
+      # The upstream chart also writes `AUTHENTIK_LOG_LEVEL: info` into the
+      # generated env Secret (`authentik-env`). An explicit `env` entry takes
+      # precedence over `envFrom`, so this value is the one the process reads,
+      # for both the server and the worker, which share this block.
+      - name: AUTHENTIK_LOG_LEVEL
+        value: "warning"
     addPrometheusAnnotations: false
     nodeSelector:
       kubernetes.io/hostname: nuc0

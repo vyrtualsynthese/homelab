@@ -20,6 +20,12 @@ vikunja:
       pullPolicy: IfNotPresent
 
     env:
+      # The upstream chart logs every HTTP request at info, and the two probes on
+      # /api/v1/info were 52 % of the pod's 33,184 lines in the 24 h to
+      # 2026-11-22. The chart contract (docs/charts/README.md, Logs) asks for
+      # warnings and errors; request counts and latencies stay readable on
+      # /api/v1/metrics, which the pod already publishes.
+      VIKUNJA_LOG_LEVEL: WARNING
       VIKUNJA_DATABASE_TYPE: postgres
       VIKUNJA_DATABASE_HOST: postgres.databases.svc.cluster.local
       VIKUNJA_DATABASE_DATABASE: vikunja
