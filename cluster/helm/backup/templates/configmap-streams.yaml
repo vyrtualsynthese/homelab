@@ -7,21 +7,24 @@ metadata:
     {{- include "backup.labels" (dict "root" . "stream" "verify") | nindent 4 }}
 data:
   # The verifier's whole input: one entry per repository, with the budget it must stay under,
-  # whether it is expected to carry an etcd snapshot copy, and the `sqlite` rows whose staged
-  # database the newest snapshot must hold. Written by hand rather than with toJson so the
-  # rendered file stays readable in `kubectl get cm -o yaml`.
+  # whether it is expected to carry an etcd snapshot copy, whether a node job stages claims into
+  # it at all, and the `sqlite` rows whose staged database the newest snapshot must hold. Written
+  # by hand rather than with toJson so the rendered file stays readable in `kubectl get cm -o
+  # yaml`.
   streams.json: |
     [
     {{- range $i, $stream := .Values.streams }}
     {{- if $i }},{{ end }}
     {{- $rows := list }}
+    {{- $claims := false }}
     {{- with (index $.Values.nodes (trimPrefix "nodes-" $stream.name)) }}
+    {{- $claims = true }}
     {{- range .claims }}
     {{- if eq .kind "sqlite" }}
     {{- $rows = append $rows . }}
     {{- end }}
     {{- end }}
     {{- end }}
-      {"name": "{{ $stream.name }}", "repository": "{{ include "backup.repository" (dict "root" $ "name" $stream.name) }}", "budgetGiB": {{ $stream.budgetGiB }}, "etcd": {{ $stream.etcd | default false }}, "staged": [{{- range $j, $row := $rows }}{{ if $j }}, {{ end }}{"namespace": "{{ $row.namespace }}", "claim": "{{ $row.claim }}"}{{- end }}]}
+      {"name": "{{ $stream.name }}", "repository": "{{ include "backup.repository" (dict "root" $ "name" $stream.name) }}", "budgetGiB": {{ $stream.budgetGiB }}, "etcd": {{ $stream.etcd | default false }}, "claims": {{ $claims }}, "staged": [{{- range $j, $row := $rows }}{{ if $j }}, {{ end }}{"namespace": "{{ $row.namespace }}", "claim": "{{ $row.claim }}"}{{- end }}]}
     {{- end }}
     ]

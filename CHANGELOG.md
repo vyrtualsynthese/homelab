@@ -247,6 +247,13 @@ All notable changes to this repository. The format follows
 
 ### Fixed
 
+- A backup row's `exclude` entry that matches nothing in its claim is now named instead of being
+  silent. The node job prints `exclude-unused row=<namespace>/<claim> pattern=<entry>` while the claim
+  is mounted and writes the same answer into the snapshot, and `backup-verify` repeats it at 08:30 —
+  the verifier reads snapshots and never a claim, so that report is the only way it can hear about
+  it. A warning, not a failure: an application that has not written its `cache/` yet matches nothing
+  either, and an unused exclusion costs space rather than data. It is the other half of the fix
+  below: Plex's five entries had matched nothing for six nights and nothing anywhere said so.
 - A backup row's `exclude` now reaches a directory that sits below the claim's root: an entry without
   a slash is a name and is excluded at any depth, and an entry with a slash stays relative to the
   claim root. Every entry used to be anchored at the root, which silently matched nothing for Plex,
