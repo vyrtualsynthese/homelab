@@ -352,6 +352,16 @@ prometheus:
           source_labels:
             - __name__
           regex: ".*_bucket"
+    # Fluent Bit ships every line Loki stores, and nothing scraped Fluent Bit
+    # itself: `count({__name__=~"fluentbit_.*"})` answered 0 on 2026-11-22, so a
+    # dropped record, an output retry or a full 5 MB input buffer was invisible
+    # while every log measurement was taken from what did arrive. The HTTP server
+    # is on (`HTTP_Server On`, port 2020) and serves Prometheus text at this path.
+    fluent-bit:
+      metrics_path: /api/v2/metrics/prometheus
+      static_configs:
+        - targets:
+            - fluent-bit.monitoring.svc:2020
     # The prober answers about whatever URL it is handed, so every blackbox job
     # aims its single Service address and passes the URL to probe in
     # __param_target; instance is rewritten from that URL, so a series is
