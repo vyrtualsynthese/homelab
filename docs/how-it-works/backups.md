@@ -118,10 +118,12 @@ morning of 2026-11-22. A snapshot of the same evening was read first, and its st
 database restored with `pragma integrity_check` → `ok`.
 
 One gap is worth naming, because the tail cannot close it: `forget` groups snapshots by host and
-paths, and the three `etcd-pre131-*` copies each carry a host of their own, so each is a group of
-one and no `keep-*` rule will ever remove it. They cost about 18 MB — they hold the same streaming
-snapshot directory the nightly already carries — and dropping them is a by-hand decision, not a
-scheduled one.
+paths, and the `etcd-pre131-streaming` copy left from the 1.31 move carries a host of its own, so it
+is a group of one and no `keep-*` rule will ever remove it. It costs almost nothing — it holds the
+same streaming snapshot directory the nightly already carries — and dropping it is a by-hand decision,
+not a scheduled one. Two companions tagged `etcd-pre131-{rbp2,nas}` held that same directory and were
+forgotten by hand on 2026-11-22, once the 1.31 run's file names were read: they were one server's
+state under two other node names.
 
 The first snapshot costs about €0.09; with the shared tail the three rebuildable repositories settle
 between 15 and 25 GB, roughly €0.11–0.18 a month. The `nfs` repository is 3.6 GB today and grows only
