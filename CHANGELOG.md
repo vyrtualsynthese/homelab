@@ -40,6 +40,17 @@ All notable changes to this repository. The format follows
 
 ### Changed
 
+- A restored claim came back as a running service: Sonarr's configuration was rebuilt from the 05:30
+  `nodes-streaming` snapshot onto its live volume on 2026-11-22 and the application served from it,
+  32 seconds down. The restored database (45 MB, `pragma integrity_check` → `ok`, 103 series and 566
+  episode files) and the claim tree replaced the live ones, which moved aside inside the claim and
+  were removed once the API, the health endpoint, the series count and ArgoCD's status agreed. Section
+  2 of [`docs/runbooks/restore.md`](docs/runbooks/restore.md) is rewritten from what was actually run,
+  including the two traps that would trip a first attempt: the pods are selected by
+  `app.kubernetes.io/instance`, not `app`, and ArgoCD's UI-set `selfHeal` reverts a scaled-down
+  Deployment unless the Application's automation is paused first. The drill log carries the row, and
+  the etcd rehearsal (card #8) is the only restore left unproven.
+
 - The rightsizing pass of 2026-11-22 changed four memory numbers and removed the CPU limits that were
   throttling. `renovate` sat at 90 % of its 1Gi ceiling — p95 915Mi, peak 917Mi across three scheduled
   and three manual runs — so it gets a 1Gi request and a 1.5Gi limit; `filebrowser` (p95 100Mi),
