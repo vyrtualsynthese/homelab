@@ -168,6 +168,8 @@ time. Examples:
   European is not the test, EU is. OVHcloud and Scaleway comply; GitHub, the container registries and
   Let's Encrypt are open items. The record is
   [`docs/decisions/2026-11-21-sovereign-eu-providers-only.md`](docs/decisions/2026-11-21-sovereign-eu-providers-only.md).
+  What carries the homelab if it is lost, and where each copy is:
+  [`docs/security/critical-points.md`](docs/security/critical-points.md).
 - Commit messages use an emoji prefix: `⬆️` upgrade, `🐛` fix, `🚀` feature, `♻️` refactor.
 
 ## 5. Secrets (never commit)
