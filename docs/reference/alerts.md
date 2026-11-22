@@ -15,7 +15,7 @@ The overview — what runs where, its sizing, and how to query the stack:
 
 Grafana unified alerting, folder `Homelab`, **two rule groups split by cadence
 on 2026-11-18**: `homelab-core-fast` at **60 s** (20 rules) and `homelab-core` at
-**300 s** (25 rules). **45 rules**, one contact point, two routes by severity.
+**300 s** (26 rules). **46 rules**, one contact point, two routes by severity.
 
 The split rule is the `for` duration: a rule sits in the fast group when its `for`
 is 5 minutes or less, or when it reports that something is down and its `for` is
@@ -70,6 +70,7 @@ webhook exists only in that contact point.
 | `RecyclarrNotSucceeding` | no successful recyclarr run in 26 h | 5m | warning | inactive |
 | `BackupStreamStale` | a CronJob in namespace `backup` whose last success is more than 26 h old | 10m | warning | inactive |
 | `BackupJobAbsent` | a backup CronJob with no `kube_cronjob_status_last_successful_time` series, so it is gone or has never succeeded | 5m | warning | inactive |
+| `RestoreDrillOverdue` | newest restore-drill timestamp older than 90 days | 1h | warning | inactive |
 | `FluentBitDroppingLogs` | output batches abandoned after retries, or records dropped from the logger queue | 10m | warning | inactive |
 | `CertificateExpiring` | newest Traefik cert per SAN <21 days | 1h | warning | inactive |
 | `TraefikRouterErrorRate` | 5xx share above 10 % per router, with a 0.01 req/s floor so one failed probe on an idle router cannot fire it | 10m | warning | inactive |
@@ -140,6 +141,20 @@ would fire on day one for a job that has not had a successful run yet, which is 
 delay exists to avoid. Its term is added once it succeeds; until then a failed run is
 `JobFailed`'s to report, and a prune deleted before its first success would be silent.
 
+**`RestoreDrillOverdue`** (2026-11-22) is the only rule whose input is a hand-written date. The drill
+log in [`../runbooks/restore.md`](../runbooks/restore.md) is prose in a repository, so the dates it
+holds are rendered by the `prometheus` chart into a ConfigMap that every node-exporter pod mounts
+read-only; the textfile collector serves them as
+`homelab_restore_drill_timestamp_seconds{stream,drill,date}`, one series per row of that table. The
+rule takes the newest row (`topk(1, …)`) and compares its age against **90 days** — three missed
+monthly drills — in the **threshold**, not in PromQL: a false PromQL comparison returns an empty
+vector, and this rule's `noDataState` is `Alerting`, so that shape would page on every recent drill.
+A missing ConfigMap, a renamed metric or an evaluation error is exactly the silence it reports, and
+that is why its no-data state is the opposite of every other rule here. Its `for` is 1 h because the
+input changes once a month, so a short gate buys nothing. The message names the newest drill's date
+and stream, so a firing rule reads as "the last drill was on this date", not as an anonymous stale
+counter.
+
 **`PodPending` and `PodNotStarting` split one symptom by cause.** `Pending` covers
 two different faults: a pod that was never scheduled (unbound claim, node selector,
 resource request) and a pod that was scheduled but whose container never started
@@ -203,11 +218,12 @@ its logger queue. Both counters were unscraped until then, so the pipeline that
 ships every line Loki stores could lose lines while every measurement was taken
 from what did arrive.
 
-`noDataState` is `OK` on every rule **except `LokiSilent`**, which is `Alerting`
-on no data: its expression returns an empty vector when no lines arrive, and that
-is exactly the condition it must report. `MonitoringDown` and `LokiSilent` also
-raise on evaluation errors (`execErrState: Alerting`), so a Prometheus restart or
-a dead Loki produces one message rather than none.
+`noDataState` is `OK` on every rule **except `LokiSilent`** and `RestoreDrillOverdue`, which are
+`Alerting` on no data: `LokiSilent`'s expression returns an empty vector when no lines arrive, and
+`RestoreDrillOverdue`'s metric disappears with its ConfigMap, which is exactly the condition each
+must report. `MonitoringDown` and `LokiSilent` also raise on evaluation errors (`execErrState:
+Alerting`), so a Prometheus restart or a dead Loki produces one message rather than none;
+`RestoreDrillOverdue` does the same, because a rule that cannot read the log must not report health.
 
 **The rule pattern matters.** A PromQL comparison such as `up == 0` returns the
 value `0` when true, and the threshold condition is "above 0" — so it can never
@@ -339,9 +355,10 @@ reports `firing` on the Health dashboard.
   run failed. `backup-prune` has no absence rule until it first succeeds. None says the bytes are
   restorable: the verifier checks the repository's snapshot age and size, not a restored file. The
   drills in [`../runbooks/restore.md`](../runbooks/restore.md) are the only proof of that: three
-  read-only restores of one file, one database and the PostgreSQL dumps on 2026-11-21, and all four
-  repositories read from a laptop on 2026-11-22. The destructive put-back onto a live claim and the
-  etcd rehearsal are still untried.
+  read-only restores on 2026-11-21, the destructive put-back onto Sonarr's live claim and a read of
+  all four repositories from a laptop on 2026-11-22; the etcd rehearsal is still untried.
+  `RestoreDrillOverdue` makes the habit fail loudly when it stops, but it reads a date the operator
+  writes, so it does not prove a drill happened.
 - **No vulnerability scanning.** Nothing reports which CVEs affect the running
   images, so there is no metric to alert on. Design and cost are recorded in
   [`superpowers/specs/2026-11-14-vulnerability-alerting-design.md`](../superpowers/specs/2026-11-14-vulnerability-alerting-design.md);

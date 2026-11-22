@@ -14,6 +14,12 @@ All notable changes to this repository. The format follows
   backup system must not have. One `absent()` term per job, gated on kube-state-metrics answering so
   a dead exporter does not also page about five backups; `backup-prune` joins once it has a first
   success, since its 2026-11-22 first run failed on a stale `nfs` repository lock.
+- `RestoreDrillOverdue` warns when the newest restore drill in `docs/runbooks/restore.md`'s log is
+  more than 90 days old — three missed monthly drills — and reports Alerting rather than OK when it
+  cannot read the log at all. The dates reach the rule through the chart: `restoreDrills` in the
+  `prometheus` values renders a ConfigMap that node-exporter's textfile collector serves as
+  `homelab_restore_drill_timestamp_seconds`, so the drill habit fails loudly instead of looking like
+  a healthy system for a year.
 - Fluent Bit's own metrics are scraped (`fluent-bit.monitoring.svc:2020`,
   `/api/v2/metrics/prometheus`), and one rule reads them: `FluentBitDroppingLogs` warns when output
   batches are abandoned after retries or records are dropped from the logger queue.
