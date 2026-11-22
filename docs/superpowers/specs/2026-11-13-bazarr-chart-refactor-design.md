@@ -10,7 +10,9 @@
 
 Both Bazarr instances have been dead since 2026-09-02. Their config claims disappeared with the
 Longhorn loss, their PVs are stuck `Terminating`, and the Deployment still carries a
-`node-type: general` affinity for a label the nodes no longer have. Nothing can schedule.
+`node-type: general` affinity, a label the repo had retired from charts but that `nuc0` still
+carried — so the affinity was not the blocker. The missing claim was the blocker: nothing could
+schedule without it. (The label itself was removed from all four nodes on 2026-11-22.)
 
 The chart itself is also the problem. It is `selfhosted-helmcharts` 0.1.3, the `helm create`
 scaffold from a repository that has stalled. It puts the environment in a ConfigMap, exposes the app
@@ -29,7 +31,7 @@ day the exporter is switched on.
 | Both pods are `Pending`, created 2026-09-02 | `pods_list` |
 | `bazarr-config` and `bazarr-anime-config` claims do not exist; the event is `persistentvolumeclaim "bazarr-config" not found` | pod event, `PersistentVolumeClaim` list |
 | The matching PVs are `Terminating`, `longhorn-static`, `Retain` | `PersistentVolume` list |
-| Both Deployments require `node-type: general`; the live nodes no longer carry that label | Deployment spec, node list |
+| Both Deployments require `node-type: general`; `nuc0` still carried the label, so it did not block scheduling — the missing claim did | Deployment spec, node list |
 | `pvc-plex-media` is `Bound` (NFS subdir provisioner) and is mounted at `/media` by the old Deployment | claim spec, pod volumes |
 | Live image is `ghcr.io/linuxserver/bazarr:1.6.0` | pod spec |
 | The old chart renders a core `Ingress` for `bazarr.kub.local` / `bazarr-anime.kub.local` on `web,websecure` with the HTTPS redirect middleware | live Ingress |

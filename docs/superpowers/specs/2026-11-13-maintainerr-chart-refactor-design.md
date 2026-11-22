@@ -16,8 +16,9 @@ is enough on its own:
 
 1. The Deployment mounts claim `maintainerr-config`, and the chart never creates it. The claim does
    not exist in `media-stack`.
-2. The pod carries a `node-type: general` node affinity, a label the repo retired. No node matches
-   it any more.
+2. The pod carries a `node-type: general` node affinity, a label the repo retired from charts. `nuc0`
+   still carried it, so the affinity was not what blocked the pod; the missing claim was. (The label
+   was removed from the nodes on 2026-11-22.)
 
 The rest is the usual scaffold debt: no probes, no resource requests or limits, no ServiceAccount,
 `replicas: 1` typed into the template, a hardcoded claim name, and an `appVersion` of `1.0.0` that

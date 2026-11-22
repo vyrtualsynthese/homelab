@@ -65,8 +65,8 @@ Facts read from upstream and the live cluster on 2026-11-13, not guessed:
 
 - Seeding `config.xml` with a chosen API key to make the exporter green on the first sync. It needs
   an extra object and a file the app rewrites; the operator pastes one key instead.
-- Keeping the `node-type` affinity "because it is there". The label is retired; the pod would never
-  schedule.
+- Keeping the `node-type` affinity "because it is there". The label is retired from charts and gone
+  from the nodes since 2026-11-22; a chart that still asks for it cannot schedule.
 - Raising the log level to `info` "so the first scan is visible". The UI is the record for a scan;
   Loki is not.
 
