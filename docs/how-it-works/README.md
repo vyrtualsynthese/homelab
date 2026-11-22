@@ -83,7 +83,7 @@ Rules 1 to 3, and what broke in 2026, are argued in
 | [Nodes](nodes.md) | which machines exist, placement, heat, what one loss costs |
 | [GitOps](gitops.md) | how a commit becomes a pod, and what to edit for a change |
 | [Storage](storage.md) | `local-path` against NFS, claim naming, Longhorn's corpse |
-| [Backups](backups.md) | what leaves the machine each night, what is deliberately left, and how a stream is proved alive |
+| [Backups](backups.md) | what leaves the machine each night, what is deliberately left, and how a stream is proved alive — the procedures are [the Backups tab](../backup/README.md) |
 | [Network](network.md) | DNS names, the LAN gate, TLS with the internal CA, public hostnames |
 | [Identity](identity.md) | authentik, the groups, and the three ways a route can be protected |
 | [Observability](observability.md) | what watches the cluster, what alerts, and what it misses |
