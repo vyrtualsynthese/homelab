@@ -59,16 +59,19 @@ def newest_snapshot(snapshots: list[dict]) -> dict | None:
     return max(snapshots, key=lambda snap: parse_time(snap["time"]))
 
 
-def stream_snapshot(snapshots: list[dict], name: str) -> dict | None:
-    """The newest snapshot the nightly job wrote for this stream.
+def stream_snapshots(snapshots: list[dict], name: str) -> list[dict]:
+    """The snapshots the nightly job wrote for this stream.
 
     `latest` is not it: an etcd copy taken by hand between two nights lands in the same
     repository with a later timestamp and tags of its own, and holds none of the stream's
     claims. The nightly job tags every snapshot `stream=<name>`, which is what tells them
     apart.
     """
-    tagged = [snap for snap in snapshots if f"stream={name}" in (snap.get("tags") or [])]
-    return newest_snapshot(tagged)
+    return [snap for snap in snapshots if f"stream={name}" in (snap.get("tags") or [])]
+
+
+def stream_snapshot(snapshots: list[dict], name: str) -> dict | None:
+    return newest_snapshot(stream_snapshots(snapshots, name))
 
 
 def hours(value: timedelta) -> float:
@@ -76,19 +79,20 @@ def hours(value: timedelta) -> float:
 
 
 def stream_line(name: str, snapshots: list[dict], bytes_used: int, now: datetime) -> str:
-    newest = newest_snapshot(snapshots)
+    nightly = stream_snapshots(snapshots, name)
+    newest = newest_snapshot(nightly)
     if newest is None:
         return f"stream={name} snapshots=0 bytes={bytes_used} newest=none age_h=-"
     when = parse_time(newest["time"])
     return (
-        f"stream={name} snapshots={len(snapshots)} bytes={bytes_used} "
+        f"stream={name} snapshots={len(nightly)} bytes={bytes_used} "
         f"newest={when:%Y-%m-%dT%H:%M:%SZ} age_h={hours(now - when)}"
     )
 
 
 def check_stream(name: str, snapshots: list[dict], bytes_used: int, budget_bytes: int,
                  now: datetime) -> list[str]:
-    newest = newest_snapshot(snapshots)
+    newest = stream_snapshot(snapshots, name)
     if newest is None:
         return ["no snapshot"]
     problems = []
