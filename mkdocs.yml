@@ -85,6 +85,13 @@ nav:
       - Use the board: running-it/use-the-board.md
       - Rebuild the docs site: running-it/rebuild-the-docs-site.md
       - Disaster recovery: running-it/disaster-recovery.md
+  - Security:
+      - security/README.md
+      - What enforces what: security/enforcement.md
+      - Secrets: secrets.md
+      - Wire an application to authentik: runbooks/authentik-apps.md
+      - The internal CA: runbooks/internal-ca.md
+      - The certificate store: runbooks/acme-store.md
   - Reference:
       - reference/README.md
       - Routes: reference/routes.md
@@ -98,7 +105,6 @@ nav:
       - Alerts: reference/alerts.md
       - Dashboards: reference/dashboards.md
       - Observability conventions: observability-conventions.md
-      - Secrets: secrets.md
       - qBittorrent Web UI stalls: qbittorrent-webui-stalls.md
       - authentik worker deadlocks: authentik-worker-deadlocks.md
   - Runbooks:

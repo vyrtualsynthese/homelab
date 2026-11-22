@@ -4,7 +4,9 @@
 > takes proxy auth, sits behind a gate that asks it, or trusts the LAN alone — in that order.
 >
 > **Use it when** you are wiring an app to single sign-on, someone cannot get in, or you need to know
-> what still works without authentik · **Verified** 2026-11-17 · **Kind:** living page
+> what still works without authentik · **Verified** 2026-11-22 · **Kind:** explanation
+>
+> **Sources** `cluster/helm/authentik/`, `cluster/helm/traefik-gate/`, `docs/secrets.md`, the authentik API on 2026-11-22
 
 ## authentik's job
 
@@ -105,3 +107,6 @@ The per-app matrix, the traps and the steps that wire a new application — blue
 [reference/sso-applications.md](../reference/sso-applications.md). The walks for the applications
 that speak OIDC themselves (the four client secrets, Grafana, pgAdmin, Kavita, Argo CD) are
 [runbooks/authentik-apps.md](../runbooks/authentik-apps.md).
+
+The guarantees this arrangement makes, what enforces each one and the command that proves it are
+[the security section](../security/README.md).
