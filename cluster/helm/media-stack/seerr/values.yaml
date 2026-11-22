@@ -167,7 +167,8 @@ ingress:
     enabled: true
     # -- Use a pre-existing certificate instead of asking Traefik to issue one.
     secretName: ""
-    certResolver: myresolver
+    # -- Served by the ashudev.com wildcard; its anchor is the ashudev.com route.
+    certResolver: ""
     # -- Render and reference the chart's TLSOption.
     options:
       enabled: true

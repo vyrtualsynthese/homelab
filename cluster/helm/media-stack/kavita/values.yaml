@@ -111,8 +111,8 @@ ingressRoute:
     enabled: true
     # -- Use a pre-existing certificate instead of asking Traefik to issue one.
     secretName: ""
-    # -- Traefik ACME resolver name.
-    certResolver: myresolver
+    # -- Served by the ashudev.com wildcard; its anchor is the ashudev.com route.
+    certResolver: ""
     # -- TLSOption resource in this namespace, rendered by `templates/tls-option.yaml`.
     options: kavita-tlsoption
 
