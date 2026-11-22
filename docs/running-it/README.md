@@ -21,7 +21,7 @@
 | rotate a secret | [Rotate a secret](rotate-a-secret.md) — every copy of the value, then the restart that makes it take |
 | use the board | [Use the board](use-the-board.md) — columns, kinds, and which moves are yours alone |
 | rebuild the docs site | [Rebuild the docs site](rebuild-the-docs-site.md) — the builder, the manual Job, and why a page is missing |
-| recover from a loss | [Disaster recovery](disaster-recovery.md) — what a dead disk takes, what exists, what does not |
+| recover from a loss | the [Backups](../backup/README.md) section — what a dead disk takes, what exists, and the page per scenario |
 
 Each page opens with a summary blockquote and the date it was last checked against the cluster; read
 that date before trusting a claim. A page whose date is older than the last merge on `develop`
