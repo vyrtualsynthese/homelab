@@ -5,8 +5,9 @@
 > drive number below. Refreshed on **Saturday 21 November 2026, 00:25–01:00 CET** for the storage
 > provisioners, the two drifted Applications, and the eight empty namespaces with the seven
 > `Released` volumes, all cleared that night. On **Sunday 22 November** the K3s version claim below
-> was refreshed after the move to `v1.31.14+k3s1`; the counts in this paragraph are still the 20–21
-> November ones. This is
+> was refreshed after the move to `v1.31.14+k3s1`, and the last three orphan `local-path`
+> directories on `nuc0` were removed; the counts in this paragraph are still the 20–21 November
+> ones. This is
 > **not a live view**: it is true for the moment named beside each section.
 
 The short answer: **nothing is broken.** Every application that is meant to run has a ready replica,
@@ -188,11 +189,9 @@ already gone, were deleted on 2026-11-21, oldest first. `local-path` uses retain
 a volume leaves its directory behind instead of freeing the space: `/mnt/ssd0` on `streaming` for the
 three media-stack volumes, `/opt/local-path-provisioner` on `nuc0` for the rest. Those seven
 directories were removed by hand the same day, 0.7 MiB between them, which is all they held.
-
-Three older directories on `nuc0` still have no volume and no claim behind them:
-`pvc-49c911f7…radarr-anime-config`, `pvc-69af512a…lidarr-config` and
-`pvc-753a7f13…sonarr-config`, 1.6 MiB together. They are housekeeping, not breakage, and no
-`Released` volume explains them: they predate the volumes above.
+Three older directories on `nuc0` that no volume or claim had ever explained — 1.6 MiB between
+them — followed on 2026-11-22, after a `du -sh` and a read of every PV path confirmed nothing used
+them.
 
 Each of the eight classes is a directory on a `nas` export, served by one release of
 `cluster/helm/nfs/provisioner/`. `nfs-ssd` and `nfs-plex` no longer exist as classes or as
