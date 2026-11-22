@@ -1,0 +1,27 @@
+# The header set for a route that serves a hand-written static page and nothing
+# else. `ashudev.com` is the only one today; a second static site joins by
+# naming this middleware next to `security` in its own route.
+#
+# It is a middleware of its own rather than three keys added to `security`
+# because `security` is shared with every application behind the router —
+# authentik, FileBrowser, the *arr stack, Grafana — and a policy written for a
+# page with no script in it would break all of them.
+#
+# `default-src 'none'` denies everything the rest of the policy does not name:
+# no script, no form target, no frame, no plugin. The page it serves has one
+# stylesheet, two font files, one image and a set of PDFs, all from its own
+# origin, so the four allowances below are the whole list. Inline styles and
+# scripts are not allowed, which is what the page's markup already does.
+#
+# Applied by hand, like the rest of `cluster/infrastructure/**`. Apply it before
+# the route that names it: a route referring to a middleware that does not exist
+# is dropped, and the site answers 404 until both are there.
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: security-static
+spec:
+  headers:
+    contentSecurityPolicy: >-
+      default-src 'none'; img-src 'self'; style-src 'self'; font-src 'self';
+      base-uri 'none'; form-action 'none'; frame-ancestors 'none'
