@@ -90,6 +90,9 @@ nav:
       - A file or a claim: backup/a-file-or-a-claim.md
       - A database: backup/a-database.md
       - PostgreSQL: backup/postgresql.md
+      - A dead node: backup/a-node.md
+      - No cluster at all: backup/no-cluster.md
+      - Everything is gone: backup/everything.md
   - Security:
       - security/README.md
       - What enforces what: security/enforcement.md
