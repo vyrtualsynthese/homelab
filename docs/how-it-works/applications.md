@@ -4,9 +4,12 @@
 > ran, how its chart is consumed, and one plain line on what it is.
 >
 > **Use it when** you are looking for the app behind a hostname, adding one, or wondering which
-> machine an application belongs to · **Verified** 2026-11-18 · **Kind:** living page
+> machine an application belongs to · **Verified** 2026-11-22 · **Kind:** reference
+>
+> **Sources** `cluster/argocd/projects/**/*.yaml`, the live cluster read on 2026-11-22, and each
+> chart's `values.yaml`
 
-This is a snapshot of the repository and of the cluster on 2026-11-18. Pod health and claim state move
+This is a snapshot of the repository and of the cluster on 2026-11-22. Pod health and claim state move
 daily; [status.md](../status.md) is the live answer for what is running, what is broken and why.
 Two rows were refreshed on 2026-11-20: `koillection` is scheduled again, and `minecraft-server` now
 renders its workload at `0` replicas by decision rather than waiting on a claim.
@@ -41,13 +44,17 @@ belong to is [media.md](media.md).
 
 | Application | Namespace | Node | Chart | What it is |
 |---|---|---|---|---|
+| `argocd` | `argocd` | nas | D | the GitOps controller: it reads this repository and makes the cluster match it |
+| `ashudev` | `ashudev` | nuc0 | A | the `ashudev.com` site: the nginx that serves it, its `www` redirect and its hostnames |
 | `ashuvidz` | `ashuvidz` | nuc0 | A | the `ashuvidz.com` site: the nginx that serves it, the git sidecar that refreshes the content, its hostnames and its redirect |
 | `authentik` | `authentik` | nuc0 | D | the identity provider: one sign-in for the gated apps |
+| `backup` | `backup` | nas | A | the six restic CronJobs: one stream per node and one for the NFS export, plus verify and prune |
 | `dashy` | `dashy` | nuc0 | D | the start page: links to every application |
 | `pgadmin` | `databases` | nuc0 | D | the web console for the shared PostgreSQL |
 | `postgres` | `databases` | nas | A | the shared PostgreSQL that holds the other apps' databases |
 | `docs-site` | `docs` | nuc0 | A | every repository's `docs/` folder, built on a schedule and served read-only |
 | `filebrowser` | `filebrowser` | nuc0 | A | web file browser over the media shares, FileBrowser Quantum, sign-in through authentik |
+| `gpu-operator` | `gpu-operator` | streaming | D | the NVIDIA stack: driver, device plugin and GPU metrics |
 | `koillection` | `koillection` | nuc0 | A | catalogue for a collection of things |
 | `autobrr` | `media-stack` | streaming | A | grabs releases from IRC announcements, without a search |
 | `bazarr` | `media-stack` | streaming | A | subtitles for the television and film libraries |
@@ -72,6 +79,7 @@ belong to is [media.md](media.md).
 | `unpackerr` | `media-stack` | streaming | A | extracts packed downloads so the *arr apps can import them |
 | `minecraft-server` | `minecraft` | — | A | a Minecraft Java server, held at `0` replicas until its anti-cheat, anti-grief and backup work lands |
 | `alert-relay` | `monitoring` | nas | A | turns Grafana alerts into cards on the alerts board |
+| `blackbox-exporter` | `monitoring` | nas | D | probes a URL from outside and reports whether it answered, and with which status |
 | `grafana` | `monitoring` | nas | D | the dashboards |
 | `loki` | `monitoring` | nas | D | the log store Fluent Bit writes into |
 | `mktxp` | `monitoring` | nuc0 | A | metrics from the MikroTik router |
