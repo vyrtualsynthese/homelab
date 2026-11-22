@@ -194,10 +194,12 @@ Grafana's own data: where they live, and what that costs, is in
   `global.addPrometheusAnnotations` stamps the annotation; `controller.metrics` and
   `repoServer.metrics` are what make the first two Services exist. The Services are headless, so an
   endpoint is the pod's own address and the scrape is a pod-to-pod connection: **the chart's own
-  policy, the named `metrics` port allowed from `namespaceSelector: {}`, is not enforced on this
-  k3s** (measured 2026-11-22 — a probe in `monitoring` was refused until a rule named numeric ports
-  from an `ipBlock`). `cluster/helm/argocd/values.yaml` carries that numeric rule for 8082 and 8084
-  beside the chart's own.
+  policy allows the named `metrics` port to any namespace through an empty `namespaceSelector` peer,
+  and this k3s does not enforce that peer** (measured 2026-11-22: with the chart's rule the only one
+  on the controller, 8082 refused a pod in `monitoring`; the same pod was allowed by a rule whose
+  peer was an `ipBlock`, with the named port or the numeric one). `cluster/helm/argocd/values.yaml`
+  carries that numeric `ipBlock` rule for 8082 and 8084 beside the chart's own. Read the matrix the
+  way it was measured: the port form is not the variable, the peer form is.
 - Prometheus is pinned to `nas`. Its memory limit is 2 GiB and the GC target
   follows the cgroup limit, so lowering it below the working set restarts the
   OOM loop of 2026-11-12.

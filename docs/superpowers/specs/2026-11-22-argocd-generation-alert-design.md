@@ -50,11 +50,12 @@ annotation. The controller's and repo-server's are disabled in the chart.
 `argocd_app_condition` exists only when `controller.metrics.application.conditions` lists the
 condition types to publish; with no list the controller publishes no condition metric at all.
 
-**The second blocker.** The chart's NetworkPolicies allow the `metrics` port "from any namespace"
-through `namespaceSelector: {}`. This k3s does not enforce that form — a probe from a pod in
-`monitoring` is refused, while a `podSelector` rule and an `ipBlock` rule on the same pod and port
-are allowed (measured with temporary policies, removed afterwards). Scraping alone would have landed
-three `up == 0` targets.
+**The second blocker.** The chart's NetworkPolicies allow the `metrics` port to any namespace through
+an empty `namespaceSelector` peer. This k3s does not enforce that peer: with the chart's rule as the
+only one in place, a probe from a pod in `monitoring` is refused on 8082, while a rule whose peer is
+an `ipBlock` is allowed — with the named `metrics` port or with the numeric one, so the port form is
+not the variable (measured 2026-11-22 with temporary policies, removed afterwards). Scraping alone
+would have landed three `up == 0` targets.
 
 ## How the numbers get in
 
@@ -93,7 +94,8 @@ is why the scrape is a pod-to-pod connection and the network policy matters.
    largest single block is not the Go runtime but the server's pre-initialised gRPC matrix —
    **1,938 series**, one per method/service pair × 17 status codes, most of them permanently zero —
    followed by the controller's work-queue and client-go instrumentation. The regex keeps the
-   Application and repository families (350 series measured) and follows the seven media rules and
+   Application, repository, cluster, git and redis families (350 series measured) and follows the
+   seven media rules and
    the comment convention.
 4. The rule, created through the Grafana provisioning API and recorded in
    `docs/reference/alerts.md`:
