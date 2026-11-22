@@ -9,6 +9,7 @@ HACK = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(HACK))
 
 import check_docs  # noqa: E402
+import gen_docs  # noqa: E402
 
 FIXTURE_DOCS = HACK / "fixtures" / "docs"
 
@@ -127,6 +128,43 @@ class SecretsTests(unittest.TestCase):
     def test_a_secret_name_and_its_keys_are_not(self):
         with temp_tree({"docs/a.md": "The Secret `backup-restic` holds RESTIC_PASSWORD.\n"}) as root:
             self.assertEqual(check_docs.secret_problems(root), [])
+
+
+BANNER = """> **In one line.** What it answers.
+> **Use it when** x · **Verified** 2026-11-22 · **Kind:** explanation
+>
+> **Sources** `cluster/helm/backup/values.yaml`
+"""
+
+
+class BannerTests(unittest.TestCase):
+    def test_a_complete_banner_passes(self):
+        with temp_tree({"docs/a.md": "# A\n\n" + BANNER + "\nbody\n"}) as root:
+            self.assertEqual(check_docs.banner_problems([root / "docs/a.md"], root), [])
+
+    def test_a_missing_sources_line_is_named(self):
+        page = BANNER.replace("> **Sources** `cluster/helm/backup/values.yaml`\n", "")
+        with temp_tree({"docs/a.md": "# A\n\n" + page + "\nbody\n"}) as root:
+            self.assertEqual(
+                check_docs.banner_problems([root / "docs/a.md"], root), ["docs/a.md: missing Sources"]
+            )
+
+    def test_an_old_kind_label_is_named(self):
+        page = BANNER.replace("explanation", "living page")
+        with temp_tree({"docs/a.md": "# A\n\n" + page + "\nbody\n"}) as root:
+            self.assertEqual(
+                check_docs.banner_problems([root / "docs/a.md"], root),
+                ["docs/a.md: kind `living page` is not one of explanation, how-to, reference, record"],
+            )
+
+    def test_a_generated_page_needs_no_five_line_banner(self):
+        page = gen_docs.GENERATED_MARKER + "\n# A\n\nRegenerate: `python3 hack/gen_docs.py --write --only routes`\n"
+        with temp_tree({"docs/a.md": page}) as root:
+            self.assertEqual(check_docs.banner_problems([root / "docs/a.md"], root), [])
+
+    def test_a_page_outside_docs_is_ignored(self):
+        with temp_tree({"AGENTS.md": "# No banner here\n"}) as root:
+            self.assertEqual(check_docs.banner_problems([root / "AGENTS.md"], root), [])
 
 
 if __name__ == "__main__":
