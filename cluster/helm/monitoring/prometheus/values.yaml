@@ -189,9 +189,10 @@ prometheus:
           source_labels:
             - __name__
           regex: "kube_secret_.*|kube_pod_tolerations|kube_replicaset_.*|kube_pod_status_qos_class"
-        # Argo CD's three components publish 3,384 series and the alert reads
-        # 350 of them (the Application, repository, cluster, git and redis
-        # families). The rest is the server's gRPC matrix — 1,938 series, one
+        # Argo CD's three components publish 3,384 series and the rule keeps
+        # 350 of them — the Application, repository, cluster, git and redis
+        # families, of which `argocd_app_condition` is the one a rule reads
+        # today. The rest is the server's gRPC matrix — 1,938 series, one
         # per method × 17 status codes, most permanently zero — plus client-go's
         # work-queue and kubectl instrumentation, the controller's webhook
         # counters, and each process's Go runtime. Measured 2026-11-22; no panel
@@ -242,8 +243,9 @@ prometheus:
     # every minute.
     #
     # Scoped by namespace, not by container: a name that a future version of an
-    # exporter renames would otherwise come back silently. Other namespaces keep
-    # their own go_* and process_*.
+    # exporter renames would otherwise come back silently. These rules cover
+    # media-stack only; the argocd namespace's runtime counters are dropped by
+    # the service-endpoints rules above, and every other namespace keeps its own.
     kubernetes-pods:
       metric_relabel_configs:
         - action: drop

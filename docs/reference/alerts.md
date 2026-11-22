@@ -407,7 +407,9 @@ reports `firing` on the Health dashboard.
   sets `SyncError` only in conditions the controller has been told to publish, and only
   `ComparisonError` is listed. Listing it would be a second rule with its own noise, and a failed
   sync is usually one Kubernetes refusal with the object and the message in the event — the dashboard
-  is the better reader.
+  is the better reader. The card's other candidate, a share of failed repo-server requests, is no
+  longer available either: it would read `grpc_server_handled_total`, which is one of the families
+  the scrape drops.
 - **qBittorrent's `cross-seed` alias is a literal ClusterIP.** The pod keeps
   `dnsPolicy: None`, so `hostAliases` maps `cross-seed` to `crossSeedServiceIP`
   in the chart. If that Service is recreated with a new IP, the completion hook
