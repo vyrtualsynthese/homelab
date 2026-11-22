@@ -5,7 +5,9 @@
 > before moving anything.
 >
 > **Use it when** you are about to place an application, want to know what a machine is for, or need
-> to know what a dead node would take with it · **Verified** 2026-11-17 · **Kind:** living page
+> to know what a dead node would take with it · **Verified** 2026-11-17 · **Kind:** explanation
+>
+> **Sources** `ansible/`, `AGENTS.md` §1 and §4, the live cluster on 2026-11-22
 
 ## The machines
 
@@ -28,8 +30,8 @@ three are on 5.15. Memory below is the total Kubernetes reports for the node.
 
 Three of the four are control-plane machines and hold etcd, the database that keeps the
 cluster's own state. One of them down leaves the cluster running; two down stops it. What is healthy is
-another question: [`status.md`](../status.md) records it on its own snapshot date, and carries
-the counts.
+another question, and not one a page answers: run the sweep in
+[Every day](../running-it/every-day.md).
 
 ## Placement is a rule, not a hint
 

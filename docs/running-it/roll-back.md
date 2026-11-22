@@ -5,7 +5,9 @@
 > them. None of them puts data back.
 >
 > **Use it when** a change you merged went wrong, a pod is wedged, or you are about to delete a claim
-> to make an application start · **Verified** 2026-11-17 · **Kind:** living page
+> to make an application start · **Verified** 2026-11-17 · **Kind:** how-to
+>
+> **Sources** `docs/how-it-works/gitops.md`, `docs/how-it-works/storage.md`, `AGENTS.md` §2
 
 ## Three different undo buttons
 
@@ -32,7 +34,7 @@ diff; `kubectl rollout restart` stamps an annotation the next sync removes, roll
 | a bumped image crash-loops | revert the bump in git; an Argo CD rollback only stops the bleeding | rollback buys time, revert holds |
 | a setting, memory limit or environment value is wrong | revert it in git | nothing at stake |
 | a route, hostname or access gate broke | revert it in git | no pod rolls |
-| the pod is wedged, git unchanged | delete the pod — unless its volume is borrowed ([status.md](../status.md)) | a restart is the whole fix |
+| the pod is wedged, git unchanged | delete the pod — unless its volume is borrowed ([storage.md](../how-it-works/storage.md)) | a restart is the whole fix |
 | `OutOfSync` with no new revision | nothing here: the auto-sync switch is off ([ship-a-change.md](ship-a-change.md#if-the-sync-stops)) | no revision to undo |
 
 The safe default is the first row: `git revert`, merge, sync. The others buy time for the revert, or
@@ -46,8 +48,8 @@ to start on its own database. Recovering the old configuration is not this tool'
 exists.
 
 `strategy: Recreate` stops the old pod before the new one starts, so the volume is never open twice —
-a rollback has a stop in it. On a borrowed volume that stop ends the application
-([status.md](../status.md)).
+a rollback has a stop in it. On a borrowed volume — a claim whose data sits on another node's disk —
+that stop ends the application ([storage.md](../how-it-works/storage.md)).
 
 Two timing traps ride with the template: a revision that ran as a different UID finds its
 `/config` unreadable ([the UID trap](../charts/README.md#changing-the-uid-breaks-the-config-volume)),
@@ -67,8 +69,8 @@ policy, so the directory survives on the node, but nothing rebinds it — and de
 
 Clearing a finalizer is worse: it looks like tidying. The driver that would clear those
 claims was Longhorn and it is gone, so the finalizer alone holds the volume attached to a running
-pod; clearing it destroys that volume under a serving application. [status.md](../status.md) names
-the ones to leave alone.
+pod; clearing it destroys that volume under a serving application. The apps in that position are the
+ones whose claim is on another node's disk, which [storage.md](../how-it-works/storage.md) explains.
 
 Instead: leave it alone. Scale the application to zero if it must stop, fix the template in git, and
 treat "an empty claim would let it start" as a data decision. When a claim really must go, retire the

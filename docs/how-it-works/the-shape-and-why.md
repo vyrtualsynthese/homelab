@@ -4,7 +4,9 @@
 > and the shape it has now is the answer to that failure, not a temporary state.
 >
 > **Use it when** a choice looks odd and you want the reason for it, or before you change something
-> decided on purpose · **Verified** 2026-11-17 · **Kind:** living page
+> decided on purpose · **Verified** 2026-11-17 · **Kind:** explanation
+>
+> **Sources** `docs/decisions/`, `docs/audit/`, `docs/how-it-works/storage.md`
 
 ## What failed, in one paragraph
 
@@ -17,8 +19,8 @@ machines were or what should run on them. The inventory, the alerting and the pl
 down what was missing; the backup gap was the last one, and it closed when the nightly streams
 started ([Backups](backups.md)) — the restore is still undrilled, which is not the same gap. The
 dated evidence is in
-[`audit/observability-storage.md`](../audit/observability-storage.md); current counts are in
-[`status.md`](../status.md).
+[`audit/observability-storage.md`](../audit/observability-storage.md); the live state is what
+[Every day](../running-it/every-day.md) asks the cluster for, and no page keeps a count.
 
 ## The four rules that follow
 

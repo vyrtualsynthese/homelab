@@ -1,7 +1,13 @@
 # Audit — observability and storage
 
-> **Kind:** snapshot (2026-11-10) — a historical snapshot, not maintained. Findings are fixed
-> by plans, never by editing this file; for today see [What is broken right now](../status.md).
+> **In one line.** A read-only audit of observability and storage, taken on 2026-11-10, kept as the evidence behind
+> the plans that fixed what it found.
+>
+> **Use it when** a plan cites this audit, or you want the finding behind a change ·
+> **Verified** 2026-11-10 · **Kind:** record
+>
+> **Sources** the live cluster on 2026-11-10, read through `kube-system/opencode-mcp`; findings are
+> never edited here. For today, [Every day](../running-it/every-day.md).
 > `REBUILD.md` and `TODO.MD` were deleted on 2026-11-11: `git show 6be598ab:REBUILD.md`.
 
 Read-only audit of the homelab repo plus live cluster state, 2026-11-10.

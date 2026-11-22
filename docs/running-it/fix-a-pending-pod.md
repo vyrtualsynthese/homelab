@@ -4,7 +4,9 @@
 > container never started — and the event at the end of `describe pod` says which.
 >
 > **Use it when** a pod is `Pending`, `CreateContainerConfigError` or `ImagePullBackOff` and you
-> want the cause · **Verified** 2026-11-17 · **Kind:** living page
+> want the cause · **Verified** 2026-11-17 · **Kind:** how-to
+>
+> **Sources** `cluster/helm/**/templates/`, `docs/how-it-works/storage.md`, the live cluster
 
 ## First, read the event
 
@@ -36,9 +38,9 @@ flowchart TD
 ## No claim to bind
 
 **The claim is missing.** The event says `persistentvolumeclaim "<name>" not found`. The chart
-names a claim it does not create, or its Application did not sync; those on
-[the status page](../status.md) waiting on a claim nobody recreated are this fault. Fix the chart,
-not a hand-made claim.
+names a claim it does not create, or its Application did not sync. Fix the chart, not a hand-made
+claim; if other applications showed the same event before, the cheapest read is
+`kubectl get pvc -A | grep Pending`.
 
 **The class is missing.** `storageclass.storage.k8s.io "<class>" not found`. Check
 `kubectl get storageclass`; use `local-path` or a working NFS class, not the strays in

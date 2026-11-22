@@ -4,7 +4,9 @@
 > change (a commit on `develop`), and five rules that explain most of what looks odd at first.
 >
 > **Use it when** you want the shape of the place before opening a topic page, or you are explaining it
-> to someone · **Verified** 2026-11-17 · **Kind:** living page
+> to someone · **Verified** 2026-11-17 · **Kind:** explanation
+>
+> **Sources** `AGENTS.md` §1, `mkdocs.yml`, the topic pages this one indexes
 
 ## Four nodes, two edge Pis
 
@@ -88,5 +90,6 @@ Rules 1 to 3, and what broke in 2026, are argued in
 | [Media](media.md) | the pipeline from indexer (a site that lists releases) to playback, and the books pair |
 | [Applications](applications.md) | the catalogue: every application, its node, route and protection |
 
-What is broken right now is [Application status](../status.md), and it is the only page that carries
-counts.
+What is broken right now is not a page. [Every day](../running-it/every-day.md) gives the commands
+that ask the cluster, and ArgoCD's application list is the live view; nothing here carries a count,
+because a count is wrong within a day.
