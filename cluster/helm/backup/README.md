@@ -70,9 +70,11 @@ and the budget each stream is allowed is `streams[].budgetGiB` in `values.yaml`.
 
 That 12.2 GB was a design figure, not a repository measurement. Measured from the bucket on
 2026-11-22, `nodes-streaming`'s nightly snapshot held 10.04 GB, of which 6.73 GiB was Plex's claim
-with its exclusions matching nothing; after that fix a snapshot holds about 2.7 GB, and the
-repository's raw data read 6.75 GiB because the snapshots taken before it still hold the art. The
-living page is [`docs/how-it-works/backups.md`](../../../docs/how-it-works/backups.md).
+with its exclusions matching nothing; after that fix a snapshot reads 2.56 GiB. The three snapshots
+taken before the fix were then forgotten by hand, and `restic stats --mode raw-data` read 650.8 MiB
+over the four that remained. The live repository is the number the budget bounds, and 9 GiB is that
+measurement plus the churn of the retained tail. The living page is
+[`docs/how-it-works/backups.md`](../../../docs/how-it-works/backups.md).
 
 ## Operating it
 

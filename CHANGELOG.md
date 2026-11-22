@@ -61,6 +61,21 @@ All notable changes to this repository. The format follows
 
 ### Changed
 
+- `nodes-streaming`'s backup budget is 9 GiB, from a measurement rather than a guess. With the Plex
+  row fixed, a nightly run read 2.56 GiB and referenced 633 MB, and the three snapshots taken before
+  the fix were forgotten by hand — `restic forget bb16c46b 9d286c04 7ac41aa9 --prune` — which left
+  `restic stats --mode raw-data` at 650.8 MiB over four snapshots. A night adds about 0.22 GiB, so
+  the ~23 snapshots the 7/4/12 tail can retain settle near 6 GiB: 0.65 + 23 × 0.22. 9 keeps the
+  ~3 GiB of headroom that still makes the verifier a canary for a row that picks up a directory it
+  should not. The hand forget was a choice: `keep-daily 7` would have dropped those snapshots around
+  2026-11-27 and the prune of 2026-11-29 would have freed the art, because November's monthly
+  snapshot is the newest one, not an old one — the page said otherwise and is corrected. It cost the
+  restore points for 2026-11-21 and the morning of 2026-11-22; a snapshot of the same evening was
+  read first, and its staged Sonarr database restored with `pragma integrity_check` → `ok`.
+  Surprisingly, `forget` cannot reclaim everything: the three `etcd-pre131-*` copies each carry a
+  host of their own, so each is a group of one and no `keep-*` rule will ever remove it — about
+  18 MB, since they hold the streaming snapshot directory the nightly already carries.
+
 - The `nfs` backup repository now keeps a decade: 24 monthly snapshots and 10 yearly ones on top of
   the shared 7 daily / 4 weekly tail, where every stream used to stop at twelve months. The Syncthing
   photos and documents and koillection's uploads are the only data no source can re-supply, so a
@@ -255,8 +270,9 @@ All notable changes to this repository. The format follows
   claim: poster art, the transcoder cache, thumbnails, scanners and Plex's own eight dated database
   copies had ridden in every nightly snapshot since 2026-11-20, and the 3.7 GB the design predicted
   was never what the job read. The row also excludes the logs, crash reports, update staging and
-  diagnostics, and a snapshot now holds about 2.7 GB. The budget stays at 14 GiB because the
-  snapshots taken before the fix keep the art until the monthly retention drops them.
+  diagnostics, and a snapshot now holds 2.56 GiB — 785 files instead of 46 500. The three snapshots
+  taken before the fix were forgotten by hand the same night; the entry under *Changed* above has the
+  measurement they left behind, and the budget that followed it.
 - `backup-prune` has run and exited 0 on all four repositories, so a retention policy is applied for
   the first time. Its only previous run, Sunday 2026-11-22 at noon, failed before touching anything:
   the `nfs` repository was still locked by the laptop read test that morning (PID 1222890 on
