@@ -44,6 +44,12 @@ def _render():
     with tempfile.TemporaryDirectory() as tmp:
         work = pathlib.Path(tmp) / "argocd"
         shutil.copytree(CHART, work)
+        # Chart.lock is gitignored and every local build rewrites it, so a checkout can carry
+        # one that predates the last Chart.yaml bump; helm would then refuse to build. A clean
+        # clone has none, and ArgoCD resolves from Chart.yaml at sync time either way.
+        lock = work / "Chart.lock"
+        if lock.exists():
+            lock.unlink()
         subprocess.run(
             ["helm", "dependency", "build", str(work)],
             check=True,
