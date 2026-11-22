@@ -198,7 +198,7 @@ Since 2026-11-22 the release asks for two certificates instead of one per name
 
 | Resolver | Names | Challenge |
 |---|---|---|
-| `ovhresolver` | `ashudev.com`, `*.ashudev.com`, `*.kub.home.ashudev.com` | DNS-01 through the OVH API, using the scoped key in `kube-system/traefik-ovh` |
+| `ovhresolver` | `ashudev.com`, `*.ashudev.com`, `*.kub.home.ashudev.com`, `kub.home.ashudev.com` | DNS-01 through the OVH API, using the scoped key in `kube-system/traefik-ovh` |
 | `myresolver` | `ashuvidz.com`, `www.ashuvidz.com` | TLS on port 443, until the `ashuvidz.com` zone leaves AWS nameservers |
 
 Only the apex route of each domain carries `tls.certResolver` and `tls.domains`; every other route is
