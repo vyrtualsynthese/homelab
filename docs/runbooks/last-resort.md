@@ -161,6 +161,19 @@ The PostgreSQL dumps are the other half: `globals.sql` and one `<database>-<UTC>
 under `nodes-nas`. They are read by `pg_restore`, so nothing checks them on the laptop; their check
 is the one in `postgres-restore.md`, once an instance exists.
 
+**End with an unlock.** The restores above each take a lock on the repository, and restic releases it
+only when the process exits cleanly — a closed laptop lid or a killed shell leaves it behind:
+
+```bash
+for r in "$NODES_NAS" "$NODES_NUC0" "$NODES_STREAMING" "$NFS"; do restic -r "$r" unlock; done
+```
+
+This is not housekeeping. The 2026-11-22 laptop read left the `nfs` repository locked for ten hours,
+and that afternoon's `backup-prune` failed on it: no retention was applied until the lock was cleared
+by hand, and no alert covered a prune job that had never once succeeded. `unlock` clears such a lock
+from any machine; when it reports a lock too fresh to judge as stale and nothing of yours is running,
+`unlock --remove-all` is the escape hatch, only while no job writes to that repository.
+
 ## Step 3 — what the retention gives you, and what it does not
 
 `backup-prune` runs on Sunday at noon. Every repository keeps one snapshot a day for a week, one a
