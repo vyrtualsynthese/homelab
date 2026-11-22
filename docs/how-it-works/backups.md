@@ -31,8 +31,27 @@ The syncthing application's own chart carried a restic CronJob until 2026-11-20.
 AWS bucket that never existed, so it had never written a snapshot; the `nfs` row above is what
 covers that folder now.
 
-`backup-prune` runs Sunday at noon: 7 daily, 4 weekly, 12 monthly. `backup-verify` runs at 08:30 and
-is the one that says whether a stream is still advancing.
+`backup-prune` runs Sunday at noon and keeps one snapshot a day for a week, one a week for a month,
+one a month for a year. The `nfs` repository reaches further, because it is the one holding data no
+source can re-supply: two years of monthly snapshots and ten years of yearly ones. `backup-verify`
+runs at 08:30 and is the one that says whether a stream is still advancing.
+
+### How far back an undo reaches
+
+| The snapshot you get | `nodes-nas`, `nodes-nuc0`, `nodes-streaming` | `nfs` |
+|---|---|---|
+| the last week | nightly | nightly |
+| the last month | weekly | weekly |
+| the last year | monthly | monthly |
+| the last two years | gone | monthly |
+| years three to ten | gone | yearly |
+| older than ten years | gone | gone |
+
+The horizon is the operator's decision of 2026-11-22, recorded in
+[`cluster/helm/backup/values.yaml`](../../cluster/helm/backup/values.yaml) as `retention:` on the
+`nfs` stream. A mistake found within a week has a nightly snapshot on every stream, and one found a
+few months later has a monthly; on `nfs`, a photo deleted nine years ago is still in a yearly
+snapshot.
 
 ## The coverage matrix is `values.yaml`
 
@@ -79,14 +98,16 @@ Measured on 2026-11-20, after every exclusion: **12.2 GB** in scope. The first m
 | `nfs` | ≈ 3 087 GB | 6.9 GB |
 | etcd copies | 1.11 GB | 1.11 GB |
 
-The first snapshot costs about €0.09; with the 7/4/12 tail the repositories settle between 15 and
-25 GB, roughly €0.11–0.18 a month. The only data that grows night over night is the etcd copies.
-Egress is free, so a restore costs nothing but time.
+The first snapshot costs about €0.09; with the shared tail the three rebuildable repositories settle
+between 15 and 25 GB, roughly €0.11–0.18 a month. The `nfs` repository is 3.6 GB today and grows only
+as the photos and documents change. Egress is free, so a restore costs nothing but time.
 
 `budgetGiB` in `values.yaml` is the same number as a ceiling: the verifier fails a stream whose
-repository passes it. The four budgets sum to 32 GiB, above the top of the expected range because
-the `nodes-streaming` one carries a separate etcd copy per retained snapshot — so a stream that
-picks up a directory it should not have still trips the check long before the bill notices.
+repository passes it. The four budgets sum to 60 GiB, well above the top of the expected range: the
+`nodes-streaming` ceiling carries a separate etcd copy per retained snapshot, and the `nfs` one holds
+ten years of yearly versions of the photos and documents. So a stream that picks up a directory it
+should not have still trips the check long before the bill notices. Past its budget, raise the number
+deliberately; a stream hundreds of gigabytes over it is a directory that should not be in a row.
 
 ## The four ways it fails
 

@@ -17,6 +17,22 @@ Call: include "backup.image" (dict "root" $ "name" "restic")
 {{- end -}}
 
 {{/*
+The retention one repository is pruned with: the shared policy, with any key the stream
+overrides on top. Returns JSON so the prune script can read it one key at a time.
+Call: include "backup.retention" (dict "root" $ "stream" .)
+*/}}
+{{- define "backup.retention" -}}
+{{- $shared := .root.Values.retention -}}
+{{- $own := .stream.retention | default (dict) -}}
+{{- $policy := dict
+      "daily" ($own.keepDaily | default $shared.keepDaily)
+      "weekly" ($own.keepWeekly | default $shared.keepWeekly)
+      "monthly" ($own.keepMonthly | default $shared.keepMonthly)
+      "yearly" ($own.keepYearly | default $shared.keepYearly | default 0) -}}
+{{- $policy | toJson -}}
+{{- end -}}
+
+{{/*
 The standard labels of a backup object.
 Call: include "backup.labels" (dict "root" $ "stream" "nodes-nas")
 */}}

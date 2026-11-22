@@ -47,8 +47,8 @@ staging:
 
 # Read by the prune job, the verifier and the dashboard: this is the only place a repository
 # is named. budgetGiB is the ceiling of the repository's raw data as `restic stats --mode
-# raw-data` reports it: the stream's measured size, plus the churn the 7/4/12 retention keeps,
-# plus headroom. Passing it fails the stream, so it is a canary for an accidental media
+# raw-data` reports it: the stream's measured size, plus the churn its retention keeps, plus
+# headroom. Passing it fails the stream, so it is a canary for an accidental media
 # directory appearing in a row as much as for real growth. The control-plane budgets carry the
 # etcd copies, which are the only data that adds a fresh gigabyte-class file every night: the
 # copy rides inside every nightly snapshot, so the 7/4/12 retention keeps one per retained
@@ -68,15 +68,29 @@ streams:
   - name: nodes-streaming
     budgetGiB: 14
     etcd: true
+  # The only stream whose contents no source can re-supply: the Syncthing photos and
+  # documents and koillection's uploads. Overflowing this ceiling means a decade of history
+  # is genuinely larger than expected, or a directory that should not be here arrived; both
+  # are worth a red job rather than a quietly growing bill.
   - name: nfs
-    budgetGiB: 12
+    budgetGiB: 40
+    # The operator's decision on 2026-11-22 (task #541): a mistaken deletion stays recoverable
+    # for ten years, not one. A yearly snapshot is the newest snapshot of each year, so the
+    # tail is one year at weekly granularity, two years at monthly, ten at yearly. The four
+    # streams share the daily and weekly tail below; only this one reaches further back.
+    retention:
+      keepMonthly: 24
+      keepYearly: 10
 
 # The one place the retention policy is written. The prune job renders its flags from these
-# numbers, so the schedule and the flags cannot disagree.
+# numbers, so the schedule and the flags cannot disagree. A stream may override any key under
+# its own `retention:`; what it does not override is inherited from here.
 retention:
   keepDaily: 7
   keepWeekly: 4
   keepMonthly: 12
+  # No yearly snapshot by default: the rebuildable streams are served by the monthly tail.
+  keepYearly: 0
 
 # Host configuration no backup held before. Mounted as one directory rather than four paths:
 # /etc/netplan does not exist on every node, and a missing hostPath fails the pod.

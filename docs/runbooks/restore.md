@@ -29,9 +29,10 @@ bucket proved before anything is pulled.
 
 A node job's snapshot carries `stream=<name>` and `node=<name>`; an NFS one carries `stream=nfs`
 and `path=<tag>` instead of a node, because it is one job reading `nas` directly rather than a
-per-node stream. Retention is 7 daily, 4 weekly and 12 monthly, pruned on Sunday at noon: anything
-older than three months is gone, and a file that was deleted three weeks ago is still in a weekly
-snapshot.
+per-node stream. Retention is 7 daily, 4 weekly and 12 monthly for the three node repositories and
+7 daily, 4 weekly, 24 monthly and 10 yearly for `nfs`, pruned on Sunday at noon: on a node repository
+anything older than three months is gone, and a file deleted three weeks ago is still in a weekly
+snapshot. On `nfs` a deleted photo stays recoverable for ten years.
 
 ## Preconditions
 

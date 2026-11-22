@@ -163,18 +163,23 @@ is the one in `postgres-restore.md`, once an instance exists.
 
 ## Step 3 — what the retention gives you, and what it does not
 
-`backup-prune` runs on Sunday at noon with **7 daily, 4 weekly, 12 monthly**.
+`backup-prune` runs on Sunday at noon. Every repository keeps one snapshot a day for a week, one a
+week for a month, one a month for a year. The `nfs` repository goes further — the photos, the
+documents and the koillection uploads are the data no source can re-supply — and keeps two years of
+monthly snapshots and ten years of yearly ones.
 
 | The data you want | Where it is |
 |---|---|
 | the last week | a nightly snapshot |
-| the last three months | a weekly snapshot |
-| older than three months, inside a year | a monthly snapshot, and nothing finer |
-| older than a year | gone, by the retention policy |
+| the last month | a weekly snapshot |
+| the last year | a monthly snapshot, and nothing finer |
+| the last two years | a monthly snapshot, `nfs` only |
+| years three to ten | a yearly snapshot, `nfs` only |
+| older than that | gone, by the retention policy |
 
-So a loss discovered three weeks later still has a daily snapshot; one discovered five weeks later
-has a weekly; one discovered in March has January's monthly and nothing else. Nothing recovered from
-this bucket is older than a year.
+So a loss discovered three weeks later still has a weekly snapshot; one discovered five weeks later
+has a monthly. On the three node repositories, nothing recovered from this bucket is older than a
+year; on `nfs`, nothing is older than ten.
 
 Cost is not a consideration at this point: egress from OVH is free, so a full restore costs time. At a
 typical home line, 25 GB is under an hour. Start with `nodes-nas` (the dumps, 108 MiB) and

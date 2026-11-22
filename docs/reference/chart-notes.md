@@ -583,9 +583,10 @@ there is nothing for those two capabilities to write.
 
 No job runs `restic init`. The four repositories are created once by hand: a job that could create one
 could create an empty repository where a lost one used to be, and the next night would look healthy.
-The prune job renders its retention flags from `values.yaml`, so the schedule and the policy cannot
-drift apart, and the verifier is a script rather than a rule so its line can be the dashboard's input
-as well as the alert's.
+The prune job renders each repository's retention flags from `values.yaml` — the shared tail, plus
+whatever the stream overrides on its own entry — so the schedule and the policy cannot drift apart,
+and the verifier is a script rather than a rule so its line can be the dashboard's input as well as
+the alert's.
 
 ## Charts still to align
 Only non-public apps with hand-maintained charts are in scope for now. Public-facing apps wait,
