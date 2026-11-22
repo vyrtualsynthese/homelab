@@ -23,7 +23,7 @@ Showcase, which still sit in the default `General` folder:
 | Homelab · Media | `homelab-media` | 9 + rows | Media stack: app health issues, queues, missing items, indexers, release intake, qBittorrent transfer, Plex sessions and library |
 | Cloud | `cloud-services` | 6 | Internet-facing side: endpoints answering, DNS checks passing, days to the earliest certificate, per-probe success and latency, every check in one table |
 | Homelab · Backups | `homelab-backups` | 6 | Backup health: stream age, repository size, snapshot count, etcd copy age, estimated monthly cost, failed jobs |
-| Homelab · Traefik | `homelab-traefik` | 11 + rows | The router in front of everything: traffic by router and by entry point, status classes, p95/p99, 5xx share, bytes and open connections by entry point, the certificate store, config reloads, scrape health |
+| Homelab · Traefik | `homelab-traefik` | 13 + rows | The router in front of everything: traffic by router and by entry point, status classes, p95/p99, 5xx share, bytes and open connections by entry point, failed and slow requests from the access log, the certificate store, config reloads, scrape health |
 
 The old `homelab-investigate` was replaced by `homelab-platform` on 2026-11-12: its workload
 row duplicated the new Applications dashboard, and its node/control-plane/Prometheus panels are
@@ -70,7 +70,11 @@ that had been answering `404` since the 2023 install ([audit page](../audit/trae
 board card 531) went unnoticed for the same reason.
 
 Four rows: traffic per router, traffic per entry point and by status class; latency and errors; bytes
-and open connections; health. `Requests per second by entry point` exists because
+and open connections; health. A fifth, *Request record*, was added on 2026-11-22 when Traefik got an
+access log: *Failed requests (4xx/5xx)* and *Requests slower than 1 s, by router* read Loki rather
+than Prometheus. The URL is absent from those lines by design, so the panel names the router, not the
+path — why, and what is dropped, is in
+[observability-conventions.md](../observability-conventions.md#what-the-router-logs). `Requests per second by entry point` exists because
 `metrics.prometheus.addEntryPointsLabels` was turned on on 2026-11-22
 ([traefik-release.md](../runbooks/traefik-release.md#the-37-configuration-audit-2026-11-22-revision-12)):
 before that, `traefik_entrypoint_requests_total` did not exist. It separates plain HTTP (redirects)

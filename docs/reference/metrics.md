@@ -269,7 +269,10 @@ bursts alone. What is left of the 0.09 GB/day is mostly a symptom, not chatter:
   that resets its Syncthing connection through the `sttcp` entry point about twice a
   minute, and `Cannot create service: subset not found` for `minecraft-server` at each
   provider refresh while the server runs `0` replicas. The `koillection` and
-  `news-freshrss` lines stopped when their claims bound on 2026-11-19 (#386).
+  `news-freshrss` lines stopped when their claims bound on 2026-11-19 (#386). Since
+  2026-11-22 it also carries Traefik's access log: about 13,300 requests a day at
+  434 bytes a line, roughly **5.8 MB/day** with the URL and client fields dropped
+  ([`observability-conventions.md#what-the-router-logs`](../observability-conventions.md#what-the-router-logs)).
 - **vikunja, 5 MB** — request logs at `info`, again including health probes.
 - **n8n, 3 MB** — the `Pruning failed` loop stopped when the app was rebuilt on
   `local-path`; what is left is a telemetry retry that cannot connect.
