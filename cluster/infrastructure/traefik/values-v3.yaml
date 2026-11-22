@@ -70,6 +70,36 @@ resources:
   limits:
     memory: 256Mi
 
+# A per-request record, with the request URL and the client address removed.
+# Traefik's `RequestPath` is the URI, and v3.7.3+ can drop its query string
+# (`queryParameters` below) but not its path. The path alone still carries
+# FileBrowser's `/share/<hash>` capability links, and Loki has no authentication
+# and a 30-day retention, so the whole field is dropped. What stays identifies
+# the request without it: time, router, service, status, duration, bytes and TLS
+# version. Plex's `?X-Plex-Token=` and OIDC `?code=` never reach the log, and
+# the query-parameter drop is a second lock in case a field is ever re-added.
+accessLog:
+  enabled: true
+  format: json
+  # One write per 100 lines or per flush tick, not one per request.
+  bufferingSize: 100
+  fields:
+    # The chart always renders this key, so it must be set; `keep` is the
+    # default and the five names below are the exceptions.
+    defaultMode: keep
+    names:
+      RequestPath: drop
+      ClientAddr: drop
+      ClientHost: drop
+      ClientPort: drop
+      ClientUsername: drop
+    headers:
+      # Already the default; written out so a future reader sees that no
+      # Authorization or Cookie header is logged.
+      defaultMode: drop
+    queryParameters:
+      defaultMode: drop
+
 # The chart does not expose serversTransport.maxIdleConnsPerHost, and its v3
 # default of 0 means Go's DefaultMaxIdleConnsPerHost, two idle connections per
 # host. Plex clients and qBittorrent open many short requests to one backend;
