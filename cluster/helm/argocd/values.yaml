@@ -3,6 +3,12 @@ argo-cd:
     # -- Default domain used by all components
     ## Used for ingresses, certificates, SSO, notifications, etc.
     domain: argocd.kub.local
+    # Every metrics Service the chart renders carries prometheus.io/scrape and
+    # prometheus.io/port, which is how this cluster finds an exporter: there is
+    # no Prometheus Operator and no ServiceMonitor. The three Services are the
+    # scrape targets (the controller, the repo-server and the server); the pods
+    # themselves are not scraped.
+    addPrometheusAnnotations: true
     image:
       # -- If defined, a repository applied to all Argo CD deployments
       repository: quay.io/argoproj/argocd
@@ -30,6 +36,9 @@ argo-cd:
         memory: 384Mi
       limits:
         memory: 768Mi
+    metrics:
+      # -- Deploy the controller's metrics Service on 8082
+      enabled: true
   repoServer:
     resources:
       requests:
@@ -37,6 +46,9 @@ argo-cd:
         memory: 256Mi
       limits:
         memory: 1.5Gi
+    metrics:
+      # -- Deploy the repo-server's metrics Service on 8084
+      enabled: true
   applicationSet:
     resources:
       requests:
@@ -54,6 +66,10 @@ argo-cd:
   configs:
     params:
       server.insecure: true
+      # With no list here the controller publishes no condition metric at all.
+      # ComparisonError is the condition Argo CD sets when it cannot render an
+      # Application, so it is the one the alert reads.
+      controller.metrics.application.conditions: "ComparisonError"
       # Measured 2026-11-18: these three wrote 747 MB/day between them, 49 % of the
       # log pipeline. The application controller logs every reconcile step for every
       # application, repo-server every gRPC call and cache hit, and the notifications
@@ -170,6 +186,38 @@ argo-cd:
             services:
               - name: argocd-server
                 port: http
+
+    # The chart ships an ingress policy per component that allows the named
+    # `metrics` port "from any namespace" (`namespaceSelector: {}`). This k3s
+    # does not enforce that form: measured 2026-11-22, a probe pod in
+    # `monitoring` was refused on 8082 while the same pod was allowed by a rule
+    # naming a pod label or an ipBlock. The metrics Services are headless, so a
+    # scrape is a pod-to-pod connection to the pod's own address and falls under
+    # that policy. This rule is additive to the chart's, and numeric on purpose:
+    # the named port is what the namespace form failed to match.
+    - apiVersion: networking.k8s.io/v1
+      kind: NetworkPolicy
+      metadata:
+        name: argocd-metrics-scrape
+      spec:
+        podSelector:
+          matchExpressions:
+            - key: app.kubernetes.io/name
+              operator: In
+              values:
+                - argocd-application-controller
+                - argocd-repo-server
+        policyTypes:
+          - Ingress
+        ingress:
+          - from:
+              - ipBlock:
+                  cidr: 10.42.0.0/16
+            ports:
+              - port: 8082
+                protocol: TCP
+              - port: 8084
+                protocol: TCP
 
   # The argocd image tag follows the chart appVersion. dex and redis are separate
   # software, so their tags are pinned here.
