@@ -23,6 +23,9 @@ restoreDrills:
   - stream: nfs
     drill: syncthing-file
     at: 1795219200
+  - stream: nodes-streaming
+    drill: sonarr-live-claim
+    at: 1795305600
   - stream: all
     drill: last-resort
     at: 1795305600
