@@ -60,10 +60,11 @@ that asks for it fails at scheduling instead of quietly landing on `nuc0`.
 3. `docs/how-it-works/applications.md`: the "older charts still select the retired label" section
    becomes a statement that none does, with `pihole-exporter` named as the last one, fixed on
    2026-11-22.
-4. `docs/reference/chart-notes.md`: the three "matched no node at all" sentences (koillection,
-   thelounge, syncthing) are corrected — the affinity asked for `general`, `nuc0` answered it, and
-   the pods those notes describe were stuck on claims their charts never created. The freshrss and
-   dashy mentions are read and corrected only where they repeat the false claim.
+4. `docs/reference/chart-notes.md`: the two "matched no node at all" sentences (koillection,
+   syncthing) are corrected — the affinity asked for `general`, `nuc0` answered it, and the pods
+   those notes describe were stuck on claims their charts never created. The thelounge mention was
+   already neutral (`is replaced by nodeSelector on nuc0`) and stays; the freshrss and dashy mentions
+   are read and corrected only where they repeat the false claim.
 5. Chart comments and READMEs that repeat "matched no node" (`syncthing`, `koillection`) are corrected
    the same way. Comments that only say "the old affinity is gone" stay.
 6. After the merge and the exporter's resync: remove the label from the four nodes, then verify

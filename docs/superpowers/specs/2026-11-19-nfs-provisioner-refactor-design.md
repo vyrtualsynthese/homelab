@@ -22,8 +22,9 @@ same way:
 Three of the eight Applications therefore never render what the cluster runs. Two provisioners —
 `nfs-hdd` (class `nfs-plex`) and `nfs-ssd` (class `nfs-ssd`, pod stuck `ContainerCreating` since
 2026-09-03) — run in the `default` namespace from Helm releases that exist nowhere in git. Five of the
-six vendored copies still pin `node-type: general`, a label retired in AGENTS.md §4, so their pods are
-unschedulable the moment they are rescheduled.
+six vendored copies still pin `node-type: general`, a label retired in AGENTS.md §4. `nuc0` still
+carried it, so a rescheduled pod would have landed there rather than gone unschedulable. (The label
+was removed from the nodes on 2026-11-22, so a copy left asking for it now cannot schedule.)
 
 Upstream has released nothing since chart `4.0.18` (2023-03-13, image `v4.0.2`), and the repo's copies
 are that release byte for byte except `Chart.yaml`'s `name:` and `values.yaml`. There is no version to

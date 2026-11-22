@@ -36,8 +36,9 @@ Evidence as of 2026-11-14.
   forcing image `2026.2.1`. Upstream current is `2026.8.5`.
 - Both authentik Deployments are at 0 replicas. The Application is `OutOfSync`/`Healthy`. Only
   the bundled Redis runs (368 days). Nothing in `docs/` records a deliberate stop.
-- The chart's affinity targets `node-type: general`, a label the cluster retired, so the pods
-  could not schedule if scaled up.
+- The chart's affinity targets `node-type: general`, a label the cluster retired from charts. `nuc0`
+  still carried it, so scaling up would have scheduled there rather than failed. (The label was
+  removed from the nodes on 2026-11-22.)
 - The chart renders a plain `networking.k8s.io/v1` Ingress with Traefik annotations. The house
   rule is Traefik CRDs only.
 - The Traefik middleware named `authentik` (`cluster/infrastructure/traefik/middleware/authentik.yaml`)
