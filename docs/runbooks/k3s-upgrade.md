@@ -128,11 +128,16 @@ kubectl get pods -A --field-selector spec.nodeName=<node> --no-headers | grep -v
 kubectl get --raw /healthz/etcd
 kubectl -n argocd get applications -o json | jq -r '[.items[]|select(.status.sync.status=="Synced" and .status.health.status=="Healthy")]|length'
 curl -s -o /dev/null -w '%{http_code}\n' --resolve dashy.ashudev.com:443:192.168.1.46 https://dashy.ashudev.com/
+# on the node that carries the GPU, the scheduler resource, not just nvidia-smi:
+kubectl get node streaming -o jsonpath='{.status.allocatable.nvidia\.com/gpu}'   # expect 1
 ```
 
 Expected: the node on the pinned version and `Ready`, no unhealthy pod that was healthy before, etcd
-`ok`, the Argo count unchanged, and every host answering as before. Then patch the plan's hostname
-list to the next node and repeat.
+`ok`, the Argo count unchanged, and every host answering as before. On `streaming`, the allocatable
+line is the one that catches the 2026-11-22 fault: every GPU pod was `Running` and `nvidia-smi`
+still worked, while the scheduler resource read 0. The recovery is one pod delete and takes about 90
+seconds — [`gpu-operator.md`](gpu-operator.md#the-gpu-drops-to-0-after-a-restart). Then patch the
+plan's hostname list to the next node and repeat.
 
 ## What actually happened on 2026-11-21/22
 
@@ -158,8 +163,12 @@ mounts, the SQLite staging and restic survive the containerd jump: `nuc0` 629 fi
 files, `nas` 599 files, each ending in a new snapshot. Delete each re-run job once its log shows the
 snapshot: `kubectl -n backup delete job <name>`. Nothing else ever removes it (see the traps).
 
-**GPU survived.** `nvidia-container-toolkit`, the device plugin, `dcgm-exporter` and `intel-gpu-plugin`
-all came back, and `nvidia-smi -L` in the Plex pod still lists the Quadro P400.
+**GPU: the pods survived, the scheduler resource did not.** `nvidia-container-toolkit`, the device
+plugin, `dcgm-exporter` and `intel-gpu-plugin` all came back, and `nvidia-smi -L` in the Plex pod
+still listed the Quadro P400 — but the node advertised `nvidia.com/gpu: 0` for about forty minutes,
+and only the allocatable check noticed. Deleting the validator pod restored it in 90 seconds; cause
+and recovery are in [`gpu-operator.md`](gpu-operator.md#the-gpu-drops-to-0-after-a-restart). The
+first version of this paragraph said the GPU "survived" on the strength of the pod list alone.
 
 ## Traps
 
