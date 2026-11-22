@@ -1,0 +1,34 @@
+# CoreDNS imports two globs from this directory on every start and reload:
+#
+#   import /etc/coredns/custom/*.override
+#   import /etc/coredns/custom/*.server
+#
+# K3s writes those two lines into the Corefile itself and mounts this ConfigMap
+# as an optional volume, so with no ConfigMap the globs match nothing and CoreDNS
+# logs two [WARNING]s per reload on every server node — 6,152 lines in the 24 h
+# to 2026-11-22. The Corefile is K3s's: editing it by hand is undone at the next
+# start, and there is no setting that drops the two imports.
+#
+# Two comment-only files satisfy the globs and change no resolution. A `.server`
+# file is a server block and a `.override` file replaces a directive from the
+# default block; both are valid when they contain only a comment.
+#
+# Applied by hand, like everything else under cluster/infrastructure:
+#
+#   kubectl apply -f cluster/infrastructure/coredns/custom.yaml
+#   kubectl -n kube-system rollout restart deploy/coredns
+#
+# The restart is what makes CoreDNS re-read the globs. Creating the ConfigMap
+# alone only populates the mounted directory.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: coredns-custom
+  namespace: kube-system
+  labels:
+    k8s-app: kube-dns
+data:
+  empty.server: |
+    # Intentionally empty: this file exists so `import .../*.server` matches.
+  empty.override: |
+    # Intentionally empty: this file exists so `import .../*.override` matches.
