@@ -221,6 +221,24 @@ class VerifyTests(unittest.TestCase):
         self.assertNotIn("restic init", scripts()["verify.py"])
         self.assertNotIn("forget", scripts()["verify.py"])
 
+    def test_each_stream_carries_the_sqlite_rows_it_must_have_staged(self):
+        # The verifier cannot read values.yaml: the streams file it mounts is its whole
+        # input, so the rows travel in it. A `files` row stages nothing and must not appear.
+        cms = {d["metadata"]["name"]: d["data"] for d in render() if d["kind"] == "ConfigMap"}
+        streams = {s["name"]: s for s in json.loads(cms["backup-streams"]["streams.json"])}
+        for node, cfg in values()["nodes"].items():
+            expected = [{"namespace": r["namespace"], "claim": r["claim"]}
+                        for r in cfg["claims"] if r.get("kind") == "sqlite"]
+            self.assertEqual(streams[f"nodes-{node}"].get("staged", []), expected, node)
+        self.assertEqual(streams["nfs"].get("staged", []), [])
+
+    def test_the_verifier_looks_where_the_node_job_stages(self):
+        staging = next(c for c in pod_of("backup-node-nuc0")["initContainers"]
+                       if c["name"] == "prepare")["args"]
+        staging = staging[staging.index("--staging") + 1]
+        source = (CHART / "files/verify.py").read_text()
+        self.assertIn(f'STAGED_PREFIX = "{staging}/claims/"', source)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -128,6 +128,14 @@ All notable changes to this repository. The format follows
 
 ### Fixed
 
+- `backup-verify` fails a `sqlite` row whose stream snapshot holds no staged database, naming the
+  row. Until now nothing checked what a row had actually staged: a `db:` pattern that upstream moved
+  or renamed matched nothing every night while the node job stayed green, and the consistent copy the
+  row exists for quietly stopped being written. The verifier reads the file list of the stream's own
+  snapshot — not `latest`, which an ad-hoc etcd copy taken between two nights would answer with — and
+  counts the files under `claims/<namespace>/<claim>/`. Every `sqlite` row of `nodes-nas`,
+  `nodes-nuc0` and `nodes-streaming` carries its database in the newest stream snapshot, checked
+  against the live repositories on 2026-11-22.
 - `cluster/infrastructure/traefik/traefik-config.yaml` parses again, so the Traefik release can be
   upgraded for the first time since 2023. The over-indented `existingClaim` was one of five defects
   that every apply had hidden behind: the values used `certificatesResolvers` where the chart reads
