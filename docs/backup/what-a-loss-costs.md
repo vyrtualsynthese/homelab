@@ -1,4 +1,4 @@
-# Disaster recovery
+# What a loss costs
 
 > **In one line.** The configuration, the databases and syncthing leave the machine every night for
 > one OVH bucket; the media library, the music, the stash library and the books stay on one disk by
@@ -6,11 +6,15 @@
 > cluster.
 >
 > **Use it when** a risk needs weighing, a disk died, or you need to know what is left ·
-> **Verified** 2026-11-22 · **Kind:** living page
+> **Verified** 2026-11-22 · **Kind:** explanation
+>
+> **Sources** `cluster/helm/backup/values.yaml`, `docs/how-it-works/backups.md`,
+> `docs/runbooks/restore.md`, the drill log
 
-The nightly mechanism is [Backups](../how-it-works/backups.md); the procedure with a cluster is
-[restore.md](../runbooks/restore.md), and the one for when the cluster is gone is
-[last-resort.md](../runbooks/last-resort.md). This page weighs what a loss costs.
+The nightly mechanism is [how backups work](../how-it-works/backups.md); the procedure with a cluster
+is [restore.md](../runbooks/restore.md), and the one for when the cluster is gone is
+[last-resort.md](../runbooks/last-resort.md). This page weighs what a loss costs; the procedures that
+put it back are the rest of this section.
 
 ## What leaves the machine
 
@@ -70,7 +74,7 @@ comes back and is readable", not "a cluster comes back".
    [restore.md](../runbooks/restore.md) section 2, PostgreSQL through
    [postgres-restore.md](../runbooks/postgres-restore.md) after restoring `globals.sql`, the board's
    columns from the [seed script](../runbooks/vikunja-board-seed.md) and its cards from the restored
-   dump ([use-the-board.md](use-the-board.md)).
+   dump ([use-the-board.md](../running-it/use-the-board.md)).
 5. **The unknowns.** Whether an etcd copy restores (the file is there, the drill is not), whether a
    restored claim matches its chart, and which Secret values exist only in the cluster.
 
