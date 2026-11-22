@@ -95,7 +95,6 @@ metadata:
     {{- include "app.labels" . | nindent 4 }}
 spec:
   entryPoints:
-    - web
     - websecure
   routes:
     - kind: Rule
@@ -109,5 +108,30 @@ spec:
   # `www` is covered by `*.ashudev.com`; asking again would order a second
   # certificate for one name.
   tls: {}
+---
+{{- /* Plain HTTP needs a router of its own. A router that carries a `tls` block
+is attached to the TLS entry points only, so listing `web` on the router above
+changed nothing: `http://www.ashudev.com` matched no router and Traefik answered
+its own 404, while `https://www` redirected. dashy-redirect and dashy-local are
+split the same way, and for the same reason. */}}
+apiVersion: {{ .Values.ingressRoute.apiVersion }}
+kind: IngressRoute
+metadata:
+  name: {{ default .Release.Name .Values.ingressRoute.name }}-www-web
+  labels:
+    {{- include "app.labels" . | nindent 4 }}
+spec:
+  entryPoints:
+    - web
+  routes:
+    - kind: Rule
+      match: Host(`{{ .Values.ingressRoute.www.host }}`)
+      middlewares:
+        - name: {{ include "app.fullname" . }}-www
+          namespace: {{ .Release.Namespace }}
+      services:
+        - kind: TraefikService
+          name: noop@internal
+  # No `tls` on purpose; see above.
 {{- end }}
 {{- end }}

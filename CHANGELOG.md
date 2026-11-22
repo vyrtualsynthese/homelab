@@ -153,6 +153,10 @@ All notable changes to this repository. The format follows
 
 ### Fixed
 
+- `http://www.ashudev.com` redirects instead of answering Traefik's own 404. The chart put both
+  entry points on one `www` router, but a router that carries a `tls` block is attached to the TLS
+  entry points only, so `web` did nothing and the plain-HTTP request matched no router at all. The
+  name now has two routers, one per scheme, the way `dashy-redirect` and `dashy-local` are split.
 - A Traefik upload no longer dies at 60 seconds. v3 raised the entry point's `readTimeout` default
   from `0` to `60s`, which caps the whole request including its body: the public FileBrowser needs
   about 800 s for a 2 GB file on a 20 Mbit/s line. `websecure` now sets `1h`. `writeTimeout` stays
