@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: restore-drills
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: {{ .Chart.Name }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+data:
+  restore-drills.prom: |
+    # Restore drills, one series per row of the table in
+    # docs/runbooks/restore.md's "The drill log". Update both in the same change.
+    {{- range .Values.restoreDrills }}
+    homelab_restore_drill_timestamp_seconds{stream="{{ .stream }}",drill="{{ .drill }}",date="{{ dateInZone "2006-01-02" (int .at) "UTC" }}"} {{ int .at }}
+    {{- end }}

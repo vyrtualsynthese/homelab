@@ -6,6 +6,27 @@ ingress:
   service: prometheus-server
   port: 80
 
+# The restore-drill log the RestoreDrillOverdue rule reads. One entry per row of
+# the table in docs/runbooks/restore.md under "The drill log"; update both in the
+# same change. `at` is Unix seconds at UTC midnight of the drill date:
+#   date -u -d 2026-11-21 +%s
+# The `date` label is derived from it in templates/configmap-restore-drills.yaml,
+# so a row stores one fact. `stream: all` is the last-resort drill, which reads
+# every repository from outside the cluster.
+restoreDrills:
+  - stream: nodes-nas
+    drill: postgresql-dumps
+    at: 1795219200
+  - stream: nodes-streaming
+    drill: sonarr-database
+    at: 1795219200
+  - stream: nfs
+    drill: syncthing-file
+    at: 1795219200
+  - stream: all
+    drill: last-resort
+    at: 1795305600
+
 prometheus:
   fullnameOverride: prometheus
   alertmanager:
@@ -69,6 +90,21 @@ prometheus:
         memory: 128Mi
   prometheus-node-exporter:
     fullnameOverride: prometheus-node-exporter
+    # The textfile collector reads the drill log that
+    # templates/configmap-restore-drills.yaml renders. `optional: true` because a
+    # missing ConfigMap must not stop node-exporter; the rule reports the missing
+    # data as Alerting, which is the failure it exists for.
+    extraArgs:
+      - --collector.textfile.directory=/restore-drills
+    extraVolumes:
+      - name: restore-drills
+        configMap:
+          name: restore-drills
+          optional: true
+    extraVolumeMounts:
+      - name: restore-drills
+        mountPath: /restore-drills
+        readOnly: true
     image:
       registry: quay.io
       repository: prometheus/node-exporter
