@@ -32,6 +32,12 @@ All notable changes to this repository. The format follows
   served from the store by SNI, so a new application under `ashudev.com` orders nothing. The OVH
   credential is a consumer key scoped to that zone's record and refresh endpoints, in
   `kube-system/traefik-ovh`.
+- Traefik's certificate store holds two entries instead of fifteen, and the two are the two
+  certificates above. The sixteen per-host entries were pruned while the router was stopped, and the
+  restart re-ordered only what the two anchor routes ask for: the four-name `ashudev.com` bundle
+  (issued at once, three of its four authorizations still valid) and the `ashuvidz.com` + `www` pair.
+  `*.kub.local` kept its internal leaf. Procedure, traps and the run record:
+  `docs/runbooks/acme-store.md`.
 - Traefik's certificate store holds sixteen certificates instead of thirty-four. The eighteen
   removed entries were for hosts no router has served since they were retired: `atlantis`,
   `cross-seed`, `dashy.kub.home`, `discourse`, `firefly`, `firefly-importer`, `forum.ashuvidz.com`,
