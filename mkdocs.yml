@@ -73,7 +73,6 @@ nav:
       - Observability: how-it-works/observability.md
       - Media: how-it-works/media.md
       - Applications: how-it-works/applications.md
-      - Backups: how-it-works/backups.md
   - Running it:
       - running-it/README.md
       - Every day: running-it/every-day.md
@@ -84,7 +83,10 @@ nav:
       - Rotate a secret: running-it/rotate-a-secret.md
       - Use the board: running-it/use-the-board.md
       - Rebuild the docs site: running-it/rebuild-the-docs-site.md
-      - Disaster recovery: running-it/disaster-recovery.md
+  - Backups:
+      - backup/README.md
+      - What a loss costs: backup/what-a-loss-costs.md
+      - How backups work: how-it-works/backups.md
   - Security:
       - security/README.md
       - What enforces what: security/enforcement.md
