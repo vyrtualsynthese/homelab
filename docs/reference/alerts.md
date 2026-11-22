@@ -15,7 +15,7 @@ The overview — what runs where, its sizing, and how to query the stack:
 
 Grafana unified alerting, folder `Homelab`, **two rule groups split by cadence
 on 2026-11-18**: `homelab-core-fast` at **60 s** (20 rules) and `homelab-core` at
-**300 s** (26 rules). **46 rules**, one contact point, two routes by severity.
+**300 s** (27 rules). **47 rules**, one contact point, two routes by severity.
 
 The split rule is the `for` duration: a rule sits in the fast group when its `for`
 is 5 minutes or less, or when it reports that something is down and its `for` is
@@ -39,7 +39,8 @@ secure field), so the contact point is never rewritten by automation. The Discor
 webhook exists only in that contact point.
 
 **Rule set and live state on 2026-11-13 (the three `Cloud*` rows read back on
-2026-11-20, the counts and `GpuNotAllocatable` on 2026-11-22):**
+2026-11-20, the counts and `GpuNotAllocatable` on 2026-11-22, and
+`ArgoAppRenderFailing` added and proved on 2026-11-22):**
 
 | Rule | Condition | for | Severity | State |
 |---|---|---|---|---|
@@ -67,6 +68,7 @@ webhook exists only in that contact point.
 | `RestartStorm` | 5+ restarts in an hour | 5m | warning | **firing, silenced** (the three long-broken apps) |
 | `OOMKilled` | terminated by OOM in the last hour | 5m | warning | inactive |
 | `JobFailed` | any Job with a failed pod, no success, and younger than 2 h | 5m | warning | inactive |
+| `ArgoAppRenderFailing` | an Application carrying a `ComparisonError` — Argo CD could not render it, so it no longer reports sync state | 10m | warning | inactive |
 | `RecyclarrNotSucceeding` | no successful recyclarr run in 26 h | 5m | warning | inactive |
 | `BackupStreamStale` | a CronJob in namespace `backup` whose last success is more than 26 h old | 10m | warning | inactive |
 | `BackupJobAbsent` | a backup CronJob with no `kube_cronjob_status_last_successful_time` series, so it is gone or has never succeeded | 5m | warning | inactive |
@@ -95,6 +97,27 @@ webhook exists only in that contact point.
 it fires for a Job whose pod failed and whose retry did not succeed, and it
 resolves by itself after two hours even if the failed Job object stays in the
 history. That window is what keeps one bad night from firing for days.
+
+**`ArgoAppRenderFailing`** (2026-11-22) is the rule for an Application Argo CD cannot render at all.
+Its expression is `argocd_app_condition{condition="ComparisonError"} > 0`: the gauge's value is the
+count of conditions of that type, so the series exists only while the condition does, and the
+threshold is simply "above 0". The message names the Application and its project, which is what the
+alternative — the share of failed repo-server requests, the card's other suggestion — cannot do.
+
+The reason this is not a rule on the log line is measured. Since card 643 the `found in Chart.yaml,
+but missing in charts/` line is known to be routine: 789 of them in the 24 hours to 2026-11-22, each
+one followed by a `helm dependency build` and a successful second render **inside the same request**.
+That is why the repo-server recorded zero non-`OK` gRPC codes between its 04:00 start and the
+measurement, and why a failed-request ratio would have been blind to the line while telling nobody
+which Application broke. The condition is
+the fault itself, and Argo CD sets it only when generation fails.
+
+The metric is not free: the controller publishes no condition at all until
+`controller.metrics.application.conditions` names the types to publish, which
+`cluster/helm/argocd/values.yaml` now sets to `ComparisonError`. Its labels are `namespace`, `name`,
+`project` and `condition`. The proof on the card: a throwaway Application pointing at a path that
+does not exist went `pending` → `firing`, the summary named it, and deleting it cleared the rule;
+`for: 10m` is what keeps a render that fails once and succeeds on the retry quiet.
 
 **`RecyclarrNotSucceeding`** covers the other half: a run that never starts or
 never finishes leaves no failure to alert on. It fires when
@@ -378,6 +401,13 @@ reports `firing` on the Health dashboard.
   check. `JobFailed` covers every Job, but only `recyclarr` has per-schedule
   staleness coverage; the other CronJobs fail loudly but a run that never starts
   is silent.
+- **A failed Argo CD sync is still unalerted.** `ArgoAppRenderFailing` watches
+  comparison: an Application whose manifests cannot be generated. A sync operation that runs and fails
+  leaves `operationState.phase: Failed` and is visible on the Applications dashboard, but Argo CD
+  sets `SyncError` only in conditions the controller has been told to publish, and only
+  `ComparisonError` is listed. Listing it would be a second rule with its own noise, and a failed
+  sync is usually one Kubernetes refusal with the object and the message in the event — the dashboard
+  is the better reader.
 - **qBittorrent's `cross-seed` alias is a literal ClusterIP.** The pod keeps
   `dnsPolicy: None`, so `hostAliases` maps `cross-seed` to `crossSeedServiceIP`
   in the chart. If that Service is recreated with a new IP, the completion hook

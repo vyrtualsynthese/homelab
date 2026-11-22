@@ -189,6 +189,15 @@ Grafana's own data: where they live, and what that costs, is in
 - **mktxp is annotation discovery**, like the in-cluster exporters: one pod with
   `prometheus.io/scrape` on port 49090, and 838 series for the two switches on
   2026-11-18. An unreachable switch publishes nothing rather than `up == 0`.
+- **Argo CD's three components are annotation discovery since 2026-11-22**, on their **metrics
+  Services** — controller 8082, repo-server 8084, server 8083 — not on the pods.
+  `global.addPrometheusAnnotations` stamps the annotation; `controller.metrics` and
+  `repoServer.metrics` are what make the first two Services exist. The Services are headless, so an
+  endpoint is the pod's own address and the scrape is a pod-to-pod connection: **the chart's own
+  policy, the named `metrics` port allowed from `namespaceSelector: {}`, is not enforced on this
+  k3s** (measured 2026-11-22 — a probe in `monitoring` was refused until a rule named numeric ports
+  from an `ipBlock`). `cluster/helm/argocd/values.yaml` carries that numeric rule for 8082 and 8084
+  beside the chart's own.
 - Prometheus is pinned to `nas`. Its memory limit is 2 GiB and the GC target
   follows the cgroup limit, so lowering it below the working set restarts the
   OOM loop of 2026-11-12.
@@ -203,6 +212,10 @@ the change against 1,185 MiB over the 24 hours before it. The request was then s
 working set above it — a sizing question, not a scrape one, answered on 2026-11-19 by raising it to
 1.25 GiB ([the sizing table](#resource-sizing)); the detail is in
 [`reference/metrics.md`](reference/metrics.md#what-prometheus-throws-away-before-storing).
+
+Argo CD joined the same job on 2026-11-22: its three components expose 3,384 series, the drop rule
+keeps at most 350, and the first scrape after the restarted pods stored 189 — a process that has not
+yet synced publishes fewer. The job holds 18,968 stored series that evening.
 
 **Measured on 2026-11-18, after the media trim:** the media stack's ten targets
 were 979 of `kubernetes-pods`' 6,429 live series and wrote 16.3 samples/s. They
