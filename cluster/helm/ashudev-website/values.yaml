@@ -98,8 +98,15 @@ ingressRoute:
   labels: {}
   annotations: {}
   tls:
-    # -- Let's Encrypt through Traefik's ACME resolver.
-    certResolver: myresolver
+    # -- The anchor for every name under ashudev.com: this route is the only one
+    # -- that asks for a certificate, and it asks for the whole list. DNS-01 is
+    # -- the only challenge Let's Encrypt accepts for a wildcard.
+    certResolver: ovhresolver
+    domains:
+      - main: ashudev.com
+        sans:
+          - "*.ashudev.com"
+          - "*.kub.home.ashudev.com"
   # -- `www`, which only redirects. A name that resolves without a router of its
   # -- own gets no certificate and answers with a TLS name mismatch — which is
   # -- what `www.ashuvidz.com` does today. Hence a real router with `tls`.
