@@ -114,8 +114,9 @@ all; the redirect is only what it does once the certificate exists.
 ## Known debt
 
 - **The access log is on**, to stdout, so request lines reach Loki. On a public host the request
-  record is the only evidence of what arrived; if the volume becomes a problem, the lever is the log
-  format.
+  record is the only evidence of what arrived. Probe lines are not kept: a `map` on
+  `$http_user_agent` drops the kubelet's, which were 61 % of this host's lines in the 24 h to
+  2026-11-22. If the volume becomes a problem, the next lever is the log format.
 - **No metrics.** nginx exposes no Prometheus endpoint out of the box.
 - **No staging copy.** A pushed typo is live within a minute.
 - **No `404.html`.** The branch carries none, so nginx answers its own 404 — GitHub Pages answered

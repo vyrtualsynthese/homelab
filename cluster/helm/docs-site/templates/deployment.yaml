@@ -66,7 +66,10 @@ spec:
             httpGet:
               path: /
               port: http
-            periodSeconds: 10
+            # The site is static: 30 s is still far quicker than a rollout, and
+            # at 10 s the probe alone was 8,640 of the 11,601 lines the pod wrote
+            # in the 24 h to 2026-11-22.
+            periodSeconds: 30
           livenessProbe:
             httpGet:
               path: /

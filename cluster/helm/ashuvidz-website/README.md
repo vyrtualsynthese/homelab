@@ -112,7 +112,9 @@ empty. That is the point: a broken content push shows as `0/1 Ready`, not as a r
 
 - **The access log is on.** On a public host the request record is the only evidence of what
   arrived, so `access_log /dev/stdout` stays, and the lines reach Loki. The error log runs at
-  `warn`. If the volume becomes a problem, the lever is the log format, not the level.
+  `warn`. Probe lines are not kept: a `map` on `$http_user_agent` drops the kubelet's, which were
+  76 % of this host's lines in the 24 h to 2026-11-22. If the volume becomes a problem, the next
+  lever is the log format, not the level.
 - **No metrics.** nginx exposes no Prometheus endpoint out of the box; adding one means a sidecar
   exporter, which is the metrics work the repo does one chart at a time. The old chart had one
   wired but disabled.
