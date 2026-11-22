@@ -104,27 +104,36 @@ snapshot held **10.04 GB**, of which 6.73 GiB was Plex's claim. Every exclusion 
 a directory Plex keeps three levels down, under `Library/Application Support/Plex Media Server/`,
 and the job anchored each entry at the claim's root, so none of them matched — poster art, the
 transcoder cache, the thumbnails and Plex's own eight dated database copies had been carried
-since 2026-11-20. The row and the job were fixed that evening. A snapshot now holds about
-**2.7 GB**: 2.05 GiB of staged databases, 0.57 GiB of etcd copies, and a few megabytes of
-configuration. An exclusion without a slash is now a name at any depth, and one with a slash is
-relative to the claim's root.
+since 2026-11-20. The row and the job were fixed that evening. The next run read **2.56 GiB**:
+2.05 GiB of staged databases, 0.51 GiB of etcd copies, a few megabytes of configuration, and 785
+files instead of 46 500. An exclusion without a slash is now a name at any depth, and one with a
+slash is relative to the claim's root.
 
-One consequence belongs beside the budget: the snapshots taken before the fix still hold the art,
-and the monthly retention keeps one of them for a year. `restic stats --mode raw-data` read
-**6.75 GiB** on 2026-11-22 and will not fall to the ~3 GB a snapshot holds when the daily ones age
-out. Forgetting those six snapshots by hand would reclaim it; nothing scheduled does.
+The three snapshots taken before the fix were then forgotten by hand, and that was a choice rather
+than a necessity: `keep-daily 7` drops them once they are eight days old, so the prune of
+2026-11-29 would have freed the art on its own — the monthly tail keeps the newest snapshot of
+November, which is a post-fix one, not an old one. What the hand forget bought was the measurement
+and the budget below, a week early, at the cost of the restore points for 2026-11-21 and the
+morning of 2026-11-22. A snapshot of the same evening was read first, and its staged Sonarr
+database restored with `pragma integrity_check` → `ok`.
+
+One gap is worth naming, because the tail cannot close it: `forget` groups snapshots by host and
+paths, and the three `etcd-pre131-*` copies each carry a host of their own, so each is a group of
+one and no `keep-*` rule will ever remove it. They cost about 18 MB — they hold the same streaming
+snapshot directory the nightly already carries — and dropping them is a by-hand decision, not a
+scheduled one.
 
 The first snapshot costs about €0.09; with the shared tail the three rebuildable repositories settle
 between 15 and 25 GB, roughly €0.11–0.18 a month. The `nfs` repository is 3.6 GB today and grows only
 as the photos and documents change. Egress is free, so a restore costs nothing but time.
 
 `budgetGiB` in `values.yaml` is the same number as a ceiling: the verifier fails a stream whose
-repository passes it. The four budgets sum to 60 GiB, well above the top of the expected range: the
-`nodes-streaming` ceiling carries a separate etcd copy per retained snapshot and the art the pre-fix
-snapshots keep, and the `nfs` one holds ten years of yearly versions of the photos and documents. So
-a stream that picks up a directory it should not have still trips the check long before the bill
-notices. Past its budget, raise the number deliberately; a stream hundreds of gigabytes over it is a
-directory that should not be in a row.
+repository passes it. The four budgets sum to 55 GiB, well above the top of the expected range: the
+`nodes-streaming` ceiling carries a separate etcd copy per retained snapshot, and the `nfs` one
+holds ten years of yearly versions of the photos and documents. So a stream that picks up a
+directory it should not have still trips the check long before the bill notices. Past its budget,
+raise the number deliberately; a stream hundreds of gigabytes over it is a directory that should
+not be in a row.
 
 ## The five ways it fails
 

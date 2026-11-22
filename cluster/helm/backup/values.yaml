@@ -74,20 +74,22 @@ streams:
   - name: nodes-nuc0
     budgetGiB: 4
     etcd: true
-  # 10.04 GB in the nightly snapshot of 2026-11-22 05:30 (7ac41aa9) when it was measured from
-  # the bucket: 6.73 GiB of it was Plex's claim, whose excludes had been matching nothing, 2.05
-  # GiB the staged databases, 0.57 GiB the etcd copies. With the Plex row fixed the same night a
-  # snapshot holds about 2.7 GiB. The repository itself — which is what this budget bounds — read
-  # 6.75 GiB of raw data that evening, because the snapshots taken before the fix still hold the
-  # art and the monthly retention keeps one of them for a year; forgetting those six by hand is
-  # what would reclaim it, and nothing here does that. Up to ~23 snapshots can be retained, and
-  # the repository grew 0.21 GiB a night over its first five, so the plateau is near 11–12 GiB.
-  # The 7 GiB this carried until 2026-11-22 was the design's 3.7 GB of claim data plus one etcd
-  # copy, and the stream passed it on the fifth night. 14 leaves 2–3 GiB of headroom, which is
-  # still a canary for a row that picks up a directory it should not: a media directory is
-  # hundreds of GiB.
+  # 10.04 GB in the nightly snapshot of 2026-11-22 05:30 (7ac41aa9), 6.73 GiB of it Plex's claim,
+  # whose excludes had been matching nothing. With the row fixed a snapshot reads 2.56 GiB: 2.05
+  # GiB of staged databases, 0.51 GiB of etcd copies, configuration, and 785 files instead of
+  # 46 500. The repository — what this budget bounds — read 6.97 GiB that evening because the
+  # three nightlies taken before the fix still held the art; they were forgotten by hand the same
+  # night (task #449) and `restic stats --mode raw-data` then read 650.8 MiB over four snapshots,
+  # compressed 4.35x. A night adds about 0.22 GiB of new data, so with the ~23 snapshots the 7/4/12
+  # tail can retain the plateau is near 6 GiB: 0.65 + 23 × 0.22. The three `etcd-pre131-*` copies
+  # are extra and permanent — each carries a host of its own, so `forget` sees a group of one and
+  # no keep-* rule can ever drop it — for about 18 MB, since they hold the same streaming snapshot
+  # directory the nightly already carries. 9 leaves ~3 GiB of headroom, still a canary for a row
+  # that picks up a directory it should not: a media directory is hundreds of GiB. The 7 GiB this
+  # carried until 2026-11-22 was the design's 3.7 GB of claim data plus one etcd copy, and the
+  # stream passed it on the fifth night.
   - name: nodes-streaming
-    budgetGiB: 14
+    budgetGiB: 9
     etcd: true
   # The only stream whose contents no source can re-supply: the Syncthing photos and
   # documents and koillection's uploads. Overflowing this ceiling means a decade of history
