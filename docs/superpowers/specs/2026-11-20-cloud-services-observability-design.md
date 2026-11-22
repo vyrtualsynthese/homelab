@@ -266,8 +266,20 @@ different backend, with a request body identical in shape to the one that
 succeeded apart from the name and the threshold. The provider, not the
 request, is at fault. The €20 threshold still fires on higher spend, so no
 condition is unmonitored; only the second signal is missing. A Backlog card
-tracks the retry. The earlier claim that the API allows one configuration per
-service and threshold is not supported by this evidence and is withdrawn.
+tracks the retry.
+
+**Corrected 2026-11-22, on the retry that card asked for.** The API keeps
+**one configuration per service scope**, and returns HTTP 500 rather than a
+refusal when a second one is attempted, which is what hid the rule. With
+`all-20` in place, `create --service all` fails at €50, at €9999 and at any
+value; a service with no configuration (`instances`, then `block_storage`)
+accepts a configuration, and a second one on that same service then fails the
+same way. All probes were deleted; `alerting list` reads back `all-20` alone.
+The design's two-line table therefore stays a design, not a record of the
+account: one global threshold is all the provider allows, and the "something is
+running that should not be" line is not available beside it. No support ticket
+is open; the query IDs are in
+[`cloud-monitoring.md`](../../runbooks/cloud-monitoring.md#6-the-money-alerts).
 
 The credentials are the legacy application-key trio in `~/ovh.conf` (mode
 600; section `[ovh-eu]`): `application_key`, `application_secret`,
