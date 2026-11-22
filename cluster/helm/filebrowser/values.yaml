@@ -221,7 +221,8 @@ config:
 traefik:
   apiVersion: traefik.io/v1alpha1
   host: filebrowser.kub.home.ashudev.com
-  certResolver: myresolver
+  # -- Served by the ashudev.com wildcard; its anchor is the ashudev.com route.
+  certResolver: ""
   tlsOption: filebrowser-tlsoption
   service: filebrowser-filebrowser-quantum
   middlewares:

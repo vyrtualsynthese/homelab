@@ -22,7 +22,7 @@ spec:
       middlewares:
         - name: kube-system-security@kubernetescrd
   tls:
-    certResolver: myresolver
+    # Served by the ashudev.com wildcard; its anchor is the ashudev.com route.
     options:
       name: authentik-tlsoption
 ---

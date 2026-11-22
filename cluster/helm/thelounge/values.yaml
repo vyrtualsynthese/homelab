@@ -78,10 +78,10 @@ ingressRoute:
   annotations: {}
   tls:
     enabled: true
-    # No secretName: the resolver issues the certificate for the public-resolvable
-    # `*.kub.home.ashudev.com` name, as this route always has.
+    # No secretName: the certificate comes from the ashudev.com wildcard, whose
+    # anchor is the ashudev.com route, and is selected by SNI.
     secretName: ""
-    certResolver: myresolver
+    certResolver: ""
     # Rendered by templates/tls-option.yaml into this namespace. Not the shared
     # `kube-system/internal-tls`: that policy belongs to the `*.kub.local` names.
     options: thelounge-tlsoption

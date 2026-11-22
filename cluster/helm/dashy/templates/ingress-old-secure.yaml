@@ -18,5 +18,5 @@ spec:
       services:
         - name: noop@internal
           kind: TraefikService
-  tls:
-    certResolver: myresolver
+  # Served by the ashudev.com wildcard; its anchor is the ashudev.com route.
+  tls: {}

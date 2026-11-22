@@ -20,6 +20,8 @@ spec:
         - name: {{ .Values.traefik.service }}
           port: {{ .Values.service.port }}
   tls:
-    certResolver: {{ .Values.traefik.certResolver }}
+    {{- with .Values.traefik.certResolver }}
+    certResolver: {{ . }}
+    {{- end }}
     options:
       name: {{ .Values.traefik.tlsOption }}
