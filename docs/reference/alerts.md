@@ -309,9 +309,11 @@ reports `firing` on the Health dashboard.
   same disk, at a coarser grain.
 - **Backup freshness is covered, backup *contents* are not.** `BackupStreamStale` says a stream
   stopped advancing; `JobFailed` says a run failed. Neither says the bytes are restorable: the
-  verifier checks the repository's snapshot age and size, not a restored file. The monthly drills in
-  [`../runbooks/restore.md`](../runbooks/restore.md) are the only proof of that, and its log is
-  empty today.
+  verifier checks the repository's snapshot age and size, not a restored file. The drills in
+  [`../runbooks/restore.md`](../runbooks/restore.md) are the only proof of that: three read-only
+  restores of one file, one database and the PostgreSQL dumps on 2026-11-21, and all four
+  repositories read from a laptop on 2026-11-22. The destructive put-back onto a live claim and the
+  etcd rehearsal are still untried.
 - **No vulnerability scanning.** Nothing reports which CVEs affect the running
   images, so there is no metric to alert on. Design and cost are recorded in
   [`superpowers/specs/2026-11-14-vulnerability-alerting-design.md`](../superpowers/specs/2026-11-14-vulnerability-alerting-design.md);
