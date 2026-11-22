@@ -80,5 +80,54 @@ class NavTests(unittest.TestCase):
             self.assertEqual(check_docs.nav_problems(root), [])
 
 
+class CatalogueTests(unittest.TestCase):
+    def test_a_row_without_an_application_is_reported(self):
+        with temp_tree(
+            {
+                "cluster/argocd/projects/a/real.yaml": "kind: Application\nmetadata: {name: real}\nspec: {}\n",
+                "docs/how-it-works/applications.md": "| `real` | x |\n| `ghost` | x |\n",
+            }
+        ) as root:
+            self.assertEqual(
+                check_docs.catalogue_problems(root),
+                ["docs/how-it-works/applications.md: row `ghost` has no Application"],
+            )
+
+    def test_an_application_without_a_row_is_reported(self):
+        with temp_tree(
+            {
+                "cluster/argocd/projects/a/real.yaml": "kind: Application\nmetadata: {name: real}\nspec: {}\n",
+                "docs/how-it-works/applications.md": "| `real` | x |\n",
+                "cluster/argocd/projects/a/new.yaml": "kind: Application\nmetadata: {name: new}\nspec: {}\n",
+            }
+        ) as root:
+            self.assertEqual(
+                check_docs.catalogue_problems(root),
+                ["docs/how-it-works/applications.md: Application `new` has no row"],
+            )
+
+
+class SecretsTests(unittest.TestCase):
+    def test_a_private_key_block_is_reported(self):
+        with temp_tree({"docs/a.md": "-----BEGIN OPENSSH PRIVATE KEY-----\n"}) as root:
+            self.assertEqual(len(check_docs.secret_problems(root)), 1)
+
+    def test_an_access_key_id_is_reported(self):
+        with temp_tree({"docs/a.md": "key AKIAIOSFODNN7EXAMPLE here\n"}) as root:
+            self.assertEqual(len(check_docs.secret_problems(root)), 1)
+
+    def test_a_password_assignment_is_reported(self):
+        with temp_tree({"docs/a.md": "password: sup3r-s3cret-value\n"}) as root:
+            self.assertEqual(len(check_docs.secret_problems(root)), 1)
+
+    def test_a_placeholder_is_not(self):
+        with temp_tree({"docs/a.md": "token: `<from the operator>`\npassword: REDACTED\n"}) as root:
+            self.assertEqual(check_docs.secret_problems(root), [])
+
+    def test_a_secret_name_and_its_keys_are_not(self):
+        with temp_tree({"docs/a.md": "The Secret `backup-restic` holds RESTIC_PASSWORD.\n"}) as root:
+            self.assertEqual(check_docs.secret_problems(root), [])
+
+
 if __name__ == "__main__":
     unittest.main()

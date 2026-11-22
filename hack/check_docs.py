@@ -110,9 +110,77 @@ def nav_problems(root: pathlib.Path) -> list[str]:
     return problems
 
 
+CATALOGUE = "docs/how-it-works/applications.md"
+ROW_RE = re.compile(r"^\|\s*`([^`]+)`\s*\|")
+PEM_RE = re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----")
+ACCESS_KEY_RE = re.compile(r"AKIA[0-9A-Z]{16}")
+ASSIGN_RE = re.compile(r"(?i)\b(password|passwd|token|secret|api[_-]?key)\b\s*[:=]\s*(\S+)")
+PLACEHOLDER_STARTS = ("<", "`<", "{{", "$", "/", "…", "...", "REDACTED", "redacted", "process.env")
+
+
+def _application_names(root: pathlib.Path) -> set[str]:
+    names: set[str] = set()
+    for path in sorted((root / "cluster" / "argocd" / "projects").rglob("*.yaml")):
+        try:
+            doc = yaml.safe_load(path.read_text(encoding="utf-8"))
+        except yaml.YAMLError:
+            continue
+        if isinstance(doc, dict) and doc.get("kind") == "Application":
+            name = (doc.get("metadata") or {}).get("name")
+            if name:
+                names.add(str(name))
+    return names
+
+
+def catalogue_problems(root: pathlib.Path) -> list[str]:
+    """The catalogue table and the Application files name the same set, in both directions."""
+    page = root / CATALOGUE
+    if not page.is_file():
+        return []
+    rows = {
+        match.group(1)
+        for line in page.read_text(encoding="utf-8").splitlines()
+        if (match := ROW_RE.match(line))
+    }
+    applications = _application_names(root)
+    problems = [f"{CATALOGUE}: row `{name}` has no Application" for name in sorted(rows - applications)]
+    problems += [f"{CATALOGUE}: Application `{name}` has no row" for name in sorted(applications - rows)]
+    return problems
+
+
+def _secret_shaped(value: str) -> bool:
+    stripped = value.strip().strip("\"'`,;")
+    if len(stripped) < 16:
+        return False
+    return not stripped.startswith(PLACEHOLDER_STARTS)
+
+
+def secret_problems(root: pathlib.Path) -> list[str]:
+    """No page holds a secret value; naming a Secret and its key is what a page does instead."""
+    problems: list[str] = []
+    for path, text in _files(root):
+        relative = (path.relative_to(root)).as_posix()
+        if not relative.startswith("docs/"):
+            continue
+        for number, line in enumerate(text.splitlines(), start=1):
+            where = f"{relative}:{number}"
+            if PEM_RE.search(line):
+                problems.append(f"{where}: private key block")
+                continue
+            if ACCESS_KEY_RE.search(line):
+                problems.append(f"{where}: access key id")
+                continue
+            match = ASSIGN_RE.search(line)
+            if match and _secret_shaped(match.group(2)):
+                problems.append(f"{where}: value assigned to `{match.group(1)}`")
+    return problems
+
+
 CHECKS = {
     "references": reference_problems,
     "nav": nav_problems,
+    "catalogue": catalogue_problems,
+    "secrets": secret_problems,
 }
 
 
