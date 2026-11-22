@@ -28,7 +28,11 @@ Storage bucket. Four restic repositories, one per stream: `nodes-nas`, `nodes-nu
    database, so a `db:` pattern that went stale loses the copy for one night, not forever.
 5. **A row's `exclude` means "not backed up".** It is applied to the claim copy *and* to staging, so an
    excluded database is not quietly staged back in. It is reserved for what is large and rebuilt from
-   something else: poster art, logs, caches, an application's own rotating database copies.
+   something else: poster art, logs, caches, an application's own rotating database copies. An entry
+   without a slash is a name and excludes that name at any depth; an entry with a slash is relative to
+   the claim's root. Until 2026-11-22 every entry was anchored at the root, which matched nothing for
+   Plex and carried 6.73 GiB of its art in the stream; `files/prepare.py` and the top of `values.yaml`
+   state the rule, and `hack/tests/test_backup_prepare.py` holds both shapes.
 6. **`pv:` pins a row that would otherwise be ambiguous.** The local-path provisioner names a directory
    `<pvName>_<namespace>_<claimName>`, and a deleted claim leaves its directory behind. Two rows today
    match two directories for that reason (`pgadmin-config`, `calibre-web-automated-config`); the pin
@@ -63,6 +67,12 @@ Measured 2026-11-20: 12.2 GB in scope. The books library was dropped from scope 
 exclusions are in the design,
 [`docs/superpowers/specs/2026-11-20-backups-design.md`](../../../docs/superpowers/specs/2026-11-20-backups-design.md),
 and the budget each stream is allowed is `streams[].budgetGiB` in `values.yaml`.
+
+That 12.2 GB was a design figure, not a repository measurement. Measured from the bucket on
+2026-11-22, `nodes-streaming`'s nightly snapshot held 10.04 GB, of which 6.73 GiB was Plex's claim
+with its exclusions matching nothing; after that fix a snapshot holds about 2.7 GB, and the
+repository's raw data read 6.75 GiB because the snapshots taken before it still hold the art. The
+living page is [`docs/how-it-works/backups.md`](../../../docs/how-it-works/backups.md).
 
 ## Operating it
 

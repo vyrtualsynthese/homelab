@@ -225,6 +225,48 @@ class ResticInputTests(unittest.TestCase):
             self.assertIn(str(claim_dir / "logs"), text)
             self.assertIn(str(claim_dir / "logs" / "**"), text)
 
+    def test_a_name_excludes_at_any_depth(self):
+        # Plex keeps Cache/ three levels down under Library/Application Support/Plex Media
+        # Server/. Anchored at the claim root, the entry matched nothing and 2.1 GiB of
+        # transcoder cache rode in the stream from 2026-11-20: the pattern restic is given has
+        # to reach it, and one for the directory plus one for everything beneath it.
+        claim_dir = pathlib.Path("/mnt/ssd0/pvc-abc_media-stack_plex-config")
+        patterns = load()._absolute_patterns(claim_dir, "Cache/")
+        self.assertIn(f"{claim_dir}/Cache", patterns)
+        self.assertIn(f"{claim_dir}/Cache/**", patterns)
+        self.assertIn(f"{claim_dir}/**/Cache", patterns)
+        self.assertIn(f"{claim_dir}/**/Cache/**", patterns)
+
+    def test_a_path_stays_anchored_at_the_claim_root(self):
+        # An entry that names a path is a path, not a name to be found anywhere: it must not
+        # start excluding a same-named directory in some unrelated part of the claim.
+        claim_dir = pathlib.Path("/mnt/ssd0/pvc-abc_media-stack_plex-config")
+        patterns = load()._absolute_patterns(claim_dir, "Plug-in Support/Databases/*.db-*")
+        self.assertEqual(patterns, [
+            f"{claim_dir}/Plug-in Support/Databases/*.db-*",
+            f"{claim_dir}/Plug-in Support/Databases/*.db-*/**",
+        ])
+
+
+class ExcludeMatchTests(unittest.TestCase):
+    """The half that decides whether an excluded database is staged, and restic's half agree."""
+
+    def test_a_name_matches_a_nested_component(self):
+        relative = pathlib.Path("Library/Application Support/Plex Media Server/Cache/art.jpg")
+        self.assertTrue(load().matches_any(relative, ["Cache/"]))
+
+    def test_a_name_does_not_match_a_longer_component(self):
+        self.assertFalse(load().matches_any(pathlib.Path("CacheInfo"), ["Cache/"]))
+
+    def test_a_path_matches_only_from_the_claim_root(self):
+        self.assertTrue(load().matches_any(
+            pathlib.Path("Plug-in Support/Databases/library.db-2026-11-21"),
+            ["Plug-in Support/Databases/*.db-*"]))
+        # the same shape of file elsewhere in the claim is not what the path names
+        self.assertFalse(load().matches_any(
+            pathlib.Path("Other/Plug-in Support/Databases/x.db-1"),
+            ["Plug-in Support/Databases/*.db-*"]))
+
 
 class MainTests(unittest.TestCase):
     """The init container's exit code is the node job's: 0 means restic runs."""
