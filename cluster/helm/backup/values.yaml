@@ -50,15 +50,23 @@ staging:
 # raw-data` reports it: the stream's measured size, plus the churn the 7/4/12 retention keeps,
 # plus headroom. Passing it fails the stream, so it is a canary for an accidental media
 # directory appearing in a row as much as for real growth. The control-plane budgets carry the
-# etcd copies, which are the only data that adds a fresh gigabyte-class file every night.
+# etcd copies, which are the only data that adds a fresh gigabyte-class file every night: the
+# copy rides inside every nightly snapshot, so the 7/4/12 retention keeps one per retained
+# snapshot, and the server with the larger etcd history pays for it every night of that tail.
 streams:
   - name: nodes-nas
     budgetGiB: 2
   - name: nodes-nuc0
     budgetGiB: 4
     etcd: true
+  # 6.11 GiB on the first snapshot on 2026-11-20 (the claims plus one etcd copy), then about
+  # 0.21 GiB a night: 6.35 after two snapshots, 6.99 after five on 2026-11-22. Up to ~23
+  # snapshots can be retained, so the plateau is near 11 GiB. The 7 GiB this carried until
+  # 2026-11-22 was the design's 3.7 GB of claim data with one etcd copy, and the stream passed
+  # it on the fifth night. 14 leaves the ~3 GiB of headroom the canary needs to still mean
+  # something; it is not a licence to carry a media directory, which is hundreds of GiB.
   - name: nodes-streaming
-    budgetGiB: 7
+    budgetGiB: 14
     etcd: true
   - name: nfs
     budgetGiB: 12

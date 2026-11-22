@@ -192,6 +192,14 @@ All notable changes to this repository. The format follows
 
 ### Fixed
 
+- `nodes-streaming`'s backup budget is 14 GiB instead of 7, before the stream tripped it. The
+  repository held 6.99 GiB after five nights and grew about 0.21 GiB a night, so the verifier —
+  which fails a stream over `budgetGiB` — was 13.5 MB from failing its 08:30 run on 2026-11-23, and
+  a failed verifier is a `JobFailed` in the morning. The old number was the design's 3.7 GB of claim
+  data plus one etcd copy, and left out the copy that rides inside every nightly snapshot and so is
+  kept by the whole 7/4/12 retention. The page's claim that the four budgets summed to 25 GiB is
+  corrected with it, and two pages that still said no backup had ever been restored now say what the
+  drill log records.
 - The GPU operator's 500m CPU limit survived the rightsizing pass: the `cpu: null` that was meant to
   delete the upstream chart's default did nothing, because a null in a chart's own `values.yaml` is a
   default and only a Helm *override* deletes an inherited subchart key. The `gpu-operator` Application
