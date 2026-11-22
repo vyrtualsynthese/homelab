@@ -155,6 +155,25 @@ class NfsJobTests(unittest.TestCase):
     def test_nfs_backup_pins_the_host_too(self):
         self.assertIn('--host nas', scripts()["backup-nfs.sh"])
 
+    def test_an_excluded_word_that_matches_nothing_is_named_before_the_run(self):
+        # The node rows are checked by prepare.py; the nfs exports have no prepare step, so the
+        # job checks its own words, with the same reading: a name at any depth, a path from the
+        # export's root. The line is printed before the restic call of that export.
+        script = scripts()["backup-nfs.sh"]
+        self.assertIn("matches_exclusion()", script)
+        self.assertIn('echo "exclude-unused path=$tag pattern=$pattern"', script)
+        self.assertIn('find "$root" -name "$word"', script)
+        self.assertIn('-path "$root/$trimmed"', script)
+        self.assertLess(script.index("exclude-unused path="), script.index("restic backup"))
+
+    def test_an_unused_word_does_not_fail_the_night(self):
+        # A warning, not a failure: an export whose versioning is off has no .stversions yet,
+        # and an exclusion that matches nothing costs space rather than data.
+        script = scripts()["backup-nfs.sh"]
+        block = script[script.index("if ! matches_exclusion"):script.index('set -- "$@" --exclude')]
+        self.assertIn('echo "exclude-unused', block)
+        self.assertNotIn("exit", block)
+
     def test_koillection_row_names_the_directory_its_pv_mounts(self):
         paths = [row["path"] for row in values()["nfs"]["paths"]]
         self.assertTrue(any(p.startswith("/mnt/storage/nfs/stash/koillection-") for p in paths))

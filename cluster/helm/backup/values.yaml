@@ -17,9 +17,11 @@
 #   * an `exclude` entry that matches nothing in its claim is named too — the job prints
 #     `exclude-unused row=<namespace>/<claim> pattern=<entry>` and carries on, and
 #     `backup-verify` repeats the line in the morning from the report the job writes into the
-#     snapshot, since the verifier never mounts a claim. Also a warning, for the same reason as
-#     the row-warning above: an install that has not written its cache yet matches nothing
-#     either, and an unused exclusion costs space rather than data. The stream's budget is
+#     snapshot, since the verifier never mounts a claim. The `nfs` rows have no prepare step, so
+#     `backup-nfs.sh` checks its own words and prints `exclude-unused path=<tag> pattern=<entry>`
+#     into the job's log, which is where the morning check reads it. Also a warning, for the same
+#     reason as the row-warning above: an install that has not written its cache yet matches
+#     nothing either, and an unused exclusion costs space rather than data. The stream's budget is
 #     what bounds that.
 #
 # Adding a claim to an application's chart means adding a row here in the same change; the
@@ -133,6 +135,9 @@ etcdSnapshotsPath: /host/etcd-snapshots
 # operator excluded (music, media, stash's library, downloads, and since 2026-11-20 the books
 # library) are not listed at all, so a job can never reach them by accident. `exclude` entries are
 # restic basename patterns; a whole export that is out of scope is an absent row, not an `exclude`.
+# An entry that matches nothing in its export is printed as `exclude-unused path=<tag>
+# pattern=<entry>` before that export's restic call, and the night carries on: it is the same
+# warning the node rows get, and the chart README says where the morning check reads it.
 nfs:
   schedule: "0 6 * * *"
   server: 192.168.1.41

@@ -205,8 +205,14 @@ entries it could not match beside the staged databases, and `backup-verify` repe
 says, and `budgetGiB` is the ceiling that bounds that. The five Plex entries that matched nothing
 from 2026-11-20 to 2026-11-22 are the case this is written for: six green nights, 6.73 GiB of
 poster art in every snapshot, and nothing anywhere that said a row's exclusion was doing nothing.
-The `nfs` stream has no prepare step — its exclusions are shell words in `backup-nfs.sh` — so its
-rows are not checked this way.
+The `nfs` stream has no prepare step, so its job counts its own words: `backup-nfs.sh` prints
+`exclude-unused path=<tag> pattern=<entry>` before an export's restic call when one of its words
+matched nothing, with the same reading — a bare name at any depth, a path from the export's root. The
+line stays in that job's log and the morning check reads it there: `kubectl -n backup logs job/<the
+night's backup-nfs job>`, or in Loki, `{namespace="backup"} |= "exclude-unused"`. `backup-verify` does
+not repeat it the way it does the node rows: the verifier reads snapshots, and the only writable tree
+the nfs job has is the export itself, so a report it could see would have to be written into the
+thing being backed up.
 
 ## What has been proved, and what has not
 
