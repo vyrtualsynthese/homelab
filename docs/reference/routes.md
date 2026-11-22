@@ -66,7 +66,7 @@ Twenty-five hostnames. Nineteen use the internal CA on a `*.kub.local` name; six
 | `kavita.kub.home.ashudev.com` | Kavita | `media-stack` | `lan-only` | Let's Encrypt | no |
 | `koillection.kub.home.ashudev.com` | Koillection | `koillection` | `lan-only` | Let's Encrypt | no |
 | `lidarr.kub.local` | Lidarr | `media-stack` | forward-auth; `lan-only` alone on `/api` | internal CA | no |
-| `loki.kub.local` | Loki, query frontend and UI | `monitoring` | forward-auth, Admins only; `/loki/api/v1` carries no exemption | internal CA | no |
+| `loki.kub.local` | Loki query API and query frontend, no browser UI | `monitoring` | forward-auth, Admins only; `/loki/api/v1` carries no exemption | internal CA | no |
 | `maintainerr.kub.local` | Maintainerr | `media-stack` | forward-auth; `lan-only` alone on `/api` | internal CA | no |
 | `n8n.kub.home.ashudev.com` | n8n | `n8n` | `lan-only` | Let's Encrypt | no |
 | `prowlarr.kub.local` | Prowlarr | `media-stack` | forward-auth; `lan-only` alone on `/api` | internal CA | no |
