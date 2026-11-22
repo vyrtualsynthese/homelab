@@ -10,7 +10,8 @@
 > chart's `values.yaml`
 
 This is a snapshot of the repository and of the cluster on 2026-11-22. Pod health and claim state move
-daily; [status.md](../status.md) is the live answer for what is running, what is broken and why.
+daily, and no page keeps up with them: `kubectl get pods -A` and ArgoCD's application list are the
+live answer, and [Every day](../running-it/every-day.md) is the sweep that reads them.
 Two rows were refreshed on 2026-11-20: `koillection` is scheduled again, and `minecraft-server` now
 renders its workload at `0` replicas by decision rather than waiting on a claim.
 
@@ -137,4 +138,5 @@ depends on the removed label.
   which sits behind the forward-auth gate, and which is LAN only.
 - [storage.md](storage.md) — the classes above, the claim naming and the missing backups.
 - [observability.md](observability.md) — what watches these workloads, and the known holes.
-- [status.md](../status.md) — the live picture: what is running, what is `Pending`, what is broken.
+- [Every day](../running-it/every-day.md) — the commands that show what is running, what is
+  `Pending` and what is broken.

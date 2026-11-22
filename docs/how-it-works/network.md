@@ -127,4 +127,3 @@ from the Applications' charts, so the one route it cannot show is the Traefik da
 `traefik.kub.local` is a value of the Traefik Helm release
 (`cluster/infrastructure/traefik/values-v3.yaml`), not an Application, and its `web` twin is
 `cluster/infrastructure/traefik/dashboard/redirect.yaml`.
-[status.md](../status.md) carries the applications that are not working.

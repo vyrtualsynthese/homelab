@@ -1,5 +1,13 @@
 # Discourse is retired, not repaired
 
+> **In one line.** Discourse left the homelab on 2026-11-19 rather than being repaired: the chart,
+> the Application and the namespace went with it, by decision.
+>
+> **Use it when** you find `forum.ashuvidz.com` in an old note, or wonder why there is no forum ·
+> **Verified** 2026-11-19 · **Kind:** record
+>
+> **Sources** the cluster read on 2026-11-19, `cluster/argocd/projects/`
+
 Date: 2026-11-19
 Decided by: operator
 Status: active
@@ -27,7 +35,7 @@ What went with it, so it is not discovered later:
 The application was already without data, and nothing depended on it.
 
 - **The pod never left `Pending`.** It mounts claim `discourse2`, which the 2026 Longhorn failure
-  released; the replacement claim was never created, and `docs/status.md` had listed the app as
+  released; the replacement claim was never created, and the status snapshot then kept in `docs/` had listed the app as
   broken since the 17 November snapshot.
 - **The database is not there either.** `pg_database_size_bytes` on the shared PostgreSQL, read on
   2026-11-19, lists `acceptance`, `authentik`, `postgres`, `template0`, `template1` and `vikunja`.

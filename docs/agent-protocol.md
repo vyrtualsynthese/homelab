@@ -1,5 +1,14 @@
 # The operator↔agent protocol
 
+> **In one line.** The board is run by one contract, written once in the workstation's own
+> `AGENTS.md`; its long form and the API calls behind it live outside this repository, and this page
+> is the pointer that keeps them findable from the docs site.
+>
+> **Use it when** you are filing, moving or refusing a card and want the page that governs it ·
+> **Verified** 2026-11-22 · **Kind:** explanation
+>
+> **Sources** the task-board contract in `~/.config/opencode/AGENTS.md`, `docs/agent-access.md`
+
 The board rules are written once, in the contract every session reads: §Task board of
 `~/.config/opencode/AGENTS.md`. The long form — a card's shape, a handover, a refusal, a blocked
 task — is [The board and worktrees](https://docs.kub.local/config/develop/agent/board-and-worktrees/)
