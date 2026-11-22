@@ -164,6 +164,17 @@ All notable changes to this repository. The format follows
 
 ### Security
 
+- `ashudev.com` sends a `content-security-policy`: `default-src 'none'` with the site's own styles,
+  fonts, images and PDFs allowed and nothing else, plus `frame-ancestors 'none'`. It is a middleware
+  of its own (`kube-system/security-static`) because `security` is shared with every application
+  behind the router and this policy would break all of them.
+- The shared `security` middleware no longer sends `x-xss-protection`. Every current browser retired
+  it, and its filter mode was itself a source of bugs; the content policy above is what replaces it.
+- The shared `security` middleware no longer advertises HSTS `preload`. `ashudev.com` was never
+  submitted to the preload list, so the flag promised a protection that did not exist, and the
+  domain carries LAN-only names that a preload entry would lock to HTTPS with no quick way back.
+  The decision on 2026-11-22 is to stop promising it, not to join the list; `includeSubdomains`
+  stays, because those names are HTTPS-only already.
 - Traefik no longer trusts a `PROXY` line or an `X-Forwarded-*` header from the client. Both
   `proxyProtocol.insecure` flags were the chart's stock values and were measured as a `lan-only`
   bypass on 2026-11-22: a request to an internal host carrying `PROXY TCP4 192.168.1.99 …` was

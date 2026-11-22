@@ -1,3 +1,21 @@
+# The header set every route carries through `kube-system-security@kubernetescrd`.
+#
+# Applied by hand, like the rest of `cluster/infrastructure/**`; no Application
+# watches this directory.
+#
+# Two headers are deliberately not here:
+#
+#   * `preload`. `ashudev.com` was never submitted to the HSTS preload list, so
+#     the flag promised a protection that did not exist. The domain also carries
+#     LAN-only names — `home.ashudev.com`, `authentik.kub.home.ashudev.com`,
+#     `dashy.ashudev.com` — and a preload entry cannot be withdrawn quickly, so
+#     the decision (2026-11-22, task 608) is to stop promising it rather than to
+#     join the list. `includeSubdomains` stays: those names are HTTPS-only today
+#     and the cluster has certificates for all of them.
+#
+#   * `browserXssFilter`. `X-XSS-Protection` is retired in every current browser
+#     and its filter mode is itself a source of bugs; the policy on the routes
+#     that need it is `content-security-policy`, see `security-static.yaml`.
 apiVersion: traefik.io/v1alpha1
 kind: Middleware
 metadata:
@@ -5,8 +23,6 @@ metadata:
 spec:
   headers:
     frameDeny: true
-    browserXssFilter: true
     contentTypeNosniff: true
     stsIncludeSubdomains: true
-    stsPreload: true
     stsSeconds: 31536000
