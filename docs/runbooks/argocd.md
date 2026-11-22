@@ -182,11 +182,16 @@ kubectl -n argocd get application <name> -o jsonpath='{.status.conditions}' | jq
 kubectl -n argocd logs deploy/argocd-repo-server --since=30m | grep -i '<name>'
 ```
 
-The causes seen here, in order of frequency: a `path` that does not exist at that `targetRevision`; a
+The causes seen here: a `path` that does not exist at that `targetRevision`; a
 chart that fails `helm template` (the message quotes the template error); a repository the
 repo-server cannot read (credentials, or a `targetRevision` branch that was never pushed); and a
 dependency build that keeps failing (see the section above). The rule's `for: 10m` means a retry
 that succeeds clears it without a message.
+
+After an Argo CD upgrade, confirm the metric the rule reads still exists:
+`count(argocd_app_condition)` must answer (0 is correct on a healthy cluster), and
+`controller.metrics.application.conditions` must still be a key the release reads. A renamed metric
+turns the rule silent, and `noDataState: OK` renders silence as health.
 
 ## Break-glass
 
