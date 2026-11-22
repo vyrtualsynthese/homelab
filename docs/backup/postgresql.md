@@ -23,6 +23,13 @@ command.
   [postgres-add-database.md](../runbooks/postgres-add-database.md), which is the authority on the pair.
 - `postgres:18.7` already on `nas`; the pods are pinned there because the claim is.
 
+**If the dump is not there.** The producer is watched twice: `PostgresDumpStale` fires when
+`databases/postgres-dump` has not succeeded in 26 hours, `PostgresDumpAbsent` when the CronJob is gone
+or has never succeeded, and the nightly verifier fails naming the `postgres-dumps` row when the newest
+`nodes-nas` snapshot holds no `*.dump` under it. Receive one of those and fix the producer before
+restoring anything: a dump no older than 14 days is the precondition above, and the retention clock is
+already running.
+
 ## The order
 
 1. **`globals.sql`.** Roles and grants are cluster-wide objects, not part of a database dump. On a

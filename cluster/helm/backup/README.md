@@ -26,6 +26,10 @@ Storage bucket. Four restic repositories, one per stream: `nodes-nas`, `nodes-nu
    and skips the live file, including its `-wal`, `-shm` and `-journal` siblings. The staged copy is
    the one a restore uses. The verifier fails any `sqlite` row whose stream snapshot holds no staged
    database, so a `db:` pattern that went stale loses the copy for one night, not forever.
+   A `kind: files` row may also declare `mustMatch`, and then the verifier fails the run when the
+   stream's newest snapshot holds no file matching it under that claim. It is for a directory whose
+   producer can stop while the directory stays: `postgres-dumps` declares `["*.dump"]`, because a
+   stopped dump CronJob leaves every stream green on a claim that holds nothing.
 5. **A row's `exclude` means "not backed up".** It is applied to the claim copy *and* to staging, so an
    excluded database is not quietly staged back in. It is reserved for what is large and rebuilt from
    something else: poster art, logs, caches, an application's own rotating database copies. An entry
@@ -52,7 +56,7 @@ Storage bucket. Four restic repositories, one per stream: `nodes-nas`, `nodes-nu
 | `backup-node-nas`, `backup-node-nuc0`, `backup-node-streaming` | 04:30, 05:00, 05:30 Europe/Paris | the node's `local-path` roots, its host configuration, and on the two control planes the K3s snapshot directory |
 | `backup-nfs` | 06:00 | the `nas` exports: syncthing, koillection uploads, the ACME store, the qBittorrent config export |
 | `backup-prune` | Sunday 12:00 | every repository, each with its own policy: `forget --keep-daily 7 --keep-weekly 4 --keep-monthly 12`, and on the `nfs` stream `--keep-monthly 24 --keep-yearly 10` |
-| `backup-verify` | 08:30 | every repository: newest snapshot age, size against budget, each `sqlite` row's staged database, the etcd copy's age, and each row's `exclude` entries that matched nothing |
+| `backup-verify` | 08:30 | every repository: newest snapshot age, size against budget, each `sqlite` row's staged database, each `mustMatch` row's files, the etcd copy's age, and each row's `exclude` entries that matched nothing |
 
 Each node job is two containers: `prepare` (Python, stages the databases and writes the two path
 lists) and `restic` (one backup run). The prune and verify jobs own no data; they are here so the
