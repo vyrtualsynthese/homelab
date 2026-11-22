@@ -1,3 +1,19 @@
+{{- /*
+Two routers for one host: the TLS one serves Loki, the plain-HTTP one only
+redirects to it. Neither sets `secretName` nor `certResolver`, so Traefik falls
+back to the cluster default certificate `kube-system/local-cert` — the
+`*.kub.local` leaf signed by the ashulab internal CA. See
+docs/runbooks/internal-ca.md.
+
+`authentik-forwardauth` is the gate: the store holds every namespace's logs for
+30 days and Loki itself authenticates nobody (`auth_enabled: false`), so the LAN
+rule alone would let every device on the network read them. Grafana and Fluent
+Bit are unaffected — they use `loki.monitoring.svc.cluster.local:3100`, which
+never passes through Traefik. The provider's `external_host` in
+cluster/helm/authentik/files/app-loki.yaml must keep the same scheme as the
+`websecure` router below, or the outpost sets a `Secure` cookie on a plain-HTTP
+page and the browser loops.
+*/ -}}
 apiVersion: {{ .Values.traefik.apiVersion }}
 kind: IngressRoute
 metadata:
@@ -8,14 +24,38 @@ metadata:
     app.kubernetes.io/instance: {{ .Release.Name }}
 spec:
   entryPoints:
+    - websecure
+  routes:
+    - match: Host(`{{ .Values.ingress.host }}`)
+      kind: Rule
+      middlewares:
+        - name: kube-system-lan-only@kubernetescrd
+        - name: kube-system-authentik-forwardauth@kubernetescrd
+      services:
+        - name: {{ .Values.ingress.service }}
+          port: {{ .Values.ingress.port }}
+  tls:
+    options:
+      name: internal-tls
+      namespace: kube-system
+---
+apiVersion: {{ .Values.traefik.apiVersion }}
+kind: IngressRoute
+metadata:
+  name: {{ .Chart.Name }}-redirect
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: {{ .Chart.Name }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  entryPoints:
     - web
   routes:
     - match: Host(`{{ .Values.ingress.host }}`)
       kind: Rule
-      # These routes serve metrics and logs with no application login, so the LAN gate
-      # is the only access control.
       middlewares:
         - name: kube-system-lan-only@kubernetescrd
+        - name: kube-system-redirect-to-https@kubernetescrd
       services:
         - name: {{ .Values.ingress.service }}
           port: {{ .Values.ingress.port }}
