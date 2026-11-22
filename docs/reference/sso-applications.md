@@ -39,6 +39,7 @@ absent from this table has no single sign-on at all — no provider, no gate —
 | Bazarr (anime) | forward-auth gate | configured; no login of its own; `/api` exempt | `bazarr-anime.kub.local` |
 | Docs site (MkDocs) | forward-auth gate | live since 2026-11-17 — blueprint `app-docs`, Admins only | `docs.kub.local` |
 | Lidarr | forward-auth gate | configured; its own login is off; `/api` exempt | `lidarr.kub.local` |
+| Loki | forward-auth gate | configured 2026-11-22 — blueprint `app-loki`, Admins only; no `/api` exemption, because the query API is exactly what the gate protects | `loki.kub.local` |
 | Maintainerr | forward-auth gate | **to verify** before the next touch — it has no login of its own; `/api` exempt since 2026-11-15 | `maintainerr.kub.local` |
 | Prowlarr | forward-auth gate | configured; its own login is off; `/api` exempt; its probes carry a `Host` header | `prowlarr.kub.local` |
 | Sonarr | forward-auth gate | configured; its own login is off; `/api` exempt | `sonarr.kub.local` |
