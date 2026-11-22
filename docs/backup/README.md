@@ -47,12 +47,14 @@ holds in prose is [how backups work](../how-it-works/backups.md).
 |---|---|
 | nothing yet, and you are weighing the risk | [what a loss costs](what-a-loss-costs.md) |
 | you want to know how the nightly jobs are built | [how backups work](../how-it-works/backups.md) |
-| a file, a directory or a whole claim is gone | [restore.md](../runbooks/restore.md) |
-| a database is broken and the claim is fine | [postgres-restore.md](../runbooks/postgres-restore.md) |
+| a file, a directory or a whole claim is gone | [a file, or a whole claim](a-file-or-a-claim.md) |
+| an application's database is broken but its claim is fine | [a database inside an application](a-database.md) |
+| a database on the shared PostgreSQL is broken | [PostgreSQL](postgresql.md) |
+| you want the full command sequence, or the drill log | [restore.md](../runbooks/restore.md) |
 | the cluster is gone, and only the bucket is left | [last-resort.md](../runbooks/last-resort.md) |
 
-The rest of the section — a lost file, a broken database, a dead node, a total loss — is being written
-now; each page lands with the procedure it describes, not before.
+A dead node and a total loss get their own pages in this section shortly; each lands with the
+procedure it describes, not before.
 
 One thing to know before the first real loss: a restore reads the bucket with the restic password from
 the Bitwarden item `homelab-backup-last-resort`. Without it the bucket is ciphertext, and that is the
