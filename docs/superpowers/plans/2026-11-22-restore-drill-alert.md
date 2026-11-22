@@ -236,7 +236,7 @@ curl -s -G -H "Authorization: Bearer $GRAFANA_TOKEN" \
   --data-urlencode 'query=topk(1, homelab_restore_drill_timestamp_seconds)'
 ```
 
-Expected: one series, `stream="all"`, `drill="last-resort"`, `date="2026-11-22"`, value `1795305600`.
+Expected: one series whose `date` is `2026-11-22`, `stream` either `all` or `nodes-streaming` (`topk(1, …)` breaks the tie between `last-resort` and `sonarr-live-claim` arbitrarily), value `1795305600`.
 
 - [ ] **Step 2: Create the rule**
 
@@ -245,7 +245,7 @@ Expected: one series, `stream="all"`, `drill="last-resort"`, `date="2026-11-22"`
 - `folderUID: homelab`, `ruleGroup: homelab-core`, `title: RestoreDrillOverdue`, `condition: C`, `for: 1h`, `noDataState: Alerting`, `execErrState: Alerting`, `labels: {severity: warning}`, `isPaused: false`.
 - A: `datasourceUid: PBFA97CFB590B2093`, instant, `expr: time() - topk(1, homelab_restore_drill_timestamp_seconds)`.
 - C: `__expr__` threshold, expression `A`, reducer `last`, evaluator `{type: gt, params: [7776000]}`.
-- annotations: summary `restore drill overdue: newest was {{ $labels.date }} ({{ $labels.stream }})`; description naming the 90-day (three-monthly) threshold, the runbook at `https://github.com/vyrtualsynthese/homelab/blob/develop/docs/runbooks/restore.md`, and that this is a warning at 90 days, not an outage; `runbook_url` the same link.
+- annotations: summary `restore drill overdue: newest was {{ $labels.date }} ({{ $labels.stream }})`; description naming the 90-day (three-monthly) threshold, the runbook at `https://github.com/vyrtualsynthese/homelab/blob/develop/docs/runbooks/restore.md`, that this is a warning at 90 days, not an outage, and that an empty date and stream mean the log could not be read at all — the ConfigMap or the metric is missing, so the fault is the exporter; `runbook_url` the same link.
 
 Expected: 201 with a `uid`; the rule appears in `homelab-core`.
 
