@@ -28,6 +28,10 @@ Fluent Bit tails `/var/log/containers/*.log` only: container output, no host log
 journal. The claim sizes and how long each keeps data are in
 [`reference/metrics.md#storage-and-retention`](reference/metrics.md#storage-and-retention).
 
+What the pipeline carries in a day — 533,803 lines and 117 MB on 2026-11-22 — and the selector that
+reproduces every figure are in [`reference/log-budget.md`](reference/log-budget.md). Read it before
+treating a log volume as a regression: the seven-day total is dominated by two bursts that are over.
+
 All five are wrapper charts under `cluster/helm/monitoring/`, one ArgoCD
 Application each; the design is
 `docs/superpowers/specs/2026-11-12-observability-stack-design.md`.

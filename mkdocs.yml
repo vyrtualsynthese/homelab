@@ -93,6 +93,7 @@ nav:
       - Chart notes: reference/chart-notes.md
       - Chart sizing: reference/chart-sizing.md
       - Metrics: reference/metrics.md
+      - Log budget: reference/log-budget.md
       - Alerts: reference/alerts.md
       - Dashboards: reference/dashboards.md
       - Secrets: secrets.md
