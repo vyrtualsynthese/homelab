@@ -30,7 +30,8 @@ Until 2026-11-21 it was the K3s addon's release. K3s shipped two `HelmChart` obj
 `traefik-crd`, plus a `HelmChartConfig` applied from a drop-in file on every server, and its
 helm-controller runs no Job at all in this cluster (task 530). So the addon's chart and values were
 frozen, and the release had to be moved by hand. Ownership moved the same day: the addon is disabled
-in the node config, the packaged objects are gone, and `values.yaml` is the only input.
+in the node config, the packaged objects are gone, and the values file for the chart line is the only
+input — `values-v3.yaml` today.
 
 **The chart source.** The upstream index (`https://traefik.github.io/charts`) no longer carries
 `25.0.3`; its oldest 25.x is gone and it starts at 42.x. K3s still serves the chart it was installed
