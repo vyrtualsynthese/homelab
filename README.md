@@ -11,10 +11,10 @@ portfolio.
 
 ## Current state
 
-| Thing | Reality on the cluster, 2026-11-12; counts include the observability branch |
+| Thing | Reality on the cluster, 2026-11-12; the K3s and Ingress rows re-checked 2026-11-22 |
 |---|---|
-| K3s | `v1.30.1+k3s1` on all four nodes, containerd, embedded etcd |
-| Ingress | Traefik `2.10.7`, chart `25.0.3`, owned by this repository since 2026-11-21; it was the K3s addon until then |
+| K3s | `v1.31.14+k3s1` on all four nodes, containerd, embedded etcd |
+| Ingress | Traefik `3.7.19`, chart `42.4.1`, owned by this repository since 2026-11-21; it was the K3s addon until then |
 | Storage | `local-path` for configuration, NFS provisioner classes for media. **No replicated storage.** |
 | Replicated storage | Longhorn was abandoned after the disk failure. Its volumes are gone. |
 | Applications | 58 ArgoCD Applications; about 20 are unhealthy |
