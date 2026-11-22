@@ -192,6 +192,11 @@ All notable changes to this repository. The format follows
 
 ### Fixed
 
+- The GPU operator's 500m CPU limit survived the rightsizing pass: the `cpu: null` that was meant to
+  delete the upstream chart's default did nothing, because a null in a chart's own `values.yaml` is a
+  default and only a Helm *override* deletes an inherited subchart key. The `gpu-operator` Application
+  now passes `values.yaml` as an override, the way `dashy` and `authentik` already do, and the live
+  Deployment lost the limit on the next sync.
 - CoreDNS's two `No files matching import glob` warnings per reload are gone.
   `cluster/infrastructure/coredns/custom.yaml` gives the `import /etc/coredns/custom/*.override` and
   `*.server` globs a comment-only file each, which K3s mounts as an optional volume. The Corefile is
