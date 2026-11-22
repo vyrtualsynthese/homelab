@@ -96,6 +96,9 @@ def nav_problems(root: pathlib.Path) -> list[str]:
     listed: set[pathlib.Path] = set()
     for target in targets:
         path = docs / target
+        if path.is_dir():
+            problems.append(f"mkdocs.yml: {target} is a directory, not a page")
+            continue
         if not path.is_file():
             problems.append(f"mkdocs.yml: {target} does not exist")
             continue
@@ -104,7 +107,8 @@ def nav_problems(root: pathlib.Path) -> list[str]:
         relative = path.relative_to(root).as_posix()
         if relative.startswith(SKIP_PATHS[0]):
             continue
-        if any(fnmatch.fnmatch(target, pattern.strip()) for pattern in omitted_patterns if pattern.strip()):
+        in_docs = path.relative_to(docs).as_posix()
+        if any(fnmatch.fnmatch(in_docs, pattern.strip()) for pattern in omitted_patterns if pattern.strip()):
             continue
         if path.resolve() not in listed:
             problems.append(f"{relative}: no nav entry")
@@ -115,7 +119,7 @@ CATALOGUE = "docs/how-it-works/applications.md"
 ROW_RE = re.compile(r"^\|\s*`([^`]+)`\s*\|")
 PEM_RE = re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----")
 ACCESS_KEY_RE = re.compile(r"AKIA[0-9A-Z]{16}")
-ASSIGN_RE = re.compile(r"(?i)\b(password|passwd|token|secret|api[_-]?key)\b\s*[:=]\s*(\S+)")
+ASSIGN_RE = re.compile(r"(?i)\b([\w.-]*(?:password|passwd|token|secret|api[_-]?key)[\w.-]*)\s*[:=]\s*(\S+)")
 PLACEHOLDER_STARTS = ("<", "`<", "{{", "$", "/", "…", "...", "REDACTED", "redacted", "process.env")
 
 

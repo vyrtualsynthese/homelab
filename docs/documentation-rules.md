@@ -22,7 +22,7 @@ the part which stops an agent "improving" a snapshot.
 |---|---|---|---|
 | Explanation | why the place is shaped this way | an agent, for the operator | rewritten when the shape changes, re-dated |
 | How-to | what to do, in order | an agent, then the operator after it has been run | the body follows reality; a change to reality changes it in the same pull request |
-| Reference | a table of current fact | a script, from the repository | never hand-edited; regenerate and commit |
+| Reference | a table of current fact | a script, from the repository, where it can be; by hand where the set is not derivable (the application catalogue, under R16) | never hand-edited once generated; regenerate and commit |
 | Record | what was true, or what was decided, on a date | the session that did it | never edited; a correction is a new record |
 
 The old labels map onto these, and a page adopts its true kind the next time it is edited: `living
@@ -43,7 +43,7 @@ A question has one home. Anything else states it by link.
 | Where does a secret come from? | [secrets.md](secrets.md) | reference |
 | What is backed up, and when? | [backups.md](how-it-works/backups.md) | explanation |
 | What is broken right now? | [every-day.md](running-it/every-day.md) | how-to |
-| Why was this decided? | [the decision records](decisions/2026-11-21-sovereign-eu-providers-only.md) | record |
+| Why was this decided? | [the decision records](decisions/README.md) | record |
 
 [`superpowers/`](superpowers/specs/2026-11-22-documentation-rules-design.md) sits outside the nav on
 purpose: it is the design record of one change, read from the card that links it, never a manual.

@@ -47,5 +47,5 @@ How a request travels — the router, the middlewares, the redirect twins — is
 [identity.md](../how-it-works/identity.md). Which hostname carries which gate, as a table, is
 [reference/routes.md](../reference/routes.md), and it is generated from the charts so it cannot lag.
 
-What to do when one of the critical points is gone is the [Backups](../how-it-works/backups.md)
+What to do when one of the critical points is gone is the [Backups](../backup/README.md)
 section's job: recovery is a backup question, not a security one.

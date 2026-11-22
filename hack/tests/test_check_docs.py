@@ -76,6 +76,18 @@ class NavTests(unittest.TestCase):
         with fixture_root(nav_extra="  - Missing: things/ghost.md\n") as root:
             self.assertEqual(check_docs.nav_problems(root), ["mkdocs.yml: things/ghost.md does not exist"])
 
+    def test_a_directory_in_the_nav_says_so(self):
+        with fixture_root(nav_extra="  - A folder: things/\n") as root:
+            self.assertTrue(any("is a directory" in p for p in check_docs.nav_problems(root)))
+
+    def test_a_not_in_nav_pattern_matches_the_page_itself(self):
+        with fixture_root(unlisted=True, nav_extra="") as root:
+            config = root / "mkdocs.yml"
+            config.write_text(
+                config.read_text(encoding="utf-8") + "not_in_nav: |\n  things/*.md\n", encoding="utf-8"
+            )
+            self.assertEqual(check_docs.nav_problems(root), [])
+
     def test_a_url_in_the_nav_is_ignored(self):
         with fixture_root(nav_extra="  - Board: https://vikunja.kub.local\n") as root:
             self.assertEqual(check_docs.nav_problems(root), [])
@@ -128,6 +140,14 @@ class SecretsTests(unittest.TestCase):
     def test_a_secret_name_and_its_keys_are_not(self):
         with temp_tree({"docs/a.md": "The Secret `backup-restic` holds RESTIC_PASSWORD.\n"}) as root:
             self.assertEqual(check_docs.secret_problems(root), [])
+
+    def test_a_prefixed_variable_with_a_value_is_reported(self):
+        with temp_tree({"docs/a.md": "RESTIC_PASSWORD=sup3r-s3cret-value\n"}) as root:
+            self.assertEqual(len(check_docs.secret_problems(root)), 1)
+
+    def test_an_underscored_setting_with_a_value_is_reported(self):
+        with temp_tree({"docs/a.md": "grafana_admin_password: sup3r-s3cret-value\n"}) as root:
+            self.assertEqual(len(check_docs.secret_problems(root)), 1)
 
 
 BANNER = """> **In one line.** What it answers.

@@ -65,6 +65,18 @@ spec:
     def test_a_document_with_no_host_is_skipped(self):
         self.assertEqual(len(gen_docs.parse_rendered_routes(self.DOCS, "x", "y")), 1)
 
+    def test_a_document_that_names_two_hosts_yields_one_row_each(self):
+        docs = self.DOCS.replace(
+            "    - kind: Rule\n",
+            "    - kind: Rule\n      match: Host(`sonarr-anime.kub.local`)\n"
+            "      middlewares:\n        - name: kube-system-lan-only@kubernetescrd\n"
+            "      services: [{name: sonarr-anime, port: 8989}]\n    - kind: Rule\n",
+        )
+        routes = gen_docs.parse_rendered_routes(docs, "sonarr", "media-stack")
+        self.assertEqual([route.host for route in routes], ["sonarr-anime.kub.local", "sonarr.kub.local"])
+        self.assertEqual(routes[0].middlewares, ("lan-only",))
+        self.assertEqual(routes[1].middlewares, ("lan-only", "authentik-forwardauth"))
+
     def test_a_web_only_route_answers_plain_http(self):
         docs = self.DOCS.replace("  entryPoints: [websecure]", "  entryPoints: [web]")
         docs = docs.replace("  tls:\n    options: {name: internal-tls, namespace: kube-system}\n", "")
@@ -122,6 +134,47 @@ class RenderRoutesTests(unittest.TestCase):
         page = gen_docs.render_routes(FIXTURE_ROOT)
         self.assertIn("| `fixture.kub.local` |", page)
         self.assertIn("| `media-stack` |", page)
+
+    def test_an_application_is_named_by_metadata_name_not_the_file_stem(self):
+        with temp_tree(
+            {
+                "cluster/argocd/projects/news/freshrss.yaml": (
+                    "apiVersion: argoproj.io/v1alpha1\nkind: Application\n"
+                    "metadata: {name: news-freshrss}\n"
+                    "spec: {destination: {namespace: news}, source: {path: cluster/helm/news}}\n"
+                ),
+            }
+        ) as root:
+            self.assertIn("news-freshrss", gen_docs.applications(root))
+
+    def test_an_application_with_no_chart_in_the_repository_is_named_in_the_page(self):
+        with temp_tree(
+            {
+                "cluster/argocd/projects/storage/volumes.yaml": (
+                    "apiVersion: argoproj.io/v1alpha1\nkind: Application\n"
+                    "metadata: {name: volume-provisioner}\n"
+                    "spec: {destination: {namespace: storage}, source: {repoURL: x, path: deploy/chart}}\n"
+                ),
+            }
+        ) as root:
+            page = gen_docs.render_routes(root)
+        self.assertIn("## Applications this table cannot see", page)
+        self.assertIn("- `volume-provisioner`", page)
+
+    def test_a_values_only_directory_that_declares_a_route_fails_loudly(self):
+        with temp_tree(
+            {
+                "cluster/argocd/projects/x/app.yaml": (
+                    "apiVersion: argoproj.io/v1alpha1\nkind: Application\n"
+                    "metadata: {name: app}\n"
+                    "spec: {destination: {namespace: x}, source: {path: cluster/helm/x}}\n"
+                ),
+                "cluster/helm/x/values.yaml": "extraObjects: [{kind: IngressRoute}]\n",
+            }
+        ) as root:
+            with self.assertRaises(gen_docs.GenError) as caught:
+                gen_docs.render_routes(root)
+        self.assertIn("no Chart.yaml", str(caught.exception))
 
 
 class RenderFailureTests(unittest.TestCase):
