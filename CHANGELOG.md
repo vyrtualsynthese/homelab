@@ -8,6 +8,13 @@ All notable changes to this repository. The format follows
 
 ### Added
 
+- `GpuNotAllocatable`: a warning in `homelab-core` when a node that has registered the NVIDIA card
+  advertises zero allocatable `nvidia.com/gpu`. A k3s restart on `streaming` clears the GPU
+  operator's validator markers in `/run/nvidia/validations` and does not re-run the init containers
+  that write them, so the scheduler resource silently goes to 0 while every GPU pod stays `Running`
+  and Plex keeps transcoding. The workaround — delete the validator pod, about 90 seconds — is now
+  recorded in `docs/runbooks/gpu-operator.md`, and the K3s upgrade's `streaming` check reads the
+  allocatable value instead of trusting `nvidia-smi`.
 - `ashudev.com` is served by this cluster: a third static-site chart on the `ashuvidz-website`
   pattern, publishing the site's `gh-pages` branch — the same bytes GitHub Pages served, with no
   build in the cluster. `www.ashudev.com` redirects to the apex and carries its own certificate, and
