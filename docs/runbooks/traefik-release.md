@@ -243,15 +243,21 @@ for h in plex.kub.home.ashudev.com ashudev.com ashuvidz.com dashy.ashudev.com; d
 done
 curl -s -o /dev/null -w 'dashboard http %{http_code}\n' --resolve traefik.kub.local:80:192.168.1.46 http://traefik.kub.local/dashboard/
 curl -sk -o /dev/null -w 'dashboard https %{http_code}\n' --resolve traefik.kub.local:443:192.168.1.46 https://traefik.kub.local/dashboard/
+curl -sk -o /dev/null -w 'dashboard with password %{http_code}\n' -u 'vronteix:<password>' --resolve traefik.kub.local:443:192.168.1.46 https://traefik.kub.local/dashboard/
 timeout 5 bash -c '</dev/tcp/192.168.1.46/22000' && echo "syncthing tcp open"
 ```
 
 Expected since 2026-11-21: `plex` `401` (Plex asking for a sign-in), `ashudev.com` and `ashuvidz.com`
-`200`, `dashy` `302` to authentik, the dashboard **`301` on http then `401` on https** from its
-basic-auth middleware over the internal CA, and Syncthing's port open. The dashboard answered `401`
+`200`, `dashy` `302` to authentik, the dashboard **`301` on http, `401` on https without credentials
+and `200` with them** over the internal CA, and Syncthing's port open. The dashboard answered `401`
 straight on `web` until that day; the redirect comes from `redirect-to-https`, whose
-`redirectScheme.permanent: true` makes Traefik answer `301`, `404` means the redirect twin is
-missing, and `401` on the https line means the route carries `traefik-dashboard`.
+`redirectScheme.permanent: true` makes Traefik answer `301`, and `404` means the redirect twin is
+missing.
+
+**`401` on its own proves nothing.** A `basicAuth` middleware whose Secret has no `users` key also
+answers `401`, to every password — that was the live state from 2023 until 2026-11-22, when the
+Secret's hash was under `auth` instead. Only the `-u` line above distinguishes "protected" from
+"unusable": it must answer `200`. The Secret and its key are in [`../secrets.md`](../secrets.md).
 
 Finally the routers Traefik built, and the metrics:
 
