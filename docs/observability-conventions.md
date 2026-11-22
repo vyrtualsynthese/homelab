@@ -258,8 +258,9 @@ Two panels on **Homelab · Traefik**, row *Request record*, read it: *Failed req
 a few seconds late, because Fluent Bit batches on its own flush interval; Traefik's writer does not
 wait.
 
-Gating Loki itself is a separate card: the log store is readable by every device on the LAN, and that
-is true of every application log, not only this one.
+The store itself is gated since 2026-11-22 (`authentik-forwardauth`, Admins only), so a line is no
+longer readable by every device on the LAN — but it is still 30 days of every application's output,
+not only Traefik's.
 
 ## Where the detail lives
 
