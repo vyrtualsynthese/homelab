@@ -247,6 +247,16 @@ All notable changes to this repository. The format follows
 
 ### Fixed
 
+- A backup row's `exclude` now reaches a directory that sits below the claim's root: an entry without
+  a slash is a name and is excluded at any depth, and an entry with a slash stays relative to the
+  claim root. Every entry used to be anchored at the root, which silently matched nothing for Plex,
+  whose whole tree lives under `Library/Application Support/Plex Media Server/`. Measured from the
+  bucket on 2026-11-22, the `nodes-streaming` snapshot held 10.04 GB and 6.73 GiB of it was Plex's
+  claim: poster art, the transcoder cache, thumbnails, scanners and Plex's own eight dated database
+  copies had ridden in every nightly snapshot since 2026-11-20, and the 3.7 GB the design predicted
+  was never what the job read. The row also excludes the logs, crash reports, update staging and
+  diagnostics, and a snapshot now holds about 2.7 GB. The budget stays at 14 GiB because the
+  snapshots taken before the fix keep the art until the monthly retention drops them.
 - `backup-prune` has run and exited 0 on all four repositories, so a retention policy is applied for
   the first time. Its only previous run, Sunday 2026-11-22 at noon, failed before touching anything:
   the `nfs` repository was still locked by the laptop read test that morning (PID 1222890 on
