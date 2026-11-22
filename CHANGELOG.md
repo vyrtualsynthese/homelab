@@ -8,6 +8,15 @@ All notable changes to this repository. The format follows
 
 ### Added
 
+- Fluent Bit's own metrics are scraped (`fluent-bit.monitoring.svc:2020`,
+  `/api/v2/metrics/prometheus`), and one rule reads them: `FluentBitDroppingLogs` warns when output
+  batches are abandoned after retries or records are dropped from the logger queue.
+  `count({__name__=~"fluentbit_.*"})` answered 0 before, so the pipeline that ships every line Loki
+  stores could lose lines while every other measurement was taken from what did arrive.
+- [`docs/reference/log-budget.md`](docs/reference/log-budget.md): the day's totals (533,803 lines and
+  117 MB on 2026-11-22), the top ten sources by lines and by bytes with the selector that reproduces
+  each, the accepted exceptions, and the two bursts that dominate a seven-day view. The observability
+  conventions link to it.
 - `GpuNotAllocatable`: a warning in `homelab-core` when a node that has registered the NVIDIA card
   advertises zero allocatable `nvidia.com/gpu`. A k3s restart on `streaming` clears the GPU
   operator's validator markers in `/run/nvidia/validations` and does not re-run the init containers
@@ -31,6 +40,15 @@ All notable changes to this repository. The format follows
 
 ### Changed
 
+- authentik, vikunja and the GPU operator log at warning/error instead of the default `info`. Their
+  health checks were the visible part: 108k lines and 35 MB a day across the three. The charts now
+  set `AUTHENTIK_LOG_LEVEL=warning`, `VIKUNJA_LOG_LEVEL=WARNING` and `operator.logging.level: error`;
+  sign-ins, admin actions and workflow outcomes stay in each application's own record.
+- Health probes are no longer part of any log. FreshRSS's readiness probe sends the three
+  `X-Forwarded-*` headers that mod_auth_openidc expects (103,617 warnings a day, 19 % of all Loki
+  lines), the three nginx charts drop only the `kube-probe` user agent from their access log and keep
+  every real request, and pgAdmin's gunicorn access log is off with its probe periods at 60 s
+  (12,952 of its 12,963 daily lines were probes).
 - Traefik asks Let's Encrypt for two certificates instead of fifteen. One DNS-01 wildcard over the
   OVH API carries `ashudev.com`, `*.ashudev.com`, `*.kub.home.ashudev.com` and the bare
   `kub.home.ashudev.com` (a wildcard stands for one label, so dashy's redirect route needs the
@@ -151,8 +169,30 @@ All notable changes to this repository. The format follows
   `helm -n kube-system rollback traefik 11` is the way back. Every decision, with the option it
   replaces, is in [`docs/runbooks/traefik-release.md`](docs/runbooks/traefik-release.md).
 
+### Removed
+
+- Three hand-applied DaemonSets that no Application owned. `kube-system/intel-gpu-plugin` was 3y233d
+  old, ran `intel/intel-gpu-plugin:devel` and warned every 5 s about a GPU no node has (17,277 lines
+  a day). `node-feature-discovery` went in full: it was a second NFD beside the GPU operator's, and
+  its `failed to get DMI entry` alone was 2,878 lines a day on `rbp2`; no selector in the repository
+  reads the labels it sets. `default/loop-device-cleaner` wrote 82,000 lines a day and had never
+  detached anything: the one device it reported every minute was a mounted snap, not a leaked loop.
+  Together they were 22 % of the lines Loki stored.
+
 ### Fixed
 
+- CoreDNS's two `No files matching import glob` warnings per reload are gone.
+  `cluster/infrastructure/coredns/custom.yaml` gives the `import /etc/coredns/custom/*.override` and
+  `*.server` globs a comment-only file each, which K3s mounts as an optional volume. The Corefile is
+  K3s's, so the imports cannot be dropped from git; 6,152 lines a day before the change.
+- Grafana's search manifest watcher no longer warns every 30 s that it listed zero manifests. An
+  empty list is this install's normal state and there is no setting to stop the poll
+  (`grafana/grafana#137058`), so `[log] filters = search-manifest-watcher:error` drops the logger to
+  errors only. 3,408 lines a day.
+- n8n's insights module is off (`N8N_DISABLED_MODULES=insights`). Its pruner wrote three lines a
+  second for twelve hours on 2026-11-18 — 729 MB in the week — and its three tables are empty, so
+  nothing that was read is lost. The expired licence-SDK certificate it also logged is embedded in
+  n8n 2.48.7, the current stable release, and is upstream's to renew.
 - `http://www.ashudev.com` redirects instead of answering Traefik's own 404. The chart put both
   entry points on one `www` router, but a router that carries a `tls` block is attached to the TLS
   entry points only, so `web` did nothing and the plain-HTTP request matched no router at all. The
