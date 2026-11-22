@@ -52,6 +52,15 @@ spec:
             # the Traefik pod: one busy caller throttles everyone.
             - name: "N8N_PROXY_HOPS"
               value: "1"
+            # Insights wrote three lines a second for twelve hours on 2026-11-18
+            # ("Pruning old insights data", "Pruning failed", and the licence SDK
+            # certificate warning), 729 MB in the week. Its three tables were
+            # empty when checked on 2026-11-22, so nothing that was ever read is
+            # lost; the module is off and the pruner cannot loop again. The
+            # licence certificate itself is embedded in n8n 2.48.7, the current
+            # stable release, and is upstream's to renew.
+            - name: "N8N_DISABLED_MODULES"
+              value: "insights"
             - name: "N8N_METRICS"
               value: "true"
             - name: "N8N_METRICS_INCLUDE_DEFAULT_METRICS"

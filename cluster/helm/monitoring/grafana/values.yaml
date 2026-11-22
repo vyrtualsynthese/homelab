@@ -31,6 +31,14 @@ grafana:
       # per evaluation, plus every Prometheus plugin request. `warn` keeps errors
       # and slow-query warnings, which are the two a human acts on.
       level: warn
+      # Grafana 13's search manifest watcher warns twice per poll when no app
+      # plugin publishes a manifest, and an empty list is the normal state here:
+      # 3,408 lines in the 24 h to 2026-11-22, the only warn volume left after
+      # `level: warn`. There is no setting to stop the poll (the upstream issue
+      # is grafana/grafana#137058, and `manifest_watcher_poll_interval` feeds the
+      # remote watcher only), so the logger is filtered to errors. Search keeps
+      # working; it simply has no app manifests to index.
+      filters: "search-manifest-watcher:error"
     auth:
       # Only authentik is offered; the local password form is hidden and a
       # visitor with an authentik session is sent there without a click.
