@@ -77,10 +77,24 @@ spec:
           # With OIDC on, /i/ answers 302 to authentik; a probe counts 3xx as
           # ready. It still boots Apache and PHP, so a dead worker fails here
           # while the TCP check would pass.
+          #
+          # The forwarded headers are what mod_auth_openidc reads to build the
+          # callback. Traefik sets them on every request it proxies; a kubelet
+          # probe does not, and the module then warns three times per pass —
+          # 103,617 lines in the 24 h to 2026-11-22, 19 % of everything Loki
+          # stored. The probe carries the headers so the check still proves the
+          # app answers through the same code path a browser uses.
           readinessProbe:
             httpGet:
               path: {{ .Values.probes.readiness.path }}
               port: http
+              httpHeaders:
+                - name: X-Forwarded-Host
+                  value: {{ .Values.ingress.host | quote }}
+                - name: X-Forwarded-Port
+                  value: "443"
+                - name: X-Forwarded-Proto
+                  value: "https"
             initialDelaySeconds: {{ .Values.probes.readiness.initialDelaySeconds }}
             periodSeconds: {{ .Values.probes.readiness.periodSeconds }}
             timeoutSeconds: {{ .Values.probes.readiness.timeoutSeconds }}
