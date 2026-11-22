@@ -40,7 +40,13 @@ entries:
       name: Loki
       slug: loki
       provider: !KeyOf loki-provider
-      meta_launch_url: https://loki.kub.local/ui
+      # Not `https://loki.kub.local/ui`: Loki serves no page there. `/ui/` is its
+      # operational API (`/ui/api/v1/cluster/nodes` answers JSON) and its browser
+      # frontend is a Grafana plugin, so every `/ui` path that is not that API
+      # answers a 307 to `/ui/404?path=…`. Logs are read in Grafana, so the tile
+      # opens Grafana's Logs Drilldown, whose route comes from the installed
+      # `grafana-lokiexplore-app` plugin's own page include.
+      meta_launch_url: https://grafana.kub.local/a/grafana-lokiexplore-app/explore
       meta_icon: https://raw.githubusercontent.com/grafana/loki/main/docs/sources/logo.png
       policy_engine_mode: any
 

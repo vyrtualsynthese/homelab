@@ -108,7 +108,11 @@ It holds **no alert rules and no Alertmanager** (`alertmanager.enabled: false`,
 **Loki** — `https://loki.kub.local`, behind `kube-system-authentik-forwardauth` on the `websecure`
 router, Admins only. Loki authenticates nobody itself (`auth_enabled: false`) and keeps 30 days of
 every namespace's logs, so the gate is the only access control, and `/loki/api/v1/*` has no
-exemption: the query API is exactly what it protects. The UI is at `/ui`.
+exemption: the query API is exactly what it protects. There is no page to open on that host: `/ui/`
+is Loki's operational API (`/ui/api/v1/cluster/nodes` answers JSON) and its frontend is a Grafana
+plugin, so any other `/ui` path answers `307` to `/ui/404?path=…`. Logs are read in Grafana —
+Explore, or Logs Drilldown at `https://grafana.kub.local/a/grafana-lokiexplore-app/explore`, which
+is where the authentik `Loki` tile points.
 
 Queries from a script go through Grafana's datasource proxy, which holds the Loki datasource and
 authenticates as Grafana does. `GRAFANA_TOKEN` is a Grafana service-account token in
