@@ -86,6 +86,23 @@ Clients install the CA root once. Without it a browser warns and can be clicked 
 is real. The root, its two backups and the restore drill are
 [runbooks/internal-ca.md](../runbooks/internal-ca.md).
 
+## TLS on the public names
+
+Two Let's Encrypt certificates cover every public name.
+
+- One `ashudev.com` certificate carries `ashudev.com`, `*.ashudev.com` and
+  `*.kub.home.ashudev.com`. A wildcard can only be validated by a DNS record (the "DNS-01 challenge",
+  proving the domain by writing a value into its zone), so this one goes through the OVH API.
+- One `ashuvidz.com` certificate carries the apex and `www`. That zone still answers from AWS
+  nameservers, so DNS-01 cannot write its challenge record; it uses the older TLS challenge on port
+  443 instead.
+
+Only the apex route of each domain asks for a certificate (`tls.certResolver` with `tls.domains`);
+every other route is served from the certificate store by SNI. Adding an application under
+`ashudev.com` therefore orders nothing. The store, its two resolvers and the pruning procedure are
+[runbooks/acme-store.md](../runbooks/acme-store.md), and the design is
+[the wildcard spec](../superpowers/specs/2026-11-22-traefik-acme-wildcard-design.md).
+
 ## API exemptions
 
 An API client sends a key, not a browser session, so it cannot complete a sign-in. A gated chart can
