@@ -98,8 +98,13 @@ ingressRoute:
   labels: {}
   annotations: {}
   tls:
-    # -- Let's Encrypt through Traefik's ACME resolver.
+    # -- The zone still answers from AWS, so DNS-01 cannot write the challenge
+    # -- record. One certificate over TLS-ALPN carries both names instead.
     certResolver: myresolver
+    domains:
+      - main: ashuvidz.com
+        sans:
+          - www.ashuvidz.com
   # -- `www`, which only redirects. A name that resolves without a router of its
   # -- own gets no certificate and answers with a TLS name mismatch — which is
   # -- what `www.ashuvidz.com` did until this block existed. Hence a real router
