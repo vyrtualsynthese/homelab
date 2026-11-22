@@ -13,6 +13,14 @@ ingress:
 # The `date` label is derived from it in templates/configmap-restore-drills.yaml,
 # so a row stores one fact. `stream: all` is the last-resort drill, which reads
 # every repository from outside the cluster.
+#
+# A drill run twice on one UTC date replaces its row rather than adding one: two
+# identical series make node-exporter reject the whole textfile, which would read
+# as an unreadable log. hack/tests/test_restore_drill_log.py checks that every
+# table row has an entry here, that the dates agree, and that no series repeats.
+# Two drills on the same date are interchangeable to the rule: topk(1) names
+# whichever stream it returns, because the alert reports the newest date, not a
+# particular stream.
 restoreDrills:
   - stream: nodes-nas
     drill: postgresql-dumps
