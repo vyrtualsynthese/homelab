@@ -234,12 +234,13 @@ are in `docs/superpowers/plans/`.
    Application to match git, which silently switches automation off until the operator re-enables it
    in the UI. None of the 55 carries it (§8.4 of the design).
 2. `cluster/infrastructure/**` is outside GitOps (§2).
-3. **Backups run, and a copy comes back; a rebuild from one is not yet drilled.** One OVH bucket in
+3. **Backups run, a copy comes back, and a claim has been rebuilt from one.** One OVH bucket in
    `GRA`, four restic repositories (`nodes-nas`, `nodes-nuc0`, `nodes-streaming`, `nfs`), six CronJobs
    in `cluster/helm/backup`, nightly. `docs/how-it-works/backups.md` is the page. The drill log in
    `docs/runbooks/restore.md` holds four read-only restores: the PostgreSQL dumps, Sonarr's database
    and a Syncthing file on 2026-11-21, and all four repositories read from a laptop with no cluster at
-   all on 2026-11-22. The destructive put-back onto a live claim and the etcd rehearsal are untried.
+   all on 2026-11-22. On 2026-11-22 Sonarr's claim was also put back onto its live volume and served
+   from the restored database, 32 seconds down. The etcd rehearsal is still untried.
    The old paths remain broken and are not used: the k3s script dumps a SQLite file on an etcd cluster,
    the NAS script backs up a MinIO path deleted in July 2024. See `docs/audit/ansible-hosts.md`.
 4. **Longhorn is gone, and its dead are buried (resolved 2026-11-19).** The driver, its

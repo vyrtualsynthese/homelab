@@ -6,7 +6,8 @@
 > syncthing, koillection's uploads, and the etcd snapshot copies.
 >
 > **Use it when** you are adding a stateful application, a job went red, a stream looks stale, or you
-> are weighing what a loss would cost · **Verified** 2026-11-22 · **Kind:** living page
+> are weighing what a loss would cost · **Verified** 2026-11-22: a claim was rebuilt from its snapshot
+> and the application ran from it · **Kind:** living page
 
 The design is [`superpowers/specs/2026-11-20-backups-design.md`](../superpowers/specs/2026-11-20-backups-design.md);
 the code is [`cluster/helm/backup/`](../../cluster/helm/backup/README.md); the restore procedure and
@@ -140,6 +141,13 @@ on-disk copies of the password were moved aside for the run. The row is in the d
 [`runbooks/restore.md`](../runbooks/restore.md) and the procedure is
 [`runbooks/last-resort.md`](../runbooks/last-resort.md).
 
-Still not proved: putting a restored configuration back onto a live claim, and restoring an etcd
-snapshot. Both are destructive and neither has been rehearsed, so the honest statement is that the
-data comes back, not that a broken application has been rebuilt from it.
+Proved on 2026-11-22, the put-back: Sonarr's claim was rebuilt from that morning's `nodes-streaming`
+snapshot and the application ran from it. It was stopped, its tree moved aside inside the claim, the
+restored database and configuration copied in, and it came back — 32 seconds down — answering its API
+with the same 103 series and 566 episode files the database held, writing to the restored
+`sonarr.db`, and syncing `Healthy` in ArgoCD. The procedure and the two traps that would trip a first
+attempt (the pod selector, ArgoCD's self-heal) are in
+[`runbooks/restore.md`](../runbooks/restore.md) §2.
+
+Still not proved: restoring an etcd snapshot. That is destructive in a way the others are not — it
+replaces the cluster's whole object state — so it is rehearsed into a test cluster, and it is card #8.

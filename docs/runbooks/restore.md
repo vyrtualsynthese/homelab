@@ -1,16 +1,17 @@
 # Restore from an off-box backup
 
 **Destructive where it says so.** Sections 1 and 3 read only. Section 2's last part replaces a live
-application's configuration, and section 4 replaces a server's whole state: both are marked, and
-neither belongs in a drill.
+application's configuration, and section 4 replaces a server's whole state: both are marked.
+Section 2's put-back was drilled on 2026-11-22; section 4's rehearsal is still untried.
 
 > **In one line.** How to get a file, a database or a cluster state back out of the OVH bucket, and
 > the drill log that says which of these has actually been tried.
 >
 > **Use it when** something was deleted, a claim is gone, a database has to be rebuilt, or the
-> monthly restore drill is due · **Verified** 2026-11-22: sections 1–3 restored and read back, all
-> four repositories read from a laptop outside the cluster, the destructive put-back and the etcd
-> rehearsal are untried · **Kind:** living page
+> monthly restore drill is due · **Verified** 2026-11-22: sections 1–3 restored and read back, Sonarr
+> stopped and restarted from a snapshot put back onto its live claim (32 s of downtime), all four
+> repositories read from a laptop outside the cluster; the etcd rehearsal is untried · **Kind:**
+> living page
 
 The nightly jobs write four restic repositories into one bucket. Restic is the tool that reads them:
 it holds the file list, the encryption and the history. There is no other way in.
@@ -127,22 +128,32 @@ means.
 
 ## Section 2 — an application's configuration
 
-Two kinds of claim, and the difference decides which path to restore:
+Two kinds of claim, and the difference decides which path to restore; a `sqlite` one is
+written in two places:
 
 | Row kind | What was written | Where it is in the snapshot |
 |---|---|---|
-| `sqlite` | each database copied through SQLite's backup API, plus the claim without its live database files | `/staging/claims/<namespace>/<claim>/…` |
-| `files` | the claim directory as it is | its host path, for example `/mnt/ssd0/pvc-<id>_<namespace>_<claim>/…` |
+| `sqlite` | each database, copied through SQLite's backup API — **the databases only**, nothing else | `/staging/claims/<namespace>/<claim>/<path/of/the/db>` |
+| `sqlite` | the claim directory without its live database files and without the row's `exclude` entries | its host path, for example `/mnt/ssd0/pvc-<id>_<namespace>_<claim>/…` |
+| `files` | the claim directory as it is | its host path |
+
+A `sqlite` app therefore needs **both** halves to be rebuilt: the database from `/staging/`, the rest
+of its configuration from the claim's host path. The two land in the same snapshot, so two
+`--include` flags on one `restore` brings them back together.
 
 For a `sqlite` claim, the staged copy under `/staging/` is the one to use. The live file was being
 written while the job read it, and its `-wal` file may hold changes the database needs: restoring the
 raw file can give a database that opens and is missing the last few minutes, or one that does not
 open at all.
 
-Example, Sonarr's configuration (a drill can stop after the checks and go to Step 0's teardown):
+Example, Sonarr's configuration (a drill can stop after the checks and go to Step 0's teardown). Its
+claim id is the directory name in the path list, so find it first:
 
 ```sh
-restic -r "$NODES_STREAMING" restore latest --target /out --include '/staging/claims/media-stack/sonarr-config'
+restic -r "$NODES_STREAMING" ls latest | grep '_media-stack_sonarr-config/' | head -3
+restic -r "$NODES_STREAMING" restore latest --target /out \
+  --include '/staging/claims/media-stack/sonarr-config' \
+  --include '/mnt/ssd0/pvc-<id>_media-stack_sonarr-config'
 find /out/staging/claims/media-stack/sonarr-config -name '*.db'
 ```
 
@@ -167,15 +178,25 @@ For a `files` claim, restore the claim directory itself. The comment above its r
 only holds what the row kept.
 
 **Destructive: putting it back on the live claim.** The application must not be writing while the
-files are replaced.
+files are replaced. Two things about this stack would trip a first attempt: the deployment's pods carry
+`app.kubernetes.io/instance=sonarr`, not `app=sonarr`, so a `kubectl wait` on the wrong selector
+returns at once and the swap starts under a running application; and every Application in this
+cluster carries `syncPolicy.automated` with `selfHeal` from the UI (git records none), so a
+scaled-down Deployment is reverted inside the controller's reconcile interval — mid-swap, in the
+worst case.
+
+Pause the automation first — patching the Application is what its UI toggle does, and it is undone
+below:
 
 ```bash
+kubectl -n argocd get application sonarr -o jsonpath='{.spec.syncPolicy}' > /tmp/sonarr-syncpolicy.json
+kubectl -n argocd patch application sonarr --type merge -p '{"spec":{"syncPolicy":{"automated":null}}}'
 kubectl -n media-stack scale deploy sonarr --replicas=0
-kubectl -n media-stack wait --for=delete pod -l app=sonarr --timeout=120s
+kubectl -n media-stack wait --for=delete pod -l app.kubernetes.io/instance=sonarr --timeout=120s
 ```
 
-Then start a writer pod that mounts the same claim, pinned to the node that holds it, and copy the
-restored files in:
+The writer pod mounts the claim on the node that holds it, and the restored tree is staged in it
+**before** the application is stopped, so the swap itself is seconds:
 
 ```bash
 kubectl -n media-stack apply -f - <<'EOF'
@@ -192,7 +213,7 @@ spec:
   containers:
     - name: writer
       image: alpine:3.21
-      command: ["sleep", "1800"]
+      command: ["sleep", "3600"]
       volumeMounts:
         - name: config
           mountPath: /config
@@ -202,23 +223,64 @@ spec:
         claimName: sonarr-config
 EOF
 kubectl -n media-stack wait --for=condition=Ready pod/sonarr-config-writer --timeout=120s
-kubectl cp sonarr.db media-stack/sonarr-config-writer:/config/sonarr.db
-kubectl -n media-stack exec sonarr-config-writer -- chown 1100:1100 /config/sonarr.db
-kubectl -n media-stack delete pod sonarr-config-writer
+kubectl cp ./restored/. media-stack/sonarr-config-writer:/tmp/staged
 ```
 
-`1100:1100` is the LinuxServer `PUID`/`PGID` this stack uses; an image that runs as another user
-needs that user's ids, and the application's chart `values.yaml` is the authority. Then scale the
-application back up, which is the ArgoCD-managed replica count:
+The swap: the old tree moves aside **inside the claim** — never out of it, never deleted — which is a
+rename on the same filesystem, and the restored tree is copied in its place.
+
+```bash
+kubectl -n media-stack exec sonarr-config-writer -- sh -c '
+set -e
+cd /config
+mkdir -p /config/_drill-aside-20261122
+for f in /config/*; do case "$f" in /config/_drill-aside-*) ;; *) mv "$f" /config/_drill-aside-20261122/ ;; esac; done
+for f in /config/.[!.]*; do [ -e "$f" ] || continue; case "$f" in /config/_drill-aside-*) ;; *) mv "$f" /config/_drill-aside-20261122/ ;; esac; done
+cp -a /tmp/staged/. /config/
+rm -f /config/sonarr.pid
+mv /config/_drill-aside-*/MediaCover /config/MediaCover
+chown -R 1100:1100 /config
+'
+```
+
+Four details in that block are deliberate:
+
+- `MediaCover` is excluded from the backup as rebuilt art. Moving it back out of the aside spares a
+  hundred poster refetches; it is not configuration, so its absence would prove nothing.
+- `sonarr.pid` comes back stale. Sonarr overwrites a pid file whose process is gone, but deleting it
+  removes the question.
+- `logs/`, `logs.db` and `Backups/` stay in the aside: the application recreates them, and the row
+  excludes them on purpose.
+- `1100:1100` is the LinuxServer `PUID`/`PGID` this stack uses; an image that runs as another user
+  needs that user's ids, and the application's chart `values.yaml` is the authority.
+
+Start it again, then put the automation back:
 
 ```bash
 kubectl -n media-stack scale deploy sonarr --replicas=1
-kubectl -n media-stack logs -f deploy/sonarr
+kubectl -n media-stack wait --for=condition=Ready pod -l app.kubernetes.io/instance=sonarr --timeout=180s
+kubectl -n argocd patch application sonarr --type merge \
+  -p '{"spec":{"syncPolicy":{"automated":{"enabled":true,"prune":true,"selfHeal":true}}}}'
 ```
 
-Success: the application starts, its settings and its library are as they were, and the log has no
-`database is locked` or `no such table`. If ArgoCD reverts the replica count, use its UI: its sync
-policy lives there, not in git.
+Success, in this order — the checks are the ones run on 2026-11-22:
+
+- `/api/v3/system/status` answers `200` with the key from `/config/config.xml`.
+- `/api/v3/series` returns the number of series the restored database holds, and their
+  `statistics.episodeFileCount` sums to the database's `EpisodeFiles` count.
+- `/api/v3/health` says nothing about the database or the root folders.
+- `deploy/sonarr` logs no `database is locked` and no `no such table`.
+- `/config/sonarr.db` has a modification time after the start: the application is writing to the file
+  it was given. ArgoCD returns to `Synced Healthy`, and the pod shows `RESTARTS 0`.
+
+Rollback if a check fails: move the aside tree back the same way, or drop it and restore the same
+snapshot again. Once the checks pass the aside can go — everything it holds that is worth keeping is
+in the snapshot, and the rest is what the row excludes:
+
+```bash
+kubectl -n media-stack exec sonarr-config-writer -- rm -rf /config/_drill-aside-20261122
+kubectl -n media-stack delete pod sonarr-config-writer
+```
 
 ## Section 3 — a Syncthing file
 
@@ -288,11 +350,12 @@ recently, not what is believed.
 | 2026-11-21 | Section 1 — PostgreSQL dumps (`nodes-nas`) | ~3 min | 26 dumps plus `globals.sql` (7 `CREATE ROLE`) restored from snapshot `e36ab944` into `/out`. The first attempt found no `globals.sql`: the roles capture landed after that morning's dump, so a dump and a `nodes-nas` run were made first and the restore repeated | opencode (agent) |
 | 2026-11-21 | Section 2 — Sonarr's database (`nodes-streaming`) | ~1 min | `sonarr.db` restored from `/staging` (42.9 MiB, no `-wal` beside it), `pragma integrity_check` → `ok`, 103 series and 6 212 episodes | opencode (agent) |
 | 2026-11-21 | Section 3 — a Syncthing file (`nfs`) | ~1 min | `Photos/Argentique/IMG_20240121_0008.jpg` restored from snapshot `173c4caa`; sha256 `a90eb14a…` identical to the live file read through the Syncthing pod | opencode (agent) |
+| 2026-11-22 | Section 2 — Sonarr put back on its live claim (`nodes-streaming`) | ~11 min, 32 s of that downtime | Snapshot `7ac41aa9` (05:30 Paris): `sonarr.db` 45 096 960 B from `/staging` with `pragma integrity_check` → `ok`, 103 series / 6 213 episodes / 566 files / 3 983 history rows, and the claim tree (`config.xml`, `asp/`, `Sentry/`) from its host path. ArgoCD automation paused on the Application, Deployment scaled to 0 at 18:54:26Z, old tree moved to `_drill-aside-20261122` (93.3 MiB), restored tree copied in with `MediaCover` moved back, `chown 1100:1100`; ready again at 18:54:58Z. `/api/v3/system/status` `200`, `/api/v3/series` 103 with 566 episode files, `/api/v3/health` clean apart from the pre-existing Cathode-Ray.Tube indexer warning, no `database is locked` or `no such table`, `sonarr.db` mtime advancing, ArgoCD `Synced Healthy` and `RESTARTS 0`. Aside removed once the checks passed; rollback is the same snapshot, restored again | opencode (agent) |
 | 2026-11-22 | Outside the cluster — all four repositories ([`last-resort.md`](last-resort.md) Step 1) | ~2 min | No cluster consulted: `restic` 0.18 on a laptop listed `nodes-nas` `44e80ca9` / 108.2 MiB, `nodes-nuc0` `80f5025f` / 811.2 MiB, `nodes-streaming` `d434572d` / 652.0 MiB, `nfs` `c517d884` / 91.0 MiB, and decrypted a tree from `nfs` (`qbittorrent-config`). The password and the S3 pair came from the Bitwarden item `homelab-backup-last-resort` with the on-disk copies moved aside. That item was written from this machine the same morning, so the run proves the credentials and the procedure, not yet a second machine | opencode (agent) |
 
-**Recorded 2026-11-22.** Sections 1–3 have each been restored and read back, and the bucket now opens
-from a laptop with no cluster at all. Section 2's destructive put-back onto a live claim and section
-4's etcd rehearsal are still untried, so those two remain unproven.
+**Recorded 2026-11-22.** Sections 1–3 have each been restored and read back, section 2 has now been put
+back onto the live claim and served from it, and the bucket opens from a laptop with no cluster at all.
+Section 4's etcd rehearsal is the one left unproven.
 
 ## When a restore surprises you
 
