@@ -89,7 +89,9 @@ broken name green.
 
 ## How to query the stack
 
-Agents do not need cluster access for any of this.
+Agents do not need cluster access for any of this. Prometheus and Grafana answer on their hostnames;
+Loki is behind a sign-in since 2026-11-22, so its recipes carry the Grafana token instead of an open
+port.
 
 **Prometheus** — `http://prometheus.kub.local`, no authentication:
 
@@ -103,12 +105,27 @@ Useful endpoints: `/api/v1/query`, `/api/v1/query_range`, `/api/v1/targets`,
 It holds **no alert rules and no Alertmanager** (`alertmanager.enabled: false`,
 `rule_files` empty): alerting lives entirely in Grafana.
 
-**Loki** — `http://loki.kub.local`, no authentication. The line is the
-application's own message, not a Fluent Bit envelope: the output strips the
-envelope before it is stored (see the exporter notes in
+**Loki** — `https://loki.kub.local`, behind `kube-system-authentik-forwardauth` on the `websecure`
+router, Admins only. Loki authenticates nobody itself (`auth_enabled: false`) and keeps 30 days of
+every namespace's logs, so the gate is the only access control, and `/loki/api/v1/*` has no
+exemption: the query API is exactly what it protects. The UI is at `/ui`.
+
+Queries from a script go through Grafana's datasource proxy, which holds the Loki datasource and
+authenticates as Grafana does. `GRAFANA_TOKEN` is a Grafana service-account token in
+`~/.config/secrets/homelab.env`; `-k` skips the internal CA check, which a client without the
+`ashulab` root installed would otherwise fail. The uid `P8E80F9AEF21F6940` is the Loki datasource's,
+and every path from [`reference/log-budget.md`](reference/log-budget.md) appends to it.
+
+```bash
+curl -skG -H "Authorization: Bearer $GRAFANA_TOKEN" \
+  "https://grafana.kub.local/api/datasources/proxy/uid/P8E80F9AEF21F6940/loki/api/v1/query" \
+  --data-urlencode 'query={job="fluent-bit"} | detected_level="error"'
+```
+
+The line is the application's own message, not a Fluent Bit envelope: the output strips the envelope
+before it is stored (see the exporter notes in
 [`reference/metrics.md`](reference/metrics.md#exporter-quirks)), so a query reads
-`{job="fluent-bit"} | detected_level="error"` with no parser in between. The UI is
-at `/ui`.
+`{job="fluent-bit"} | detected_level="error"` with no parser in between.
 
 **Grafana** — `https://grafana.kub.local`, served over the cluster's internal
 certificate (`*.kub.local` from the ashulab internal CA,
@@ -204,9 +221,12 @@ seconds — and it is deliberately narrower than a normal access log.
 its query string (`fields.queryParameters`), but not of its path, and the path alone carries
 FileBrowser's `/share/<hash>` capability links. So the whole field is dropped — the query parameters
 with it as a second lock — along with `ClientAddr`, `ClientHost`, `ClientPort` and `ClientUsername`;
-headers stay dropped by the chart default. The reason is that `loki.kub.local` has no authentication
-and a 30-day retention: a full log would put Plex's `?X-Plex-Token=`, FileBrowser's share links and
-OIDC `?code=` callbacks in front of every device on the LAN.
+headers stay dropped by the chart default. `loki.kub.local` has been behind `authentik-forwardauth`
+since 2026-11-22, so the store is no longer readable by any LAN device, but the field stays dropped
+for the same reason it began: a full log would still hand Plex's `?X-Plex-Token=`, FileBrowser's share
+links and OIDC `?code=` callbacks to every session that can read it, and to every session created
+later against 30 days of retention. Revisiting the field list is the access-log card's (task 544,
+#410), not this one's.
 
 **Everything else is kept**, because the file uses `defaultMode: keep` and names only the drops above.
 What a line carries, measured on the live stream rather than read off the docs: the time, the entry
@@ -224,10 +244,12 @@ carries 0.09 GB/day. An evening reads higher; the day's own figure is two querie
 
 ```bash
 # bytes carried in the trailing 24 h — this is the day's volume
-curl -sG http://loki.kub.local/loki/api/v1/query \
+curl -skG -H "Authorization: Bearer $GRAFANA_TOKEN" \
+  "https://grafana.kub.local/api/datasources/proxy/uid/P8E80F9AEF21F6940/loki/api/v1/query" \
   --data-urlencode 'query=sum(bytes_over_time({job="fluent-bit", container="traefik"}[24h]))'
 # lines in the same window; divide the two for the line size
-curl -sG http://loki.kub.local/loki/api/v1/query \
+curl -skG -H "Authorization: Bearer $GRAFANA_TOKEN" \
+  "https://grafana.kub.local/api/datasources/proxy/uid/P8E80F9AEF21F6940/loki/api/v1/query" \
   --data-urlencode 'query=sum(count_over_time({job="fluent-bit", container="traefik"}[24h]))'
 ```
 

@@ -20,6 +20,15 @@ All notable changes to this repository. The format follows
   `prometheus` values renders a ConfigMap that node-exporter's textfile collector serves as
   `homelab_restore_drill_timestamp_seconds`, so the drill habit fails loudly instead of looking like
   a healthy system for a year.
+- `loki.kub.local` is behind `kube-system-authentik-forwardauth`, Admins only, and moved from plain
+  HTTP to `websecure` with the cluster's internal certificate plus a `web` router that only
+  redirects. Loki runs `auth_enabled: false` and keeps 30 days of every namespace's logs, so until
+  now any device on the LAN could query them — including the Plex tokens and FileBrowser share links
+  that reach the store through the applications' own logs. Grafana and Fluent Bit are untouched: both
+  reach `loki.monitoring.svc.cluster.local:3100`, which never passes through Traefik. A script that
+  used `curl http://loki.kub.local` now goes through Grafana's datasource proxy with `GRAFANA_TOKEN`,
+  and every page that documented the open store shows that form
+  ([`docs/observability-conventions.md`](docs/observability-conventions.md)).
 - Fluent Bit's own metrics are scraped (`fluent-bit.monitoring.svc:2020`,
   `/api/v2/metrics/prometheus`), and one rule reads them: `FluentBitDroppingLogs` warns when output
   batches are abandoned after retries or records are dropped from the logger queue.

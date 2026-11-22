@@ -21,7 +21,15 @@ a log level left at `info`, and three objects applied by hand that nothing in Gi
 
 ## How to measure it
 
-Loki answers without authentication at `http://loki.kub.local`:
+Loki is behind `authentik-forwardauth` since 2026-11-22, so a script asks through Grafana's
+datasource proxy: prefix every path in the table below with
+`https://grafana.kub.local/api/datasources/proxy/uid/P8E80F9AEF21F6940`, and send the token.
+
+```bash
+curl -skG -H "Authorization: Bearer $GRAFANA_TOKEN" \
+  "https://grafana.kub.local/api/datasources/proxy/uid/P8E80F9AEF21F6940/loki/api/v1/query" \
+  --data-urlencode 'query=sum(count_over_time({job="fluent-bit"}[24h]))'
+```
 
 | Question | Call |
 |---|---|

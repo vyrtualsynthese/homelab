@@ -1,7 +1,7 @@
 # Routes: every hostname, its gate and its certificate
 
-> **In one line.** Traefik answers the 34 hostnames in this table: seven are public, twenty-three are
-> internal over TLS, four answer plain HTTP, and three more names exist only to redirect; the gate
+> **In one line.** Traefik answers the 34 hostnames in this table: seven are public, twenty-four are
+> internal over TLS, three answer plain HTTP, and three more names exist only to redirect; the gate
 > column — not the address — is what decides who gets in.
 >
 > **Use it when** you need to know whether a hostname is reachable from outside, what stands in
@@ -66,6 +66,7 @@ Twenty-four hostnames. Eighteen use the internal CA on a `*.kub.local` name; six
 | `kavita.kub.home.ashudev.com` | Kavita | `media-stack` | `lan-only` | Let's Encrypt | no |
 | `koillection.kub.home.ashudev.com` | Koillection | `koillection` | `lan-only` | Let's Encrypt | no |
 | `lidarr.kub.local` | Lidarr | `media-stack` | forward-auth; `lan-only` alone on `/api` | internal CA | no |
+| `loki.kub.local` | Loki, query frontend and UI | `monitoring` | forward-auth, Admins only; `/loki/api/v1` carries no exemption | internal CA | no |
 | `maintainerr.kub.local` | Maintainerr | `media-stack` | forward-auth; `lan-only` alone on `/api` | internal CA | no |
 | `n8n.kub.home.ashudev.com` | n8n | `n8n` | `lan-only` | Let's Encrypt | no |
 | `prowlarr.kub.local` | Prowlarr | `media-stack` | forward-auth; `lan-only` alone on `/api` | internal CA | no |
@@ -82,11 +83,10 @@ Twenty-four hostnames. Eighteen use the internal CA on a `*.kub.local` name; six
 
 ## Internal without TLS
 
-Three routes serve plain HTTP. The LAN allowlist or a password is all that stands in front of them.
+Two routes serve plain HTTP. The LAN allowlist or a password is all that stands in front of them.
 
 | Host | Application | Namespace | Gate | TLS | Public? |
 |---|---|---|---|---|---|
-| `loki.kub.local` | Loki, query frontend | `monitoring` | `lan-only` | none | no |
 | `pgadmin.kub.local` | pgAdmin | `databases` | `lan-only` | none | no |
 | `prometheus.kub.local` | Prometheus | `monitoring` | `lan-only` | none | no |
 
@@ -96,7 +96,7 @@ Three routes serve plain HTTP. The LAN allowlist or a password is all that stand
 name that only redirects to HTTPS, carrying `lan-only` and nothing else. The public hosts' `web`
 routers carry `redirect-https` and no gate, because a gate there would refuse the browser before it
 ever asked for the certificate. FileBrowser has no `web` router at all: it answers `websecure` only.
-The three rows in the last table are served on `web` itself. Three hostnames exist only to redirect and
+The two rows in the last table are served on `web` itself. Three hostnames exist only to redirect and
 are rows in no table: `kub.home.ashudev.com` and `dashy.kub.local`, both to
 `https://dashy.ashudev.com`, and `www.ashudev.com` to `https://ashudev.com`, path and query kept. The
 first two answer on `web` alone; `www.ashudev.com` also has a `websecure` router, is in the

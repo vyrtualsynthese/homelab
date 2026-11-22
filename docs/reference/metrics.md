@@ -293,7 +293,8 @@ Verify rather than trust:
 
 ```bash
 curl -s http://prometheus.kub.local/api/v1/status/flags | grep retention
-curl -s http://loki.kub.local/config | sed -n '/limits_config:/,/^[a-z]/p'
+curl -sk -H "Authorization: Bearer $GRAFANA_TOKEN" \
+  "https://grafana.kub.local/api/datasources/proxy/uid/P8E80F9AEF21F6940/config" | sed -n '/limits_config:/,/^[a-z]/p'
 ```
 
 `nas`'s `/mnt/ssd0` holds all `local-path` claims and currently has far more free
