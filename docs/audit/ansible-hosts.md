@@ -6,7 +6,7 @@
 > **Use it when** a plan cites this audit, or you want the finding behind a change ·
 > **Verified** 2026-11-10 · **Kind:** record
 >
-> **Sources** the live cluster on 2026-11-10, read through `kube-system/opencode-mcp`; findings are
+> **Sources** the live cluster on 2026-11-10, read through the read-only opencode-mcp ServiceAccount; findings are
 > never edited here. For today, [Every day](../running-it/every-day.md).
 > `REBUILD.md` and `TODO.MD` were deleted on 2026-11-11: `git show 6be598ab:REBUILD.md`.
 
