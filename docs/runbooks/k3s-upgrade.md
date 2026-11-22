@@ -40,7 +40,40 @@ kubectl -n argocd get applications -o json \
 kubectl get --raw /healthz/etcd
 ```
 
-**2. Copy etcd off the node, because the next step restarts it.** The copy holds the cluster's object
+**2. Check that nothing sits on an API the climb removes.** The five releases drop very little, and a
+hit only shows after the fact, as an object a client can no longer read.
+
+```bash
+hack/check-api-removals.sh
+```
+
+It reads the served group/versions (`kubectl get --raw /apis`), the live volumes for a schema the
+climb changes, and every `*.yaml` under `cluster/` and `kubectl/` — what Argo CD re-applies — and
+matches them against the removal table in `hack/check_api_removals.py`. **Expected: `0 hits`.** One
+`note:` is normal on 1.31: `flowcontrol.apiserver.k8s.io/v1beta3` is still served, 1.32 drops it, and
+`v1` carries the same objects.
+
+| Release | Stops serving | Use instead |
+|---|---|---|
+| 1.32 | `flowcontrol.apiserver.k8s.io/v1beta3` (FlowSchema, PriorityLevelConfiguration) | `flowcontrol.apiserver.k8s.io/v1` |
+| 1.33 | nothing | — |
+| 1.34 | nothing | — |
+| 1.35 | `storage.k8s.io/v1alpha1` (VolumeAttributesClass) | `storage.k8s.io/v1` |
+| 1.35 | `storagemigration.k8s.io/v1alpha1` (StorageVersionMigration) | `storagemigration.k8s.io/v1beta1` |
+| 1.36 | `PersistentVolume.spec.portworxVolume` (in-tree Portworx) | the `pxd.portworx.com` CSI driver |
+| 1.36 | `groupsnapshot.storage.k8s.io/v1alpha1` (SnapshotMetadataService) | `groupsnapshot.storage.k8s.io/v1beta1` |
+
+Sources, read on 2026-11-23: the [deprecated API migration
+guide](https://kubernetes.io/docs/reference/using-api/deprecation-guide/) for 1.32, and the
+[1.35](https://github.com/kubernetes/kubernetes/blob/master/CHANGELOG/CHANGELOG-1.35.md) and
+[1.36](https://github.com/kubernetes/kubernetes/blob/master/CHANGELOG/CHANGELOG-1.36.md) changelogs;
+1.33 and 1.34 have neither a guide section nor a changelog entry, which is the absence itself.
+
+**On a hit**, fix the object or the manifest before the plan is touched: a manifest takes the
+surviving version, a `portworxVolume` moves to its CSI driver. A hit cannot be repaired after the
+node that serves it has restarted.
+
+**3. Copy etcd off the node, because the next step restarts it.** The copy holds the cluster's object
 state, not one node's: any server's copy restores the whole of it. What the node in the file name
 records is *which server wrote the file*, and K3s takes it from where the command runs, not from
 `--name`: a snapshot is `<name>-<node>-<time>`. Pin the pod with `nodeName` to the server whose restart
@@ -105,7 +138,7 @@ were forgotten on 2026-11-22 (`restic forget 5a6d795d d434572d --prune`, 72 KiB 
 The NAS is not an option: `/mnt/storage` and `/mnt/storage/nfs` are handed to pods read-only, and only
 the per-claim subdirectories are writable. A copy there would land inside a backed-up stream.
 
-**3. Pin the version *and* the target node** on the plan the node belongs to. Two plans exist:
+**4. Pin the version *and* the target node** on the plan the node belongs to. Two plans exist:
 `server-plan` matches `node-role.kubernetes.io/control-plane In [true]`, `agent-plan` matches
 `DoesNotExist` (its `prepare` step waits for `server-plan` to finish).
 
