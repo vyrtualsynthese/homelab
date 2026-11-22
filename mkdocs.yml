@@ -58,10 +58,17 @@ plugins:
 validation:
   nav:
     omitted_files: ignore
+  # A page cites the file it was written from, and most of those are outside `docs_dir` —
+  # `cluster/helm/...`, `AGENTS.md`, `hack/...`. MkDocs cannot resolve them and warns on every one;
+  # `hack/check_docs.py --only references` is the check that verifies them, and
+  # `hack/check_docs_links.py` verifies the links inside `docs/`. Anchors stay warnings.
+  links:
+    not_found: ignore
 
 nav:
-  - Start here: README.md
-  - Documentation rules: documentation-rules.md
+  - Start here:
+      - README.md
+      - Documentation rules: documentation-rules.md
   - How it works:
       - how-it-works/README.md
       - The shape and why: how-it-works/the-shape-and-why.md
@@ -83,16 +90,29 @@ nav:
       - Rotate a secret: running-it/rotate-a-secret.md
       - Use the board: running-it/use-the-board.md
       - Rebuild the docs site: running-it/rebuild-the-docs-site.md
+      - Every procedure: runbooks/README.md
+      - The GitOps controller: runbooks/argocd.md
+      - Moving the Traefik release: runbooks/traefik-release.md
+      - Moving K3s to a new minor: runbooks/k3s-upgrade.md
+      - Renovate: runbooks/renovate.md
+      - The GPU stack: runbooks/gpu-operator.md
+      - Cloud monitoring: runbooks/cloud-monitoring.md
+      - The alert relay: runbooks/alert-relay.md
+      - Add a database: runbooks/postgres-add-database.md
+      - Shape the board: runbooks/vikunja-board-seed.md
   - Backups:
       - backup/README.md
       - What a loss costs: backup/what-a-loss-costs.md
       - Coverage: backup/coverage.md
       - How backups work: how-it-works/backups.md
+      - Restore from a backup: runbooks/restore.md
       - A file or a claim: backup/a-file-or-a-claim.md
       - A database: backup/a-database.md
       - PostgreSQL: backup/postgresql.md
+      - Restore a PostgreSQL database: runbooks/postgres-restore.md
       - A dead node: backup/a-node.md
       - No cluster at all: backup/no-cluster.md
+      - When the cluster is gone: runbooks/last-resort.md
       - Everything is gone: backup/everything.md
   - Security:
       - security/README.md
@@ -117,27 +137,6 @@ nav:
       - Observability conventions: observability-conventions.md
       - qBittorrent Web UI stalls: qbittorrent-webui-stalls.md
       - authentik worker deadlocks: authentik-worker-deadlocks.md
-  - Runbooks:
-      - runbooks/README.md
-      - Wire an application to authentik: runbooks/authentik-apps.md
-      - The GitOps controller: runbooks/argocd.md
-      - The internal CA: runbooks/internal-ca.md
-      - The certificate store: runbooks/acme-store.md
-      - Moving the Traefik release: runbooks/traefik-release.md
-      - Add a database: runbooks/postgres-add-database.md
-      - Restore a database: runbooks/postgres-restore.md
-      - Restore from a backup: runbooks/restore.md
-      - When the cluster is gone: runbooks/last-resort.md
-      - The alert relay: runbooks/alert-relay.md
-      - Renovate: runbooks/renovate.md
-      - The GPU stack: runbooks/gpu-operator.md
-      - The board's database: runbooks/vikunja-database.md
-      - First start of the board: runbooks/vikunja-first-start.md
-      - Shape the board: runbooks/vikunja-board-seed.md
-      - The books cutover: runbooks/books-cutover.md
-      - First run of the docs site: runbooks/docs-site-first-run.md
-      - Cloud monitoring: runbooks/cloud-monitoring.md
-      - Moving K3s to a new minor: runbooks/k3s-upgrade.md
   - History:
       - Decisions: decisions/README.md
       - nuc0 throttling: decisions/2026-11-13-nuc0-throttling-accepted.md
@@ -146,6 +145,10 @@ nav:
       - Retiring Discourse: decisions/2026-11-19-retire-discourse.md
       - EU-only providers: decisions/2026-11-21-sovereign-eu-providers-only.md
       - Longhorn leftovers: cleanup/longhorn-disposition.md
+      - The board's database: runbooks/vikunja-database.md
+      - The board's first start: runbooks/vikunja-first-start.md
+      - The books cutover: runbooks/books-cutover.md
+      - The docs site's first run: runbooks/docs-site-first-run.md
       - Audits: audit/README.md
       - Ansible and hosts: audit/ansible-hosts.md
       - ArgoCD and Helm: audit/argocd-helm.md

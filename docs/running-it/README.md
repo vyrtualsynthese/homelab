@@ -4,9 +4,9 @@
 > the runbook behind it when the answer is a procedure rather than an explanation.
 >
 > **Use it when** something needs doing to the cluster and you want the shortest route to the page ·
-> **Verified** 2026-11-17 · **Kind:** explanation
+> **Verified** 2026-11-22 · **Kind:** explanation
 >
-> **Sources** `mkdocs.yml`, the pages this one indexes
+> **Sources** `mkdocs.yml`, the pages this one indexes, `docs/runbooks/README.md`
 
 ## I want to…
 
@@ -21,7 +21,7 @@
 | rotate a secret | [Rotate a secret](rotate-a-secret.md) — every copy of the value, then the restart that makes it take |
 | use the board | [Use the board](use-the-board.md) — columns, kinds, and which moves are yours alone |
 | rebuild the docs site | [Rebuild the docs site](rebuild-the-docs-site.md) — the builder, the manual Job, and why a page is missing |
-| recover from a loss | the [Backups](../backup/README.md) section — what a dead disk takes, what exists, and the page per scenario |
+| recover from a loss | not this tab: [Backups](../backup/README.md) takes a dead disk, a broken database, a node and a total loss, one page each |
 
 Each page opens with a summary blockquote and the date it was last checked against the cluster; read
 that date before trusting a claim. A page whose date is older than the last merge on `develop`
@@ -38,29 +38,28 @@ describes an older cluster.
   audit set ([hosts](../audit/ansible-hosts.md), [ArgoCD](../audit/argocd-helm.md),
   [storage](../audit/observability-storage.md)) argue; they do not instruct.
 
-## Runbooks
+## The procedures
 
 The pages above stop at the application: a chart, an Application, a route, a Secret. A procedure that
 touches a host, a data directory or a credential is a runbook, and one exists only after it has been
-run at least once. The shelf, with each runbook's status, is
-[`runbooks/README.md`](../runbooks/README.md).
+run at least once. Each one's status — proved on a date, or still pending its first run — is
+[the shelf](../runbooks/README.md), which is also where the unwritten ones are named.
 
-The ones this index sends you to directly:
+| Procedure | Use it when |
+|---|---|
+| [The GitOps controller](../runbooks/argocd.md) | Argo CD is down, or must be rebuilt from nothing |
+| [Moving the Traefik release](../runbooks/traefik-release.md) | the router's chart has to move, be inspected or be rolled back — by `helm`, because K3s's helm-controller runs nothing here |
+| [Moving K3s to a new minor](../runbooks/k3s-upgrade.md) | a node has to follow the cluster to a new version, one hostname at a time |
+| [Renovate](../runbooks/renovate.md) | the dependency pull requests stopped, or its token has to be rotated |
+| [The GPU stack](../runbooks/gpu-operator.md) | the GPU disappears from a pod, or Plex stops transcoding |
+| [Cloud monitoring](../runbooks/cloud-monitoring.md) | a `Cloud*` alert fires, or a public name or DNS record changes |
+| [The alert relay](../runbooks/alert-relay.md) | Grafana alerts stop reaching the board, or the relay needs rebuilding |
+| [Add a database](../runbooks/postgres-add-database.md) | an application is rebuilt and needs its own role, database and Secrets |
+| [Shape the board](../runbooks/vikunja-board-seed.md) | the board's columns have to be recreated from the tracked seed |
 
-- [postgres-restore.md](../runbooks/postgres-restore.md) — a database from the nightly dump; the only
-  restore with a written procedure, and it has not been run.
-- [internal-ca.md](../runbooks/internal-ca.md) — mint the root, sign a leaf, re-trust after a loss.
-- [authentik-apps.md](../runbooks/authentik-apps.md) — put an application behind SSO.
-- [vikunja-board-seed.md](../runbooks/vikunja-board-seed.md) — recreate the board's columns and
-  verify them after a loss; its cards need a restored dump.
-- [docs-site-first-run.md](../runbooks/docs-site-first-run.md) — the docs site's first start, written
-  ahead of the build that proves it.
-- [postgres-add-database.md](../runbooks/postgres-add-database.md) — a new role and database, proved
-  on the acceptance instance.
-
-Pending runbooks — etcd restore, the offsite restore drill, the K3s upgrade, adding a node, rotating
-a secret at the host level — are listed in [`runbooks/README.md`](../runbooks/README.md) with the
-workstream that will write them. Until then, the page above is all the advice there is.
+Two procedures are not here because the situation picks the tab: [a restore](../backup/README.md)
+belongs to Backups, and so does PostgreSQL's; [wiring an app to authentik](../security/README.md) and
+[the internal CA](../runbooks/internal-ca.md) belong to Security.
 
 ## The rule that outranks the index
 
