@@ -127,6 +127,20 @@ metrics:
     buckets: "0.1,0.25,0.5,1.0,2.5,5.0,10.0"
     manualRouting: false
 
+# The OVH DNS-01 provider reads its credentials from the environment. The
+# Secret holds the four values only; the two timeouts are configuration and
+# stay readable here. The consumer key behind it is scoped to
+# /domain/zone/ashudev.com/{record,record/*,refresh}, so a copy of this pod
+# cannot change delegation, storage or another domain.
+envFrom:
+  - secretRef:
+      name: traefik-ovh
+env:
+  - name: OVH_PROPAGATION_TIMEOUT
+    value: "300"
+  - name: OVH_POLLING_INTERVAL
+    value: "10"
+
 certificatesResolvers:
   myresolver:
     acme:
@@ -135,6 +149,20 @@ certificatesResolvers:
       # Must match the mounted claim; a different path means the store is empty
       # and every name is re-issued.
       storage: /data/acme.json
+  # The ashudev.com anchor asks this one for a wildcard: DNS-01 is the only
+  # challenge Let's Encrypt accepts for `*.ashudev.com`. ashuvidz.com stays on
+  # `myresolver` until its delegation moves off AWS nameservers.
+  ovhresolver:
+    acme:
+      email: valentin.ronteix@ashudev.com
+      # Same file as `myresolver`; the store is keyed by resolver name, so the
+      # two accounts and their certificates coexist.
+      storage: /data/acme.json
+      dnsChallenge:
+        provider: ovh
+        # The API refreshes the zone, but OVH's public nameservers can lag;
+        # 60 s of wait before the first check beats a failed order.
+        delayBeforeCheck: 60
 
 ports:
   # Pinned back to the 2.11 value: chart 42 moved the default to 8080.
