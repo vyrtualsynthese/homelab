@@ -72,8 +72,9 @@ URL, not a broken one.
 ## Routing
 
 `ashudev.com` is on the cluster's public list, so the route carries **no** `lan-only` middleware and
-no authentik gate: it is reachable from the internet by design. TLS is `certResolver: myresolver`
-(Let's Encrypt); the only middleware on the apex is `kube-system/security`, which sets the security
+no authentik gate: it is reachable from the internet by design. TLS is the `ashudev.com` wildcard
+(Let's Encrypt): this route is the anchor that asks `ovhresolver` for it, and carries the name list in
+`tls.domains`. The only middleware on the apex is `kube-system/security`, which sets the security
 headers.
 
 Three routers:

@@ -55,8 +55,9 @@ The content lives in an `emptyDir` mounted at `/site`:
 ## Routing
 
 `ashuvidz.com` is on the cluster's public list, so the route carries **no** `lan-only` middleware and
-no authentik gate: it is reachable from the internet by design. TLS is `certResolver: myresolver`
-(Let's Encrypt); the only middleware is `kube-system/security`, which sets the security headers.
+no authentik gate: it is reachable from the internet by design. TLS is one `ashuvidz.com`
+certificate (Let's Encrypt): this route is the anchor that asks `myresolver` for it, with `www` in
+`tls.domains.sans`. The only middleware is `kube-system/security`, which sets the security headers.
 
 Three routers:
 
