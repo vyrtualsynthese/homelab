@@ -28,7 +28,7 @@ spec:
         - name: koillection-app
           port: http
   tls:
-    certResolver: myresolver
+    # Served by the ashudev.com wildcard; its anchor is the ashudev.com route.
     options:
       name: {{ include "app.fullname" . }}-tlsoption
 {{- end }}

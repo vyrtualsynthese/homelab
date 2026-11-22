@@ -210,6 +210,7 @@ ingress:
   middlewares:
     - kube-system-lan-only@kubernetescrd
   tls:
-    # ACME through the `myresolver` resolver, with the per-app TLSOption the
-    # chart renders. Unchanged from the live objects.
-    certResolver: myresolver
+    # Served by the ashudev.com wildcard; its anchor is the ashudev.com route.
+    # The per-app TLSOption still applies, since a store certificate carries no
+    # policy of its own.
+    certResolver: ""
