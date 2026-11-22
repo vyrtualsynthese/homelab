@@ -189,6 +189,19 @@ prometheus:
           source_labels:
             - __name__
           regex: "kube_secret_.*|kube_pod_tolerations|kube_replicaset_.*|kube_pod_status_qos_class"
+        # Argo CD's three components publish 3,384 series and the alert reads
+        # 350 of them (the Application, repository, cluster, git and redis
+        # families). The rest is the server's gRPC matrix — 1,938 series, one
+        # per method × 17 status codes, most permanently zero — plus client-go's
+        # work-queue and kubectl instrumentation, the controller's webhook
+        # counters, and each process's Go runtime. Measured 2026-11-22; no panel
+        # and no rule reads any of it.
+        - action: drop
+          source_labels:
+            - namespace
+            - __name__
+          separator: ";"
+          regex: "argocd;(go_.*|process_.*|grpc_server_.*|argocd_kubectl_.*|workqueue_.*|controller_runtime_.*|certwatcher_.*)"
     # Same guard as the pods -slow job: this is where a Service annotated
     # prometheus.io/scrape_slow is scraped, and the KSM families above would
     # come back through it.
@@ -198,6 +211,12 @@ prometheus:
           source_labels:
             - __name__
           regex: "kube_secret_.*|kube_pod_tolerations|kube_replicaset_.*|kube_pod_status_qos_class"
+        - action: drop
+          source_labels:
+            - namespace
+            - __name__
+          separator: ";"
+          regex: "argocd;(go_.*|process_.*|grpc_server_.*|argocd_kubectl_.*|workqueue_.*|controller_runtime_.*|certwatcher_.*)"
     # The pod-scraped exporters publish what they publish: qBittorrent writes
     # one series per torrent per field, 6,240 series for 365 torrents, while the
     # Media board reads four qbittorrent_global_* totals. The n8n histogram is
