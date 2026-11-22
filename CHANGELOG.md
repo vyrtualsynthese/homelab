@@ -157,6 +157,14 @@ All notable changes to this repository. The format follows
   entry points on one `www` router, but a router that carries a `tls` block is attached to the TLS
   entry points only, so `web` did nothing and the plain-HTTP request matched no router at all. The
   name now has two routers, one per scheme, the way `dashy-redirect` and `dashy-local` are split.
+- `http://www.ashuvidz.com` redirects for the same reason and the same fix: the `ashuvidz-website`
+  chart still had the single `www` router the `ashudev-website` one carried before PR #1415, so plain
+  HTTP answered Traefik's 404 while HTTPS redirected.
+- Every file in `cluster/infrastructure/traefik/middleware/` names `namespace: kube-system` in its
+  own metadata. Five of the seven did not, and the directory is applied by hand: `kubectl apply -f
+  <file>` without `-n` created a second object in `default` and left the live one on its old spec,
+  so the file looked applied and changed nothing. `security.yaml` had lost the line in the a0f30ecb
+  rewrite.
 - A Traefik upload no longer dies at 60 seconds. v3 raised the entry point's `readTimeout` default
   from `0` to `60s`, which caps the whole request including its body: the public FileBrowser needs
   about 800 s for a 2 GB file on a 20 Mbit/s line. `websecure` now sets `1h`. `writeTimeout` stays
@@ -168,6 +176,10 @@ All notable changes to this repository. The format follows
   fonts, images and PDFs allowed and nothing else, plus `frame-ancestors 'none'`. It is a middleware
   of its own (`kube-system/security-static`) because `security` is shared with every application
   behind the router and this policy would break all of them.
+- `ashuvidz.com` sends the same `content-security-policy`, and the policy's `img-src` gains `data:`.
+  The site's stylesheet paints its noise texture from a `data:image/svg+xml` URI, so the policy as
+  `ashudev.com` needed it would have removed the background silently. The extra scheme is the whole
+  difference, and it widens nothing on `ashudev.com`.
 - The shared `security` middleware no longer sends `x-xss-protection`. Every current browser retired
   it, and its filter mode was itself a source of bugs; the content policy above is what replaces it.
 - The shared `security` middleware no longer advertises HSTS `preload`. `ashudev.com` was never
