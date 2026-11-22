@@ -95,7 +95,9 @@ These are recorded so a later pass does not re-open them:
 
 - **`argocd/repo-server`: `found in Chart.yaml, but missing in charts/ directory`, ~668 a day.**
   ArgoCD's first `helm template` runs before `helm dependency build`, so every wrapper chart fails
-  once and then succeeds. The Applications stay Synced. Not a defect.
+  once and then succeeds. The Applications stay Synced. Not a defect; the mechanism, the 24-hour
+  counts and how to tell a stalled render from an old sync operation are in
+  [`runbooks/argocd.md`](../runbooks/argocd.md#wrapper-charts-and-their-dependency-build).
 - **Grafana's search manifest watcher.** Grafana 13 warns twice per poll when no app plugin
   publishes a manifest, which is the normal state here. There is no setting to stop the poll; the
   logger is filtered to errors in `cluster/helm/monitoring/grafana/values.yaml`. Upstream issue
