@@ -12,19 +12,21 @@ Date: 2026-11-22
 
 ## What the store is
 
-Traefik answers TLS for every `*.kub.home.ashudev.com` and public route through the certificate
-resolver `myresolver`: ACME over the TLS-ALPN challenge, with Let's Encrypt as the authority. Its
-state is one file, `acme.json`, at `/data/acme.json` inside the router.
+Traefik answers TLS for every `*.kub.home.ashudev.com` and public route from one certificate
+resolver, `ovhresolver`: ACME over the DNS-01 challenge, validated by writing a TXT record through
+the OVH API, with Let's Encrypt as the authority. Its state is one file, `acme.json`, at
+`/data/acme.json` inside the router. Two certificates live in it — the `ashudev.com` wildcard and the
+`ashuvidz.com` pair.
 
 | | |
 |---|---|
 | File | `/data/acme.json` on claim `kube-system/pvc-traefik-nfs` |
 | Backing volume | `pv-traefik-nfs`, NFS `192.168.1.41:/mnt/storage/traefik`, reclaim policy `Retain` |
 | Owner | uid/gid `65532`, mode `0600`; the Traefik image runs as that user |
-| Contents | the `myresolver` account registration, then one array entry per certificate |
+| Contents | the `ovhresolver` account registration, then one array entry per certificate |
 | Not in it | the internal `*.kub.local` leaf, which is the Secret `kube-system/local-cert` — see [`internal-ca.md`](internal-ca.md) |
 
-The file holds no index of which hostnames are live. A route that sets `tls.certResolver: myresolver`
+The file holds no index of which hostnames are live. A route that sets `tls.certResolver: ovhresolver`
 asks for a certificate; once issued, the entry stays, and Traefik renews every entry it holds until
 it reaches the renewal window (30 days before expiry) whether or not a router still names it. Hosts
 retired from the cluster therefore keep being reissued, and every `*.kub.home.ashudev.com` name counts
@@ -82,7 +84,7 @@ spec:
 kubectl apply -f acme-inspect.yaml
 kubectl -n kube-system wait --for=jsonpath='{.status.phase}'=Succeeded pod/acme-inspect
 kubectl -n kube-system logs acme-inspect > acme.json
-jq -r '.myresolver.Certificates[].domain.main' acme.json | sort
+jq -r '.ovhresolver.Certificates[].domain.main' acme.json | sort
 kubectl -n kube-system delete pod acme-inspect
 ```
 
@@ -101,9 +103,9 @@ half-minute the router is stopped.
 
    ```bash
    jq --argjson keep '["host1.example","host2.example"]' \
-     '.myresolver.Certificates |= map(select(.domain.main as $d | $keep | index($d)))' \
+     '.ovhresolver.Certificates |= map(select(.domain.main as $d | $keep | index($d)))' \
      acme.json > acme-new.json
-   jq '.myresolver.Certificates | length' acme.json acme-new.json
+   jq '.ovhresolver.Certificates | length' acme.json acme-new.json
    ```
 
 2. Stop the router and confirm the pod is gone:
@@ -171,7 +173,7 @@ half-minute the router is stopped.
    ```bash
    # the store still parses, and holds the expected number of entries
    kubectl -n kube-system exec acme-maintain -- \
-     python3 -c 'import json;print(len(json.load(open("/data/acme.json"))["myresolver"]["Certificates"]))'
+     python3 -c 'import json;print(len(json.load(open("/data/acme.json"))["ovhresolver"]["Certificates"]))'
 
    # no error in the router log
    kubectl -n kube-system logs deploy/traefik --since=5m | grep -iE 'error|acme'
@@ -214,17 +216,43 @@ rebuilt its pair from the anchor route.
 ## The two-certificate store
 
 Since 2026-11-22 the release asks for two certificates instead of one per name
-([design](../superpowers/specs/2026-11-22-traefik-acme-wildcard-design.md)):
+([design](../superpowers/specs/2026-11-22-traefik-acme-wildcard-design.md)), and since the same
+day both are ordered by one resolver:
 
 | Resolver | Names | Challenge |
 |---|---|---|
 | `ovhresolver` | `ashudev.com`, `*.ashudev.com`, `*.kub.home.ashudev.com`, `kub.home.ashudev.com` | DNS-01 through the OVH API, using the scoped key in `kube-system/traefik-ovh` |
-| `myresolver` | `ashuvidz.com`, `www.ashuvidz.com` | TLS on port 443, until the `ashuvidz.com` zone leaves AWS nameservers |
+| `ovhresolver` (second order) | `ashuvidz.com`, `www.ashuvidz.com` | the same key; the zone has answered from OVH nameservers since 2026-11-22 |
 
 Only the apex route of each domain carries `tls.certResolver` and `tls.domains`; every other route is
 served from this store by SNI. The store therefore holds exactly **two** entries, and `kub.local` is
 not one of them — the internal leaf is the Secret `kube-system/local-cert`, never in `acme.json`. A
 new application under `ashudev.com` now orders nothing, so two is the number to expect.
+
+### Retiring the TLS-ALPN resolver (2026-11-22)
+
+`myresolver` validated over TLS on port 443, and it existed for one reason: `ashuvidz.com` answered
+from AWS nameservers, so no API could write its challenge record. When the zone's delegation moved to
+`ns17/dns17.ovh.net`, the `ashuvidz.com` anchor switched to `ovhresolver` and `myresolver` left the
+values file; its entry was then deleted from the store by the prune above.
+
+Two things have to be true before the release that does this:
+
+- **The OVH credential can write both zones.** The key in `kube-system/traefik-ovh` was scoped to
+  `/domain/zone/ashudev.com/{record,record/*,refresh}` by its first run, and a key cannot widen
+  itself (`PUT /auth/currentCredential` answers `405`). A new consumer key is created for the pair of
+  zones, validated once in the browser, and the Secret updated with it — the router restart that
+  follows the upgrade picks it up, because the values mount it with `envFrom`. The zone is reached
+  by name in the API call, so a credential without rights on the second zone fails the order with a
+  `403` and the name keeps whatever certificate the store already holds for it.
+- **The order is watched, not assumed.** DNS-01 for `ashuvidz.com` places two authorizations; the
+  first release moves both names from a certificate `myresolver` owns to one `ovhresolver` owns, so
+  the apex answers with no certificate at all until the order completes.
+
+The retirement itself is `helm upgrade` with the values that no longer carry `myresolver`, then the
+prune in §"Pruning the store" with the keep-list every `ovhresolver` entry, then a handshake per
+public name. `values.yaml` and `values-2.11.yaml` keep the old resolver because they describe the
+older charts; `values-v3.yaml` is the file the live release is installed from.
 
 ### When Traefik orders a certificate
 
@@ -270,7 +298,7 @@ The store held 34 certificates, 18 of them for hosts no router served: `atlantis
 | writing `/data/acme.json` as root answers `Permission denied` | the export root-squashes; run the pod as uid `65532`, the file's owner |
 | the trimmed file does not parse after an `exec -i` pipe | the pipe truncated the payload; use `kubectl cp` |
 | `/api/rawdata` answers `404` on the pod's port 9000 | the dashboard API is not attached to that entry point; read `acme.json` instead |
-| Traefik logs an ACME error for a name you just removed | a router still sets `tls.certResolver: myresolver` for it and re-requested it; find the route, not the file |
+| Traefik logs an ACME error for a name you just removed | a router still sets `tls.certResolver` for it and re-requested it; find the route, not the file. Naming a resolver that no longer exists in the values fails the whole router's TLS instead |
 | a removed name still validates | another kept certificate carries it in `sans`; that is harmless until a route serves it |
 | a SAN added to a route changes nothing | every name in the bundle is already covered by an existing entry; prune that entry, the router orders the bundle at the next start |
 | a keep-list built from `domain.main` drops names the certificate carries | the stored `domain` records only the name that was newly validated; read the PEM's `subjectAltName` instead |

@@ -93,13 +93,13 @@ Two Let's Encrypt certificates cover every public name.
 - One `ashudev.com` certificate carries `ashudev.com`, `*.ashudev.com`, `*.kub.home.ashudev.com` and
   the bare `kub.home.ashudev.com` — a wildcard stands for one label, so it does not cover that one. A wildcard can only be validated by a DNS record (the "DNS-01 challenge",
   proving the domain by writing a value into its zone), so this one goes through the OVH API.
-- One `ashuvidz.com` certificate carries the apex and `www`. That zone still answers from AWS
-  nameservers, so DNS-01 cannot write its challenge record; it uses the older TLS challenge on port
-  443 instead.
+- One `ashuvidz.com` certificate carries the apex and `www`. Its zone has answered from OVH
+  nameservers since 2026-11-22, so it is validated through the same API, under the same resolver and
+  the same credential as the wildcard; the older TLS challenge on port 443 is no longer used at all.
 
 Only the apex route of each domain asks for a certificate (`tls.certResolver` with `tls.domains`);
 every other route is served from the certificate store by SNI. Adding an application under
-`ashudev.com` therefore orders nothing. The store, its two resolvers and the pruning procedure are
+`ashudev.com` therefore orders nothing. The store, its single resolver and the pruning procedure are
 [runbooks/acme-store.md](../runbooks/acme-store.md), and the design is
 [the wildcard spec](../superpowers/specs/2026-11-22-traefik-acme-wildcard-design.md).
 
