@@ -28,7 +28,8 @@ put it back are the rest of this section.
 Every application's configuration is a `local-path` claim, so a node's disk dying costs that day's
 changes and not the settings themselves — as long as the claim has a row in
 [`cluster/helm/backup/values.yaml`](../../cluster/helm/backup/values.yaml), which is the authority on
-what is covered.
+what is covered. The claim-by-claim list is [the coverage table](coverage.md), generated from that
+file.
 
 ## What would still be lost
 

@@ -140,5 +140,47 @@ class RenderFailureTests(unittest.TestCase):
             self.assertIn("broken", str(caught.exception))
 
 
+class CoverageTests(unittest.TestCase):
+    NODES = {
+        "streams": [{"name": "nodes-nas"}],
+        "nodes": {
+            "nas": {
+                "schedule": "30 4 * * *",
+                "claims": [{"claim": "grafana", "namespace": "monitoring", "kind": "sqlite"}],
+            }
+        },
+    }
+    NFS = {
+        "streams": [{"name": "nfs"}],
+        "nfs": {"schedule": "0 6 * * *", "paths": [{"tag": "traefik", "path": "/mnt/storage/traefik"}]},
+    }
+
+    def test_a_claim_row_carries_its_stream_and_node(self):
+        self.assertEqual(
+            gen_docs.coverage_rows(self.NODES),
+            [gen_docs.CoverageRow("nodes-nas", "30 4 * * *", "nas", "grafana", "monitoring", "sqlite")],
+        )
+
+    def test_an_nfs_path_is_a_row_named_by_its_tag(self):
+        self.assertEqual(
+            gen_docs.coverage_rows(self.NFS),
+            [gen_docs.CoverageRow("nfs", "0 6 * * *", "nfs", "traefik", "-", "files")],
+        )
+
+    def test_a_stream_with_no_rows_emits_none(self):
+        self.assertEqual(gen_docs.coverage_rows({"streams": [{"name": "nodes-nuc0"}], "nodes": {}}), [])
+
+    def test_the_page_is_generated_from_the_matrix(self):
+        with temp_tree(
+            {
+                "cluster/helm/backup/values.yaml": "streams:\n  - name: nodes-nas\nnodes:\n  nas:\n    schedule: 30 4 * * *\n    claims:\n      - claim: grafana\n        namespace: monitoring\n        kind: sqlite\n"
+            }
+        ) as root:
+            page = gen_docs.render_coverage(root)
+        self.assertTrue(page.startswith(gen_docs.GENERATED_MARKER))
+        self.assertIn("| `grafana` |", page)
+        self.assertIn("python3 hack/gen_docs.py --write --only coverage", page)
+
+
 if __name__ == "__main__":
     unittest.main()

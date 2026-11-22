@@ -1,8 +1,8 @@
 """Render the documentation pages that can be derived from this repository.
 
-Two pages are generated, never hand-edited: `docs/reference/routes.md` from the charts' rendered
-`IngressRoute` objects, and `docs/backup/coverage.md` from the backup chart's values. Both are
-committed, because GitHub and every agent read the repository and not the rendered site.
+The routes page is generated from the charts' rendered `IngressRoute` objects; the backup coverage
+page follows from the backup chart's values. Both are committed, because GitHub and every agent read
+the repository and not the rendered site.
 
     hack/gen_docs.py --check              every page matches its source
     hack/gen_docs.py --write              regenerate and write
@@ -293,8 +293,107 @@ def render_routes(root: pathlib.Path) -> str:
     return "\n".join(lines)
 
 
+@dataclasses.dataclass(frozen=True)
+class CoverageRow:
+    stream: str
+    schedule: str
+    node: str
+    claim: str
+    namespace: str
+    kind: str
+
+
+def coverage_rows(values: dict) -> list[CoverageRow]:
+    """One row per backed-up claim and per NFS export, straight from the matrix."""
+    rows: list[CoverageRow] = []
+    for node, config in sorted((values.get("nodes") or {}).items()):
+        config = config or {}
+        for claim in config.get("claims") or []:
+            rows.append(
+                CoverageRow(
+                    stream=f"nodes-{node}",
+                    schedule=str(config.get("schedule") or "-"),
+                    node=node,
+                    claim=str(claim.get("claim") or "-"),
+                    namespace=str(claim.get("namespace") or "-"),
+                    kind=str(claim.get("kind") or "files"),
+                )
+            )
+    nfs = values.get("nfs") or {}
+    for path in nfs.get("paths") or []:
+        rows.append(
+            CoverageRow(
+                stream="nfs",
+                schedule=str(nfs.get("schedule") or "-"),
+                node="nfs",
+                claim=str(path.get("tag") or "-"),
+                namespace="-",
+                kind="files",
+            )
+        )
+    return rows
+
+
+def render_coverage(root: pathlib.Path) -> str:
+    """The coverage matrix, rendered from the backup chart's values."""
+    source = root / "cluster" / "helm" / "backup" / "values.yaml"
+    values = yaml.safe_load(source.read_text(encoding="utf-8")) or {}
+    rows = coverage_rows(values)
+    streams = [row.stream for row in rows]
+    order: list[str] = []
+    for name in (values.get("streams") or []):
+        if name.get("name") in streams and name["name"] not in order:
+            order.append(name["name"])
+    for name in streams:
+        if name not in order:
+            order.append(name)
+
+    lines = [
+        GENERATED_MARKER,
+        "",
+        "# What is backed up, and where",
+        "",
+        f"> **Generated page.** {len(rows)} rows over {len(order)} streams, rendered from",
+        "> `cluster/helm/backup/values.yaml` by `hack/gen_docs.py`. Do not edit it: the matrix is the",
+        "> values file.",
+        "",
+        "Regenerate: `python3 hack/gen_docs.py --write --only coverage`",
+        "",
+        "One row per claim and per export. `Schedule` is the CronJob's time in the node's local",
+        "timezone; `Kind` is `sqlite` when the row stages a database through SQLite's backup API and",
+        "`files` when the directory is copied as it is. A stream with no rows is a stream that backs up",
+        "nothing, which is a defect rather than a quiet night: the verifier fails it.",
+        "",
+    ]
+    for stream in order:
+        group = [row for row in rows if row.stream == stream]
+        if not group:
+            continue
+        lines += [
+            f"## `{stream}` — {group[0].schedule}",
+            "",
+            "| Claim or tag | Namespace | Node | Kind |",
+            "|---|---|---|---|",
+        ]
+        for row in group:
+            lines.append(f"| `{row.claim}` | `{row.namespace}` | {row.node} | {row.kind} |")
+        lines.append("")
+    lines += [
+        "## Sources",
+        "",
+        "- `cluster/helm/backup/values.yaml` — the matrix, and the measured size beside each row",
+        "- `cluster/helm/backup/templates/` — the six CronJobs that read it",
+        "",
+        "What is deliberately absent — the media libraries, the music, the books, the downloads — is",
+        "absent by decision and named in [what a loss costs](what-a-loss-costs.md).",
+        "",
+    ]
+    return "\n".join(lines)
+
+
 PAGES: dict[str, tuple[str, object]] = {
     "reference/routes.md": ("routes", render_routes),
+    "backup/coverage.md": ("coverage", render_coverage),
 }
 
 
