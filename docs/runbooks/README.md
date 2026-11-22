@@ -7,7 +7,7 @@
 > ever been rehearsed · **Verified** 2026-11-20 · **Kind:** living page
 
 A runbook exists only after it has been performed at least once; a procedure nobody has run is a
-guess with a title. This page lists only files that exist. Twelve are procedures — several of them
+guess with a title. This page lists only files that exist. Thirteen are procedures — several of them
 pending their first run — and five are completed records, kept because each is the only write-up of
 something that happened once; their status says so.
 
@@ -17,6 +17,7 @@ something that happened once; their status says so.
 |---|---|---|
 | [`authentik-apps.md`](authentik-apps.md) | proved 2026-11-15 | an application needs signing in through authentik: native OIDC where the app speaks it, the forward-auth gate where it does not. The matrix and the traps are in [`reference/sso-applications.md`](../reference/sso-applications.md). |
 | [`internal-ca.md`](internal-ca.md) | proved 2026-11-15; the restore drill is pending | a `*.kub.local` certificate fails to validate, the root must be minted again, or a leaf signed. |
+| [`acme-store.md`](acme-store.md) | proved 2026-11-22 (34 entries → 16) | a Let's Encrypt certificate exists for a hostname no route serves, or a retired name must stop consuming the weekly issuance limit. The store is one file on an NFS claim, edited with the router stopped. |
 | [`traefik-release.md`](traefik-release.md) | proved 2026-11-21 (chart `20.3.1` → `25.0.3`); W5's 2.11 rehearsal records into the same page | the Traefik release has to move to a newer chart, or be inspected or rolled back. K3s's helm-controller runs nothing in this cluster, so the release is moved with `helm` by hand. |
 | [`argocd.md`](argocd.md) | pending — the rebuild has not been run | the controller is down, or Argo CD must be rebuilt from nothing since it became self-managed on 2026-11-19. |
 | [`postgres-add-database.md`](postgres-add-database.md) | proved 2026-11-13 (acceptance database) | an application is rebuilt and needs its own role, database and Secrets. |
