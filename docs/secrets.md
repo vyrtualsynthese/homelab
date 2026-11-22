@@ -41,9 +41,25 @@ database passwords.
 | `mktxp-conf` | `monitoring` | mounted as a file |
 | `grafana` | `monitoring` | `admin-user`, `admin-password` — required; the chart reads it via `admin.existingSecret` |
 | `local-cert` | `kube-system` | Traefik default TLS cert (`TLSStore`) |
-| `traefik-dashboard-auth` | `kube-system` | basicAuth for the dashboard |
+| `traefik-dashboard` | `kube-system` | `users` — the htpasswd line(s) for the dashboard's basic auth |
 | `n8n` | `n8n` | `encryption-key` → `N8N_ENCRYPTION_KEY`, the key n8n encrypts stored credentials with |
 | `backup-restic` | `backup` | `RESTIC_PASSWORD`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` (restic's names for any S3 store's pair; the values are OVH's) → `envFrom` in every job of `cluster/helm/backup` |
+
+- **`traefik-dashboard` is keyed `users`, and the key name is the whole contract.** The Middleware
+  [`traefik-dashboard`](../cluster/infrastructure/traefik/dashboard/auth.yaml) reads this Secret, and
+  Traefik only looks for `users`, holding `user:hash` lines in htpasswd format (bcrypt preferred). A
+  Secret that carries its hash under any other key — `auth` was the mistake, live from 2023 to
+  2026-11-22 — gives a middleware with **no users**, which answers `401` to every request, correct
+  password included. That looks like a working password prompt, which is why it survived so long.
+  Recreate it and prove it in one sitting:
+
+```bash
+htpasswd -nbB vronteix '<password>' \
+  | kubectl -n kube-system create secret generic traefik-dashboard \
+      --from-file=users=/dev/stdin --dry-run=client -o yaml | kubectl apply -f -
+curl -sk -o /dev/null -w '%{http_code}\n' -u 'vronteix:<password>' \
+  --resolve traefik.kub.local:443:192.168.1.46 https://traefik.kub.local/dashboard/   # 200
+```
 
 `n8n` is the one application Secret that must exist **before** its first sync: the deployment reads
 `encryption-key` without `optional`, so a missing Secret is `CreateContainerConfigError`, not a pod
