@@ -40,6 +40,14 @@ All notable changes to this repository. The format follows
 
 ### Changed
 
+- The money alerts are one threshold, because that is what OVHcloud allows. The €50 billing alert
+  was retried on 2026-11-22 and still answered HTTP 500; probes on the same endpoint show it accepts
+  one configuration per service scope — a service with none took one (200), a second on a taken scope
+  failed (500), and the request body and the threshold never changed the outcome. `all-20` is the
+  only project-wide threshold the account can hold, so crossing €50 sends the €20 mail. The retry
+  evidence, the query IDs and the procedure are in `docs/runbooks/cloud-monitoring.md` §6, and the
+  design spec's withdrawn claim is restored with it.
+
 - A restored claim came back as a running service: Sonarr's configuration was rebuilt from the 05:30
   `nodes-streaming` snapshot onto its live volume on 2026-11-22 and the application served from it,
   32 seconds down. The restored database (45 MB, `pragma integrity_check` → `ok`, 103 series and 566
