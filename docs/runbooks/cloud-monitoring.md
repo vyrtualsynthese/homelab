@@ -274,15 +274,12 @@ up, needs no credential anywhere near Prometheus, and sends email rather than Di
 ovhcloud cloud alerting list --cloud-project a93a624a514243a6a557863c90a5379e -o json
 ```
 
-Change the threshold or the address with `edit`, add another threshold with `create`, remove it with
-`delete`:
+Change the threshold or the address with `edit`, remove it with `delete`, and create a new one only
+for a service that has none (see the limit below):
 
 ```bash
 ovhcloud cloud alerting edit 07f35b7f-f559-472b-8852-93b140034720 \
   --cloud-project a93a624a514243a6a557863c90a5379e --monthly-threshold 30
-ovhcloud cloud alerting create --cloud-project a93a624a514243a6a557863c90a5379e \
-  --name all-50 --service all --monthly-threshold 50 \
-  --emails valentin.ronteix@ashudev.com --delay 3600
 ovhcloud cloud alerting delete 07f35b7f-f559-472b-8852-93b140034720 \
   --cloud-project a93a624a514243a6a557863c90a5379e
 ```
@@ -291,14 +288,23 @@ Credentials are the legacy application-key trio in `~/ovh.conf` (mode 600, secti
 mirrored as `OVH_APPLICATION_KEY`, `OVH_APPLICATION_SECRET` and `OVH_CONSUMER_KEY` in
 `~/.config/secrets/keys.env`.
 
-**The second threshold was refused, and this page does not pretend otherwise.** A €50 configuration
-was attempted five times on 2026-11-20; every attempt answered HTTP 500
-`Server::InternalServerError`, from a different backend each time, with a request body identical in
-shape to the one that succeeded apart from the name and the threshold. The provider is at fault, not
-the request. The retry is tracked by Vikunja card **#483**. The consequence is small but real: there
-is one alert, not two, and the €50 "something is running that should not be" signal does not exist
-yet. Nothing is unmonitored — €20 still fires when spend goes higher — only the second signal is
-missing.
+**The API keeps one configuration per service, so a second global threshold cannot exist.** This was
+retried on 2026-11-22 and the earlier reading is now explained, not merely repeated. With `all-20` in
+place, `create --service all` fails at any threshold — €50 on 2026-11-20 and again on 2026-11-22,
+€9999 the same day — always HTTP 500 `Server::InternalServerError`, with a fresh `X-OVH-Query-Id` each
+time (`EU.ext-4.6b0339ee.1014459.1c89b147…`, `EU.ext-4.6b033a02.1014459.b8f34e7a…`) and in under
+100 ms, so the request is rejected, not dropped. The same call for a service that has no
+configuration succeeds: `--service instances` at €9999 returned 200, and `block_storage` did too while
+two configurations already existed. A second `instances` configuration then failed the same way,
+which is what makes the rule "one per service" rather than "one per project": the request shape and
+the threshold never mattered, only whether that service already had a configuration. Every probe was
+deleted afterwards with `alerting delete`, and `alerting list` reads back the one `all-20`.
+
+The consequence is small but real: the €50 "something is running that should not be" line cannot sit
+beside a €20 line for the same project-wide scope. One global threshold is what the provider allows,
+and €20 is the one kept. Nothing is unmonitored — crossing €50 crosses €20 and sends the mail — only
+the second signal is missing. A second signal would need OVHcloud to allow two configurations on one
+service scope; no support ticket is open, and the query IDs above are what a ticket would quote.
 
 What stays with OVHcloud, unchanged: domain renewal and expiry notices, unpaid-bill reminders, and
 invoice mail. The AWS budget is not part of this and was destroyed with the migration.
@@ -341,9 +347,10 @@ restore there.
   Google Workspace can accept mail with a broken `DMARC` for a while, and this page will not see it.
 - **No zone-versus-git drift.** The probe asserts what the zone serves *now*. A record edited in the
   console and never committed looks green here; `infra-main` owns the comparison with git.
-- **No spend dashboard or history.** The €20 email is the only spend signal, and only one threshold
-  exists (see [§6](#6-the-money-alerts)). Spend over time would need the exporter that was considered
-  and rejected.
+- **No spend dashboard or history.** The €20 email is the only spend signal, and a second threshold
+  cannot exist: the provider keeps one configuration per service scope (see
+  [§6](#6-the-money-alerts)). Spend over time would need the exporter that was considered and
+  rejected.
 - **A dead prober is quieter than a dead site, by design.** If the `blackbox-exporter` pod dies,
   `probe_success` stops being produced and `CloudEndpointDown` goes quiet rather than firing, because
   every rule is `noDataState: OK`. `ScrapeTargetDown` reports the pod instead — the pod carries
