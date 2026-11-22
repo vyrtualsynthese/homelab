@@ -42,8 +42,15 @@ Storage bucket. Four restic repositories, one per stream: `nodes-nas`, `nodes-nu
    the job leaves in the snapshot, because the verifier reads snapshots and never a claim. It is a
    **warning, not a failure** — an application that has not written its `cache/` yet matches nothing
    either, and an exclusion that matches nothing costs space rather than data, which `budgetGiB` is
-   what bounds. The `nfs` stream's exclusions are shell words in `backup-nfs.sh`, which has no prepare
-   step, and are not checked this way.
+   what bounds. The `nfs` stream has no prepare step, so `backup-nfs.sh` counts its own words before
+   each export's restic call — same reading, a bare name at any depth or a path from the export's
+   root — and prints `exclude-unused path=<tag> pattern=<entry>` for one that matches nothing. That
+   line lives in the job's log and nowhere else, and `backup-verify` does not repeat it: the verifier
+   reads snapshots, and the only tree this job can write is the export itself, which is mounted
+   read-only and is what the backup is made of, so a report the verifier could see would have to be
+   written into the thing being backed up. The morning check is therefore the log of the previous
+   night's job, `kubectl -n backup logs job/<name>`, or the same lines in Loki with
+   `{namespace="backup"} |= "exclude-unused"`.
 6. **`pv:` pins a row that would otherwise be ambiguous.** The local-path provisioner names a directory
    `<pvName>_<namespace>_<claimName>`, and a deleted claim leaves its directory behind. Two rows today
    match two directories for that reason (`pgadmin-config`, `calibre-web-automated-config`); the pin
@@ -54,9 +61,9 @@ Storage bucket. Four restic repositories, one per stream: `nodes-nas`, `nodes-nu
 | Objects | Runs | Reads |
 |---|---|---|
 | `backup-node-nas`, `backup-node-nuc0`, `backup-node-streaming` | 04:30, 05:00, 05:30 Europe/Paris | the node's `local-path` roots, its host configuration, and on the two control planes the K3s snapshot directory |
-| `backup-nfs` | 06:00 | the `nas` exports: syncthing, koillection uploads, the ACME store, the qBittorrent config export |
+| `backup-nfs` | 06:00 | the `nas` exports: syncthing, koillection uploads, the ACME store, the qBittorrent config export — and its own `exclude` words, naming the ones that match nothing |
 | `backup-prune` | Sunday 12:00 | every repository, each with its own policy: `forget --keep-daily 7 --keep-weekly 4 --keep-monthly 12`, and on the `nfs` stream `--keep-monthly 24 --keep-yearly 10` |
-| `backup-verify` | 08:30 | every repository: newest snapshot age, size against budget, each `sqlite` row's staged database, each `mustMatch` row's files, the etcd copy's age, and each row's `exclude` entries that matched nothing |
+| `backup-verify` | 08:30 | every repository: newest snapshot age, size against budget, each `sqlite` row's staged database, each `mustMatch` row's files, the etcd copy's age, and each node row's `exclude` entries that matched nothing |
 
 Each node job is two containers: `prepare` (Python, stages the databases and writes the two path
 lists) and `restic` (one backup run). The prune and verify jobs own no data; they are here so the
@@ -70,6 +77,11 @@ retention policy and the health check live beside what they check.
   parent snapshot, and rescans the whole stream every night instead of only what changed.
 - Restored databases are the **staged** copies under `/staging/claims/<namespace>/<claim>/`, never the
   live file in the claim.
+- The `nfs` exclusion check reads the live exports as matching on 2026-11-23: `.stversions` under four
+  Syncthing folders (55 MB of them inside `Scans`), and `logs`, `log`, `geoip`, `ui.prev`, `.cache` and
+  `.npm` at the root of the qBittorrent config export. Read through the two applications' own pods,
+  read-only, so the first night after the check landed prints no `exclude-unused` line for the four
+  exports in scope.
 
 ## Sizes
 
