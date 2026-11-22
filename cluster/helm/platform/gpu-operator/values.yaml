@@ -48,6 +48,9 @@ gpu-operator:
         cpu: 50m
         memory: 96Mi
       limits:
+        # The upstream chart defaults this to 500m. `null` drops the inherited
+        # key: a CPU limit only throttles, per the house rule.
+        cpu: null
         memory: 192Mi
 
   validator:

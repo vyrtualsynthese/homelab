@@ -23,11 +23,12 @@ dumps:
   retentionDays: 14
 
 resources:
+  # No CPU limit, per the house rule. The 1-core limit throttled 51% of CFS
+  # periods over the 7 days to 2026-11-22, 9,122 seconds in total.
   requests:
     cpu: 100m
     memory: 512Mi
   limits:
-    cpu: "1"
     memory: 1Gi
 
 postgresql:

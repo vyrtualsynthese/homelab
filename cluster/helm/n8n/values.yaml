@@ -77,14 +77,14 @@ n8n:
     #      - chart-example.local
 
   resources:
-    # Sized from Prometheus on 2026-11-13 over the 39h it holds: 420Mi average
-    # and 420Mi peak. The 512Mi limit left 15% of headroom for a workflow run,
-    # which is not enough for this app.
+    # Measured 2026-11-22 over 7 days: p95 385Mi, peak 387Mi. The request was
+    # 256Mi, below the working set, so the scheduler reserved less than the app
+    # holds. Request = p95 rounded up; the 768Mi limit is peak x 2.
     limits:
       memory: 768Mi
     requests:
       cpu: 10m
-      memory: 256Mi
+      memory: 448Mi
 
     # We usually recommend not to specify default resources and to leave this as a conscious
     # choice for the user. This also increases chances charts run on environments with little
