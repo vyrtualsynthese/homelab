@@ -403,7 +403,8 @@ reports `firing` on the Health dashboard.
   snapshot holds no `*.dump` under it. No rule proves a file restores — the
   drills in [`../runbooks/restore.md`](../runbooks/restore.md) are the only proof of that: three
   read-only restores on 2026-11-21, the destructive put-back onto Sonarr's live claim and a read of
-  all four repositories from a laptop on 2026-11-22; the etcd rehearsal is still untried.
+  all four repositories from a laptop on 2026-11-22, and the etcd snapshot restored into a throwaway
+  K3s the same day ([`../runbooks/restore-etcd.md`](../runbooks/restore-etcd.md)).
   `RestoreDrillOverdue` makes the habit fail loudly when it stops, but it reads a date the operator
   writes, so it does not prove a drill happened.
 - **No vulnerability scanning.** Nothing reports which CVEs affect the running

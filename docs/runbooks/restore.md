@@ -2,16 +2,20 @@
 
 **Destructive where it says so.** Sections 1 and 3 read only. Section 2's last part replaces a live
 application's configuration, and section 4 replaces a server's whole state: both are marked.
-Section 2's put-back was drilled on 2026-11-22; section 4's rehearsal is still untried.
+Section 2's put-back was drilled on 2026-11-22; section 4 was rehearsed the same day in
+[`restore-etcd.md`](restore-etcd.md).
 
 > **In one line.** How to get a file, a database or a cluster state back out of the OVH bucket, and
 > the drill log that says which of these has actually been tried.
 >
 > **Use it when** something was deleted, a claim is gone, a database has to be rebuilt, or the
 > monthly restore drill is due · **Verified** 2026-11-22: sections 1–3 restored and read back, Sonarr
-> stopped and restarted from a snapshot put back onto its live claim (32 s of downtime), all four
-> repositories read from a laptop outside the cluster; the etcd rehearsal is untried · **Kind:**
-> living page
+> stopped and restarted from a snapshot put back onto its live claim (32 s of downtime), the etcd
+> snapshot restored into a throwaway single-node K3s, all four repositories read from a laptop
+> outside the cluster · **Kind:** how-to
+>
+> **Sources** `cluster/helm/backup/values.yaml`, `docs/how-it-works/backups.md`, `docs/secrets.md`,
+> `docs/reference/alerts.md`
 
 The nightly jobs write four restic repositories into one bucket. Restic is the tool that reads them:
 it holds the file list, the encryption and the history. There is no other way in.
@@ -303,12 +307,12 @@ kubectl -n syncthing exec deploy/syncthing -- sha256sum /data/<path/of/the/file>
 Success: two identical hashes. A file deleted since the snapshot was taken is exactly the case this
 restores: copy it back into `/data` through the same pod, then let Syncthing propagate it.
 
-## Section 4 — etcd (pending, card #8)
+## Section 4 — etcd
 
-Two sentences of context, because this one is unlike the others: an etcd snapshot is the cluster's
-entire object state, so restoring it is done into a *test* cluster first, never into the running one.
-The rehearsal belongs to the W5 platform work and card #8; this runbook only fixes where the file
-comes from and the one thing that makes it readable.
+An etcd snapshot is the cluster's entire object state, so restoring it is done into a *test* cluster
+first, never into the running one. The procedure, the token requirement, the single-member caveat
+and the measured times are [`restore-etcd.md`](restore-etcd.md); this section keeps only where the
+file comes from.
 
 The copy is inside the two control-plane streams, as a directory the node job mounted and handed to
 restic:
@@ -318,14 +322,18 @@ restic -r "$NODES_STREAMING" ls latest | grep '^/host/etcd-snapshots/'
 restic -r "$NODES_STREAMING" restore latest --target /out --include '/host/etcd-snapshots'
 ```
 
-Success: one file per night, named `<node>-<unix-time>-<revision>`, around 110–125 MB each.
+Success: one file per 12-hour run, named `etcd-snapshot-<server>-<unix seconds>`, plus one
+`pre-131-*` per server left by the 1.31 move. Measured 2026-11-22: 41–80 MB per file, nine files,
+514.8 MiB, restored in 3 seconds.
 
-**The snapshot is encrypted with a key derived from the K3s server token.** A rebuild that installs a
-new token produces a snapshot that opens to garbage, so the token from
-`/var/lib/rancher/k3s/server/token` — kept in the password manager, see
-[`../secrets.md`](../secrets.md) — must be in place *before* `k3s server --cluster-reset
---cluster-reset-restore-path=<file>` runs. Restoring without it is not a partial restore; it is a
-server that starts with unreadable Secrets.
+**The snapshot opens only under the token it was taken with.** It is the value in
+`/var/lib/rancher/k3s/server/token` on the servers, kept in the password manager, see
+[`../secrets.md`](../secrets.md), and it has to be passed to the reset with `--token` or
+`K3S_TOKEN`: a file placed at that path by hand is overwritten when K3s starts. Without the right
+token the restore writes the database and then stops with `bootstrap data already found and
+encrypted with different token` — not a partial restore, a server whose bootstrap data will not
+open. [`restore-etcd.md`](restore-etcd.md) Step 2 has the three failed attempts and the one that
+works.
 
 Once W5 lands the official S3 upload, the file comes from the bucket directly instead of from inside
 this stream, and this section is rewritten with that path. Until then the copy is the bridge, and its
@@ -342,9 +350,8 @@ before the pod is deleted. The bucket is untouched by every command above.
 
 ## The drill log
 
-One drill a month, rotating through sections 1–3; section 4 belongs to card #8. A drill counts once
-its row is written: the point of the table is that the next person can see what has been tried
-recently, not what is believed.
+One drill a month, rotating through sections 1–4. A drill counts once its row is written: the point
+of the table is that the next person can see what has been tried recently, not what is believed.
 
 | Date (UTC) | Drill | Duration | Result | By |
 |---|---|---|---|---|
@@ -353,10 +360,11 @@ recently, not what is believed.
 | 2026-11-21 | Section 3 — a Syncthing file (`nfs`) | ~1 min | `Photos/Argentique/IMG_20240121_0008.jpg` restored from snapshot `173c4caa`; sha256 `a90eb14a…` identical to the live file read through the Syncthing pod | opencode (agent) |
 | 2026-11-22 | Section 2 — Sonarr put back on its live claim (`nodes-streaming`) | ~11 min, 32 s of that downtime | Snapshot `7ac41aa9` (05:30 Paris): `sonarr.db` 45 096 960 B from `/staging` with `pragma integrity_check` → `ok`, 103 series / 6 213 episodes / 566 files / 3 983 history rows, and the claim tree (`config.xml`, `asp/`, `Sentry/`) from its host path. ArgoCD automation paused on the Application, Deployment scaled to 0 at 18:54:26Z, old tree moved to `_drill-aside-20261122` (93.3 MiB), restored tree copied in with `MediaCover` moved back, `chown 1100:1100`; ready again at 18:54:58Z. `/api/v3/system/status` `200`, `/api/v3/series` 103 with 566 episode files, `/api/v3/health` clean apart from the pre-existing Cathode-Ray.Tube indexer warning, no `database is locked` or `no such table`, `sonarr.db` mtime advancing, ArgoCD `Synced Healthy` and `RESTARTS 0`. Aside removed once the checks passed; rollback is the same snapshot, restored again | opencode (agent) |
 | 2026-11-22 | Outside the cluster — all four repositories ([`last-resort.md`](last-resort.md) Step 1) | ~2 min | No cluster consulted: `restic` 0.18 on a laptop listed `nodes-nas` `44e80ca9` / 108.2 MiB, `nodes-nuc0` `80f5025f` / 811.2 MiB, `nodes-streaming` `d434572d` / 652.0 MiB, `nfs` `c517d884` / 91.0 MiB, and decrypted a tree from `nfs` (`qbittorrent-config`). The password and the S3 pair came from the Bitwarden item `homelab-backup-last-resort` with the on-disk copies moved aside. That item was written from this machine the same morning, so the run proves the credentials and the procedure, not yet a second machine. The `restore` in that run left a lock behind (PID 1222890 on `Val-Gaming`, written 02:20:56Z) that nobody released: `backup-prune` failed on it at noon the same day, and it took a scratch pod and an `unlock` to clear | opencode (agent) |
+| 2026-11-22 | Section 4 — etcd snapshot into a throwaway K3s ([`restore-etcd.md`](restore-etcd.md)) | ~4 min, 16 s of it the restore itself | Snapshot `etcd-snapshot-streaming-1795348801` (49 401 888 B, taken 12:00:01Z) restored from `nodes-streaming` snapshot `57c1df7d` into `v1.31.14+k3s1` in a privileged container on the workstation under WSL2. `--cluster-reset` 7 s, start → API 9 s; a marker ConfigMap from before the restore was gone; 25 namespaces, 66 Deployments, 3 StatefulSets, 47 PVCs, 115 pods, 376 Secrets, 60 ArgoCD Applications came back; `streaming`'s Ready heartbeat read `2026-11-22T11:55:25Z`; `backup-restic`'s `RESTIC_PASSWORD` byte-identical to the local copy. Without the vault token the restore stops at `bootstrap data already found and encrypted with different token` | opencode (agent) |
 
 **Recorded 2026-11-22.** Sections 1–3 have each been restored and read back, section 2 has now been put
-back onto the live claim and served from it, and the bucket opens from a laptop with no cluster at all.
-Section 4's etcd rehearsal is the one left unproven.
+back onto the live claim and served from it, section 4 has been restored into a throwaway K3s with its
+objects read back, and the bucket opens from a laptop with no cluster at all.
 
 The table above is the human record; the alert reads a machine-readable copy. `restoreDrills` in
 `cluster/helm/monitoring/prometheus/values.yaml` holds one entry per row (Unix seconds;
