@@ -42,6 +42,14 @@ rules:
   - apiGroups: ["storage.k8s.io"]
     resources: ["storageclasses"]
     verbs: ["get", "list", "watch"]
+  # The cluster-scoped objects a chart owns. Without these, a release cannot be checked for
+  # adoption: the RBAC bindings and the IngressClass are invisible to the read-only identity.
+  - apiGroups: ["rbac.authorization.k8s.io"]
+    resources: ["clusterroles", "clusterrolebindings"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["ingressclasses"]
+    verbs: ["get", "list", "watch"]
   - apiGroups: ["argoproj.io"]
     resources: ["applications", "appprojects", "applicationsets"]
     verbs: ["get", "list", "watch"]
