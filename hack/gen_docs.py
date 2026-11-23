@@ -213,11 +213,35 @@ def _declares_a_route(chart_dir: pathlib.Path) -> bool:
     """True when the chart's own templates or values can render an IngressRoute.
 
     A chart may carry its routes in `values.yaml` under `extraObjects` instead of a
-    template of its own; ArgoCD does exactly that.
+    template of its own; ArgoCD does exactly that. A values file can also declare a
+    route without naming the kind at all: see `_declares_a_dashboard_route`.
     """
     candidates = list((chart_dir / "templates").glob("*.y*ml")) if (chart_dir / "templates").is_dir() else []
     candidates += list(chart_dir.glob("values*.y*ml"))
-    return any("IngressRoute" in p.read_text(encoding="utf-8") for p in candidates)
+    if any("IngressRoute" in p.read_text(encoding="utf-8") for p in candidates):
+        return True
+    for path in chart_dir.glob("values*.y*ml"):
+        try:
+            values = yaml.safe_load(path.read_text(encoding="utf-8"))
+        except yaml.YAMLError:
+            continue
+        if _declares_a_dashboard_route(values):
+            return True
+    return False
+
+
+def _declares_a_dashboard_route(values) -> bool:
+    """True when a values tree carries the Traefik chart's dashboard block.
+
+    The upstream chart renders its dashboard IngressRoute from values rather than a template whose
+    text names it, so a wrapper that carries the block declares a route without saying so.
+    """
+    if not isinstance(values, dict):
+        return False
+    dashboard = (values.get("ingressRoute") or {}).get("dashboard")
+    if isinstance(dashboard, dict):
+        return dashboard.get("enabled") is True
+    return any(_declares_a_dashboard_route(value) for value in values.values())
 
 
 def _merge_hosts(routes: list[Route]) -> list[Route]:
@@ -286,8 +310,10 @@ def render_routes(root: pathlib.Path) -> str:
         "",
         "Hostnames, middlewares and TLS options are rendered from the `IngressRoute` objects each chart",
         "declares. A host with a `web` and a `websecure` router is one row, and its gate names both.",
-        "A route that no Application owns is not here: the Traefik dashboard is a Helm release value, and",
-        "it is named in [network.md](../how-it-works/network.md). One internal route is an API rather",
+        "A route the charts do not render is not here: `traefik.kub.local` on port 80 is redirected",
+        "by an `IngressRoute` applied by hand from",
+        "`cluster/infrastructure/traefik/dashboard/redirect.yaml`, and that twin is not a row of its",
+        "own. One internal route is an API rather",
         "than a page: `loki.kub.local` serves Loki's query API and its query frontend, and the logs are",
         "read in Grafana. The `IngressRouteTCP` and `IngressRouteUDP` entries Syncthing and Minecraft",
         "declare match on `HostSNI(*)`, carry no hostname, and are therefore not rows here.",
