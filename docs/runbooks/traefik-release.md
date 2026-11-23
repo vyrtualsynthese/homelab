@@ -3,15 +3,18 @@
 Date: 2026-11-21 · **Ownership moved** 2026-11-21 at chart `25.0.3`, revision 8 · **Moved to 2.11**
 the same day, chart `27.0.2` (Traefik `2.11.63`), revision 10 · **Moved to v3** the same day, chart
 `42.4.1` (Traefik `3.7.19`), revision 11 · **Configuration audited** 2026-11-22, revision 12 ·
-**Adopted by ArgoCD** 2026-11-23: Application `traefik`, manual sync only
+**Application committed** 2026-11-23: `traefik`, manual sync; the first sync, which is the adoption,
+runs the procedure below
 
 > **In one line.** The Traefik release is this repository's, applied by an ArgoCD Application from a
 > wrapper chart in git, and synced by hand. `helm` is the fallback when ArgoCD is the broken thing.
 >
 > **Use it when** Traefik has to move to a newer chart, its values change, the release has to be
 > inspected or rolled back, or the Application has to be synced by hand or taken back out of ArgoCD ·
-> **Verified** 2026-11-23 on chart `42.4.1`, Traefik `3.7.19`: the Application renders the same
-> objects the release was running, every host answering, `/metrics` scraped (`up == 1`) ·
+> **Verified** 2026-11-23 on chart `42.4.1`, Traefik `3.7.19`: the chart renders the objects the live
+> release was running — arguments, image, node selector, claim, strategy and ports identical, the rest
+> the API server's own defaults. The sync itself is not verified yet: it runs after the merge, and its
+> evidence lands here ·
 > **Kind:** how-to · **Sources** `cluster/helm/platform/traefik/`,
 > `cluster/argocd/projects/platform/traefik.yaml`, `cluster/infrastructure/traefik/`,
 > `docs/how-it-works/network.md`.
@@ -147,19 +150,19 @@ argocd app diff traefik                      # read this before anything else
 argocd app sync traefik
 ```
 
-The first sync after adoption ran with `--server-side --force`, because the objects were created by
-Helm and its field manager owned the fields ArgoCD was about to claim. That is a one-time need: later
-syncs are plain applies.
+The first sync runs with `--server-side --force`, because the objects were created by Helm and its
+field manager owns the fields ArgoCD is about to claim. That is a one-time need: later syncs are
+plain applies.
 
 Two rules this configuration depends on:
 
 - **`helm.skipCrds: true`.** Without it a sync applies the chart's `crds/` directory: fifteen
   `hub.traefik.io` CRDs that need a licence and gate nothing here, plus ownership of the ten
   `traefik.io` ones the manual step owns. The diff could then never be empty.
-- **`ignoreDifferences` only for noise an observed diff named.** Today that is the Deployment's
-  `deployment.kubernetes.io/revision` annotation and the Service's `load-balancer-cleanup` finalizer;
-  both exist on every object the controllers touch. A new entry needs a diff that showed it, not a
-  guess.
+- **`ignoreDifferences` only for noise an observed diff named.** The Application in git carries none.
+  The entries to expect are the Deployment's `deployment.kubernetes.io/revision` annotation and the
+  Service's `load-balancer-cleanup` finalizer, because the controllers add both to every object they
+  touch — but an entry goes in only after `argocd app diff` printed it, never from this guess.
 
 ## Getting back out of ArgoCD
 

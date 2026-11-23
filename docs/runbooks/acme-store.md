@@ -36,11 +36,10 @@ against the weekly issuance limit of its registered domain (`ashudev.com`).
 
 The router is one `Deployment` replica on `streaming`, applied by the ArgoCD `Application` `traefik`,
 which never syncs itself: scaling it down is not reverted by self-heal, because nothing is applied
-without a person running a sync. At the 2026-11-23 adoption the live release was chart `42.4.1` /
-Traefik `v3.7.19`, read from
-[`cluster/helm/platform/traefik/values.yaml`](../../cluster/helm/platform/traefik/values.yaml), whose
-keys nest under `traefik:` because that chart wraps the upstream one. `values-25.0.3.yaml` and
-`values-2.11.yaml` in `cluster/infrastructure/traefik/` belong to the earlier charts, and
+without a person running a sync. The live release is chart `42.4.1` / Traefik `v3.7.19`, read from
+`cluster/helm/platform/traefik/values.yaml`, whose keys nest under
+`traefik:` because that chart wraps the upstream one. `values-25.0.3.yaml` and `values-2.11.yaml` in
+`cluster/infrastructure/traefik/` belong to the earlier charts, and
 [`traefik-release.md`](traefik-release.md) says which file goes with which.
 
 ## Finding the orphans
