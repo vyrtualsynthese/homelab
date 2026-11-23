@@ -3,8 +3,7 @@
 Date: 2026-11-21 · **Ownership moved** 2026-11-21 at chart `25.0.3`, revision 8 · **Moved to 2.11**
 the same day, chart `27.0.2` (Traefik `2.11.63`), revision 10 · **Moved to v3** the same day, chart
 `42.4.1` (Traefik `3.7.19`), revision 11 · **Configuration audited** 2026-11-22, revision 12 ·
-**Application committed** 2026-11-23: `traefik`, manual sync; the first sync, which is the adoption,
-runs the procedure below
+**Adopted by ArgoCD** 2026-11-23: Application `traefik`, manual sync, one sync, no diff left
 
 > **In one line.** The Traefik release is this repository's, applied by an ArgoCD Application from a
 > wrapper chart in git, and synced by hand. `helm` is the fallback when ArgoCD is the broken thing.
@@ -12,9 +11,8 @@ runs the procedure below
 > **Use it when** Traefik has to move to a newer chart, its values change, the release has to be
 > inspected or rolled back, or the Application has to be synced by hand or taken back out of ArgoCD ·
 > **Verified** 2026-11-23 on chart `42.4.1`, Traefik `3.7.19`: the chart renders the objects the live
-> release was running — arguments, image, node selector, claim, strategy and ports identical, the rest
-> the API server's own defaults. The sync itself is not verified yet: it runs after the merge, and its
-> evidence lands here ·
+> release was running, and the pre-sync diff was one `tracking-id` annotation per object and nothing
+> else. After the sync the pod kept its name, its creation time and its zero restarts ·
 > **Kind:** how-to · **Sources** `cluster/helm/platform/traefik/`,
 > `cluster/argocd/projects/platform/traefik.yaml`, `cluster/infrastructure/traefik/`,
 > `docs/how-it-works/network.md`.
@@ -150,9 +148,22 @@ argocd app diff traefik                      # read this before anything else
 argocd app sync traefik
 ```
 
-The first sync runs with `--server-side --force`, because the objects were created by Helm and its
-field manager owns the fields ArgoCD is about to claim. That is a one-time need: later syncs are
+The first sync ran with `--server-side --force`, because the objects were created by Helm and its
+field manager owns the fields ArgoCD was about to claim. That is a one-time need: later syncs are
 plain applies.
+
+**What the adoption measured.** On 2026-11-23, `develop` at `9b7b966e`, the diff read before the sync
+was one line per object — `argocd.argoproj.io/tracking-id` — and nothing else, so the Application
+needs no `ignoreDifferences` at all; entries are still added only for noise a diff printed. The pod
+kept its name, its creation time and its zero restarts across the sync, which is what proves no
+certificate was re-requested, and the routes answered as before (`plex` 401, `dashy` 302,
+`ashuvidz.com` 200, the dashboard's `/dashboard/` 401 behind its own login and its port 80 twin 301).
+
+A later plain sync changed no object's spec, but it did client-side-apply the dashboard
+`IngressRoute` and write `kubectl.kubernetes.io/last-applied-configuration` onto it, with a warning,
+because Helm never wrote that annotation on the objects it created. ArgoCD does not report it as a
+diff. Making every sync server-side (`syncOptions: [ServerSideApply=true]`) would stop that
+annotation appearing; it is not set today.
 
 Two rules this configuration depends on:
 
@@ -192,6 +203,11 @@ helm -n kube-system list                                     # empty
 ```
 
 Deleting that Secret forgets the release and touches no object.
+
+**Where that stands.** As of 2026-11-23 the record is still there and the trap is live: the ArgoCD
+sync is clean, but the Secret has not been deleted, and the read-only identity an agent shell uses
+cannot read Secrets at all (`helm list` answers `403`). So this step needs the operator's own
+kubeconfig. Until it is done, `helm uninstall traefik` is a loaded gun, not history.
 
 ## Moving to 2.11, chart `27.0.2`
 
