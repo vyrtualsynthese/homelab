@@ -1,6 +1,6 @@
 # The Let's Encrypt certificate store
 
-Date: 2026-11-22
+Date: 2026-11-22 · values paths re-checked 2026-11-23
 
 > **In one line.** Traefik keeps every certificate it has ever requested in one JSON file on an NFS
 > claim, and renews all of them forever, so a retired hostname has to be deleted from that file by
@@ -8,7 +8,9 @@ Date: 2026-11-22
 >
 > **Use it when** a certificate exists for a hostname no route serves, a renewal alert names a host
 > nobody visits, or a hostname is renamed and the old name must stop consuming the Let's Encrypt
-> issuance limit · **Verified** 2026-11-22 · **Kind:** living procedure
+> issuance limit · **Verified** 2026-11-22 · **Kind:** how-to · **Sources**
+> `cluster/helm/platform/traefik/values.yaml`, `docs/runbooks/traefik-release.md`, and the live
+> `acme.json` read through the cluster.
 
 ## What the store is
 
@@ -32,11 +34,13 @@ it reaches the renewal window (30 days before expiry) whether or not a router st
 retired from the cluster therefore keep being reissued, and every `*.kub.home.ashudev.com` name counts
 against the weekly issuance limit of its registered domain (`ashudev.com`).
 
-The router is one `Deployment` replica on `streaming`, installed with `helm` by hand; no ArgoCD
-`Application` owns it, so scaling it down is not reverted by self-heal. At the 2026-11-22 run the
-live release was chart `42.4.1` / Traefik `v3.7.19`, installed from
-[`cluster/infrastructure/traefik/values-v3.yaml`](../../cluster/infrastructure/traefik/values-v3.yaml);
-the sibling `values.yaml` and `values-2.11.yaml` belong to the earlier charts, and
+The router is one `Deployment` replica on `streaming`, applied by the ArgoCD `Application` `traefik`,
+which never syncs itself: scaling it down is not reverted by self-heal, because nothing is applied
+without a person running a sync. At the 2026-11-23 adoption the live release was chart `42.4.1` /
+Traefik `v3.7.19`, read from
+[`cluster/helm/platform/traefik/values.yaml`](../../cluster/helm/platform/traefik/values.yaml), whose
+keys nest under `traefik:` because that chart wraps the upstream one. `values-25.0.3.yaml` and
+`values-2.11.yaml` in `cluster/infrastructure/traefik/` belong to the earlier charts, and
 [`traefik-release.md`](traefik-release.md) says which file goes with which.
 
 ## Finding the orphans
@@ -278,10 +282,11 @@ Two things have to be true before the release that does this:
   first release moves both names from a certificate `myresolver` owns to one `ovhresolver` owns, so
   the apex answers with no certificate at all until the order completes.
 
-The retirement itself is `helm upgrade` with the values that no longer carry `myresolver`, then the
+The retirement itself is a sync with the values that no longer carry `myresolver` — a commit, then
+`argocd app sync traefik` — then the
 prune in §"Pruning the store" with the keep-list every `ovhresolver` entry, then a handshake per
-public name. `values.yaml` and `values-2.11.yaml` keep the old resolver because they describe the
-older charts; `values-v3.yaml` is the file the live release is installed from.
+public name. `values-25.0.3.yaml` and `values-2.11.yaml` keep the old resolver because they describe
+the older charts; the live file is `cluster/helm/platform/traefik/values.yaml`.
 
 ### When Traefik orders a certificate
 

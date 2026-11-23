@@ -73,7 +73,7 @@ why it carries the rules it just read back. Both calls were run against Grafana 
 ## What the panels and rules read
 
 The metrics are Traefik's own Prometheus endpoint on the pod's `:9100`, scraped through the pod
-annotation — the Service no longer publishes that port ([`values.yaml`](../../../../../infrastructure/traefik/values.yaml)).
+annotation — the Service no longer publishes that port ([`values.yaml`](../../../../../helm/platform/traefik/values.yaml), nested under `traefik:`).
 The p95 and p99 panels only exist because Prometheus stopped dropping `traefik_.*_bucket` on
 2026-11-21 and the release widened the buckets to `0.1,0.25,0.5,1,2.5,5,10`. The thresholds, the
 reasoning and the known holes are in [`docs/reference/alerts.md`](../../../../../../docs/reference/alerts.md).
