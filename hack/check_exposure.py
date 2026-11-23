@@ -113,15 +113,17 @@ def _check_dashboard_values(values, where, violations):
 
 
 def _values_with_a_dashboard(node):
-    """Every mapping in a values tree that declares `ingressRoute.dashboard`.
+    """Every mapping in a values tree that declares a dashboard route the chart will render.
 
     The upstream Traefik chart renders its dashboard route from values, so a values file is a route
     declaration with no `kind` to dispatch on. A wrapper chart hands those values to the upstream
     chart under the chart's own name, which puts the block one level down rather than at the top:
-    that is why this walks the tree instead of reading one key.
+    that is why this walks the tree instead of reading one key. A block with `enabled` off (the
+    chart's own default) renders nothing, so it declares no route and needs no gate.
     """
     if isinstance(node, dict):
-        if isinstance((node.get("ingressRoute") or {}).get("dashboard"), dict):
+        dashboard = (node.get("ingressRoute") or {}).get("dashboard")
+        if isinstance(dashboard, dict) and dashboard.get("enabled") is True:
             yield node
         for value in node.values():
             yield from _values_with_a_dashboard(value)

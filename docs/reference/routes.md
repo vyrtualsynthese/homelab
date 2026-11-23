@@ -9,17 +9,16 @@ Regenerate: `python3 hack/gen_docs.py --write --only routes`
 
 Hostnames, middlewares and TLS options are rendered from the `IngressRoute` objects each chart
 declares. A host with a `web` and a `websecure` router is one row, and its gate names both.
-A route the charts do not render is not here: `traefik.kub.local` on port 80 is redirected
-by an `IngressRoute` applied by hand from
-`cluster/infrastructure/traefik/dashboard/redirect.yaml`, and that twin is not a row of its
-own. One internal route is an API rather
+The dashboard is the one host whose `web` router is applied by hand rather than rendered:
+`traefik.kub.local` on port 80 is redirected by
+`cluster/infrastructure/traefik/dashboard/redirect.yaml`, and that twin merges into the row
+the chart-rendered `websecure` router gives the host. One internal route is an API rather
 than a page: `loki.kub.local` serves Loki's query API and its query frontend, and the logs are
 read in Grafana. The `IngressRouteTCP` and `IngressRouteUDP` entries Syncthing and Minecraft
 declare match on `HostSNI(*)`, carry no hostname, and are therefore not rows here.
 How a request arrives, what the gate does and which certificate answers the handshake are
 [how it works](../how-it-works/network.md); who signs in where is
-[the SSO matrix](sso-applications.md). `Public?` is what
-[`hack/check_exposure.py`](../../hack/check_exposure.py) allows.
+[the SSO matrix](sso-applications.md). `Public?` is what `hack/check_exposure.py` allows.
 
 ## Public (9)
 

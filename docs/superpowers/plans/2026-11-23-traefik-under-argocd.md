@@ -475,7 +475,7 @@ grep -rn "infrastructure/traefik/values.yaml\|values-v3" AGENTS.md docs/ --inclu
 hack/check-docs.sh --base origin/develop; echo "exit=$?"
 ```
 
-Expected: no hit outside `docs/superpowers/` (specs and plans are records of what was true then), and exit 0.
+Expected: no hit outside `docs/superpowers/` (specs and plans are records of what was true then) and outside the runbook's "Moving to v3" and "ownership cutover" sections, which are history and say so at their head, and exit 0. The `docs/audit/` snapshot is dated evidence and is not edited.
 
 - [ ] **Step 7: Commit**
 
@@ -552,9 +552,17 @@ Expected: the Application exists and reports `OutOfSync`, `Missing` or `Unknown`
 
 ```bash
 argocd app diff traefik | tee /tmp/opencode/first-diff.txt
+export KUBECONFIG=$HOME/.kube/mcp-readonly.yaml
+kubectl -n kube-system get deploy traefik \
+  -o jsonpath='{.spec.selector}{"\n"}{.spec.template.metadata.labels}{"\n"}'
+helm template traefik cluster/helm/platform/traefik -n kube-system \
+  | python3 -c 'import sys,yaml
+docs=[d for d in yaml.safe_load_all(sys.stdin) if d]
+d=[x for x in docs if x["kind"]=="Deployment"][0]
+print(d["spec"]["selector"]); print(d["spec"]["template"]["metadata"]["labels"])'
 ```
 
-Expected: the Service's port order, plus `metadata` noise (`deployment.kubernetes.io/revision`, `finalizers`). Anything else — a changed argument, image, selector, claim — means the chart and the release disagree; stop and fix the chart, do not sync.
+Expected: the Service's port order, plus `metadata` noise (`deployment.kubernetes.io/revision`, `finalizers`), and the two printed selector/label pairs identical — `app.kubernetes.io/instance: traefik-kube-system` in both, and the same `spec.selector.matchLabels`. The render diff in Task 1 stripped labels to compare them, so this is where the immutable selector is checked: a difference here is a `Recreate` rollout of the router, not a sync. Anything else — a changed argument, image, selector, claim — means the chart and the release disagree; stop and fix the chart, do not sync.
 
 - [ ] **Step 3: Sync, with server-side apply and force**
 

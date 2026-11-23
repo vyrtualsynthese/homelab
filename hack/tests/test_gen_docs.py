@@ -122,6 +122,35 @@ class DeclaresARouteTests(unittest.TestCase):
         ) as root:
             self.assertTrue(gen_docs._declares_a_route(root / "cluster/helm/x"))
 
+    def test_a_disabled_dashboard_block_declares_no_route(self):
+        with temp_tree(
+            {
+                "cluster/helm/x/Chart.yaml": "apiVersion: v2\nname: x\nversion: 0.1.0\n",
+                "cluster/helm/x/values.yaml": (
+                    "traefik:\n  ingressRoute:\n    dashboard:\n      enabled: false\n"
+                ),
+            }
+        ) as root:
+            self.assertFalse(gen_docs._declares_a_route(root / "cluster/helm/x"))
+
+    def test_an_enabled_dashboard_beside_a_disabled_one_is_found(self):
+        with temp_tree(
+            {
+                "cluster/helm/x/Chart.yaml": "apiVersion: v2\nname: x\nversion: 0.1.0\n",
+                "cluster/helm/x/values.yaml": (
+                    "traefik:\n"
+                    "  ingressRoute:\n"
+                    "    dashboard:\n"
+                    "      enabled: false\n"
+                    "  extra:\n"
+                    "    ingressRoute:\n"
+                    "      dashboard:\n"
+                    "        enabled: true\n"
+                ),
+            }
+        ) as root:
+            self.assertTrue(gen_docs._declares_a_route(root / "cluster/helm/x"))
+
 
 @unittest.skipUnless(shutil.which("helm"), "helm is not installed")
 class RenderChartTests(unittest.TestCase):

@@ -231,17 +231,17 @@ def _declares_a_route(chart_dir: pathlib.Path) -> bool:
 
 
 def _declares_a_dashboard_route(values) -> bool:
-    """True when a values tree carries the Traefik chart's dashboard block.
+    """True when a values tree carries the Traefik chart's dashboard block, switched on.
 
     The upstream chart renders its dashboard IngressRoute from values rather than a template whose
-    text names it, so a wrapper that carries the block declares a route without saying so.
+    text names it, so a wrapper that carries the block declares a route without saying so. The
+    chart's own default is `enabled: false`, and a block that keeps it renders nothing.
     """
     if not isinstance(values, dict):
         return False
     dashboard = (values.get("ingressRoute") or {}).get("dashboard")
-    if isinstance(dashboard, dict):
-        return dashboard.get("enabled") is True
-    return any(_declares_a_dashboard_route(value) for value in values.values())
+    found = isinstance(dashboard, dict) and dashboard.get("enabled") is True
+    return found or any(_declares_a_dashboard_route(value) for value in values.values())
 
 
 def _merge_hosts(routes: list[Route]) -> list[Route]:
@@ -310,17 +310,16 @@ def render_routes(root: pathlib.Path) -> str:
         "",
         "Hostnames, middlewares and TLS options are rendered from the `IngressRoute` objects each chart",
         "declares. A host with a `web` and a `websecure` router is one row, and its gate names both.",
-        "A route the charts do not render is not here: `traefik.kub.local` on port 80 is redirected",
-        "by an `IngressRoute` applied by hand from",
-        "`cluster/infrastructure/traefik/dashboard/redirect.yaml`, and that twin is not a row of its",
-        "own. One internal route is an API rather",
+        "The dashboard is the one host whose `web` router is applied by hand rather than rendered:",
+        "`traefik.kub.local` on port 80 is redirected by",
+        "`cluster/infrastructure/traefik/dashboard/redirect.yaml`, and that twin merges into the row",
+        "the chart-rendered `websecure` router gives the host. One internal route is an API rather",
         "than a page: `loki.kub.local` serves Loki's query API and its query frontend, and the logs are",
         "read in Grafana. The `IngressRouteTCP` and `IngressRouteUDP` entries Syncthing and Minecraft",
         "declare match on `HostSNI(*)`, carry no hostname, and are therefore not rows here.",
         "How a request arrives, what the gate does and which certificate answers the handshake are",
         "[how it works](../how-it-works/network.md); who signs in where is",
-        "[the SSO matrix](sso-applications.md). `Public?` is what",
-        "[`hack/check_exposure.py`](../../hack/check_exposure.py) allows.",
+        "[the SSO matrix](sso-applications.md). `Public?` is what `hack/check_exposure.py` allows.",
         "",
         f"## Public ({len(public)})",
         "",

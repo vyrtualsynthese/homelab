@@ -1,0 +1,8 @@
+# A wrapper chart's values with the dashboard switched off: the upstream chart renders no
+# route, so there is no gate to demand.
+traefik:
+  ingressRoute:
+    dashboard:
+      enabled: false
+      entryPoints: ["websecure"]
+      matchRule: Host(`traefik.kub.local`) && (PathPrefix(`/dashboard`) || PathPrefix(`/api`))
