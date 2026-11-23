@@ -1,7 +1,8 @@
 # Agent shells reach the cluster as the read-only ServiceAccount
 
-> **In one line.** Every shell OpenCode spawns authenticates as `kube-system/opencode-mcp`, because
-> the wrapper that starts it exports the read-only kubeconfig; the operator's own terminal stays admin.
+> **In one line.** Every shell OpenCode spawns authenticates as `kube-system/opencode-mcp` by default,
+> because the wrapper that starts it exports the read-only kubeconfig; the operator's own terminal
+> stays admin.
 >
 > **Use it when** a command answers `403` in a session, or you wonder why an agent asks you to run a
 > `kubectl` write · **Verified** 2026-11-23 · **Kind:** record
@@ -16,13 +17,19 @@ Status: active
 ## The decision
 
 Every shell an agent starts reaches the cluster as the read-only ServiceAccount
-`kube-system/opencode-mcp`, not as the operator. The line that does it lives in the `opencode`
+`kube-system/opencode-mcp`, not as the operator. The block that does it lives in the `opencode`
 wrapper, which is the only place the tool shells inherit environment from:
 
 ```sh
+# Agent shells read the cluster, they do not change it: the read-only
+# ServiceAccount, not the admin kubeconfig. An admin session is deliberate —
+# `KUBECONFIG=$HOME/.kube/config opencode`.
 : "${KUBECONFIG:=$HOME/.kube/mcp-readonly.yaml}"
 export KUBECONFIG
 ```
+
+It sits after the block that loads the secrets and before the real binary is resolved, so every child
+process inherits it. That is the whole edit — the wrapper is otherwise unchanged.
 
 `:="${…}"`, not `=`, so the default holds and the exception costs one variable.
 `KUBECONFIG=$HOME/.kube/config opencode` starts an admin session. `~/.kube/config` keeps the admin
@@ -54,12 +61,15 @@ Options rejected:
   card.
 
 The cost accepted with the choice: `kubectl exec`, `kubectl cp`, `kubectl port-forward` and every
-write answer `403` to an agent, and `helm` can no longer install or upgrade against the cluster
-(`helm template` and `helm lint` need no cluster and are unaffected). A runbook step that needs one
-of those becomes the operator's.
+write answer `403` to an agent, and `helm` can no longer install or upgrade against the cluster. Reads
+through `helm` fail where the data is a Secret, which `view` excludes by design: `helm list`,
+`helm history` and `helm get` answer `403` because Helm keeps its release records in Secrets.
+`helm template` and `helm lint` need no cluster and are unaffected. A runbook step that needs one of
+those becomes the operator's.
 
-`argocd` is unaffected: the CLI authenticates against `argocd.kub.local` over HTTPS with grpc-web and
-never reads the kubeconfig, so `argocd app list` and `argocd app sync` keep working for an agent.
+`argocd` is unaffected: the CLI keeps its own session in `~/.config/argocd/config` and talks to
+`argocd.kub.local` over HTTPS with grpc-web, so it does not read the kubeconfig for `app list` or
+`app sync` and both keep working for an agent.
 
 ## What it costs if it is wrong
 
@@ -68,7 +78,7 @@ $HOME/.kube/config` and gets `system:admin` back — the guard stops accidents a
 intent, and the admin kubeconfig stays readable because the operator needs it there.
 
 The wrapper is an untracked file at `~/.local/bin/opencode`. Rebuild the machine and the admin default
-returns until those two lines are put back; the file's content is quoted above for that reason.
+returns until that block is put back; it is quoted in full above, with its position, for that reason.
 
 If a routine verification genuinely needs `exec` or `port-forward`, the price is a scoped Role in
 `kubectl/mcp-readonly-rbac.yaml` and a card, not a return to cluster-admin.

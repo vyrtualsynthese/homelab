@@ -43,8 +43,8 @@ LAN.
 **If authentik is down** the WebUI is unreachable; sync itself keeps running, since the sync and
 discovery ports do not cross Traefik. The way back is `kubectl -n syncthing port-forward
 svc/syncthing 8384:8384`. Before the click above it asks for the local login; afterwards it asks for
-nothing, which is deliberate: reaching it already requires `kubectl`, and that is cluster-admin. What
-it never is, is a route from the LAN.
+nothing, which is deliberate: reaching it already requires the admin kubeconfig, because an agent's
+shell cannot port-forward. What it never is, is a route from the LAN.
 
 ## Backup
 
