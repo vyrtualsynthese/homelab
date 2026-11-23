@@ -17,6 +17,27 @@ State: read from the charts on 2026-11-17; the custody of the three rebuild cred
 confirmed with the operator on 2026-11-22 (card #461). This file is the whole inventory: every Secret
 a chart expects, then the PostgreSQL instance and the per-application database passwords.
 
+## Where the values are held
+
+The cluster holds them; the vault is the copy that outlives it. One Bitwarden secure note per
+Kubernetes Secret, in the `Homelab` folder, named `homelab-k8s-<namespace>-<name>`: the fields are
+the Secret's keys verbatim, and a value too long for one field (the server caps an encrypted field
+at 5,000 characters) is split into `<key>.partNN` fields to concatenate in order. Read them back and
+compare by hash, never by eye. The notes were taken from the live cluster on 2026-11-23 with the
+admin kubeconfig — 54 Secrets, 109 key values, every one matched on read-back.
+
+- `homelab-backup-last-resort` — the restic password, the backup bucket's S3 pair and the K3s server
+  token. Losing these loses the backups, not just their configuration.
+- `homelab-env`, `homelab-keys-env`, `homelab-ovh-state-backend` — the API tokens and shell
+  credentials from the two files in `~/.config/secrets`, and the OpenTofu state backend pair.
+- `local-ca-key.pem` — the internal CA's private key, so a rebuild can reissue the `*.kub.local`
+  leaf. `homelab-k8s-kube-system-local-cert` — the leaf and key Traefik actually serves, which is the
+  pair the copies in `~/.config/secrets/kub-local/` are refreshed from, never the other way round.
+
+Not filed on purpose: the `sh.helm.release.v1.*` release history, service-account tokens, the
+k3s-generated node passwords and serving certificate (all regenerable), and `dashy-conf`, which is
+rendered from `cluster/helm/dashy/files/conf.yml` in git.
+
 ## Application secrets expected by the charts
 
 > Compiled from the charts on 2026-11-17; not verified against the cluster, because the read-only
