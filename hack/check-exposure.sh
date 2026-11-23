@@ -131,12 +131,12 @@ while IFS= read -r values; do
   printf '%-52s static (values-only)\n' "$rel"
 done < <(find "$ROOT/cluster/helm" -name values.yaml | sort)
 
-# The Traefik dashboard is rendered from the chart's own values file, not a chart
-# in this repository.
+# The Traefik dashboard route is declared inside the wrapper chart's values, under the
+# subchart's key, so the chart loop above sees the file and never looks inside it.
 if [ -z "$ONLY" ]; then
   dashboard="$ROOT/cluster/helm/platform/traefik/values.yaml"
   if ! out="$(python3 "$CHECKER" "$dashboard")"; then
-    printf 'cluster/infrastructure/traefik/values.yaml: %s\n' "$out"
+    printf 'cluster/helm/platform/traefik/values.yaml: %s\n' "$out"
     violations=1
   fi
 fi

@@ -414,7 +414,8 @@ After the change the startup log carries the last two warnings only, both accept
 `false`: the collection endpoint is not an EU provider under the sovereign-provider rule.
 
 **The rename sweep.** Chart 42 validates its values with `additionalProperties: false`, so a stale key
-fails the render rather than being ignored. Every key in `values-v3.yaml` exists in chart `42.4.1`'s
+fails the render rather than being ignored. Every key in `values-v3.yaml` — the wrapper's `values.yaml`
+since 2026-11-23 — exists in chart `42.4.1`'s
 own `values.yaml`; `helm lint` and `helm template` both pass. The silent-ignore risk left is a key
 the chart accepts but never reads, which `helm template` shows in the rendered arguments — the audit
 compared those against the table above.

@@ -5,7 +5,9 @@
 > how to change the schedule.
 >
 > **Use it when** Renovate has not opened its usual pull requests, its token has to be rotated, or
-> the nightly slot has to move · **Verified** 2026-11-19 · **Kind:** living page
+> the nightly slot has to move · **Verified** 2026-11-19, application count re-checked 2026-11-23 ·
+> **Kind:** how-to · **Sources** `.github/renovate.json`, `cluster/helm/renovate/`,
+> `cluster/argocd/projects/`.
 
 Status: **proved 2026-11-19** — the hand-triggered run described below is its first execution: Job
 `renovate-manual-20261119-0114`, 18 minutes, exit code 0, no error line in 347.
@@ -38,9 +40,9 @@ Four of the rules in that file exist because of a failure, and they read as arbi
   a legacy base tag next to each release, and `qbittorrent:20.04.1` reads as a major bump. Without
   the gate it became a nightly pull request that would have replaced 5.3.0 with a 2020 Ubuntu image.
   The real majors (Prowlarr 2.x → 3.x) stay on the dashboard, one click away.
-- **The repository's own `develop` reference is disabled.** All 56 Applications pin
+- **The repository's own `develop` reference is disabled.** All 60 Applications pin
   `targetRevision: develop` on this repository. There is no version to move to, and a tag written
-  there would stop the GitOps sync, so renaming it a dependency only invented 56 rows on the
+  there would stop the GitOps sync, so renaming it a dependency only invented 60 rows on the
   dashboard.
 - **n8n's tag is read from GitHub releases, not Docker Hub.** n8n publishes its prerelease builds to
   Docker Hub as ordinary version tags (`2.49.1`, `3.3.0`) and marks them as prereleases only in the
