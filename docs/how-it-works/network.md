@@ -123,10 +123,9 @@ name but is not on the allowlist, so its gate is required, not optional.
 
 The full hostname table — app, gate, certificate, public or not — is
 [reference/routes.md](../reference/routes.md), the one home for route and gate state. It is rendered
-from the Applications' charts, so the one route it cannot show is the Traefik dashboard's:
-`traefik.kub.local` is a value of the Traefik Helm release
-(`cluster/infrastructure/traefik/values-v3.yaml`), not an Application, and its `web` twin is
-`cluster/infrastructure/traefik/dashboard/redirect.yaml`.
+from the Applications' charts. The Traefik dashboard is one of those routes now: its `websecure`
+router is rendered from the `traefik` chart's values, and only its `web` twin is outside the table,
+applied by hand from `cluster/infrastructure/traefik/dashboard/redirect.yaml`.
 
 The guarantees this arrangement makes, what enforces each one and the command that proves it are
 [the security section](../security/README.md).

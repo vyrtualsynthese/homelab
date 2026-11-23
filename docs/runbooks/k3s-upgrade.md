@@ -1,10 +1,11 @@
 # Moving K3s to a new minor
 
+Date: 2026-11-21/22 · **Proved** on `v1.30.1+k3s1` → `v1.31.14+k3s1`, four nodes, one at a time
+
 > **In one line.** The `system-upgrade-controller` swaps one node's k3s binary, the node restarts, and
 > the next node waits for a human to point the plan at it.
 >
 > **Use it when** K3s has to move to a new minor version (1.32 next), or a single node is stuck on an
-<<<<<<< HEAD
 > older one · **Verified** 2026-11-23: all four nodes on `v1.31.14+k3s1`, containerd `2.1.5-k3s1.32`,
 > Ready, etcd `ok`, both Plans `Complete`, and the controller's settings file and kubectl image checked
 > against the live cluster; the climb itself proved 2026-11-21/22, four nodes one at a time, quorum
@@ -279,4 +280,4 @@ the snapshot in the bucket predates the change.
 - Update `AGENTS.md` §7, the plan, and this page with the version as it is now.
 - A K3s upgrade does **not** touch the Traefik release. Confirm it is still this repository's chart
   and not a K3s-bundled addon: `kubectl -n kube-system get deploy traefik -o jsonpath='{.spec.template.spec.containers[0].image}'`
-  should print the image `values-v3.yaml` pins.
+  should print the image pinned in `cluster/helm/platform/traefik/values.yaml`.

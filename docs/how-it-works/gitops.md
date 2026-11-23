@@ -5,7 +5,8 @@
 > auto-sync switch — leave that path.
 >
 > **Use it when** you are changing an application, adding one, or wondering why a sync did not happen
-> · **Verified** 2026-11-17 · **Kind:** living page
+> · **Verified** 2026-11-17, paths re-checked 2026-11-23 · **Kind:** explanation · **Sources**
+> `cluster/argocd/`, `cluster/helm/`, `cluster/infrastructure/`, `docs/charts/README.md`.
 
 ## A commit's journey
 
@@ -33,7 +34,7 @@ develop` and points at one chart, or at a values file for a remote chart.
 |---|---|
 | `cluster/argocd/` | The root Application and `projects/` — one YAML file per application. The folder holds Applications, not ArgoCD "projects", despite its name. |
 | `cluster/helm/` | One chart per application, plus directories holding only a `values.yaml` for remote charts. |
-| `cluster/infrastructure/` | Traefik configuration, middlewares, the TLS store and storage classes. **No Application owns this path**: it is applied by hand. |
+| `cluster/infrastructure/` | Traefik configuration, middlewares, the TLS store and storage classes. **No Application owns this path**: it is applied by hand. The router's own release is not here — it is the Application `traefik` over `cluster/helm/platform/traefik`. |
 | `kubectl/` | One-off manifests and the read-only RBAC for cluster access. |
 | `ansible/` | Host preparation playbooks, outside GitOps. |
 | `hack/` | The checkers — links, public exposure — the board tooling and one-off scripts such as `internal-cert.sh`. |
@@ -82,7 +83,7 @@ comparison.
 | a hostname, route or access gate | the chart's IngressRoute and its middleware list | merge, sync, open the URL |
 | a secret | nothing in git — create or update the Secret in the cluster | restart the pod; see [secrets.md](../secrets.md) |
 | add an application | a chart under `cluster/helm/` and an Application file under `cluster/argocd/projects/` | the catalogue is [applications.md](applications.md) |
-| a cluster-wide Traefik rule or storage class | `cluster/infrastructure/` | applied by hand, outside GitOps |
+| a cluster-wide Traefik rule or storage class | `cluster/infrastructure/` | applied by hand, outside GitOps. The router itself is not here: its release is `cluster/helm/platform/traefik`, synced by hand from the `traefik` Application |
 
 ## Validate before merging
 
