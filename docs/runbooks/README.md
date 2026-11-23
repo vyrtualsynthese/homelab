@@ -26,7 +26,8 @@ puts data back, Security for identity and certificates, Running it for the rest.
 | [`authentik-apps.md`](authentik-apps.md) | Security | proved 2026-11-15 | an application needs signing in through authentik: native OIDC where the app speaks it, the forward-auth gate where it does not. The matrix and the traps are in [`reference/sso-applications.md`](../reference/sso-applications.md). |
 | [`internal-ca.md`](internal-ca.md) | Security | proved 2026-11-15; the restore drill is pending | a `*.kub.local` certificate fails to validate, the root must be minted again, or a leaf signed. |
 | [`acme-store.md`](acme-store.md) | Security | proved 2026-11-22 (34 entries → 16) | a Let's Encrypt certificate exists for a hostname no route serves, or a retired name must stop consuming the weekly issuance limit. The store is one file on an NFS claim, edited with the router stopped. |
-| [`restore.md`](restore.md) | Backups | proved 2026-11-21: sections 1–3 restored and read back; the destructive put-back and the etcd rehearsal are untried | a file, a claim, a database or the cluster state has to come back out of the OVH bucket, or the monthly restore drill is due. |
+| [`restore.md`](restore.md) | Backups | proved 2026-11-21: sections 1–3 restored and read back; the destructive put-back and section 4's etcd restore are proved separately | a file, a claim, a database or the cluster state has to come back out of the OVH bucket, or the monthly restore drill is due. |
+| [`restore-etcd.md`](restore-etcd.md) | Backups | proved 2026-11-22 on a throwaway single-node K3s: a production snapshot restored and its objects read back in 16 s | the control plane is unquorate, a server will not start, or the drill that proves the etcd copy restores is due. |
 | [`postgres-restore.md`](postgres-restore.md) | Backups | pending — the dumps were verified 2026-11-13, the restore itself has not been run | a database is lost, or the drill that proves the dumps restore is due. |
 | [`last-resort.md`](last-resort.md) | Backups | proved 2026-11-22 from a laptop with no cluster, values out of Bitwarden; not yet run from a second machine | the cluster is gone, the house is not available, or the bucket has to be proved from outside before a rebuild. |
 | [`argocd.md`](argocd.md) | Running it | pending — the rebuild has not been run | the controller is down, or Argo CD must be rebuilt from nothing since it became self-managed on 2026-11-19. |
@@ -47,8 +48,6 @@ puts data back, Security for identity and certificates, Running it for the rest.
 
 No file exists for these, so there is no procedure to follow — do not run one from memory.
 
-- `restore-etcd.md` — W5 (Platform) Task 3. It is proved on the test cluster before it is written
-  down.
 - `add-a-node.md` — W8 (Ansible and docs).
 - `rotate-a-secret.md` — W8 (Ansible and docs). No longer a gap: the procedure lives at
   `docs/running-it/rotate-a-secret.md`, which the Running it tab lists.

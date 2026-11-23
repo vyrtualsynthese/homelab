@@ -4,14 +4,15 @@
 > the next node waits for a human to point the plan at it.
 >
 > **Use it when** K3s has to move to a new minor version (1.32 next), or a single node is stuck on an
+<<<<<<< HEAD
 > older one · **Verified** 2026-11-23: all four nodes on `v1.31.14+k3s1`, containerd `2.1.5-k3s1.32`,
 > Ready, etcd `ok`, both Plans `Complete`, and the controller's settings file and kubectl image checked
 > against the live cluster; the climb itself proved 2026-11-21/22, four nodes one at a time, quorum
 > never lost, one 15-second ingress blip on `streaming` · **Kind:** how-to
 >
 > **Sources** `cluster/infrastructure/system-upgrade/controller.yaml`,
-> `cluster/infrastructure/system-upgrade/controller-env.yaml`, and the live Plans, Jobs and node
-> versions, read on 2026-11-23
+> `cluster/infrastructure/system-upgrade/controller-env.yaml`, `docs/runbooks/restore-etcd.md`, and the
+> live Plans, Jobs and node versions, read on 2026-11-23
 
 ## What this touches
 
@@ -266,8 +267,10 @@ What limits the damage: etcd keeps quorum on the other two servers while a contr
 snapshot in the OVH bucket predates the change, and a worker failing leaves the cluster serving. Plan
 the rollback *before* touching the first node.
 
-Restoring etcd from a snapshot is **not** written yet — `restore-etcd.md` is still in the
-[runbook index](README.md)'s "not written yet" list and has never been rehearsed.
+Restoring etcd from a snapshot is written down and has been rehearsed: [`restore-etcd.md`](restore-etcd.md)
+has the commands, the token requirement and the measured times. What has not been rehearsed is the
+*rollback of a node that fails mid-upgrade*: the restore has only been run on a throwaway server, and
+the snapshot in the bucket predates the change.
 
 ## After the run
 
