@@ -74,6 +74,9 @@ class GateTests(unittest.TestCase):
     def test_nested_traefik_values_file_with_the_gate_passes(self):
         self.assertEqual(violations("traefik-values-nested-gated.yaml"), [])
 
+    def test_a_disabled_dashboard_route_needs_no_gate(self):
+        self.assertEqual(violations("traefik-values-nested-disabled.yaml"), [])
+
     def test_traefik_dashboard_is_checked_when_the_values_do_not_parse(self):
         found = violations("helmchartconfig-malformed.yaml")
         self.assertEqual(len(found), 1)

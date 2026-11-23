@@ -1,5 +1,5 @@
 # The dashboard's HTTP twin. The chart renders the dashboard route on
-# `websecure` only (cluster/infrastructure/traefik/values.yaml), so without this
+# `websecure` only (cluster/helm/platform/traefik/values.yaml), so without this
 # the plain-HTTP hostname would answer 404 instead of sending the browser to TLS.
 #
 # Same shape as the redirect routers the internal charts render: `lan-only`

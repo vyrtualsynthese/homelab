@@ -97,7 +97,7 @@ wrapper charts that need them (see `.gitignore`) — ArgoCD runs `helm dependenc
 time. Examples:
 `monitoring/prometheus`,
 `monitoring/grafana`, `monitoring/loki`, `monitoring/fluent-bit`, `authentik`, `dashy`,
-`filebrowser`.
+`filebrowser`, `platform/traefik`.
 
 ## 4. Conventions
 
@@ -200,7 +200,7 @@ dependency chart in a temporary copy, so it lints all 52.
 
 Charts that need `helm dependency build`: `monitoring/prometheus`, `monitoring/grafana`,
 `monitoring/loki`, `monitoring/fluent-bit`, `authentik`, `dashy`, `filebrowser`,
-`databases/pgadmin`, `renovate`, `nfs/provisioner`.
+`databases/pgadmin`, `renovate`, `nfs/provisioner`, `platform/traefik`.
 
 `hack/check-app-version.sh` checks requirement 1 of [`docs/charts/README.md`](docs/charts/README.md):
 every `appVersion` names the version inside the chart's `image.tag`, with the packaging suffix

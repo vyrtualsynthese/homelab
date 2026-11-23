@@ -153,7 +153,7 @@ ingress:
   # game safe to publish; the security work decides whether the entryPoint stays
   # reachable from the internet.
   enabled: true
-  # -- The Traefik entryPoint is defined in cluster/infrastructure/traefik/values.yaml.
+  # -- The Traefik entryPoint is defined in cluster/helm/platform/traefik/values.yaml.
   entryPoint: mc
   match: "HostSNI(`*`)"
   annotations: {}
