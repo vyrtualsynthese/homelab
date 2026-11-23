@@ -134,7 +134,7 @@ done < <(find "$ROOT/cluster/helm" -name values.yaml | sort)
 # The Traefik dashboard is rendered from the chart's own values file, not a chart
 # in this repository.
 if [ -z "$ONLY" ]; then
-  dashboard="$ROOT/cluster/infrastructure/traefik/values.yaml"
+  dashboard="$ROOT/cluster/helm/platform/traefik/values.yaml"
   if ! out="$(python3 "$CHECKER" "$dashboard")"; then
     printf 'cluster/infrastructure/traefik/values.yaml: %s\n' "$out"
     violations=1
