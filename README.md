@@ -84,7 +84,7 @@ configuration volume lands on that same node; there is no failover, by design.
 ```
 ansible/                  host playbooks (see the caveat in ansible/README.MD)
 cluster/argocd/           root Application + per-app Applications (CRLF line endings)
-cluster/helm/             49 charts: local, values-only, and a few still vendored
+cluster/helm/             52 charts: local, values-only, and a few still vendored
 cluster/infrastructure/   Traefik config, storage classes — applied by hand
 kubectl/                  standalone manifests and one-shot helpers
 docs/                     audit, design, plans, runbooks — the authoritative documents

@@ -13,10 +13,10 @@ Everything below was derived from the repo; items marked **[verify]** need clust
 A single K3s homelab managed by ArgoCD (GitOps) plus Ansible for host prep.
 
 - GitOps branch: `develop` (every Application pins `targetRevision: develop`).
-- 59 ArgoCD `Application` objects in `cluster/argocd/projects/**/*.yaml`, plus the root application
+- 60 ArgoCD `Application` objects in `cluster/argocd/projects/**/*.yaml`, plus the root application
   at `cluster/argocd/argocd-root.yaml`. The old `calibre` Application and its chart were retired once
   Calibre-Web Automated had the collection.
-- 51 Helm charts under `cluster/helm/`.
+- 52 Helm charts under `cluster/helm/`.
 - No CI. Renovate updates images/chart versions; nothing runs on PR.
 - Secrets are never committed. See §5.
 
@@ -34,8 +34,9 @@ Consequences:
 - Editing `cluster/helm/**` only takes effect after the commit lands on `develop`.
 - Never `kubectl edit/apply` a GitOps-managed resource; automated `selfHeal` reverts it.
 - `cluster/infrastructure/**` is **not referenced by any Application** → applied by hand. That includes
-  the Traefik middlewares and TLSStore, and the Traefik release itself: it is installed from
-  `cluster/infrastructure/traefik/values.yaml` and moved with `helm` (see
+  the Traefik middlewares and TLSStore, and the Traefik dashboard's `web` redirect. The router's
+  release is not in that path: it is the Application `traefik`, manual sync, over the wrapper chart
+  `cluster/helm/platform/traefik`, whose `values.yaml` is the live file (see
   [`docs/runbooks/traefik-release.md`](docs/runbooks/traefik-release.md)). K3s's Traefik addon is
   disabled in the node config.
 
@@ -195,7 +196,7 @@ done
 `hack/check-charts.sh` is that loop in bulk plus `helm lint`: requirement 11 of
 [`docs/charts/README.md`](docs/charts/README.md) is both commands, and `helm template` masks a broken
 document separator with the `# Source:` line it injects while lint does not. The script builds each
-dependency chart in a temporary copy, so it lints all 51.
+dependency chart in a temporary copy, so it lints all 52.
 
 Charts that need `helm dependency build`: `monitoring/prometheus`, `monitoring/grafana`,
 `monitoring/loki`, `monitoring/fluent-bit`, `authentik`, `dashy`, `filebrowser`,
@@ -243,7 +244,7 @@ are in `docs/superpowers/plans/`.
    UI — faster than a commit when debugging a pod. **No `Application` under
    `cluster/argocd/projects/` records `syncPolicy.automated`**, and a PR that adds it is a
    regression: a root-app sync rewrites the Application to match git, which silently switches
-   automation off until the operator re-enables it in the UI. None of the 59 project Applications
+   automation off until the operator re-enables it in the UI. None of the 60 project Applications
    carries it; the root application at `cluster/argocd/argocd-root.yaml` is the one that must
    (§8.4 of the design).
 2. `cluster/infrastructure/**` is outside GitOps (§2).
