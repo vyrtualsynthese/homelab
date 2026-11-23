@@ -5,7 +5,7 @@
 > PostgreSQL instance and the per-application database passwords.
 >
 > **Use it when** a pod is stuck in `CreateContainerConfigError`, a rebuild needs to know which Secret
-> to create first, or a credential is being rotated · **Verified** 2026-11-22 · **Kind:** reference
+> to create first, or a credential is being rotated · **Verified** 2026-11-23 · **Kind:** reference
 >
 > **Sources** `docs/runbooks/last-resort.md`, `docs/security/critical-points.md`, `cluster/helm/`
 
@@ -14,8 +14,10 @@ the cluster and in the operator's password manager, nowhere else. Secrets are no
 not be added to it.
 
 State: read from the charts on 2026-11-17; the custody of the three rebuild credentials below was
-confirmed with the operator on 2026-11-22 (card #461). This file is the whole inventory: every Secret
-a chart expects, then the PostgreSQL instance and the per-application database passwords.
+confirmed with the operator on 2026-11-22 (card #461), and every credential the cluster holds was
+read out of it and read back from the vault on 2026-11-23 (card #474). This file is the whole
+inventory: every Secret a chart expects, the Secrets no chart declares, then the PostgreSQL instance
+and the per-application database passwords.
 
 ## Where the values are held
 
@@ -35,8 +37,10 @@ admin kubeconfig — 54 Secrets, 109 key values, every one matched on read-back.
   pair the copies in `~/.config/secrets/kub-local/` are refreshed from, never the other way round.
 
 Not filed on purpose: the `sh.helm.release.v1.*` release history, service-account tokens, the
-k3s-generated node passwords and serving certificate (all regenerable), and `dashy-conf`, which is
-rendered from `cluster/helm/dashy/files/conf.yml` in git.
+k3s-generated node passwords and serving certificate (all regenerable), `dashy-conf`, which is
+rendered from `cluster/helm/dashy/files/conf.yml` in git, `authentik`, which is the chart's plain
+environment file whose 20 keys hold no credential, and `argocd-notifications-secret`, which holds no
+keys at all.
 
 ## Application secrets expected by the charts
 
@@ -187,6 +191,10 @@ beside the instance that creates the role, once beside the application that cons
 | `koillection` | `koillection` | `DB_NAME`, `DB_HOST`, `DB_USER`, `DB_PASSWORD` | The application pod's `env` | Existing Secret. `DB_HOST` is where the hostname moves; the file is also the documented rotation point for the password. |
 | `vikunja-db` | `vikunja` | `VIKUNJA_DATABASE_PASSWORD` | The board pod's environment; the key name is Vikunja's own variable, so the chart needs no mapping | Created by [`runbooks/vikunja-database.md`](runbooks/vikunja-database.md) with `openssl rand -base64 24`, so the value is 32 characters. Deliberately **no** `databases/pg-vikunja` copy: this Secret is the only one, and losing it is repaired with `ALTER ROLE` plus a new Secret. |
 
+Two application databases exist today: `pg-authentik`, and `pg-acceptance`, the throwaway the W2
+restore drill created on 2026-11-13 and whose application side is gone. Both are filed in the vault
+under `databases/`.
+
 Only the password keys hold secrets; `DB_NAME`, `DB_HOST` and `DB_USER` live in
 the Secret because the chart reads them there, not because they are sensitive.
 
@@ -196,6 +204,38 @@ order and with the checks at each step, is
 [`running-it/rotate-a-secret.md`](running-it/rotate-a-secret.md). Changing only one of the two
 copies is the failure mode: the application keeps working until its next restart, then fails
 authentication for no visible reason.
+
+## Secrets no chart declares
+
+ArgoCD is installed from the upstream chart, so its own Secrets are not in the tables above. A second
+group outlives applications that were retired: no Deployment, Job or chart references them any more.
+All of them are filed in the vault under the same `homelab-k8s-<namespace>-<name>` name, because a
+rebuild should not have to guess which of the two groups a Secret belongs to.
+
+| Secret | Namespace | Keys | What it is | Filed as |
+|---|---|---|---|---|
+| `argocd-secret` | `argocd` | `server.secretkey`, `dex.authentik.clientSecret`, `admin.password`, `admin.passwordMtime` | ArgoCD's token signing key, the dex client secret it presents to authentik, and the local `admin` password hash | `homelab-k8s-argocd-argocd-secret` |
+| `argocd-redis` | `argocd` | `auth` | the password ArgoCD's server, repo server and controller share with its bundled Redis | `homelab-k8s-argocd-argocd-redis` |
+| `argocd-initial-admin-secret` | `argocd` | `password` | the first-login password of the `admin` account, which SSO does not replace | `homelab-k8s-argocd-argocd-initial-admin-secret` |
+| `git-creds` | `argocd` | `sshPrivateKey` | an SSH key for a repository added over SSH. Every Application here uses HTTPS, and `argocd/repo-*` hold only a URL, a project and a type, so nothing reads it | `homelab-k8s-argocd-git-creds` |
+
+The two `argocd/repo-*` entries are repository declarations rather than credentials;
+`repo-3970616075` still points at `charts.longhorn.io`, which no longer has a consumer.
+
+**Left by a retired application.** These are a cleanup rather than a credential to recreate, but two of
+them still hold something that works outside the cluster — `qbit-manage` carries the qBittorrent admin
+login, and `mullvad` carries a WireGuard key that belongs to the Mullvad account — so rotating at the
+source is a tidier end than leaving them in a vault nobody opens:
+
+| Secret | Namespace | Holds | Retired with | Filed as |
+|---|---|---|---|---|
+| `mullvad` | `media-stack` | Mullvad's WireGuard hostnames, tunnel addresses, firewall ports and private key | the qbittorrent VPN sidecar that read them from the environment; it boots from the `vpn-config` claim now | `homelab-k8s-media-stack-mullvad` |
+| `qbit-manage` | `media-stack` | a `config.yml` carrying the qBittorrent login and its rules | the `qbit-manage` application | `homelab-k8s-media-stack-qbit-manage` |
+| `readarr` | `media-stack` | `secret` — the API key exportarr scraped | the `readarr` application | `homelab-k8s-media-stack-readarr` |
+| `tdarr-auth`, `upgradinatorr` | `media-stack` | each application's own auth or configuration file | the `tdarr` and `upgradinatorr` applications | `homelab-k8s-media-stack-tdarr-auth`, `homelab-k8s-media-stack-upgradinatorr` |
+| `syncthing-backup` | `syncthing` | an AWS S3 pair and a restic password | the backup job retired on 2026-11-21, which never had a bucket | `homelab-k8s-syncthing-syncthing-backup` |
+| `filebrowser` | `filebrowser` | `FB_CONFIG`, `FB_DATABASE`, `FB_USERNAME`, `FB_PASSWORD` | the chart that preceded the current wrapper, whose own Secret is `filebrowser-filebrowser-quantum` | `homelab-k8s-filebrowser-filebrowser` |
+| `authentik-postgresql-secrets` | `authentik` | `password`, `postgres-password` | the bundled PostgreSQL the authentik chart ran until the 2024 database migration | `homelab-k8s-authentik-authentik-postgresql-secrets` |
 
 ## What goes wrong without them
 
