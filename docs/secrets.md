@@ -5,7 +5,7 @@
 > PostgreSQL instance and the per-application database passwords.
 >
 > **Use it when** a pod is stuck in `CreateContainerConfigError`, a rebuild needs to know which Secret
-> to create first, or a credential is being rotated · **Verified** 2026-11-22 · **Kind:** reference
+> to create first, or a credential is being rotated · **Verified** 2026-11-23 · **Kind:** reference
 >
 > **Sources** `docs/runbooks/last-resort.md`, `docs/security/critical-points.md`, `cluster/helm/`
 
@@ -14,8 +14,10 @@ the cluster and in the operator's password manager, nowhere else. Secrets are no
 not be added to it.
 
 State: read from the charts on 2026-11-17; the custody of the three rebuild credentials below was
-confirmed with the operator on 2026-11-22 (card #461). This file is the whole inventory: every Secret
-a chart expects, then the PostgreSQL instance and the per-application database passwords.
+confirmed with the operator on 2026-11-22 (card #461), and every credential the cluster holds was
+read out of it and read back from the vault on 2026-11-23 (cards #474, #477). This file is the whole
+inventory: every Secret a chart expects, the Secrets no chart declares, then the PostgreSQL instance
+and the per-application database passwords.
 
 ## Where the values are held
 
@@ -24,7 +26,8 @@ Kubernetes Secret, in the `Homelab` folder, named `homelab-k8s-<namespace>-<name
 the Secret's keys verbatim, and a value too long for one field (the server caps an encrypted field
 at 5,000 characters) is split into `<key>.partNN` fields to concatenate in order. Read them back and
 compare by hash, never by eye. The notes were taken from the live cluster on 2026-11-23 with the
-admin kubeconfig — 54 Secrets, 109 key values, every one matched on read-back.
+admin kubeconfig — 46 Secrets, 89 key values, every one matched on read-back. The eight notes that
+covered the Secrets deleted the same day are in the vault's trash, not in the folder.
 
 - `homelab-backup-last-resort` — the restic password, the backup bucket's S3 pair and the K3s server
   token. Losing these loses the backups, not just their configuration.
@@ -35,8 +38,10 @@ admin kubeconfig — 54 Secrets, 109 key values, every one matched on read-back.
   pair the copies in `~/.config/secrets/kub-local/` are refreshed from, never the other way round.
 
 Not filed on purpose: the `sh.helm.release.v1.*` release history, service-account tokens, the
-k3s-generated node passwords and serving certificate (all regenerable), and `dashy-conf`, which is
-rendered from `cluster/helm/dashy/files/conf.yml` in git.
+k3s-generated node passwords and serving certificate (all regenerable), `dashy-conf`, which is
+rendered from `cluster/helm/dashy/files/conf.yml` in git, `authentik`, which is the chart's plain
+environment file whose 20 keys hold no credential, and `argocd-notifications-secret`, which holds no
+keys at all.
 
 ## Application secrets expected by the charts
 
@@ -187,6 +192,10 @@ beside the instance that creates the role, once beside the application that cons
 | `koillection` | `koillection` | `DB_NAME`, `DB_HOST`, `DB_USER`, `DB_PASSWORD` | The application pod's `env` | Existing Secret. `DB_HOST` is where the hostname moves; the file is also the documented rotation point for the password. |
 | `vikunja-db` | `vikunja` | `VIKUNJA_DATABASE_PASSWORD` | The board pod's environment; the key name is Vikunja's own variable, so the chart needs no mapping | Created by [`runbooks/vikunja-database.md`](runbooks/vikunja-database.md) with `openssl rand -base64 24`, so the value is 32 characters. Deliberately **no** `databases/pg-vikunja` copy: this Secret is the only one, and losing it is repaired with `ALTER ROLE` plus a new Secret. |
 
+Two application databases exist today: `pg-authentik`, and `pg-acceptance`, the throwaway the W2
+restore drill created on 2026-11-13 and whose application side is gone. Both are filed in the vault
+under `databases/`.
+
 Only the password keys hold secrets; `DB_NAME`, `DB_HOST` and `DB_USER` live in
 the Secret because the chart reads them there, not because they are sensitive.
 
@@ -196,6 +205,29 @@ order and with the checks at each step, is
 [`running-it/rotate-a-secret.md`](running-it/rotate-a-secret.md). Changing only one of the two
 copies is the failure mode: the application keeps working until its next restart, then fails
 authentication for no visible reason.
+
+## Secrets no chart declares
+
+ArgoCD is installed from the upstream chart, so its own Secrets are not in the tables above. They are
+filed in the vault under the same `homelab-k8s-<namespace>-<name>` name, because a rebuild should not
+have to guess which rule a Secret follows.
+
+| Secret | Namespace | Keys | What it is | Filed as |
+|---|---|---|---|---|
+| `argocd-secret` | `argocd` | `server.secretkey`, `dex.authentik.clientSecret`, `admin.password`, `admin.passwordMtime` | ArgoCD's token signing key, the dex client secret it presents to authentik, and the local `admin` password hash | `homelab-k8s-argocd-argocd-secret` |
+| `argocd-redis` | `argocd` | `auth` | the password ArgoCD's server, repo server and controller share with its bundled Redis | `homelab-k8s-argocd-argocd-redis` |
+| `argocd-initial-admin-secret` | `argocd` | `password` | the first-login password of the `admin` account, which SSO does not replace | `homelab-k8s-argocd-argocd-initial-admin-secret` |
+| `git-creds` | `argocd` | `sshPrivateKey` | an SSH key for a repository added over SSH. Every Application here uses HTTPS, and `argocd/repo-*` hold only a URL, a project and a type, so nothing reads it | `homelab-k8s-argocd-git-creds` |
+
+The two `argocd/repo-*` entries are repository declarations rather than credentials;
+`repo-3970616075` still points at `charts.longhorn.io`, which no longer has a consumer.
+
+Nothing else is unaccounted for: the eight Secrets that outlived retired applications were deleted
+with their vault notes on 2026-11-23 (card #477). They were `mullvad`, `qbit-manage`, `readarr`,
+`tdarr-auth`, `upgradinatorr`, `syncthing-backup`, the `filebrowser` Secret the chart before the
+Quantum one left behind, and `authentik-postgresql-secrets`; no Deployment, Job or chart referenced
+any of them, and the two that carried a working credential at the source — the Mullvad WireGuard key
+and the qBittorrent admin login — were left for the operator to revoke or rotate themselves.
 
 ## What goes wrong without them
 
