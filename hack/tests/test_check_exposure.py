@@ -66,6 +66,14 @@ class GateTests(unittest.TestCase):
         self.assertEqual(len(found), 1)
         self.assertIn("traefik dashboard", found[0])
 
+    def test_traefik_values_nested_under_a_wrapper_key_are_checked(self):
+        found = violations("traefik-values-nested-ungated.yaml")
+        self.assertEqual(len(found), 1)
+        self.assertIn("traefik dashboard", found[0])
+
+    def test_nested_traefik_values_file_with_the_gate_passes(self):
+        self.assertEqual(violations("traefik-values-nested-gated.yaml"), [])
+
     def test_traefik_dashboard_is_checked_when_the_values_do_not_parse(self):
         found = violations("helmchartconfig-malformed.yaml")
         self.assertEqual(len(found), 1)

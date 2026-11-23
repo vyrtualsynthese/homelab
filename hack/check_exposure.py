@@ -112,6 +112,24 @@ def _check_dashboard_values(values, where, violations):
         violations.append(f"{where}: traefik dashboard route: missing {GATE}")
 
 
+def _values_with_a_dashboard(node):
+    """Every mapping in a values tree that declares `ingressRoute.dashboard`.
+
+    The upstream Traefik chart renders its dashboard route from values, so a values file is a route
+    declaration with no `kind` to dispatch on. A wrapper chart hands those values to the upstream
+    chart under the chart's own name, which puts the block one level down rather than at the top:
+    that is why this walks the tree instead of reading one key.
+    """
+    if isinstance(node, dict):
+        if isinstance((node.get("ingressRoute") or {}).get("dashboard"), dict):
+            yield node
+        for value in node.values():
+            yield from _values_with_a_dashboard(value)
+    elif isinstance(node, list):
+        for item in node:
+            yield from _values_with_a_dashboard(item)
+
+
 def _check_helm_chart_config(doc, violations):
     where = _where(doc)
     values = (doc.get("spec") or {}).get("valuesContent") or ""
@@ -162,11 +180,12 @@ def check_documents(docs):
             _check_gate_middleware(doc, violations)
         elif kind == "HelmChartConfig":
             _check_helm_chart_config(doc, violations)
-        elif isinstance((doc.get("ingressRoute") or {}).get("dashboard"), dict):
-            # The Traefik chart's own values file: it declares the dashboard
-            # IngressRoute under `ingressRoute.dashboard`, which other charts do
-            # not have (their `ingressRoute` key is their own route's settings).
-            _check_dashboard_values(doc, _where(doc), violations)
+        else:
+            # The Traefik chart's own values: it declares the dashboard IngressRoute under
+            # `ingressRoute.dashboard`, which other charts do not have (their `ingressRoute` key is
+            # their own route's settings). A wrapper puts that block under the chart's name.
+            for values in _values_with_a_dashboard(doc):
+                _check_dashboard_values(values, _where(doc), violations)
     return violations
 
 

@@ -1,0 +1,10 @@
+apiVersion: v2
+name: traefik
+description: Traefik - the cluster's ingress router
+type: application
+version: 0.1.0
+appVersion: "3.7.19"
+dependencies:
+  - name: traefik
+    version: 42.4.1
+    repository: https://traefik.github.io/charts

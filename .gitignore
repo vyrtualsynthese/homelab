@@ -48,6 +48,10 @@ cluster/helm/argocd/Chart.lock
 cluster/helm/platform/gpu-operator/charts/
 cluster/helm/platform/gpu-operator/Chart.lock
 
+# Built by ArgoCD at sync time
+cluster/helm/platform/traefik/charts/
+cluster/helm/platform/traefik/Chart.lock
+
 # Built by ArgoCD at sync time (see the NFS provisioner design §The target shape)
 cluster/helm/nfs/provisioner/charts/
 cluster/helm/nfs/provisioner/Chart.lock

@@ -1,0 +1,291 @@
+# The live values of the Traefik release, read by the ArgoCD Application `traefik`
+# (cluster/argocd/projects/platform/traefik.yaml) through the wrapper chart in
+# this directory.
+#
+# Everything below sits under `traefik:`, the key the wrapper hands to the
+# subchart it depends on. It is not decoration and must not be flattened: a flat
+# file renders the chart's own defaults instead, which is a second resolver, the
+# stock entry points and a claim nobody asked for. The two flat files left in
+# cluster/infrastructure/traefik/ describe earlier chart lines —
+# `values-25.0.3.yaml` for chart 25.0.3, `values-2.11.yaml` for chart 27.0.2 —
+# and are rollback material only.
+#
+# Chart 42.4.1, Traefik 3.7.19. Derived from values-2.11.yaml, one key at a time,
+# because chart 42 validates its values with `additionalProperties: false` and
+# renames more than the ACME key:
+#   - `certResolvers` -> `certificatesResolvers`;
+#   - `service.type` -> `service.spec.type`; `ipFamilyPolicy` is now a spec
+#     entry too, since the chart no longer reads it from the top level;
+#   - `ports.traefik.port` defaults to 8080 here, so it is pinned back to 9000
+#     to keep the health probes and the internal API where they are;
+#   - `global.systemDefaultRegistry` does not exist.
+#
+# Apply the chart's `traefik.io` CRDs before a chart bump is synced: an existing
+# CRD is never replaced by Helm, and v3 reads only `traefik.io`. The Application
+# renders with `helm.skipCrds`, so that step stays manual — see
+# docs/runbooks/traefik-release.md.
+#
+# The allow-list field is already the v3 name: chart 27 declared it on 2.11, so
+# there is no rename left here.
+traefik:
+  deployment:
+    # One pod, not a DaemonSet (task 482). Two processes writing /data/acme.json
+    # corrupt it and re-request every name.
+    kind: Deployment
+    replicas: 1
+
+  # Recreate, not a rolling update: a rolling one runs both pods together for a
+  # few seconds, which is two certificate owners again.
+  updateStrategy:
+    type: Recreate
+
+  # The house router forwards 80, 443, 25565, 22000 TCP/UDP and 21027 UDP to
+  # 192.168.1.46.
+  nodeSelector:
+    kubernetes.io/hostname: streaming
+
+  image:
+    repository: traefik
+    tag: "v3.7.19"
+
+  priorityClassName: system-cluster-critical
+
+  tolerations:
+    - key: CriticalAddonsOnly
+      operator: Exists
+    - key: node-role.kubernetes.io/control-plane
+      operator: Exists
+      effect: NoSchedule
+    - key: node-role.kubernetes.io/master
+      operator: Exists
+      effect: NoSchedule
+
+  global:
+    checkNewVersion: true
+    # No telemetry leaves the house. Traefik's collection endpoint is not an EU
+    # provider under the sovereign-provider rule, and the data buys nothing on a
+    # single router.
+    sendAnonymousUsage: false
+    # v3.7.17+. A header whose name is spelled with a character other than a
+    # letter, a digit or a dash (X_Auth_User, X.Auth.User) is read as X-Auth-User
+    # by every backend that derives variable names from header names; authentik
+    # is Python WSGI and trusts the headers Traefik writes. `delete` drops the
+    # alias before routing. `reject` would answer 400 to any client that sends
+    # one, innocuous private headers included. The startup warning disappears for
+    # every entry point at once from this one key.
+    aliasHeadersStrategy: delete
+
+  resources:
+    requests:
+      cpu: 10m
+      memory: 64Mi
+    limits:
+      memory: 256Mi
+
+  # A per-request record, with the request URL and the client address removed.
+  # Traefik's `RequestPath` is the URI, and v3.7.3+ can drop its query string
+  # (`queryParameters` below) but not its path. The path alone still carries
+  # FileBrowser's `/share/<hash>` capability links, and Loki has no authentication
+  # and a 30-day retention, so the whole field is dropped. Plex's `?X-Plex-Token=`
+  # and OIDC `?code=` never reach the log, and the query-parameter drop is a second
+  # lock in case a field is ever re-added.
+  #
+  # `defaultMode: keep` keeps everything else, so a line is wider than the six
+  # names below suggest: the requested hostname, the method, the entry point, both
+  # statuses and durations, sizes, the retry count, the TLS version and cipher, and
+  # the pod address Traefik forwarded to. No path, no query, no header, no client
+  # address. `docs/observability-conventions.md` lists the fields in full.
+  accessLog:
+    enabled: true
+    format: json
+    # Hand each line to a writer goroutine through a 100-slot channel instead of
+    # writing on the request path. There is no timed flush in Traefik: the delay
+    # between a request and its line in Loki is Fluent Bit's, a few seconds.
+    bufferingSize: 100
+    fields:
+      # The chart always renders this key, so it must be set; `keep` is the
+      # default and the five names below are the exceptions.
+      defaultMode: keep
+      names:
+        RequestPath: drop
+        ClientAddr: drop
+        ClientHost: drop
+        ClientPort: drop
+        ClientUsername: drop
+      headers:
+        # Already the default; written out so a future reader sees that no
+        # Authorization or Cookie header is logged.
+        defaultMode: drop
+      queryParameters:
+        defaultMode: drop
+
+  # The chart does not expose serversTransport.maxIdleConnsPerHost, and its v3
+  # default of 0 means Go's DefaultMaxIdleConnsPerHost, two idle connections per
+  # host. Plex clients and qBittorrent open many short requests to one backend;
+  # beyond two, every request dials again. 100 is per host and costs one open
+  # connection per host, not one thousand.
+  additionalArguments:
+    - "--serversTransport.maxIdleConnsPerHost=100"
+
+  providers:
+    kubernetesCRD:
+      # Every gate and redirect is referenced as kube-system-<name>@kubernetescrd;
+      # without this no cross-namespace reference resolves and every gate vanishes.
+      allowCrossNamespace: true
+      # false, not true. Safe naming renames every generated router and service
+      # (names joined with `_`, e.g. kube-system_lan-only@kubernetescrd), and 85
+      # middleware references in the chart templates are written in the legacy
+      # `namespace-name@kubernetescrd` form. A reference in the wrong form does
+      # not resolve, so turning this on without rewriting all of them first
+      # removes every gate at once. The collision it prevents needs two
+      # namespace/name pairs that concatenate to the same string, which this
+      # cluster does not have. False keeps the current names and silences the
+      # startup warning.
+      safeNaming: false
+    kubernetesIngress:
+      publishedService:
+        enabled: true
+
+  ingressRoute:
+    dashboard:
+      enabled: true
+      entryPoints: ["websecure"]
+      matchRule: Host(`traefik.kub.local`) && (PathPrefix(`/dashboard`) || PathPrefix(`/api`))
+      middlewares:
+        - name: lan-only
+          namespace: kube-system
+        - name: traefik-dashboard
+          namespace: kube-system
+      # Neither a secretName nor a certResolver: Traefik serves the default
+      # kube-system/local-cert through the `default` TLSStore.
+      tls:
+        options:
+          name: internal-tls
+          namespace: kube-system
+
+  metrics:
+    prometheus:
+      entryPoint: metrics
+      # Six entry points, and code/method are bounded: measured at 66 series on
+      # five entry points at startup, growing only with the codes and methods
+      # actually seen. Without it the per-entry-point panel cannot exist, and
+      # `traefik_open_connections` alone cannot tell web from websecure traffic.
+      addEntryPointsLabels: true
+      addRoutersLabels: true
+      addServicesLabels: false
+      buckets: "0.1,0.25,0.5,1.0,2.5,5.0,10.0"
+      manualRouting: false
+
+  # The OVH DNS-01 provider reads its credentials from the environment. The
+  # Secret holds the four values only; the two timeouts are configuration and
+  # stay readable here. Two zones, one key: the consumer key is scoped to
+  # /domain/zone/{ashudev.com,ashuvidz.com}/{record,record/*,refresh}, so a copy
+  # of this pod cannot change delegation, storage or another domain.
+  envFrom:
+    - secretRef:
+        name: traefik-ovh
+  env:
+    - name: OVH_PROPAGATION_TIMEOUT
+      value: "300"
+    - name: OVH_POLLING_INTERVAL
+      value: "10"
+
+  certificatesResolvers:
+    # One resolver for both public certificates. It was the ashudev.com wildcard's
+    # alone until ashuvidz.com's delegation moved to OVH nameservers on
+    # 2026-11-22; the TLS-ALPN resolver it replaced, `myresolver`, is retired and
+    # its entry has left the store. DNS-01 is also the only challenge Let's
+    # Encrypt accepts for `*.ashudev.com`, which is why the wildcard forced it.
+    ovhresolver:
+      acme:
+        email: valentin.ronteix@ashudev.com
+        storage: /data/acme.json
+        dnsChallenge:
+          provider: ovh
+          # The API refreshes the zone, but OVH's public nameservers can lag;
+          # 60 s of wait before the first check beats a failed order.
+          delayBeforeCheck: 60
+
+  ports:
+    # Pinned back to the 2.11 value: chart 42 moved the default to 8080.
+    traefik:
+      port: 9000
+      expose:
+        default: false
+    web:
+      port: 8000
+      expose:
+        default: true
+      exposedPort: 80
+      protocol: TCP
+      # No forwardedHeaders and no proxyProtocol on either HTTP entry point. The
+      # Orange Livebox in front is plain NAT and sends neither an X-Forwarded-*
+      # header nor a PROXY line, so trusting them only trusts the client. Both
+      # `insecure: true` flags were the chart's stock values and were a hole:
+      # on 2026-11-22 a request carrying `PROXY TCP4 192.168.1.99 …` was admitted
+      # through lan-only, while the same header claiming 8.8.8.8 answered 403.
+      # Nothing on this network sends the header, so it is removed, not scoped.
+    websecure:
+      port: 8443
+      expose:
+        default: true
+      exposedPort: 443
+      protocol: TCP
+      transport:
+        respondingTimeouts:
+          # v3 raised this default from 0 to 60s, which caps a request at 60
+          # seconds including its body: FileBrowser is public and a 2 GB upload
+          # on a 20 Mbit/s line needs about 800s. 1h leaves every real upload
+          # inside and still bounds a slow connection.
+          readTimeout: 1h
+    mc:
+      port: 25565
+      expose:
+        default: true
+      exposedPort: 25565
+      protocol: TCP
+    # Syncthing: file transfer (22000 TCP and UDP) and local discovery (21027 UDP).
+    sttcp:
+      port: 22000
+      expose:
+        default: true
+      exposedPort: 22000
+      protocol: TCP
+    studp:
+      port: 22000
+      expose:
+        default: true
+      exposedPort: 22000
+      protocol: UDP
+    stdiscovery:
+      port: 21027
+      expose:
+        default: true
+      exposedPort: 21027
+      protocol: UDP
+    metrics:
+      port: 9100
+      # Not published on the Service: Prometheus scrapes the pod's 9100 through
+      # the chart's prometheus.io/* annotations.
+      expose:
+        default: false
+      exposedPort: 9101
+      protocol: TCP
+
+  persistence:
+    enabled: true
+    name: data
+    # Holds /data/acme.json, the certificate store; a different claim means every
+    # name is re-issued.
+    existingClaim: pvc-traefik-nfs
+    path: /data
+
+  service:
+    enabled: true
+    single: true
+    spec:
+      type: LoadBalancer
+      # Rendered only when set: without it the API server defaults the Service to
+      # SingleStack, which is not the object that serves today.
+      ipFamilyPolicy: PreferDualStack
+      externalTrafficPolicy: Local
