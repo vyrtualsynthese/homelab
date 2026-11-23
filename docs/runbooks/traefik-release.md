@@ -3,27 +3,34 @@
 Date: 2026-11-21 · **Ownership moved** 2026-11-21 at chart `25.0.3`, revision 8 · **Moved to 2.11**
 the same day, chart `27.0.2` (Traefik `2.11.63`), revision 10 · **Moved to v3** the same day, chart
 `42.4.1` (Traefik `3.7.19`), revision 11 · **Configuration audited** 2026-11-22, revision 12 ·
-**Kind:** living runbook
+**Adopted by ArgoCD** 2026-11-23: Application `traefik`, manual sync only
 
-> **In one line.** The Traefik release is this repository's; K3s's addon is disabled, and the
-> release is moved with `helm` from one values file.
+> **In one line.** The Traefik release is this repository's, applied by an ArgoCD Application from a
+> wrapper chart in git, and synced by hand. `helm` is the fallback when ArgoCD is the broken thing.
 >
-> **Use it when** Traefik has to move to a newer chart, its values change, or the release has to be
-> inspected or rolled back · **Verified** 2026-11-22 on chart `42.4.1`, revision 12: digest
-> unchanged, 72 routes, every host answering, `/metrics` scraped (`up == 1`), and only two startup
-> warnings left, both accepted below.
+> **Use it when** Traefik has to move to a newer chart, its values change, the release has to be
+> inspected or rolled back, or the Application has to be synced by hand or taken back out of ArgoCD ·
+> **Verified** 2026-11-23 on chart `42.4.1`, Traefik `3.7.19`: the Application renders the same
+> objects the release was running, every host answering, `/metrics` scraped (`up == 1`) ·
+> **Kind:** how-to · **Sources** `cluster/helm/platform/traefik/`,
+> `cluster/argocd/projects/platform/traefik.yaml`, `cluster/infrastructure/traefik/`,
+> `docs/how-it-works/network.md`.
 
 ## The shape of the problem
 
-Traefik is not a chart in this repository. It is the upstream Traefik chart, installed in
-`kube-system`, with one values file per chart line:
+Traefik is not a chart in this repository: it is the upstream Traefik chart, wrapped by a small chart
+of ours in `cluster/helm/platform/traefik` that pins it at one exact version, applied in `kube-system`
+by the ArgoCD Application `traefik`. A wrapper carries the subchart's values under the dependency's
+name, so the live file nests everything under `traefik:` — that indentation is the wrapper's, not
+decoration.
 
 | What | Where |
 |---|---|
-| The values the release runs with | `cluster/infrastructure/traefik/values-v3.yaml` (chart `42.4.1`) |
-| The values a rollback to revision 10 needs | `values-2.11.yaml` (chart `27.0.2`) |
-| The values a rollback to revision 9 needs | `values.yaml` (chart `25.0.3`) |
-| The chart | `traefik` `42.4.1` from the upstream index; `25.0.3+up25.0.0` came from K3s's static path (see below) |
+| The values the release runs with | `cluster/helm/platform/traefik/values.yaml` (chart `42.4.1`), nested under `traefik:` |
+| The Application that applies them | `cluster/argocd/projects/platform/traefik.yaml`, manual sync, `helm.skipCrds` |
+| The values a rollback to chart `27.0.2` needs | `cluster/infrastructure/traefik/values-2.11.yaml` (flat) |
+| The values a rollback to chart `25.0.3` needs | `cluster/infrastructure/traefik/values-25.0.3.yaml` (flat) |
+| The chart | `traefik` `42.4.1` from the upstream index, pinned in the wrapper's `Chart.yaml`; `25.0.3+up25.0.0` came from K3s's static path (see below) |
 | The certificate store | claim `pvc-traefik-nfs` mounted at `/data`; PV `pv-traefik-nfs`, NFS, `Retain` |
 | The objects it owns | `Deployment`, `Service`, `IngressClass`, `IngressRoute traefik-dashboard`, `ClusterRole`, `ClusterRoleBinding`, `ServiceAccount` |
 
@@ -31,8 +38,8 @@ Until 2026-11-21 it was the K3s addon's release. K3s shipped two `HelmChart` obj
 `traefik-crd`, plus a `HelmChartConfig` applied from a drop-in file on every server, and its
 helm-controller runs no Job at all in this cluster (task 530). So the addon's chart and values were
 frozen, and the release had to be moved by hand. Ownership moved the same day: the addon is disabled
-in the node config, the packaged objects are gone, and the values file for the chart line is the only
-input — `values-v3.yaml` today.
+in the node config, the packaged objects are gone, and the wrapper chart's `values.yaml` is the only
+input.
 
 **The chart source.** The upstream index (`https://traefik.github.io/charts`) no longer carries
 `25.0.3`; its oldest 25.x is gone and it starts at 42.x. K3s still serves the chart it was installed
@@ -47,7 +54,7 @@ grep -E '^version:|^appVersion:' /tmp/traefik/Chart.yaml   # 25.0.3+up25.0.0, v2
 That tarball is the upstream chart as K3s repackaged it: same templates, version string
 `25.0.3+up25.0.0`. Using it kept the release's stored chart version unchanged, so the adoption
 upgrade changed no label. The release moved to `27.0.2` for Traefik 2.11 the same day, from the
-upstream index; `values-v3.yaml` is the next line.
+upstream index, and to `42.4.1` the same evening; the wrapper now pins that version.
 
 ## Before
 
@@ -74,21 +81,37 @@ On 2026-11-21 before the cutover: release revision 7, chart `25.0.3+up25.0.0`, i
 
 ## Upgrading the release
 
-Pick the values file for the target chart — `values-2.11.yaml` today, `values-v3.yaml` once v3 is
-written — and read the chart's own `values.yaml` first, because the schema moves between lines. Then:
+A move is now a change in git, because the version lives in the wrapper's `Chart.yaml`. Read the
+target chart's own `values.yaml` first — the schema moves between lines, and this chart rejects
+unknown keys (`additionalProperties: false`).
+
+1. Bump `dependencies[0].version` in `cluster/helm/platform/traefik/Chart.yaml`, and `appVersion` to
+   the application version inside the new chart's image tag.
+2. Apply the new chart's `traefik.io` CRDs from a pulled tarball. The Application renders with
+   `helm.skipCrds`, so a sync never touches a CRD, and a chart whose CRDs are missing fails its first
+   render (the `ServersTransportTCP` lesson, item 9 of `AGENTS.md` §7).
+3. Merge the values against the new schema, then render and diff against the live objects:
 
 ```bash
-FILE=cluster/infrastructure/traefik/values-2.11.yaml
-CHART=/tmp/traefik-2.11/traefik
-helm upgrade traefik "$CHART" -n kube-system \
-  --reset-values -f "$FILE" --dry-run=server > /tmp/dryrun.yaml
+helm dependency build cluster/helm/platform/traefik
+helm template traefik cluster/helm/platform/traefik -n kube-system > /tmp/render.yaml
+kubectl -n kube-system get deploy,svc -n kube-system -l app.kubernetes.io/name=traefik -o yaml > /tmp/live.yaml
 ```
 
-Diff `/tmp/dryrun.yaml` against `kubectl -n kube-system get deploy traefik -o yaml` before applying
-anything. The only difference a values change should introduce is the change you meant to make. Then:
+Diff the two before anything is applied. The only difference a values change should introduce is the
+change you meant to make; the fields the API server defaults, the Service's port order and the
+`load-balancer-cleanup` finalizer are expected and nothing else is.
+
+4. Merge the pull request, then sync by hand — see the section below. Nothing reaches the cluster
+   before that sync.
+
+The hand-run command still exists, for the case where ArgoCD is the broken thing:
 
 ```bash
-helm upgrade traefik "$CHART" -n kube-system \
+FILE=cluster/helm/platform/traefik/values.yaml
+helm upgrade traefik cluster/helm/platform/traefik -n kube-system \
+  --reset-values -f "$FILE" --dry-run=server > /tmp/dryrun.yaml
+helm upgrade traefik cluster/helm/platform/traefik -n kube-system \
   --reset-values -f "$FILE" --wait --timeout 5m
 ```
 
@@ -96,20 +119,76 @@ helm upgrade traefik "$CHART" -n kube-system \
 removed from the file stays live — that is how `deployment.podAnnotations` and `service.ipFamilyPolicy`
 survived the 2023 values for two years.
 
-Afterwards, confirm the release holds the file rather than a merge. `helm get values` re-serialises
-the YAML and prints a `USER-SUPPLIED VALUES:` header, so a text diff never matches; compare the
-parsed documents:
+After a hand-run upgrade, confirm the release holds the file rather than a merge. `helm get values`
+re-serialises the YAML and prints a `USER-SUPPLIED VALUES:` header, so a text diff never matches; the
+file nests under `traefik:`, so compare that key:
 
 ```bash
-FILE=cluster/infrastructure/traefik/values-v3.yaml
 helm -n kube-system get values traefik > /tmp/after.yaml
-FILE="$FILE" python3 - <<'EOF'
-import os, yaml
-raw = open('/tmp/after.yaml').read().split('\n', 1)[1]   # drop the header line
-same = yaml.safe_load(raw) == yaml.safe_load(open(os.environ['FILE']))
-print('release == file' if same else 'DIFFERS: the release holds a merge')
+python3 - <<'EOF'
+import yaml
+raw = open('/tmp/after.yaml').read().split('\n', 1)[1]        # drop the header line
+release = (yaml.safe_load(raw) or {}).get('traefik') or {}
+live = yaml.safe_load(open('cluster/helm/platform/traefik/values.yaml'))['traefik']
+print('release == file' if release == live else 'DIFFERS: the release holds a merge')
 EOF
 ```
+
+## Running it from ArgoCD
+
+The Application `traefik` applies this chart to `kube-system`. **It never syncs itself:** the
+operator's decision, because a bad sync here takes down every route, the ArgoCD UI included. The
+file records no `automated` block, and adding one is a regression — a root-app sync rewrites the
+Application to match git and the automation silently disappears.
+
+```bash
+argocd login argocd.kub.local --sso          # authentik; there is no local admin
+argocd app diff traefik                      # read this before anything else
+argocd app sync traefik
+```
+
+The first sync after adoption ran with `--server-side --force`, because the objects were created by
+Helm and its field manager owned the fields ArgoCD was about to claim. That is a one-time need: later
+syncs are plain applies.
+
+Two rules this configuration depends on:
+
+- **`helm.skipCrds: true`.** Without it a sync applies the chart's `crds/` directory: fifteen
+  `hub.traefik.io` CRDs that need a licence and gate nothing here, plus ownership of the ten
+  `traefik.io` ones the manual step owns. The diff could then never be empty.
+- **`ignoreDifferences` only for noise an observed diff named.** Today that is the Deployment's
+  `deployment.kubernetes.io/revision` annotation and the Service's `load-balancer-cleanup` finalizer;
+  both exist on every object the controllers touch. A new entry needs a diff that showed it, not a
+  guess.
+
+## Getting back out of ArgoCD
+
+Deleting the Application with the default cascade deletes the objects it manages — including the
+Service the house router forwards to. Orphan them instead, then take the release back under `helm`:
+
+```bash
+kubectl -n argocd delete application traefik --cascade=orphan
+helm dependency build cluster/helm/platform/traefik
+helm upgrade traefik cluster/helm/platform/traefik -n kube-system --reset-values \
+  -f cluster/helm/platform/traefik/values.yaml --wait --timeout 5m
+helm -n kube-system list        # the release is Helm's again
+```
+
+The objects were never deleted, so the pod, the Service and its `nodePort` values, the claim and the
+certificate store are the same throughout.
+
+**The trap adoption creates.** Once ArgoCD owns the objects, the Helm release record from before is
+still in the cluster until somebody deletes it — and `helm uninstall traefik` deletes the objects
+themselves, which is every route in the house. The record is removed only after a clean ArgoCD sync,
+and never before:
+
+```bash
+helm -n kube-system history traefik | tail -1               # read the revision <N>
+kubectl -n kube-system delete secret sh.helm.release.v1.traefik.v<N>
+helm -n kube-system list                                     # empty
+```
+
+Deleting that Secret forgets the release and touches no object.
 
 ## Moving to 2.11, chart `27.0.2`
 
@@ -141,7 +220,9 @@ against them.
 
 ## Moving to v3, chart `42.4.1`
 
-Done 2026-11-21, revision 10 → 11, with `values-v3.yaml` and `docker.io/traefik:v3.7.19`.
+Done 2026-11-21, revision 10 → 11, with `values-v3.yaml` and `docker.io/traefik:v3.7.19`. That file is
+the wrapper chart's `values.yaml` since 2026-11-23, one indentation level down under `traefik:`; the
+commands below are the record of how the move was run, not a script to re-run as written.
 
 **Check the CRDs before applying them.** Chart 42's schemas are a strict superset of chart 27's:
 `scripts`-free comparison of both trees found no removed property and no changed type on any shared
@@ -191,6 +272,12 @@ Traefik dashboard panels read those names.
 
 This is history, not a repeatable step: run it only if the addon ever has to be removed again, for
 example on a rebuilt server. **The order matters.**
+
+**Re-enabling the addon is not a rollback any more.** The `traefik.containo.us` CRDs were deleted on
+2026-11-21 and every route has been on `traefik.io` since; the addon's chart `25.0.3` reads only the
+old group, so switching it back on would leave it routing nothing while the release's own router is
+removed — every hostname dark. What this section is kept for is a rebuilt node or a rebuilt cluster;
+the way out of ArgoCD is the section above.
 
 1. **Strip the uninstall finalizers first.** Both K3s `HelmChart` objects carried
    `wrangler.cattle.io/on-helm-chart-remove`, whose handler runs `helm uninstall`. On the CRD chart
@@ -337,7 +424,7 @@ compared those against the table above.
 - **Values**: `helm -n kube-system get history traefik` lists the revisions. `helm rollback` to the
   revision before the change restores that revision's stored values, which is safe only if those
   values were the current file. If in doubt, upgrade again with the matching file:
-  `helm upgrade traefik /tmp/traefik-25.0.3/traefik -n kube-system --reset-values -f cluster/infrastructure/traefik/values.yaml`
+  `helm upgrade traefik /tmp/traefik-25.0.3/traefik -n kube-system --reset-values -f cluster/infrastructure/traefik/values-25.0.3.yaml`
   for the 2.10 line, or the snapshot
   `cluster/infrastructure/traefik/snapshot/2026-11-21/release-values.yaml` for the values as they
   were adopted. From revision 10 the one-liner is `helm -n kube-system rollback traefik 9`. For the

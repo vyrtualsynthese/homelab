@@ -111,6 +111,7 @@ they are what everything above stands on.
 | `traefik-nfs` | `kube-system` | nuc0 | D | the `traefik-nfs` class: where Traefik keeps its certificates |
 | `fluent-bit` | `monitoring` | every node | D | DaemonSet: ships container logs to Loki |
 | `prometheus-smartctl` | `monitoring` | every node | A | DaemonSet: drive health (SMART) metrics |
+| `traefik` | `kube-system` | streaming | D | the ingress router: the one door the house router forwards to |
 | `traefik-gate` | `kube-system` | — | A | middlewares, TLS options and the `lan-only` gate: no workload of its own |
 
 All eight provisioners are one release each of the wrapper chart at
