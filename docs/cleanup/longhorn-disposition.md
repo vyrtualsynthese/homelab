@@ -1,5 +1,13 @@
 # Longhorn leftovers: what was left and how it was cleared
 
+> **In one line.** Every Longhorn object is gone — the driver, its StorageClasses, its custom
+> resources, the `longhorn-system` namespace, all twenty-six volumes and all six claims.
+>
+> **Use it when** a Longhorn volume, claim or CRD turns up in an old note, or you want the order the
+> leftovers were cleared in · **Verified** 2026-11-19 · **Kind:** record
+>
+> **Sources** the live cluster on 2026-11-18 and 2026-11-19, and the inventory table below
+
 Longhorn was the cluster's replicated storage layer. It was abandoned after the 2026 disk failure and
 its replica data is gone; no volume below held anything worth rescuing, by operator decision
 (`docs/superpowers/specs/2026-11-10-homelab-stabilisation-design.md` §9 W0).
@@ -7,14 +15,14 @@ its replica data is gone; no volume below held anything worth rescuing, by opera
 The storage driver and its custom resources were uninstalled first, so nothing could remove the last
 objects on its own: their finalizers named controllers that no longer exist.
 
-> **Where this stands: done, 2026-11-19.** Every Longhorn object is gone — the driver, its
-> StorageClasses, its custom resources, the `longhorn-system` namespace, all twenty-six volumes and
-> all six claims. Twenty-three volumes and three claims went on 2026-11-18; `n8n`, `thelounge` and
-> `syncthing` were rebuilt on `local-path` on 2026-11-19 and their claims followed, `syncthing-conf`
-> last. The page is kept as the record of what was removed and how, not as a queue.
+> **Where this stands: done, 2026-11-19.** Twenty-three volumes and three claims went on 2026-11-18;
+> `n8n`, `thelounge` and `syncthing` were rebuilt on `local-path` on 2026-11-19 and their claims
+> followed, `syncthing-conf` last. The page is kept as the record of what was removed and how, not as
+> a queue.
 
-> **Agents cannot run these steps.** The agent's cluster access is read-only and shell `kubectl` is
-> denied, so every cluster-side command here was the operator's. Repo-side items were merged.
+> **Agents cannot run these steps.** An agent's cluster access is read-only — writes, `exec`, `cp` and
+> `port-forward` answer `403` — so every cluster-side command here was the operator's. Repo-side items
+> were merged.
 
 ## What was left
 

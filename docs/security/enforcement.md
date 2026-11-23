@@ -23,7 +23,7 @@ Each one prints nothing, or a short list, when the guarantee holds.
 | Public names carry Let's Encrypt | the two resolvers of the certificate store, `acme.json` on `kube-system/pvc-traefik-nfs` — there is no cert-manager, so no `Certificate` object to list | the `acme-inspect` recipe in [the certificate store](../runbooks/acme-store.md), then `jq -r '.ovhresolver.Certificates[].domain.main' acme.json` |
 | No secret value is written in a page | `secret_problems` in `hack/check_docs.py` | `python3 hack/check_docs.py --only secrets` |
 | Every image is pinned to a version | the `image.tag` in each chart, and the `appVersion` beside it | `hack/check-app-version.sh` |
-| Agents read the cluster and cannot write it | the `view` role plus read-only objects, bound to `kube-system/opencode-mcp` | `kubectl auth can-i --list --as=system:serviceaccount:kube-system:opencode-mcp -n kube-system` |
+| Agents read the cluster and cannot write it | the `view` role plus read-only objects, bound to `kube-system/opencode-mcp`, **and** the `opencode` wrapper's `KUBECONFIG` default that makes a tool shell use that account — the RBAC alone cannot make a shell use it | `kubectl auth whoami` in a session shell, then `kubectl auth can-i --list --as=system:serviceaccount:kube-system:opencode-mcp -n kube-system` |
 | The docs cannot drift from their sources | `hack/check-docs.sh` | `hack/check-docs.sh --base origin/develop` |
 
 ## The claims with no command
