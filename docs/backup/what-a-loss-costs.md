@@ -56,7 +56,8 @@ and size, and a restore reads back — a PostgreSQL dump set, Sonarr's database 
 a laptop with no cluster, using only the values in Bitwarden.
 
 Not proved: **that a broken application is rebuilt from a restore.** The destructive put-back onto a
-live claim and the etcd rehearsal are untried, and the drill log in
+live claim is untried, and an etcd snapshot has been restored and read back but never put in front of
+the cluster's real servers; the drill log in
 [`restore.md`](../runbooks/restore.md#the-drill-log) says so. The honest description is "the data
 comes back and is readable", not "a cluster comes back".
 

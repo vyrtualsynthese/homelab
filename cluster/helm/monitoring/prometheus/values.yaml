@@ -37,6 +37,9 @@ restoreDrills:
   - stream: all
     drill: last-resort
     at: 1795305600
+  - stream: nodes-streaming
+    drill: etcd-snapshot-restore
+    at: 1795305600
 
 prometheus:
   fullnameOverride: prometheus

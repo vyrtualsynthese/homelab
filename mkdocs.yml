@@ -106,6 +106,7 @@ nav:
       - Coverage: backup/coverage.md
       - How backups work: how-it-works/backups.md
       - Restore from a backup: runbooks/restore.md
+      - Restore the cluster state from etcd: runbooks/restore-etcd.md
       - A file or a claim: backup/a-file-or-a-claim.md
       - A database: backup/a-database.md
       - PostgreSQL: backup/postgresql.md

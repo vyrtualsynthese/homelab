@@ -214,8 +214,10 @@ The order is not negotiable, and every step assumes the previous one:
    Secrets are noise.
 3. **The Secrets** from [`../secrets.md`](../secrets.md), before ArgoCD syncs anything. A missing
    Secret is a pod in `CreateContainerConfigError`, not a failed sync.
-4. **etcd**, if it is being restored at all, into a test cluster first. This has never been rehearsed
-   (card #8); treat it as unproven and prefer rebuilding the object state from git.
+4. **etcd**, if it is being restored at all, from [`restore-etcd.md`](restore-etcd.md). It has been
+   rehearsed on a throwaway single-node K3s, not against the real servers: the design is proved, the
+   rejoin of the other two is not. Passing the token from the vault is what makes the snapshot
+   readable; a fresh token gives a restore that stops at once.
 5. **`globals.sql` before any database dump.** The dump's objects belong to roles a fresh instance
    does not have.
 6. **Claims before the applications that write to them**, then the applications, then ArgoCD syncing
