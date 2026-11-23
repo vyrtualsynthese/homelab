@@ -1,0 +1,10 @@
+# A wrapper chart's values: the upstream chart's keys sit under its own name.
+traefik:
+  ingressRoute:
+    dashboard:
+      enabled: true
+      entryPoints: ["web"]
+      matchRule: Host(`traefik.kub.local`) && (PathPrefix(`/dashboard`) || PathPrefix(`/api`))
+      middlewares:
+        - name: traefik-dashboard
+          namespace: kube-system
