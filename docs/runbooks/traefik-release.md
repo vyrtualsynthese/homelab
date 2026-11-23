@@ -3,16 +3,17 @@
 Date: 2026-11-21 · **Ownership moved** 2026-11-21 at chart `25.0.3`, revision 8 · **Moved to 2.11**
 the same day, chart `27.0.2` (Traefik `2.11.63`), revision 10 · **Moved to v3** the same day, chart
 `42.4.1` (Traefik `3.7.19`), revision 11 · **Configuration audited** 2026-11-22, revision 12 ·
-**Adopted by ArgoCD** 2026-11-23: Application `traefik`, manual sync, one sync, no diff left
+**Adopted by ArgoCD** 2026-11-23: Application `traefik`, manual sync, one sync, no diff left, Helm
+record deleted
 
 > **In one line.** The Traefik release is this repository's, applied by an ArgoCD Application from a
 > wrapper chart in git, and synced by hand. `helm` is the fallback when ArgoCD is the broken thing.
 >
 > **Use it when** Traefik has to move to a newer chart, its values change, the release has to be
 > inspected or rolled back, or the Application has to be synced by hand or taken back out of ArgoCD ·
-> **Verified** 2026-11-23 on chart `42.4.1`, Traefik `3.7.19`: the chart renders the objects the live
-> release was running, and the pre-sync diff was one `tracking-id` annotation per object and nothing
-> else. After the sync the pod kept its name, its creation time and its zero restarts ·
+> **Verified** 2026-11-23 on chart `42.4.1`, Traefik `3.7.19`: the pre-sync diff was one `tracking-id`
+> annotation per object and nothing else, the sync left `Synced`/`Healthy` with an empty diff, the pod
+> kept its name, its creation time and its zero restarts, and the Helm release record is gone ·
 > **Kind:** how-to · **Sources** `cluster/helm/platform/traefik/`,
 > `cluster/argocd/projects/platform/traefik.yaml`, `cluster/infrastructure/traefik/`,
 > `docs/how-it-works/network.md`.
@@ -204,10 +205,20 @@ helm -n kube-system list                                     # empty
 
 Deleting that Secret forgets the release and touches no object.
 
-**Where that stands.** As of 2026-11-23 the record is still there and the trap is live: the ArgoCD
-sync is clean, but the Secret has not been deleted, and the read-only identity an agent shell uses
-cannot read Secrets at all (`helm list` answers `403`). So this step needs the operator's own
-kubeconfig. Until it is done, `helm uninstall traefik` is a loaded gun, not history.
+**Done, 2026-11-23.** Ten records existed, revisions 8 to 17, the adopting revision among them.
+All ten went, with the release's own label selector rather than one name:
+
+```bash
+kubectl -n kube-system get secret -l owner=helm,name=traefik   # the ten, before
+kubectl -n kube-system delete secret -l owner=helm,name=traefik
+helm -n kube-system list                                       # header only
+helm -n kube-system history traefik                            # release: not found
+```
+
+The whole set and not just the deployed revision: a later `helm install traefik` starts again at
+revision 1, and a leftover `…v1` Secret is a name the new record cannot take. The pod kept its name,
+its creation time and its zero restarts, every route answered as before, and `argocd app diff` stayed
+empty — forgetting the release touched no object.
 
 ## Moving to 2.11, chart `27.0.2`
 
