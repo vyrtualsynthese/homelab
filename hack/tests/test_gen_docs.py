@@ -110,6 +110,19 @@ spec:
         self.assertEqual(route.tls, "Let's Encrypt")
 
 
+class DeclaresARouteTests(unittest.TestCase):
+    def test_a_dashboard_values_block_declares_a_route(self):
+        with temp_tree(
+            {
+                "cluster/helm/x/Chart.yaml": "apiVersion: v2\nname: x\nversion: 0.1.0\n",
+                "cluster/helm/x/values.yaml": (
+                    "traefik:\n  ingressRoute:\n    dashboard:\n      enabled: true\n"
+                ),
+            }
+        ) as root:
+            self.assertTrue(gen_docs._declares_a_route(root / "cluster/helm/x"))
+
+
 @unittest.skipUnless(shutil.which("helm"), "helm is not installed")
 class RenderChartTests(unittest.TestCase):
     def test_a_fixture_chart_renders_one_route(self):

@@ -2,15 +2,17 @@
 
 # Routes: every hostname, its gate and its certificate
 
-> **Generated page.** 37 hostnames, rendered from the charts of 33
+> **Generated page.** 38 hostnames, rendered from the charts of 34
 > Applications by `hack/gen_docs.py`. Do not edit it: the tables are the charts.
 
 Regenerate: `python3 hack/gen_docs.py --write --only routes`
 
 Hostnames, middlewares and TLS options are rendered from the `IngressRoute` objects each chart
 declares. A host with a `web` and a `websecure` router is one row, and its gate names both.
-A route that no Application owns is not here: the Traefik dashboard is a Helm release value, and
-it is named in [network.md](../how-it-works/network.md). One internal route is an API rather
+A route the charts do not render is not here: `traefik.kub.local` on port 80 is redirected
+by an `IngressRoute` applied by hand from
+`cluster/infrastructure/traefik/dashboard/redirect.yaml`, and that twin is not a row of its
+own. One internal route is an API rather
 than a page: `loki.kub.local` serves Loki's query API and its query frontend, and the logs are
 read in Grafana. The `IngressRouteTCP` and `IngressRouteUDP` entries Syncthing and Minecraft
 declare match on `HostSNI(*)`, carry no hostname, and are therefore not rows here.
@@ -35,7 +37,7 @@ On the allowlist, meant to answer the internet.
 | `www.ashudev.com` | ashudev | `ashudev` | `doc-nginx-www` | Let's Encrypt | yes |
 | `www.ashuvidz.com` | ashuvidz | `ashuvidz` | `doc-nginx-www` | Let's Encrypt | yes |
 
-## Internal over TLS (26)
+## Internal over TLS (27)
 
 | Host | Application | Namespace | Gate | TLS | Public? |
 |---|---|---|---|---|---|
@@ -64,6 +66,7 @@ On the allowlist, meant to answer the internet.
 | `syncthing.kub.home.ashudev.com` | syncthing | `syncthing` | `lan-only`, `authentik-forwardauth`, `syncthing-redirect-https` | Let's Encrypt | no |
 | `tautulli.kub.local` | tautulli | `media-stack` | `lan-only`, `redirect-to-https` | internal CA | no |
 | `thelounge.kub.home.ashudev.com` | thelounge | `thelounge` | `lan-only`, `security`, `redirect-to-https` | Let's Encrypt | no |
+| `traefik.kub.local` | traefik | `kube-system` | `lan-only`, `traefik-dashboard` | internal CA | no |
 | `vikunja.kub.local` | vikunja | `vikunja` | `lan-only`, `redirect-to-https` | internal CA | no |
 
 ## Internal without TLS (2)
