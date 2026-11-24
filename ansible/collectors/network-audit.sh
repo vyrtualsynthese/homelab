@@ -43,9 +43,47 @@ targets() {
   done
 }
 
+# Replace the value of every attribute whose name says it holds a credential with <redacted>,
+# quotes included. Reads stdin, writes stdout, one line in for one line out, and is the same
+# filter every captured export goes through before it can reach the page committed to git.
+redact_routeros() {
+  awk '
+  # A RouterOS line is a command followed by name=value pairs, some quoted and containing spaces.
+  # A key is sensitive when, with - turned to _, it ends in one of the secret words or in _key, and
+  # the match starts the key or follows an underscore; public_key is the one exemption, because
+  # the public key of a peer is not a secret. The whole value, quotes included, becomes <redacted>.
+  function sensitive(k,   t, i) {
+    t = tolower(k); gsub(/-/, "_", t)
+    if (t == "public_key") return 0
+    i = match(t, /(password|passwd|secret|passphrase|psk|token|community|key)$/)
+    if (!i) return 0
+    return i == 1 || substr(t, i - 1, 1) == "_"
+  }
+  {
+    out = ""; line = $0
+    while (match(line, /[A-Za-z0-9._-]+=/)) {
+      key = substr(line, RSTART, RLENGTH - 1)
+      out = out substr(line, 1, RSTART - 1) key "="
+      line = substr(line, RSTART + RLENGTH)
+      if (sensitive(key)) {
+        if (substr(line, 1, 1) == "\"") {
+          if (match(line, /^"[^"]*"/)) line = substr(line, RLENGTH + 1)
+          else line = ""
+        } else {
+          sub(/^[^[:space:]]+/, "", line)
+        }
+        out = out "<redacted>"
+      }
+    }
+    print out line
+  }
+  '
+}
+
 case "${1:-}" in
   --help|-h) usage ;;
   --list-targets) targets; exit 0 ;;
+  --redact-routeros) redact_routeros; exit 0 ;;
   "") ;;
   *) die "unknown option '$1' (try --help)" ;;
 esac
