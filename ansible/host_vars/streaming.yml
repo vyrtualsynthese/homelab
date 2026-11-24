@@ -1,0 +1,22 @@
+---
+# `streaming` has 908 distinct packages installed, and 183 of them are CUDA
+# toolkits from seven releases. 13-2 is the one a future build would use; the
+# rest are dead weight, and every one is rebuilt against each new kernel.
+#
+# The patterns name each release's suffix because there is no cuda-toolkit-12-4
+# metapackage to remove — the toolkits went in piecemeal. 12-4 is the oldest
+# release from NVIDIA's own repository; 10-x and 11-x stay, because they are
+# dependencies of Ubuntu's nvidia-cuda-toolkit and removing them would take an
+# nvidia-* package with them.
+packages_absent:
+  - "cuda-*-12-4"
+  - "cuda-*-12-5"
+  - "cuda-*-12-6"
+  - "cuda-*-12-8"
+  - "cuda-*-13-0"
+  - "cuda-*-13-1"
+  - gedit
+
+# Never in this list: nvidia-*, nvidia-srv, nvidia-container-toolkit and
+# cuda-*-13-2. The driver is what the GPU workloads run on; a test fails if an
+# entry here starts with `nvidia`.

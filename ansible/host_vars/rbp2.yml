@@ -1,0 +1,6 @@
+---
+# Nothing is removed here by name. rbp2's fifty orphaned linux-modules-extra-*
+# belong to kernels, not to a list: naming them would remove the module set the
+# running kernel boots with. The system role's kernel retention is what clears
+# them, and that role reads the running kernel before it marks anything.
+packages_absent: []
