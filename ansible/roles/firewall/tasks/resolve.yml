@@ -1,0 +1,28 @@
+---
+# Kept apart from the apply so the two facts can be rendered without touching a
+# host: `tasks_from: resolve` is what the offline check runs.
+# Existing rules are left in place: `ufw status verbose` before the apply is how
+# the operator decides whether one of them should go. This role adds and never
+# resets, so a mistake on a host is undone by disabling ufw, not by re-running.
+- name: Choose the rule set this host gets
+  ansible.builtin.set_fact:
+    firewall_rules: >-
+      {{ (firewall_rules_cluster if 'cluster' in group_names else [])
+         + (firewall_rules_edge if 'edge' in group_names else [])
+         + (firewall_rules_nas if inventory_hostname == firewall_nfs_host else []) }}
+
+- name: Resolve every named source set to the addresses it stands for
+  ansible.builtin.set_fact:
+    firewall_entries: >-
+      {%- set lan = [lan_cidr] -%}
+      {%- set nodes = groups['cluster'] | map('extract', hostvars, 'ansible_host') | list -%}
+      {%- set servers = groups['servers'] | map('extract', hostvars, 'ansible_host') | list -%}
+      {%- set sources = {'lan': lan, 'nodes': nodes, 'servers': servers} -%}
+      {%- set out = [] -%}
+      {%- for rule in firewall_rules -%}
+      {%-   for address in sources[rule.source] -%}
+      {%-     set _ = out.append({'port': rule.port, 'proto': rule.proto,
+                                  'from': address, 'comment': rule.comment}) -%}
+      {%-   endfor -%}
+      {%- endfor -%}
+      {{ out }}

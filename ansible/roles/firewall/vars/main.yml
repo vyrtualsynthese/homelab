@@ -1,0 +1,83 @@
+---
+# Every entry is a rule plus the name of the source set that may reach it; the
+# role resolves a source set to addresses before it touches ufw, because a rule
+# is one rule per address, not one rule per subnet of four.
+#
+# What is deliberately absent: every port a container publishes. Docker and the
+# CNI put those in NAT and FORWARD, where ufw's INPUT rules never look — 5000
+# (the wg-easy admin) and 9902 (the exporter) on both Pis are reachable today and
+# stay reachable after ufw is on. Binding them to loopback, or putting them
+# behind the cluster's router, is a later task; filtering them is a DOCKER-USER
+# rule. A ufw rule for either would filter nothing and read as if it filtered.
+firewall_rules_cluster:
+  - port: 22
+    proto: tcp
+    source: lan
+    comment: ssh from the LAN
+  - port: 6443
+    proto: tcp
+    source: lan
+    comment: the k3s API, for kubectl on the LAN
+  - port: 10250
+    proto: tcp
+    source: nodes
+    comment: kubelet, read across nodes and by Prometheus
+  - port: 2379
+    proto: tcp
+    source: servers
+    comment: etcd, clients only on the servers
+  - port: 2380
+    proto: tcp
+    source: servers
+    comment: etcd, peers only on the servers
+  - port: 8472
+    proto: udp
+    source: nodes
+    comment: flannel vxlan
+  - port: 9100
+    proto: tcp
+    source: nodes
+    comment: node-exporter, scraped by a pod that egresses as its node
+
+# No 443: nothing terminates TLS on these two, and the cluster's router answers
+# every name that resolves here on `streaming` instead.
+firewall_rules_edge:
+  - port: 22
+    proto: tcp
+    source: lan
+    comment: ssh from the LAN, key-only
+  - port: 80
+    proto: tcp
+    source: lan
+    comment: the Pi-hole web interface
+  - port: 53
+    proto: tcp
+    source: lan
+    comment: LAN DNS
+  - port: 53
+    proto: udp
+    source: lan
+    comment: LAN DNS
+
+# The exports the cluster mounts. NFSv4 puts everything on 2049; 111 and 20048
+# are the v3 path the provisioner does not use, kept for a human's mount.
+firewall_rules_nas:
+  - port: 111
+    proto: tcp
+    source: nodes
+    comment: rpcbind
+  - port: 111
+    proto: udp
+    source: nodes
+    comment: rpcbind
+  - port: 2049
+    proto: tcp
+    source: nodes
+    comment: NFSv4
+  - port: 20048
+    proto: tcp
+    source: nodes
+    comment: NFSv3 mountd
+
+# The host that carries `firewall_rules_nas`; a name, not an address.
+firewall_nfs_host: nas
