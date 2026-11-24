@@ -2,6 +2,8 @@ import os
 import pathlib
 import subprocess
 
+import yaml
+
 REPO = pathlib.Path(__file__).resolve().parents[2]
 SCRIPT = REPO / "ansible/pi/hosts-pi.sh"
 
@@ -85,3 +87,21 @@ def test_backup_then_restore_puts_the_stack_back(tmp_path):
     out = run("restore", str(backup), "rbp1", root=root)
     assert out.returncode == 0, out.stdout + out.stderr
     assert (stack / "docker-compose.yml").exists()
+
+
+def test_the_rbp0_template_does_not_start_a_second_router():
+    compose = yaml.safe_load(
+        (REPO / "ansible/playbooks/templates/runners/rbp0/docker-compose.yml").read_text()
+    )
+    assert "traefik" not in compose["services"], (
+        "rbp0 must not run its own Traefik: the cluster's router owns 80/443 for "
+        "*.kub.home.ashudev.com, and this copy served --api.insecure=true with no "
+        "certificate store of its own"
+    )
+
+
+def test_setup_removes_a_service_the_template_no_longer_declares():
+    """`docker compose up -d` starts what the file names and leaves the rest
+    running. rbp0's live stack still has the router this template dropped."""
+    text = SCRIPT.read_text()
+    assert "--remove-orphans" in text

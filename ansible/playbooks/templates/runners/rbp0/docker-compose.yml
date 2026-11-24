@@ -27,20 +27,14 @@ services:
     sysctls:
       - net.ipv4.ip_forward=1
       - net.ipv4.conf.all.src_valid_mark=1
-  traefik:
-    image: "traefik:v3.7.19"
-    container_name: "traefik"
-    network_mode: host
-    command:
-      - "--api.insecure=true"
-      - "--providers.docker=false"
-      - "--providers.docker.exposedbydefault=false"
-      - "--entrypoints.web.address=:80"
-      - "--entrypoints.websecure.address=:443"
-      - "--providers.file.directory=/providers"
-    volumes:
-      - "/var/run/docker.sock:/var/run/docker.sock:ro"
-      - "./providers:/providers"
+  # No router here, by decision (task 480, 2026-11-24). The cluster's Traefik on
+  # `streaming` already answers every *.kub.home.ashudev.com name and holds the
+  # only certificate store; this copy had none, so it could not serve TLS.
+  #
+  # Its whole configuration was --api.insecure=true: the dashboard on 8080, with
+  # no authentication, on a host that faces the LAN. `docker ps` on rbp0 has not
+  # shown it running for three months. Keeping it declared is how a second router
+  # comes back by accident.
   node_exporter:
     image: quay.io/prometheus/node-exporter:v1.13.1
     container_name: node_exporter

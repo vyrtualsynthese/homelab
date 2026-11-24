@@ -148,8 +148,12 @@ cmd_setup() {
     write_text "$ROOT/etc/hosts" "$(desired_hosts "$host")"
 
     if [ -z "$ROOT" ]; then
-        ( cd "$STACK_DIR" && docker compose up -d >/dev/null )
-        echo "stack: docker compose up -d"
+        # --remove-orphans is what takes a service off a host when this template
+        # stops declaring it: `up -d` starts what the file names and leaves
+        # everything else running. Without the flag, the router this template no
+        # longer declares would stay up on rbp0, dashboard on 8080 included.
+        ( cd "$STACK_DIR" && docker compose up -d --remove-orphans >/dev/null )
+        echo "stack: docker compose up -d --remove-orphans"
     else
         echo "stack: not started (PI_ROOT is set)"
     fi
