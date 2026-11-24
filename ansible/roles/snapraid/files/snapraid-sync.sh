@@ -4,14 +4,23 @@
 # journal: it already reaches Loki, and this homelab has no mail path of its own.
 set -euo pipefail
 
+rc=0
+
 logger -t snapraid "sync starting"
 /usr/bin/snapraid sync
 logger -t snapraid "sync finished"
 
-# `status` exits 2 when the array still holds unsynced blocks, which after a
-# successful sync means the sync did not cover everything. The exit code is left
-# alone so cron reports it.
-/usr/bin/snapraid status
+# `status` exits 2 while blocks are unsynced, which on a live array means a file
+# changed during the sync — the normal outcome on a NAS that is being written to,
+# not a failure. `set -e` would end the script here and the scrub below would
+# never run, so the code is caught, named in the journal, and only a real error
+# (anything but 0 and 2) fails the run.
+/usr/bin/snapraid status || rc=$?
+case "$rc" in
+  0) ;;
+  2) logger -t snapraid "status: blocks remain unsynced, files changed during the sync" ;;
+  *) logger -t snapraid "status failed with exit $rc"; exit "$rc" ;;
+esac
 
 # One scrub slice a month, on the first Sunday: scrubbing the whole array at once
 # would keep the disks busy for hours on a storage node that also serves NFS.

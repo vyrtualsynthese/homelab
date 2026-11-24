@@ -3,3 +3,10 @@
 # their secrets in `pihole.env` and `wg-easy.env` beside the compose file; those
 # are gitignored and the setup script requires them rather than writing them.
 stack_dir: /home/vronteix/dockers
+
+# The tunnel subnet WireGuard clients arrive from, or an empty list. Empty means
+# the firewall opens DNS and the Pi-hole UI to the LAN only — correct when
+# `wg-easy.env` does not point WG_DEFAULT_DNS at this host. Read it before the
+# first ufw apply on a Pi; a client that resolves through Pi-hole arrives on this
+# subnet and is dropped at INPUT until it is listed here.
+vpn_cidrs: []

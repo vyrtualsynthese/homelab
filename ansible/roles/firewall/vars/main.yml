@@ -9,6 +9,12 @@
 # stay reachable after ufw is on. Binding them to loopback, or putting them
 # behind the cluster's router, is a later task; filtering them is a DOCKER-USER
 # rule. A ufw rule for either would filter nothing and read as if it filtered.
+#
+# The other half of that split is easy to get wrong in the opposite direction: an
+# exporter with `network_mode: host` is not DNAT'd, so it *does* hit INPUT and a
+# default deny takes it off the network. 9100 and 9323 below are there for that
+# reason — Prometheus scrapes both on both Pis, and the failure is silent (the
+# target goes down, no process on the Pi errors).
 firewall_rules_cluster:
   - port: 22
     proto: tcp
@@ -58,6 +64,35 @@ firewall_rules_edge:
     proto: udp
     source: lan
     comment: LAN DNS
+  # A VPN client that resolves through this Pi arrives on the tunnel, not on the
+  # LAN, and ufw drops it at INPUT unless the tunnel is named. `vpn_cidrs` is
+  # empty until someone reads `wg-easy.env`: if it sets WG_DEFAULT_DNS to this
+  # host's address, put the tunnel subnet (wg-easy's default is 10.8.0.0/24)
+  # there before enabling ufw, or every remote client loses name resolution.
+  - port: 53
+    proto: tcp
+    source: vpn
+    comment: DNS for clients on the WireGuard tunnel
+  - port: 53
+    proto: udp
+    source: vpn
+    comment: DNS for clients on the WireGuard tunnel
+  - port: 80
+    proto: tcp
+    source: vpn
+    comment: the Pi-hole web interface from the tunnel
+  # Host-network exporters: not DNAT'd, so they reach INPUT. Prometheus on `nas`
+  # scrapes both of these on both Pis (the third target there, 9902, is a
+  # published container port and needs nothing), and a missing rule shows up only
+  # as a target that stops answering.
+  - port: 9100
+    proto: tcp
+    source: nodes
+    comment: node-exporter, scraped by a pod that egresses as its node
+  - port: 9323
+    proto: tcp
+    source: nodes
+    comment: the Docker metrics endpoint daemon.json opens on 0.0.0.0
 
 # The exports the cluster mounts. NFSv4 puts everything on 2049; 111 and 20048
 # are the v3 path the provisioner does not use, kept for a human's mount.
