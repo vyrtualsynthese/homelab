@@ -9,14 +9,14 @@
 #   ./network-audit.sh --dump <device> <slug>      # for tests: one capture, redacted
 #   ./network-audit.sh --major <device>            # for tests: its RouterOS major, 6 or 7
 #   ./network-audit.sh --export-command <major>    # for tests: the /export command for it
-#
 # A slug is one of resource, routerboard, package, identity, ethernet, address, route, export.
 #
-# Read-only: the RouterOS account carries `read` and `ssh`, so it signs in, prints and exports but
-# cannot change anything. What runs is `/print`, `/export` and one `/interface ethernet monitor
-# [find] once` for port state; no file is written and the Livebox answers one unauthenticated GET.
-# The page goes to stdout, a device that does not answer is reported inside it, and the exit is 0
-# when a switch answered, 1 when none did, 2 on a usage error.
+# Read-only on the devices: the RouterOS account carries `read` and `ssh`, so it signs in, prints
+# and exports but cannot change anything. What runs is `/print`, `/export` and one
+# `/interface ethernet monitor [find] once` for port state; no file is written on a device, and the
+# Livebox answers one unauthenticated GET. ssh records each switch's host key in
+# `~/.ssh/known_hosts` on first contact, the one local write. The page goes to stdout and a device
+# that does not answer is reported inside it: exit 0 when one answered, 1 when none did, 2 on usage.
 #
 # NET_AUDIT_TARGETS      "name=host" pairs, default crs326=192.168.1.11 crs309=192.168.1.43
 # NET_AUDIT_FROM_FIXTURE a directory of captured output; when set, no device is contacted
@@ -134,13 +134,20 @@ redact_routeros() {
 # One RouterOS command on a device, its output on stdout (ssh's own messages included, so a
 # failure has a reason to print). Bounded on the connect and on the command; BatchMode keeps ssh
 # from ever asking for a password, so a key the device refuses ends the call instead of hanging.
+# LogLevel=ERROR drops ssh's informational lines — `Warning: Permanently added '...' to the list of
+# known hosts` on first contact, which would otherwise print inside the configuration fence as if
+# the device had said it — while a real error such as `Permission denied` still arrives.
+# The carriage returns go: RouterOS answers with CRLF and ssh ends its connection errors with one,
+# so a reason line would otherwise close on an invisible byte and every fenced line carry it.
+# `pipefail` keeps ssh's status through the pipe, which the caller tests.
 ros() {                                  # ros <host> <routeros command...>
   local host="$1"; shift
   timeout "$NET_AUDIT_CMD_TIMEOUT" ssh \
     -i "$NET_AUDIT_KEY" -o BatchMode=yes \
     -o ConnectTimeout="$NET_AUDIT_CONNECT_TIMEOUT" \
     -o StrictHostKeyChecking=accept-new \
-    "$NET_AUDIT_USER@$host" "$*" 2>&1
+    -o LogLevel=ERROR \
+    "$NET_AUDIT_USER@$host" "$*" 2>&1 | tr -d '\r'
 }
 
 slug_command() {                         # slug_command <slug> <major>
@@ -159,19 +166,44 @@ slug_command() {                         # slug_command <slug> <major>
     route)       printf '/ip route print' ;;
     export)      case "$2" in
                    6) printf '/export hide-sensitive' ;;
-                   7) printf '/export terse' ;;
+                   7) printf '/export' ;;
                    *) return 1 ;;
                  esac ;;
     *) return 1 ;;
   esac
 }
 
+# The first line of a capture that carries text: the line a failure reason sits on, whether ssh
+# put it there or RouterOS answered with an error instead of output.
+first_line() {                           # first_line <capture>
+  printf '%s\n' "$1" | awk 'NF { print; exit }'
+}
+
+# True when a capture's first non-empty line is one of the reasons RouterOS or ssh give in-band.
+# Anchoring to that line is deliberate: an ssh call that exits 0 still carries a RouterOS error
+# there (`expected end of command`), while a configuration line deep in an export that happens to
+# hold the same words is not a failed command. Case-insensitive, because RouterOS capitalises some
+# of these and ssh does not.
+ros_failed() {                           # ros_failed <capture> → 0 when it is a failure line
+  local first
+  first="$(first_line "$1" | tr '[:upper:]' '[:lower:]')"
+  case "$first" in
+    *"bad command name"*|*"expected end of command"*|*"failure:"*|*"permission denied"*) ;;
+    *"connection refused"*|*"connection timed out"*|*"no route to host"*) ;;
+    *"cannot connect"*|*"host key verification failed"*) ;;
+    *) return 1 ;;
+  esac
+  return 0
+}
+
 fetch() {                                # fetch <device> <slug>
-  local device="$1" slug="$2" host major cmd rc out
+  local device="$1" slug="$2" host major cmd rc out reason
   host="$(host_of "$device")" || { printf '(unreachable: no such target)\n'; return 0; }
-  # The export command follows the major, and an unknown major fails closed: `/export terse`
-  # against a RouterOS 6 device prints its Wi-Fi keys and the SNMP community in clear, so when
-  # the version cannot be read no export is sent at all and the page says why.
+  # The export command follows the major, and an unknown major fails closed: a bare `/export` on a
+  # RouterOS 6 device prints its Wi-Fi keys and the SNMP community in clear, so when the version
+  # cannot be read no export is sent at all and the page says why. Major 7 sends `/export` with no
+  # flag — sensitive values are hidden by default there, and `terse` was never verified on a
+  # device, so the redactor is the backstop rather than an unproven flag.
   major="$(routeros_major "$device")"
   if ! cmd="$(slug_command "$slug" "$major")"; then
     if [ "$slug" = "export" ]; then
@@ -188,15 +220,21 @@ fetch() {                                # fetch <device> <slug>
     printf '(unreachable: no fixture for %s.%s)\n' "$device" "$slug"; return 0
   fi
   out="$(ros "$host" "$cmd")"; rc=$?
-  if [ "$rc" -ne 0 ] || printf '%s' "$out" | grep -q '^Bad command name\|^failure:\|Permission denied\|Connection refused\|Connection timed out\|No route to host'; then
-    printf '(unreachable: %s)\n' "$(printf '%s' "$out" | head -1)"
+  if [ "$rc" -ne 0 ] || ros_failed "$out"; then
+    # The reason is the one line that would otherwise reach the page unredacted, so it goes through
+    # the redactor too: a RouterOS error can echo an attribute and the value beside it. A call the
+    # timeout killed leaves no line at all, and an empty reason would read as a device that
+    # answered with nothing, so the exit code stands in for it.
+    reason="$(first_line "$out" | redact_routeros)"
+    printf '(unreachable: %s)\n' "${reason:-ssh exited $rc with no output}"
     return 0
   fi
   printf '%s\n' "$out" | redact_routeros
 }
 
-# The major version decides one thing: `/export terse` on 7, `/export hide-sensitive` on 6, never
-# the other way round. Read from the resource block directly, not through fetch, which asks this.
+# The major version decides one thing: `/export` on 7, where sensitive values are hidden by default,
+# or `/export hide-sensitive` on 6, never the other way round. Read from the resource block
+# directly, not through fetch, which asks this.
 routeros_major() {                       # routeros_major <device> → 6, 7, or empty
   local device="$1" host
   host="$(host_of "$device")" || return 0
@@ -354,10 +392,12 @@ page_livebox() {
     fi
   fi
   # The build is the `sah=` value on the loader script; the title element is empty, so the query
-  # string is the only version the login page carries. The whole query value is taken, and only a
-  # well-formed `v` plus digits, dots and underscores is printed: a match that stopped at a hyphen
-  # would print `v1.0.161` from `v1.0.161-20260923`, which is a plausible number the box never ran.
-  build="$(printf '%s' "$body" | grep -o 'sah=[^"&<>[:space:]]*' | head -1 | cut -d= -f2)"
+  # string is the only version the login page carries. The whole query value is taken (`-f2-`, not
+  # `-f2`: a build carrying a second `=`, `v1.0.161=20260923`, would otherwise be cut down to
+  # `v1.0.161` and print as a firmware the box never ran), and only a well-formed `v` plus digits,
+  # dots and underscores is printed: a match that stopped at a hyphen has the same defect, printing
+  # `v1.0.161` from `v1.0.161-20260923`.
+  build="$(printf '%s' "$body" | grep -o 'sah=[^"&<>[:space:]]*' | head -1 | cut -d= -f2-)"
   if ! printf '%s\n' "$build" | grep -Eq '^v[0-9]+([._][0-9]+)*$'; then build=""; fi
   section "Livebox — $LIVEBOX_HOST"
   case "$status" in
