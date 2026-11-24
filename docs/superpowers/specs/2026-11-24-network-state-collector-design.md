@@ -108,7 +108,8 @@ The private key stays in `~/.ssh/`; its path is `NET_AUDIT_KEY`, default `~/.ssh
 RouterOS builds that predate ed25519 import need an RSA key instead — recorded on the page, not
 worked around in the script.
 
-**What is captured per Mikrotik.** `/export terse` (RouterOS 7) or `/export hide-sensitive`
+**What is captured per Mikrotik.** `/export` (RouterOS 7, where sensitive values are hidden by
+default) or `/export hide-sensitive`
 (RouterOS 6), chosen after reading `/system resource print`; then `/system routerboard print`,
 `/system package print`, `/system identity print`, `/interface ethernet monitor [find] once`,
 `/ip address print`, `/ip route print`. Enough to answer "what is configured" and "what is up", nothing that changes.
