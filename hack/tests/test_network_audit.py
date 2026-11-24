@@ -65,11 +65,18 @@ class RouterOSRedactionTests(unittest.TestCase):
             '/interface wireless security-profiles set [ find default=yes ] '
             'authentication-types=wpa2-psk mode=dynamic-keys wpa2-pre-shared-key="hunter2" '
             'wpa-pre-shared-key=oldkey\n'
+            '/interface wireless security-profiles set [ find default=yes ] '
+            'authentication-password=authpw encryption-password=encpw mode=dynamic-keys\n'
         )
         self.assertNotIn("hunter2", out)
         self.assertNotIn("oldkey", out)
+        self.assertNotIn("authpw", out)
+        self.assertNotIn("encpw", out)
         self.assertIn("wpa2-pre-shared-key=<redacted>", out)
         self.assertIn("wpa-pre-shared-key=<redacted>", out)
+        self.assertIn("authentication-password=<redacted>", out)
+        self.assertIn("encryption-password=<redacted>", out)
+        self.assertIn("mode=dynamic-keys", out)
 
     def test_a_secret_that_is_not_the_first_pair_is_removed(self):
         out = self.redact('/interface wireguard set wg1 private-key="k3y" listen-port=51820\n')
@@ -155,13 +162,15 @@ class FetchTests(unittest.TestCase):
         self.assertEqual(run(["--major", "crs326"], env=self.env()).stdout.strip(), "7")
         self.assertEqual(run(["--major", "crs309"], env=self.env()).stdout.strip(), "6")
 
-    def test_the_export_flag_follows_the_routeros_major(self):
+    def test_the_export_command_follows_the_routeros_major(self):
         six = run(["--export-command", "6"])
         self.assertEqual(six.returncode, 0)
         self.assertEqual(six.stdout.strip(), "/export hide-sensitive")
+        # RouterOS 7 hides sensitive values by default and `terse` was never verified on a device,
+        # so major 7 gets the bare command and the redactor is the backstop.
         seven = run(["--export-command", "7"])
         self.assertEqual(seven.returncode, 0)
-        self.assertEqual(seven.stdout.strip(), "/export terse")
+        self.assertEqual(seven.stdout.strip(), "/export")
 
     def test_an_unknown_major_sends_no_export_at_all(self):
         done = run(["--export-command", "unknown"])
@@ -203,6 +212,94 @@ class FetchTests(unittest.TestCase):
                  "NET_AUDIT_CMD_TIMEOUT": "2"},
         )
         self.assertIn("(unreachable:", done.stdout)
+
+
+class TransportTests(unittest.TestCase):
+    # The live branch is driven by stub `ssh` and `curl` scripts on PATH, the way LiveboxTests drives
+    # the box: no device is contacted, and what the script does with a capture is what is measured.
+    # This is the branch the two Important defects lived in, so it gets a harness of its own.
+
+    RESOURCE = ("                  uptime: 3w2d1h\\n"
+                "                 version: 7.16.1 (stable)\\n")
+
+    def run_with(self, ssh_script, args=(), targets="crs326=127.0.0.1"):
+        with tempfile.TemporaryDirectory() as tmp:
+            for name, script in (("ssh", ssh_script), ("curl", "printf '200\\n'")):
+                stub = pathlib.Path(tmp) / name
+                stub.write_text("#!/usr/bin/env bash\n" + script)
+                stub.chmod(0o755)
+            return run(
+                list(args),
+                env={
+                    "PATH": f"{tmp}:{os.environ['PATH']}",
+                    "NET_AUDIT_TARGETS": targets,
+                    "NET_AUDIT_CONNECT_TIMEOUT": "1",
+                    "NET_AUDIT_CMD_TIMEOUT": "2",
+                },
+            )
+
+    def ssh_answering(self, export):
+        # A RouterOS session: the version block always answers, `/export` answers with the text
+        # under test and exits 0, which is how a rejected export command actually arrives.
+        return (
+            "for last; do :; done\n"
+            'case "$last" in\n'
+            f"  \"/system resource print\") printf '{self.RESOURCE}' ;;\n"
+            f"  \"/export\") printf '{export}' ;;\n"
+            "  *) printf '\\n' ;;\n"
+            "esac\n"
+            "exit 0\n"
+        )
+
+    def test_a_routeros_error_on_an_exit_zero_call_is_not_printed_as_configuration(self):
+        page = self.run_with(
+            self.ssh_answering("expected end of command (line 1 column 12)\\n")
+        ).stdout
+        configuration = page.split("### Configuration")[1].split("## Livebox")[0]
+        self.assertIn("(unreachable: expected end of command (line 1 column 12))", configuration)
+        self.assertNotIn("```", configuration)
+
+    def test_a_failure_word_deep_in_a_configuration_is_not_a_failed_capture(self):
+        # Anchoring to the first line is what keeps a comment that happens to read `permission
+        # denied` from turning a good export into an unreachable device.
+        text = ('/ip route add dst-address=10.0.0.0/8 gateway=192.168.1.254\n'
+                '/ip firewall filter add chain=forward comment="permission denied"\n')
+        done = self.run_with(self.ssh_answering(text), ["--dump", "crs326", "export"])
+        self.assertNotIn("(unreachable:", done.stdout)
+        self.assertIn("permission denied", done.stdout)
+
+    def test_ssh_is_invoked_at_log_level_error(self):
+        # LogLevel=ERROR is what stops ssh printing `Warning: Permanently added ...` into a first
+        # run's capture; a stub that echoes the invocation shows the flags the script builds.
+        done = self.run_with('printf \'%s\\n\' "$*"\nexit 0\n',
+                             ["--dump", "crs326", "identity"])
+        self.assertIn("-o LogLevel=ERROR", done.stdout)
+
+    def test_the_unreachable_reason_passes_the_redactor(self):
+        # The reason is the one line outside the redactor's usual flow, and a RouterOS error can
+        # echo a value beside its attribute name.
+        done = self.run_with(self.ssh_answering('failure: bad password="s3cr3t" in /user\n'),
+                             ["--dump", "crs326", "export"])
+        self.assertIn("(unreachable:", done.stdout)
+        self.assertNotIn("s3cr3t", done.stdout)
+
+    def test_a_carriage_return_from_ssh_does_not_reach_the_page(self):
+        # RouterOS answers with CRLF and ssh closes a connection error with a CR, so without a strip
+        # the reason ends on an invisible byte and every fenced line carries one into the page.
+        done = self.run_with(
+            "printf 'ssh: connect to host 127.0.0.1 port 22: Connection refused\\r\\n'\n"
+            "exit 255\n",
+            ["--dump", "crs326", "identity"],
+        )
+        self.assertIn("(unreachable: ssh: connect to host 127.0.0.1 port 22: Connection refused)\n",
+                      done.stdout)
+        self.assertNotIn("\r", done.stdout)
+
+    def test_a_call_that_answers_nothing_says_why_it_failed(self):
+        # A capture the timeout killed prints no line at all, and `(unreachable: )` would read as a
+        # device that answered with nothing.
+        done = self.run_with("exit 124\n", ["--dump", "crs326", "identity"])
+        self.assertIn("(unreachable: ssh exited 124 with no output)", done.stdout)
 
 
 spec = importlib.util.spec_from_file_location("check_docs", ROOT / "hack" / "check_docs.py")
@@ -296,10 +393,15 @@ class PageTests(unittest.TestCase):
         self.assertNotIn("| ether1 ether2 |", done.stdout)
 
     def test_a_large_export_is_not_truncated(self):
-        page = self.page()
-        self.assertIn("/ip address add address=192.168.1.11/24", page)
-        self.assertIn("fixture-last-line", page)
-        self.assertNotIn("(timed out", page)
+        # Review focus #4 is thousands of lines, and the checked-in fixture is 11: a line cap added
+        # by accident would pass against it. The marker is the last line of a 3,000-line export.
+        lines = "".join(f"/ip firewall filter add chain=forward comment=rule-{i}\n"
+                        for i in range(3000))
+        done = self.page_of({"export": lines + "/system note set note=fixture-last-line\n"})
+        self.assertEqual(done.returncode, 0, done.stderr)
+        self.assertIn("comment=rule-0\n", done.stdout)
+        self.assertIn("comment=rule-2999\n", done.stdout)
+        self.assertIn("note=fixture-last-line", done.stdout)
 
     def test_the_page_says_what_it_does_not_cover(self):
         self.assertIn("## What this record does not cover", self.page())
@@ -366,6 +468,13 @@ class LiveboxTests(unittest.TestCase):
     def test_a_build_string_outside_the_version_alphabet_is_unknown(self):
         # Truncating at the hyphen would print v1.0.161 as a measured build the box never ran.
         page = self.live_page("printf 'loader.js?sah=v1.0.161-20260923\\n'\nprintf '200\\n'\n")
+        self.assertIn("firmware: unknown", page)
+        self.assertNotIn("v1.0.161", page)
+
+    def test_a_build_string_with_a_second_equals_is_unknown(self):
+        # `cut -d= -f2` would turn v1.0.161=20260923 into v1.0.161, which passes the well-formedness
+        # check and prints as a firmware the box never ran, so the whole tail is taken.
+        page = self.live_page("printf 'loader.js?sah=v1.0.161=20260923\\n'\nprintf '200\\n'\n")
         self.assertIn("firmware: unknown", page)
         self.assertNotIn("v1.0.161", page)
 
