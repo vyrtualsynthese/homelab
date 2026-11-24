@@ -39,6 +39,10 @@
     backup: true
   notify: Reload the export list
 
+# The only tree this role touches ownership on, and only because the previous
+# table was `no_root_squash`: anything there was written as root and would now be
+# unwritable. A recursive chown anywhere else would walk terabytes that already
+# belong to 1100; the probe after the apply is the check for those.
 - name: Give the certificate store to the identity the squash maps root to
   ansible.builtin.file:
     path: /mnt/storage/traefik
@@ -60,10 +64,17 @@
 - name: Apply the queued reload before reading the table back
   ansible.builtin.meta: flush_handlers
 
+# Read from the running kernel, not from the file just written, and check what
+# the table *says* rather than how many lines it is: `exportfs -v` prints one
+# line per export-and-client pair, so a line count is 8 only while the cluster
+# has one address.
 - name: Read the export table back and refuse a looser one
   ansible.builtin.command: exportfs -v
   register: nfs_exported
   changed_when: false
   failed_when: >-
-    (nfs_exported.stdout_lines | length) != 8
+    (nfs_exported.stdout_lines | select('match', '^/')
+     | map('regex_replace', '\s.*$', '') | unique | list | length) != 8
     or 'no_root_squash' in nfs_exported.stdout
+    or 'insecure' in nfs_exported.stdout
+    or (nfs_exported.stdout_lines | select('match', '^/mnt\s') | list | length) > 0

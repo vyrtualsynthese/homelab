@@ -25,7 +25,11 @@
     running="linux-image-{{ system_running_kernel.stdout }}"
     keep="{{ kernel_keep | int }}"
     installed="$(dpkg-query -W -f='${Package}\n' 'linux-image-[0-9]*' | sort -V)"
-    newest="$(printf '%s\n' "$installed" | tail -n $(( keep - 1 )))"
+    # The running kernel is taken out before the tail: on the steady state, where
+    # the host booted the newest image, keeping "the newest" would keep the
+    # running one again and autoremove would take the rollback kernel with it.
+    others="$(printf '%s\n' "$installed" | grep -vx "$running" || true)"
+    newest="$(printf '%s\n' "$others" | tail -n $(( keep - 1 )) || true)"
     for pkg in $installed; do
       if [ "$pkg" = "$running" ]; then continue; fi
       if printf '%s\n' "$newest" | grep -qx "$pkg"; then continue; fi
