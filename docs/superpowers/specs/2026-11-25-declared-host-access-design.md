@@ -64,11 +64,13 @@ human_user: vronteix
 ```
 
 - The list is written to `~{{ human_user }}/.ssh/authorized_keys` and
-  `~{{ automation_user }}/.ssh/authorized_keys`, mode `0600`, `exclusive: true` on both.
-- A key that is not in the list is **removed** on the next apply. That is the point: it is what makes
-  retirement real and what lets `make check` see a key nobody declared.
-- `exclusive` is what makes this a declaration rather than a wish. Without it the variable documents
-  access instead of controlling it.
+  `~{{ automation_user }}/.ssh/authorized_keys`, mode `0600`, by `ansible.builtin.copy` with `content`
+  rendered from the list and `backup: true`. The file is *exactly* the declaration, so a key that is not
+  in the list is **removed** on the next apply — it is what makes retirement real and what lets
+  `make check` see a key nobody declared.
+- `copy` rather than `ansible.builtin.authorized_key` on purpose: the module has no `backup` parameter,
+  while `copy` leaves the previous file beside the new one and replaces the whole file atomically. The
+  declaration is the whole file either way.
 - **One pair per laptop**, at the same path on every machine (`~/.ssh/homelab_live`). Two laptops are
   two lines with two fingerprints, so retiring one is deleting one line and the other keeps working.
   The private half never moves between machines — that is the whole reason to generate instead of copy
@@ -190,7 +192,7 @@ default identity list rather than adding to it — verified against `ssh -G`.
 
 | Claim | Proof |
 |---|---|
-| the layer writes both files from one list | `hack/tests/test_ansible_layer.py`: both tasks carry `exclusive: true`, `key: "{{ trusted_ssh_keys … }}"`, and no `remote_src` copy remains in `automation` |
+| the layer writes both files from one list | `hack/tests/test_ansible_layer.py`: both `copy` tasks name `trusted_ssh_keys`, carry `backup: true` and mode `0600`, and no `remote_src` copy remains in `automation` |
 | an unsafe list is refused | the two `assert` tasks are named in the tests, and a `--check` run with an empty list fails before any write |
 | a laptop is really adopted | step 4 above on the new machine, `make check --limit nas` printing no `changed` |
 | a key really is retired | a throwaway key added by hand on `nas` is reported as drift by `make check` and removed by `make apply`; this is the round trip the tests cannot run |
