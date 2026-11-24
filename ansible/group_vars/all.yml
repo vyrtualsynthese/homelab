@@ -1,0 +1,11 @@
+---
+# Facts every host shares. Node addresses are deliberately absent: a role reads
+# `hostvars[host].ansible_host`, so the inventory stays the one place an address
+# is written. `hack/tests/test_ansible_layer.py` fails a repeat.
+timezone: Europe/Paris
+
+# Two kernels kept: the running one and the newest other. One is not a rollback,
+# three costs a reboot's worth of disk on a 4 GB /boot/firmware.
+kernel_keep: 2
+
+ansible_python_interpreter: /usr/bin/python3
