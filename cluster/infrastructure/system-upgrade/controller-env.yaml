@@ -22,12 +22,12 @@ data:
   # it yet: the value was v1.25.4, three years old and six minors behind the
   # node binary the first drain would have driven.
   #
-  # Kept on the minor of the node binary — v1.31.14 on all four nodes
-  # (2026-11-22) — because kubectl supports one minor either side of the API
+  # Kept on the minor of the node binary — v1.33.13 on all four nodes
+  # (2026-11-24) — because kubectl supports one minor either side of the API
   # server it talks to. Bump it with the climb, beside the Plans' `version`;
   # Renovate cannot see an image named in a ConfigMap value, so nothing else
   # moves this line.
-  SYSTEM_UPGRADE_JOB_KUBECTL_IMAGE: "rancher/kubectl:v1.31.14"
+  SYSTEM_UPGRADE_JOB_KUBECTL_IMAGE: "rancher/kubectl:v1.33.13"
   SYSTEM_UPGRADE_JOB_PRIVILEGED: "true"
   SYSTEM_UPGRADE_JOB_TTL_SECONDS_AFTER_FINISH: "900"
   # How often the controller re-reads the Plans, which is how long a plan
