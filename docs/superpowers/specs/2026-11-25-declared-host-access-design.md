@@ -128,9 +128,11 @@ logged in to" — still holds; it is now satisfied from the declared list instea
    `sk-ssh-ed25519@openssh.com`; then a base64 body; then an optional comment. A truncated paste is
    the other way to lose the fleet.
 3. `backup: true` on both writes, so the previous file is on the host beside the new one.
-4. **The migration reads the diff before it writes.** `make check --limit <host> --diff` prints every
-   key that *would be removed*. Anything the operator still wants is added to the list first. This is
-   the step that captures the keys already on the hosts, which the agent cannot read.
+4. **The migration reads the diff before it writes.** `ansible-playbook playbooks/site.yml --check
+   --diff --limit <host>` prints every key that *would be removed*. Anything the operator still wants is
+   added to the list first. This is the step that captures the keys already on the hosts, which the
+   agent cannot read. A limit is passed to `ansible-playbook` rather than to `make`, because make reads
+   `--limit` and `--diff` as options of its own and exits.
 5. **One host first**, `--limit nas`, read the result, then the rest. The repository already states
    this rule for anything that can lock out; this is the strongest case of it. `nas` is a worker, so a
    bad run costs a worker's access and never an etcd member's.
@@ -174,13 +176,14 @@ default identity list rather than adding to it — verified against `ssh -G`.
    third account holds a laptop key, the two-file promise is incomplete on that host and the design
    says so here rather than discovering it in a year.
 3. **Validated laptop.** Paste the line into `trusted_ssh_keys`, commit on a branch, open a pull
-   request. Then `make check --limit nas --diff` and read every key it offers to remove; add any that
-   are still wanted. Then `make apply --limit nas`, then the other three cluster nodes. The two edge
+   request. Then `ansible-playbook playbooks/site.yml --check --diff --limit nas` and read every key it
+   offers to remove; add any that are still wanted. Then the same command without `--check --diff`,
+   then the other three cluster nodes. The two edge
    Pis are not in this pass: they have no `ansible` account until they are reflashed (card #481), and
    their runbook's step 8 is rewritten in the same change so the reflash bootstraps from this list.
 4. **New laptop, proving it.** `ssh -o BatchMode=yes -i ~/.ssh/homelab_live ansible@nas true`, then
-   `make init` and `make check --limit nas` — no `changed` line is the proof, because a missing key is
-   drift the role now reports.
+   `make init` and `ansible-playbook playbooks/site.yml --check --diff --limit nas` — no `changed` line
+   is the proof, because a missing key is drift the role now reports.
 5. **Retirement.** Delete the line, `make apply`. `make check` on any host that still holds it is the
    check that it worked; a key seen there is a host that did not get the run. A session already open
    stays open until it ends.
@@ -194,7 +197,7 @@ default identity list rather than adding to it — verified against `ssh -G`.
 |---|---|
 | the layer writes both files from one list | `hack/tests/test_ansible_layer.py`: both `copy` tasks name `trusted_ssh_keys`, carry `backup: true` and mode `0600`, and no `remote_src` copy remains in `automation` |
 | an unsafe list is refused | the two `assert` tasks are named in the tests, and a `--check` run with an empty list fails before any write |
-| a laptop is really adopted | step 4 above on the new machine, `make check --limit nas` printing no `changed` |
+| a laptop is really adopted | step 4 above on the new machine, `ansible-playbook playbooks/site.yml --check --diff --limit nas` printing no `changed` |
 | a key really is retired | a throwaway key added by hand on `nas` is reported as drift by `make check` and removed by `make apply`; this is the round trip the tests cannot run |
 | the bootstrap still works | the `README.MD` two-run sequence, run on a host whose `ansible` account does not exist (a reflashed Pi is the case) |
 | the Pi path still works | `docs/runbooks/pi-reflash.md` steps 8–9 read as the declared list, not the inheritance |
