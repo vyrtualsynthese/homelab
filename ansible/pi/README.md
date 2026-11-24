@@ -46,13 +46,23 @@ two files and `restore` puts them back when they are needed; `setup` never inven
 # on the Pi, before anything
 sudo ./hosts-pi.sh backup /mnt/backup/$(hostname) $(hostname)
 
-# write the image to the USB disk, boot it, then
-sudo ./hosts-pi.sh setup  rbp1
-sudo ./hosts-pi.sh verify rbp1
+# write the image to the USB disk, boot it, then — restore first, not setup
+sudo ./hosts-pi.sh restore /mnt/backup/rbp1 rbp1
+sudo ./hosts-pi.sh setup   rbp1
+sudo ./hosts-pi.sh verify  rbp1
 ```
+
+`restore` comes first because a fresh image is not this host yet: its `/etc/hostname` is whatever
+cloud-init wrote, and `pihole.env`/`wg-easy.env` do not exist — `setup` refuses both, correctly, since
+it will not configure a host as something else and will not invent a secret. `restore` puts the
+backup back, and `setup` then finds a host that already calls itself `rbp1`.
 
 `rbp1` goes first. `rbp0` answers LAN DNS and WireGuard while it is down, and the reverse order takes
 the house's resolver offline with nothing to fall back to.
+
+`restore` does not write `cmdline.txt` back: it names the `PARTUUID` of the disk the image was
+written to, which is not the disk it is being restored onto. The copy stays in the backup and the
+script says so; compare it by hand if the boot arguments need changing.
 
 ### The backup is only as good as its size
 

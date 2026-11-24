@@ -79,7 +79,9 @@ require_env() {
         fi
     done
     if [ "$missing" -eq 1 ]; then
-        echo "these hold secrets and are gitignored: write them once by hand" >&2
+        echo "these hold secrets and are gitignored. After a reflash, 'restore' is" >&2
+        echo "what brings them back from the backup; on a fresh host, write them once" >&2
+        echo "by hand." >&2
         exit 1
     fi
 }
@@ -199,14 +201,24 @@ cmd_verify() {
     echo "root device: $(root_device)"
 
     if [ -z "$ROOT" ]; then
-        local state
-        state="$(cd "$STACK_DIR" && docker compose ps --format '{{.Name}} {{.State}}' 2>/dev/null || true)"
-        if [ -n "$state" ]; then
-            printf '%s\n' "$state"
-            if printf '%s\n' "$state" | grep -qv ' running$'; then
-                echo "NOT RUNNING: a service above is not in state running"
-                problems=1
-            fi
+        # --all, and the declared service list compared with what is up: `ps`
+        # without it hides a stopped container, so a fully down stack printed
+        # nothing and this function answered "ok".
+        local expected actual names expected_list names_list
+        expected="$(cd "$STACK_DIR" && docker compose config --services 2>/dev/null | sort || true)"
+        actual="$(cd "$STACK_DIR" && docker compose ps --all --format '{{.Service}} {{.State}}' 2>/dev/null || true)"
+        if [ -n "$actual" ]; then
+            printf '%s\n' "$actual"
+        fi
+        names="$(printf '%s\n' "$actual" | awk 'NF { print $1 }' | sort)"
+        if [ "$expected" != "$names" ]; then
+            expected_list="${expected//$'\n'/ }"
+            names_list="${names//$'\n'/ }"
+            echo "NOT RUNNING: declared [${expected_list}] but found [${names_list}]"
+            problems=1
+        elif printf '%s\n' "$actual" | awk '$2 != "running" { found = 1 } END { exit !found }'; then
+            echo "NOT RUNNING: a service above is not in state running"
+            problems=1
         fi
     fi
 
@@ -272,12 +284,41 @@ cmd_restore() {
         fi
     done
     for file in config.txt cmdline.txt; do
-        if [ -f "$dir/boot/$file" ]; then
-            cp -a "$dir/boot/$file" "$ROOT/boot/firmware/$file"
+        if [ ! -f "$dir/boot/$file" ]; then
+            continue
         fi
+        if [ "$file" = "cmdline.txt" ] && ! cmdline_matches_this_disk "$dir/boot/$file"; then
+            echo "kept $ROOT/boot/firmware/cmdline.txt as it is: the backup names another disk's PARTUUID" >&2
+            echo "the copy is in $dir/boot/cmdline.txt; compare it by hand before using it" >&2
+            continue
+        fi
+        cp -a "$dir/boot/$file" "$ROOT/boot/firmware/$file"
     done
 
     cmd_verify "$host"
+}
+
+# A cmdline.txt carries the PARTUUID of the disk the image was written to. That
+# is right on the disk it names and unbootable on any other, and the machine that
+# would fix it is the one that will not start. So the line is written only when
+# it names the disk this host is running from; when that cannot be read (a
+# PI_ROOT fixture, a host without blkid), it is not written at all.
+cmdline_matches_this_disk() {
+    local wanted current device
+    wanted="$(sed -n 's/.*PARTUUID=\([^[:space:]]*\).*/\1/p' "$1" | head -1)"
+    if [ -z "$wanted" ]; then
+        return 0
+    fi
+    if [ -n "$ROOT" ] || ! command -v blkid >/dev/null 2>&1; then
+        return 1
+    fi
+    device="$(root_device)"
+    case "$device" in
+        /dev/*) ;;
+        *) return 1 ;;
+    esac
+    current="$(blkid -s PARTUUID -o value "$device" 2>/dev/null || true)"
+    [ -n "$current" ] && [ "$current" = "$wanted" ]
 }
 
 main() {
