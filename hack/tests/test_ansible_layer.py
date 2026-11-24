@@ -1,4 +1,6 @@
+import os
 import pathlib
+import subprocess
 
 import yaml
 
@@ -666,3 +668,83 @@ def test_the_union_script_writes_only_what_differs(tmp_path):
     second = run("--apply")
     assert second.returncode == 0
     assert second.stdout.strip() == "unchanged", "a converged mount reported a change"
+def make_adopt(key=None, env=None):
+    command = ["make", "-C", str(ANSIBLE), "adopt"]
+    if key is not None:
+        command.append("KEY=" + str(key))
+    return subprocess.run(
+        command, capture_output=True, text=True, env=env,
+    )
+
+
+def a_key(tmp_path, name="homelab_live", comment="operator@laptop", password=""):
+    subprocess.run(
+        ["ssh-keygen", "-t", "ed25519", "-N", password, "-C", comment,
+         "-f", str(tmp_path / name)],
+        check=True, capture_output=True,
+    )
+    return tmp_path / (name + ".pub")
+
+
+def test_make_adopt_prints_a_line_that_loads_as_yaml(tmp_path):
+    run = make_adopt(a_key(tmp_path))
+    assert run.returncode == 0, run.stderr
+    entry = next(line for line in run.stdout.splitlines() if line.startswith("  - "))
+    assert yaml.safe_load("keys:\n" + entry)["keys"][0].startswith("ssh-ed25519 ")
+    assert "fingerprint SHA256:" in run.stdout
+
+def test_make_adopt_never_edits_the_inventory(tmp_path):
+    before = (ANSIBLE / "inventory/group_vars/all.yml").read_bytes()
+    assert make_adopt(a_key(tmp_path)).returncode == 0
+    assert (ANSIBLE / "inventory/group_vars/all.yml").read_bytes() == before
+
+def test_make_adopt_refuses_a_file_that_is_not_a_key(tmp_path):
+    junk = tmp_path / "junk.pub"
+    junk.write_text("hello\n")
+    run = make_adopt(junk)
+    assert run.returncode != 0
+    assert "not an OpenSSH public key" in run.stderr
+
+def test_make_adopt_refuses_a_public_key_without_its_private_half(tmp_path):
+    pub = a_key(tmp_path)
+    orphan = tmp_path / "orphan.pub"
+    orphan.write_bytes(pub.read_bytes())
+    run = make_adopt(orphan)
+    assert run.returncode != 0
+    assert "proves nothing on its own" in run.stderr
+
+def test_make_adopt_refuses_a_mismatched_pair(tmp_path):
+    a_key(tmp_path, "first")
+    pub = a_key(tmp_path, "second")
+    pub.write_bytes((tmp_path / "first.pub").read_bytes())
+    run = make_adopt(pub)
+    assert run.returncode != 0
+    assert "does not match" in run.stderr
+
+def test_make_adopt_survives_a_comment_that_would_break_yaml(tmp_path):
+    run = make_adopt(a_key(tmp_path, comment='a"b@laptop'))
+    assert run.returncode == 0, run.stderr
+    entry = next(line for line in run.stdout.splitlines() if line.startswith("  - "))
+    assert yaml.safe_load("keys:\n" + entry)["keys"][0].endswith('a"b@laptop')
+
+def test_make_adopt_survives_a_backslash_in_the_comment(tmp_path):
+    run = make_adopt(a_key(tmp_path, comment='a\\b@laptop'))
+    assert run.returncode == 0, run.stderr
+    entry = next(line for line in run.stdout.splitlines() if line.startswith("  - "))
+    assert yaml.safe_load("keys:\n" + entry)["keys"][0].endswith('a\\b@laptop')
+
+def test_make_adopt_reports_a_passphrase_protected_key(tmp_path):
+    pub = a_key(tmp_path, password="secret")
+    run = make_adopt(pub)
+    assert run.returncode != 0
+    assert "cannot be read without a passphrase" in run.stderr
+
+def test_make_adopt_finds_the_default_key_without_a_key_argument(tmp_path):
+    a_key(tmp_path)
+    (tmp_path / ".ssh").mkdir()
+    for half in ("homelab_live", "homelab_live.pub"):
+        (tmp_path / half).rename(tmp_path / ".ssh" / half)
+    run = make_adopt(env={**os.environ, "HOME": str(tmp_path)})
+    assert run.returncode == 0, run.stderr
+    entry = next(line for line in run.stdout.splitlines() if line.startswith("  - "))
+    assert yaml.safe_load("keys:\n" + entry)["keys"][0].startswith("ssh-ed25519 ")
