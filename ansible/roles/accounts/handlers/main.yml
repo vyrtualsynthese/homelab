@@ -1,0 +1,7 @@
+---
+# Ubuntu's unit is ssh.service; sshd.service is an alias for it, so one handler
+# covers both names and a second one would never run.
+- name: Reload sshd
+  ansible.builtin.systemd_service:
+    name: ssh
+    state: reloaded

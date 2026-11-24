@@ -73,3 +73,28 @@ def test_no_playbook_grants_passwordless_root():
         text = path.read_text()
         if "NOPASSWD: ALL" in text:
             assert "state: absent" in text, f"{path} writes passwordless root"
+
+
+def test_accounts_removes_the_admins_grant_and_keeps_sudo():
+    text = (ANSIBLE / "roles/accounts/tasks/main.yml").read_text()
+    assert "path: /etc/sudoers" in text
+    assert "line: '%admins ALL=(ALL) NOPASSWD: ALL'" in text
+    assert "state: absent" in text
+    assert "line: '%sudo" not in text, "the stock %sudo line must not be rewritten"
+
+
+def test_accounts_closes_password_auth_for_every_host():
+    defaults = yaml.safe_load((ANSIBLE / "group_vars/all.yml").read_text())
+    assert defaults["sshd_password_auth"] is False
+    text = (ANSIBLE / "roles/accounts/tasks/main.yml").read_text()
+    assert "PasswordAuthentication" in text
+    assert "X11Forwarding" in text
+
+
+def test_accounts_sets_its_own_sshd_config_and_the_first_word_wins():
+    """A drop-in numbered 50 can set PasswordAuthentication yes and win over the
+    main file, because sshd takes the first value it reads. Ours has to sort
+    ahead of it, and the role has to say so."""
+    text = (ANSIBLE / "roles/accounts/tasks/main.yml").read_text()
+    assert "sshd_config.d/00-homelab.conf" in text
+    assert "first value" in text
