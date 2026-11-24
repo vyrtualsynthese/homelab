@@ -172,7 +172,7 @@ section "1. Machine"
 run "os-release" cat /etc/os-release
 run "uname" uname -a
 run "uptime" uptime
-run_sh "hardware model" 'cat /proc/device-tree/model 2>/dev/null; cat /sys/devices/virtual/dmi/id/product_name 2>/dev/null; cat /sys/devices/virtual/dmi/id/sys_vendor 2>/dev/null'
+run_sh "hardware model" 'cat /proc/device-tree/model 2>/dev/null | tr -d "\0"; cat /sys/devices/virtual/dmi/id/product_name 2>/dev/null; cat /sys/devices/virtual/dmi/id/sys_vendor 2>/dev/null'
 run "lsb_release" lsb_release -a
 run "last boot" who -b
 run_sh "kernel cmdline" 'cat /proc/cmdline'
@@ -277,7 +277,7 @@ run_sh "nvidia container toolkit" 'nvidia-ctk --version 2>/dev/null; ls -1 /etc/
 
 # --------------------------------------------------------------------------------------------------
 section "12. Pi specifics"
-run_sh "model, firmware and throttle" 'cat /proc/device-tree/model 2>/dev/null; echo; vcgencmd measure_temp 2>/dev/null; vcgencmd get_throttled 2>/dev/null; vcgencmd version 2>/dev/null'
+run_sh "model, firmware and throttle" 'cat /proc/device-tree/model 2>/dev/null | tr -d "\0"; echo; vcgencmd measure_temp 2>/dev/null; vcgencmd get_throttled 2>/dev/null; vcgencmd version 2>/dev/null'
 run "dpkg architecture" dpkg --print-architecture
 run_sh "/boot/firmware/config.txt" 'grep -vE "^[[:space:]]*(#|$)" /boot/firmware/config.txt /boot/config.txt 2>/dev/null'
 run_sh "/boot/firmware/cmdline.txt" 'cat /boot/firmware/cmdline.txt /boot/cmdline.txt 2>/dev/null'
@@ -327,7 +327,7 @@ kv os "$(. /etc/os-release 2>/dev/null && echo "${PRETTY_NAME:-unknown}")"
 kv codename "$(. /etc/os-release 2>/dev/null && echo "${VERSION_CODENAME:-unknown}")"
 kv kernel "$(uname -r)"
 kv arch "$(dpkg --print-architecture 2>/dev/null || uname -m)"
-kv model "$(tr -d '\0' < /proc/device-tree/model 2>/dev/null || cat /sys/devices/virtual/dmi/id/product_name 2>/dev/null)"
+kv model "$(cat /proc/device-tree/model 2>/dev/null | tr -d '\0' || cat /sys/devices/virtual/dmi/id/product_name 2>/dev/null)"
 kv cgroup "$(grep ' /sys/fs/cgroup ' /proc/1/mountinfo 2>/dev/null | sed 's/.* - //' | cut -d' ' -f1)"
 kv docker "$(docker version --format '{{.Server.Version}}' 2>/dev/null)"
 kv k3s "$(k3s --version 2>/dev/null | awk 'NR==1{print $3}')"
