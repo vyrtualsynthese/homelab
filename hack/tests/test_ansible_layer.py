@@ -194,15 +194,42 @@ def test_accounts_sets_its_own_sshd_config_and_the_first_word_wins():
     assert "first value" in text
 
 
-def test_system_pins_the_running_kernel_before_any_autoremove():
+def test_system_removes_the_kernels_autoremove_is_forbidden_to_touch():
+    """Ubuntu's /etc/apt/apt.conf.d/01autoremove lists `^linux-image-[a-z0-9]*-[a-z0-9]*$`
+    under NeverAutoRemove, so `apt-mark auto` plus `autoremove` keeps every kernel:
+    on 2026-11-24 `nas` still held four and `rbp2` eighteen after two clean runs,
+    while the role reported `changed=0`. The removal therefore names the versions,
+    computed on the host, with the running one and the newest kept excluded."""
+    text = (ANSIBLE / "roles/system/tasks/main.yml").read_text()
+    tasks = yaml.safe_load(text)
+    lister = next(t for t in tasks if t.get("register") == "system_kernel_remove")
+    remover = next(
+        t
+        for t in tasks
+        if "ansible.builtin.apt" in t
+        and t["ansible.builtin.apt"].get("state") == "absent"
+        and "system_kernel_remove" in str(t["ansible.builtin.apt"].get("name"))
+    )
+    script = lister["ansible.builtin.shell"]
+    assert "{{ kernel_keep | int }}" in script
+    assert "{{ system_running_kernel.stdout }}" in script, "the running kernel must never be listed"
+    assert "tail -n" in script, "the newest kept kernel is chosen, not written down"
+    assert "linux-modules-extra" in script, "the module tree is what holds the image"
+    assert remover["ansible.builtin.apt"]["purge"] is True
+    assert lister["changed_when"] is False and lister["check_mode"] is False
+    assert "01autoremove" in text, "the next reader has to know why autoremove is not enough"
+    assert "linux-image-{{" not in text, "a version is never written into the role"
+
+
+def test_system_pins_the_running_kernel_before_any_removal():
     text = (ANSIBLE / "roles/system/tasks/main.yml").read_text()
     tasks = [
         "- name: Read the kernel this host booted",
-        "- name: Mark every other kernel automatic",
-        "- name: Remove what nothing references any more",
+        "- name: List the kernel packages that are neither running nor the newest kept",
+        "- name: Drop the kernels that are neither running nor the newest kept",
     ]
     order = [text.index(task) for task in tasks]
-    assert order == sorted(order), "autoremove must come after the running kernel is pinned"
+    assert order == sorted(order), "nothing may be removed before the running kernel is known"
 
 
 def test_system_keeps_two_kernels_and_sets_the_zone_from_one_variable():
