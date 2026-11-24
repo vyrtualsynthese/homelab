@@ -200,6 +200,109 @@ routeros_major() {                       # routeros_major <device> → 6, 7, or 
   ros "$host" "/system resource print" | awk '/^ *version:/{print $2; exit}' | cut -d. -f1
 }
 
+# A Markdown section heading, with the blank lines that separate it from what came before.
+section() {                              # section <title>
+  printf '\n## %s\n\n' "$1"
+}
+
+# One "key: value" line, the shape every fenced status block uses.
+kv() {                                   # kv <key> <value>
+  printf '%s: %s\n' "$1" "$2"
+}
+
+# The text after "key:" in a block a RouterOS print produces, empty when the key is absent.
+field() {                                # field <key> <block>
+  printf '%s\n' "$2" | awk -v key="$1" '
+    $1 == key ":" { sub(/^[[:space:]]*[^:]+:[[:space:]]*/, ""); print; exit }
+  '
+}
+
+# The page's opening: the five-label banner hack/check_docs.py requires, then how each half was
+# read. The banner is a blockquote and carries the date and the script's own version.
+page_header() {
+  cat <<EOF
+# Audit — the network hardware, measured
+
+> **In one line.** What the two switches are configured to do and what the Livebox answers,
+> read from the devices on $NET_AUDIT_DATE rather than from the pages that describe them.
+>
+> **Use it when** you need the real state of a port, a VLAN, a firewall filter or the WAN edge ·
+> **Verified** $NET_AUDIT_DATE · **Kind:** record
+>
+> **Sources** \`ansible/collectors/network-audit.sh\` (version $SCRIPT_VERSION), run read-only as the
+> RouterOS \`audit\` user; the Livebox section says which of its lines were measured.
+
+## How it was read
+
+- CRS326 \`192.168.1.11\` and CRS309 \`192.168.1.43\`: SSH as a RouterOS user with the \`read\` policy,
+  \`/export\` and a status set, every line through the collector's redactor.
+- Livebox \`192.168.1.1\`: the login page only; no credential was used.
+EOF
+}
+
+# One switch's section: status, ports, configuration. When the device did not answer the section
+# holds its reason line and nothing else, so no table is ever printed empty.
+page_device() {                          # page_device <device> <host> → 0 answered, 1 unreachable
+  local device="$1" host="$2" resource identity board model serial routeros uptime ethernet
+  resource="$(fetch "$device" resource)"
+  section "$device — $host"
+  case "$resource" in
+    "(unreachable:"*) printf '%s\n' "$resource"; return 1 ;;
+  esac
+  identity="$(field name "$(fetch "$device" identity)")"
+  # One capture for both fields: a second call could answer with the other half of a flaky read.
+  board="$(fetch "$device" routerboard)"
+  model="$(field model "$board")"
+  serial="$(field serial-number "$board")"
+  routeros="$(field version "$resource")"; routeros="${routeros%% *}"
+  uptime="$(field uptime "$resource")"
+
+  printf '### Status\n\n```\n'
+  kv identity "${identity:-unknown}"
+  kv model "${model:-unknown}"
+  kv serial "${serial:-unknown}"
+  kv routeros "${routeros:-unknown}"
+  kv uptime "${uptime:-unknown}"
+  printf '```\n'
+
+  # One row per port, from the name=, status= and speed= fields of the ethernet block. A port the
+  # device reports no speed for says unknown rather than leaving the cell blank.
+  ethernet="$(fetch "$device" ethernet)"
+  printf '\n### Ethernet\n\n'
+  case "$ethernet" in
+    "(unreachable:"*|"") printf '%s\n' "${ethernet:-(no port reported)}" ;;
+    *)
+      printf '| port | status | speed |\n|---|---|---|\n'
+      printf '%s\n' "$ethernet" | awk '{
+        port = "unknown"; state = "unknown"; speed = "unknown"
+        for (i = 1; i <= NF; i++) {
+          if ($i ~ /^name=/)   port  = substr($i, 6)
+          if ($i ~ /^status=/) state = substr($i, 8)
+          if ($i ~ /^speed=/)  speed = substr($i, 7)
+        }
+        printf "| %s | %s | %s |\n", port, state, speed
+      }'
+      ;;
+  esac
+
+  # The export is printed whole, straight through the redactor: no head, no line cap.
+  printf '\n### Configuration\n\n```\n'
+  fetch "$device" export
+  printf '```\n'
+  return 0
+}
+
+# The page's last section: what a reader must not take this record for.
+page_footer() {
+  section "What this record does not cover"
+  printf '%s\n' '- Writing configuration back to a device, or correcting drift: this run only read.'
+  printf '%s\n' '- A restore-capable backup: RouterOS `.backup` files and the Livebox backup file are a'
+  printf '%s\n' '  different artefact with a different home, and are not collected here.'
+  printf '%s\n' '- The guarded half of the Livebox: port forwards, the WAN address and DHCP leases need its'
+  printf '%s\n' '  admin password, and this run used no credential.'
+  printf '%s\n' '- History: this is one snapshot, taken on the day named in the banner, not a series.'
+}
+
 case "${1:-}" in
   --help|-h) usage ;;
   --list-targets) targets; exit 0 ;;
@@ -214,6 +317,16 @@ case "${1:-}" in
     [ $# -eq 2 ] || die "--export-command takes <major>"
     slug_command export "$2" || die "no export command for RouterOS major '$2'"
     printf '\n'; exit 0 ;;
-  "") validate_targets ;;
+  "")
+    validate_targets
+    page_header
+    answered=0
+    while read -r device host; do
+      if page_device "$device" "$host"; then answered=1; fi
+    done < <(targets)
+    page_footer
+    # Exit 0 as soon as one device answered; a run where every fetch failed is not a page.
+    [ "$answered" -eq 1 ] || exit 1
+    ;;
   *) die "unknown option '$1' (try --help)" ;;
 esac

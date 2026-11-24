@@ -1,5 +1,6 @@
 """The network collector's contract: read-only, redacted, testable without a device."""
 
+import importlib.util
 import os
 import pathlib
 import subprocess
@@ -201,3 +202,44 @@ class FetchTests(unittest.TestCase):
                  "NET_AUDIT_CMD_TIMEOUT": "2"},
         )
         self.assertIn("(unreachable:", done.stdout)
+
+
+spec = importlib.util.spec_from_file_location("check_docs", ROOT / "hack" / "check_docs.py")
+check_docs = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(check_docs)
+
+
+class PageTests(unittest.TestCase):
+    def page(self):
+        done = run(env={"NET_AUDIT_FROM_FIXTURE": str(FIXTURE), "NET_AUDIT_DATE": "2026-11-24"})
+        self.assertEqual(done.returncode, 0, done.stderr)
+        return done.stdout
+
+    def test_the_banner_passes_the_docs_checker(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            (root / "docs").mkdir()
+            (root / "docs" / "network-2026-11-24.md").write_text(self.page())
+            self.assertEqual(check_docs.banner_problems([root / "docs/network-2026-11-24.md"], root), [])
+
+    def test_the_page_carries_no_secret_from_the_fixtures(self):
+        page = self.page()
+        self.assertNotIn("fixture-psk-not-real", page)
+        self.assertNotIn("fixture-wg-psk", page)
+        self.assertIn("AAAAB3NzaC1yc2E=", page)
+
+    def test_a_section_per_device_with_its_identity(self):
+        page = self.page()
+        self.assertIn("## crs326 — 192.168.1.11", page)
+        self.assertIn("## crs309 — 192.168.1.43", page)
+        self.assertIn("CR326", page)
+        self.assertIn("7.16.1", page)
+
+    def test_a_large_export_is_not_truncated(self):
+        page = self.page()
+        self.assertIn("/ip address add address=192.168.1.11/24", page)
+        self.assertIn("fixture-last-line", page)
+        self.assertNotIn("(timed out", page)
+
+    def test_the_page_says_what_it_does_not_cover(self):
+        self.assertIn("## What this record does not cover", self.page())
