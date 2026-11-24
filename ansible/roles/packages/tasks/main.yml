@@ -38,6 +38,9 @@
   loop: "{{ packages_absent | default([]) }}"
   register: packages_hits
   changed_when: false
+  # Read-only, and its output is the removal list: skipped under `--check`, the list comes
+  # back empty and the drift report calls a host that still carries the debris clean.
+  check_mode: false
   # A pattern that matches nothing is the normal case on every host but its own.
   failed_when: false
 
