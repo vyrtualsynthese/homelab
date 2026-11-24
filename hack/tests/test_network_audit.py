@@ -30,6 +30,7 @@ class UsageTests(unittest.TestCase):
         self.assertEqual(done.returncode, 0)
         self.assertIn("read-only", done.stdout)
         self.assertIn("NET_AUDIT_FROM_FIXTURE", done.stdout)
+        self.assertIn("LIVEBOX_HOST", done.stdout)
 
     def test_help_prints_comment_lines_only(self):
         for line in run(["--help"]).stdout.splitlines():
@@ -308,8 +309,65 @@ class LiveboxTests(unittest.TestCase):
     def page(self):
         return run(env={"NET_AUDIT_FROM_FIXTURE": str(FIXTURE)}).stdout
 
+    # The live branch is the one the bug lived in, so it is driven by a stub `curl` on PATH — a
+    # small script that prints a body and a status line the way `-w '\n%{http_code}'` does, or
+    # fails with curl's own message. The switches are pointed at a loopback address that refuses
+    # the connection, so the run reaches `page_livebox` without contacting a device.
+    def live_page(self, script):
+        with tempfile.TemporaryDirectory() as tmp:
+            stub = pathlib.Path(tmp) / "curl"
+            stub.write_text("#!/usr/bin/env bash\n" + script)
+            stub.chmod(0o755)
+            done = run(
+                env={
+                    "PATH": f"{tmp}:{os.environ['PATH']}",
+                    "NET_AUDIT_TARGETS": "ghost=127.0.0.1",
+                    "NET_AUDIT_CONNECT_TIMEOUT": "1",
+                    "NET_AUDIT_CMD_TIMEOUT": "2",
+                }
+            )
+        return done.stdout
+
     def test_the_firmware_build_is_read_from_the_login_page(self):
         self.assertIn("v1.0.161_20260923", self.page())
+
+    def test_the_fixture_prints_no_status_it_did_not_measure(self):
+        # The fixture directory never fetched the page, so a 200 here would be a guess printed in
+        # the same `http:` line a measured answer uses.
+        page = self.page()
+        self.assertIn("http: not measured (fixture)", page)
+        self.assertNotIn("http: 200", page)
+
+    def test_a_measured_200_is_printed_as_200(self):
+        page = self.live_page(
+            "printf '<script data-main=\"loader.js?sah=v1.0.161_20260923\"></script>\\n'\n"
+            "printf '200\\n'\n"
+        )
+        self.assertIn("http: 200", page)
+        self.assertIn("firmware: v1.0.161_20260923", page)
+
+    def test_an_answer_that_is_not_200_is_printed_as_the_code_it_gave(self):
+        # `curl -sS` exits 0 for a 404 or a login challenge, so the exit code cannot supply this.
+        page = self.live_page("printf '<html>who are you</html>\\n'\nprintf '404\\n'\n")
+        self.assertIn("http: 404", page)
+        self.assertNotIn("http: 200", page)
+
+    def test_a_failed_read_prints_curls_reason_not_just_the_exit(self):
+        page = self.live_page(
+            "printf 'curl: (7) Failed to connect: Connection refused\\n' >&2\nexit 7\n"
+        )
+        self.assertIn("(unreachable: curl: (7) Failed to connect: Connection refused)", page)
+        self.assertNotIn("curl exit 7", page)
+
+    def test_a_page_with_no_sah_prints_firmware_unknown(self):
+        page = self.live_page("printf '<title></title>\\n'\nprintf '200\\n'\n")
+        self.assertIn("firmware: unknown", page)
+
+    def test_a_build_string_outside_the_version_alphabet_is_unknown(self):
+        # Truncating at the hyphen would print v1.0.161 as a measured build the box never ran.
+        page = self.live_page("printf 'loader.js?sah=v1.0.161-20260923\\n'\nprintf '200\\n'\n")
+        self.assertIn("firmware: unknown", page)
+        self.assertNotIn("v1.0.161", page)
 
     def test_the_remembered_half_is_labelled(self):
         page = self.page()
