@@ -430,6 +430,17 @@ def test_snapraid_runs_outside_the_backup_window():
     assert "17 3 * * *" in text, "03:17 is after the 02:00 window and before the 05:00 backup"
 
 
+def test_snapraid_skips_a_night_that_overlaps_a_running_sync():
+    """A 51 TB array's sync outlives its night, and SnapRAID refuses a second
+    instance on its own lock: without a guard the next 03:17 is a failed run."""
+    script = (ANSIBLE / "roles/snapraid/files/snapraid-sync.sh").read_text()
+    lock = script.index("flock -n 9")
+    assert lock < script.index("/usr/bin/snapraid sync"), "the lock is taken before the sync starts"
+    assert "exit 0" in script[lock:script.index("rc=0")], (
+        "a skipped run is the expected outcome, not a cron failure"
+    )
+
+
 def test_readme_no_longer_claims_the_layer_does_not_work():
     text = (REPO / "ansible/README.MD").read_text()
     assert "does not currently work" not in text
