@@ -70,11 +70,89 @@ def test_lock_timeout_is_set_and_short():
     assert "inventory = inventory/hosts.yml" in cfg
 
 
-def test_no_playbook_grants_passwordless_root():
+def test_the_one_passwordless_grant_left_names_the_automation_account():
+    """`%admins ALL=(ALL) NOPASSWD: ALL` is removed because it follows every
+    account that joins the group. What stays is one account's, in a file this
+    layer owns, `0440` and checked by visudo: unattended runs cannot type the
+    password the removal would otherwise put in `become`'s way."""
+    offenders = []
     for path in yaml_files():
         text = path.read_text()
-        if "NOPASSWD: ALL" in text:
-            assert "state: absent" in text, f"{path} writes passwordless root"
+        if "NOPASSWD: ALL" not in text:
+            continue
+        removing = "state: absent" in text
+        granting = "roles/automation/" in path.as_posix()
+        if not (removing or granting):
+            offenders.append(path.relative_to(ANSIBLE).as_posix())
+    assert offenders == [], f"{offenders} write passwordless root"
+
+    tasks = yaml.safe_load((ANSIBLE / "roles/automation/tasks/main.yml").read_text())
+    grants = [
+        task["ansible.builtin.copy"]
+        for task in tasks
+        if isinstance(task, dict) and "ansible.builtin.copy" in task
+        and "NOPASSWD: ALL" in str(task["ansible.builtin.copy"].get("content", ""))
+    ]
+    assert len(grants) == 1, "exactly one file may carry the grant"
+    grant = grants[0]
+    assert grant["dest"] == "/etc/sudoers.d/00-homelab-automation"
+    assert grant["mode"] == "0440"
+    assert grant["validate"] == "visudo -cf %s"
+    assert "{{ automation_user }} ALL=(ALL) NOPASSWD: ALL" in grant["content"]
+    assert "ALL=(" in grant["content"] and "%" not in grant["content"]
+
+
+def test_the_inventory_connects_as_the_automation_account():
+    defaults = load("inventory/group_vars/all.yml")
+    inv = load("inventory/hosts.yml")["all"]["children"]
+    users = {
+        spec["ansible_user"] for group in inv.values() for spec in group["hosts"].values()
+    }
+    assert users == {defaults["automation_user"]}
+
+
+def test_the_human_grant_is_removed_only_by_a_run_that_no_longer_uses_it():
+    """A run logged in as the human removes the grant it is still using, and the
+    next task dies on `Missing sudo password`. Gating the removal on the account
+    proves the automation path works before the human one goes away."""
+    tasks = yaml.safe_load((ANSIBLE / "roles/accounts/tasks/main.yml").read_text())
+    removal = [
+        task
+        for task in tasks
+        if isinstance(task, dict)
+        and task.get("ansible.builtin.lineinfile", {}).get("path") == "/etc/sudoers"
+    ]
+    assert len(removal) == 1
+    condition = removal[0].get("when")
+    assert condition == "ansible_user == automation_user", condition
+
+
+def test_the_automation_account_takes_its_key_from_the_human_account():
+    """The controller's `~/.ssh` is off limits and a `*.pub` in the tree is a
+    committed identity, so the key is copied on the host, from the account that
+    already logs in: the role trusts nothing it did not trust before."""
+    text = (ANSIBLE / "roles/automation/tasks/main.yml").read_text()
+    assert "remote_src: true" in text
+    assert "lookup('file'" not in text, "a key read on the controller"
+    assert "automation_key_source_user" in text
+    assert "authorized_keys" in text
+
+
+def test_the_automation_role_can_be_applied_alone_and_runs_before_the_removal():
+    """The bootstrap is two runs: the first logs in as the human and may touch
+    nothing but the account, `--tags automation`; the second logs in as the
+    account and does the rest."""
+    site = (ANSIBLE / "playbooks/site.yml").read_text()
+    assert site.index("- automation") < site.index("- accounts")
+    tasks = yaml.safe_load((ANSIBLE / "roles/automation/tasks/main.yml").read_text())
+    untagged = [task.get("name") for task in tasks if "automation" not in (task.get("tags") or [])]
+    assert untagged == [], f"{untagged} would not run under --tags automation"
+
+
+def test_the_readme_documents_the_two_step_bootstrap():
+    text = (ANSIBLE / "README.MD").read_text()
+    assert "--tags automation" in text
+    assert "ansible_user" in text
 
 
 def test_accounts_removes_the_admins_grant_and_keeps_sudo():
@@ -134,6 +212,21 @@ def test_system_keeps_two_kernels_and_sets_the_zone_from_one_variable():
     tasks = (ANSIBLE / "roles/system/tasks/main.yml").read_text()
     assert "{{ timezone }}" in tasks, "the zone comes from group_vars, not a literal in the role"
     assert "hwclock" not in tasks, "a Raspberry Pi has no RTC; the module would fail on the edge hosts"
+
+
+def test_the_cache_measure_counts_bytes_and_not_directory_blocks():
+    """`du -sm` rounds up: an emptied `/var/cache/apt/archives` still measures
+    1 MB because of the directory's own blocks, so `apt clean` reported `changed`
+    on every run of a host that was already correct (seen on `streaming`,
+    2026-11-24). Byte sizes of the files are zero when the cache is empty."""
+    tasks = yaml.safe_load((ANSIBLE / "roles/packages/tasks/main.yml").read_text())
+    measure, clean = tasks[0], tasks[1]
+    argv = measure["ansible.builtin.command"]["argv"]
+    assert "du" not in argv, "block sizes make an empty cache look like 1 MB"
+    assert "-type" in argv and "-printf" in argv and "%s" in argv[-1]
+    assert measure["changed_when"] is False
+    assert measure["check_mode"] is False
+    assert "packages_cache_before" in clean["changed_when"]
 
 
 def test_packages_absent_is_per_host_and_never_touches_the_driver():

@@ -147,6 +147,7 @@ nav:
       - Retiring Discourse: decisions/2026-11-19-retire-discourse.md
       - EU-only providers: decisions/2026-11-21-sovereign-eu-providers-only.md
       - Agent shells are read-only: decisions/2026-11-23-agent-shells-read-only.md
+      - Automation sudo account: decisions/2026-11-24-automation-sudo-account.md
       - Longhorn leftovers: cleanup/longhorn-disposition.md
       - The board's database: runbooks/vikunja-database.md
       - The board's first start: runbooks/vikunja-first-start.md

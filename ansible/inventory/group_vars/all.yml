@@ -18,3 +18,14 @@ lan_cidr: "{{ hostvars[groups['cluster'][0]].ansible_host | regex_replace('\\.\\
 # Every host: key-only SSH. The accounts role writes this into sshd_config and
 # into a drop-in that sorts ahead of a distribution one.
 sshd_password_auth: false
+
+# The account unattended runs log in as, and the only one holding a passwordless
+# grant: `accounts` removes the group-wide one, and `become` cannot type a
+# password. The human account keeps a password on sudo.
+# docs/decisions/2026-11-24-automation-sudo-account.md is the trade.
+automation_user: ansible
+
+# Automation accepts the keys the human account already accepts — copied on the
+# host, because the controller's ~/.ssh is off limits to an agent and a `*.pub`
+# in the tree is a committed identity.
+automation_key_source_user: vronteix

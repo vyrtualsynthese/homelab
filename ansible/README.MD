@@ -29,6 +29,26 @@ ansible-playbook playbooks/site.yml --check --diff --limit nuc0
 ansible-playbook playbooks/site.yml --limit nuc0
 ```
 
+**A host's first run is two steps, in this order.** The layer removes
+`%admins ALL=(ALL) NOPASSWD: ALL`, which is the only passwordless path the human account has, and the
+`become` of the run that removes it then asks for a password no unattended run can type — the first
+apply of this layer died there with `Missing sudo password`. So the grant moves to one named account,
+`ansible` (`automation_user`), and that account has to exist before the human grant goes:
+
+```bash
+cd ansible
+# 1. create the automation account, and touch nothing else
+ansible-playbook playbooks/site.yml -e ansible_user=vronteix --limit nuc0 --tags automation
+# 2. converge the host as that account; this is the run that removes the human grant
+ansible-playbook playbooks/site.yml --limit nuc0
+```
+
+Step 1 is the only command in this directory that names the human account, and the only one an agent
+cannot run on a host where the grant is already gone: that host needs `-K` and a typed password, so it
+is the operator's. A reflashed Pi needs both steps again, because the image has neither account.
+The trade — passwordless root for one named identity instead of a group — is
+[`docs/decisions/2026-11-24-automation-sudo-account.md`](../docs/decisions/2026-11-24-automation-sudo-account.md).
+
 ## What is here
 
 | Path | What it is |
