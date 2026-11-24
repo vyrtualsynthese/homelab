@@ -244,6 +244,9 @@ run_sh "/etc/fstab" 'grep -vE "^(#|$)" /etc/fstab'
 run_sh "nfs server" 'systemctl is-active nfs-server 2>/dev/null; cat /etc/exports 2>/dev/null | grep -vE "^(#|$)"; exportfs -v 2>/dev/null'
 run_sh "mounts of interest" 'mount | grep -E " (nfs|nfs4|cifs|/mnt|/media) " 2>/dev/null'
 run_sh "local-path and media trees" 'ls -1d /mnt/* /srv/* /opt/* 2>/dev/null'
+run_sh "root disk and transport" 'findmnt -no SOURCE,FSTYPE,SIZE /; lsblk -o NAME,TRAN,SIZE,MODEL,MOUNTPOINT'
+run_sh "snapraid" 'ls -l /etc/snapraid.conf 2>/dev/null; snapraid status 2>/dev/null | head -15'
+run_sh "/opt and operator scripts" 'ls -1 /opt 2>/dev/null; ls -l /home/*/scripts 2>/dev/null | head -20'
 run_sh "size of the trees that matter, same filesystem only" 'du -shx /var/lib/rancher /var/lib/docker /var/lib/kubelet 2>/dev/null; df -h /mnt/* 2>/dev/null'
 
 # --------------------------------------------------------------------------------------------------
@@ -255,6 +258,7 @@ run "docker images" docker image ls --format 'table {{.Repository}}\t{{.Tag}}\t{
 run "docker volumes" docker volume ls
 run_sh "docker service units" 'systemctl list-unit-files "docker*" --no-legend --no-pager'
 run_sh "compose file locations" 'find /home /opt /srv /root -maxdepth 4 -name "docker-compose.y*ml" -o -maxdepth 4 -name "compose.y*ml" 2>/dev/null | head -20'
+run_sh "compose trees, what a reflash would have to keep" 'find /home/*/dockers -maxdepth 2 -printf "%y %s %p\n" 2>/dev/null | head -40'
 
 # --------------------------------------------------------------------------------------------------
 section "10. Kubernetes (k3s)"
@@ -266,6 +270,8 @@ run_sh "k3s role hints" 'ls -1d /var/lib/rancher/k3s/server /var/lib/rancher/k3s
 run_sh "containerd config drop-ins" 'ls -1 /var/lib/rancher/k3s/agent/etc/containerd/ 2>/dev/null; cat /var/lib/rancher/k3s/agent/etc/containerd/config.toml.tmpl 2>/dev/null'
 run_sh "registries.yaml" 'cat /etc/rancher/k3s/registries.yaml 2>/dev/null'
 run_sh "etcd snapshot config" 'grep -hE "etcd-(snapshot|s3)" /etc/rancher/k3s/config.yaml /etc/systemd/system/k3s.service 2>/dev/null'
+run_sh "etcd snapshots on disk" 'ls -l /var/lib/rancher/k3s/server/db/snapshots 2>/dev/null | tail -5; ls -ld /var/lib/rancher/k3s/server/db/etcd 2>/dev/null'
+run_sh "credential file modes" 'ls -l /etc/rancher/k3s/k3s.yaml /var/lib/rancher/k3s/server/token /home/*/.kube/config 2>/dev/null'
 
 # --------------------------------------------------------------------------------------------------
 section "11. GPU"
@@ -282,6 +288,7 @@ run "dpkg architecture" dpkg --print-architecture
 run_sh "/boot/firmware/config.txt" 'grep -vE "^[[:space:]]*(#|$)" /boot/firmware/config.txt /boot/config.txt 2>/dev/null'
 run_sh "/boot/firmware/cmdline.txt" 'cat /boot/firmware/cmdline.txt /boot/cmdline.txt 2>/dev/null'
 run_sh "eeprom" 'rpi-eeprom-update 2>/dev/null; ls -1 /etc/rpi-issue 2>/dev/null && cat /etc/rpi-issue'
+run_sh "boot order and root device" 'findmnt -no SOURCE,TRAN,FSTYPE / ; lsblk -o NAME,TRAN,SIZE,MODEL,MOUNTPOINT 2>/dev/null; vcgencmd bootloader_config 2>/dev/null | head -3'
 run_sh "raspi packages" 'dpkg-query -W -f="\${Package} \${Version}\n" "raspi*" "rpi-*" "libraspberrypi*" 2>/dev/null | grep -v "<none>"'
 
 # --------------------------------------------------------------------------------------------------
@@ -291,6 +298,8 @@ run_sh "authorized_keys (type and comment only)" 'for h in /root /home/*; do [ -
 run_sh "human accounts and groups" 'awk -F: "\$3 >= 1000 && \$3 < 65000 {print \$1\" uid=\"\$3\" shell=\"\$7}" /etc/passwd; getent group admins sudo docker 2>/dev/null'
 run_sh "sudoers drop-ins (names)" 'ls -1 /etc/sudoers.d/ 2>/dev/null'
 run_sh "sudoers drop-ins (content)" 'for f in /etc/sudoers.d/*; do [ -f "$f" ] && { echo "--- $f"; grep -vE "^(#|$)" "$f"; }; done'
+run_sh "/etc/sudoers, non-comment lines" 'grep -vE "^[[:space:]]*(#|$)" /etc/sudoers 2>/dev/null'
+run_sh "docker socket and its group" 'ls -l /var/run/docker.sock 2>/dev/null; getent group docker sudo adm 2>/dev/null'
 run_sh "shadow summary (no hashes)" 'awk -F: "\$2 ~ /^\\\$/ {p++} \$2 !~ /^\\\$/ {l++} END {printf \"hashes set: %d, locked or blank: %d\n\", p+0, l+0}" /etc/shadow 2>/dev/null'
 run_sh "unattended-upgrades" 'systemctl is-active unattended-upgrades 2>/dev/null; for f in /etc/apt/apt.conf.d/*unattended* /etc/apt/apt.conf.d/*auto-upgrades*; do [ -f "$f" ] && { echo "--- $f"; grep -vE "^(//|#|$)" "$f"; }; done'
 run_sh "apparmor" 'aa-status --enabled 2>/dev/null; aa-status 2>/dev/null | head -5'
@@ -307,6 +316,8 @@ run_sh "pending dist-upgrade (simulated)" 'apt-get -s -o Debug::NoLocking=true d
 run_sh "upgradable list" 'apt list --upgradable 2>/dev/null | head -40'
 run_sh "ubuntu pro" 'pro status --format=json 2>/dev/null | head -20'
 run_sh "space for a release upgrade" 'df -h / /boot /boot/firmware /var 2>/dev/null'
+run_sh "inodes, apt cache and logs" 'df -i / | tail -1; du -sh /var/cache/apt/archives /var/log /var/lib/docker 2>/dev/null'
+run "dpkg audit" dpkg --audit
 run_sh "previous failed upgrades" 'ls -1t /var/log/dist-upgrade 2>/dev/null | head -5; ls -1 /var/lib/ubuntu-release-upgrader 2>/dev/null'
 if [ "$AUDIT_NETWORK" = "1" ]; then
   run "release check (network)" do-release-upgrade -c
