@@ -1,0 +1,9 @@
+---
+# One play, one entry point. Every host takes every role; a role skips the hosts
+# it does not own by testing its own group, so the list below never grows into a
+# second inventory.
+- name: Prepare every host
+  hosts: all
+  become: true
+  roles:
+    - baseline
