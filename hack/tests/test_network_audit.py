@@ -210,10 +210,26 @@ spec.loader.exec_module(check_docs)
 
 
 class PageTests(unittest.TestCase):
+    # The blocks a device answers when a test withholds only the one it is about.
+    ANSWERING = {
+        "resource": "                  uptime: 3w2d1h\n"
+                    "                 version: 7.16.1 (stable)\n",
+        "identity": "                   name: CR326\n",
+        "routerboard": "             model: CRS326-24G-2S+\n",
+    }
+
     def page(self):
         done = run(env={"NET_AUDIT_FROM_FIXTURE": str(FIXTURE), "NET_AUDIT_DATE": "2026-11-24"})
         self.assertEqual(done.returncode, 0, done.stderr)
         return done.stdout
+
+    def page_of(self, files):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            for slug, text in {**self.ANSWERING, **files}.items():
+                (root / f"crs326.{slug}.txt").write_text(text)
+            return run(env={"NET_AUDIT_FROM_FIXTURE": str(root), "NET_AUDIT_DATE": "2026-11-24",
+                            "NET_AUDIT_TARGETS": "crs326=192.168.1.11"})
 
     def test_the_banner_passes_the_docs_checker(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -232,8 +248,35 @@ class PageTests(unittest.TestCase):
         page = self.page()
         self.assertIn("## crs326 — 192.168.1.11", page)
         self.assertIn("## crs309 — 192.168.1.43", page)
-        self.assertIn("CR326", page)
-        self.assertIn("7.16.1", page)
+        # The labelled lines, not the bare values: 7.16.1 also appears in crs326's export, and
+        # crs326's current-firmware is a different number, so only a `version:` read of the
+        # resource block can put it on the `routeros:` line.
+        self.assertIn("identity: CR326", page)
+        self.assertIn("model: CRS326-24G-2S+", page)
+        self.assertIn("serial: HE908ABCD", page)
+        self.assertIn("routeros: 7.16.1", page)
+
+    def test_the_ethernet_table_labels_every_port(self):
+        page = self.page()
+        self.assertIn("| port | status | speed |", page)
+        self.assertIn("| ether1 | link-ok | 1Gbps |", page)
+        self.assertIn("| ether3 | no-link | unknown |", page)
+        self.assertIn("| sfp-sfpplus1 | link-ok | 10Gbps |", page)
+        self.assertNotIn("| unknown | unknown | unknown |", page)
+
+    def test_an_export_failure_is_a_line_above_the_fence(self):
+        done = self.page_of({"ethernet": "                      name: ether1\n"
+                                         "                    status: link-ok\n"
+                                         "                      rate: 1Gbps\n"})
+        self.assertEqual(done.returncode, 0, done.stderr)
+        self.assertIn("(unreachable: no fixture for crs326.export)", done.stdout)
+        self.assertIn("### Configuration\n\n(unreachable:", done.stdout)
+
+    def test_a_port_block_that_yields_no_port_says_so(self):
+        done = self.page_of({"ethernet": "", "export": "/system identity set name=CR326\n"})
+        self.assertEqual(done.returncode, 0, done.stderr)
+        self.assertIn("(no port reported)", done.stdout)
+        self.assertNotIn("| port | status | speed |", done.stdout)
 
     def test_a_large_export_is_not_truncated(self):
         page = self.page()

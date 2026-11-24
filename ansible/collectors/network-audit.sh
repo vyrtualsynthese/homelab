@@ -147,7 +147,12 @@ slug_command() {                         # slug_command <slug> <major>
     routerboard) printf '/system routerboard print' ;;
     package)     printf '/system package print' ;;
     identity)    printf '/system identity print' ;;
-    ethernet)    printf '/interface ethernet print' ;;
+    # The port table needs link state and the negotiated rate, which no `print` carries: they come
+    # from the monitor command, also read-only. The fixture under hack/fixtures/network reproduces
+    # the shape of that output, because this session has no device and no credential; the first
+    # live run is what proves it. A shape this parser does not recognise prints (no port reported)
+    # instead of a table of unknown.
+    ethernet)    printf '/interface ethernet monitor [find] once' ;;
     address)     printf '/ip address print' ;;
     route)       printf '/ip route print' ;;
     export)      case "$2" in
@@ -243,7 +248,8 @@ EOF
 # One switch's section: status, ports, configuration. When the device did not answer the section
 # holds its reason line and nothing else, so no table is ever printed empty.
 page_device() {                          # page_device <device> <host> → 0 answered, 1 unreachable
-  local device="$1" host="$2" resource identity board model serial routeros uptime ethernet
+  local device="$1" host="$2" resource identity board model serial routeros uptime
+  local ethernet rows configuration
   resource="$(fetch "$device" resource)"
   section "$device — $host"
   case "$resource" in
@@ -265,30 +271,47 @@ page_device() {                          # page_device <device> <host> → 0 ans
   kv uptime "${uptime:-unknown}"
   printf '```\n'
 
-  # One row per port, from the name=, status= and speed= fields of the ethernet block. A port the
-  # device reports no speed for says unknown rather than leaving the cell blank.
+  # One row per port, from the `name:`, `status:` and `rate:` lines of the monitor block, which
+  # prints one blank-line-separated block per port. A field a port does not report says unknown
+  # rather than leaving the cell blank; a block that yields no port at all says so instead of
+  # printing a table with no rows.
   ethernet="$(fetch "$device" ethernet)"
   printf '\n### Ethernet\n\n'
   case "$ethernet" in
-    "(unreachable:"*|"") printf '%s\n' "${ethernet:-(no port reported)}" ;;
+    "(unreachable:"*) printf '%s\n' "$ethernet" ;;
     *)
-      printf '| port | status | speed |\n|---|---|---|\n'
-      printf '%s\n' "$ethernet" | awk '{
-        port = "unknown"; state = "unknown"; speed = "unknown"
-        for (i = 1; i <= NF; i++) {
-          if ($i ~ /^name=/)   port  = substr($i, 6)
-          if ($i ~ /^status=/) state = substr($i, 8)
-          if ($i ~ /^speed=/)  speed = substr($i, 7)
+      rows="$(printf '%s\n' "$ethernet" | awk '
+        function row() {
+          if (name != "")
+            printf "| %s | %s | %s |\n", name, (state == "" ? "unknown" : state), (rate == "" ? "unknown" : rate)
+          name = ""; state = ""; rate = ""
         }
-        printf "| %s | %s | %s |\n", port, state, speed
-      }'
+        /^[[:space:]]*$/ { row(); next }
+        {
+          key = $0; sub(/^[[:space:]]*/, "", key); sub(/:.*/, "", key)
+          value = $0; sub(/^[[:space:]]*[^:]+:[[:space:]]*/, "", value)
+          if (key == "name")        name  = value
+          else if (key == "status") state = value
+          else if (key == "rate")   rate  = value
+        }
+        END { row() }')"
+      if [ -n "$rows" ]; then
+        printf '| port | status | speed |\n|---|---|---|\n%s\n' "$rows"
+      else
+        printf '(no port reported)\n'
+      fi
       ;;
   esac
 
-  # The export is printed whole, straight through the redactor: no head, no line cap.
-  printf '\n### Configuration\n\n```\n'
-  fetch "$device" export
-  printf '```\n'
+  # The export is printed whole, straight through the redactor: no head, no line cap. A failure is
+  # a line of its own above the fence, never text inside it, where a reader would take it for
+  # configuration the device actually holds.
+  printf '\n### Configuration\n\n'
+  configuration="$(fetch "$device" export)"
+  case "$configuration" in
+    "(unreachable:"*) printf '%s\n' "$configuration" ;;
+    *) printf '```\n%s\n```\n' "$configuration" ;;
+  esac
   return 0
 }
 
