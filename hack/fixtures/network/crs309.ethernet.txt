@@ -1,5 +1,30 @@
-name=ether1 status=link-ok speed=1Gbps
-name=sfp-sfpplus1 status=link-ok speed=10Gbps
-name=sfp-sfpplus2 status=link-ok speed=10Gbps
-name=sfp-sfpplus3 status=no-link speed=unknown
-name=sfp-sfpplus4 status=link-ok speed=10Gbps
+                      name: ether1
+                    status: link-ok
+                      rate: 1Gbps
+               full-duplex: yes
+           tx-flow-control: no
+           rx-flow-control: no
+
+                      name: sfp-sfpplus1
+                    status: link-ok
+                     rate: 10Gbps
+               full-duplex: yes
+           tx-flow-control: no
+           rx-flow-control: no
+
+                      name: sfp-sfpplus2
+                    status: link-ok
+                     rate: 10Gbps
+               full-duplex: yes
+           tx-flow-control: no
+           rx-flow-control: no
+
+                      name: sfp-sfpplus3
+                    status: no-link
+
+                      name: sfp-sfpplus4
+                    status: link-ok
+                     rate: 10Gbps
+               full-duplex: yes
+           tx-flow-control: no
+           rx-flow-control: no
