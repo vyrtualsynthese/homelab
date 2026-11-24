@@ -135,7 +135,7 @@ adopt:
 	   || { echo "adopt: $(KEY) does not match $$priv" >&2; exit 1; }; \
 	 printf '  - "%s"\n' "$$(tr '"' "'" < "$(KEY)")"; \
 	 printf '# fingerprint %s\n' "$$(ssh-keygen -lf "$(KEY)" | cut -d' ' -f2)"; \
-	 printf '# add that line under trusted_ssh_keys in inventory/group_vars/all.yml,\n# then: make check --limit nas --diff && make apply --limit nas\n'
+	 printf '# add that line under trusted_ssh_keys in inventory/group_vars/all.yml,\n# then: ansible-playbook playbooks/site.yml --check --diff --limit nas\n'
 ```
 
 - [ ] **Step 4: Run the tests to verify they pass**
@@ -487,8 +487,8 @@ git commit -m "🔧 chore: name the homelab identity in ansible.cfg"
 - **Before you start** — the four hosts this reaches (`nas`, `nuc0`, `streaming`, `rbp2`); `rbp0`/`rbp1` arrive at their reflash (`pi-reflash.md`).
 - **What is already trusted** — `sudo ./collectors/host-audit.sh` on one host prints every `authorized_keys` under `/root` and `/home/*` as key type and comment, never key material. If a third account holds a laptop key, the two-file promise is incomplete and the page says so. Run it before the first apply.
 - **Adopt a laptop** — the five commands, in order, with the expected output for each:
-  `./setup sync`, `ssh-keygen -t ed25519 -f ~/.ssh/homelab_live` (until `config`'s `keys.json` carries it), `make adopt`, paste the line, `make check --limit nas --diff` / `make apply --limit nas` then the other three.
-- **Prove it** — `ssh -o BatchMode=yes -i ~/.ssh/homelab_live ansible@nas true` and `make check --limit nas`, expected no `changed`, because a missing key is drift.
+  `./setup sync`, `ssh-keygen -t ed25519 -f ~/.ssh/homelab_live` (until `config`'s `keys.json` carries it), `make adopt`, paste the line, then `ansible-playbook playbooks/site.yml --check --diff --limit nas` and `ansible-playbook playbooks/site.yml --limit nas`, then the other three. Say on the page that a whole-fleet run is `make check` / `make apply`, and that a limit goes to `ansible-playbook` directly because make reads `--limit` as one of its own options.
+- **Prove it** — `ssh -o BatchMode=yes -i ~/.ssh/homelab_live ansible@nas true` and `ansible-playbook playbooks/site.yml --check --diff --limit nas`, expected no `changed`, because a missing key is drift.
 - **Retire a laptop** — delete the line, `make apply`, then `make check` on each host; a `changed` there is a host that missed the run.
 - **What can lock the fleet out, and the five fences** — the two assertions, `backup: true`, the diff-first reading of `--diff`, and one host first.
 - **The floor** — console on `nas`/`nuc0`, physical access to the Pis; a run already authenticated survives the write that breaks the next one.
@@ -551,18 +551,18 @@ git commit -m "📝 docs: adopting a laptop is a line in group_vars"
 
 ```bash
 cd ansible
-make check --limit nas --diff
+ansible-playbook playbooks/site.yml --check --diff --limit nas
 ```
 Before reading it, run `collectors/host-audit.sh` on `nas` the way its README describes (copy it to the host, `sudo ./host-audit.sh`): it prints every `authorized_keys` under `/root` and `/home/*` as type and comment. Read every key the diff offers to remove. Anything still wanted goes into `trusted_ssh_keys` before the next step — including a key the audit found in an account other than `vronteix` or `ansible`, which the layer does not write. Expected: the two accounts' `authorized_keys` replaced, nothing else changed.
 
 - [ ] **Step 2: Apply to the pilot, then the rest**
 
 ```bash
-make apply --limit nas
-make check --limit nas          # expected: no `changed`
-make apply --limit nuc0
-make apply --limit streaming
-make apply --limit rbp2
+ansible-playbook playbooks/site.yml --limit nas
+ansible-playbook playbooks/site.yml --check --diff --limit nas   # expected: no `changed`
+ansible-playbook playbooks/site.yml --limit nuc0
+ansible-playbook playbooks/site.yml --limit streaming
+ansible-playbook playbooks/site.yml --limit rbp2
 make check                      # expected: no `changed` on the four
 ```
 
@@ -573,7 +573,7 @@ Add a throwaway key by hand on `nas`, as `ansible` with its passwordless sudo:
 ```bash
 ssh ansible@nas "sudo sh -c 'echo \"ssh-ed25519 AAAA… throwaway\" >> /home/vronteix/.ssh/authorized_keys'"
 ```
-then `make check --limit nas` — expected: `changed`, naming the file. `make apply --limit nas`, then `make check --limit nas` — expected: no `changed`.
+then `ansible-playbook playbooks/site.yml --check --diff --limit nas` — expected: `changed`, naming the file. `ansible-playbook playbooks/site.yml --limit nas`, then the check again — expected: no `changed`.
 
 - [ ] **Step 4: Record what happened**
 
