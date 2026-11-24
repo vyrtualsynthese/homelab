@@ -72,6 +72,9 @@
   ansible.builtin.command: exportfs -v
   register: nfs_exported
   changed_when: false
+  # Read-only, and this is the assertion that the table is not looser than this file:
+  # skipped under `--check`, a hand-edited `no_root_squash` would go unreported.
+  check_mode: false
   failed_when: >-
     (nfs_exported.stdout_lines | select('match', '^/')
      | map('regex_replace', '\s.*$', '') | unique | list | length) != 8
