@@ -119,6 +119,7 @@ nav:
       - security/README.md
       - What enforces what: security/enforcement.md
       - The critical points: security/critical-points.md
+      - The security baseline (2026-11-24): security/security-baseline-2026-11-24.md
       - Secrets: secrets.md
       - Wire an application to authentik: runbooks/authentik-apps.md
       - The internal CA: runbooks/internal-ca.md
