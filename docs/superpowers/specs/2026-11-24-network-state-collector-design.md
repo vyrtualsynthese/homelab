@@ -106,8 +106,8 @@ worked around in the script.
 
 **What is captured per Mikrotik.** `/export terse` (RouterOS 7) or `/export hide-sensitive`
 (RouterOS 6), chosen after reading `/system resource print`; then `/system routerboard print`,
-`/system package print`, `/system identity print`, `/interface ethernet print`, `/ip address print`,
-`/ip route print`. Enough to answer "what is configured" and "what is up", nothing that changes.
+`/system package print`, `/system identity print`, `/interface ethernet monitor [find] once`,
+`/ip address print`, `/ip route print`. Enough to answer "what is configured" and "what is up", nothing that changes.
 
 Why the status block: `/export` carries no link state, no uptime and no RouterOS version, and
 "the port is administratively up but the link is down" is exactly the kind of finding an audit is
