@@ -39,3 +39,53 @@ class UsageTests(unittest.TestCase):
 
     def test_an_unknown_flag_is_a_usage_error(self):
         self.assertEqual(run(["--nope"]).returncode, 2)
+
+
+class RouterOSRedactionTests(unittest.TestCase):
+    def redact(self, text):
+        done = run(["--redact-routeros"], stdin=text)
+        self.assertEqual(done.returncode, 0)
+        return done.stdout
+
+    def test_wifi_keys_are_removed_wherever_they_sit(self):
+        out = self.redact(
+            '/interface wireless security-profiles set [ find default=yes ] '
+            'authentication-types=wpa2-psk mode=dynamic-keys wpa2-pre-shared-key="hunter2" '
+            'wpa-pre-shared-key=oldkey\n'
+        )
+        self.assertNotIn("hunter2", out)
+        self.assertNotIn("oldkey", out)
+        self.assertIn("wpa2-pre-shared-key=<redacted>", out)
+        self.assertIn("wpa-pre-shared-key=<redacted>", out)
+
+    def test_a_secret_that_is_not_the_first_pair_is_removed(self):
+        out = self.redact('/interface wireguard set wg1 private-key="k3y" listen-port=51820\n')
+        self.assertNotIn("k3y", out)
+        self.assertIn("private-key=<redacted>", out)
+        self.assertIn("listen-port=51820", out)
+
+    def test_a_password_mid_line_is_removed_and_the_policy_kept(self):
+        out = self.redact('/user set [ find name=audit ] password="p4ss word" policy=read\n')
+        self.assertNotIn("p4ss word", out)
+        self.assertIn("password=<redacted>", out)
+        self.assertIn("policy=read", out)
+
+    def test_snmp_community_is_removed(self):
+        out = self.redact('/snmp community set [ find default=yes ] name=public community=s3cr3t\n')
+        self.assertNotIn("s3cr3t", out)
+
+    def test_non_secrets_survive(self):
+        line = ('/interface wireguard peers add public-key="AAAAB3NzaC1yc2E=" allowed-address=10.8.0.2/32 '
+                'comment="uplink to the NAS" name=peer1\n')
+        out = self.redact(line)
+        self.assertIn('public-key="AAAAB3NzaC1yc2E="', out)
+        self.assertIn('comment="uplink to the NAS"', out)
+        self.assertIn("name=peer1", out)
+
+    def test_a_dynamic_keys_mode_survives_after_a_psk(self):
+        out = self.redact("authentication-types=wpa2-psk mode=dynamic-keys\n")
+        self.assertIn("mode=dynamic-keys", out)
+
+    def test_addresses_and_ports_survive(self):
+        line = "/ip address add address=192.168.1.11/24 interface=bridge comment=mgmt\n"
+        self.assertEqual(self.redact(line), line)
