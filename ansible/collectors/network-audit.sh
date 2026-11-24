@@ -59,16 +59,33 @@ redact_routeros() {
     if (!i) return 0
     return i == 1 || substr(t, i - 1, 1) == "_"
   }
+  # Position of the quote that closes the string opening line, or 0 when it never closes. A
+  # backslash escapes the character after it, which is how RouterOS writes a literal quote.
+  function close_quote(s,   i) {
+    for (i = 2; i <= length(s); i++) {
+      if (substr(s, i, 1) == "\\") { i++; continue }
+      if (substr(s, i, 1) == "\"") return i
+    }
+    return 0
+  }
   {
     out = ""; line = $0
+    snmp = (line ~ /^[[:space:]]*\/snmp[[:space:]]+community([[:space:]]|$)/)
     while (match(line, /[A-Za-z0-9._-]+=/)) {
       key = substr(line, RSTART, RLENGTH - 1)
       out = out substr(line, 1, RSTART - 1) key "="
       line = substr(line, RSTART + RLENGTH)
-      if (sensitive(key)) {
+      # On an /snmp community object the community string itself is carried by name=.
+      if (sensitive(key) || (snmp && key == "name")) {
         if (substr(line, 1, 1) == "\"") {
-          if (match(line, /^"[^"]*"/)) line = substr(line, RLENGTH + 1)
-          else line = ""
+          end = close_quote(line)
+          # Keep what follows only when the quote closes on the end of the line or on a space;
+          # a quote that closes on a word means the value held one of its own, so the rest of the
+          # line goes with it rather than being printed raw.
+          if (end > 0 && (end == length(line) || substr(line, end + 1, 1) ~ /[[:space:]]/))
+            line = substr(line, end + 1)
+          else
+            line = ""
         } else {
           sub(/^[^[:space:]]+/, "", line)
         }
