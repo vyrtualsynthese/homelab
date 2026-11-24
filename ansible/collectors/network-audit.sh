@@ -12,11 +12,11 @@
 #
 # A slug is one of resource, routerboard, package, identity, ethernet, address, route, export.
 #
-# Read-only: the RouterOS account carries the `read` policy, and what runs is `/print`, `/export`
-# and one `/interface ethernet monitor [find] once` for port state; no file is written and the
-# Livebox answers a single unauthenticated GET. The page goes to stdout, warnings to stderr, and is
-# printed whatever the outcome; the exit is 0 when at least one switch answered it, 1 when none did
-# (the Livebox alone does not count), 2 on a usage error.
+# Read-only: the RouterOS account carries `read` and `ssh`, so it signs in, prints and exports but
+# cannot change anything. What runs is `/print`, `/export` and one `/interface ethernet monitor
+# [find] once` for port state; no file is written and the Livebox answers one unauthenticated GET.
+# The page goes to stdout, a device that does not answer is reported inside it, and the exit is 0
+# when a switch answered, 1 when none did, 2 on a usage error.
 #
 # NET_AUDIT_TARGETS      "name=host" pairs, default crs326=192.168.1.11 crs309=192.168.1.43
 # NET_AUDIT_FROM_FIXTURE a directory of captured output; when set, no device is contacted
