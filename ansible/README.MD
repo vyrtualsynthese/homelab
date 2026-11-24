@@ -12,6 +12,11 @@ make apply                     # converge a host
 make lint                      # ansible-lint over the whole layer
 ```
 
+`make init` pins each collection to a range, not to "latest": `community.general` 14 needs
+ansible-core 2.19, and this controller is 2.18, so an unpinned install prints a support warning on
+every run and then uses a collection built against a newer core. Bump a range only after
+`ansible --version` on the machine that runs it.
+
 **The rule: `make check` is the drift report, and a host that is correct prints no `changed`.** A
 `changed` line is either a host drifting from this repository or a task that is not idempotent; both
 are defects to read, not noise to tolerate.
