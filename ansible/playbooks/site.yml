@@ -7,3 +7,4 @@
   become: true
   roles:
     - baseline
+    - accounts

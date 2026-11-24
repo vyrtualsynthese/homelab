@@ -1,0 +1,66 @@
+---
+# The order and the warnings in this file are the whole point of the role.
+#
+# The grant goes before the group: a run interrupted between the two must never
+# leave a member without the group it belongs to. `validate: visudo -cf %s` is
+# what stops a bad edit from taking sudo away from every account at once.
+#
+# On the two Pis this is the role that can lock the operator out. Their
+# PasswordAuthentication is `yes` today and their access is two keys
+# (vyrtualsynthese@DESKTOP-I3PJEO5, valentin.ronteix@ashudev.com). Apply it to
+# rbp1 alone with --check --diff first, read that diff, and only then go on.
+- name: Remove the passwordless sudo grant on the admins group
+  ansible.builtin.lineinfile:
+    path: /etc/sudoers
+    line: '%admins ALL=(ALL) NOPASSWD: ALL'
+    state: absent
+    validate: visudo -cf %s
+
+# After the grant, never before: the group is useless without it and a member
+# without its group is a smaller mess than a member with passwordless root.
+- name: Remove the admins group the grant belonged to
+  ansible.builtin.group:
+    name: admins
+    state: absent
+
+- name: State the password-login policy in the main sshd config
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '^#?\s*PasswordAuthentication\s'
+    line: "PasswordAuthentication {{ sshd_password_auth | ternary('yes', 'no') }}"
+    validate: sshd -t -f %s
+  notify: Reload sshd
+
+- name: Turn X11 forwarding off
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '^#?\s*X11Forwarding\s'
+    line: X11Forwarding no
+    validate: sshd -t -f %s
+  notify: Reload sshd
+
+# sshd takes the first value it reads for a keyword, and Ubuntu's sshd_config
+# includes sshd_config.d/*.conf near its top. A drop-in named 50-cloud-init.conf
+# therefore wins over anything written further down, including the two tasks
+# above. Ours sorts ahead of it, which is what makes "no" the answer.
+- name: Write a drop-in that sorts ahead of a distribution one
+  ansible.builtin.copy:
+    dest: /etc/ssh/sshd_config.d/00-homelab.conf
+    content: |
+      # Written by ansible/roles/accounts; an edit here is reverted on the next run.
+      PasswordAuthentication {{ sshd_password_auth | ternary('yes', 'no') }}
+      X11Forwarding no
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload sshd
+
+- name: Refuse to run without a known account and a stated policy
+  ansible.builtin.assert:
+    that:
+      - ansible_user | default('') != 'root'
+      - sshd_password_auth is defined
+    fail_msg: >-
+      This play connects as {{ ansible_user | default('an unknown user') }}.
+      Closing password logins is only safe from a named account with a key of
+      its own, and only when sshd_password_auth is set.
