@@ -9,3 +9,7 @@ timezone: Europe/Paris
 kernel_keep: 2
 
 ansible_python_interpreter: /usr/bin/python3
+
+# Every host: key-only SSH. The accounts role writes this into sshd_config and
+# into a drop-in that sorts ahead of a distribution one.
+sshd_password_auth: false
