@@ -82,7 +82,7 @@ hosts-pi.sh backup  <dir>  # copy the state a reflash destroys into <dir>
 hosts-pi.sh restore <dir>  # put it back, then verify
 ```
 
-`setup` writes the compose file and env files from `ansible/playbooks/templates/runners/<host>/`,
+`setup` writes the compose file and the boot files from `ansible/playbooks/templates/runners/<host>/`,
 starts the stack, and refuses to run if the hostname does not match the directory it came from. It is
 idempotent: a second `setup` changes nothing, and `verify` is the same code with the writes removed.
 Since Ansible is not installed on a fresh Pi, the script is bash — and it is the same script the
@@ -152,9 +152,13 @@ The script owns four files on the Pi and nothing else:
 | Path | Why it is in the script |
 |---|---|
 | `/home/vronteix/dockers/docker-compose.yml` | the stack; rendered from the template per host |
-| `/home/vronteix/dockers/pihole.env`, `wg-easy.env` | the two secrets files the templates reference |
 | `/boot/firmware/cmdline.txt`, `config.txt` | the boot line and `arm_64bit=1`; a reflash must reproduce them |
 | `/etc/hostname`, `/etc/hosts` | the name the compose file and Pi-hole's DNS depend on |
+
+`pihole.env`, `wg-easy.env` and `.env` are **not** written by the script: they hold the Pi-hole
+password and the WireGuard key, they are gitignored, and writing them would mean either a secret in
+git or a secret invented on each run. The script requires them and refuses to continue without them,
+naming the missing file.
 
 `backup` copies `/home/vronteix/dockers` whole — Pi-hole's `etc-pihole` is 57 MB of blocklists and the
 query database, and wg-easy's peer set lives in the same tree — plus the current `config.txt` and
