@@ -61,6 +61,19 @@ class SecretRemovalTests(unittest.TestCase):
             ["envtokensekrit", "authsekrit", "dbsekrit"],
         )
 
+    def test_keys_whose_name_ends_in_key_or_is_auth(self):
+        """A prefix defeats a suffix list that only names whole words: the K3s
+        config's own `etcd-s3-secret-key` is the case the collector's etcd grep
+        exists for, and registries.yaml stores its credential under `auth`."""
+        self.assertSecretsGone(
+            "etcd-s3-secret-key: s3sekrit0001\n"
+            "etcd-s3-access-key: s3access0001\n"
+            "aws_secret_access_key: awssekrit0001\n"
+            "auth: registrysekrit0001\n"
+            "registry_auth: regauthsekrit\n",
+            ["s3sekrit0001", "s3access0001", "awssekrit0001", "registrysekrit0001", "regauthsekrit"],
+        )
+
     def test_yaml_and_json_values(self):
         self.assertSecretsGone(
             'password: yamlsekrit\n"api_key": "jsonsekrit"\nclient-secret: clientsekrit\n',

@@ -9,6 +9,34 @@
 # PasswordAuthentication is `yes` today and their access is two keys
 # (vyrtualsynthese@DESKTOP-I3PJEO5, valentin.ronteix@ashudev.com). Apply it to
 # rbp1 alone with --check --diff first, read that diff, and only then go on.
+#
+# The guard comes first. A check that runs after the change it is supposed to
+# prevent protects nothing: by then the file is written and sshd has been told to
+# read it. What has to be true before the first write is that this play connects
+# as a named account, that the policy is stated, and that the account has a key
+# on disk — because the change below takes the password away.
+- name: Read the account this play connects as
+  ansible.builtin.getent:
+    database: passwd
+    key: "{{ ansible_user }}"
+
+- name: Look for a key that can replace the password
+  ansible.builtin.stat:
+    path: "{{ getent_passwd[ansible_user][4] }}/.ssh/authorized_keys"
+  register: accounts_authorized_keys
+
+- name: Refuse to close password logins on an account that has no key
+  ansible.builtin.assert:
+    that:
+      - ansible_user | default('') != 'root'
+      - sshd_password_auth is defined
+      - accounts_authorized_keys.stat.exists
+      - accounts_authorized_keys.stat.size | default(0) > 0
+    fail_msg: >-
+      This play connects as {{ ansible_user | default('an unknown user') }} and
+      {{ getent_passwd[ansible_user][4] | default('its home') }}/.ssh/authorized_keys
+      holds no key. Without one, the next task takes away the only way back in.
+
 - name: Remove the passwordless sudo grant on the admins group
   ansible.builtin.lineinfile:
     path: /etc/sudoers
@@ -54,13 +82,3 @@
     group: root
     mode: "0644"
   notify: Reload sshd
-
-- name: Refuse to run without a known account and a stated policy
-  ansible.builtin.assert:
-    that:
-      - ansible_user | default('') != 'root'
-      - sshd_password_auth is defined
-    fail_msg: >-
-      This play connects as {{ ansible_user | default('an unknown user') }}.
-      Closing password logins is only safe from a named account with a key of
-      its own, and only when sshd_password_auth is set.

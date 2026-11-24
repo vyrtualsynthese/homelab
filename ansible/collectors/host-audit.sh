@@ -37,8 +37,11 @@ redact() {
       gsub(/[-.]/, "_", t)
       gsub(/^[[:space:]]+|[[:space:]]+$/, "", t)
       sub(/^(export|set|declare[[:space:]]+-x|readonly)[[:space:]]+/, "", t)
-      if (t ~ /^(token|secret|pass|password|passwd|api_key|apikey|private_key|privatekey|preshared_key|presharedkey|psk|pre_shared_key|authorization|auth_token|authtoken|client_secret|clientsecret|secret_key|secretkey|access_key|accesskey|access_key_id|secret_access_key|passphrase|credential|credentials|key)$/) return 1
-      if (t ~ /_(token|secret|password|passwd|api_key|apikey|private_key|preshared_key|psk|passphrase|credential|credentials)$/) return 1
+      if (t ~ /^(token|secret|pass|password|passwd|api_key|apikey|private_key|privatekey|preshared_key|presharedkey|psk|pre_shared_key|authorization|auth_token|authtoken|auth|client_secret|clientsecret|secret_key|secretkey|access_key|accesskey|access_key_id|secret_access_key|passphrase|credential|credentials|key)$/) return 1
+      # `key` as a suffix covers the shapes a prefix defeats: etcd-s3-secret-key,
+      # aws_secret_access_key, ssh_key, registry_auth. Nothing in this homelab
+      # uses *_key for a value that is safe to print.
+      if (t ~ /_(token|secret|password|passwd|api_key|apikey|private_key|preshared_key|psk|passphrase|credential|credentials|key|auth)$/) return 1
       if (t ~ /(token|secret|password|passwd|privatekey|presharedkey|apikey)$/) return 1
       return 0
     }

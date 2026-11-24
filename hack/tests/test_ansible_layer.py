@@ -104,7 +104,12 @@ def test_accounts_sets_its_own_sshd_config_and_the_first_word_wins():
 
 def test_system_pins_the_running_kernel_before_any_autoremove():
     text = (ANSIBLE / "roles/system/tasks/main.yml").read_text()
-    order = [text.index(needle) for needle in ("uname -r", "apt-mark", "autoremove")]
+    tasks = [
+        "- name: Read the kernel this host booted",
+        "- name: Mark every other kernel automatic",
+        "- name: Remove what nothing references any more",
+    ]
+    order = [text.index(task) for task in tasks]
     assert order == sorted(order), "autoremove must come after the running kernel is pinned"
 
 
@@ -169,15 +174,25 @@ def test_firewall_takes_its_addresses_from_the_inventory():
     assert "hostvars" in text and "ansible_host" in text
 
 
+def export_lines():
+    """The lines the template emits, without its comments or its Jinja setup."""
+    tpl = (ANSIBLE / "roles/nfs/templates/exports.j2").read_text()
+    return [
+        line
+        for line in tpl.splitlines()
+        if line.strip() and not line.strip().startswith(("#", "{%"))
+    ]
+
+
 def test_exports_drop_mnt_and_squash_root():
     tpl = (ANSIBLE / "roles/nfs/templates/exports.j2").read_text()
     assert "/mnt/storage/nfs/plexmedia" in tpl
     assert "no_root_squash" not in tpl
     assert "insecure" not in tpl
     assert "root_squash" in tpl
-    lines = [l for l in tpl.splitlines() if l.strip() and not l.strip().startswith("#")]
+    lines = export_lines()
     assert len(lines) == 8, f"expected the eight the cluster mounts, got {len(lines)}"
-    assert not any(l.split()[0] == "/mnt" for l in lines), "/mnt must not be exported"
+    assert not any(line.split()[0] == "/mnt" for line in lines), "/mnt must not be exported"
 
 
 def test_the_certificate_store_belongs_to_the_squashed_identity():
@@ -213,9 +228,7 @@ def test_every_notify_names_a_handler_that_exists():
 
 
 def test_every_export_line_attaches_the_options_to_each_address():
-    tpl = (ANSIBLE / "roles/nfs/templates/exports.j2").read_text()
-    lines = [l for l in tpl.splitlines() if l.strip() and not l.strip().startswith("#")]
-    for line in lines:
+    for line in export_lines():
         assert "regex_replace" in line, (
             "exports(5) gives an option list to the host it follows: a bare "
             "address takes the defaults instead of this file's options"
@@ -248,3 +261,69 @@ def test_readme_no_longer_claims_the_layer_does_not_work():
     text = (REPO / "ansible/README.MD").read_text()
     assert "does not currently work" not in text
     assert "make check" in text
+
+
+def test_the_edge_firewall_keeps_the_host_exporters_reachable():
+    """9100 and 9323 are `network_mode: host`, so unlike a published container
+    port they reach INPUT. Prometheus scrapes both on both Pis; default deny
+    without a rule takes them off the monitoring silently."""
+    rules = yaml.safe_load((ANSIBLE / "roles/firewall/vars/main.yml").read_text())
+    edge = {(r["port"], r["proto"]): r["source"] for r in rules["firewall_rules_edge"]}
+    assert edge[(9100, "tcp")] == "nodes"
+    assert edge[(9323, "tcp")] == "nodes"
+
+
+def test_every_firewall_rule_names_a_source_set_that_resolves():
+    rules = yaml.safe_load((ANSIBLE / "roles/firewall/vars/main.yml").read_text())
+    defined = set()
+    resolve = (ANSIBLE / "roles/firewall/tasks/resolve.yml").read_text()
+    for name in ("lan", "nodes", "servers", "vpn"):
+        assert f"'{name}':" in resolve, f"resolve.yml defines no source set {name!r}"
+        defined.add(name)
+    for key in ("firewall_rules_cluster", "firewall_rules_edge", "firewall_rules_nas"):
+        for rule in rules[key]:
+            assert rule["source"] in defined, f"{key}: unknown source {rule['source']!r}"
+
+
+def test_every_export_maps_the_squashed_root_to_the_writer():
+    """Mapping root to `nobody` turns a container's start-up chown into EACCES on
+    files the app itself owns. 1100 is what every writer here runs as."""
+    for line in export_lines():
+        assert "anonuid=1100" in line and "anongid=1100" in line, line
+
+
+def test_the_read_back_checks_the_table_not_its_line_count():
+    """`exportfs -v` prints one line per export and client, so a count of 8 is
+    true only while eight things mount."""
+    text = (ANSIBLE / "roles/nfs/tasks/main.yml").read_text()
+    assert "stdout_lines | length" not in text
+    assert "no_root_squash" in text and "'^/mnt\\s'" in text
+
+
+def test_snapraid_scrub_is_reachable_when_status_reports_unsynced_blocks():
+    """`snapraid status` exits 2 while blocks are unsynced, which on a live array
+    is the normal outcome. Under `set -e` that ended the script before the scrub."""
+    script = (ANSIBLE / "roles/snapraid/files/snapraid-sync.sh").read_text()
+    status = script.index("/usr/bin/snapraid status")
+    scrub = script.index("/usr/bin/snapraid scrub")
+    assert status < scrub
+    assert "|| rc=$?" in script
+    assert "2)" in script, "exit 2 must be classified, not treated as a failure"
+
+
+def test_the_kernel_kept_beside_the_running_one_is_a_different_kernel():
+    """If the host booted the newest image, `tail -n keep-1` over all of them
+    returns that same image twice and autoremove takes the rollback kernel."""
+    text = (ANSIBLE / "roles/system/tasks/main.yml").read_text()
+    tail = text.index("tail -n $(( keep - 1 ))")
+    assert 'grep -vx "$running"' in text[:tail], (
+        "the running kernel has to leave the set before the newest others are chosen"
+    )
+
+
+def test_accounts_checks_for_a_key_before_it_takes_the_password_away():
+    text = (ANSIBLE / "roles/accounts/tasks/main.yml").read_text()
+    guard = text.index("authorized_keys")
+    write = text.index("PasswordAuthentication {{")
+    assert guard < write, "a guard that runs after the change protects nothing"
+    assert "getent" in text
