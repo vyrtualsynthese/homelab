@@ -93,6 +93,20 @@ def test_accounts_closes_password_auth_for_every_host():
     assert "X11Forwarding" in text
 
 
+def test_the_sshd_edits_match_active_directives_only():
+    """`lineinfile` rewrites the last match, so `^#?\\s*X11Forwarding` edits the
+    commented example at the bottom of Ubuntu's file and leaves the active
+    `X11Forwarding yes` above it — which still wins, sshd taking the first value."""
+    tasks = yaml.safe_load((ANSIBLE / "roles/accounts/tasks/main.yml").read_text())
+    patterns = {
+        task["ansible.builtin.lineinfile"]["regexp"]
+        for task in tasks
+        if isinstance(task, dict) and "ansible.builtin.lineinfile" in task
+        and task["ansible.builtin.lineinfile"]["path"] == "/etc/ssh/sshd_config"
+    }
+    assert patterns == {"^PasswordAuthentication\\s", "^X11Forwarding\\s"}, patterns
+
+
 def test_accounts_sets_its_own_sshd_config_and_the_first_word_wins():
     """A drop-in numbered 50 can set PasswordAuthentication yes and win over the
     main file, because sshd takes the first value it reads. Ours has to sort
@@ -327,3 +341,11 @@ def test_accounts_checks_for_a_key_before_it_takes_the_password_away():
     write = text.index("PasswordAuthentication {{")
     assert guard < write, "a guard that runs after the change protects nothing"
     assert "getent" in text
+
+
+def test_the_collections_are_pinned_below_what_the_controller_supports():
+    """community.general 14 needs ansible-core 2.19; the controller here is 2.18,
+    and `make init` installed 14 anyway and then warned on every run."""
+    text = (ANSIBLE / "Makefile").read_text()
+    assert "community.general:>=13.0.0,<14.0.0" in text
+    assert "ansible.posix:>=" in text and "community.docker:>=" in text
