@@ -4,6 +4,17 @@
 # journal: it already reaches Loki, and this homelab has no mail path of its own.
 set -euo pipefail
 
+# A sync of a 51 TB array outlives the night it starts in, and SnapRAID refuses a
+# second instance on its own lock: under `set -e` the next 03:17 would be a failed
+# cron run with a `sync starting` in the journal and no `sync finished` after it.
+# This lock turns that collision into a logged skip instead, and `flock` drops it
+# when the process goes away, however it goes away.
+exec 9>/run/lock/snapraid-sync.lock
+if ! flock -n 9; then
+  logger -t snapraid "a run is still going; skipping this one"
+  exit 0
+fi
+
 rc=0
 
 logger -t snapraid "sync starting"
