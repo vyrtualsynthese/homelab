@@ -1,17 +1,17 @@
 # Moving K3s to a new minor
 
 Date: 2026-11-21/22 and 2026-11-24 · **Proved** on `v1.30.1+k3s1` → `v1.31.14+k3s1`, then
-`v1.31.14+k3s1` → `v1.33.13+k3s2`, four nodes, one at a time
+`v1.31.14+k3s1` → `v1.33.13+k3s2`, then → `v1.36.6+k3s1`, four nodes, one at a time
 
 > **In one line.** The `system-upgrade-controller` swaps one node's k3s binary, the node restarts, and
 > the next node waits for a human to point the plan at it.
 >
-> **Use it when** K3s has to move to a new minor version (1.34 next), or a single node is stuck on an
-> older one · **Verified** 2026-11-24: all four nodes on `v1.33.13+k3s2`, containerd `2.2.5-k3s1.33`,
-> Ready, etcd `ok`, both Plans pinned to the version they reached, and the controller's kubectl image
-> moved to `v1.33.13` with its Deployment rolled; the climbs themselves proved 2026-11-21/22 (one
-> minor) and 2026-11-24 (two, back to back), four nodes each time, quorum never lost, and a 6-second
-> ingress blip on `streaming` in the second · **Kind:** how-to
+> **Use it when** K3s has to move to a new minor version, or a single node is stuck on an older one.
+> The next step up is 1.37 and that is a decision, not a scheduled hop.
+> · **Verified** 2026-11-24: all four nodes on `v1.36.6+k3s1`, containerd `2.3.7-k3s1.36`, Ready,
+> etcd `ok`, both Plans pinned to the version they reached, controller kubectl `v1.36.2`; five minors
+> climbed in three chains on this procedure, quorum never lost, and no ingress blip in the last three
+> · **Kind:** how-to
 >
 > **Sources** `cluster/infrastructure/system-upgrade/controller.yaml`,
 > `cluster/infrastructure/system-upgrade/controller-env.yaml`, `docs/runbooks/restore-etcd.md`, and the
@@ -35,6 +35,20 @@ rescheduled, which matters because every workload here is pinned to a named node
 reschedule anyway.
 
 ## Before you start
+
+**Argo CD's supported range is 1.34–1.37.** On 1.33 the controller is one minor below its floor and
+says so; that warning is expected and is not a new fault. It disappears at 1.34 and comes back at
+1.37, which the plan does not reach.
+
+**The kubelet refuses cgroup v1 from 1.35.** All four nodes are on cgroup v2, checked on
+2026-11-24 by reading the host's mount table for `/sys/fs/cgroup`:
+
+```bash
+# privileged pod pinned to the node, host root at /host
+grep ' /sys/fs/cgroup ' /host/proc/1/mountinfo | sed 's/.* - //' | cut -d' ' -f1
+```
+
+`cgroup2` on every node; the driver was already `systemd`.
 
 **1. Capture the pre-flight.** Write it to a file and compare against it afterwards. The numbers that
 changed on 2026-11-21 were only the node versions and the container restart counts.
@@ -99,7 +113,7 @@ spec:
   tolerations: [{operator: Exists}]
   containers:
     - name: snap
-      image: docker.io/rancher/k3s:v1.33.13-k3s2   # the version the node runs *before* the hop
+      image: docker.io/rancher/k3s:v1.36.6-k3s1   # the version the node runs *before* the hop
       securityContext: {privileged: true}
       command: [/bin/sh, -c, "chroot /host /usr/local/bin/k3s etcd-snapshot save --name pre-<version> && ls -l /host/var/lib/rancher/k3s/server/db/snapshots | tail -3"]
       volumeMounts: [{name: host-root, mountPath: /host}]
@@ -158,7 +172,7 @@ the per-claim subdirectories are writable. A copy there would land inside a back
 ```bash
 kubectl -n system-upgrade get plan server-plan -o jsonpath='{.spec}'
 kubectl -n system-upgrade patch plan server-plan --type=merge -p '{"spec":{
-  "version":"v1.34.13+k3s1",
+  "version":"v1.36.6+k3s1",
   "nodeSelector":{"matchExpressions":[
     {"key":"node-role.kubernetes.io/control-plane","operator":"In","values":["true"]},
     {"key":"kubernetes.io/hostname","operator":"In","values":["nuc0"]}]}}}'
@@ -168,14 +182,18 @@ kubectl -n system-upgrade patch plan server-plan --type=merge -p '{"spec":{
 expression is not decoration — without it the controller upgrades the next matching node the moment the
 first one reports the new version.
 
-**5. Move the controller's kubectl client with the plan.** Both plans use `cordon: true`, an API call
-the controller makes itself, so no job has ever run `rancher/kubectl`; the pin sits unused in
-`cluster/infrastructure/system-upgrade/controller-env.yaml`, on the node binary's minor. It is a
-client, supported one minor either side of the API server, so bump it when the climb leaves that
-window — before any plan first sets `drain` — and restart the controller to pick it up, because the
-value is read once at container start:
+**5. Move the controller's kubectl client with the plan.** Both plans use `cordon: true`, which puts a
+`cordon` **init container** in every upgrade job, its image taken from
+`SYSTEM_UPGRADE_JOB_KUBECTL_IMAGE` in `cluster/infrastructure/system-upgrade/controller-env.yaml`. The
+pin is on the node binary's minor: kubectl supports one minor either side of the API server, and the
+value is read once at container start, so bump it before the hop that leaves the window and restart
+the controller. The tag must be one `rancher/kubectl` actually publishes — it tracks Kubernetes
+patches, not k3s ones, and a name it does not have leaves the job in `Init:ImagePullBackOff` until
+its deadline while the node stays where it was:
 
 ```bash
+# the newest published tag on the minor, before the climb
+curl -s "https://hub.docker.com/v2/repositories/rancher/kubectl/tags?page_size=100" | jq -r '.results[].name' | grep '^v1\.36\.'
 kubectl apply -f cluster/infrastructure/system-upgrade/controller-env.yaml
 kubectl -n system-upgrade rollout restart deploy/system-upgrade-controller
 ```
@@ -254,7 +272,10 @@ first version of this paragraph said the GPU "survived" on the strength of the p
 
 ## What actually happened on 2026-11-24
 
-Two minors back to back, same four nodes, same order.
+Five minors in one evening, three chains: 1.32 and 1.33, then 1.34, 1.35 and 1.36, each chain
+`nuc0` → `rbp2` → `streaming` → `nas`.
+
+**1.32 and 1.33**
 
 | Node | 1.32 to `Ready` | 1.33 to `Ready` | Notes |
 |---|---|---|---|
@@ -263,18 +284,31 @@ Two minors back to back, same four nodes, same order.
 | `streaming` | 27 s | 22 s | ingress down **6 s**, three failed probes 01:16:24–01:16:28 |
 | `nas` | 27 s | 32 s | PostgreSQL and the NFS exports unaffected |
 
-- **The GPU held.** `nvidia.com/gpu` read `1` after each `streaming` step; the 2026-11-22 fault did not
-  recur.
 - **`dashy` flipped not-ready after each `nuc0` restart and recovered on its own.** Its probe period is
   90 s, so a readiness change can lag the node by that long; the pod kept serving throughout (`wget`
   from a pod on `nuc0` answered while the kubelet still said not-ready). A `ClusterIPNotAllocated`
   event on its Service repaired itself in the same window.
-- **Backups replayed after each node that has one:** `nuc0` 636 files, `streaming` 787, `nas` 608,
-  each ending in a new snapshot, then the manual job deleted.
-- **The controller's kubectl image was moved to `v1.33.13` before the second hop**, because `cordon`
-  is the controller's own API call and `v1.31` would have been two minors behind the server.
-- **The Plans were widened to one hostname per hop**, and both end pinned to `v1.33.13+k3s2` with the
-  last node moved (`streaming` on `server-plan`, `nas` on `agent-plan`).
+- **Backups replayed:** `nuc0` 636 files, `streaming` 787, `nas` 608.
+
+**1.34, 1.35 and 1.36**
+
+| Node | 1.34 | 1.35 | 1.36 |
+|---|---|---|---|
+| `nuc0` | ~55 s, by hand (see the trap below) | 32 s | 31 s |
+| `rbp2` | 5 m 31 s, about 4 m of it failed image pulls | 226 s | 215 s |
+| `streaming` | 31 s | 31 s | 32 s |
+| `nas` | 31 s | 31 s | 31 s |
+
+- **containerd ends on `2.3.7-k3s1.36`**; it moved once, at 1.36, with no separate step.
+- **No ingress blip.** A probe every 2 s through each `streaming` step saw no failed sample in 1.34,
+  1.35 or 1.36, unlike the 6-second one at 1.33.
+- **The GPU held.** `nvidia.com/gpu` read `1` after the `streaming` steps in 1.35 and 1.36. It was
+  not recorded after 1.34; the applications came back, which the 2026-11-22 fault proved is not the
+  same check.
+- **Backups replayed after every node that has one**, each ending in a saved snapshot, then the
+  manual job deleted: `nuc0` 639 files at 1.36, `streaming` 786-787, `nas` 608.
+- **The controller's kubectl image is a published tag on the node's minor, not the k3s patch.** See
+  the trap below; it cost fifteen minutes of a failed job at 1.34.
 
 ## Traps
 
@@ -287,6 +321,7 @@ Two minors back to back, same four nodes, same order.
 | a `node-exporter` target reads `up 0` for a minute | the restart window after containerd comes back; it recovers. If it stays 0, the host port is not bound, which containerd 2.x changed |
 | `host-path missing: /host/etc/exports` in a `nuc0` or `streaming` job log | `/etc/exports` exists on `nas` alone. The job prints the line and carries on; it is not a failure |
 | a `backup-node-*` job created by hand sits beside the scheduled ones for days | `kubectl create job --from=cronjob/…` is not a scheduled run, and nothing prunes it as the history limits turn over: the two `first-*` jobs from 2026-11-20 were still there, `Failed`, 25 hours and five scheduled runs later, and read as a live backup failure. Read the log for `snapshot <id> saved`, then `kubectl -n backup delete job <name>` |
+| the upgrade job sits `0/1` in `Init:ImagePullBackOff` until its 900 s deadline, and the node never moves | the cordon init container pulls `SYSTEM_UPGRADE_JOB_KUBECTL_IMAGE`, and the tag named there does not exist. `rancher/kubectl` publishes kubernetes patches, not k3s ones: `v1.34.13` has no image while `v1.34.9` does. Check the tag on Docker Hub before the climb and pin the newest on the node's minor |
 
 ## Rolling back
 
@@ -308,7 +343,8 @@ the snapshot in the bucket predates the change.
 ## After the run
 
 - Both plans stay pinned to the version they reached; the last hostname list names the last node
-  upgraded. Move both when the next minor is due (holder: homelab card 521, 1.34 to 1.36).
+  upgraded. The 1.32–1.36 climb is done (cards 520 and 521); 1.37 is a decision of its own and has
+  no card yet.
 - Update `AGENTS.md` §7, the plan, and this page with the version as it is now.
 - A K3s upgrade does **not** touch the Traefik release. Confirm it is still this repository's chart
   and not a K3s-bundled addon: `kubectl -n kube-system get deploy traefik -o jsonpath='{.spec.template.spec.containers[0].image}'`

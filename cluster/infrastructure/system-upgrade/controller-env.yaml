@@ -22,12 +22,16 @@ data:
   # it yet: the value was v1.25.4, three years old and six minors behind the
   # node binary the first drain would have driven.
   #
-  # Kept on the minor of the node binary — v1.33.13 on all four nodes
+  # Kept on the minor of the node binary — v1.36.6 on all four nodes
   # (2026-11-24) — because kubectl supports one minor either side of the API
-  # server it talks to. Bump it with the climb, beside the Plans' `version`;
-  # Renovate cannot see an image named in a ConfigMap value, so nothing else
-  # moves this line.
-  SYSTEM_UPGRADE_JOB_KUBECTL_IMAGE: "rancher/kubectl:v1.33.13"
+  # server it talks to. The patch is whatever `rancher/kubectl` publishes on
+  # that minor, which is not the k3s patch: `v1.34.13` has no image, and a job
+  # that names it sits in Init:ImagePullBackOff until its deadline. Check the
+  # tag exists before the climb (`hub.docker.com/v2/repositories/rancher/kubectl/tags`)
+  # and take the newest published one on the minor. Bump it with the climb,
+  # beside the Plans' `version`; Renovate cannot see an image named in a
+  # ConfigMap value, so nothing else moves this line.
+  SYSTEM_UPGRADE_JOB_KUBECTL_IMAGE: "rancher/kubectl:v1.36.2"
   SYSTEM_UPGRADE_JOB_PRIVILEGED: "true"
   SYSTEM_UPGRADE_JOB_TTL_SECONDS_AFTER_FINISH: "900"
   # How often the controller re-reads the Plans, which is how long a plan
