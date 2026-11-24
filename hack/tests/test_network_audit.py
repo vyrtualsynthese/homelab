@@ -74,6 +74,26 @@ class RouterOSRedactionTests(unittest.TestCase):
         out = self.redact('/snmp community set [ find default=yes ] name=public community=s3cr3t\n')
         self.assertNotIn("s3cr3t", out)
 
+    def test_the_snmp_community_carried_by_name_is_removed(self):
+        out = self.redact(
+            '/snmp community add name=lan9xyz comment="discovery"\n'
+            '/interface wireguard peers add name=peer1\n'
+        )
+        self.assertNotIn("lan9xyz", out)
+        self.assertIn("name=<redacted>", out)
+        self.assertIn("name=peer1", out)
+
+    def test_a_value_that_reopens_a_quote_is_redacted_to_the_end_of_the_line(self):
+        out = self.redact('password="ab"cd"\n')
+        self.assertNotIn("cd", out)
+        self.assertIn("password=<redacted>", out)
+
+    def test_a_backslash_escaped_quote_in_a_password_does_not_leak_the_tail(self):
+        out = self.redact('password="a\\"b"\n')
+        self.assertNotIn('a\\"b', out)
+        self.assertNotIn("b", out)
+        self.assertIn("password=<redacted>", out)
+
     def test_non_secrets_survive(self):
         line = ('/interface wireguard peers add public-key="AAAAB3NzaC1yc2E=" allowed-address=10.8.0.2/32 '
                 'comment="uplink to the NAS" name=peer1\n')
