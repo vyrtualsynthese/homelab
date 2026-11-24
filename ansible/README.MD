@@ -51,3 +51,39 @@ make setup-node    # prompts for SSH and become passwords
 
 Treat both commands as broken until W8 lands. If you need to touch a host, do it by hand and record
 what you did in `docs/`.
+
+## Seeing the network hardware without touching it
+
+`collectors/network-audit.sh` reads the two MikroTik switches and prints one Markdown page. Each
+switch gets the device's own `/export`, a status block with its identity, model, serial, RouterOS
+version and uptime, and a table of every port with its link state and negotiated speed. After the two
+switches comes the Livebox: the status its login page answers with, the firmware build named in that
+page, and the port forwards, marked as remembered rather than read because they need the admin
+password. What looks like a credential inside an export comes out as `<redacted>`.
+
+Nothing is written and nothing is changed: the switch half runs `/print`, `/export` and one port-state
+query each, and the Livebox gets a single unauthenticated GET.
+
+It signs in with a key, as a RouterOS user carrying only the `read` policy. Create that account once
+per switch:
+
+```
+/user group add name=audit policy=read,test
+/user add name=audit group=audit
+/user ssh-keys import public-key-file=network-audit.pub user=audit
+```
+
+Then, from this directory:
+
+```bash
+./collectors/network-audit.sh > /tmp/opencode/network-audit.md
+NET_AUDIT_FROM_FIXTURE=../hack/fixtures/network ./collectors/network-audit.sh   # no device touched
+```
+
+The default targets are `crs326=192.168.1.11` and `crs309=192.168.1.43`, which `NET_AUDIT_TARGETS`
+overrides; `./collectors/network-audit.sh --help` lists the rest of the variables. The page goes to
+stdout and warnings to stderr, and it is printed whatever the outcome: the exit is 0 when at least one
+switch answered it, 1 when none did, 2 on a usage error.
+
+Do not cite a snapshot page from here until one exists: `hack/check_docs.py` resolves every `docs/*.md`
+path in the repository and fails on one that is not there yet.
