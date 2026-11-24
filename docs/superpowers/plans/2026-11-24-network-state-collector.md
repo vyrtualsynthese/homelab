@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- Nothing is written to a device. The RouterOS account carries `policy=read,test`; the script never passes `show-sensitive` and never omits `hide-sensitive` on RouterOS 6.
+- Nothing is written to a device. The RouterOS account carries `policy=read,ssh` (SSH access is a RouterOS policy of its own); the script never passes `show-sensitive` and never omits `hide-sensitive` on RouterOS 6.
 - No secret value may reach stdout. The page is committed to git, so a leak is permanent.
 - The script writes no file: no temp file, no log, no cache.
 - Markdown only on stdout; diagnostics go to stderr.
@@ -773,18 +773,26 @@ After the host-audit subsection, before the next `##`:
 switch's own `/export`, its model, serial, RouterOS version, uptime and per-port link state, then
 what the Livebox answers on its login page. It writes nothing and changes nothing.
 
-It signs in with a key, as a RouterOS user carrying only the `read` policy. Create that account
-once per switch:
+It signs in with a key, as a RouterOS user that can sign in, print and export, and change nothing
+else — the `read` policy plus the `ssh` one, because RouterOS counts SSH access as a policy of its own.
 
-    /user group add name=audit policy=read,test
+```bash
+ssh-keygen -t ed25519 -N '' -f ~/.ssh/network-audit
+scp ~/.ssh/network-audit.pub admin@192.168.1.11:
+ssh admin@192.168.1.11
+```
+
+Then in that session, once per switch (the import needs the user to exist):
+
+    /user group add name=audit policy=read,ssh
     /user add name=audit group=audit
     /user ssh-keys import public-key-file=network-audit.pub user=audit
 
-Then:
+Then, from this directory:
 
 ```bash
 ./collectors/network-audit.sh > /tmp/opencode/network-audit.md
-NET_AUDIT_FROM_FIXTURE=hack/fixtures/network ./collectors/network-audit.sh   # no device touched
+NET_AUDIT_FROM_FIXTURE=../hack/fixtures/network ./collectors/network-audit.sh   # no device touched
 ```
 
 Do not cite a snapshot page from here until one exists: `hack/check_docs.py` resolves every

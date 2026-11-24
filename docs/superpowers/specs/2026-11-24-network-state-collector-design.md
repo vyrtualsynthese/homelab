@@ -95,10 +95,14 @@ a public key; the script then authenticates with `ssh -i`. No password appears i
 environment variable or this repository.
 
 ```
-/user group add name=audit policy=read,test
+/user group add name=audit policy=read,ssh
 /user add name=audit group=audit
 /user ssh-keys import public-key-file=network-audit.pub user=audit
 ```
+
+The group carries `ssh` because RouterOS counts SSH access as a policy of its own: a group holding
+`read` alone cannot open the session, whatever else it may read. `test` is not granted — `/export`,
+`/print` and `/interface ethernet monitor` are all `read` commands.
 
 The private key stays in `~/.ssh/`; its path is `NET_AUDIT_KEY`, default `~/.ssh/network-audit`.
 RouterOS builds that predate ed25519 import need an RSA key instead — recorded on the page, not
