@@ -51,10 +51,15 @@
     name: admins
     state: absent
 
+# `lineinfile` rewrites the *last* line its regexp matches, so a pattern that
+# also matches a commented example (`#      X11Forwarding no`, in Ubuntu's
+# sshd_config) edits the example and leaves the real directive alone — which then
+# wins, because sshd takes the first value it reads. Both patterns below match an
+# active directive only.
 - name: State the password-login policy in the main sshd config
   ansible.builtin.lineinfile:
     path: /etc/ssh/sshd_config
-    regexp: '^#?\s*PasswordAuthentication\s'
+    regexp: '^PasswordAuthentication\s'
     line: "PasswordAuthentication {{ sshd_password_auth | ternary('yes', 'no') }}"
     validate: sshd -t -f %s
   notify: Reload sshd
@@ -62,7 +67,7 @@
 - name: Turn X11 forwarding off
   ansible.builtin.lineinfile:
     path: /etc/ssh/sshd_config
-    regexp: '^#?\s*X11Forwarding\s'
+    regexp: '^X11Forwarding\s'
     line: X11Forwarding no
     validate: sshd -t -f %s
   notify: Reload sshd
