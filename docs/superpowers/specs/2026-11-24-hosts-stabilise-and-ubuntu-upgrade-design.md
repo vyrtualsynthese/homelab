@@ -204,13 +204,16 @@ upgrade is the one night you want the previous night's copy.
 
 ## Risks
 
-**The Quadro P400 and the 26.04 kernel.** The module is DKMS-built against five kernels today, the
-newest being the 6.8.0-149 the host runs. 26.04 ships a newer kernel than that, and the 580 branch is
-the last one NVIDIA's release notes list for Pascal cards — so the driver will not get a new major
-release to build against. Either the 580 source compiles against the new kernel as it stands, or
-`streaming` can never take 26.04 and the destination for that host becomes "stay on 24.04, which is
-supported until 2029". **This is decided by an experiment, not by reading release notes**: build the
-module against a 26.04 kernel in a throwaway VM before `streaming` is touched.
+**The Quadro P400 and the 26.04 kernel — answered 2026-11-24: the 580 module compiles.** The module is
+DKMS-built against five kernels today, the newest being the 6.8.0-149 the host runs; 26.04 ships 7.0.0
+instead, and the 580 branch is the last one NVIDIA's release notes list for Pascal cards, so no new
+major release will arrive to build against. Ubuntu packages that same branch — `nvidia-dkms-580-server`
+580.178.04, the `nvidia-srv/580.178.04` entry `streaming` already carries — and DKMS built it against
+both 26.04 kernels, GA `7.0.0-14` and updates `7.0.0-44`, with zero compile errors; NVIDIA's own
+580.178.04 `.run` source builds the same way. The driver therefore does not hold `streaming` on 24.04.
+What the experiment does not prove is that the module **loads** and drives the card on the new kernel:
+that is the phase-4 check after the reboot, where `nvidia-smi -L` and a transcode decide, and the
+rollback is hop 1 back onto 24.04.
 
 **The union filesystem across two hops.** `nas` runs mergerfs over six ext4 disks with snapraid parity
 above it. mergerfs is a userspace FUSE mount whose behaviour follows the kernel it was built for, and
@@ -261,9 +264,11 @@ Per host, after each phase, in this order:
 
 ## Open questions
 
-1. **Does the P400 module build against the 26.04 kernel?** The experiment above settles it, and it
-   can run before any host moves. If the answer is no, `streaming` stays on 24.04 and the design says
-   so rather than discovering it at phase 4.
+1. **Does the P400 module build against the 26.04 kernel? Answered 2026-11-24: yes.** A throwaway
+   26.04.1 container with `linux-headers-generic` built `nvidia-dkms-580-server` 580.178.04 for both
+   GPU-relevant kernels — `7.0.0-44` (updates) and `7.0.0-14` (GA) — and `dkms status` prints
+   `nvidia-srv/580.178.04, 7.0.0-44-generic, x86_64: installed`, the same module name and version
+   `streaming` runs today. `streaming` takes the 26.04 hop; loading and playback are proved at phase 4.
 2. **Does an official Raspberry Pi Ubuntu 26.04.1 image exist**, or is the Pis' path a 26.04 base image
    plus `rpi-eeprom` and the `-raspi` kernel? `rbp0` being offered 26.04.1 proves the *release* exists
    for arm64; it does not prove an installable image does.
