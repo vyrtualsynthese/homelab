@@ -7,8 +7,18 @@
 # `autoremove` stays off here on purpose: the system role pins the running
 # kernel and then collects what nothing references, in the same play, and it has
 # to be the only task that removes packages nobody named.
+# Byte sizes of the files, not `du`: a directory's own blocks round `du -sm` up
+# to 1 MB, so an emptied cache still measured 1 and `apt clean` reported
+# `changed` on every run of a host that was already correct.
 - name: Measure the package cache before emptying it
-  ansible.builtin.command: du -sm /var/cache/apt/archives
+  ansible.builtin.command:
+    argv:
+      - find
+      - /var/cache/apt/archives
+      - -type
+      - f
+      - -printf
+      - '%s\n'
   register: packages_cache_before
   changed_when: false
   check_mode: false
@@ -16,7 +26,7 @@
 - name: Empty the package cache
   ansible.builtin.apt:
     clean: true
-  changed_when: packages_cache_before.stdout | default('0') | split | first | int > 0
+  changed_when: packages_cache_before.stdout_lines | default([]) | map('int') | sum > 0
 
 - name: Find the installed packages each pattern names
   ansible.builtin.command:

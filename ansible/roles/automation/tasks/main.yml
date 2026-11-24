@@ -1,0 +1,98 @@
+---
+# The account unattended runs log in as, and the one place a passwordless grant
+# survives.
+#
+# It exists because the layer was a dead end without it: `accounts` removes
+# `%admins ALL=(ALL) NOPASSWD: ALL`, `become` then asks for a password no
+# unattended run can type, and the first apply aborted one task later with
+# "Missing sudo password". The grant moves from a group to one named account, so
+# the human account keeps `%sudo` — a password, typed interactively — and the
+# sudo log names the identity that acted instead of saying `vronteix` twice.
+# The trade is written down in docs/decisions/2026-11-24-automation-sudo-account.md.
+#
+# The bootstrap is two runs, and the order is the safety:
+#
+#   ansible-playbook playbooks/site.yml -e ansible_user=vronteix --tags automation
+#   ansible-playbook playbooks/site.yml
+#
+# The first creates this account while the human grant is still in force. The
+# second connects as the account, so `accounts` — which removes the human grant
+# only under that condition — cannot take away the path it is using.
+
+- name: Read the account automation inherits its keys from
+  ansible.builtin.getent:
+    database: passwd
+    key: "{{ automation_key_source_user }}"
+  tags: [automation]
+
+- name: Note where that account keeps the keys that already log in
+  ansible.builtin.set_fact:
+    automation_key_source: "{{ getent_passwd[automation_key_source_user][4] }}/.ssh/authorized_keys"
+  tags: [automation]
+
+- name: Read that file before creating an account no key can reach
+  ansible.builtin.stat:
+    path: "{{ automation_key_source }}"
+  register: automation_key_source_stat
+  tags: [automation]
+
+- name: Stop before an account exists that nothing can log in to
+  ansible.builtin.assert:
+    that:
+      - automation_key_source_stat.stat.exists
+      - automation_key_source_stat.stat.size | default(0) > 0
+    fail_msg: >-
+      {{ automation_key_source }} holds no key. An account created without one
+      cannot be logged in to, and the run that removes the human grant would
+      remove the only way in.
+  tags: [automation]
+
+- name: Create the automation account, key-only
+  ansible.builtin.user:
+    name: "{{ automation_user }}"
+    shell: /bin/bash
+    create_home: true
+    password_lock: true
+    state: present
+  tags: [automation]
+
+- name: Give it a home for its keys
+  ansible.builtin.file:
+    path: "/home/{{ automation_user }}/.ssh"
+    state: directory
+    owner: "{{ automation_user }}"
+    group: "{{ automation_user }}"
+    mode: "0700"
+  tags: [automation]
+
+# Read on the host and written there: the controller's ~/.ssh is off limits to an
+# agent, and a `*.pub` in the tree is a committed identity. This account accepts
+# what the human account already accepts, so the role trusts nothing new — and a
+# key removed from the human account is still a key that gets in, which is why
+# both files are named here.
+- name: Give it the keys the human account already accepts
+  ansible.builtin.copy:
+    src: "{{ automation_key_source }}"
+    dest: "/home/{{ automation_user }}/.ssh/authorized_keys"
+    remote_src: true
+    owner: "{{ automation_user }}"
+    group: "{{ automation_user }}"
+    mode: "0600"
+  tags: [automation]
+
+# `0440` and validated: a typo in this file takes sudo away from the account
+# every unattended run depends on, and `visudo -cf` refuses to write one. The
+# content names one account and no group — a group grant follows every account
+# that joins it, which is how the old one spread.
+- name: Write the one passwordless grant this layer keeps
+  ansible.builtin.copy:
+    dest: /etc/sudoers.d/00-homelab-automation
+    content: |
+      # Written by ansible/roles/automation; an edit here is reverted on the next run.
+      # One account, not a group.
+      {{ automation_user }} ALL=(ALL) NOPASSWD: ALL
+    owner: root
+    group: root
+    mode: "0440"
+    validate: visudo -cf %s
+  tags: [automation]
