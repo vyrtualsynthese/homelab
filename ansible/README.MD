@@ -1,54 +1,77 @@
 # Ansible
 
-Host preparation for the six machines. **This directory does not currently work, and it could not
-rebuild these hosts even if it ran.** Both statements are established in
-[`docs/audit/ansible-hosts.md`](../docs/audit/ansible-hosts.md).
+Host preparation for the six machines: four K3s nodes upgraded in place, two edge Pis reflashed.
+Everything a host needs that is not in a container is described here, and `make check` is what says
+whether a host still matches.
 
-## Why it does not work
+```bash
+cd ansible
+make init                      # once: install the collections the roles use
+make check                     # the drift report, --check --diff, changes nothing
+make apply                     # converge a host
+make lint                      # ansible-lint over the whole layer
+```
 
-- **No inventory.** There is no `inventory`, no `group_vars`, no `host_vars` and no `ansible.cfg`
-  anywhere in this repo or in its git history. The `Makefile` calls `ansible-playbook` without `-i`,
-  so host names and connection details live outside version control and nobody can reconstruct them
-  from here.
-- **Missing source files.** The playbook copies `pihole.env` and `wg-easy.env`, which `.gitignore`
-  excludes. It fails as written.
-- **Stale for the platform.** The Docker apt repository is pinned to `focal` while the nodes run
-  Ubuntu 22.04, `apt_key` is removed in current Ansible, and `upgrade-all.yaml` uses the legacy
-  `docker_compose` v1 module while `setup-node.yaml` uses `docker_compose_v2`.
-- **`upgrade-all.yaml` is unsafe as written.** It runs a full `apt upgrade` on all six hosts in
-  parallel with no reboot, no drain and no control-plane ordering. On a three-server etcd cluster
-  that is how quorum is lost.
+**The rule: `make check` is the drift report, and a host that is correct prints no `changed`.** A
+`changed` line is either a host drifting from this repository or a task that is not idempotent; both
+are defects to read, not noise to tolerate.
 
-## What it does not cover
+`make check` and `make apply` reach every host in the inventory. To work one host at a time — which is
+how the first run of a role that touches a firewall or an export list must be done — pass a limit:
 
-A rebuild from this repository cannot reproduce the platform. Missing: K3s install, role assignment,
-cluster token and `config.yaml`; containerd; node labels and taints; NFS exports; the GPU host stack;
-a firewall; WireGuard keys and Pi-hole secrets; the System Upgrade Controller plans.
+```bash
+ansible-playbook playbooks/site.yml --check --diff --limit nuc0
+ansible-playbook playbooks/site.yml --limit nuc0
+```
 
-## Backups
+## What is here
 
-This directory holds no backup code any more. `backup-setup.yaml`, `restic_env.yaml.dist` and the
-three `backup-scripts/` were removed on 2026-11-20: they wrote AWS credentials in plaintext to
-`/etc/environment`, dumped a SQLite `state.db` that an etcd cluster does not have, and backed up a
-MinIO path deleted in July 2024.
+| Path | What it is |
+|---|---|
+| `inventory/hosts.yml` | the six hosts, in four groups. An address is written here and nowhere else |
+| `inventory/group_vars/`, `inventory/host_vars/` | the values per group and per host; beside the inventory, where Ansible reads them |
+| `playbooks/site.yml` | the one entry point; every host takes every role, and a role skips what it does not own |
+| `roles/` | one role per concern, below |
+| `pi/hosts-pi.sh` | the two Pis, which are reflashed and so cannot be configured by Ansible — see `pi/README.md` |
+| `collectors/host-audit.sh` | a read-only report of what a host actually is |
 
-Backups are `cluster/helm/backup` in the homelab repository: one OVH bucket in `GRA`, four restic
-repositories, a nightly job per node plus one for the NFS exports. Its coverage matrix is
-`cluster/helm/backup/values.yaml`, and [`docs/how-it-works/backups.md`](../docs/how-it-works/backups.md)
-explains it.
+| Role | Hosts | What it changes |
+|---|---|---|
+| `baseline` | all | marks the host as managed from here |
+| `accounts` | all | removes the `%admins ALL=(ALL) NOPASSWD: ALL` grant and the group, closes password logins, turns X11 forwarding off |
+| `packages` | all | removes what `inventory/host_vars/<host>.yml` names, after resolving each pattern against dpkg |
+| `system` | all | one time zone, two kernels kept (the running one and the newest other), `apt autoremove --purge`, the `rc` residue purged |
+| `firewall` | all | `ufw`, default deny in, the K3s and NFS ports opened to the addresses that use them |
+| `nfs` | `storage` | the eight exports the cluster mounts, root squashed, `sync` |
+| `snapraid` | `storage` | a nightly sync from cron, without the Python 2 runner it used to call |
 
-What this playbook used to cover on the edge, and still does not: the two Pis' data. Their compose
-stacks are in `playbooks/templates/runners/`, so the configuration is in git; anything they keep
-outside those files is not backed up anywhere, by decision, until an edge stream exists.
+The roles are ordered in `site.yml`: `packages` before `system`, because the removals create orphans
+and the system role is the one that collects them after it has named the running kernel.
+
+## What it deliberately does not do
+
+- **No release upgrade.** Nothing here runs `do-release-upgrade`. Moving a host between Ubuntu
+  releases is a decision with a reboot, a rollback and a node drain attached, and the runbooks are
+  `docs/runbooks/k3s-upgrade.md` and (for the Pis) `pi/README.md`.
+- **No K3s install, no cluster token, no node labels.** The cluster belongs to
+  `cluster/argocd` and `cluster/helm`; this layer is the host under it.
+- **No backups.** Those are `cluster/helm/backup`, one OVH bucket in `GRA`, four restic repositories
+  and a nightly job per node. [`docs/how-it-works/backups.md`](../docs/how-it-works/backups.md) is the
+  page.
+- **No secrets.** The Pis' `pihole.env` and `wg-easy.env` are gitignored and the script requires them
+  rather than writing them; every other secret is a Kubernetes Secret, listed in `docs/secrets.md`.
+- **No rule for a published container port.** Docker's DNAT and the CNI's portmap are evaluated in NAT
+  and FORWARD, where `ufw`'s INPUT never looks. The role says so where its rules are, and names
+  `DOCKER-USER` as the place those are filtered.
 
 ## Seeing a host without touching it
 
-`collectors/host-audit.sh` is the one thing in this directory that works today. It reads a host and
-prints a Markdown report — packages, kernel and sysctl, services and timers, network, firewall,
-storage and exports, containers, K3s, GPU, Pi firmware, SSH and sudoers, upgrade readiness, recent
-errors — and writes nothing, starts nothing, changes nothing:
+`collectors/host-audit.sh` reads a host and prints a Markdown report — packages, kernel and sysctl,
+services and timers, network, firewall, storage and exports, containers, K3s, GPU, Pi firmware, SSH and
+sudoers, upgrade readiness, recent errors — and writes nothing, starts nothing, changes nothing:
 
 ```bash
+mkdir -p /tmp/opencode/host-audit
 sudo ./collectors/host-audit.sh > /tmp/opencode/host-audit/$(hostname).md
 sudo AUDIT_NETWORK=1 ./collectors/host-audit.sh   # also asks apt and do-release-upgrade -c
 ```
@@ -60,16 +83,21 @@ credentials, presigned URLs, JWTs, PEM blocks) and the settings it must leave al
 (`PasswordAuthentication no`, `vm.swappiness = 60`, a sudoers line). A non-root run still prints, marks
 what it could not read, and is not worth trusting until it is rerun under `sudo`.
 
-## Intended use
+## What this replaced, and why
 
-```bash
-cd ansible
-make init          # install the required collections
-make setup-node    # prompts for SSH and become passwords
-```
+Until 2026-11-24 this directory was not runnable. There was no inventory and no `ansible.cfg` anywhere
+in the repo or its history, so host names and connection details lived outside version control;
+`setup-node.yaml` copied `pihole.env` and `wg-easy.env`, which `.gitignore` excludes, and wrote
+`%admins ALL=(ALL) NOPASSWD: ALL`; the Docker apt repository was pinned to `focal`; `apt_key` was used
+after Ansible removed it; and `upgrade-all.yaml` ran a full `apt upgrade` on all six hosts at once with
+no reboot, no drain and no control-plane ordering, which on a three-server etcd cluster is how quorum
+is lost. Both playbooks are deleted. The evidence for each statement is in
+[`docs/audit/ansible-hosts.md`](../docs/audit/ansible-hosts.md), and the work that replaced them is
+[`docs/superpowers/plans/2026-11-24-hosts-stabilise.md`](../docs/superpowers/plans/2026-11-24-hosts-stabilise.md).
 
-Treat both commands as broken until W8 lands. If you need to touch a host, do it by hand and record
-what you did in `docs/`.
+Two earlier files went the same way on 2026-11-20: `backup-setup.yaml`, `restic_env.yaml.dist` and the
+three `backup-scripts/` wrote AWS credentials in plaintext to `/etc/environment`, dumped a SQLite
+`state.db` an etcd cluster does not have, and backed up a MinIO path deleted in July 2024.
 
 ## Seeing the network hardware without touching it
 
@@ -123,3 +151,6 @@ when at least one switch answered it, 1 when none did, 2 on a usage error.
 <!-- Do not cite a snapshot page from here until one exists: `hack/check_docs.py` resolves every
 `docs/*.md` path in the repository and fails on one that is not there yet. -->
 
+||||||| parent of 58ba63e9 (📝 docs: what the host layer does, and how to see a host drift from it)
+Treat both commands as broken until W8 lands. If you need to touch a host, do it by hand and record
+what you did in `docs/`.
