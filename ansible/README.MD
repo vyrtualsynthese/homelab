@@ -22,7 +22,12 @@ every run and then uses a collection built against a newer core. Bump a range on
 are defects to read, not noise to tolerate.
 
 `make check` and `make apply` reach every host in the inventory. To work one host at a time — which is
-how the first run of a role that touches a firewall or an export list must be done — pass a limit:
+how the first run of a role that touches a firewall or an export list must be done — pass a limit.
+
+The two edge Pis are the exception until they are reflashed: the 24.04 image has no `ansible`
+account, so a run that includes them answers `unreachable` for those two hosts and exits non-zero.
+Use `--limit cluster` for the drift report until the reflash has put the account on both (card #481),
+and read an `unreachable` there as this state, not as drift.
 
 ```bash
 ansible-playbook playbooks/site.yml --check --diff --limit nuc0
