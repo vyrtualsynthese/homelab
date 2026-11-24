@@ -153,6 +153,7 @@ nav:
       - The docs site's first run: runbooks/docs-site-first-run.md
       - Audits: audit/README.md
       - Ansible and hosts: audit/ansible-hosts.md
+      - Hosts measured (2026-11-24): audit/hosts-2026-11-24.md
       - ArgoCD and Helm: audit/argocd-helm.md
       - Observability and storage: audit/observability-storage.md
       - Media stack (2026-11-18): audit/media-stack-2026-11-18.md
