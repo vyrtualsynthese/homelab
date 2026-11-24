@@ -113,3 +113,27 @@ def test_system_keeps_two_kernels_and_sets_the_zone_from_one_variable():
     tasks = (ANSIBLE / "roles/system/tasks/main.yml").read_text()
     assert "{{ timezone }}" in tasks, "the zone comes from group_vars, not a literal in the role"
     assert "hwclock" not in tasks, "a Raspberry Pi has no RTC; the module would fail on the edge hosts"
+
+
+def test_packages_absent_is_per_host_and_never_touches_the_driver():
+    nas = yaml.safe_load((ANSIBLE / "host_vars/nas.yml").read_text())
+    streaming = yaml.safe_load((ANSIBLE / "host_vars/streaming.yml").read_text())
+    rbp2 = yaml.safe_load((ANSIBLE / "host_vars/rbp2.yml").read_text())
+    assert "intel-i915-dkms" in nas["packages_absent"]
+    assert any(p.startswith("cuda-") and "12-4" in p for p in streaming["packages_absent"])
+    assert all("nvidia" not in p for p in streaming["packages_absent"])
+    assert all("linux-image" not in p for p in rbp2["packages_absent"])
+
+
+def test_packages_resolves_patterns_before_removing():
+    text = (ANSIBLE / "roles/packages/tasks/main.yml").read_text()
+    assert "dpkg-query" in text, "apt would take a glob literally"
+    assert "autoremove: false" in text, "the system role owns autoremove"
+
+
+def test_packages_runs_before_the_role_that_autoremoves():
+    site = (ANSIBLE / "playbooks/site.yml").read_text()
+    assert site.index("- packages") < site.index("- system"), (
+        "the orphans the removals create are collected in the same run, after the "
+        "running kernel is pinned"
+    )

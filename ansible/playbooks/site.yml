@@ -8,4 +8,5 @@
   roles:
     - baseline
     - accounts
+    - packages
     - system

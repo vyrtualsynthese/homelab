@@ -1,0 +1,17 @@
+---
+# `nas` carries three intel-*-dkms packages that build against 5.15.0-91 and
+# -94 only; the running kernel (5.15.0-187) uses the in-tree i915. They are dead
+# weight and each new kernel costs another failed build.
+packages_absent:
+  - intel-i915-dkms
+  - intel-platform-cse-dkms
+  - intel-platform-vsec-dkms
+
+# cse's registration is already broken — /var/lib/dkms/intel-platform-cse-dkms/
+# 2022.28/source holds no dkms.conf — so `dkms status` errors on every run and
+# the purge can leave the directory behind. These are cleared after the purge,
+# and `dkms status` must then be quiet.
+dkms_state_absent:
+  - intel-i915-dkms
+  - intel-platform-cse-dkms
+  - intel-platform-vsec-dkms

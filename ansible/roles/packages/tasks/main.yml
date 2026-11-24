@@ -1,0 +1,53 @@
+---
+# Order: reclaim the cache, resolve every pattern against what dpkg says is
+# installed, remove what resolved, then clear the dkms state a purged package
+# can leave behind. A pattern is never handed straight to apt — it would be a
+# literal that matches nothing, or a shell glob that matches too much.
+#
+# `autoremove` stays off here on purpose: the system role pins the running
+# kernel and then collects what nothing references, in the same play, and it has
+# to be the only task that removes packages nobody named.
+- name: Measure the package cache before emptying it
+  ansible.builtin.command: du -sm /var/cache/apt/archives
+  register: packages_cache_before
+  changed_when: false
+  check_mode: false
+
+- name: Empty the package cache
+  ansible.builtin.apt:
+    clean: true
+  changed_when: packages_cache_before.stdout | default('0') | split | first | int > 0
+
+- name: Find the installed packages each pattern names
+  ansible.builtin.command:
+    argv:
+      - dpkg-query
+      - -W
+      - -f=${Package}\n
+      - "{{ item }}"
+  loop: "{{ packages_absent | default([]) }}"
+  register: packages_hits
+  changed_when: false
+  # A pattern that matches nothing is the normal case on every host but its own.
+  failed_when: false
+
+- name: Remove what resolved
+  ansible.builtin.apt:
+    name: "{{ packages_hits.results | map(attribute='stdout_lines') | flatten | unique }}"
+    state: absent
+    purge: true
+    autoremove: false
+  when: packages_hits.results | map(attribute='stdout_lines') | flatten | length > 0
+
+- name: Clear the dkms registrations a purged package leaves behind
+  ansible.builtin.file:
+    path: "/var/lib/dkms/{{ item }}"
+    state: absent
+  loop: "{{ dkms_state_absent | default([]) }}"
+
+- name: Fail if a broken dkms registration survived the purge
+  ansible.builtin.command: dkms status
+  register: packages_dkms
+  changed_when: false
+  failed_when: "'Error!' in packages_dkms.stdout or 'Error!' in packages_dkms.stderr"
+  when: dkms_state_absent | default([]) | length > 0
