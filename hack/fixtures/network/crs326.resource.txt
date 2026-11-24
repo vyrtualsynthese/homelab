@@ -1,0 +1,9 @@
+                   uptime: 3w2d1h
+                  version: 7.16.1 (stable)
+              free-memory: 201.3MiB
+             total-memory: 256.0MiB
+                      cpu: MIPS 98Kc
+                cpu-count: 2
+           architecture-name: mipsbe
+                  board-name: CRS326-24G-2S+
+                    platform: MikroTik

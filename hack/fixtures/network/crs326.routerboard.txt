@@ -1,0 +1,5 @@
+       routerboard: yes
+             model: CRS326-24G-2S+
+     serial-number: HE908ABCD
+     firmware-type: ar7240
+  current-firmware: 7.16.1

@@ -1,0 +1,24 @@
+# 2026-11-24 08:14:41 by RouterOS 6.49.10
+# software id = WXYZ-5678
+#
+/interface bridge
+add admin-mac=48:A9:8A:00:22:33 auto-mac=no comment=defconf name=bridge protocol-mode=none vlan-filtering=yes
+/interface ethernet
+set [ find default-name=ether1 ] comment=uplink
+/interface wireless security-profiles
+add authentication-types=wpa2-psk mode=dynamic-keys name=defconf wpa2-pre-shared-key="fixture-psk-not-real"
+/interface wireguard
+add listen-port=51820 mtu=1420 name=wg-nas
+/interface wireguard peers
+add allowed-address=10.8.0.2/32 interface=wg-nas name=peer-nas preshared-key="fixture-wg-psk" public-key="AAAAB3NzaC1yc2E="
+/interface bridge vlan
+add bridge=bridge tagged=bridge,sfp-sfpplus1 vlan-ids=20
+/ip address
+add address=192.168.1.43/24 comment=mgmt interface=bridge network=192.168.1.0
+/ip route
+add distance=1 gateway=192.168.1.1
+/snmp community
+add addresses=192.168.1.0/24 name=fixture-community-not-real
+/system identity
+set name=MikroTik
+/ip route add dst-address=10.0.0.0/8 gateway=192.168.1.254 comment="fixture-last-line"

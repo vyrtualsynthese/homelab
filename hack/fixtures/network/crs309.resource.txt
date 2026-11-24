@@ -1,0 +1,9 @@
+                   uptime: 1w4d3h
+                  version: 6.49.10 (stable)
+              free-memory: 187.6MiB
+             total-memory: 256.0MiB
+                      cpu: ARM 98DX8208
+                cpu-count: 1
+           architecture-name: arm
+                  board-name: CRS309-1G-8S+
+                    platform: MikroTik
