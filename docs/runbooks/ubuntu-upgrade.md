@@ -47,6 +47,10 @@ Each node's gate, in this order, recorded in the card:
   three, and no two control planes move in the same evening.
 - **`rbp2`'s boot partition**: 26.04 writes a kernel and firmware into `/boot/firmware` before anything
   else, and 64 MB of 253 MB was free on 2026-11-24. At least 120 MB, measured, or the hop does not start.
+- **`nas`'s parity is synced**: `snapraid status` prints no `NOT fully synced` warning and no `sync in
+  progress` line, and its last `scrub/sync` is 0 days old. On 2026-11-24 the parity and the content both
+  dated from 2024-02-10, so the union has had no protection since; the hop does not start until the
+  nightly runner has brought the array current.
 - **`streaming`'s GPU**: driver 580.178.04 is the last branch NVIDIA ships for the Quadro P400, and its
   module is DKMS-built. The 26.04 hop on this host is gated by the experiment that builds that module
   against the new kernel; if it does not compile, `streaming` stops after hop 1 and stays on 24.04, which
@@ -103,8 +107,24 @@ procedure, and 1.37 is a decision of its own — [moving K3s to a new minor](k3s
    ```
 
    On `streaming` add: `nvidia-smi -L` names the Quadro P400 and `dkms status` shows the 580 module built
-   for the new kernel. On `nas` add: `snapraid status` reports `786,116` files with no out-of-date parity,
-   and a file written to `/mnt/storage` reads back with the right content.
+   for the new kernel. On `nas` the union and the parity are checked together, and either one failing
+   stops the node:
+
+   ```bash
+   findmnt -T /mnt/storage                              # fuse.mergerfs, not an empty directory
+   sudo dd if=/dev/urandom of=/mnt/storage/.hop bs=1M count=4 status=none
+   sha256sum /mnt/storage/.hop                          # keep this digest
+   sudo find /mnt/hdd[0-5] -maxdepth 1 -name .hop -exec sha256sum {} \;   # one branch, same digest
+   sudo rm /mnt/storage/.hop
+   sudo snapraid status > /tmp/snapraid-status
+   grep -E 'NOT fully synced|sync in progress' /tmp/snapraid-status     # must print nothing
+   grep 'days ago of the last scrub/sync' /tmp/snapraid-status          # 0, or 1
+   ```
+
+   The parity is a gate here rather than a line in the closing checks because on 2026-11-24 it had no
+   relation to the data at all: every block was 1,018 days old and the parity file itself dated from
+   2024-02-10 ([the measurement](../audit/hosts-2026-11-24.md#the-union-and-the-parity-before-nas-moves)).
+   The runner syncs at 03:17, so a `days ago` in the thousands means it has not been following the data.
 
 5. **Hop 2, to 26.04.1.** Check that the release check now offers it — `do-release-upgrade -c` — then the
    same command, from the same tmux session, with the same answers. Then the same verification, plus the one
