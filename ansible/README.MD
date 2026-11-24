@@ -41,6 +41,25 @@ What this playbook used to cover on the edge, and still does not: the two Pis' d
 stacks are in `playbooks/templates/runners/`, so the configuration is in git; anything they keep
 outside those files is not backed up anywhere, by decision, until an edge stream exists.
 
+## Seeing a host without touching it
+
+`collectors/host-audit.sh` is the one thing in this directory that works today. It reads a host and
+prints a Markdown report — packages, kernel and sysctl, services and timers, network, firewall,
+storage and exports, containers, K3s, GPU, Pi firmware, SSH and sudoers, upgrade readiness, recent
+errors — and writes nothing, starts nothing, changes nothing:
+
+```bash
+sudo ./collectors/host-audit.sh > /tmp/opencode/host-audit/$(hostname).md
+sudo AUDIT_NETWORK=1 ./collectors/host-audit.sh   # also asks apt and do-release-upgrade -c
+```
+
+Every value passes through a redactor before it is printed: a secret's value becomes `<redacted>` and
+its key stays, so a report line reads `token: <redacted>`. `hack/tests/test_host_audit.py` holds the
+proof in both directions — the shapes it must remove (K3s token, WireGuard keys, env files, URL
+credentials, presigned URLs, JWTs, PEM blocks) and the settings it must leave alone
+(`PasswordAuthentication no`, `vm.swappiness = 60`, a sudoers line). A non-root run still prints, marks
+what it could not read, and is not worth trusting until it is rerun under `sudo`.
+
 ## Intended use
 
 ```bash
