@@ -16,6 +16,11 @@ board path has never carried a single card.
   life is under 10 %, **or** when pending sectors are above zero.
 - **One drive is worn, not failing.** `nas /dev/sdf` (Crucial CT1000BX500SSD1) reports 0 % life left,
   522 TB written against a 360 TB rating, SMART **passed**, zero reallocated and zero pending sectors.
+- **Its checker exit code is 32, and that is the whole difference.** `smartctl` exit bits are a
+  bitmask: 32 means "the drive's error log holds records", not "the drive is failing" (8 is failing,
+  16 is a prefail attribute under threshold, 64 is a self-test log with errors). Every other drive
+  returns 0. So a bare `exit_code != 0` cannot tell a historic error-log entry from damage — and it
+  is the only reason `/dev/sdf` is critical today, independently of its life.
 - **A mute is the only thing silencing it.** Silence `0110b899` matches that drive and that rule and
   expires 2026-12-12. Under a silence the alert still fires; only delivery stops.
 - **The board path works and has never been used.** A test notification sent from Grafana to the
@@ -50,27 +55,28 @@ Pis' SMART exporter on port 9902), so the tables and messages stay readable.
 
 ### `DriveWorn` — warning, `for: 1h`, group `homelab-core`
 
-Life is under 10 %, using the three vendor shapes the exporter publishes — Crucial's
-`percent_lifetime_remain`, NVMe's `100 - percentage_used`, Samsung SATA's `wear_leveling_count`:
+Either signal below, and nothing above it:
 
-```
-(10 - max by (node, instance, drive, model_name, serial_number, user_capacity, type)
-   (smartprom_percent_lifetime_remain)
- or 10 - (100 - max by (…) (smartprom_percentage_used))
- or 10 - max by (…) (smartprom_wear_leveling_count)) > 0
-```
+- Life is under 10 %, using the three vendor shapes the exporter publishes — Crucial's
+  `percent_lifetime_remain`, NVMe's `100 - percentage_used`, Samsung SATA's `wear_leveling_count`;
+- the checker's exit code carries bit 32 — the drive's error log holds records. It means "look at
+  this drive", not "this drive is dying": with `smart_passed` at 1 and every sector counter at zero,
+  it is a history, not a symptom.
 
-- Labels: `severity=warning`, `board=card`.
-- Notification: **repeat turned off** (a year's interval), so the notice arrives when the drive
-  crosses the line and again only if it recovers and recrosses.
-- Message: "`nas /dev/sdf` has used up its rated life. Replace it when convenient — nothing is failing
-  yet", with a link to the Disks dashboard and to the replacement procedure.
-- Annotation explains why the drive is not paged: SMART passes, no sectors pending.
+Labels: `severity=warning`, `board=card`. Notification: **repeat turned off**, so the notice arrives
+when the drive crosses the line and again only if it recovers and recrosses. Message: "`nas /dev/sdf`
+has used up its rated life. Replace it when convenient — nothing is failing yet", with a link to the
+Disks dashboard and to the replacement procedure.
+
+A drive that is both worn and failing raises both rules; the page is the one that matters, and the
+worn notice on the same day carries no extra cost.
 
 ### `DriveFailing` — critical, `for: 10m`, group `homelab-core`
 
-Any of: SMART self-test failed, the checker exited non-zero, pending sectors above zero, or
-offline-uncorrectable sectors above zero.
+Any of: SMART self-test failed, pending sectors above zero, offline-uncorrectable sectors above zero,
+a self-test log with errors (exit bit 64), or any exit bit below 32 (1 parse error, 2 device could not
+be opened, 4 command failed, 8 disk failing, 16 prefail attribute under threshold) — expressed as
+`exit_code % 32 > 0`. Bit 32 alone is **not** in this rule.
 
 - Labels: `severity=critical`.
 - Notification: the existing hourly critical route, unchanged.
@@ -107,9 +113,11 @@ Question the screen answers: *which drives need action, and which are quietly fi
 Six panels, down from fourteen. The six KPI stats, the two bargauges and the duplicate trend panels go.
 
 **Verdict** is one numeric score per drive, value-mapped to words in the panel, so the table can sort
-on it: `3` failing (any hard signal), `2` replace (life under 10 %), `1` watch (life under 25 %), `0` OK.
-The score is computed as `(failing * 3) or (life<10 * 2) or (life<25 * 1) or (0 * temperature)`, so every
-drive appears once and the leftmost match wins.
+on it: `3` failing (any hard signal), `2` replace (worn), `1` watch (life under 25 %), `0` OK. The score
+is `(failing * 3) or (worn * 2) or (watch * 1) or (0 * smart_passed)`; the base is `smart_passed`
+because it is the one series every one of the eighteen drives publishes, and the `or` keeps the
+leftmost match, so the worst state wins. Comparison branches use `bool` and a `> 0` filter, or they
+pass the life value through and a drive at 0 % scores 0.
 
 ## What lives where
 
