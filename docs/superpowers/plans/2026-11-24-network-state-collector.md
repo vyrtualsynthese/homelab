@@ -323,7 +323,7 @@ git commit -m "🚀 feature: a redactor written for RouterOS attributes"
 ```
 
 `crs326.package.txt`: a three-line `routeros` package block naming `7.16.1`.
-`crs326.ethernet.txt`: five ports, `name=ether1 status=link-ok speed=1Gbps` style, one `status=no-link`.
+`crs326.ethernet.txt`: five ports in the shape `/interface ethernet monitor [find] once` prints — one `key: value` block per port, blank line between blocks, `name:`, `status:` and `rate:` — with one `status: no-link` port that reports no rate.
 `crs326.address.txt`: `address=192.168.1.11/24 interface=bridge network=192.168.1.0`.
 `crs326.route.txt`: two lines, one static `0.0.0.0/0` via `192.168.1.1`.
 `crs326.export.txt`: an export with a Wi-Fi profile carrying `wpa2-pre-shared-key="fixture-psk-not-real"`, a wireguard peer with `public-key="AAAAB3NzaC1yc2E="` and `preshared-key="fixture-wg-psk"`, a bridge VLAN table line, and as its **last** line
@@ -419,7 +419,7 @@ slug_command() {                         # slug_command <slug> <major>
     routerboard) printf '/system routerboard print' ;;
     package)     printf '/system package print' ;;
     identity)    printf '/system identity print' ;;
-    ethernet)    printf '/interface ethernet print' ;;
+    ethernet)    printf '/interface ethernet monitor [find] once' ;;
     address)     printf '/ip address print' ;;
     route)       printf '/ip route print' ;;
     export)      case "$2" in
@@ -599,7 +599,8 @@ uptime: 3w2d1h
 
 `page_device` reads identity, model, serial, RouterOS version and uptime out of the `resource`,
 `routerboard` and `identity` blocks with `awk`; the Ethernet table is built from the `ethernet`
-block's `name=`, `status=` and `speed=` fields. The export block is printed whole, with no `head`.
+block's `name:`, `status:` and `rate:` fields, one row per port, `unknown` for a field a port does
+not report. The export block is printed whole, with no `head`.
 
 This task's default run ends with `page_footer` and does **not** call `page_livebox`; Task 5 inserts
 that call together with the function. The exit-code test for a run with nothing reachable also
