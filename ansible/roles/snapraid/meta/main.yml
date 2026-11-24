@@ -1,0 +1,11 @@
+---
+galaxy_info:
+  role_name: snapraid
+  author: operator
+  description: Runs the parity sync from cron without the retired runner
+  license: MIT
+  min_ansible_version: "2.18"
+  platforms:
+    - name: Ubuntu
+      versions:
+        - all

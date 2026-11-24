@@ -1,0 +1,69 @@
+---
+# The cron line on this host is hand-written and points at /opt/snapraid-runner,
+# which needs a Python 2 that no supported release ships. It has been failing on
+# every run since, so the parity on a 51 TB array is as old as the last time
+# someone ran it by hand.
+#
+# Two decisions, both recorded here rather than in a commit nobody reads:
+#   The runner is retired, not ported. Its whole job was sync, a scrub and a mail
+#   this homelab cannot send from a host; the journal already reaches Loki.
+#   03:17 keeps it out of the day and ahead of the 05:00 backups, which read the
+#   same disks.
+- name: Refuse to run anywhere but the node that holds the array
+  ansible.builtin.assert:
+    that:
+      - "'storage' in group_names"
+    fail_msg: >-
+      The array is on the node in the `storage` group. A parity run started
+      anywhere else would read another host's /etc/snapraid.conf, or none.
+
+# The existing entry cannot be removed with the cron module: that module only
+# removes lines it wrote itself, marked with its own comment. This goes through
+# `crontab -`, which is the supported way to replace a user's whole table, and
+# it reports a change only when the line was there.
+- name: Remove the hand-written line from root's crontab
+  ansible.builtin.shell: |
+    set -euo pipefail
+    current="$(crontab -u root -l 2>/dev/null || true)"
+    filtered="$(printf '%s\n' "$current" | grep -v 'snapraid-runner' || true)"
+    if [ "$current" = "$filtered" ]; then
+      exit 0
+    fi
+    if [ -z "${filtered//[[:space:]]/}" ]; then
+      crontab -u root -r
+    else
+      printf '%s\n' "$filtered" | crontab -u root -
+    fi
+    echo "removed"
+  args:
+    executable: /bin/bash
+  register: snapraid_crontab
+  changed_when: "'removed' in snapraid_crontab.stdout"
+
+- name: Install the runner
+  ansible.builtin.copy:
+    src: snapraid-sync.sh
+    dest: /usr/local/sbin/snapraid-sync
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Schedule it at 03:17
+  ansible.builtin.copy:
+    dest: /etc/cron.d/snapraid
+    content: |
+      # Written by ansible/roles/snapraid; an edit here is reverted on the next run.
+      # 03:17 is out of the day and ahead of the 05:00 backups that read these disks.
+      17 3 * * * root /usr/local/sbin/snapraid-sync
+    owner: root
+    group: root
+    mode: "0644"
+
+# The run is not started here: a parity sync takes hours on this array, and a
+# playbook is not the place to wait for one. What is checked is that the tool
+# still reads the array, which is what the missing Python broke.
+- name: Read the array back
+  ansible.builtin.command: snapraid status
+  register: snapraid_status
+  changed_when: false
+  failed_when: "'SnapRAID status report' not in snapraid_status.stdout"
