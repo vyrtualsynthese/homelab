@@ -7,6 +7,7 @@ import unittest
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / "ansible" / "collectors" / "network-audit.sh"
+FIXTURE = ROOT / "hack" / "fixtures" / "network"
 
 
 def run(args=(), env=None, stdin=None):
@@ -28,6 +29,10 @@ class UsageTests(unittest.TestCase):
         self.assertIn("read-only", done.stdout)
         self.assertIn("NET_AUDIT_FROM_FIXTURE", done.stdout)
 
+    def test_help_prints_comment_lines_only(self):
+        for line in run(["--help"]).stdout.splitlines():
+            self.assertTrue(line.startswith("#"), line)
+
     def test_list_targets_prints_the_defaults(self):
         done = run(["--list-targets"])
         self.assertEqual(done.returncode, 0)
@@ -39,6 +44,11 @@ class UsageTests(unittest.TestCase):
 
     def test_an_unknown_flag_is_a_usage_error(self):
         self.assertEqual(run(["--nope"]).returncode, 2)
+
+    def test_a_malformed_target_list_prints_no_partial_set(self):
+        done = run(["--list-targets"], env={"NET_AUDIT_TARGETS": "crs326=192.168.1.11 broken"})
+        self.assertEqual(done.returncode, 2)
+        self.assertEqual(done.stdout, "")
 
 
 class RouterOSRedactionTests(unittest.TestCase):
@@ -83,6 +93,17 @@ class RouterOSRedactionTests(unittest.TestCase):
         self.assertIn("name=<redacted>", out)
         self.assertIn("name=peer1", out)
 
+    def test_a_v6_snmp_block_hides_the_community_on_the_line_below(self):
+        out = self.redact(
+            '/snmp community\n'
+            'add addresses=192.168.1.0/24 name=lan6xyz\n'
+            '/interface bridge\n'
+            'add name=bridge\n'
+        )
+        self.assertNotIn("lan6xyz", out)
+        self.assertIn("name=<redacted>", out)
+        self.assertIn("name=bridge", out)
+
     def test_a_value_that_reopens_a_quote_is_redacted_to_the_end_of_the_line(self):
         out = self.redact('password="ab"cd"\n')
         self.assertNotIn("cd", out)
@@ -109,3 +130,52 @@ class RouterOSRedactionTests(unittest.TestCase):
     def test_addresses_and_ports_survive(self):
         line = "/ip address add address=192.168.1.11/24 interface=bridge comment=mgmt\n"
         self.assertEqual(self.redact(line), line)
+
+
+class FetchTests(unittest.TestCase):
+    def env(self, **extra):
+        merged = {"NET_AUDIT_FROM_FIXTURE": str(FIXTURE)}
+        merged.update(extra)
+        return merged
+
+    def test_a_fixture_is_read_for_a_known_slug(self):
+        done = run(["--dump", "crs326", "identity"], env=self.env())
+        self.assertEqual(done.returncode, 0)
+        self.assertIn("CR326", done.stdout)
+
+    def test_a_missing_fixture_is_reported_as_unreachable(self):
+        done = run(["--dump", "ghost", "identity"], env=self.env())
+        self.assertEqual(done.returncode, 0)
+        self.assertIn("(unreachable:", done.stdout)
+
+    def test_the_routeros_major_is_read_from_the_resource_block(self):
+        self.assertEqual(run(["--major", "crs326"], env=self.env()).stdout.strip(), "7")
+        self.assertEqual(run(["--major", "crs309"], env=self.env()).stdout.strip(), "6")
+
+    def test_the_export_flag_follows_the_routeros_major(self):
+        self.assertEqual(run(["--export-command", "6"]).stdout.strip(), "/export hide-sensitive")
+        self.assertEqual(run(["--export-command", "7"]).stdout.strip(), "/export terse")
+        self.assertEqual(run(["--export-command", "unknown"]).stdout.strip(), "/export terse")
+
+    def test_the_v6_export_hides_the_snmp_community(self):
+        done = run(["--dump", "crs309", "export"], env=self.env())
+        self.assertEqual(done.returncode, 0)
+        self.assertNotIn("fixture-community-not-real", done.stdout)
+        self.assertIn("name=<redacted>", done.stdout)
+
+    def test_a_malformed_target_list_is_a_usage_error_before_any_fetch(self):
+        done = run(
+            ["--dump", "crs326", "identity"],
+            env=self.env(NET_AUDIT_TARGETS="crs326=192.168.1.11 broken"),
+        )
+        self.assertEqual(done.returncode, 2)
+        self.assertEqual(done.stdout, "")
+        self.assertIn("is not name=host", done.stderr)
+
+    def test_a_device_that_refuses_the_key_is_unreachable_and_fast(self):
+        done = run(
+            ["--dump", "ghost", "identity"],
+            env={"NET_AUDIT_TARGETS": "ghost=203.0.113.9", "NET_AUDIT_CONNECT_TIMEOUT": "1",
+                 "NET_AUDIT_CMD_TIMEOUT": "2"},
+        )
+        self.assertIn("(unreachable:", done.stdout)
