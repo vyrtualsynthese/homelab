@@ -1,0 +1,11 @@
+---
+galaxy_info:
+  role_name: automation
+  author: operator
+  description: Creates the key-only account unattended runs log in as, with its one sudo grant
+  license: MIT
+  min_ansible_version: "2.18"
+  platforms:
+    - name: Ubuntu
+      versions:
+        - all

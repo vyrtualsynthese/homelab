@@ -154,6 +154,15 @@ costs: any unattended session, any stolen key, or any password guessed on a Pi (
 sudo. If unattended automation needs it, give that one command a scoped `NOPASSWD` drop-in instead of
 a group-wide grant.
 
+*Status, 2026-11-24.* The line is removed by `ansible/roles/accounts`, and the grant an unattended run
+needs sits on one named account instead of a group: `ansible`, key-only, in
+`/etc/sudoers.d/00-homelab-automation`, which `ansible/roles/automation` writes and `visudo` validates.
+Re-authentication is therefore still defeated for that one account, by design, while the operator's
+own account needs its password and the sudo log tells the two apart.
+[The record](../decisions/2026-11-24-automation-sudo-account.md) says why the alternative — no
+passwordless grant anywhere — was rejected: `make check` would need a password typed at a terminal,
+and that drift report is the layer's whole output.
+
 **A finding, low.** Both Pis accept a password on port 22 while the four cluster nodes do not. They
 are the DNS server and the VPN endpoint, so a guessed password does not merely reach a host.
 

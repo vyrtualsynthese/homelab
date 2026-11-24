@@ -7,6 +7,9 @@
   become: true
   roles:
     - baseline
+    # Before `accounts`, which removes the grant this role is the replacement
+    # for, and only from a run that connects as the account it creates.
+    - automation
     - accounts
     - packages
     - system
