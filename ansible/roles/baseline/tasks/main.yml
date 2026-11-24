@@ -1,0 +1,14 @@
+---
+# The only thing the baseline role does is say the host is managed from this
+# repository. It exists so `site.yml` has something to converge on before the
+# roles that change a host arrive, and it is what `--check` can prove without a
+# password.
+- name: Mark this host as managed by the ansible layer
+  ansible.builtin.copy:
+    dest: /etc/profile.d/99-homelab.sh
+    content: |
+      # Written by ansible/playbooks/site.yml; edits here are reverted on the next run.
+      export HOMELAB_MANAGED=1
+    owner: root
+    group: root
+    mode: "0644"

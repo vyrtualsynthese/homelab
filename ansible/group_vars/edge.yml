@@ -1,0 +1,5 @@
+---
+# The two Pis run one Docker Compose stack each, from this directory. Both hold
+# their secrets in `pihole.env` and `wg-easy.env` beside the compose file; those
+# are gitignored and the setup script requires them rather than writing them.
+stack_dir: /home/vronteix/dockers

@@ -1,11 +1,14 @@
+.PHONY: init check apply lint
+
 init:
-	ansible-galaxy collection install ansible.posix -f
-	ansible-galaxy collection install community.crypto -f
-	ansible-galaxy collection install community.docker -f
-	ansible-galaxy collection install community.general -f
+	ansible-galaxy collection install ansible.posix community.crypto community.docker community.general -f
 
-setup-node:
-	ansible-playbook playbooks/setup-node.yaml -kK
+# The drift report. A host that is correct prints no `changed`.
+check:
+	ansible-playbook playbooks/site.yml --check --diff
 
-upgrade-all:
-	ansible-playbook playbooks/upgrade-all.yaml
+apply:
+	ansible-playbook playbooks/site.yml
+
+lint:
+	ansible-lint
