@@ -33,16 +33,10 @@ class DefaultsTests(unittest.TestCase):
         self.assertEqual(relay.DEFAULT_BASE, "http://vikunja.vikunja.svc.cluster.local:3456")
 
 
-class SeverityTests(unittest.TestCase):
-    def test_critical_is_wanted(self):
-        self.assertTrue(relay.is_critical(payload()["alerts"][0]))
-
-    def test_warning_is_dropped(self):
-        self.assertFalse(relay.is_critical(payload(severity="warning")["alerts"][0]))
-
-    def test_missing_severity_is_not_critical(self):
-        alert = {"labels": {"alertname": "X"}}
-        self.assertFalse(relay.is_critical(alert))
+class DeliveryLineTests(unittest.TestCase):
+    def test_the_line_names_the_rule_and_the_outcome(self):
+        self.assertEqual(relay.delivery_line(payload(), "opened #42"),
+                         "firing: DiskFull on nas: opened #42")
 
 
 class KeyTests(unittest.TestCase):
@@ -134,7 +128,7 @@ class FakeBoard:
         return self.card
 
     def open_card(self, title, description):
-        self.calls.append(("open", title))
+        self.calls.append(("open", title, description))
         return {"id": 42}
 
     def comment(self, task, text):
@@ -148,9 +142,26 @@ class FakeBoard:
 
 
 class HandleTests(unittest.TestCase):
-    def test_a_warning_writes_nothing(self):
+    def test_a_warning_opens_a_card(self):
         board = FakeBoard()
-        self.assertEqual(relay.handle(payload(severity="warning"), board, 600), "ignored: not critical")
+        self.assertEqual(relay.handle(payload(severity="warning"), board, 600), "opened #42")
+        self.assertEqual(board.calls[0][0], "open")
+
+    def test_a_mixed_group_keeps_the_warning(self):
+        p = payload()
+        p["alerts"].append({
+            "status": "firing", "fingerprint": "w1",
+            "labels": {"alertname": "DiskFull", "severity": "warning", "instance": "nuc0"},
+            "annotations": {},
+        })
+        board = FakeBoard()
+        relay.handle(p, board, 600)
+        self.assertIn("carries 2 alerts", board.calls[0][2])
+
+    def test_a_resolve_without_a_card_writes_nothing(self):
+        board = FakeBoard()
+        self.assertEqual(relay.handle(payload(status="resolved"), board, 600),
+                         "resolved with no card")
         self.assertEqual(board.calls, [])
 
     def test_a_new_critical_alert_opens_one_card(self):

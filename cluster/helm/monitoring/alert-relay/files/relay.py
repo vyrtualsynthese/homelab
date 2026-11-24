@@ -7,11 +7,12 @@ comment per repetition, a comment on resolve, and never a close.
 
 The rules it enforces, in order:
 
-  * a warning is logged and dropped — only critical reaches the board;
+  * every delivered notification gets a card — Grafana's routing tree decides
+    what belongs on the board, the relay does not second-guess it;
   * a firing alert with no open card opens one;
   * the same alert firing again is a comment on that card, never a second card;
   * a resolve is a comment and nothing else: the card stays where it is until a
-    session investigates it;
+    session investigates it, and a resolve with no card writes nothing at all;
   * a malformed body is refused out loud, never dropped in silence.
 
 Deployed from the chart's ConfigMap; see docs/runbooks/alert-relay.md.
@@ -40,10 +41,10 @@ DEFAULT_BASE = "http://vikunja.vikunja.svc.cluster.local:3456"
 # ---------------------------------------------------------------------------
 # Pure helpers, tested in hack/tests/test_alert_relay.py.
 # ---------------------------------------------------------------------------
-def is_critical(alert: dict) -> bool:
-    """Only critical alerts are worth an investigation."""
-    labels = alert.get("labels") or {}
-    return str(labels.get("severity", "")).lower() == "critical"
+def delivery_line(payload: dict, outcome: str) -> str:
+    """One line per delivery, so a silent relay is obvious in its own log."""
+    status = str(payload.get("status") or "firing").lower()
+    return f"{status}: {render_title(payload)}: {outcome}"
 
 
 def incident_key(payload: dict) -> str:
@@ -208,19 +209,18 @@ class Board:
 def handle(payload: dict, board: Board, cooldown: float, now: datetime | None = None) -> str:
     """What to do with one delivery. Returns a word for the log."""
     key = incident_key(payload)
-    alerts = [a for a in (payload.get("alerts") or []) if is_critical(a)]
-    if not alerts:
-        return "ignored: not critical"
-
-    payload = dict(payload, alerts=alerts)
+    resolved = (payload.get("status") or "").lower() == "resolved"
     card = board.find_open_card(key)
     if card is None:
+        # A resolve for an incident that never opened a card is a test
+        # notification or a rule deleted mid-flight: it is not a new incident.
+        if resolved:
+            return "resolved with no card"
         created = board.open_card(render_title(payload), render_body(payload, key))
         for name in ("task", "alert"):
             board.label(created["id"], name)
         return f"opened #{created.get('id')}"
 
-    resolved = (payload.get("status") or "").lower() == "resolved"
     stamp = (now or datetime.now(timezone.utc)).timestamp()
     last = board.last_comment_epoch(card["id"])
     # The cooldown exists to keep a flapping alert from writing a hundred comments.
@@ -270,7 +270,7 @@ class Handler(BaseHTTPRequestHandler):
             self.send_response(502)
             self.end_headers()
             return
-        print(f"{payload.get('status')}: {outcome}", flush=True)
+        print(delivery_line(payload, outcome), flush=True)
         self.send_response(202)
         self.end_headers()
 
