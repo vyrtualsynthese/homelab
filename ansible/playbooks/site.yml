@@ -15,3 +15,5 @@
     # that holds the disks, and the inventory is where that node is named.
     - role: nfs
       when: "'storage' in group_names"
+    - role: snapraid
+      when: "'storage' in group_names"

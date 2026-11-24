@@ -220,3 +220,25 @@ def test_every_export_line_attaches_the_options_to_each_address():
             "exports(5) gives an option list to the host it follows: a bare "
             "address takes the defaults instead of this file's options"
         )
+
+
+def test_snapraid_runner_does_not_need_python2():
+    text = (ANSIBLE / "roles/snapraid/tasks/main.yml").read_text()
+    assert "python2" not in text
+    assert "/etc/cron.d/snapraid" in text
+    script = (ANSIBLE / "roles/snapraid/files/snapraid-sync.sh").read_text()
+    assert "snapraid sync" in script
+    assert "snapraid status" in script
+
+
+def test_snapraid_replaces_the_hand_written_cron_line():
+    """The line in root's crontab was written by hand, so `cron: name=...` cannot
+    match it: the module only removes entries it marked with its own comment."""
+    text = (ANSIBLE / "roles/snapraid/tasks/main.yml").read_text()
+    assert "crontab -u root" in text
+    assert "snapraid-runner" in text
+
+
+def test_snapraid_runs_outside_the_backup_window():
+    text = (ANSIBLE / "roles/snapraid/tasks/main.yml").read_text()
+    assert "17 3 * * *" in text, "03:17 is after the 02:00 window and before the 05:00 backup"
