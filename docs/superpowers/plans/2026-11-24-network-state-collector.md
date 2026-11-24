@@ -680,28 +680,44 @@ starts the section; the remembered block is printed after it.
 
 ```bash
 page_livebox() {
-  local body build status
+  local body build status out rc reason
   if [ -n "$NET_AUDIT_FROM_FIXTURE" ]; then
     if [ -f "$NET_AUDIT_FROM_FIXTURE/livebox-root.html" ]; then
-      body="$(cat "$NET_AUDIT_FROM_FIXTURE/livebox-root.html")"; status=200
+      # The fixture branch contacts nothing, so it has no status to report. Saying so is the point:
+      # a 200 printed here would be a guess wearing the same "http:" label as a measured one.
+      body="$(cat "$NET_AUDIT_FROM_FIXTURE/livebox-root.html")"
+      status="not measured (fixture)"
     else
-      body=""; status="unreachable: no fixture"
+      body=""; status="unreachable: no fixture for livebox-root.html"
     fi
   else
-    if body="$(curl -sS -m 6 "http://$LIVEBOX_HOST/" 2>/dev/null)"; then status=200
-    else status="unreachable: curl exit $?"; body=""; fi
+    # One unauthenticated GET, bounded. `curl -sS` exits 0 for any HTTP status, so the exit code
+    # cannot stand in for the answer; `-w '\n%{http_code}'` appends the real code, the shell strips
+    # the final newline, and the last line is the code with the body above it. On a failure the
+    # captured text is curl's own message, so its first line is the reason.
+    out="$(curl -sS -m 6 -w '\n%{http_code}' "http://$LIVEBOX_HOST/" 2>&1)"; rc=$?
+    if [ "$rc" -ne 0 ]; then
+      reason="$(printf '%s\n' "$out" | head -1)"; body=""
+      status="unreachable: ${reason:-curl exit $rc}"
+    else
+      status="$(printf '%s\n' "$out" | tail -1)"
+      body="$(printf '%s\n' "$out" | sed '$d')"
+    fi
   fi
-  build="$(printf '%s' "$body" | grep -o 'sah=v[0-9._]*' | head -1 | cut -d= -f2)"
+  # The whole `sah=` value, printed only when it is a well-formed version: a match that stopped at
+  # a hyphen would print `v1.0.161` from `v1.0.161-20260923`, a plausible number the box never ran.
+  build="$(printf '%s' "$body" | grep -o 'sah=[^"&<>[:space:]]*' | head -1 | cut -d= -f2)"
+  if ! printf '%s\n' "$build" | grep -Eq '^v[0-9]+([._][0-9]+)*$'; then build=""; fi
   section "Livebox — $LIVEBOX_HOST"
-  printf '```\n'
-  kv http "$status"
-  kv firmware "${build:-unknown}"
-  printf '```\n\n'
+  case "$status" in
+    unreachable:*) printf '(%s)\n\n' "$status" ;;
+    *) printf '```\n'; kv http "$status"; kv firmware "${build:-unknown}"; printf '```\n\n' ;;
+  esac
   # then the remembered block below
 }
 ```
 
-The section prints: the HTTP answer, the build string (or `unknown`), then
+The section prints: the measured HTTP answer — or `not measured (fixture)` when the page came from a file — the build string (or `unknown`), then
 
 ```markdown
 ### Remembered, not read from the device
@@ -710,6 +726,10 @@ The section prints: the HTTP answer, the build string (or `unknown`), then
 (TCP and UDP) and 21027 (UDP) to `192.168.1.46`. This half is **not read from the device**;
 the port-forward table itself needs the admin password and is a separate piece of work.
 ```
+
+The shipped tests also cover the branch that touches the box, because that is where a hardcoded
+status hides: a stub `curl` placed first on `PATH` returns a body plus a code, and the tests pin a
+`200`, a non-`200`, a failed curl carrying its own message, and a page with no `sah=` value.
 
 - [ ] **Step 5: Run the tests to verify they pass**
 
