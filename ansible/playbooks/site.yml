@@ -11,3 +11,7 @@
     - packages
     - system
     - firewall
+    # The one role that is not for every host: the export belongs to the node
+    # that holds the disks, and the inventory is where that node is named.
+    - role: nfs
+      when: "'storage' in group_names"

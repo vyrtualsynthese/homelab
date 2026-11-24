@@ -1,0 +1,32 @@
+# /etc/exports — rendered by ansible/roles/nfs from exports.j2.
+#
+# Eight lines: the eight directories the cluster mounts, and nothing else. The
+# bare `/mnt` export is gone, because nothing in this repository mounts it; the
+# parent directories are not exported either, so a client has to name what it
+# wants.
+#
+# Every line squashes root. The cluster's writers run as 1100 — the LinuxServer
+# images take PUID/PGID 1100 and the NFS provisioners set runAsUser 1100 — so a
+# root write from a pod fails with EACCES instead of succeeding silently.
+#
+# The options are given to every address, not once at the end of the line: in
+# exports(5) an option list belongs to the host it follows, so a bare address
+# would silently take the defaults (`subtree_check`, no fsid) while the last one
+# on the line got what this file says.
+#
+# fsid 8 is the exception in effect only: Traefik runs as root and writes the
+# certificate store, so that line maps the squashed root back to 1100 with
+# anonuid/anongid, and the role gives that directory to 1100 once. Without both,
+# certificate renewal fails weeks later and quietly.
+#
+# fsid values are kept exactly as the running mounts were made with. Changing
+# one forces every client to remount, which is a cluster-wide restart for a
+# cosmetic reason.
+/mnt/storage/nfs/plexmedia {{ nfs_addresses | map('regex_replace', '$', '(rw,sync,root_squash,no_subtree_check,fsid=2)') | join(' ') }}
+/mnt/storage/nfs/books {{ nfs_addresses | map('regex_replace', '$', '(rw,sync,root_squash,no_subtree_check,fsid=4)') | join(' ') }}
+/mnt/ultrafaststorage/nfs {{ nfs_addresses | map('regex_replace', '$', '(rw,sync,root_squash,no_subtree_check,fsid=5)') | join(' ') }}
+/mnt/storage/nfs/stash {{ nfs_addresses | map('regex_replace', '$', '(rw,sync,root_squash,no_subtree_check,fsid=7)') | join(' ') }}
+/mnt/storage/traefik {{ nfs_addresses | map('regex_replace', '$', '(rw,sync,root_squash,no_subtree_check,fsid=8,anonuid=1100,anongid=1100)') | join(' ') }}
+/mnt/storage/nfs/syncthing {{ nfs_addresses | map('regex_replace', '$', '(rw,sync,root_squash,no_subtree_check,fsid=9)') | join(' ') }}
+/mnt/storage/nfs/qbittorrent-config {{ nfs_addresses | map('regex_replace', '$', '(rw,sync,root_squash,no_subtree_check,fsid=11)') | join(' ') }}
+/mnt/storage/nfs/audio {{ nfs_addresses | map('regex_replace', '$', '(rw,sync,root_squash,no_subtree_check,fsid=12)') | join(' ') }}

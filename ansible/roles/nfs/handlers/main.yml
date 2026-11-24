@@ -1,0 +1,7 @@
+---
+# Re-reads /etc/exports without restarting the server: `exportfs -ra` adds and
+# removes entries and leaves the mounts that are already established alone.
+- name: Reload the export list
+  ansible.builtin.command: exportfs -ra
+  # It only runs when the file it reads has just changed.
+  changed_when: true
