@@ -14,11 +14,13 @@
 #
 # Read-only: the RouterOS account carries the `read` policy, and what runs is `/print`, `/export`
 # and one `/interface ethernet monitor [find] once` for port state; no file is written and the
-# Livebox answers a single unauthenticated GET. The page goes to stdout, warnings to stderr; exit
-# 0 on a printed page, 1 when no device answered, 2 on a usage error.
+# Livebox answers a single unauthenticated GET. The page goes to stdout, warnings to stderr, and is
+# printed whatever the outcome; the exit is 0 when at least one switch answered it, 1 when none did
+# (the Livebox alone does not count), 2 on a usage error.
 #
 # NET_AUDIT_TARGETS      "name=host" pairs, default crs326=192.168.1.11 crs309=192.168.1.43
 # NET_AUDIT_FROM_FIXTURE a directory of captured output; when set, no device is contacted
+# LIVEBOX_HOST           the box the unauthenticated GET goes to, default 192.168.1.1
 # NET_AUDIT_USER, NET_AUDIT_KEY, NET_AUDIT_DATE   account, its key, and the page's date
 # NET_AUDIT_CONNECT_TIMEOUT, NET_AUDIT_CMD_TIMEOUT  seconds, default 5 and 20
 #
@@ -35,7 +37,7 @@ NET_AUDIT_CONNECT_TIMEOUT="${NET_AUDIT_CONNECT_TIMEOUT:-5}"
 NET_AUDIT_CMD_TIMEOUT="${NET_AUDIT_CMD_TIMEOUT:-20}"
 LIVEBOX_HOST="${LIVEBOX_HOST:-192.168.1.1}"
 
-usage() { sed -n '2,25p' "${BASH_SOURCE[0]}"; exit 0; }
+usage() { sed -n '2,27p' "${BASH_SOURCE[0]}"; exit 0; }
 die() { printf 'network-audit.sh: %s\n' "$1" >&2; exit 2; }
 
 # Die on a list that is not "name=host", before any pair is printed or fetched: a malformed list
@@ -320,22 +322,43 @@ page_device() {                          # page_device <device> <host> → 0 ans
 # is the login page, and that page carries the firmware build in its loader query string. The
 # section is always printed — a box that did not answer says so on a line of its own rather than
 # dropping the heading — and the half that would need the admin password is marked as remembered.
+# The answer's status code is the box's own, never assumed: what was not measured says so by name.
 page_livebox() {
-  local body build status
+  local body build status out rc reason
   if [ -n "$NET_AUDIT_FROM_FIXTURE" ]; then
     if [ -f "$NET_AUDIT_FROM_FIXTURE/livebox-root.html" ]; then
-      body="$(cat "$NET_AUDIT_FROM_FIXTURE/livebox-root.html")"; status=200
+      # The fixture branch contacts nothing, so it has no status to report. Saying so is the point:
+      # a 200 printed here would be a guess wearing the same "http:" label as a measured one.
+      body="$(cat "$NET_AUDIT_FROM_FIXTURE/livebox-root.html")"
+      status="not measured (fixture)"
     else
       body=""; status="unreachable: no fixture for livebox-root.html"
     fi
   else
     # One unauthenticated GET, bounded: no credential, no POST, nothing that writes to the box.
-    if body="$(curl -sS -m 6 "http://$LIVEBOX_HOST/" 2>/dev/null)"; then status=200
-    else status="unreachable: curl exit $?"; body=""; fi
+    # `curl -sS` exits 0 for any HTTP status, so the exit code cannot stand in for the answer: it
+    # only separates "the box replied" from "nothing replied". `-w '\n%{http_code}'` appends the
+    # real code after the body, the shell strips the final newline, and the last line is the code
+    # with the body above it. On a failure the captured text is curl's own message, so the first
+    # line of it is the reason (`Connection refused`), not a bare exit number.
+    out="$(curl -sS -m 6 -w '\n%{http_code}' "http://$LIVEBOX_HOST/" 2>&1)"; rc=$?
+    if [ "$rc" -ne 0 ]; then
+      reason="$(printf '%s\n' "$out" | head -1)"; body=""
+      status="unreachable: ${reason:-curl exit $rc}"
+    else
+      status="$(printf '%s\n' "$out" | tail -1)"
+      body="$(printf '%s\n' "$out" | sed '$d')"
+      if [ -z "$status" ]; then
+        status="unreachable: curl exited 0 with no status line"; body=""
+      fi
+    fi
   fi
   # The build is the `sah=` value on the loader script; the title element is empty, so the query
-  # string is the only version the login page carries.
-  build="$(printf '%s' "$body" | grep -o 'sah=v[0-9._]*' | head -1 | cut -d= -f2)"
+  # string is the only version the login page carries. The whole query value is taken, and only a
+  # well-formed `v` plus digits, dots and underscores is printed: a match that stopped at a hyphen
+  # would print `v1.0.161` from `v1.0.161-20260923`, which is a plausible number the box never ran.
+  build="$(printf '%s' "$body" | grep -o 'sah=[^"&<>[:space:]]*' | head -1 | cut -d= -f2)"
+  if ! printf '%s\n' "$build" | grep -Eq '^v[0-9]+([._][0-9]+)*$'; then build=""; fi
   section "Livebox — $LIVEBOX_HOST"
   case "$status" in
     unreachable:*)
