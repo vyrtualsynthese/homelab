@@ -105,3 +105,43 @@ def test_setup_removes_a_service_the_template_no_longer_declares():
     running. rbp0's live stack still has the router this template dropped."""
     text = SCRIPT.read_text()
     assert "--remove-orphans" in text
+
+
+def _pi_fixture(root):
+    stack = root / "home/vronteix/dockers"
+    stack.mkdir(parents=True)
+    (stack / "pihole.env").write_text("WEBPASSWORD=x\n")
+    (stack / "wg-easy.env").write_text("WG_HOST=x\n")
+    (root / "proc").mkdir()
+    (root / "proc/mounts").write_text("LABEL=writable / ext4 rw 0 0\n")
+    (root / "boot/firmware").mkdir(parents=True)
+    (root / "boot/firmware/cmdline.txt").write_text("console=serial0 root=PARTUUID=aaaa-01 rootwait\n")
+    (root / "boot/firmware/config.txt").write_text("arm_64bit=1\n")
+    return stack
+
+
+def test_restore_keeps_a_boot_line_it_cannot_check(tmp_path):
+    """The backup's cmdline.txt names the disk the image was written to. Writing
+    it back onto a different disk makes the Pi unbootable, and the machine that
+    would fix it is the one that will not start."""
+    root = tmp_path / "pi"
+    _pi_fixture(root)
+    assert run("setup", "rbp1", root=root).returncode == 0
+    backup = tmp_path / "backup"
+    assert run("backup", str(backup), "rbp1", root=root).returncode == 0
+    (backup / "boot/cmdline.txt").write_text("console=serial0 root=PARTUUID=bbbb-02 rootwait\n")
+    (root / "boot/firmware/cmdline.txt").unlink()
+    (root / "boot/firmware/config.txt").unlink()
+
+    out = run("restore", str(backup), "rbp1", root=root)
+
+    assert out.returncode == 0, out.stdout + out.stderr
+    assert "PARTUUID" in out.stderr
+    assert not (root / "boot/firmware/cmdline.txt").exists()
+    assert (root / "boot/firmware/config.txt").exists(), "config.txt carries no disk identity"
+
+
+def test_verify_does_not_pass_a_stack_that_is_not_up():
+    text = SCRIPT.read_text()
+    assert "docker compose ps --all" in text, "ps without --all hides a stopped container"
+    assert "docker compose config --services" in text, "the declared services are the ones to compare"
