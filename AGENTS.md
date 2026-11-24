@@ -355,15 +355,18 @@ are in `docs/superpowers/plans/`.
     updating, the only image being a `latest` scratch pod. `docs/runbooks/renovate.md` has the
     manager-by-manager coverage.
 
-18. **K3s is on `v1.31.14+k3s1` on all four nodes (2026-11-22), containerd `2.1.5-k3s1.32`.** Moved
+18. **K3s is on `v1.33.13+k3s2` on all four nodes (2026-11-24), containerd `2.2.5-k3s1.33`.** Moved
     one node at a time with `system-upgrade-controller`, against plans pinned to a version *and* a
-    single hostname: `nuc0` 40 s, `rbp2` 160 s (the ARM Pi), `streaming` 20 s with a measured
-    15-second ingress blip, `nas` 20 s. etcd quorum held throughout, PostgreSQL shut down cleanly,
-    the NFS exports kept serving, and each node's backup job was re-run afterwards as the containerd
-    check. Procedure, timings, traps and the rollback caveat:
-    [`docs/runbooks/k3s-upgrade.md`](docs/runbooks/k3s-upgrade.md). Next minor: cards 520 and 521.
-    Both plans now carry `version: v1.31.14+k3s1` and a hostname selector naming the last node moved;
-    widening a selector is what starts the next node.
+    single hostname, twice in one evening (`v1.31.14+k3s1` → `v1.32.13+k3s1` → `v1.33.13+k3s2`):
+    `nuc0` 33 s then 27 s, `rbp2` 152 s then 268 s (the ARM Pi), `streaming` 27 s then 22 s with a
+    measured 6-second ingress blip on the second hop, `nas` 27 s then 32 s. etcd quorum held
+    throughout, PostgreSQL shut down cleanly, the NFS exports kept serving, the GPU stayed at
+    `nvidia.com/gpu: 1`, and each node's backup job was re-run afterwards as the containerd check.
+    Procedure, timings, traps and the rollback caveat:
+    [`docs/runbooks/k3s-upgrade.md`](docs/runbooks/k3s-upgrade.md). Next minors: card 521 (1.34 to
+    1.36), where 1.34 puts Argo CD back inside its supported range. Both plans carry
+    `version: v1.33.13+k3s2` and a hostname selector naming the last node moved; widening a selector
+    is what starts the next node. The controller's kubectl image is `v1.33.13`.
 
 ## 8. Rules
 
