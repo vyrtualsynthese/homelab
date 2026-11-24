@@ -1,0 +1,11 @@
+---
+galaxy_info:
+  role_name: firewall
+  author: operator
+  description: A default-deny host firewall that knows which ports k3s needs
+  license: MIT
+  min_ansible_version: "2.18"
+  platforms:
+    - name: Ubuntu
+      versions:
+        - all
