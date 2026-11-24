@@ -15,6 +15,10 @@
   ansible.builtin.command: uname -r
   register: system_running_kernel
   changed_when: false
+  # Read-only, and the list below is what `--check` has to agree with: without this line
+  # the command is skipped under `--check`, `running` renders empty, and the drift report
+  # offers to purge the kernel the host is running — which is what it did on 2026-11-24.
+  check_mode: false
 
 # Ubuntu's /etc/apt/apt.conf.d/01autoremove carries
 # `"^linux-image-[a-z0-9]*-[a-z0-9]*$"` under NeverAutoRemove, so `apt-mark auto`
@@ -28,6 +32,13 @@
     set -euo pipefail
     keep="{{ kernel_keep | int }}"
     running="{{ system_running_kernel.stdout }}"
+    # A list computed without a running kernel is a list that removes the running kernel.
+    # The task above now runs under `--check` too, so this should never fire; it stays
+    # because the consequence is a host that no longer boots.
+    if [ -z "$running" ]; then
+      echo "uname -r gave no version; refusing to name kernels for removal" >&2
+      exit 1
+    fi
     images="$(dpkg-query -W -f='${Package}\n' 'linux-image-[0-9]*' 2>/dev/null | sed 's/^linux-image-//' | sort -V || true)"
     others="$(printf '%s\n' "$images" | grep -vx "$running" || true)"
     kept="$(printf '%s\n' "$others" | tail -n $(( keep - 1 )) || true)"

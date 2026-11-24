@@ -194,6 +194,45 @@ def test_accounts_sets_its_own_sshd_config_and_the_first_word_wins():
     assert "first value" in text
 
 
+def test_a_read_whose_output_another_task_decides_on_runs_in_check_mode():
+    """`ansible.builtin.command` is skipped under `--check`, so its register comes back
+    with an empty `stdout` and no error. Every task here that another task's `when`,
+    `name` or `failed_when` consumes is therefore read-only by nature and must carry
+    `check_mode: false`: without it `make check` — the drift report the README sells —
+    silently describes a different host than `make apply` would act on.
+
+    The failure this caught, on 2026-11-24 after the kernel fix had been accepted:
+    `uname -r` was skipped, `running` rendered empty, and `make check --diff` offered to
+    purge the *running* kernel on all four nodes."""
+    wanted = {
+        ("system", "system_running_kernel"),
+        ("packages", "packages_hits"),
+        ("nfs", "nfs_exported"),
+    }
+    seen = set()
+    for role, path in [(p.parent.parent.name, p) for p in sorted(ANSIBLE.glob("roles/*/tasks/*.yml"))]:
+        for task in yaml.safe_load(path.read_text()) or []:
+            if not isinstance(task, dict):
+                continue
+            register = task.get("register")
+            if (role, register) in wanted:
+                seen.add((role, register))
+                assert task.get("check_mode") is False, (
+                    f"{role}: {task.get('name')!r} feeds a decision but is skipped under --check"
+                )
+    assert seen == wanted, f"task or register renamed: {wanted - seen}"
+
+
+def test_the_kernel_list_refuses_to_run_without_a_running_kernel():
+    """The guard behind the test above: a list computed with an empty `running` names
+    the running kernel for removal, so the lister stops instead of guessing."""
+    tasks = yaml.safe_load((ANSIBLE / "roles/system/tasks/main.yml").read_text())
+    lister = next(t for t in tasks if t.get("register") == "system_kernel_remove")
+    script = lister["ansible.builtin.shell"]
+    assert '[ -z "$running" ]' in script, "an unread version must stop the task, not shorten it"
+    assert "exit 1" in script
+
+
 def test_system_removes_the_kernels_autoremove_is_forbidden_to_touch():
     """Ubuntu's /etc/apt/apt.conf.d/01autoremove lists `^linux-image-[a-z0-9]*-[a-z0-9]*$`
     under NeverAutoRemove, so `apt-mark auto` plus `autoremove` keeps every kernel:
