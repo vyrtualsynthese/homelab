@@ -1,10 +1,10 @@
 ---
 # Kernel retention, in the one order that cannot remove the kernel this host is
-# running: name the running kernel, keep the newest others, mark the rest
-# automatic, and only then let the package manager clean up. No task here names
-# a package to delete — the name that is right today is the running one tomorrow,
-# and on `nas` and `streaming` the modules a boot needs live in
-# linux-modules-extra-*, which follows its kernel.
+# running: name the running kernel, keep the newest others, then name every
+# package of every version that is neither — image, modules, modules-extra,
+# headers — to apt. The list is built from dpkg because a version written here is
+# wrong the day the host updates, and the removal is explicit because Ubuntu's
+# `01autoremove` forbids autoremove from dropping a kernel at all.
 - name: Set the time zone from group_vars
   community.general.timezone:
     name: "{{ timezone }}"
@@ -16,32 +16,54 @@
   register: system_running_kernel
   changed_when: false
 
-# Prints one line per package it actually changes, so a second run is silent and
-# `--check` shows this task as skipped rather than as a permanent change. The
-# removal it enables is the task below.
-- name: Mark every other kernel automatic, keeping only the newest
+# Ubuntu's /etc/apt/apt.conf.d/01autoremove carries
+# `"^linux-image-[a-z0-9]*-[a-z0-9]*$"` under NeverAutoRemove, so `apt-mark auto`
+# plus `autoremove` keeps every kernel no matter how it is marked: on 2026-11-24
+# `nas` still held four and `rbp2` eighteen after two runs that reported
+# `changed=0`. The versions are therefore computed here and named to apt — never
+# written into this file, because the one that is "the newest other" changes the
+# day the host updates.
+- name: List the kernel packages that are neither running nor the newest kept
   ansible.builtin.shell: |
     set -euo pipefail
-    running="linux-image-{{ system_running_kernel.stdout }}"
     keep="{{ kernel_keep | int }}"
-    installed="$(dpkg-query -W -f='${Package}\n' 'linux-image-[0-9]*' | sort -V)"
-    # The running kernel is taken out before the tail: on the steady state, where
-    # the host booted the newest image, keeping "the newest" would keep the
-    # running one again and autoremove would take the rollback kernel with it.
-    others="$(printf '%s\n' "$installed" | grep -vx "$running" || true)"
-    newest="$(printf '%s\n' "$others" | tail -n $(( keep - 1 )) || true)"
-    for pkg in $installed; do
-      if [ "$pkg" = "$running" ]; then continue; fi
-      if printf '%s\n' "$newest" | grep -qx "$pkg"; then continue; fi
-      if apt-mark showmanual "$pkg" | grep -qx "$pkg"; then
-        apt-mark auto "$pkg" >/dev/null
-        echo "marked-auto: ${pkg}"
-      fi
-    done
+    running="{{ system_running_kernel.stdout }}"
+    images="$(dpkg-query -W -f='${Package}\n' 'linux-image-[0-9]*' 2>/dev/null | sed 's/^linux-image-//' | sort -V || true)"
+    others="$(printf '%s\n' "$images" | grep -vx "$running" || true)"
+    kept="$(printf '%s\n' "$others" | tail -n $(( keep - 1 )) || true)"
+    # `dpkg-query` exits non-zero when a pattern matches nothing, and `headers`
+    # and `buildinfo` match nothing on a host that never built a module: `|| true`
+    # inside the group is what keeps `set -e` from ending the task there.
+    versions="$(
+      { dpkg-query -W -f='${Package}\n' \
+          'linux-image-[0-9]*' 'linux-modules-[0-9]*' 'linux-modules-extra-[0-9]*' \
+          'linux-headers-[0-9]*' 'linux-buildinfo-[0-9]*' 2>/dev/null || true; } \
+        | sed -E 's/^linux-(image|modules|modules-extra|headers|buildinfo)-//' | sort -uV
+    )"
+    printf '%s\n' "$versions" | while read -r version; do
+      [ -n "$version" ] || continue
+      [ "$version" = "$running" ] && continue
+      printf '%s\n' "$kept" | grep -qx "$version" && continue
+      for family in linux-image linux-modules linux-modules-extra linux-headers linux-buildinfo; do
+        dpkg-query -W -f='${Package} ${db:Status-Abbrev}\n' "${family}-${version}" 2>/dev/null \
+          | awk '$2 ~ /^ii/ { print $1 }' || true
+      done
+    done | sort -u
   args:
     executable: /bin/bash
-  register: system_kernel_mark
-  changed_when: system_kernel_mark.stdout | length > 0
+  register: system_kernel_remove
+  changed_when: false
+  check_mode: false
+
+# `autoremove: false`: this task removes what the list named and nothing else.
+# The task below is what collects the orphans it leaves behind.
+- name: Drop the kernels that are neither running nor the newest kept
+  ansible.builtin.apt:
+    name: "{{ system_kernel_remove.stdout_lines }}"
+    state: absent
+    purge: true
+    autoremove: false
+  when: system_kernel_remove.stdout_lines | length > 0
 
 - name: Remove what nothing references any more, configuration files included
   ansible.builtin.apt:
