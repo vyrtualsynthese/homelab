@@ -1,0 +1,63 @@
+---
+# Kernel retention, in the one order that cannot remove the kernel this host is
+# running: name the running kernel, keep the newest others, mark the rest
+# automatic, and only then let the package manager clean up. No task here names
+# a package to delete — the name that is right today is the running one tomorrow,
+# and on `nas` and `streaming` the modules a boot needs live in
+# linux-modules-extra-*, which follows its kernel.
+- name: Set the time zone from group_vars
+  community.general.timezone:
+    name: "{{ timezone }}"
+  # No hardware-clock step: a Raspberry Pi has no real-time clock, the module
+  # would fail there, and every host here already keeps UTC.
+
+- name: Read the kernel this host booted
+  ansible.builtin.command: uname -r
+  register: system_running_kernel
+  changed_when: false
+
+# Prints one line per package it actually changes, so a second run is silent and
+# `--check` shows this task as skipped rather than as a permanent change. The
+# removal it enables is the task below.
+- name: Mark every other kernel automatic, keeping only the newest
+  ansible.builtin.shell: |
+    set -euo pipefail
+    running="linux-image-{{ system_running_kernel.stdout }}"
+    keep="{{ kernel_keep | int }}"
+    installed="$(dpkg-query -W -f='${Package}\n' 'linux-image-[0-9]*' | sort -V)"
+    newest="$(printf '%s\n' "$installed" | tail -n $(( keep - 1 )))"
+    for pkg in $installed; do
+      if [ "$pkg" = "$running" ]; then continue; fi
+      if printf '%s\n' "$newest" | grep -qx "$pkg"; then continue; fi
+      if apt-mark showmanual "$pkg" | grep -qx "$pkg"; then
+        apt-mark auto "$pkg" >/dev/null
+        echo "marked-auto: ${pkg}"
+      fi
+    done
+  args:
+    executable: /bin/bash
+  register: system_kernel_mark
+  changed_when: system_kernel_mark.stdout | length > 0
+
+- name: Remove what nothing references any more, configuration files included
+  ansible.builtin.apt:
+    autoremove: true
+    purge: true
+    update_cache: false
+
+# The audit found `rc` residue on every host: packages removed with their
+# configuration left behind (`virtualbox*`, old kernel headers). apt does not
+# touch those, so they are purged here by name from dpkg's own status field.
+- name: Purge the configuration files of packages removed earlier
+  ansible.builtin.shell: |
+    set -euo pipefail
+    dpkg-query -W -f='${db:Status-Abbrev} ${Package}\n' \
+      | awk '$1 ~ /^rc/ { print $2 }' \
+      | while read -r pkg; do
+          dpkg --purge "$pkg"
+          echo "purged: ${pkg}"
+        done
+  args:
+    executable: /bin/bash
+  register: system_rc_purge
+  changed_when: system_rc_purge.stdout | length > 0
