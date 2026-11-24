@@ -34,8 +34,8 @@ back and its applications still empty; the claims come back from the restic stre
   finish without it. It is in the password manager, item `homelab-backup-last-resort`, field
   `K3S_SERVER_TOKEN`; [`../secrets.md`](../secrets.md) lists it with the other three values the
   bucket needs. Its shape is `K10<…>::server:<…>`, 108 characters here.
-- **A K3s binary of the same version as the snapshot**, `v1.31.14+k3s1` for the files the cluster
-  writes today. Being generous, any `1.31.x` reads them; being strict costs one download.
+- **A K3s binary of the same version as the snapshot**, `v1.33.13+k3s2` for the files the cluster
+  writes today. Being generous, any `1.33.x` reads them; being strict costs one download.
 - **A machine that is not a cluster host**, with about 1 GB free. The rehearsal in the drill log ran
   in a privileged container on the workstation, under WSL2, with no KVM and no VM image.
 
