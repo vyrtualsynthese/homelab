@@ -56,7 +56,7 @@ what you did in `docs/`.
 
 `collectors/network-audit.sh` reads the two MikroTik switches and prints one Markdown page. Each
 switch gets the device's own `/export`, a status block with its identity, model, serial, RouterOS
-version and uptime, and a table of every port with its link state and negotiated speed. After the two
+version and uptime, and a table of the ports, with link state and negotiated speed. After the two
 switches comes the Livebox: the status its login page answers with, the firmware build named in that
 page, and the port forwards, marked as remembered rather than read because they need the admin
 password. What looks like a credential inside an export comes out as `<redacted>`.
@@ -64,14 +64,30 @@ password. What looks like a credential inside an export comes out as `<redacted>
 Nothing is written and nothing is changed: the switch half runs `/print`, `/export` and one port-state
 query each, and the Livebox gets a single unauthenticated GET.
 
-It signs in with a key, as a RouterOS user carrying only the `read` policy. Create that account once
-per switch:
+It signs in with a key, as a RouterOS user that can sign in, print and export, and change nothing else.
+That is the `read` policy plus the `ssh` one, because RouterOS counts SSH access as a policy of its
+own: a group holding `read` alone cannot open the session.
+
+Make the pair on your machine with no passphrase, copy the public half to the switch with an account
+that can still sign in, and open a session there:
+
+```bash
+ssh-keygen -t ed25519 -N '' -f ~/.ssh/network-audit
+scp ~/.ssh/network-audit.pub admin@192.168.1.11:
+ssh admin@192.168.1.11
+```
+
+Then in that session, once per switch:
 
 ```
-/user group add name=audit policy=read,test
+/user group add name=audit policy=read,ssh
 /user add name=audit group=audit
 /user ssh-keys import public-key-file=network-audit.pub user=audit
 ```
+
+The import comes last because it names the account, which has to exist by then. The script reads
+`~/.ssh/network-audit` unless `NET_AUDIT_KEY` names another file, and a RouterOS build too old to
+import an ed25519 key needs an RSA one: `ssh-keygen -t rsa -b 4096 -N '' -f ~/.ssh/network-audit`.
 
 Then, from this directory:
 
@@ -82,8 +98,9 @@ NET_AUDIT_FROM_FIXTURE=../hack/fixtures/network ./collectors/network-audit.sh   
 
 The default targets are `crs326=192.168.1.11` and `crs309=192.168.1.43`, which `NET_AUDIT_TARGETS`
 overrides; `./collectors/network-audit.sh --help` lists the rest of the variables. The page goes to
-stdout and warnings to stderr, and it is printed whatever the outcome: the exit is 0 when at least one
-switch answered it, 1 when none did, 2 on a usage error.
+stdout, and a device that does not answer is reported in it rather than on the terminal: the exit is 0
+when at least one switch answered it, 1 when none did, 2 on a usage error.
 
-Do not cite a snapshot page from here until one exists: `hack/check_docs.py` resolves every `docs/*.md`
-path in the repository and fails on one that is not there yet.
+<!-- Do not cite a snapshot page from here until one exists: `hack/check_docs.py` resolves every
+`docs/*.md` path in the repository and fails on one that is not there yet. -->
+
