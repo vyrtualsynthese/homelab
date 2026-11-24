@@ -1,6 +1,6 @@
 # Declared host access: a laptop is adopted by a line in git — design
 
-**Status:** draft, awaiting approval · **Date:** 2026-11-25 · **Board:** homelab, card #711
+**Status:** approved 2026-11-25 · **Date:** 2026-11-25 · **Board:** homelab, card #716
 **Live basis (measured 2026-11-25):** `ansible/`, its tests, the two role implementations, `ansible.cfg`
 and [`docs/decisions/2026-11-24-automation-sudo-account.md`](../../decisions/2026-11-24-automation-sudo-account.md).
 Each claim about today's behaviour below was read from the file it names, not inferred from a run,
@@ -94,10 +94,11 @@ human_user: vronteix
 - **Append (`make adopt` writes the host, nothing records it).** One command and no variable. But a key
   nobody revoked is invisible: `make check` cannot report it, and the six hosts become the only record
   of who has access. This is today's model with a shorter command.
-- **A runner on `rbp0` (card #711's original shape).** Real, but it answers a different question: the
-  operator's work is deliberately manual — a dist-upgrade, a node-by-node move, a configuration
-  change — so a second machine buys nothing until the same command has to run while the laptop is shut.
-  This design makes any laptop equivalent, which is the prerequisite for that card either way.
+- **A runner on `rbp0`, or on any other machine (card #711).** Dropped by the operator on 2026-11-25,
+  not deferred. It answered a question the operator does not have: the work is deliberately manual —
+  a dist-upgrade, a node-by-node move, a configuration change — and a second machine adds a machine to
+  patch and a key to protect. What the ticket was really about, a run that does not depend on one
+  laptop, is what this design provides; #711 was retired with its premise.
 - **An SSH certificate authority.** Six hosts and three laptops do not justify one; the CA's private
   key becomes the single object to protect and the thing that has to be on every laptop to sign keys.
   Revisit if hosts ever number in the dozens.
@@ -212,8 +213,8 @@ default identity list rather than adding to it — verified against `ssh -G`.
 
 ## Out of scope
 
-- **The Pi runner** (card #711's literal title). This design is what makes it optional; the decision to
-  still want one belongs to the operator, on the board, not here.
+- **A runner on any machine.** Dropped with #711 (2026-11-25). The layer runs from a laptop by design;
+  the drift report is the only thing that could ever be scheduled, and it is not in this change.
 - **`homelab_ssh` in `config/keys.json`.** A different repository, its own branch and card: it needs an
   entry in `keys.json`, a matching tuple in `EXPECTED_VALIDATORS` (`setup_lib/keys.py`), and a `doctor`
   check. Until it lands, the runbook says `ssh-keygen -t ed25519 -f ~/.ssh/homelab_live`.
@@ -223,8 +224,9 @@ default identity list rather than adding to it — verified against `ssh -G`.
   this one stays reviewable; it does not gate access.
 - **Committing host keys or a `known_hosts`.** A reflashed Pi regenerates its host key, so a committed
   file would need a commit on every reflash. The runbook compares fingerprints instead.
-- **SSH CA, hardware keys, per-host key lists.** Revisit when the fleet or the threat changes.
-
+- **SSH CA, hardware keys, two key lists.** One list was chosen on 2026-11-25: every laptop that may log
+  in may also apply. Revisit if a laptop is ever meant to read the drift report without being able to
+  change a host.
 - **The two edge Pis in this pass.** They have no `ansible` account until the reflash, so this change
   reaches four hosts. Their bootstrap arrives through `pi-reflash.md` steps 8–9 when card #481 runs,
   and the design only requires that the runbook's paragraph stops promising inheritance.
@@ -243,13 +245,11 @@ default identity list rather than adding to it — verified against `ssh -G`.
 - How the runbook page is titled and split. It is one page of about sixty lines, not a section in the
   README.
 
-## Open questions
+## Decisions taken at approval
 
-1. **Card #711's title says "run from a Pi".** This design makes every laptop equivalent and leaves the
-   runner optional. Does #711 get reshaped to this procedure, superseded by a new card, or kept as a
-   later convenience? That is a board decision, and it decides whether this work lands under #711 or
-   under a card of its own.
-2. **One list, or two** (`trusted_ssh_keys` and a narrower `automation_ssh_keys`)? One list is what the
-   homelab actually does; two would let a laptop read the drift report without being able to apply.
-   That is a real distinction only if a laptop is expected to be less trusted than the others, which
-   is not the case today.
+- **One list**, `trusted_ssh_keys`: a laptop that may log in may also apply. The narrower automation-only
+  list is recorded above as the thing to add if that ever stops being true.
+- **No runner, anywhere.** Card #711 was retired on 2026-11-25 with the Pi premise; this work is card
+  #716.
+- **Four hosts in this pass**, the two edge Pis at their reflash (card #481), because they have no
+  `ansible` account to write a key for.
