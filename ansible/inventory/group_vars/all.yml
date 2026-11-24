@@ -10,6 +10,11 @@ kernel_keep: 2
 
 ansible_python_interpreter: /usr/bin/python3
 
+# The LAN the six hosts sit in, derived from a cluster address rather than
+# written down again: the firewall and the exports both need to name it, and a
+# second copy of a network is the drift this layer exists to remove.
+lan_cidr: "{{ hostvars[groups['cluster'][0]].ansible_host | regex_replace('\\.\\d+$', '.0/24') }}"
+
 # Every host: key-only SSH. The accounts role writes this into sshd_config and
 # into a drop-in that sorts ahead of a distribution one.
 sshd_password_auth: false

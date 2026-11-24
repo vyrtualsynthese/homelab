@@ -84,7 +84,7 @@ def test_accounts_removes_the_admins_grant_and_keeps_sudo():
 
 
 def test_accounts_closes_password_auth_for_every_host():
-    defaults = yaml.safe_load((ANSIBLE / "group_vars/all.yml").read_text())
+    defaults = yaml.safe_load((ANSIBLE / "inventory/group_vars/all.yml").read_text())
     assert defaults["sshd_password_auth"] is False
     text = (ANSIBLE / "roles/accounts/tasks/main.yml").read_text()
     assert "PasswordAuthentication" in text
@@ -107,7 +107,7 @@ def test_system_pins_the_running_kernel_before_any_autoremove():
 
 
 def test_system_keeps_two_kernels_and_sets_the_zone_from_one_variable():
-    defaults = yaml.safe_load((ANSIBLE / "group_vars/all.yml").read_text())
+    defaults = yaml.safe_load((ANSIBLE / "inventory/group_vars/all.yml").read_text())
     assert defaults["kernel_keep"] == 2
     assert defaults["timezone"] == "Europe/Paris"
     tasks = (ANSIBLE / "roles/system/tasks/main.yml").read_text()
@@ -116,9 +116,9 @@ def test_system_keeps_two_kernels_and_sets_the_zone_from_one_variable():
 
 
 def test_packages_absent_is_per_host_and_never_touches_the_driver():
-    nas = yaml.safe_load((ANSIBLE / "host_vars/nas.yml").read_text())
-    streaming = yaml.safe_load((ANSIBLE / "host_vars/streaming.yml").read_text())
-    rbp2 = yaml.safe_load((ANSIBLE / "host_vars/rbp2.yml").read_text())
+    nas = yaml.safe_load((ANSIBLE / "inventory/host_vars/nas.yml").read_text())
+    streaming = yaml.safe_load((ANSIBLE / "inventory/host_vars/streaming.yml").read_text())
+    rbp2 = yaml.safe_load((ANSIBLE / "inventory/host_vars/rbp2.yml").read_text())
     assert "intel-i915-dkms" in nas["packages_absent"]
     assert any(p.startswith("cuda-") and "12-4" in p for p in streaming["packages_absent"])
     assert all("nvidia" not in p for p in streaming["packages_absent"])
@@ -137,3 +137,31 @@ def test_packages_runs_before_the_role_that_autoremoves():
         "the orphans the removals create are collected in the same run, after the "
         "running kernel is pinned"
     )
+
+
+def test_firewall_covers_every_port_k3s_needs():
+    rules = yaml.safe_load((ANSIBLE / "roles/firewall/vars/main.yml").read_text())
+    cluster = {(r["port"], r["proto"]) for r in rules["firewall_rules_cluster"]}
+    for needed in [(6443, "tcp"), (10250, "tcp"), (2379, "tcp"), (2380, "tcp"), (8472, "udp")]:
+        assert needed in cluster, f"k3s needs {needed}"
+
+
+def test_firewall_leaves_the_container_ports_alone():
+    rules = yaml.safe_load((ANSIBLE / "roles/firewall/vars/main.yml").read_text())
+    edge = {(r["port"], r["proto"]) for r in rules["firewall_rules_edge"]}
+    assert (22, "tcp") in edge and (53, "udp") in edge
+    assert (5000, "tcp") not in edge, "5000 is DNAT, not INPUT: a rule for it filters nothing"
+    assert (51821, "udp") not in edge, "the tunnel is a published container port, so ufw never sees it"
+
+
+def test_firewall_says_what_it_does_not_cover():
+    text = (ANSIBLE / "roles/firewall/tasks/main.yml").read_text()
+    assert "DOCKER-USER" in text, "the reader has to know where the published ports are filtered"
+
+
+def test_firewall_takes_its_addresses_from_the_inventory():
+    text = "".join(
+        (ANSIBLE / f"roles/firewall/tasks/{name}.yml").read_text()
+        for name in ("main", "resolve")
+    )
+    assert "hostvars" in text and "ansible_host" in text
