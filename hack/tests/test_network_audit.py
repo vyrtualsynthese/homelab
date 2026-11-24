@@ -3,6 +3,7 @@
 import os
 import pathlib
 import subprocess
+import tempfile
 import unittest
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
@@ -153,9 +154,30 @@ class FetchTests(unittest.TestCase):
         self.assertEqual(run(["--major", "crs309"], env=self.env()).stdout.strip(), "6")
 
     def test_the_export_flag_follows_the_routeros_major(self):
-        self.assertEqual(run(["--export-command", "6"]).stdout.strip(), "/export hide-sensitive")
-        self.assertEqual(run(["--export-command", "7"]).stdout.strip(), "/export terse")
-        self.assertEqual(run(["--export-command", "unknown"]).stdout.strip(), "/export terse")
+        six = run(["--export-command", "6"])
+        self.assertEqual(six.returncode, 0)
+        self.assertEqual(six.stdout.strip(), "/export hide-sensitive")
+        seven = run(["--export-command", "7"])
+        self.assertEqual(seven.returncode, 0)
+        self.assertEqual(seven.stdout.strip(), "/export terse")
+
+    def test_an_unknown_major_sends_no_export_at_all(self):
+        done = run(["--export-command", "unknown"])
+        self.assertNotEqual(done.returncode, 0)
+        self.assertEqual(done.stdout, "")
+        self.assertIn("export", done.stderr)
+
+    def test_an_export_with_no_readable_version_is_skipped(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            (root / "crs326.export.txt").write_text(
+                '/ip route add dst-address=10.0.0.0/8 gateway=192.168.1.254\n'
+            )
+            done = run(["--dump", "crs326", "export"],
+                       env=self.env(NET_AUDIT_FROM_FIXTURE=str(root)))
+        self.assertEqual(done.returncode, 0)
+        self.assertIn("(unreachable: RouterOS version unknown, export skipped)", done.stdout)
+        self.assertNotIn("10.0.0.0/8", done.stdout)
 
     def test_the_v6_export_hides_the_snmp_community(self):
         done = run(["--dump", "crs309", "export"], env=self.env())
