@@ -17,6 +17,12 @@ This is a record: what was true on the date, graded. It is not the plan of work 
 [card #480 and #481](https://vikunja.kub.local/projects/2), and this page is what they were filed
 from. A later measurement supersedes it; this one is not edited afterwards.
 
+> **Superseded in part, 2026-11-24 — written, not yet applied.** The findings in §3 (no host firewall),
+> §4 (nine exports of the whole LAN, unsquashed root) and §6 (the `%admins` grant, password logins on
+> the two Pis) have a fix in `ansible/` that was written the same day and has not run on a host yet.
+> The grades above stand as what was measured; they change when a collector run shows the state after
+> the apply, not when the code lands.
+
 ## How a claim is graded here
 
 A line in this plan is only a finding when it names four things: the principal that is not trusted,

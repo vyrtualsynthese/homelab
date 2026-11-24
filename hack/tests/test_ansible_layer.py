@@ -242,3 +242,9 @@ def test_snapraid_replaces_the_hand_written_cron_line():
 def test_snapraid_runs_outside_the_backup_window():
     text = (ANSIBLE / "roles/snapraid/tasks/main.yml").read_text()
     assert "17 3 * * *" in text, "03:17 is after the 02:00 window and before the 05:00 backup"
+
+
+def test_readme_no_longer_claims_the_layer_does_not_work():
+    text = (REPO / "ansible/README.MD").read_text()
+    assert "does not currently work" not in text
+    assert "make check" in text
