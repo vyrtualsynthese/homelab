@@ -5,8 +5,9 @@
 >
 > **Use it when** a cluster node has to move to the next Ubuntu LTS. The two edge Pis do not take this
 > route: they are reflashed — [reflashing an edge Pi](pi-reflash.md) · **Verified** 2026-11-24: the
-> releases offered and the state of all six hosts read from the machines; no node has taken the path
-> below · **Kind:** how-to
+> releases offered and the state of all six hosts read from the machines, and the P400's 580 module
+> built against both 26.04 kernels in a throwaway container; no node has taken the path below ·
+> **Kind:** how-to
 >
 > **Status:** pending — written from the design, the measured hosts and the runbooks it links to, not
 > from a run. The first node makes it `proved`.
@@ -51,11 +52,14 @@ Each node's gate, in this order, recorded in the card:
   progress` line, and its last `scrub/sync` is 0 days old. On 2026-11-24 the parity and the content both
   dated from 2024-02-10, so the union has had no protection since; the hop does not start until the
   nightly runner has brought the array current.
-- **`streaming`'s GPU**: driver 580.178.04 is the last branch NVIDIA ships for the Quadro P400, and its
-  module is DKMS-built. The 26.04 hop on this host is gated by the experiment that builds that module
-  against the new kernel; if it does not compile, `streaming` stops after hop 1 and stays on 24.04, which
-  is supported to 2029. **That is a decision, and it is recorded before the node is touched, not at the
-  reboot.**
+- **`streaming`'s GPU — settled on 2026-11-24: the module compiles.** Driver 580.178.04 is the last
+  branch NVIDIA ships for the Quadro P400, and its module is DKMS-built. Ubuntu 26.04.1 packages the
+  same branch as `nvidia-dkms-580-server` 580.178.04, and DKMS built it against both 26.04 kernels —
+  updates `7.0.0-44` and GA `7.0.0-14` — with zero errors, printing
+  `nvidia-srv/580.178.04, 7.0.0-44-generic, x86_64: installed`. The hop is no longer gated by the
+  build. It is still gated by **loading**: after the reboot `nvidia-smi -L` must name the Quadro P400
+  and a Plex transcode must work. If the module refuses to load, that is hop 1's rollback — the host
+  goes back on 24.04, supported to 2029, and the reason is written in the card before anything else.
 
 ## One node at a time
 
