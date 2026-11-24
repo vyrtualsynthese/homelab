@@ -16,8 +16,15 @@ single-board computers that run Pi-hole, the DNS filter every device on the LAN 
 WireGuard, the VPN that gets you in from outside. No Kubernetes workload runs on them.
 
 The four cluster nodes are all `Ready`, with no memory or disk pressure, on K3s `v1.36.6+k3s1`
-(since 24 November) and Ubuntu 22.04.5 LTS. `streaming` is the only one on a 6.8 kernel; the other
+(since 24 November). `streaming` is the only one on a 6.8 kernel; the other
 three are on 5.15. Memory below is the total Kubernetes reports for the node.
+
+Measured on 2026-11-24, the four run Ubuntu 22.04.5 LTS (jammy): `nas` and `nuc0` on
+5.15.0-187-generic, `streaming` on 6.8.0-149-generic, `rbp2` on 5.15.0-1105-raspi. The two edge Pis are
+split across releases — `rbp0` is on Ubuntu 24.04.4 LTS (noble) with 6.8.0-1060-raspi, and `rbp1` is
+still on 22.04.5 (jammy) with 5.15.0-1105-raspi — so the Pis do not upgrade as a pair. Kernel and
+package detail for all six is in the record:
+[the six hosts, measured](../audit/hosts-2026-11-24.md).
 
 ![The four cluster nodes with their workloads and disks, the router, and the two edge Pis](../assets/diagrams/nodes.svg)
 
@@ -75,3 +82,4 @@ accepted](../decisions/2026-11-13-nuc0-throttling-accepted.md).
 - [storage.md](storage.md) — the two storage worlds, claim naming, and the backup gap.
 - [applications.md](applications.md) — every application with its node, route, protection and chart.
 - [observability.md](observability.md) — what watches these machines, and the known holes.
+- [the six hosts, measured](../audit/hosts-2026-11-24.md) — kernel, packages, runtime and exports as the machines report them.
