@@ -150,22 +150,37 @@ slug_command() {                         # slug_command <slug> <major>
     ethernet)    printf '/interface ethernet print' ;;
     address)     printf '/ip address print' ;;
     route)       printf '/ip route print' ;;
-    export)      if [ "$2" = "6" ]; then printf '/export hide-sensitive'; else printf '/export terse'; fi ;;
+    export)      case "$2" in
+                   6) printf '/export hide-sensitive' ;;
+                   7) printf '/export terse' ;;
+                   *) return 1 ;;
+                 esac ;;
     *) return 1 ;;
   esac
 }
 
 fetch() {                                # fetch <device> <slug>
-  local device="$1" slug="$2" host major rc out
+  local device="$1" slug="$2" host major cmd rc out
   host="$(host_of "$device")" || { printf '(unreachable: no such target)\n'; return 0; }
+  # The export command follows the major, and an unknown major fails closed: `/export terse`
+  # against a RouterOS 6 device prints its Wi-Fi keys and the SNMP community in clear, so when
+  # the version cannot be read no export is sent at all and the page says why.
+  major="$(routeros_major "$device")"
+  if ! cmd="$(slug_command "$slug" "$major")"; then
+    if [ "$slug" = "export" ]; then
+      printf '(unreachable: RouterOS version unknown, export skipped)\n'
+    else
+      printf '(unreachable: unknown slug %s)\n' "$slug"
+    fi
+    return 0
+  fi
   if [ -n "$NET_AUDIT_FROM_FIXTURE" ]; then
     if [ -f "$NET_AUDIT_FROM_FIXTURE/$device.$slug.txt" ]; then
       redact_routeros < "$NET_AUDIT_FROM_FIXTURE/$device.$slug.txt"; return 0
     fi
     printf '(unreachable: no fixture for %s.%s)\n' "$device" "$slug"; return 0
   fi
-  major="$(routeros_major "$device")"
-  out="$(ros "$host" "$(slug_command "$slug" "$major")")"; rc=$?
+  out="$(ros "$host" "$cmd")"; rc=$?
   if [ "$rc" -ne 0 ] || printf '%s' "$out" | grep -q '^Bad command name\|^failure:\|Permission denied\|Connection refused\|Connection timed out\|No route to host'; then
     printf '(unreachable: %s)\n' "$(printf '%s' "$out" | head -1)"
     return 0
@@ -197,7 +212,8 @@ case "${1:-}" in
     validate_targets; routeros_major "$2"; exit 0 ;;
   --export-command)
     [ $# -eq 2 ] || die "--export-command takes <major>"
-    slug_command export "$2"; printf '\n'; exit 0 ;;
+    slug_command export "$2" || die "no export command for RouterOS major '$2'"
+    printf '\n'; exit 0 ;;
   "") validate_targets ;;
   *) die "unknown option '$1' (try --help)" ;;
 esac
