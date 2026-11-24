@@ -181,6 +181,3 @@ when at least one switch answered it, 1 when none did, 2 on a usage error.
 <!-- Do not cite a snapshot page from here until one exists: `hack/check_docs.py` resolves every
 `docs/*.md` path in the repository and fails on one that is not there yet. -->
 
-||||||| parent of 58ba63e9 (📝 docs: what the host layer does, and how to see a host drift from it)
-Treat both commands as broken until W8 lands. If you need to touch a host, do it by hand and record
-what you did in `docs/`.
