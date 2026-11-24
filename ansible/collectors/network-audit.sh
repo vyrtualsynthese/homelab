@@ -6,6 +6,11 @@
 #   ./network-audit.sh --list-targets
 #   ./network-audit.sh --redact-routeros < some-export
 #   ./network-audit.sh --help
+#   ./network-audit.sh --dump <device> <slug>      # for tests: one capture, redacted
+#   ./network-audit.sh --major <device>            # for tests: its RouterOS major, 6 or 7
+#   ./network-audit.sh --export-command <major>    # for tests: the /export command for it
+#
+# A slug is one of resource, routerboard, package, identity, ethernet, address, route, export.
 #
 # Read-only: the RouterOS account carries the `read` policy, every command is a `print` or an
 # `/export`, and no file is written anywhere. The page goes to stdout, warnings to stderr; exit 0
@@ -30,17 +35,36 @@ NET_AUDIT_CONNECT_TIMEOUT="${NET_AUDIT_CONNECT_TIMEOUT:-5}"
 NET_AUDIT_CMD_TIMEOUT="${NET_AUDIT_CMD_TIMEOUT:-20}"
 LIVEBOX_HOST="${LIVEBOX_HOST:-192.168.1.1}"
 
-usage() { sed -n '2,20p' "${BASH_SOURCE[0]}"; exit 0; }
+usage() { sed -n '2,25p' "${BASH_SOURCE[0]}"; exit 0; }
 die() { printf 'network-audit.sh: %s\n' "$1" >&2; exit 2; }
 
-# One "name host" pair per line, from NET_AUDIT_TARGETS.
-targets() {
+# Die on a list that is not "name=host", before any pair is printed or fetched: a malformed list
+# that emitted the pairs it had already read would look like a good run that lost targets.
+validate_targets() {
   local pair name host
   for pair in $NET_AUDIT_TARGETS; do
     name="${pair%%=*}"; host="${pair#*=}"
     [ "$name" != "$host" ] || die "target '$pair' is not name=host"
+  done
+}
+
+# One "name host" pair per line, from NET_AUDIT_TARGETS.
+targets() {
+  local pair name host
+  validate_targets
+  for pair in $NET_AUDIT_TARGETS; do
+    name="${pair%%=*}"; host="${pair#*=}"
     printf '%s %s\n' "$name" "$host"
   done
+}
+
+# The address of a target by name, 1 when the name is unknown.
+host_of() {
+  local device="$1" name host
+  while read -r name host; do
+    if [ "$name" = "$device" ]; then printf '%s\n' "$host"; return 0; fi
+  done < <(targets)
+  return 1
 }
 
 # Replace the value of every attribute whose name says it holds a credential with <redacted>,
@@ -70,13 +94,21 @@ redact_routeros() {
   }
   {
     out = ""; line = $0
-    snmp = (line ~ /^[[:space:]]*\/snmp[[:space:]]+community([[:space:]]|$)/)
+    # Two export shapes carry the community: RouterOS 7 writes the whole object on an absolute
+    # command line, RouterOS 6 prints a `/snmp community` header and the `add`/`set` lines below
+    # it, where the community is a `name=`. So the header opens a block, remembered across lines,
+    # and any other absolute command closes it.
+    snmp = 0
+    if (line ~ /^[[:space:]]*\//) {
+      snmp = (line ~ /^[[:space:]]*\/snmp[[:space:]]+community([[:space:]]|$)/)
+      in_snmp = snmp
+    }
     while (match(line, /[A-Za-z0-9._-]+=/)) {
       key = substr(line, RSTART, RLENGTH - 1)
       out = out substr(line, 1, RSTART - 1) key "="
       line = substr(line, RSTART + RLENGTH)
       # On an /snmp community object the community string itself is carried by name=.
-      if (sensitive(key) || (snmp && key == "name")) {
+      if (sensitive(key) || ((snmp || in_snmp) && key == "name")) {
         if (substr(line, 1, 1) == "\"") {
           end = close_quote(line)
           # Keep what follows only when the quote closes on the end of the line or on a space;
@@ -97,10 +129,75 @@ redact_routeros() {
   '
 }
 
+# One RouterOS command on a device, its output on stdout (ssh's own messages included, so a
+# failure has a reason to print). Bounded on the connect and on the command; BatchMode keeps ssh
+# from ever asking for a password, so a key the device refuses ends the call instead of hanging.
+ros() {                                  # ros <host> <routeros command...>
+  local host="$1"; shift
+  timeout "$NET_AUDIT_CMD_TIMEOUT" ssh \
+    -i "$NET_AUDIT_KEY" -o BatchMode=yes \
+    -o ConnectTimeout="$NET_AUDIT_CONNECT_TIMEOUT" \
+    -o StrictHostKeyChecking=accept-new \
+    "$NET_AUDIT_USER@$host" "$*" 2>&1
+}
+
+slug_command() {                         # slug_command <slug> <major>
+  case "$1" in
+    resource)    printf '/system resource print' ;;
+    routerboard) printf '/system routerboard print' ;;
+    package)     printf '/system package print' ;;
+    identity)    printf '/system identity print' ;;
+    ethernet)    printf '/interface ethernet print' ;;
+    address)     printf '/ip address print' ;;
+    route)       printf '/ip route print' ;;
+    export)      if [ "$2" = "6" ]; then printf '/export hide-sensitive'; else printf '/export terse'; fi ;;
+    *) return 1 ;;
+  esac
+}
+
+fetch() {                                # fetch <device> <slug>
+  local device="$1" slug="$2" host major rc out
+  host="$(host_of "$device")" || { printf '(unreachable: no such target)\n'; return 0; }
+  if [ -n "$NET_AUDIT_FROM_FIXTURE" ]; then
+    if [ -f "$NET_AUDIT_FROM_FIXTURE/$device.$slug.txt" ]; then
+      redact_routeros < "$NET_AUDIT_FROM_FIXTURE/$device.$slug.txt"; return 0
+    fi
+    printf '(unreachable: no fixture for %s.%s)\n' "$device" "$slug"; return 0
+  fi
+  major="$(routeros_major "$device")"
+  out="$(ros "$host" "$(slug_command "$slug" "$major")")"; rc=$?
+  if [ "$rc" -ne 0 ] || printf '%s' "$out" | grep -q '^Bad command name\|^failure:\|Permission denied\|Connection refused\|Connection timed out\|No route to host'; then
+    printf '(unreachable: %s)\n' "$(printf '%s' "$out" | head -1)"
+    return 0
+  fi
+  printf '%s\n' "$out" | redact_routeros
+}
+
+# The major version decides one thing: `/export terse` on 7, `/export hide-sensitive` on 6, never
+# the other way round. Read from the resource block directly, not through fetch, which asks this.
+routeros_major() {                       # routeros_major <device> → 6, 7, or empty
+  local device="$1" host
+  host="$(host_of "$device")" || return 0
+  if [ -n "$NET_AUDIT_FROM_FIXTURE" ]; then
+    awk '/^ *version:/{print $2; exit}' "$NET_AUDIT_FROM_FIXTURE/$device.resource.txt" 2>/dev/null | cut -d. -f1
+    return 0
+  fi
+  ros "$host" "/system resource print" | awk '/^ *version:/{print $2; exit}' | cut -d. -f1
+}
+
 case "${1:-}" in
   --help|-h) usage ;;
   --list-targets) targets; exit 0 ;;
   --redact-routeros) redact_routeros; exit 0 ;;
-  "") ;;
+  --dump)
+    [ $# -eq 3 ] || die "--dump takes <device> <slug>"
+    validate_targets; fetch "$2" "$3"; exit 0 ;;
+  --major)
+    [ $# -eq 2 ] || die "--major takes <device>"
+    validate_targets; routeros_major "$2"; exit 0 ;;
+  --export-command)
+    [ $# -eq 2 ] || die "--export-command takes <major>"
+    slug_command export "$2"; printf '\n'; exit 0 ;;
+  "") validate_targets ;;
   *) die "unknown option '$1' (try --help)" ;;
 esac

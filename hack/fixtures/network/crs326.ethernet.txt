@@ -1,0 +1,5 @@
+name=ether1 status=link-ok speed=1Gbps
+name=ether2 status=link-ok speed=1Gbps
+name=ether3 status=no-link speed=unknown
+name=sfp-sfpplus1 status=link-ok speed=10Gbps
+name=sfp-sfpplus2 status=link-ok speed=10Gbps
