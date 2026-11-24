@@ -92,8 +92,8 @@ as the early "it has started to die" signal. `DiskTooHot` (19 firings in 30 days
 
 - **Relay.** `is_critical()` goes. Every delivered notification creates or comments on a card, exactly
   as the code already does for criticals: open one card per incident, comment on repetition, comment on
-  resolve, never close. One log line per delivery — `firing: created #N`, `firing: commented on #N`,
-  `resolved: commented on #N` — so a silent relay is visible next time.
+  resolve, never close. One log line per delivery — `firing: DriveWorn on nas: opened #N`, `…: commented on #N`,
+  `…: resolved on #N` — so a silent relay is visible next time.
 - **Routing.** Add a third child route: matcher `board=card` → `vikunja-alerts`, no `continue`. The
   existing `severity=critical` → `vikunja-alerts` route stays. The worn rule therefore creates one card
   and one Discord message, and nothing after.
@@ -106,11 +106,13 @@ Question the screen answers: *which drives need action, and which are quietly fi
 
 | Row | Panels |
 |---|---|
-| **Needs attention** | `Replace soon` (worn, not failing) · `Failing now` — two stats, each opening the alert |
+| **Needs attention** | `Drives monitored` · `Replace soon` (worn, not failing) · `Failing now` — three stats, the last two opening the alert |
 | **Fleet** | one table, sorted failing first: host, drive, model, capacity, age, life %, temperature, SMART, reallocated, pending, **verdict** |
 | **Trends** | life left over time · temperature · reallocated and pending sectors |
 
-Six panels, down from fourteen. The six KPI stats, the two bargauges and the duplicate trend panels go.
+Seven panels, down from fourteen. `Drives monitored` stays because a drive that stops publishing
+disappears from the table and from both rules: the count going down is the only trace. The six KPI
+stats, the two bargauges and the duplicate trend panels go.
 
 **Verdict** is one numeric score per drive, value-mapped to words in the panel, so the table can sort
 on it: `3` failing (any hard signal), `2` replace (worn), `1` watch (life under 25 %), `0` OK. The score
