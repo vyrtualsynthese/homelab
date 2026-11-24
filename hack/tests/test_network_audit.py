@@ -248,9 +248,9 @@ class PageTests(unittest.TestCase):
         page = self.page()
         self.assertIn("## crs326 — 192.168.1.11", page)
         self.assertIn("## crs309 — 192.168.1.43", page)
-        # The labelled lines, not the bare values: 7.16.1 also appears in crs326's export, and
-        # crs326's current-firmware is a different number, so only a `version:` read of the
-        # resource block can put it on the `routeros:` line.
+        # The labelled line, not the bare value: 7.16.1 is also in the package fixture
+        # (`crs326.package.txt`, the `0 routeros 7.16.1` row), so only `routeros: 7.16.1` shows
+        # the version was read from the resource block's own `version:` field.
         self.assertIn("identity: CR326", page)
         self.assertIn("model: CRS326-24G-2S+", page)
         self.assertIn("serial: HE908ABCD", page)
@@ -278,6 +278,22 @@ class PageTests(unittest.TestCase):
         self.assertIn("(no port reported)", done.stdout)
         self.assertNotIn("| port | status | speed |", done.stdout)
 
+    def test_a_port_table_whose_blocks_are_not_blank_separated_has_one_row_each(self):
+        # Some device shapes a monitor block without a blank line between ports, so a flush that
+        # waits only for a blank line would merge every port into one row and drop the rest.
+        done = self.page_of({
+            "ethernet": "                      name: ether1\n"
+                        "                    status: link-ok\n"
+                        "                      rate: 1Gbps\n"
+                        "                      name: ether2\n"
+                        "                    status: no-link\n",
+            "export": "/system identity set name=CR326\n",
+        })
+        self.assertEqual(done.returncode, 0, done.stderr)
+        self.assertIn("| ether1 | link-ok | 1Gbps |", done.stdout)
+        self.assertIn("| ether2 | no-link | unknown |", done.stdout)
+        self.assertNotIn("| ether1 ether2 |", done.stdout)
+
     def test_a_large_export_is_not_truncated(self):
         page = self.page()
         self.assertIn("/ip address add address=192.168.1.11/24", page)
@@ -286,3 +302,27 @@ class PageTests(unittest.TestCase):
 
     def test_the_page_says_what_it_does_not_cover(self):
         self.assertIn("## What this record does not cover", self.page())
+
+
+class LiveboxTests(unittest.TestCase):
+    def page(self):
+        return run(env={"NET_AUDIT_FROM_FIXTURE": str(FIXTURE)}).stdout
+
+    def test_the_firmware_build_is_read_from_the_login_page(self):
+        self.assertIn("v1.0.161_20260923", self.page())
+
+    def test_the_remembered_half_is_labelled(self):
+        page = self.page()
+        self.assertIn("not read from the device", page)
+        self.assertIn("192.168.1.46", page)
+
+    def test_an_unreachable_livebox_still_prints_a_page(self):
+        done = run(env={"NET_AUDIT_FROM_FIXTURE": "/nonexistent"})
+        self.assertIn("(unreachable:", done.stdout)
+        self.assertIn("## What this record does not cover", done.stdout)
+
+    def test_a_run_with_no_reachable_device_exits_1(self):
+        done = run(env={"NET_AUDIT_TARGETS": "ghost=203.0.113.9",
+                        "NET_AUDIT_FROM_FIXTURE": "/nonexistent"})
+        self.assertEqual(done.returncode, 1)
+        self.assertEqual(done.stdout.count("(unreachable:"), 2)
