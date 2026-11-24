@@ -15,7 +15,7 @@ Two Raspberry Pis sit outside the cluster: the **edge Pis**, `rbp0` and `rbp1`. 
 single-board computers that run Pi-hole, the DNS filter every device on the LAN queries, and
 WireGuard, the VPN that gets you in from outside. No Kubernetes workload runs on them.
 
-The four cluster nodes are all `Ready`, with no memory or disk pressure, on K3s `v1.33.13+k3s2`
+The four cluster nodes are all `Ready`, with no memory or disk pressure, on K3s `v1.36.6+k3s1`
 (since 24 November) and Ubuntu 22.04.5 LTS. `streaming` is the only one on a 6.8 kernel; the other
 three are on 5.15. Memory below is the total Kubernetes reports for the node.
 

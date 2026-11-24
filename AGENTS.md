@@ -355,18 +355,18 @@ are in `docs/superpowers/plans/`.
     updating, the only image being a `latest` scratch pod. `docs/runbooks/renovate.md` has the
     manager-by-manager coverage.
 
-18. **K3s is on `v1.33.13+k3s2` on all four nodes (2026-11-24), containerd `2.2.5-k3s1.33`.** Moved
+18. **K3s is on `v1.36.6+k3s1` on all four nodes (2026-11-24), containerd `2.3.7-k3s1.36`.** Moved
     one node at a time with `system-upgrade-controller`, against plans pinned to a version *and* a
-    single hostname, twice in one evening (`v1.31.14+k3s1` → `v1.32.13+k3s1` → `v1.33.13+k3s2`):
-    `nuc0` 33 s then 27 s, `rbp2` 152 s then 268 s (the ARM Pi), `streaming` 27 s then 22 s with a
-    measured 6-second ingress blip on the second hop, `nas` 27 s then 32 s. etcd quorum held
-    throughout, PostgreSQL shut down cleanly, the NFS exports kept serving, the GPU stayed at
-    `nvidia.com/gpu: 1`, and each node's backup job was re-run afterwards as the containerd check.
-    Procedure, timings, traps and the rollback caveat:
-    [`docs/runbooks/k3s-upgrade.md`](docs/runbooks/k3s-upgrade.md). Next minors: card 521 (1.34 to
-    1.36), where 1.34 puts Argo CD back inside its supported range. Both plans carry
-    `version: v1.33.13+k3s2` and a hostname selector naming the last node moved; widening a selector
-    is what starts the next node. The controller's kubectl image is `v1.33.13`.
+    single hostname, five minors in one evening (`v1.31.14+k3s1` → 1.32 → 1.33, then 1.34, 1.35,
+    1.36): `nuc0` 31–55 s, `rbp2` 152–268 s then 215–226 s (the ARM Pi), `streaming` 22–32 s,
+    `nas` 27–32 s. etcd quorum held throughout, PostgreSQL shut down cleanly, the NFS exports kept
+    serving, the GPU stayed at `nvidia.com/gpu: 1`, and each node's backup job was re-run afterwards
+    as the containerd check. No ingress blip in the last three hops; 6 s at 1.33. Procedure, timings,
+    traps and the rollback caveat: [`docs/runbooks/k3s-upgrade.md`](docs/runbooks/k3s-upgrade.md).
+    Cards 520 and 521 are closed by it; **1.37 is a decision of its own and has no card**. Both plans
+    carry `version: v1.36.6+k3s1` and a hostname selector naming the last node moved; widening a
+    selector is what starts the next node. The controller's kubectl image is `v1.36.2` — a published
+    `rancher/kubectl` tag, never the k3s patch name.
 
 ## 8. Rules
 
