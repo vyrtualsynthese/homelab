@@ -290,7 +290,7 @@ git commit -m "🚀 feature: a redactor written for RouterOS attributes"
   - `ros <host> <routeros-command…>` — prints the command's output on stdout, returns the ssh exit status; it never prints a password.
   - `host_of <device>` — prints the target's address, returns 1 for an unknown name.
   - `fetch <device> <slug>` — prints the redacted output for that slug, or the single line `(unreachable: <reason>)`; slugs are `resource routerboard package identity ethernet address route export`.
-  - `slug_command <slug> <major>` — the RouterOS command for that slug; `export` is `/export hide-sensitive` on major `6`, `/export terse` on `7`, and nothing at all for any other value (it returns non-zero, so `fetch` fails closed rather than guessing).
+  - `slug_command <slug> <major>` — the RouterOS command for that slug; `export` is `/export hide-sensitive` on major `6`, `/export` on `7` (where sensitive values are hidden by default), and nothing at all for any other value (it returns non-zero, so `fetch` fails closed rather than guessing).
   - `routeros_major <device>` — prints `6` or `7` from the `resource` block, empty when unknown.
   - Internal modes, documented in the header as "for tests": `--dump <device> <slug>`, `--major <device>`, `--export-command <major>`.
   - Fixture layout: `$NET_AUDIT_FROM_FIXTURE/<device>.<slug>.txt`.
@@ -363,11 +363,11 @@ class FetchTests(unittest.TestCase):
         self.assertEqual(six.stdout.strip(), "/export hide-sensitive")
         seven = run(["--export-command", "7"])
         self.assertEqual(seven.returncode, 0)
-        self.assertEqual(seven.stdout.strip(), "/export terse")
+        self.assertEqual(seven.stdout.strip(), "/export")
 
     def test_an_unknown_major_sends_no_export_at_all(self):
         # An unreadable version fails closed: no export is sent, so a RouterOS 6 device can
-        # never receive `/export terse`. Ruling R9 in the SDD ledger.
+        # never receive a bare `/export`. Rulings R9 and R12 in the SDD ledger.
         done = run(["--export-command", "unknown"])
         self.assertNotEqual(done.returncode, 0)
         self.assertEqual(done.stdout, "")
@@ -424,7 +424,7 @@ slug_command() {                         # slug_command <slug> <major>
     route)       printf '/ip route print' ;;
     export)      case "$2" in
                    6) printf '/export hide-sensitive' ;;
-                   7) printf '/export terse' ;;
+                   7) printf '/export' ;;
                    *) return 1 ;;
                  esac ;;
     *) return 1 ;;
@@ -434,7 +434,7 @@ slug_command() {                         # slug_command <slug> <major>
 fetch() {                                # fetch <device> <slug>
   local device="$1" slug="$2" host major cmd rc out
   host="$(host_of "$device")" || { printf '(unreachable: no such target)\n'; return 0; }
-  # The export command follows the major, and an unknown major fails closed: `/export terse`
+  # The export command follows the major, and an unknown major fails closed: a bare `/export`
   # against a RouterOS 6 device prints its Wi-Fi keys and the SNMP community in clear, so when
   # the version cannot be read no export is sent at all and the page says why.
   major="$(routeros_major "$device")"
