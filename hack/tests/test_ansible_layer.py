@@ -98,3 +98,18 @@ def test_accounts_sets_its_own_sshd_config_and_the_first_word_wins():
     text = (ANSIBLE / "roles/accounts/tasks/main.yml").read_text()
     assert "sshd_config.d/00-homelab.conf" in text
     assert "first value" in text
+
+
+def test_system_pins_the_running_kernel_before_any_autoremove():
+    text = (ANSIBLE / "roles/system/tasks/main.yml").read_text()
+    order = [text.index(needle) for needle in ("uname -r", "apt-mark", "autoremove")]
+    assert order == sorted(order), "autoremove must come after the running kernel is pinned"
+
+
+def test_system_keeps_two_kernels_and_sets_the_zone_from_one_variable():
+    defaults = yaml.safe_load((ANSIBLE / "group_vars/all.yml").read_text())
+    assert defaults["kernel_keep"] == 2
+    assert defaults["timezone"] == "Europe/Paris"
+    tasks = (ANSIBLE / "roles/system/tasks/main.yml").read_text()
+    assert "{{ timezone }}" in tasks, "the zone comes from group_vars, not a literal in the role"
+    assert "hwclock" not in tasks, "a Raspberry Pi has no RTC; the module would fail on the edge hosts"

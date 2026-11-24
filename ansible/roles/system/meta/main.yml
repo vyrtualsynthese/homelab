@@ -1,0 +1,11 @@
+---
+galaxy_info:
+  role_name: system
+  author: operator
+  description: Sets one time zone and keeps the kernel set to two versions
+  license: MIT
+  min_ansible_version: "2.18"
+  platforms:
+    - name: Ubuntu
+      versions:
+        - all
