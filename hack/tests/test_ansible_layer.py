@@ -52,7 +52,9 @@ def test_site_lists_every_role_that_exists():
     roles = sorted(p.name for p in (ANSIBLE / "roles").iterdir() if p.is_dir())
     assert roles, "no roles yet"
     for role in roles:
-        assert f"- {role}" in site, f"{role} is not reached from site.yml"
+        assert f"- {role}" in site or f"- role: {role}" in site, (
+            f"{role} is not reached from site.yml"
+        )
 
 
 def test_every_role_declares_its_metadata():
@@ -165,3 +167,56 @@ def test_firewall_takes_its_addresses_from_the_inventory():
         for name in ("main", "resolve")
     )
     assert "hostvars" in text and "ansible_host" in text
+
+
+def test_exports_drop_mnt_and_squash_root():
+    tpl = (ANSIBLE / "roles/nfs/templates/exports.j2").read_text()
+    assert "/mnt/storage/nfs/plexmedia" in tpl
+    assert "no_root_squash" not in tpl
+    assert "insecure" not in tpl
+    assert "root_squash" in tpl
+    lines = [l for l in tpl.splitlines() if l.strip() and not l.strip().startswith("#")]
+    assert len(lines) == 8, f"expected the eight the cluster mounts, got {len(lines)}"
+    assert not any(l.split()[0] == "/mnt" for l in lines), "/mnt must not be exported"
+
+
+def test_the_certificate_store_belongs_to_the_squashed_identity():
+    """Traefik runs as root and writes acme.json. Squashing root without giving
+    that store to 1100 breaks certificate renewal on a delay nobody watches."""
+    text = (ANSIBLE / "roles/nfs/tasks/main.yml").read_text()
+    assert "/mnt/storage/traefik" in text
+    assert "1100" in text
+    tpl = (ANSIBLE / "roles/nfs/templates/exports.j2").read_text()
+    assert "anonuid=1100" in tpl, "fsid 8 maps the squashed root back to the writer"
+
+
+def test_the_nfs_role_runs_only_where_the_export_is():
+    site = (ANSIBLE / "playbooks/site.yml").read_text()
+    assert "group_names" in site and "storage" in site
+
+
+def test_every_notify_names_a_handler_that_exists():
+    for role in (ANSIBLE / "roles").iterdir():
+        if not role.is_dir():
+            continue
+        handler_file = role / "handlers/main.yml"
+        handlers = yaml.safe_load(handler_file.read_text()) or [] if handler_file.exists() else []
+        names = {h["name"] for h in handlers if isinstance(h, dict) and h.get("name")}
+        for path in (role / "tasks").glob("*.yml"):
+            for task in yaml.safe_load(path.read_text()) or []:
+                if not isinstance(task, dict) or "notify" not in task:
+                    continue
+                notified = task["notify"]
+                notified = [notified] if isinstance(notified, str) else notified
+                missing = sorted(set(notified) - names)
+                assert not missing, f"{path}: notify names {missing}, which {role.name} does not define"
+
+
+def test_every_export_line_attaches_the_options_to_each_address():
+    tpl = (ANSIBLE / "roles/nfs/templates/exports.j2").read_text()
+    lines = [l for l in tpl.splitlines() if l.strip() and not l.strip().startswith("#")]
+    for line in lines:
+        assert "regex_replace" in line, (
+            "exports(5) gives an option list to the host it follows: a bare "
+            "address takes the defaults instead of this file's options"
+        )

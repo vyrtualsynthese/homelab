@@ -1,0 +1,69 @@
+---
+# The eight exports, owned here and nowhere else.
+#
+# What decides the procedure:
+#   `showmount -a` on the host before the first apply names every client that
+#   mounts something today, including machines that appear in no repository.
+#   A client dropped from the list fails with "access denied" on its next
+#   mount, which is visible; a client kept by accident is a hole that looks
+#   like a working mount.
+#
+#   `sync` replaces `async`: with async a client's write is acknowledged before
+#   it reaches the disk, so a database can survive a reboot in a state nobody
+#   planned for.
+- name: Refuse to run anywhere but the node that holds the disks
+  ansible.builtin.assert:
+    that:
+      - "'storage' in group_names"
+    fail_msg: >-
+      The export belongs to the node in the `storage` group. Running it here
+      would overwrite this host's export table with another host's paths.
+
+- name: Install the server where it is absent
+  ansible.builtin.apt:
+    name: nfs-kernel-server
+    state: present
+
+- name: Collect the addresses that may mount
+  ansible.builtin.set_fact:
+    nfs_addresses: "{{ groups['cluster'] | map('extract', hostvars, 'ansible_host') | list }}"
+
+- name: Write the export list
+  ansible.builtin.template:
+    src: exports.j2
+    dest: /etc/exports
+    owner: root
+    group: root
+    mode: "0644"
+    # The previous file is what a rollback restores: `cp /etc/exports.<stamp>`.
+    backup: true
+  notify: Reload the export list
+
+- name: Give the certificate store to the identity the squash maps root to
+  ansible.builtin.file:
+    path: /mnt/storage/traefik
+    state: directory
+    owner: 1100
+    group: 1100
+    recurse: true
+    follow: false
+
+- name: Make sure the server is running
+  ansible.builtin.systemd_service:
+    name: nfs-server
+    state: started
+    enabled: true
+  notify: Reload the export list
+
+# A handler runs at the end of the play, which is after the read-back below.
+# Flushing it here is what makes the read-back see the table this run wrote.
+- name: Apply the queued reload before reading the table back
+  ansible.builtin.meta: flush_handlers
+
+- name: Read the export table back and refuse a looser one
+  ansible.builtin.command: exportfs -v
+  register: nfs_exported
+  changed_when: false
+  failed_when: >-
+    (nfs_exported.stdout_lines | length) != 8
+    or 'no_root_squash' in nfs_exported.stdout

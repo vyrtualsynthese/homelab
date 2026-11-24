@@ -78,6 +78,3 @@ firewall_rules_nas:
     proto: tcp
     source: nodes
     comment: NFSv3 mountd
-
-# The host that carries `firewall_rules_nas`; a name, not an address.
-firewall_nfs_host: nas

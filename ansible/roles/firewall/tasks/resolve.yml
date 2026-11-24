@@ -9,7 +9,7 @@
     firewall_rules: >-
       {{ (firewall_rules_cluster if 'cluster' in group_names else [])
          + (firewall_rules_edge if 'edge' in group_names else [])
-         + (firewall_rules_nas if inventory_hostname == firewall_nfs_host else []) }}
+         + (firewall_rules_nas if 'storage' in group_names else []) }}
 
 - name: Resolve every named source set to the addresses it stands for
   ansible.builtin.set_fact:
