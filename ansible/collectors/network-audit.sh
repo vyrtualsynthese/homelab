@@ -12,17 +12,17 @@
 #
 # A slug is one of resource, routerboard, package, identity, ethernet, address, route, export.
 #
-# Read-only: the RouterOS account carries the `read` policy, every command is a `print` or an
-# `/export`, and no file is written anywhere. The page goes to stdout, warnings to stderr; exit 0
-# on a printed page, 1 when no device answered, 2 on a usage error.
+# Read-only: the RouterOS account carries the `read` policy, and what runs is `/print`, `/export`
+# and one `/interface ethernet monitor [find] once` for port state; no file is written and the
+# Livebox answers a single unauthenticated GET. The page goes to stdout, warnings to stderr; exit
+# 0 on a printed page, 1 when no device answered, 2 on a usage error.
 #
 # NET_AUDIT_TARGETS      "name=host" pairs, default crs326=192.168.1.11 crs309=192.168.1.43
 # NET_AUDIT_FROM_FIXTURE a directory of captured output; when set, no device is contacted
 # NET_AUDIT_USER, NET_AUDIT_KEY, NET_AUDIT_DATE   account, its key, and the page's date
 # NET_AUDIT_CONNECT_TIMEOUT, NET_AUDIT_CMD_TIMEOUT  seconds, default 5 and 20
 #
-# The MikroTik half is read in full. The Livebox half is partly remembered: what the box will not
-# answer is supplied by the operator, and the page marks it as remembered.
+# The MikroTik half is read in full; the Livebox half is partly remembered, and the page says which.
 set -uo pipefail
 
 SCRIPT_VERSION="2026-11-24.1"
@@ -274,7 +274,8 @@ page_device() {                          # page_device <device> <host> → 0 ans
   # One row per port, from the `name:`, `status:` and `rate:` lines of the monitor block, which
   # prints one blank-line-separated block per port. A field a port does not report says unknown
   # rather than leaving the cell blank; a block that yields no port at all says so instead of
-  # printing a table with no rows.
+  # printing a table with no rows. A `name:` that arrives while one is already held flushes the old
+  # row too, so a device that separates its blocks some other way keeps one row per port.
   ethernet="$(fetch "$device" ethernet)"
   printf '\n### Ethernet\n\n'
   case "$ethernet" in
@@ -290,7 +291,7 @@ page_device() {                          # page_device <device> <host> → 0 ans
         {
           key = $0; sub(/^[[:space:]]*/, "", key); sub(/:.*/, "", key)
           value = $0; sub(/^[[:space:]]*[^:]+:[[:space:]]*/, "", value)
-          if (key == "name")        name  = value
+          if (key == "name")        { if (name != "") row(); name = value }
           else if (key == "status") state = value
           else if (key == "rate")   rate  = value
         }
@@ -313,6 +314,46 @@ page_device() {                          # page_device <device> <host> → 0 ans
     *) printf '```\n%s\n```\n' "$configuration" ;;
   esac
   return 0
+}
+
+# The Livebox, the one box whose state is mostly out of reach: what it answers without a credential
+# is the login page, and that page carries the firmware build in its loader query string. The
+# section is always printed — a box that did not answer says so on a line of its own rather than
+# dropping the heading — and the half that would need the admin password is marked as remembered.
+page_livebox() {
+  local body build status
+  if [ -n "$NET_AUDIT_FROM_FIXTURE" ]; then
+    if [ -f "$NET_AUDIT_FROM_FIXTURE/livebox-root.html" ]; then
+      body="$(cat "$NET_AUDIT_FROM_FIXTURE/livebox-root.html")"; status=200
+    else
+      body=""; status="unreachable: no fixture for livebox-root.html"
+    fi
+  else
+    # One unauthenticated GET, bounded: no credential, no POST, nothing that writes to the box.
+    if body="$(curl -sS -m 6 "http://$LIVEBOX_HOST/" 2>/dev/null)"; then status=200
+    else status="unreachable: curl exit $?"; body=""; fi
+  fi
+  # The build is the `sah=` value on the loader script; the title element is empty, so the query
+  # string is the only version the login page carries.
+  build="$(printf '%s' "$body" | grep -o 'sah=v[0-9._]*' | head -1 | cut -d= -f2)"
+  section "Livebox — $LIVEBOX_HOST"
+  case "$status" in
+    unreachable:*)
+      # A failed read is a line above the fence, as in a device section: text inside the status
+      # block would read as something the box reported.
+      printf '(%s)\n\n' "$status"
+      ;;
+    *)
+      printf '```\n'
+      kv http "$status"
+      kv firmware "${build:-unknown}"
+      printf '```\n\n'
+      ;;
+  esac
+  printf '### Remembered, not read from the device\n\n'
+  printf '%s\n' '`docs/how-it-works/network.md`, verified 2026-11-22: the box forwards 80, 443, 25565, 22000'
+  printf '%s\n' '(TCP and UDP) and 21027 (UDP) to `192.168.1.46`. This half is **not read from the device**;'
+  printf '%s\n' 'the port-forward table itself needs the admin password and is a separate piece of work.'
 }
 
 # The page's last section: what a reader must not take this record for.
@@ -347,6 +388,8 @@ case "${1:-}" in
     while read -r device host; do
       if page_device "$device" "$host"; then answered=1; fi
     done < <(targets)
+    # The Livebox never sets `answered`: its login page is not a device that was read in full.
+    page_livebox
     page_footer
     # Exit 0 as soon as one device answered; a run where every fetch failed is not a page.
     [ "$answered" -eq 1 ] || exit 1
