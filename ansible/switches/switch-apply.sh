@@ -10,6 +10,8 @@
 #        --change /var/lib/switch-change/inbox/<change>.rsc --dry-run
 #
 # Flags: --target, --change, --window, --expect, --yes, --dry-run, --arm-only.
+# The change is checked, copied into a private stage under the work directory, and switch-change.sh
+# is handed that copy: the file the script reads cannot be swapped after the check.
 # Exit: the script's own; 1 = refused, nothing touched; 2 = bad argument.
 set -uo pipefail
 PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
@@ -70,6 +72,35 @@ check_change() {
     "$INBOX"/*) ;;
     *) refuse "the change must sit in $INBOX: $path" ;;
   esac
+  # The inbox is writable by the agent, so the path can change hands between the checks above and
+  # the script reading it. Open it once and check what was actually opened; the descriptor stays
+  # open, and stage_change copies from it, so no later swap is followed.
+  exec 3< "$path" || refuse "cannot open the change: $path"
+  case "$(realpath -- /proc/self/fd/3)" in
+    "$INBOX"/*) ;;
+    *) exec 3<&-; refuse "the change moved while it was checked: $path" ;;
+  esac
+}
+
+# Copy the pinned descriptor into a private stage, and hand the script that path: the inbox is the
+# agent's, the stage is netcfg's 0700 directory, so the copy cannot be swapped after the check.
+stage_change() {
+  local dir base epoch pid staged_file
+  dir="$WORK/staged"
+  find "$dir" -type f -mmin +1440 -delete 2>/dev/null
+  [ -d "$dir" ] || mkdir -m 0700 -p "$dir" || { exec 3<&-; refuse "cannot create $dir"; }
+  base="$(basename -- "$change")"
+  epoch="$(date +%s)"
+  pid="$$"
+  staged_file="$dir/$base.$epoch.$pid.rsc"
+  cat <&3 > "$staged_file" || {
+    rm -f -- "$staged_file"; exec 3<&-; refuse "cannot stage the change in $dir"
+  }
+  chmod 0600 -- "$staged_file" || {
+    rm -f -- "$staged_file"; exec 3<&-; refuse "cannot stage the change in $dir"
+  }
+  exec 3<&-
+  staged="$staged_file"
 }
 
 # A live change must run the reviewed code. The installed copy is root-owned; the canonical
@@ -91,8 +122,9 @@ main() {
   check_target
   check_installed
   check_change "$change"
+  stage_change
   HOME="$HOME_DIR" SWITCH_CHANGE_WORKDIR="$WORK" \
-    exec "$SCRIPT" --target "$target" --change "$change" "${passthru[@]}"
+    exec "$SCRIPT" --target "$target" --change "$staged" "${passthru[@]}"
 }
 
 if [ "${BASH_SOURCE[0]}" = "$0" ]; then main "$@"; fi
