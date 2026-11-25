@@ -1,8 +1,11 @@
 """The change script's contract: the undo it renders, and the runs it drives."""
 
+import contextlib
+import json
 import os
 import pathlib
 import subprocess
+import tempfile
 import unittest
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
@@ -19,6 +22,123 @@ def run(args=(), env=None, stdin=None):
         ["bash", str(SCRIPT), *args],
         input=stdin, text=True, capture_output=True, env=merged,
     )
+
+
+FAKE = FIXTURE / "fake"
+
+
+class Fake:
+    """A switch that answers the commands the script sends, and nothing a switch would not."""
+
+    def __init__(self, root, **kw):
+        self.root = root
+        self.state = root / "state"
+        self.state.mkdir(parents=True)
+        self.bin = root / "bin"
+        self.bin.mkdir()
+        for name in ("ssh", "scp"):
+            link = self.bin / name
+            link.symlink_to(FAKE / name)
+        (self.state / "key").write_text("")
+        self.env = {
+            "FAKE_STATE": str(self.state),
+            "FAKE_NOW": kw.get("now", "2026-11-25 09:20:00"),
+            "FAKE_STEP": str(kw.get("step", 60)),
+            "FAKE_VERSION": kw.get("version", "7.16.1"),
+        }
+        self._write("clock", self.env["FAKE_NOW"] + "\n")
+        self._write("config", kw.get("config", (EXPORTS / "v7-plain.rsc").read_text()))
+        for src, name in (("after_change", "after_change"), ("after_undo", "after_undo"),
+                          ("import_error", "import_error")):
+            if kw.get(src) is not None:
+                self._write(name, kw[src])
+        if kw.get("break_after_change"):
+            self._write("break_after_change", "1")
+        if kw.get("backup_denied"):
+            self._write("backup_denied", "1")
+        if kw.get("fire_on_arm"):
+            self._write("fire_on_arm", str(kw["fire_on_arm"]))
+
+    def _write(self, name, text):
+        (self.state / name).write_text(text)
+
+    def _env(self, extra=None):
+        env = dict(os.environ)
+        env.update(self.env)
+        env["PATH"] = str(self.bin) + os.pathsep + env["PATH"]
+        env.update(extra or {})
+        return env
+
+    def ros(self, command):
+        done = subprocess.run(
+            ["ssh", "-i", str(self.state / "key"), "-o", "BatchMode=yes",
+             "deploy@192.168.1.11", command],
+            text=True, capture_output=True, env=self._env(),
+        )
+        return done.stdout if done.returncode == 0 else ""
+
+    def script(self, args, stdin=None):
+        env = self._env({
+            "SWITCH_CHANGE_TARGETS": "crs326=192.168.1.11",
+            "SWITCH_CHANGE_USER": "deploy",
+            "SWITCH_CHANGE_KEY": str(self.state / "key"),
+            "SWITCH_CHANGE_POLL": "0",
+            "SWITCH_CHANGE_WORKDIR": str(self.root / "work"),
+            "SWITCH_CHANGE_CONNECT_TIMEOUT": "1",
+            "SWITCH_CHANGE_CMD_TIMEOUT": "5",
+        })
+        return subprocess.run(["bash", str(SCRIPT), *args], input=stdin, text=True,
+                              capture_output=True, env=env)
+
+    def spawn(self, args):
+        env = self._env({
+            "SWITCH_CHANGE_TARGETS": "crs326=192.168.1.11",
+            "SWITCH_CHANGE_USER": "deploy",
+            "SWITCH_CHANGE_KEY": str(self.state / "key"),
+            "SWITCH_CHANGE_POLL": "0",
+            "SWITCH_CHANGE_WORKDIR": str(self.root / "work"),
+            "SWITCH_CHANGE_CONNECT_TIMEOUT": "1",
+            "SWITCH_CHANGE_CMD_TIMEOUT": "5",
+        })
+        return subprocess.Popen(["bash", str(SCRIPT), *args], text=True,
+                                stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env)
+
+    def wait_for(self, text, proc):
+        seen = ""
+        while True:
+            line = proc.stdout.readline()
+            if line == "":
+                raise AssertionError(f"the run ended without printing {text!r}: {seen!r}")
+            seen += line
+            if text in line:
+                return seen
+
+    def files(self):
+        d = self.state / "files"
+        return sorted(p.name for p in d.iterdir()) if d.is_dir() else []
+
+    def arm(self, name, start_time, on_event=None):
+        (self.state / "scheduler.json").write_text(json.dumps({
+            name: {"start-time": start_time, "on-event": on_event or "/import file=undo-old.rsc",
+                   "run-count": 0}}))
+
+    def calls(self):
+        p = self.state / "calls"
+        return int(p.read_text()) if p.exists() else 0
+
+
+@contextlib.contextmanager
+def fake(tag, **kw):
+    with tempfile.TemporaryDirectory(prefix=f"switch-change-{tag}-") as tmp:
+        yield Fake(pathlib.Path(tmp), **kw)
+
+
+class FakeDeviceTests(unittest.TestCase):
+    def test_the_fake_answers_a_routeros_read_and_an_export(self):
+        with fake("read") as f:
+            self.assertIn("version: 7.16.1", f.ros("/system resource print"))
+            self.assertEqual(f.ros("/export").strip(),
+                             (EXPORTS / "v7-plain.rsc").read_text().strip())
 
 
 class UsageTests(unittest.TestCase):

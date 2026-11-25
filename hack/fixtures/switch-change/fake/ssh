@@ -1,0 +1,211 @@
+#!/usr/bin/env python3
+"""A fake RouterOS device for switch-change.sh's tests.
+
+It answers the commands the script sends and nothing else, keeps its configuration, its file list,
+its scheduler table and its clock in a state directory, and advances that clock on every call so a
+one-shot entry arrives in a test without waiting.
+
+FAKE_STATE          the state directory (required)
+FAKE_NOW            the starting clock, "YYYY-MM-DD HH:MM:SS"
+FAKE_STEP           seconds the clock moves per call, default 60
+FAKE_VERSION        what /system resource print answers, default 7.16.1
+
+State files: config, clock, calls, scheduler.json, files/, and the flags break, break_after_change,
+backup_denied, import_error, after_change, after_undo, fire_on_arm.
+"""
+
+import json
+import os
+import pathlib
+import re
+import sys
+from datetime import datetime, timedelta
+
+state = pathlib.Path(os.environ.get("FAKE_STATE", ""))
+if not state.is_dir():
+    sys.stderr.write("fake-ssh: FAKE_STATE is not a directory\n")
+    sys.exit(2)
+
+
+def read(name, default=None):
+    path = state / name
+    return path.read_text() if path.exists() else default
+
+
+def write(name, text):
+    (state / name).write_text(text)
+
+
+def flag(name):
+    return (state / name).exists()
+
+
+def counters():
+    write("calls", str(int(read("calls", "0")) + 1))
+
+
+def import_file(name, undo=False):
+    """Run one .rsc the way the device would: the change lands, or the undo puts the old one back."""
+    if undo:
+        after = read("after_undo")
+        if after is not None:
+            write("config", after)
+        (state / "break").unlink(missing_ok=True)
+        return None
+    error = read("import_error")
+    after = read("after_change")
+    if after is not None:
+        write("config", after)
+    if flag("break_after_change"):
+        write("break", "1")
+    return error
+
+
+def fire_due(now):
+    """Run every one-shot entry whose start-time has arrived, device-side, whatever the link does."""
+    table = json.loads(read("scheduler.json", "{}"))
+    changed = False
+    for entry in table.values():
+        if entry.get("run-count", 0):
+            continue
+        if now.strftime("%H:%M:%S") < entry["start-time"]:
+            continue
+        match = re.search(r"/import file=([^\"\s]+)", entry.get("on-event", ""))
+        if match:
+            import_file(match.group(1), undo=match.group(1).startswith("undo-"))
+        entry["run-count"] = 1
+        changed = True
+    if changed:
+        write("scheduler.json", json.dumps(table))
+
+
+def scheduler_block(entry, name):
+    return (f' 0    name="{name}" owner="deploy" policy=read,write,test\n'
+            f'      start-date=2026-11-25 start-time={entry["start-time"]} '
+            f'interval=0s run-count={entry.get("run-count", 0)}\n'
+            f'      on-event="{entry.get("on-event", "")}"\n')
+
+
+def answer(command):
+    command = command.strip()
+
+    if command.startswith("/system resource print"):
+        return (f"                   uptime: 1w2d3h\n"
+                f"                  version: {os.environ.get('FAKE_VERSION', '7.16.1')} (stable)\n"
+                f"               build-time: 2026-10-01 09:00:00\n")
+
+    if command.startswith("/system clock print"):
+        now = read("clock").strip()
+        date, time = now.split(" ")
+        return (f"                  date: {date}\n"
+                f"                  time: {time}\n"
+                f"       time-zone-autodetect: no\n"
+                f"           time-zone-name: Europe/Paris\n")
+
+    if command in ("/export", "/export verbose", "/export hide-sensitive verbose"):
+        return read("config", "")
+
+    if command.startswith("/file print"):
+        name = re.search(r'name="?([^"\s]+)"?', command)
+        listed = []
+        files = state / "files"
+        if files.is_dir():
+            for path in sorted(files.iterdir()):
+                if name and path.name != name.group(1):
+                    continue
+                listed.append(f' 0 name="{path.name}" type=".rsc" size=120\n')
+        return "".join(listed)
+
+    if command.startswith("/file remove"):
+        name = re.search(r'name="?([^"\s\]]+)"?', command)
+        path = state / "files" / name.group(1)
+        path.unlink(missing_ok=True)
+        return ""
+
+    if command.startswith("/system scheduler print detail"):
+        table = json.loads(read("scheduler.json", "{}"))
+        return "".join(scheduler_block(entry, name) for name, entry in table.items())
+
+    if command.startswith("/system scheduler add"):
+        name = re.search(r"name=([^\s]+)", command).group(1)
+        start = re.search(r"start-time=([^\s]+)", command).group(1)
+        event = re.search(r'on-event="([^"]*)"', command).group(1)
+        table = json.loads(read("scheduler.json", "{}"))
+        table[name] = {"start-time": start, "on-event": event, "run-count": 0}
+        write("scheduler.json", json.dumps(table))
+        if flag("fire_on_arm"):
+            fire_due(datetime.strptime(read("clock").strip(), "%Y-%m-%d %H:%M:%S"))
+        return ""
+
+    if command.startswith("/system scheduler remove"):
+        name = re.search(r'name="?([^"\s\]]+)"?', command).group(1)
+        table = json.loads(read("scheduler.json", "{}"))
+        table.pop(name, None)
+        write("scheduler.json", json.dumps(table))
+        return ""
+
+    if command.startswith("/system backup save"):
+        name = re.search(r"name=([^\s]+)", command).group(1)
+        if flag("backup_denied"):
+            return "not enough permissions (9)\n"
+        files = state / "files"
+        files.mkdir(exist_ok=True)
+        (files / f"{name}.backup").write_text("binary\n")
+        return ""
+
+    if command.startswith("/import file="):
+        name = re.search(r"/import file=([^\s]+)", command).group(1)
+        error = import_file(name, undo=name.startswith("undo-"))
+        if error:
+            return error if error.endswith("\n") else error + "\n"
+        return ""
+
+    return f'bad command name {command.split()[0]} (line 1 column 1)\n'
+
+
+# ssh options that take the next argument as their value: `-o` and `-i` are the ones the script
+# uses, and the rest are here so an option added later is not read as the destination.
+SSH_VALUE_OPTIONS = set("bcDEeFIiJLlmOoPpQRSWw")
+
+
+def ssh_operands(argv):
+    """The destination and the remote command, skipping every option and its value."""
+    i = 0
+    while i < len(argv):
+        arg = argv[i]
+        if arg == "--":
+            i += 1
+            break
+        if arg.startswith("-") and arg != "-":
+            for pos, char in enumerate(arg[1:], start=1):
+                if char in SSH_VALUE_OPTIONS:
+                    if pos == len(arg) - 1:
+                        i += 1
+                    break
+            i += 1
+            continue
+        break
+    if i >= len(argv):
+        return "", ""
+    return argv[i], " ".join(argv[i + 1:])
+
+
+def main(argv):
+    _, command = ssh_operands(argv)
+    counters()
+
+    now = datetime.strptime(read("clock").strip(), "%Y-%m-%d %H:%M:%S")
+    now += timedelta(seconds=int(os.environ.get("FAKE_STEP", "60")))
+    write("clock", now.strftime("%Y-%m-%d %H:%M:%S"))
+    fire_due(now)
+
+    # A link that a change took away answers nothing until the timer puts the configuration back.
+    if flag("break"):
+        sys.exit(255)
+
+    sys.stdout.write(answer(command))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

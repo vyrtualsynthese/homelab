@@ -1,0 +1,84 @@
+#!/usr/bin/env python3
+"""A fake `scp` for switch-change.sh's tests: one file, one direction, no network.
+
+It reads and writes the same state directory as `fake/ssh`, so an upload lands in `state/files` and
+a download puts that file on the local disk. `-O` (the legacy protocol the collector uses) and the
+connection options are accepted and ignored.
+
+FAKE_STATE          the state directory (required)
+"""
+
+import os
+import pathlib
+import re
+import sys
+
+state = pathlib.Path(os.environ.get("FAKE_STATE", ""))
+if not state.is_dir():
+    sys.stderr.write("fake-scp: FAKE_STATE is not a directory\n")
+    sys.exit(2)
+
+# scp options that take the next argument as their value.
+VALUE_OPTIONS = set("cFiJloPSX")
+
+# host:path, with or without user@. A local path has no colon before its first slash.
+REMOTE = re.compile(r"^(?:[^@/:]+@)?[^/:]+:(.+)$")
+
+
+def operands(argv):
+    """The positional arguments, skipping every option and its value."""
+    i = 0
+    while i < len(argv):
+        arg = argv[i]
+        if arg == "--":
+            i += 1
+            break
+        if arg.startswith("-") and arg != "-":
+            for pos, char in enumerate(arg[1:], start=1):
+                if char in VALUE_OPTIONS:
+                    if pos == len(arg) - 1:
+                        i += 1
+                    break
+            i += 1
+            continue
+        break
+    return argv[i:]
+
+
+def remote_path(arg):
+    match = REMOTE.match(arg)
+    return match.group(1) if match else None
+
+
+def main(argv):
+    ops = operands(argv)
+    if len(ops) < 2:
+        sys.stderr.write("fake-scp: a source and a destination are required\n")
+        return 2
+
+    src, dst = ops[-2], ops[-1]
+    files = state / "files"
+    files.mkdir(exist_ok=True)
+    src_remote, dst_remote = remote_path(src), remote_path(dst)
+
+    if src_remote and dst_remote:
+        sys.stderr.write("fake-scp: remote to remote is not something the script does\n")
+        return 2
+
+    if src_remote:
+        name = pathlib.PurePosixPath(src_remote).name
+        found = files / name
+        pathlib.Path(dst).write_bytes(found.read_bytes() if found.exists() else b"")
+        return 0
+
+    if dst_remote:
+        name = pathlib.PurePosixPath(dst_remote).name
+        (files / name).write_bytes(pathlib.Path(src).read_bytes())
+        return 0
+
+    pathlib.Path(dst).write_bytes(pathlib.Path(src).read_bytes())
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
