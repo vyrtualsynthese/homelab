@@ -118,6 +118,40 @@ class RefusalTests(unittest.TestCase):
         self.assertIn("/import", self.refused("refuse-import.rsc"))
 
 
+class RendererV6Tests(unittest.TestCase):
+    def render(self, change, major="6"):
+        done = run(["--render-undo", "--major", major,
+                    "--change", str(CHANGES / change),
+                    "--export", str(EXPORTS / "v6-plain.rsc"),
+                    "--verbose-export", str(EXPORTS / "v6-verbose.rsc")])
+        self.assertEqual(done.returncode, 0, done.stderr)
+        return done.stdout
+
+    def test_an_added_object_on_a_v6_device_is_removed_under_a_guard(self):
+        self.assertIn(
+            ':if ([:len [/ip address find address="192.168.1.44/24"]] > 0) '
+            'do={ /ip address remove [find address="192.168.1.44/24"] }',
+            self.render("add-address-v6.rsc"))
+
+    def test_a_removed_v6_object_is_added_back_with_every_argument(self):
+        self.assertIn(
+            'do={ /interface bridge add admin-mac=AA:BB:CC:DD:EE:FF auto-mac=no name=bridge }',
+            self.render("remove-bridge-v6.rsc"))
+
+    def test_an_object_the_export_introduces_with_set_is_indexed(self):
+        self.assertIn(
+            'do={ /interface ethernet set [find default-name="sfp-sfpplus1"] mtu=1500 }',
+            self.render("set-mtu-v6.rsc"))
+
+    def test_an_export_whose_header_names_another_major_is_refused(self):
+        done = run(["--render-undo", "--major", "7",
+                    "--change", str(CHANGES / "add-address-v6.rsc"),
+                    "--export", str(EXPORTS / "v6-plain.rsc"),
+                    "--verbose-export", str(EXPORTS / "v6-verbose.rsc")])
+        self.assertEqual(done.returncode, 1)
+        self.assertIn("says RouterOS 6", done.stderr)
+
+
 class NoiseFreeTests(unittest.TestCase):
     def test_comments_and_blank_lines_go_and_every_other_line_stays(self):
         text = ("# 2026-11-25 09:14:02 by RouterOS 7.16.1\n\n/ip route\n"
