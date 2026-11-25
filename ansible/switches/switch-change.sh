@@ -219,6 +219,14 @@ render_undo() {
   function keyname(tok,   i) { i = index(tok, "="); return i ? substr(tok, 1, i - 1) : "" }
   function keyval(tok,   i)  { i = index(tok, "="); return i ? substr(tok, i + 1) : "" }
 
+  # A selector the change itself rewrites can never match when the undo runs: the attribute it finds
+  # the object by is the one the change replaced.
+  function sel_uses(sel, k,   st, sn, i) {
+    sn = tokens(sel, st)
+    for (i = 1; i <= sn; i++) if (keyname(st[i]) == k) return 1
+    return 0
+  }
+
   # A value with its surrounding quotes removed, so "a" and a compare equal.
   function unq(v) {
     if (length(v) >= 2 && substr(v, 1, 1) == "\"" && substr(v, length(v), 1) == "\"")
@@ -400,6 +408,10 @@ render_undo() {
       k = keyname(at[i])
       if (k == "") {
         do_refuse(lineno, "cannot undo the argument \"" at[i] "\": it sets no property, so the undo has nothing to put back")
+        return
+      }
+      if (sel_uses(SEL, k)) {
+        do_refuse(lineno, "the change sets " k ", which its own selector matches on, so the undo would find nothing to put back; select the object by an attribute the change leaves alone")
         return
       }
       oldv = obj_value(vargs[path, vidx], k)
