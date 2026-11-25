@@ -57,6 +57,7 @@ CANON="{self.canon}"; HOME_DIR="{self.tmp}"
         done = self.gate("", call=f'check_change "{other}"; echo ok')
         self.assertEqual(done.returncode, 1)
         self.assertNotIn("ok", done.stdout)
+        self.assertEqual(list((self.work / "staged").glob("*")), [])
 
     def test_a_directory_named_like_the_inbox_prefix_is_refused(self):
         evil = self.tmp / "inbox-evil"
@@ -115,17 +116,53 @@ CANON="{self.canon}"; HOME_DIR="{self.tmp}"
         self.assertEqual(done.returncode, 0)
         self.assertIn("ok", done.stdout)
 
-    def test_the_passthrough_flags_reach_the_script_in_order(self):
-        shim = self.tmp / "shim.sh"
-        shim.write_text('#!/bin/bash\nprintf "%s\\n" "$@"\n')
-        shim.chmod(0o755)
+    # A shim that prints its arguments, so the run can be inspected instead of executed.
+    def shim(self):
+        path = self.tmp / "shim.sh"
+        path.write_text('#!/bin/bash\nprintf "%s\\n" "$@"\n')
+        path.chmod(0o755)
+        return path
+
+    def run_main(self, *flags):
+        shim = self.shim()
         body = f'''
 source "{GATE}"
 INBOX="{self.inbox}"; WORK="{self.work}"; SCRIPT="{shim}"; CANON="{shim}"
 HOME_DIR="{self.tmp}"; TARGET_USER="$(id -un)"
-main --target crs326 --change "{self.change}" --dry-run --yes
+main --target crs326 --change "{self.change}" {" ".join(flags)}
 '''
-        done = subprocess.run(["bash", "-c", body], text=True, capture_output=True)
+        return subprocess.run(["bash", "-c", body], text=True, capture_output=True)
+
+    def handed_change(self, done):
+        args = done.stdout.split()
+        return pathlib.Path(args[args.index("--change") + 1])
+
+    def test_the_passthrough_flags_reach_the_script_in_order(self):
+        done = self.run_main("--dry-run", "--yes")
         self.assertEqual(done.returncode, 0, done.stderr)
-        self.assertEqual(done.stdout.split(), ["--target", "crs326", "--change",
-                                              str(self.change), "--dry-run", "--yes"])
+        args = done.stdout.split()
+        self.assertEqual(args[0:2], ["--target", "crs326"])
+        self.assertEqual(args[2], "--change")
+        self.assertTrue(args[3].startswith(str(self.work / "staged") + "/"), args[3])
+        self.assertEqual(args[4:], ["--dry-run", "--yes"])
+
+    def test_the_script_is_handed_a_staged_copy_not_the_inbox_path(self):
+        done = self.run_main()
+        self.assertEqual(done.returncode, 0, done.stderr)
+        handed = self.handed_change(done)
+        self.assertTrue(str(handed).startswith(str(self.work / "staged") + "/"), handed)
+        self.assertNotEqual(handed, self.change)
+        self.assertEqual(handed.read_text(), self.change.read_text())
+        self.assertEqual(oct(handed.stat().st_mode & 0o777), "0o600")
+
+    def test_a_stale_staged_file_is_removed_on_the_next_run(self):
+        staged = self.work / "staged"
+        staged.mkdir()
+        old = staged / "old.rsc"
+        old.write_text("old")
+        two_days_ago = old.stat().st_mtime - 2 * 24 * 60 * 60
+        os.utime(old, (two_days_ago, two_days_ago))
+        done = self.run_main()
+        self.assertEqual(done.returncode, 0, done.stderr)
+        self.assertFalse(old.exists())
+        self.assertEqual(len(list(staged.glob("*.rsc"))), 1)
