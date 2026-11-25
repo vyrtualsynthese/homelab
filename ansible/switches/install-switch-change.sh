@@ -138,10 +138,13 @@ check_file() {  # src dst mode
   sum="$(sha "$src")" || die "cannot hash $src"
   if [ -e "$dst" ] || [ -L "$dst" ]; then
     { [ -f "$dst" ] && [ ! -L "$dst" ]; } || die "$dst is not a regular file; move it aside and re-run"
+    # Mode and owner are checked whenever the destination exists, not only when its bytes already
+    # match: a wrong mode or a foreign owner means something else has been writing there, and an
+    # upgrade must not paper over that by replacing the file.
+    have="$(stat -c '%a' -- "$dst")"
+    same_mode "$have" "$3" || die "$dst is mode $have, not $(norm_mode "$3"); fix it and re-run (refusing to tighten it)"
+    check_owner_group "$dst"
     if [ "$(sha "$dst")" = "$sum" ]; then
-      have="$(stat -c '%a' -- "$dst")"
-      same_mode "$have" "$3" || die "$dst is mode $have, not $(norm_mode "$3"); fix it and re-run (refusing to tighten it)"
-      check_owner_group "$dst"
       say "already $dst ($sum)"
       return 0
     fi
@@ -159,10 +162,12 @@ write_digest() {  # dst sum
   want="$2  switch-change.sh"
   if [ -e "$dst" ] || [ -L "$dst" ]; then
     { [ -f "$dst" ] && [ ! -L "$dst" ]; } || die "$dst is not a regular file; move it aside and re-run"
+    # Checked before the content, for the reason given in check_file: a drifted mode or owner is the
+    # signal, and a rewrite would hide it.
+    have="$(stat -c '%a' -- "$dst")"
+    same_mode "$have" 0644 || die "$dst is mode $have, not $(norm_mode 0644); fix it and re-run (refusing to tighten it)"
+    check_owner_group "$dst"
     if [ "$(cat -- "$dst")" = "$want" ]; then
-      have="$(stat -c '%a' -- "$dst")"
-      same_mode "$have" 0644 || die "$dst is mode $have, not $(norm_mode 0644); fix it and re-run (refusing to tighten it)"
-      check_owner_group "$dst"
       say "already $dst ($2)"
       return 0
     fi

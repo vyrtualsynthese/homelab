@@ -37,8 +37,10 @@ and its refusal is why that one step is allowed to fail.
 
 `SWITCH_CHANGE_TARGETS`, `SWITCH_CHANGE_USER` and `SWITCH_CHANGE_KEY` override the three for a direct
 run, and `./switches/switch-change.sh --list-targets` prints the pairs. Through the gate none of them
-is in reach — `sudo` does not carry the agent's environment into the script, and the gate does not
-take the modes: the targets are `crs326` and `crs309`, and the account and key are the two above.
+is in reach: the gate clears them before it hands over, and it reads its own paths and the account
+from constants in the installed file, never from the environment, so `sudo`'s environment policy is
+not what keeps a run on the reviewed code. The targets are `crs326` and `crs309`, the account and key
+are the two above.
 
 ## The command
 
@@ -79,7 +81,7 @@ sudo -u netcfg /usr/local/sbin/switch-apply --target crs326 \
   --change /var/lib/switch-change/inbox/<change>.rsc --window 20m # the default is 10m, the ceiling 1h
 ```
 
-`--arm-only` is for a change applied by hand from Winbox: the undo and its timer are the same, and
+`--arm-only` is for a change applied by hand from Winbox (MikroTik's Windows management tool): the undo and its timer are the same, and
 the operator applies the change. `--expect` is the address to keep polling once the change has
 landed; it defaults to the target's address and matters when the change is the management address
 itself.
@@ -131,7 +133,7 @@ with `sudo`. The staged copy sits one level up in `work/staged/`, which the gate
 
 | Code | Meaning |
 |---|---|
-| 0 | the change landed, the timer was removed, and the switch answered |
+| 0 | the change landed, the timer was removed, and the switch answered. When the switch does not confirm the timer's removal, the last line says so and stderr names the entry: it may still be armed, and it fires at its start time unless it is removed by hand |
 | 1 | no change was applied, and nothing is left on the switch: a refusal, an unreadable change, a failed upload (whatever it had uploaded is removed), a timer the device refused or would not show back, or an interrupt, which leaves the timer armed on purpose |
 | 2 | usage error, including a run with no `--yes` and no terminal to ask on, a window below a minute or above an hour, and an option given with no value |
 | 3 | the export is identical to the one taken before the change — reverted, or the change was a no-op; with an unreadable `run-count` the line says which of the two is unknown |
@@ -231,7 +233,6 @@ install -m 0640 /dev/stdin /var/lib/switch-change/inbox/arm-only.rsc <<'EOF'
 /ip service
 set [ find name=ssh ] disabled=yes
 EOF
-chmod 0640 /var/lib/switch-change/inbox/arm-only.rsc
 sudo -u netcfg /usr/local/sbin/switch-apply --target crs309 \
   --change /var/lib/switch-change/inbox/arm-only.rsc --dry-run
 ```
@@ -295,7 +296,6 @@ install -m 0640 /dev/stdin /var/lib/switch-change/inbox/ssh-off.rsc <<'EOF'
 /ip service
 set [ find name=ssh ] disabled=yes
 EOF
-chmod 0640 /var/lib/switch-change/inbox/ssh-off.rsc
 sudo -u netcfg /usr/local/sbin/switch-apply --target crs326 \
   --change /var/lib/switch-change/inbox/ssh-off.rsc --yes --window 5m
 ```
@@ -328,11 +328,11 @@ section is what the banner's **Verified** line and the **Verified** list below a
 ## Verified
 
 - `uv run --with-requirements hack/tests/requirements.txt python -m pytest -q hack/tests/test_switch_change.py`
-  — 64 tests, the undo renderer on RouterOS 6 and 7, every refusal, and every exit path driven
+  — 66 tests, the undo renderer on RouterOS 6 and 7, every refusal, and every exit path driven
   through the fake switch, whose `/export` carries its scheduler table as a real one does.
-- `hack/tests/test_switch_apply.py` — 19 tests, the gate's target list, its argument set, the pinned
+- `hack/tests/test_switch_apply.py` — 21 tests, the gate's target list, its argument set, the pinned
   descriptor, the staged copy, the digest and the work directory.
-- `hack/tests/test_switch_install.py` — 15 tests, the installer against a temporary `--destdir`.
+- `hack/tests/test_switch_install.py` — 16 tests, the installer against a temporary `--destdir`.
 - `bash hack/check-docs.sh` — this page's banner, links and nav entry.
 - Not verified: a real switch, a real scheduler entry, and a real timer firing. "The first live runs"
   above is that proof, and its output is pasted there when the runs happen. Card #485 created the

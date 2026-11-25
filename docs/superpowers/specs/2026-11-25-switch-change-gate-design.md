@@ -91,7 +91,7 @@ things that do not exist yet, and this design covers both:
 | `/usr/local/sbin/switch-apply` | `root:root 0755` | the gate |
 | `/etc/sudoers.d/50-switch-apply` | `root:root 0440` | `vsynthese ALL=(netcfg) NOPASSWD: /usr/local/sbin/switch-apply` |
 | `/var/lib/switch-change/inbox` | `vsynthese:netcfg 2750` | where the agent stages a change file; the setgid bit makes files group-`netcfg` |
-| `/var/lib/switch-change/work` | `netcfg:vsynthese 0750` | the script's work directory: `netcfg` writes, the agent reads the exports back for the card's evidence |
+| `/var/lib/switch-change/work` | `netcfg:vsynthese 0750` | the script's work directory. Each run makes its own `<id>` directory `0700`: the gate's `umask 077` is what the script runs under, so the exports are `netcfg`'s alone, the run prints the diff as the evidence, and the operator reads the files with `sudo` |
 
 The wrapper, running as `netcfg`:
 
