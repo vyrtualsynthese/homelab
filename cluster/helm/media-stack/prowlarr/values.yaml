@@ -21,7 +21,7 @@ image:
   # runAsNonRoot (see the chart README).
   repository: lscr.io/linuxserver/prowlarr
   # -- Pin the tag. Never `latest`. Renovate manages this.
-  tag: "2.7.0.5723-ls168"
+  tag: "3.1.0.5799-ls170"
   pullPolicy: IfNotPresent
 
 imagePullSecrets: []
