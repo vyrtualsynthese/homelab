@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- The rendered file holds **no secret**. `WEBPASSWORD` stays the only key in `pihole.env`, which is host-local and covered by `.gitignore`'s `*.env`.
+- The rendered file holds **no secret**. `FTLCONF_webserver_api_password` stays the only key in `pihole.env`, which is host-local, `0600`, owned by the account that runs compose, and covered by `.gitignore`'s `*.env`.
 - Both hosts must end up with **byte-identical** rendered settings; `verify` compares bytes, not lines.
 - Values, copied from the spec: `dns.blockTTL=2`, `dns.rateLimit.count=1000`, `dns.listeningMode=ALL`, `dns.revServers=true,192.168.1.0/24,192.168.1.1,local`, `dns.upstreams=86.54.11.100;86.54.11.200`.
 - Netplan resolvers, both hosts, in this order: `192.168.1.22`, `192.168.1.38`. Never `127.0.0.1` (a container cannot reach it), never `1.1.1.1`.
@@ -41,7 +41,7 @@
 - Consumes: nothing.
 - Produces: `desired_pihole_settings()` in `hosts-pi.sh`, printing the file's bytes; the host path `$STACK_DIR/pihole.settings`.
 
-- [ ] **Step 1: Write the failing test** — `test_the_shared_pihole_settings_are_one_rendered_file`: render `rbp0` and `rbp1` through the script, assert both print a `pihole.settings` section, that the bytes are equal, that the text carries `FTLCONF_dns_upstreams=86.54.11.100;86.54.11.200` and `FTLCONF_dns_blockTTL=2`, and that it does not carry `WEBPASSWORD` or `PIHOLE_DNS_`.
+- [ ] **Step 1: Write the failing test** — `test_the_shared_pihole_settings_are_one_rendered_file`: render `rbp0` and `rbp1` through the script, assert both print a `pihole.settings` section, that the bytes are equal, that the text carries `FTLCONF_dns_upstreams=86.54.11.100;86.54.11.200` and `FTLCONF_dns_blockTTL=2`, and that it does not carry `FTLCONF_webserver_api_password` or `PIHOLE_DNS_`.
 - [ ] **Step 2: Run it** — `uv run --with-requirements hack/tests/requirements.txt python -m pytest -q hack/tests/test_pi_script.py -k shared_pihole` → FAIL (no such section).
 - [ ] **Step 3: Implement** — the template; `desired_pihole_settings(){ cat "$TEMPLATES/pihole.settings"; }`; `cmd_render` prints it; `cmd_setup` writes it with `write_abs` and marks `pihole_changed`; `cmd_verify` compares it with `check_text`; compose reads `./pihole.settings` then `./pihole.env`.
 - [ ] **Step 4: Run the whole file of tests** → PASS.
