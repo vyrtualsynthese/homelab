@@ -72,8 +72,8 @@ own `user-data` on the boot partition before the first boot — step 4. The imag
 - **Record what a reflash must not change**: `rpi-eeprom-update` (26.3 on `rbp0`, 13.12 on `rbp1` on
   2026-11-24) and the USB disk's model and serial. The boot order lives in the EEPROM and survives an
   image write, so a version that moves afterwards is a firmware change nobody would notice for a month.
-- **Docker is not in the image** and nothing in this repository installs it yet (card #709 for the layer).
-  Step 6 does it by hand.
+- **Docker is not in the image**, and `setup` installs it (step 6): nothing on this host is installed by
+  hand.
 
 ## Steps
 
@@ -144,14 +144,7 @@ df -h / /boot/firmware # root grown to the SSD; 497 M on /boot/firmware
 findmnt -no SOURCE /   # the USB disk, not an SD card
 ```
 
-**6. Docker.** Ubuntu's archive carries `docker.io` and `docker-compose-v2`, which are not the packages
-the Pis run today (Docker 28.3.2 comes from Docker's own repository). Add Docker's repository for the new
-release's suite name, install `docker-ce`, `docker-ce-cli`, `containerd.io` and `docker-compose-plugin`,
-and put `vronteix` in the `docker` group. If Docker's repository does not carry the suite yet, install
-Ubuntu's pair instead and record which — the two are not interchangeable. Either way, write down which
-one landed; it is the fact card #709 has to end up owning.
-
-**7. Put the stack back, then let the script own its files.**
+**6. Put the stack back, then let the script install the engine and own its files.**
 
 ```bash
 scp -r ansible vronteix@<host>:~/hosts          # a fresh image has no checkout
@@ -168,7 +161,16 @@ predates the template — that is expected, and `setup` is the verb that writes 
 there, and it never writes the env files. Check the tree is readable by `vronteix` after the copy: a `cp -a`
 from a stick keeps the owner it was written with.
 
-**8. Bootstrap the layer.** Two runs, in this order: the first creates the `ansible` account from the keys
+A fresh image also has no container runtime, and `setup` installs that too: `docker-ce`, `docker-ce-cli`,
+`containerd.io` and `docker-compose-plugin` from Docker's own repository, then `vronteix` into the `docker`
+group. The suite (the release name apt matches on) is read from the image's `/etc/os-release`; measured on
+2026-11-25, Docker's repository carried the 26.04 suite for arm64 with `docker-ce` 29.10.1 and
+`docker-compose-plugin` 5.8.0, so Ubuntu's `docker.io` is never used. The packages are pinned by band, and
+the pins live in the script's header. This step therefore needs the network, and it runs before the stack
+starts. An engine already present outside its band is named and left alone: the script never upgrades a
+runtime in place, so a Pi already running 28.3.2 moves on its next reflash, not through `setup`.
+
+**7. Bootstrap the layer.** Two runs, in this order: the first creates the `ansible` account from the keys
 `vronteix` already accepts, the second connects as it. `-K` is needed on the first because a fresh image's
 sudo asks for a password.
 
@@ -179,7 +181,7 @@ ansible-playbook playbooks/site.yml --limit rbp1
 ansible-playbook playbooks/site.yml --limit rbp1 --check   # expected: changed=0
 ```
 
-**9. Prove it.**
+**8. Prove it.**
 
 ```bash
 docker compose -f /home/vronteix/dockers/docker-compose.yml ps   # four services running
@@ -206,8 +208,6 @@ time, and why the copy in step 1 leaves the Pi first.
 
 ## What the first run has to answer
 
-- **Which Docker package set** the new suite gets: Docker's repository if it carries the suite name,
-  Ubuntu's `docker.io` otherwise. Card #709 moves this into the layer.
 - **Whether `hosts-pi.sh setup` accepts the image's boot files** as they are. The image's `config.txt` uses
   `os_prefix=current/` and a `[tryboot]` section the old disk's copy may not have; the script reproduces a
   file that exists rather than inventing one, and the first run is where that is proved.
