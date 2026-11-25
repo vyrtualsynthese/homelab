@@ -149,7 +149,7 @@ checks), refuses a file that is not an OpenSSH public key, prints the fingerprin
 and prints the YAML line ready to paste:
 
 ```bash
-make adopt        # prints the entry, its fingerprint, and the next three steps
+make adopt        # prints the entry, its fingerprint, and the check that follows
 ```
 
 It runs on the **new** laptop and touches no network: that machine cannot reach a host yet, and does

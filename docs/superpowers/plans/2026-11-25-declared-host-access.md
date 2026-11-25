@@ -508,6 +508,11 @@ In `ansible/README.MD`, in "What it deliberately does not do" → "No secrets", 
 > machine you are on. The procedure is
 > [`docs/runbooks/ansible-laptop-onboarding.md`](../docs/runbooks/ansible-laptop-onboarding.md).
 
+Two repairs the task review found in the same file, both one sentence:
+
+- In the usage block near the top (`make init` / `make check` / `make apply` / `make lint`), add the line `make adopt  # print this laptop's key line for trusted_ssh_keys`, so the command the design names is documented where the other targets are.
+- At "pass a limit" (about line 25), say that the limit goes to `ansible-playbook` directly, because make reads `--limit` as one of its own options and exits; the two example commands below it are already the right form.
+
 Keep the two-run bootstrap section unchanged, including `-e ansible_user=vronteix` and `--tags automation` — a test asserts both are present.
 
 - [ ] **Step 4: Fix the reflash step**
