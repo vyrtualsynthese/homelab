@@ -10,6 +10,7 @@
   ],
   "prConcurrentLimit": 0,
   "prHourlyLimit": 0,
+  "separateMajorMinor": false,
 
   "argocd": {
     "description": "Only the Applications. The default pattern (`\\.yaml$`) walks every YAML in the repository, including 52 charts of templates and the docs fixtures, and finds nothing there.",
@@ -90,7 +91,7 @@
       "enabled": false
     },
     {
-      "description": "LinuxServer puts the image build after the app version (`1.30.4-ls332`), and Docker's default versioning reads `-ls332` as a compatibility suffix. Renovate never crosses from one suffix to another, so every LinuxServer pin ending in `-ls<N>` was frozen at its release: Freshrss 1.25 was blind to 1.30. This versioning folds the app version and the `-ls` build into one ordered number (1.30.4-ls332 becomes 1.30.4.332), which drops the suffix rule and makes those updates visible again. Tags outside this shape, the `version-`, `amd64-`, `nightly-` and `development-` channels, stop being candidates.",
+      "description": "LinuxServer puts the image build after the app version (`1.30.4-ls332`), and Docker's default versioning reads `-ls332` as a compatibility suffix. Renovate never crosses from one suffix to another, so every LinuxServer pin ending in `-ls<N>` was frozen at its release: Freshrss 1.25 was blind to 1.30. This versioning folds the app version and the `-ls` build into one ordered number (1.30.4-ls332 becomes 1.30.4.332), which drops the suffix rule and makes those updates visible again. The `-ls<N>` suffix is required, not optional: the publisher keeps legacy base tags next to each release (`qbittorrent:20.04.1`, `lidarr:8.1.2135`) and they read as wild major jumps. Every release carries the build suffix, so requiring it keeps the releases and drops the base tags. Tags outside this shape, the `version-`, `amd64-`, `nightly-` and `development-` channels, stop being candidates.",
       "matchDatasources": [
         "docker"
       ],
@@ -100,23 +101,7 @@
         "docker.io/linuxserver/**",
         "linuxserver/**"
       ],
-      "versioning": "regex:^v?(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)(?:\\.\\d+)?(?:_v\\d+\\.\\d+\\.\\d+)?(?:-r\\d+)?(?:-ls(?<build>\\d+))?$"
-    },
-    {
-      "description": "LinuxServer still republishes a legacy base tag next to each release (qBittorrent carries `20.04.1`), and the default and the versioning above both read that as a major bump. Majors of these images therefore wait for a tick in the dependency dashboard: the legacy tag cannot become a nightly pull request, and the real majors (Prowlarr 2.x to 3.x) stay visible.",
-      "matchDatasources": [
-        "docker"
-      ],
-      "matchPackageNames": [
-        "lscr.io/linuxserver/**",
-        "ghcr.io/linuxserver/**",
-        "docker.io/linuxserver/**",
-        "linuxserver/**"
-      ],
-      "matchUpdateTypes": [
-        "major"
-      ],
-      "dependencyDashboardApproval": true
+      "versioning": "regex:^v?(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)(?:\\.\\d+)?(?:_v\\d+\\.\\d+\\.\\d+)?(?:-r\\d+)?-ls(?<build>\\d+)$"
     },
     {
       "description": "One exportarr version serves eight charts (Radarr, Radarr Anime, Sonarr, Sonarr Anime, Lidarr, Prowlarr, Bazarr, Bazarr Anime). One pull request, not eight.",
@@ -139,6 +124,24 @@
       "matchPackageNames": [
         "/authentik/"
       ]
+    },
+    {
+      "description": "The Traefik wrapper chart and the image it ships are one release: chart 43.0.0 carries Traefik 3.8.0, and the tag in values.yaml names that image. One branch carries both.",
+      "groupName": "traefik",
+      "matchDatasources": [
+        "docker",
+        "helm"
+      ],
+      "matchPackageNames": [
+        "traefik"
+      ]
+    },
+    {
+      "description": "cluster/infrastructure/traefik/snapshot/ records what the old release looked like. A pull request there would rewrite a record rather than change the cluster: nothing applies it, and the image tags in it are history.",
+      "matchFileNames": [
+        "cluster/infrastructure/traefik/snapshot/**"
+      ],
+      "enabled": false
     }
   ]
 }

@@ -25,9 +25,9 @@ different place where a version is written:
 | `helmv3` | `dependencies:` in every `Chart.yaml` | 11 chart versions |
 | `argocd` | `targetRevision:` on a `chart:` in the Applications | the NFS provisioner chart, in two Applications |
 | `docker-compose` | the edge Pis' `docker-compose.yml` under `ansible/` | 9 images |
-| `kubernetes` | `image:` in the hand-applied manifests under `kubectl/` and `cluster/infrastructure/` | one `latest` scratch pod, nothing to update |
+| `kubernetes` | `image:` in the hand-applied manifests under `kubectl/` and `cluster/infrastructure/` | one `latest` scratch pod, nothing to update; the Traefik snapshot is excluded |
 
-Four of the rules in that file exist because of a failure, and they read as arbitrary without it:
+Three of the rules in that file exist because of a failure, and they read as arbitrary without it:
 
 - **LinuxServer tags.** The publisher writes the image build after the app version (`1.30.4-ls332`),
   and Docker's default versioning reads `-ls332` as a compatibility suffix. Renovate never crosses
@@ -35,11 +35,12 @@ Four of the rules in that file exist because of a failure, and they read as arbi
   The effect was that every LinuxServer pin ending in `-ls<N>` was frozen at its release: Freshrss
   1.25 was blind to 1.30, and a Sonarr pin on `-ls4` was blind to `-ls329`. The `versioning` regex on those
   packages folds the build into the number (`1.30.4-ls332` is read as `1.30.4.332`), which is what
-  makes those updates visible at all.
-- **LinuxServer majors wait on a tick in the dependency dashboard.** The publisher still republishes
-  a legacy base tag next to each release, and `qbittorrent:20.04.1` reads as a major bump. Without
-  the gate it became a nightly pull request that would have replaced 5.3.0 with a 2020 Ubuntu image.
-  The real majors (Prowlarr 2.x → 3.x) stay on the dashboard, one click away.
+  makes those updates visible at all. The `-ls<N>` suffix is required rather than optional: the
+  publisher keeps legacy base tags beside each release — `qbittorrent:20.04.1`, `lidarr:8.1.2135` —
+  and the regex read those as majors 20 and 8, so a nightly pull request would have replaced 5.3.0
+  with a 2020 Ubuntu image. Every real release carries the build suffix, so requiring it keeps the
+  releases and drops the base tags, which is what the dashboard gate of 2026-11-19 used to hold back
+  one tag at a time.
 - **The repository's own `develop` reference is disabled.** All 60 Applications pin
   `targetRevision: develop` on this repository. There is no version to move to, and a tag written
   there would stop the GitOps sync, so renaming it a dependency only invented 60 rows on the
@@ -62,6 +63,28 @@ twice, and it would copy the packaging suffix (`-ls332`, `-distroless`) into `ap
 [chart contract](../charts/README.md#how-appversion-relates-to-imagetag) says is the application's
 own version. `hack/check-app-version.sh` is the guard instead: after merging an image bump, it fails
 until `appVersion` names the version inside the new tag.
+
+## The newest stable release wins, 2026-11-25
+
+`separateMajorMinor` is off for the repository, so a package has one branch and that branch moves to
+the newest stable release. When a major is out, the branch goes to that major and no patch branch for
+the line it replaces opens beside it: with chart `43.0.0` and Traefik `3.8.0` published, the answer is
+one pull request to `43.0.0`, not a `43` branch next to a `42.4.3` one. Prereleases stay out through
+`ignoreUnstable`, which is on by default, so a major is only offered once it is a published stable
+release.
+
+Two rules narrow that for the packages where it does not fit:
+
+- **Traefik groups the chart and the image it ships.** The wrapper chart in
+  `cluster/helm/platform/traefik` pins both the chart dependency and the `image.tag` inside it, and
+  each chart release carries the image that belongs with it: chart `43.0.0` ships Traefik `3.8.0`. A
+  `groupName` puts the two on one branch, so the chart and the image move together instead of
+  arriving as two pull requests that can drift apart.
+- **The Traefik snapshot is outside Renovate.** `cluster/infrastructure/traefik/snapshot/` is a
+  written record of what the old release looked like and nothing applies it, so an image bump there
+  rewrites a record instead of changing the cluster. Pull requests #1514 and #1519 were exactly that.
+  A `matchFileNames` rule disables every dependency under that path.
+
 
 ## Where the configuration lives, and when a change takes effect
 
@@ -184,7 +207,9 @@ job renovate-manual-20261119-0503: Complete, 1/1, exit 0, 9m38s — six blocked 
 The LinuxServer gate held: the dependency dashboard lists the major tags (lidarr v8, prowlarr v3,
 qbittorrent v20) under **Pending Approval**, and no branch was created for them. `qbittorrent
 20.04.1` also sits behind the closed pull request #615, so recreating that branch needs a checkbox
-as well as an approval.
+as well as an approval. On 2026-11-25 the gate was replaced by the required `-ls<N>` suffix, which
+drops those base tags instead of parking them, so the table above is the record of what the gate did
+while it existed.
 
 ## Rotating the token
 
