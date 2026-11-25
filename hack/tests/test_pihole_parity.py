@@ -58,3 +58,12 @@ def test_the_clean_line_counts_a_tree_that_holds_lists():
     what the adlist set is: counting them in a set raised on the first panel that
     agreed."""
     assert parity.count_settings(panel()) > 0
+
+
+def test_a_panel_session_is_closed_after_the_read():
+    """The panel allows a handful of sessions and answers 429 when they run out,
+    so a checker that never logs out stops being runnable — which happened."""
+    text = (pathlib.Path(__file__).resolve().parents[1] / "check_pihole_parity.py").read_text()
+
+    assert 'f"/api/auth/session/{sid}"' in text
+    assert '"DELETE"' in text
