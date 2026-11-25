@@ -14,5 +14,10 @@ its own JSON, the board wants a task, and neither speaks the other's shape.
   wrote a cause moves one to Validation.
 - Grafana's routing tree decides what reaches the relay; the relay writes a card
   for whatever arrives.
+- `files/lifecycle.py` — a `CronJob` every five minutes. It reads the alerts
+  board, follows each alert card's `blocked` fix cards, moves the alert to
+  `Doing` while any fix is open, and to `Validation` once every fix is in
+  `Validation` or `Done`. It writes only the alerts board, never moves a card
+  backwards, and never closes one.
 
 Procedure: [`docs/runbooks/alert-relay.md`](../../../../docs/runbooks/alert-relay.md).
