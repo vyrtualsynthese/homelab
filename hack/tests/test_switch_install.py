@@ -74,13 +74,25 @@ class InstallTests(unittest.TestCase):
         already = [l for l in done.stdout.splitlines() if l.startswith("already ")]
         self.assertEqual(len(already), 6, done.stdout)
 
-    def test_a_group_writable_parent_is_refused_not_tightened(self):
+    def test_a_group_writable_install_dir_is_refused(self):
+        # Only the install directory exists: the refusal has to come from the directory check, not
+        # from a write that never happens.
         lib = self.dest / "usr/local/lib/homelab"
         lib.mkdir(parents=True)
         lib.chmod(0o775)
         done = install(self.dest)
         self.assertEqual(done.returncode, 1)
-        self.assertIn("writable by more than root", done.stderr)
+        self.assertIn(str(lib), done.stderr)
+        self.assertIn("is writable by more than", done.stderr)
+        self.assertEqual(self.mode("usr/local/lib/homelab"), 0o775)
+
+    def test_a_drifted_install_dir_is_refused_on_a_second_run(self):
+        self.assertEqual(install(self.dest).returncode, 0)
+        lib = self.dest / "usr/local/lib/homelab"
+        lib.chmod(0o775)
+        done = install(self.dest)
+        self.assertEqual(done.returncode, 1)
+        self.assertIn(str(lib), done.stderr)
         self.assertEqual(self.mode("usr/local/lib/homelab"), 0o775)
 
     def test_a_symlinked_destination_is_refused(self):

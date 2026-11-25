@@ -19,9 +19,11 @@
 # already exists with the wrong owner, group or mode is refused, never tightened behind the
 # operator's back: a wrong mode there means someone else has been writing to it.
 #
-# The directory a file is installed into is held to the same rule: it must belong to root and must not
-# be writable by its group or by anyone else. A group-writable one lets that group replace the script
-# and the digest together, which is exactly what the digest exists to prevent.
+# The directory a file is installed into is held to the same rule: it must belong to the account the
+# files are installed as (`root` normally, the invoking user under --destdir) and must not be writable
+# by its group or by anyone else. A group-writable one lets that group replace the script and the
+# digest together, which is exactly what the digest exists to prevent. These directories are checked
+# on every run, not only when a file has to be written.
 #
 # Flags: --destdir DIR and --sudoers-line LINE are for the test suite only; both are refused as
 # root, and --sudoers-line is refused outside --destdir.
@@ -106,14 +108,25 @@ need_parent() {  # dst
 # digest names the script's bytes, so whoever may write to the directory may swap both.
 check_parent() {  # dir
   local dir="$1" have_mode have_owner
+  [ -e "$dir" ] || [ -L "$dir" ] || return 0
   { [ -d "$dir" ] && [ ! -L "$dir" ]; } || die "$dir is not a directory; move it aside and re-run"
   have_owner="$(stat -c '%U' -- "$dir")"
   [ "$have_owner" = "$owner" ] || die "$dir is owned by $have_owner, not $owner; chown it and re-run"
   have_mode="$(stat -c '%a' -- "$dir")"
   # The last two digits are the group and other permissions; a write bit in either is the defect.
   case "${have_mode: -2}" in
-    *[2367]*) die "$dir is writable by more than root; fix it and re-run (refusing to tighten it)" ;;
+    *[2367]*) die "$dir is writable by more than $owner; fix it and re-run (refusing to tighten it)" ;;
   esac
+}
+
+# An installed file belongs to the account this run installs as: someone else who owns it can rewrite
+# it whatever its mode allows, so the owner and group are checked with the mode, not instead of it.
+check_owner_group() {  # path
+  local path="$1" have_owner have_group
+  have_owner="$(stat -c '%U' -- "$path")"
+  have_group="$(stat -c '%G' -- "$path")"
+  [ "$have_owner" = "$owner" ] || die "$path is owned by $have_owner, not $owner; chown it and re-run"
+  [ "$have_group" = "$group" ] || die "$path is group $have_group, not $group; chgrp it and re-run"
 }
 
 # An unchanged file is left alone, digest and all. A file whose bytes are right but whose mode is
@@ -128,6 +141,7 @@ check_file() {  # src dst mode
     if [ "$(sha "$dst")" = "$sum" ]; then
       have="$(stat -c '%a' -- "$dst")"
       same_mode "$have" "$3" || die "$dst is mode $have, not $(norm_mode "$3"); fix it and re-run (refusing to tighten it)"
+      check_owner_group "$dst"
       say "already $dst ($sum)"
       return 0
     fi
@@ -148,6 +162,7 @@ write_digest() {  # dst sum
     if [ "$(cat -- "$dst")" = "$want" ]; then
       have="$(stat -c '%a' -- "$dst")"
       same_mode "$have" 0644 || die "$dst is mode $have, not $(norm_mode 0644); fix it and re-run (refusing to tighten it)"
+      check_owner_group "$dst"
       say "already $dst ($2)"
       return 0
     fi
@@ -169,16 +184,13 @@ sudoers_body() {
 }
 
 write_sudoers() {  # dst
-  local dst tmp have have_owner have_group
+  local dst tmp have
   dst="$(at "$1")"
   if [ -e "$dst" ] || [ -L "$dst" ]; then
     { [ -f "$dst" ] && [ ! -L "$dst" ]; } || die "$dst is not a regular file; move it aside and re-run"
     have="$(stat -c '%a' -- "$dst")"
     same_mode "$have" 0440 || die "$dst is mode $have, not $(norm_mode 0440); fix it and re-run (refusing to tighten it)"
-    have_owner="$(stat -c '%U' -- "$dst")"
-    have_group="$(stat -c '%G' -- "$dst")"
-    [ "$have_owner" = "$owner" ] || die "$dst is owned by $have_owner, not $owner; chown it and re-run"
-    [ "$have_group" = "$group" ] || die "$dst is group $have_group, not $group; chgrp it and re-run"
+    check_owner_group "$dst"
     if [ "$(cat -- "$dst")" = "$(sudoers_body)" ]; then
       say "already $dst"
       return 0
@@ -237,8 +249,15 @@ main() {
     if ! dirty="$(git -c "safe.directory=$repo" -C "$repo" status --porcelain -- ansible/switches 2>&1)"; then
       die "cannot ask git whether ansible/switches is committed: $dirty"
     fi
-    [ -z "$dirty" ] || die "ansible/switches has uncommitted changes; commit or merge first"
+    [ -z "$dirty" ] || die "ansible/switches has uncommitted changes; commit or merge first: $dirty"
   fi
+
+  # The directories the files land in are inspected on every run, before anything is written: a second
+  # run has nothing to write, and a directory that drifted to group-writable is exactly what it still
+  # has to catch.
+  for dir in /usr/local/lib/homelab /usr/local/sbin /etc/sudoers.d; do
+    check_parent "$(at "$dir")"
+  done
 
   check_dir /var/lib/switch-change/inbox 2750 "$inbox_owner" "$inbox_group"
   check_dir /var/lib/switch-change/work 0750 "$work_owner" "$work_group"
