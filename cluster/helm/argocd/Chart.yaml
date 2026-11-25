@@ -7,5 +7,5 @@ version: 0.1.0
 # appVersion, so a value here would only drift from what runs (card 344).
 dependencies:
   - name: argo-cd
-    version: 10.18.2
+    version: 10.19.1
     repository: https://argoproj.github.io/argo-helm
