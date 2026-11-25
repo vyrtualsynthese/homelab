@@ -89,6 +89,11 @@ in front of the Pis. The security baseline's finding stays open with that pointe
   this change empties. The rendered settings file now carries `FTLCONF_misc_etc_dnsmasq_d=true`, and
   all six answer again from `127.0.0.1` on both hosts.
 
+- **A second measured correction.** `webserver.api.max_sessions` defaults to 16, a session lasts 30
+  minutes, and an app password cannot delete one — only the panel's own password can, so the check
+  cannot hand its seat back. Three runs in half an hour answered `api_seats_exceeded`. The shared
+  settings now carry `FTLCONF_webserver_api_max_sessions=64`.
+
 - No change to the blocklist strategy. The 26 lists and 418/418 domains are identical on both hosts,
   so parity does not depend on settling it; the overlap between the hand-added hagezi list and the
   firebog set stays a separate decision.
