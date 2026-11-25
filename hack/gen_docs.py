@@ -359,7 +359,7 @@ def render_routes(root: pathlib.Path, live_ingress_routes: int = LIVE_INGRESS_RO
         "`traefik.kub.local` on port 80 is redirected by",
         "`cluster/infrastructure/traefik/dashboard/redirect.yaml`, and that twin merges into the row",
         "the chart-rendered `websecure` router gives the host. That twin is also the whole difference",
-        f"between what the cluster holds and what these charts render: {LIVE_INGRESS_ROUTES} `IngressRoute`",
+        f"between what the cluster holds and what these charts render: {live_ingress_routes} `IngressRoute`",
         f"objects live against the {objects} rendered here, and `kube-system/traefik-dashboard-redirect`",
         "is the only name on one side and not the other. `cluster/infrastructure/**` is applied by hand,",
         "so no Application can ever render it, and the gap is a shape of this repository rather than",
