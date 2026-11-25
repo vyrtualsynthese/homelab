@@ -51,9 +51,12 @@ routes reach it: `severity="critical"` every **6 h**, and `board=card` every **1
 has no severity filter — the routing tree decides, and the relay writes a card for whatever arrives.
 
 **Rule set and live state on 2026-11-13 (the three `Cloud*` rows read back on
-2026-11-20, the counts and `GpuNotAllocatable` on 2026-11-22, and
+2026-11-20, the counts and `GpuNotAllocatable` on 2026-11-22,
 `ArgoAppRenderFailing` added and proved on 2026-11-22, the two `Postgres*` rows
-added on 2026-11-22):**
+added on 2026-11-22, the `DriveWorn`/`DriveFailing` split on 2026-11-25, and
+`SnapraidParityStale`, which is created through Grafana's provisioning API after
+its metric reached `develop` — the state below is the state it was written with,
+confirmed by the first read-back):**
 
 | Rule | Condition | for | Severity | State |
 |---|---|---|---|---|
@@ -217,7 +220,7 @@ backups. SnapRAID keeps a redundant copy — the **parity** — of the six data 
 nightly run (a **sync**) brings that copy up to date; a disk lost while the parity is old costs every
 write since the last finished sync. `ansible/roles/snapraid` writes the Unix time of each sync that
 exited cleanly into `/var/lib/node-exporter/textfile/snapraid.prom`, and a second node-exporter on
-`nas`, with **every default collector off**, serves that value alone as
+`nas`, with **every default collector off**, serves that value as
 `homelab_snapraid_last_sync_timestamp_seconds`. The chart is `snapraid-exporter`, at
 `cluster/helm/monitoring/snapraid-exporter`.
 Why a second exporter rather than the one already running: `--collector.textfile.directory` is a
