@@ -51,3 +51,10 @@ def test_a_password_hash_is_not_printed_and_not_called_drift():
     printed = " ".join(parity.diff_panels(source, replica))
     assert "one" not in printed and "two" not in printed
     assert "contents not compared" in printed
+
+
+def test_the_clean_line_counts_a_tree_that_holds_lists():
+    """`flatten` yields (key, value) pairs and a value can be a list, which is
+    what the adlist set is: counting them in a set raised on the first panel that
+    agreed."""
+    assert parity.count_settings(panel()) > 0
