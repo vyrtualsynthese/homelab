@@ -95,8 +95,16 @@ def read_panel(name: str, api_key: str) -> dict:
     sid = (session.get("session") or {}).get("sid")
     if not sid:
         raise RuntimeError(f"{name}: the API key did not authenticate")
-    config = _call(base, "GET", "/api/config", sid=sid).get("config", {})
-    adlists = _call(base, "GET", "/api/lists", sid=sid).get("lists", [])
+    try:
+        config = _call(base, "GET", "/api/config", sid=sid).get("config", {})
+        adlists = _call(base, "GET", "/api/lists", sid=sid).get("lists", [])
+    finally:
+        # A panel keeps a handful of sessions and answers 429 with none left, so
+        # a check that ran twice in ten minutes would stop being runnable.
+        try:
+            _call(base, "DELETE", f"/api/auth/session/{sid}", sid=sid)
+        except (urllib.error.URLError, TimeoutError):
+            pass
     return snapshot(config, adlists)
 
 
