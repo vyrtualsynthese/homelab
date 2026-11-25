@@ -321,26 +321,45 @@ so the first sign-in is the only way in; `/login?local=1` is the way past the au
 Unlike every other application here it needs a second credential that authentik does not issue: a
 CrowdSec *machine* (watcher) account, which is how it reads the LAPI's alerts and decisions. Create
 it against the running LAPI, with an admin kubeconfig — the agent's shells are read-only and answer
-`403`:
+`403`.
+
+**Generate the two secrets in the same shell that uses them, and print them before anything else.**
+`--password "$(openssl rand -hex 32)"` looks harmless and is not: the shell expands it, `cscli` never
+prints it, and `-f /dev/null` discards the file it would have written. The machine then exists with a
+password nobody knows, which only `cscli machines delete` undoes. The same care applies to
+`--from-literal=key=…`: `…` is a literal, not a placeholder.
 
 ```bash
+set -euo pipefail
+LAPI_PW=$(openssl rand -hex 32)
+OIDC_SECRET=$(openssl rand -hex 32)
+printf 'LAPI machine password: %s\nOIDC client secret:   %s\n' "$LAPI_PW" "$OIDC_SECRET"
+
+# The machine. `-f /dev/null` keeps cscli from rewriting the container's own
+# credentials file; --ignore-missing makes a re-run harmless.
 kubectl -n security exec deploy/crowdsec-lapi -- \
-  cscli machines add crowdsec-web-ui --password "$(openssl rand -hex 32)" -f /dev/null
-```
+  cscli machines delete crowdsec-web-ui --ignore-missing
+kubectl -n security exec deploy/crowdsec-lapi -- \
+  cscli machines add crowdsec-web-ui --password "$LAPI_PW" -f /dev/null
 
-`-f /dev/null` keeps `cscli` from rewriting the container's own credentials file. Then the Secret
-the chart reads, in `security` (its own namespace, because Secrets do not cross namespaces), with
-the same client secret you put in `authentik-sso` as `CROWDSEC_CLIENT_SECRET`:
+# authentik's half. A blueprint's !Env resolves when it is applied, so the key
+# has to exist before the worker restarts — not after.
+kubectl -n authentik patch secret authentik-sso --type merge \
+  -p "$(jq -n --arg s "$OIDC_SECRET" '{stringData:{"CROWDSEC_CLIENT_SECRET":$s}}')"
+kubectl -n authentik rollout restart deployment/authentik-worker
 
-```bash
+# The app's Secret, in `security`: Secrets do not cross namespaces. `apply`
+# makes this the command to re-run when either value changes.
 kubectl -n security create secret generic crowdsec-web-ui \
-  --from-literal=lapi-password='<printed by cscli>' \
-  --from-literal=oidc-client-secret='<CROWDSEC_CLIENT_SECRET>'
+  --from-literal=lapi-password="$LAPI_PW" \
+  --from-literal=oidc-client-secret="$OIDC_SECRET" \
+  --dry-run=client -o yaml | kubectl apply -f -
 ```
 
-Order matters once: the `authentik` Application syncs first (it creates the provider), then the
-machine and the Secret, then `crowdsec-web-ui`. A missing Secret is a `CreateContainerConfigError`;
-a missing machine leaves the pod `Running` and the UI empty.
+Then sync `crowdsec-web-ui`, which is not auto-synced. A missing Secret is a
+`CreateContainerConfigError`; a missing machine leaves the pod `Running` and the UI empty; a
+blueprint whose `!Env` variable was absent reports `status: error` in the authentik API and creates
+no provider, so the sign-in answers *The client identifier (client_id) is missing or invalid*.
 
 ## The LDAP outpost (The Lounge)
 
