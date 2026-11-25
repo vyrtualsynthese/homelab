@@ -488,7 +488,7 @@ git commit -m "🔧 chore: name the homelab identity in ansible.cfg"
 - **What is already trusted** — `sudo ./collectors/host-audit.sh` on one host prints every `authorized_keys` under `/root` and `/home/*` as key type and comment, never key material. If a third account holds a laptop key, the two-file promise is incomplete and the page says so. Run it before the first apply.
 - **Adopt a laptop** — the five commands, in order, with the expected output for each:
   `./setup sync`, `ssh-keygen -t ed25519 -f ~/.ssh/homelab_live` (until `config`'s `keys.json` carries it), `make adopt`, paste the line, then `ansible-playbook playbooks/site.yml --check --diff --limit nas` and `ansible-playbook playbooks/site.yml --limit nas`, then the other three. Say on the page that a whole-fleet run is `make check` / `make apply`, and that a limit goes to `ansible-playbook` directly because make reads `--limit` as one of its own options.
-- **Prove it** — `ssh -o BatchMode=yes -i ~/.ssh/homelab_live ansible@nas true` and `ansible-playbook playbooks/site.yml --check --diff --limit nas`, expected no `changed`, because a missing key is drift.
+- **Prove it** — the four-host probe first (`for h in nas nuc0 streaming rbp2; do ssh -o BatchMode=yes -i ~/.ssh/homelab_live ansible@"$h" true && echo "$h ok" || echo "$h DENIED"; done`), because `ansible.cfg` makes that key the only one offered and only `nuc0`/`rbp2` were probed at design time; then `ansible-playbook playbooks/site.yml --check --diff --limit nas`, expected no `changed`, because a missing key is drift. A `DENIED` line before anything runs is the cheap failure.
 - **Retire a laptop** — delete the line, `make apply`, then `make check` on each host; a `changed` there is a host that missed the run.
 - **What can lock the fleet out, and the five fences** — the two assertions, `backup: true`, the diff-first reading of `--diff`, and one host first.
 - **The floor** — console on `nas`/`nuc0`, physical access to the Pis; a run already authenticated survives the write that breaks the next one.
@@ -553,6 +553,18 @@ git commit -m "📝 docs: adopting a laptop is a line in group_vars"
 - Consumes: everything above, merged onto the working branch.
 
 - [ ] **Step 1: Read the diff on the pilot**
+
+Before any playbook, prove the identity on all four hosts — `ansible.cfg` makes `homelab_live` the
+only key offered, and it was probed on `nuc0` and `rbp2` only:
+
+```bash
+for h in nas nuc0 streaming rbp2; do
+  ssh -o BatchMode=yes -i ~/.ssh/homelab_live ansible@"$h" true && echo "$h ok" || echo "$h DENIED"
+done
+```
+
+A `DENIED` here is the cheap failure: nothing has run yet. Fix it by adding that host's key to
+`trusted_ssh_keys` through a normal apply of the old layer, not by removing the identity.
 
 ```bash
 cd ansible
