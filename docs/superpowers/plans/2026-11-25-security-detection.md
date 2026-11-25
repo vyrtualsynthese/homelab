@@ -769,7 +769,7 @@ findings to carry into the ban layer.
 
 **Interfaces:**
 - Consumes: `/var/log/traefik/access.log` from Task 1, on `streaming`.
-- Produces: the LAPI Service at `crowdsec-crowdsec-service.crowdsec.svc:8080`, a NodePort `30500` on every node for the host-side bouncer, the bouncer key Secret `crowdsec-bouncer-key` (key `api-key`) that Task 6 reads from the operator's environment, and the whitelist postoverflow every later proof depends on.
+- Produces: the LAPI Service at `crowdsec-service.security.svc:8080`, the NodePort `30500` on every node for the host-side bouncer (`security/crowdsec-lapi-lan`, 30500 → 8080), the bouncer key Secret `crowdsec-bouncer-key` (key `api-key`) that Task 6 reads from the operator's environment, and the whitelist postoverflow every later proof depends on.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -1543,9 +1543,9 @@ git commit -m "🚀 feature: ban attacking addresses at the firewall on streamin
 
 | Piece | Where | How to look |
 |---|---|---|
-| Agent | Deployment `crowdsec-crowdsec-agent`, node `streaming` | `kubectl -n security logs deploy/crowdsec-crowdsec-agent` |
-| LAPI | Deployment `crowdsec-crowdsec-lapi`, node `nas` | `kubectl -n security logs deploy/crowdsec-crowdsec-lapi` |
-| Decisions | LAPI's SQLite, `local-path` claim on `nas` | `kubectl -n security exec deploy/crowdsec-crowdsec-lapi -- cscli decisions list` |
+| Agent | Deployment `crowdsec-agent`, node `streaming` | `kubectl -n security logs deploy/crowdsec-agent` |
+| LAPI | Deployment `crowdsec-lapi`, node `nas` | `kubectl -n security logs deploy/crowdsec-lapi` |
+| Decisions | LAPI's SQLite, `local-path` claim on `nas` | `kubectl -n security exec deploy/crowdsec-lapi -- cscli decisions list` |
 | Bans, as the kernel has them | `nftables` on `streaming`, table `crowdsec` | `nft list set ip crowdsec crowdsec-blacklists` |
 | Ban count, and the bouncer's liveness | the bouncer's own listener | `curl -s http://127.0.0.1:60601/metrics \| grep fw_bouncer_banned_ips` |
 
@@ -1573,7 +1573,7 @@ git commit -m "🚀 feature: ban attacking addresses at the firewall on streamin
 ## Undo a ban
 
 ```bash
-kubectl -n security exec deploy/crowdsec-crowdsec-lapi -- cscli decisions delete --ip <address>
+kubectl -n security exec deploy/crowdsec-lapi -- cscli decisions delete --ip <address>
 ```
 
 A false positive is the cost of a detector: FileBrowser share links are opened from outside by
@@ -1596,7 +1596,7 @@ being written. Re-enable by starting the service again — the bouncer re-reads 
 the LAPI is unreachable, or when the bouncer's listener is down. In order:
 
 1. `kubectl -n security get pods` — an `Init:0/1` agent is `wait-for-lapi`, so check the LAPI first.
-2. `kubectl -n security logs deploy/crowdsec-crowdsec-agent | grep -i 'file\|parse\|acquis'` — a
+2. `kubectl -n security logs deploy/crowdsec-agent | grep -i 'file\|parse\|acquis'` — a
    parser that matches nothing says so once and then stays quiet.
 3. `tail -c 200 /var/log/traefik/access.log` on `streaming` — no recent timestamp means the router
    stopped writing, which is a permission or a rotation problem, not a detector problem.
@@ -2719,14 +2719,19 @@ says "security thing happened" is a message the operator opens Grafana for. A Lo
 its labels from the stream, and the node is not one of them: the annotation points at the panel whose
 raw lines carry `_HOSTNAME`.
 
-**`SecurityStackBlind`'s metric names are confirmed against the LAPI before the rule is saved**:
-`curl -s http://192.168.1.46:30500/metrics | grep '^cs_'` from a machine that can reach the NodePort.
+**`SecurityStackBlind`'s metric names are confirmed against what Prometheus actually scrapes before the
+rule is saved**: `curl -sG http://prometheus.kub.local/api/v1/label/__name__/values |
+jq -r '.data[] | select(startswith("cs_"))'` lists every family the scrape carries — a rule that names
+one that is not in the list is silent, the exact failure this rule exists to prevent, so the check is
+not optional. For a family Prometheus has not scraped yet, read the pod directly after a port-forward
+(`kubectl -n security port-forward deploy/crowdsec-lapi 6060:6060`, the operator's command, then
+`curl -s http://localhost:6060/metrics | grep '^cs_'`); the NodePort `30500` serves the API on 8080,
+not the metrics port.
 `cs_active_decisions` is confirmed in CrowdSec's own source (`pkg/metrics/global.go`, the LAPI's
 gauge), and `cs_parser_hits_ok_total` is registered beside it — if that one is published by the
 agent's pod, prefer it for the "is the parser seeing anything" half, because it moves on every parsed
-line while the decision count sits at zero on a quiet night. Write down whichever names the page
-actually shows; a rule that names a family nobody publishes is silent, which is the exact failure
-this rule exists to prevent, so the check is not optional. If the LAPI publishes nothing usable, the
+line while the decision count sits at zero on a quiet night. Write down whichever names the list
+actually shows. If the LAPI publishes nothing usable, the
 honest fix is the exporter's read-only bouncer key — a decision to take then, not to guess now.
 
 - [ ] **Step 2: Create them through the provisioning API**
@@ -2753,7 +2758,7 @@ curl -s -H "Authorization: Bearer $GRAFANA_TOKEN" \
 For each rule, `POST /api/v1/eval` with `{condition, data}` copied from its own object — the check the Traefik rules used on 2026-11-21. Then, for the two that can be provoked:
 
 - a burst of ten missing paths from the runbook's outside address creates a decision → `SecurityBanBurst` and `SecurityAttackSustained` fire, with the address in the message;
-- **the operator** scales `deploy/crowdsec-crowdsec-agent` to zero (`kubectl -n security scale`, a write this session must not make) → `SecurityStackBlind` fires within five minutes. **This is the one proof that is not an expression**; the rule's whole value is that a dead agent is not a quiet night, and scaling it down is how that is shown. Scale it back and watch the alert resolve.
+- **the operator** scales `deploy/crowdsec-agent` to zero (`kubectl -n security scale`, a write this session must not make) → `SecurityStackBlind` fires within five minutes. **This is the one proof that is not an expression**; the rule's whole value is that a dead agent is not a quiet night, and scaling it down is how that is shown. Scale it back and watch the alert resolve.
 
 - [ ] **Step 4: Read one Discord message and one card as the operator receives them**
 
