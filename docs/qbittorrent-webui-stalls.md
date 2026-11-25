@@ -1,24 +1,25 @@
 # qBittorrent's Web UI stops answering during downloads
 
-> **In one line.** The Web UI and API stop answering because one file on the downloads export leaves
-> a page stuck in the node's NFS client; the config claim moved to `local-path` on 2026-11-25 and the
-> stall came back six minutes later, so the config volume was not the cause.
+> **In one line.** The Web UI and API stop answering while torrents keep moving; the config claim
+> moved to `local-path` on 2026-11-25 and the stall came back six minutes later, and exporting the
+> downloads volume `async` the same evening changed nothing, so neither the config volume nor the
+> server's fsync is the cause.
 >
 > **Use it when** qBittorrent's Web UI hangs, the exporter stops being scraped, or you want the
-> evidence gathered on 13 and 25 November and what cleared the hang · **Verified** 2026-11-25: 627
-> failed scrapes in the previous 24 h, every one pinned at the exporter's 5 s timeout, and the hang
-> reproduced and cleared on the same evening · **Kind:** record
+> evidence gathered on 13 and 25 November and what cleared the hang · **Verified** 2026-11-25 19:20:
+> the Web UI dead for 20 minutes while the mount wrote 2,000 times a second, with every server-side
+> and network-side suspect measured and cleared · **Kind:** record
 >
 > **Sources** `cluster/helm/media-stack/qbittorrent/values.yaml`,
 > `cluster/helm/media-stack/qbittorrent-exporter/values.yaml`, live `up` and
 > `scrape_duration_seconds` from Prometheus, kernel stacks read from `streaming` and `nas`
 
-Status: **open. The config claim was moved off NFS on 2026-11-25 and it was not the cause**; the
-stall reproduced at 18:10 the same evening. The wedge is a stuck writeback on the **downloads**
-export, and the evidence, the recovery and the open question are under *The stall came back* below.
-Documented 2026-11-13, measured again on 2026-11-25 (board card 758). The exporter's alert stays
-silenced until it is closed or handed over; the note under *Why the app was not changed until now*
-says what to do with that silence.
+Status: **open.** The config claim was moved off NFS on 2026-11-25 and it was not the cause; the
+downloads export was made `async` that evening and the stall came back under it too. What is left is
+a wedge in the app's own event loop, covered under *The async export, and why it did not help*.
+Documented 2026-11-13, measured again on 2026-11-25 (board cards 758 and 777). The exporter's alert
+stays silenced until it is closed or handed over; the note under *Why the app was not changed until
+now* says what to do with that silence.
 
 ## What is seen
 
@@ -208,30 +209,82 @@ Read from `nas` while the second hang was live:
 | `jbd2` itself | running, 5.5 ms average commit, no task blocked on the disk |
 | the same filesystem | an 8 MiB write with `fsync` at 456 MB/s, at that moment |
 
-So the disk is fine, the journal is fine, and the write that hangs is one file's fsync in ext4's
-**fast-commit** path. The client waits for the page that write would have completed, and the session
-waits for the `close()`. Because it is one file, a fresh mount resumes onto the same file and wedges
-again within minutes.
+So the disk is fine, the journal is fine, and the write that hangs is one file's fsync, waiting on a
+journal commit that does not arrive. The client waits for the page that write would have completed,
+and the session waits for the `close()`. Because it is one file, a fresh mount resumes onto the same
+file and wedges again within minutes.
+
+The `ext4_fc_commit` in that stack is not the fast-commit path: this filesystem has no `fast_commit`
+feature at all (`tune2fs -l` on `/mnt/ultrafaststorage` does not list one), so `ext4_fc_commit` fell
+straight through to `jbd2_complete_transaction` and the ordinary full commit. Turning fast-commit off
+— the second candidate in the list below — is therefore not an option here: it was never on.
+
+### The async export, and why it did not help
+
+The first candidate — take `sync` off the downloads export — was taken on 2026-11-25 at 19:00:34:
+`/mnt/ultrafaststorage/nfs` is exported `async` (commit `0f218818`), so `nfsd` acknowledges a write
+without fsyncing it and a client's `COMMIT` returns at once.
+
+The pod that came back at 18:59 mounted that export under the new options and answered normally at
+19:02 (`scrape_duration_seconds` 0.098 s). By 19:07 it was pinned at the exporter's 5 s ceiling again,
+and at 19:30 it was still pinned. A further pod, started at 19:24 with its own fresh mount of the same
+export, was dead by 19:28. So the server-side fsync is not what wedges the client: with `sync` off
+there is nothing left for a write to wait on, and the WebUI stopped answering anyway.
+
+Measured on `streaming` at 19:20, WebUI dead, every scrape failing:
+
+| Observation | Value |
+|---|---|
+| downloads still moving | **39,992 `WRITE` calls in 20 s** on the mount, about 2,000 a second and ~32 MB/s |
+| other traffic on the same mount | `statfs`, `ls` and a fresh create all answer in under 5 s |
+| remote procedure calls ("RPC", one NFS request) | `retrans` 0, every per-operation timeout 0, no `server not responding` in the kernel log |
+| the client's connection | one TCP session to 192.168.1.41:2049, connected, nothing queued either way |
+| writeback backlog | `Dirty` 1.2 MB, `Writeback` 536 kB |
+| `nas` | every `nfsd` thread idle, `jbd2` idle |
+| the two disks | 0 media errors, 6–7 % of life used, no `nvme` line in the day's kernel log |
+| the filesystem | 66 % full, 1 % of the inodes used, no `fast_commit` feature |
+
+And on the app itself, from `/proc`:
+
+| Observation | Value |
+|---|---|
+| threads | 9 in all: one disk thread cycling through `D` for milliseconds at a time, four in `poll`, four waiting on a lock |
+| the thread that serves the WebUI | parked in the kernel's lock wait (`futex_wait`, a contended mutex) on every sample over 20 minutes, never back in its event loop |
+| the listener | 30 connections waiting to be accepted, and the app accepts none of them |
+| metadata volume | 6.1 M `DELEGRETURN`, 71 M `OPEN` and 71 M `CLOSE` since boot, for 379 torrents |
+
+So the two shapes are not the same. At 18:50 a thread waited **inside the kernel** for one file's
+writeback — the class upstream tracks in
+[#21783](https://github.com/qbittorrent/qBittorrent/issues/21783) and
+[#23599](https://github.com/qbittorrent/qBittorrent/issues/23599), both closed as not planned, both
+carrying this same `close()` → `nfs_wb_all` stack. At 19:20 nothing was waiting in the kernel: the
+mount answered, other files were being written, and only the program's own event loop was stuck.
+
+Whether the second is a leftover of the first (a lock taken before the stall and never released) cannot
+be told from outside the binary. The image ships a static, stripped `qbittorrent-nox`, so a backtrace
+of its threads resolves no function: an `addr2line` on those addresses prints `??`.
 
 ### What is still open
 
-Which file, and why its fsync never commits, is not settled. The `fileid changed` bursts are what a
-client reports when a name it has cached now points at a different inode — what a replaced file looks
-like, after a mover renames over it or through qBittorrent's own temp-file pattern — while the client
-still holds dirty pages for the old inode.
+- **Settled, and no longer candidates:** `sync` off (tested, wedge returned); ext4 fast-commit (the
+  feature is not enabled on this filesystem); a failing disk (SMART clean, no `nvme` error); the
+  network and the server (no retransmission, no timeout, `nfsd` idle); the config volume (moved).
+- **Still untested — replaced names in the page cache.** `lookupcache=none` on the downloads mount is
+  the general form of the `fileid changed` messages: 48 of them today, 39 of them in the 17h hour.
+  Changing it means recreating the volume, not editing the chart, because mount options come from the
+  volume once it exists.
+- **Still untested — a stack trace with symbols.** The instrument that names the lock and the line is
+  a qBittorrent build that carries its symbols, running under the same NFS volume until the event loop
+  parks.
+- **Still untested — the kernel-side shape, if it returns.** The server's `rpcdebug -m nfsd -s file`
+  names every file handle it serves; the client's `rpcdebug -m nfs -s file` names every file it opens.
+  Run both while the `close()` stack is live and the file is named, not inferred.
 
-The candidates to bound it are all untested:
+The way out of the app when the event loop is parked is still the kernel-side one: stop the pod, detach
+the pod's NFS mounts in the node's mount namespace, start the pod. A container restart alone does not
+clear it, because the wedged state lives in the node's NFS client, which every new pod on `streaming`
+joins.
 
-- take `sync` off the downloads export, so `nfsd` stops fsyncing per write and the client's `COMMIT`
-  has nothing to wait for;
-- turn ext4's fast-commit feature off on `/mnt/ultrafaststorage` (needs the export unmounted, so it is
-  a maintenance-window change);
-- find the file and its access pattern: the kernel does not name it from userspace, so this needs the
-  server's `rpcdebug` file tracing while the wedge is reproduced;
-- keep replaced names out of the client's page cache (`lookupcache=none`), which is the general
-  version of the last point.
-
-No chart or host change is made for any of them yet.
 
 ## The gate, and the way back
 
