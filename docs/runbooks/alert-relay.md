@@ -1,7 +1,8 @@
 # Turning Grafana alerts into an investigation queue
 
 > **In one line.** A small in-cluster relay turns whatever Grafana routes to it into a card on the
-> `alerts` board, opens one only when the firing is new work, and never moves or closes one.
+> `alerts` board, opens one only when the firing is new work, and a five-minute job moves that card
+> with the fix work it spawned; neither moves a card on its own, and neither closes one.
 >
 > **Use it when** a Grafana alert should reach the board, a card never appeared, or you are changing
 > what the relay does · **Verified** 2026-11-25 · **Kind:** how-to
@@ -11,18 +12,21 @@
 
 Date: 2026-11-16
 
-**Changes the cluster:** yes. Adds a Deployment, a Service and a ConfigMap in `monitoring`, and an
-ArgoCD Application for them. One Secret is created by hand. No route to the internet, no ingress.
+**Changes the cluster:** yes. Adds a Deployment, a Service, a ConfigMap and a CronJob in `monitoring`,
+and an ArgoCD Application for them. One Secret is created by hand. No route to the internet, no
+ingress.
 
 The relay listens on one endpoint and turns a Grafana alert into a card on the `alerts` board. It is
 the only thing that translates between Grafana's JSON and the board's task shape; neither product can
 be told to speak the other's format, and Vikunja has no inbound webhook.
 
 Design: [`2026-11-16-alerts-to-board-design.md`](../superpowers/specs/2026-11-16-alerts-to-board-design.md),
-revised on 2026-11-25 by
-[`2026-11-25-drive-alert-lifecycle-design.md`](../superpowers/specs/2026-11-25-drive-alert-lifecycle-design.md).
+revised on 2026-11-25 by the column gate
+([`2026-11-25-alert-relay-column-gate-design.md`](../superpowers/specs/2026-11-25-alert-relay-column-gate-design.md))
+and the card lifecycle
+([`2026-11-25-alert-lifecycle-enforcement-design.md`](../superpowers/specs/2026-11-25-alert-lifecycle-enforcement-design.md)).
 The one decision taken there: the card **waits for a session** — no scheduled agent investigates and
-closes it.
+closes it. The job only moves a card along the path the session's own work defines.
 
 ## Who decides what reaches the board
 
@@ -64,6 +68,75 @@ HTML, so a group key's quotes come back as `&#34;` and a search on the raw key m
 is how three test cards were opened by three identical deliveries on 2026-11-24. The raw group key is
 kept on the next line as `Group:`, for a person reading the card.
 
+## After the investigation
+
+A card in Backlog is a card nobody has looked at. The session that investigates it records its fixes
+on the card, and a five-minute CronJob — `alert-relay-lifecycle`, same chart, same Secret, same
+token — moves the card as the work moves.
+
+**A fix is attached as a relation, not as a link in the text.** The fix card goes on its own
+repository board, and the alert card waits on it:
+
+```bash
+# as bot-opencode, which holds read+write on `alerts` and the repository boards
+curl -s -X POST "https://vikunja.kub.local/api/v2/tasks/<alert>/relations" \
+  -H "Authorization: Bearer $VIKUNJA_MCP_TOKEN" -H 'Content-Type: application/json' \
+  -d '{"relation_kind":"blocked","other_task_id":<fix>}'
+```
+
+`blocked` on the alert card means the alert is waiting for that fix. Vikunja writes the inverse
+`blocking` on the fix card for you, and the two cards need not share a project.
+
+| Blocked fix cards | Current column | The job moves it to |
+|---|---|---|
+| none | any | nothing — a card with no fix is the session's to place |
+| at least one, not all closed | Backlog | Doing |
+| at least one, not all closed | Doing | nothing |
+| at least one, all closed | Backlog or Doing | Validation |
+| any | Validation | nothing |
+
+**Closed** means the fix is in Validation or Done, or is marked done. A fix in Validation is finished
+work waiting for acceptance, and the alert follows it — a deliberate exception to the board's
+"only Done releases" rule. Nothing else counts: a fix in Backlog or Doing keeps the alert in Doing.
+
+The rest is guarded:
+
+- a card without the `alert` label, a `frozen` card, a done card, and a card in Idea, Shaping or
+  Validation is never touched;
+- Validation is terminal — a reopened fix does not pull the card back to Doing;
+- nothing moves a card to Done, and nothing closes one;
+- a fix card whose column cannot be read fails that card loudly instead of guessing: the job prints
+  `failed #<id>: …`, moves nothing for it, and exits non-zero.
+
+Renaming a column is safe for the moves — the bucket ids are in `values.yaml` — but not for this
+check: the job matches the titles `Backlog`, `Doing`, `Validation` and `Done`. Those four names are
+part of the contract, and a rename is a code change.
+
+Each move leaves one line, so the job's own log is the record:
+
+```
+#757 CloudEndpointDown on https://ashuvidz.com: Backlog -> Doing (2 fixes open)
+lifecycle: 1 moved, 0 failed
+```
+
+A run that moves nothing prints nothing at all.
+
+**The session's part**, in order:
+
+1. Investigate the card in Backlog.
+2. Open each required fix card on its own board, as that board's rules say.
+3. Relate each fix to the alert card with the call above.
+4. Write the cause on the alert card: what happened, what was fixed, what stops it recurring.
+5. Move the alert card to Doing — or let the job do it within five minutes.
+6. Nothing to fix? Write the cause and move the card straight to Validation. The job leaves a card
+   with no blocked fix alone, so this is the only path for it.
+7. When the last fix reaches Validation or Done, the job moves the alert to Validation. Nobody has to
+   remember it.
+
+A fix card that is deleted leaves no relation behind; if that empties the list, the job leaves the
+alert where it is and a session closes it by hand. A fix card that is `frozen` is still open, so the
+alert correctly waits.
+
 ## Step 1 — the bot
 
 `bot-alertmanager` is a second bot, owned by the operator, separate from `bot-opencode` so an alert
@@ -71,8 +144,33 @@ card is never mistaken for an agent's work.
 
 1. In the board: **Settings → Bots → create**, name it `alertmanager`.
 2. Copy its token once.
-3. Share **only the `alerts` project** with it, permission read+write. It has no business on the
-   seven repository boards.
+3. Share the `alerts` project with it, permission read+write.
+4. Share the five repository boards with it, **read-only**: `homelab` (2), `config` (3),
+   `ashudev-website` (5), `ashuvidz-creator` (8) and `infra-main` (12). It writes nothing there; it
+   reads each fix card's column, and a board it cannot read fails the alert card that waits on it.
+
+`bot-opencode` is the other half: it needs **read+write on `alerts`**, because a session relates the
+fix cards to the alert card and moves it.
+
+These four changes are the operator's, made once. They need `VIKUNJA_API_TOKEN` — the operator's
+token, never the bot token an agent uses. `POST` creates the share and `PUT` changes an existing one:
+
+```bash
+B=https://vikunja.kub.local/api/v2
+# bot-opencode: read+write on alerts
+curl -s -X POST "$B/projects/9/users" -H "Authorization: Bearer $VIKUNJA_API_TOKEN" \
+  -H 'Content-Type: application/json' -d '{"username":"bot-opencode","permission":1}'
+# bot-alertmanager: read-only on each repository board
+for p in 2 3 5 8 12; do
+  curl -s -X POST "$B/projects/$p/users" -H "Authorization: Bearer $VIKUNJA_API_TOKEN" \
+    -H 'Content-Type: application/json' -d '{"username":"bot-alertmanager","permission":0}'
+done
+```
+
+A `400` or `409` means the share already exists: run the same call against
+`$B/projects/{project}/users/{username}` with `PUT` instead. Check it took with
+`GET $B/projects/9` as `bot-opencode` (`max_permission: 1`) and `GET $B/tasks/<a fix card>` as
+`bot-alertmanager` (200, not 403).
 
 ## Step 2 — the Secret
 
@@ -95,6 +193,16 @@ the ArgoCD UI like every other Application here (auto-sync is enabled per Applic
 kubectl -n monitoring rollout status deploy/alert-relay --timeout=120s
 kubectl -n monitoring port-forward svc/alert-relay 8080:8080 &
 curl -s localhost:8080/healthz   # → ok
+kubectl -n monitoring get cronjob alert-relay-lifecycle   # → */5 * * * *
+```
+
+The job runs on its own schedule. To take one pass by hand — after a permission change, or to prove a
+move without waiting — start it from the CronJob:
+
+```bash
+kubectl -n monitoring create job --from=cronjob/alert-relay-lifecycle lifecycle-probe
+kubectl -n monitoring logs job/lifecycle-probe
+kubectl -n monitoring delete job lifecycle-probe
 ```
 
 ## Step 4 — point Grafana at it
@@ -165,6 +273,34 @@ Expected: `firing: TestDiskFull on nas: opened #<id>`, and one card. Send the sa
 `resolved, ignored, #<id> in Backlog`, and the card stays where it is. Send a `resolved` whose
 `groupKey` was never seen → `resolved, no card`, and no card.
 
+**To prove the lifecycle**, with the shares in place and the probe card from above still in Backlog:
+open a probe fix card on `homelab`, relate it, run the job once, and watch the probe card move.
+
+```bash
+set -a; . ~/.config/secrets/homelab.env; set +a
+B=https://vikunja.kub.local/api/v2
+FIX=$(curl -sk -X POST "$B/projects/2/tasks?format=markdown" \
+  -H "Authorization: Bearer $VIKUNJA_MCP_TOKEN" -H 'Content-Type: application/json' \
+  -d '{"title":"Lifecycle probe fix","description":"probe","bucket_id":13}' | jq -r .id)
+curl -sk -X POST "$B/tasks/<alert>/relations" \
+  -H "Authorization: Bearer $VIKUNJA_MCP_TOKEN" -H 'Content-Type: application/json' \
+  -d "{\"relation_kind\":\"blocked\",\"other_task_id\":$FIX}"
+kubectl -n monitoring create job --from=cronjob/alert-relay-lifecycle lifecycle-probe
+kubectl -n monitoring logs job/lifecycle-probe
+# → #<alert> TestDiskFull on nas: Backlog -> Doing (1 fixes open)
+
+# close the fix the way a session would, then run once more
+curl -sk -X PUT "$B/projects/2/views/13/buckets/14/tasks" \
+  -H "Authorization: Bearer $VIKUNJA_MCP_TOKEN" -H 'Content-Type: application/json' \
+  -d "{\"task_id\":$FIX}"
+kubectl -n monitoring create job --from=cronjob/alert-relay-lifecycle lifecycle-probe-2
+kubectl -n monitoring logs job/lifecycle-probe-2
+# → #<alert> TestDiskFull on nas: Doing -> Validation (0 fixes open)
+```
+
+A card with no blocked fix must stay where it is on the next run. Freeze one probe card and confirm
+it does not move either. Then trash both probe cards and delete the probe jobs.
+
 ## Failure modes
 
 | Symptom | Means | Do |
@@ -175,6 +311,9 @@ Expected: `firing: TestDiskFull on nas: opened #<id>`, and one card. Send the sa
 | Grafana reports a failed delivery | The relay is down or the Service name is wrong | `kubectl -n monitoring logs deploy/alert-relay` |
 | Cards stop appearing, everything else looks fine | The relay is the single point of failure, and this is what that looks like | Accepted in the design; check the pod |
 | **The relay log is empty, not even an `opened`** | Grafana never dispatched: the fault is in the routing tree, not the relay | Read `GET /api/alertmanager/grafana/api/v2/status` and check the rule's route |
+| Job `alert-relay-lifecycle` Failed | A card could not be read or moved — most often a missing share on a repository board, or the board call failing | `kubectl -n monitoring logs job/<job>`; the line `failed #<id>: …` names the card. Fix the share, then run a pass by hand |
+| An alert stays in Doing with every fix closed | The job cannot read one of those fix cards' boards, so it cannot tell Validation from Doing | Check the share on that board; a 403 in the log is the tell |
+| An alert stays in Backlog with fix cards attached | The relation was never written, or the job cannot read the alert board | `GET /api/v2/tasks/<alert>?expand=buckets` and read `related_tasks.blocked` |
 
 ## What it deliberately does not do
 
@@ -182,3 +321,5 @@ Expected: `firing: TestDiskFull on nas: opened #<id>`, and one card. Send the sa
 - It does not investigate. The card carries the payload and a `Next step:`; the session brings the
   tools.
 - It does not mute anything. Silences, with an expiry date, are how noise is handled.
+- The job does not move a card backwards, does not close one, and does not touch a card that has no
+  `alert` label, is `frozen`, or is done.
