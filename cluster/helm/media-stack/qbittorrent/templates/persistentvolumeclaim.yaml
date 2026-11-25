@@ -15,20 +15,6 @@ spec:
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: {{ include "app.tempClaimName" . }}
-  labels:
-    {{- include "app.labels" . | nindent 4 }}
-spec:
-  accessModes:
-    {{- toYaml .Values.storage.temp.accessModes | nindent 4 }}
-  storageClassName: {{ .Values.storage.temp.className }}
-  resources:
-    requests:
-      storage: {{ .Values.storage.temp.size }}
----
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
   name: {{ include "app.vpnClaimName" . }}
   labels:
     {{- include "app.labels" . | nindent 4 }}

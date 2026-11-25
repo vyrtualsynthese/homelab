@@ -421,9 +421,9 @@ Two consequences, stated so nobody rediscovers them:
   the "copy, then delete the source" note under *The fix* no longer applies. The completion hook fires
   on a rename, at once.
 
-The chart still renders `qbittorrent-temp` and mounts it at `/downloads-temp`; nothing writes there any
-more. Card 783 removes the claim, its template, its helper and its mount, and the note in
-`cluster/helm/backup/values.yaml` that explains why it was never backed up.
+The chart no longer renders `qbittorrent-temp`, and nothing mounts `/downloads-temp` any more: the
+claim, its template, its helper and its mount were removed on 2026-11-25 (board #540), with the note
+in `cluster/helm/backup/values.yaml` that explained why it was never backed up.
 
 Ten minutes later the bill arrived: the exporter stopped answering at **20:54** and started again at
 **21:16**, with one container restart in between (the pod's first since 20:09). The relocation ran
@@ -644,8 +644,8 @@ deleted or modified by the move.
 The in-flight downloads have the same way back, and it is one preference pair rather than a copy. They
 are back where they started — `Session\TempPath=/downloads/incomplete`, `Session\TempPathEnabled=true`
 — so the whole setting is that pair, applied through `app/setPreferences`, no restart and no copy.
-Nothing is lost either way: an unfinished torrent is re-fetched. `qbittorrent-temp` is empty and used
-by nothing; card 783 removes the claim.
+Nothing is lost either way: an unfinished torrent is re-fetched. The `qbittorrent-temp` claim was
+empty and used by nothing, and it is gone from the chart (board #540).
 
 ## Why the app was not changed until now
 
