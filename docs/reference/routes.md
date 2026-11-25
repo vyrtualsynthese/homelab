@@ -12,10 +12,20 @@ declares. A host with a `web` and a `websecure` router is one row, and its gate 
 The dashboard is the one host whose `web` router is applied by hand rather than rendered:
 `traefik.kub.local` on port 80 is redirected by
 `cluster/infrastructure/traefik/dashboard/redirect.yaml`, and that twin merges into the row
-the chart-rendered `websecure` router gives the host. One internal route is an API rather
+the chart-rendered `websecure` router gives the host. That twin is also the whole difference
+between what the cluster holds and what these charts render: 73 `IngressRoute`
+objects live against the 72 rendered here, and `kube-system/traefik-dashboard-redirect`
+is the only name on one side and not the other. `cluster/infrastructure/**` is applied by hand,
+so no Application can ever render it, and the gap is a shape of this repository rather than
+drift. The other three ways a router goes missing are empty here: every Application's `path`
+holds a chart, no Application is a leftover of a retired app, and every router a chart renders
+is live. Both counts, with the day the live one was read, are in
+`cluster/helm/security/security-exporter/values.yaml`. One internal route is an API rather
 than a page: `loki.kub.local` serves Loki's query API and its query frontend, and the logs are
 read in Grafana. The `IngressRouteTCP` and `IngressRouteUDP` entries Syncthing and Minecraft
-declare match on `HostSNI(*)`, carry no hostname, and are therefore not rows here.
+declare match on `HostSNI(*)`, carry no hostname, and are therefore not rows here — which is
+why `hack/check-exposure.sh` prints `checked: 77 routes`: its grep takes
+`IngressClass` and those four objects as well, and none of them is an `IngressRoute`.
 How a request arrives, what the gate does and which certificate answers the handshake are
 [how it works](../how-it-works/network.md); who signs in where is
 [the SSO matrix](sso-applications.md). `Public?` is what `hack/check_exposure.py` allows.
