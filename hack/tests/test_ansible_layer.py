@@ -157,6 +157,46 @@ def test_accounts_removes_the_admins_grant_and_keeps_sudo():
     assert "line: '%sudo" not in text, "the stock %sudo line must not be rewritten"
 
 
+def test_accounts_removes_the_cloud_init_grant_for_an_account_that_does_not_exist():
+    """rbp2's image wrote `/etc/sudoers.d/90-cloud-init-users`, a NOPASSWD grant for
+    an `ubuntu` account that no host has had since the rename. It is inert today and
+    passwordless root the moment anything creates that name, and it names another
+    identity than `%admins`, so the role's own grant removal leaves it alone."""
+    tasks = yaml.safe_load((ANSIBLE / "roles/accounts/tasks/main.yml").read_text())
+    removals = [
+        task
+        for task in tasks
+        if isinstance(task, dict)
+        and task.get("ansible.builtin.file", {}).get("path")
+        == "/etc/sudoers.d/90-cloud-init-users"
+    ]
+    assert len(removals) == 1, removals
+    assert removals[0]["ansible.builtin.file"]["state"] == "absent"
+    assert removals[0].get("when") is None, "nothing about the grant depends on the caller"
+
+
+def test_accounts_removes_the_orphan_home_only_when_no_account_owns_it():
+    """`/home/ubuntu` on rbp2 is uid 1000's, and no account holds that id any more.
+    The directory is removed, but only on the answer "no such account": a home that
+    belongs to a live account is not this role's to delete."""
+    tasks = yaml.safe_load((ANSIBLE / "roles/accounts/tasks/main.yml").read_text())
+    read = next(t for t in tasks if t.get("register") == "accounts_ubuntu_account")
+    assert read["ansible.builtin.command"]["cmd"] == "getent passwd ubuntu"
+    assert read["changed_when"] is False
+    assert read["failed_when"] is False, "an absent account is the answer, not a failure"
+    assert read["check_mode"] is False, "the removal's `when` reads it; --check must still run it"
+    home = next(
+        t
+        for t in tasks
+        if isinstance(t, dict)
+        and t.get("ansible.builtin.file", {}).get("path") == "/home/ubuntu"
+    )
+    assert home["ansible.builtin.file"]["state"] == "absent"
+    assert "accounts_ubuntu_account.rc == 2" in home["when"], home["when"]
+    names = [t.get("name") for t in tasks if isinstance(t, dict)]
+    assert names.index(read["name"]) < names.index(home["name"]), "read before remove"
+
+
 def test_accounts_closes_password_auth_for_every_host():
     defaults = yaml.safe_load((ANSIBLE / "inventory/group_vars/all.yml").read_text())
     assert defaults["sshd_password_auth"] is False

@@ -77,7 +77,7 @@ The trade — passwordless root for one named identity instead of a group — is
 | Role | Hosts | What it changes |
 |---|---|---|
 | `baseline` | all | marks the host as managed from here |
-| `accounts` | all | removes the `%admins ALL=(ALL) NOPASSWD: ALL` grant and the group, closes password logins, turns X11 forwarding off |
+| `accounts` | all | removes the `%admins ALL=(ALL) NOPASSWD: ALL` grant, the group, cloud-init's grant for the retired `ubuntu` account and that orphan home, closes password logins, turns X11 forwarding off |
 | `packages` | all | removes what `inventory/host_vars/<host>.yml` names, after resolving each pattern against dpkg |
 | `system` | all | one time zone, two kernels kept (the running one and the newest other), `apt autoremove --purge`, the `rc` residue purged |
 | `firewall` | all | `ufw`, default deny in, the K3s and NFS ports opened to the addresses that use them |
