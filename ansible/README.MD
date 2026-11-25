@@ -72,6 +72,7 @@ The trade — passwordless root for one named identity instead of a group — is
 | `packages` | all | removes what `inventory/host_vars/<host>.yml` names, after resolving each pattern against dpkg |
 | `system` | all | one time zone, two kernels kept (the running one and the newest other), `apt autoremove --purge`, the `rc` residue purged |
 | `firewall` | all | `ufw`, default deny in, the K3s and NFS ports opened to the addresses that use them |
+| `union` | `storage` | the mergerfs pool's line in `/etc/fstab` and its two runtime options: `moveonenospc`, `minfreespace` |
 | `nfs` | `storage` | the eight exports the cluster mounts, root squashed, `sync` |
 | `snapraid` | `storage` | a nightly sync from cron, without the Python 2 runner it used to call |
 

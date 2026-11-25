@@ -1,0 +1,42 @@
+---
+# The union `nas` presents to the cluster: six ext4 disks seen as one 51 TB
+# folder, with snapraid parity above them. It lived, hand-written, in
+# /etc/fstab and nowhere in the repository, so a host rebuilt from here came
+# back without it. This role owns that one line and its running options.
+#
+# Three things differ from the line that was there:
+#   moveonenospc=true   a write that hits a full disk moves the file to another
+#                       disk and retries, instead of failing the copy. `true` is
+#                       mergerfs's alias for its "most free space" policy, which
+#                       is why the runtime pair below says `mfs`.
+#   minfreespace=100G   up from 50G: the move above needs a disk with room left,
+#                       and 100G is at least the largest file an import copies.
+#   nonempty            dropped. It let the mount cover a non-empty mountpoint,
+#                       so a failed mount hid writes on the system disk instead
+#                       of refusing.
+#
+# The NFS recipe is left alone: `use_ino`, `inodecalc=path-hash`, `noforget`,
+# `cache.files=off` and `dropcacheonclose=true` are what keep file handles
+# stable and the page cache out of the way for the cluster's clients.
+union_branches: /mnt/hdd*
+union_mountpoint: /mnt/storage
+union_options:
+  - allow_other
+  - noforget
+  - use_ino
+  - inodecalc=path-hash
+  - cache.files=off
+  - dropcacheonclose=true
+  - minfreespace=100G
+  - category.create=mfs
+  - func.getattr=newest
+  - moveonenospc=true
+  - fsname=mergerfs
+
+# The two options that can be changed on the mount that is already running, in
+# the form mergerfs reports them: the policy name `mfs` rather than the `true`
+# alias, and bytes rather than `100G` (100 × 1024³). The rest of the list above
+# is fixed when the mount is made, and the next boot reads it from /etc/fstab.
+union_runtime:
+  moveonenospc: mfs
+  minfreespace: "107374182400"

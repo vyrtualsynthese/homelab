@@ -20,7 +20,6 @@ Deployed from the chart's ConfigMap; see docs/runbooks/alert-relay.md.
 
 from __future__ import annotations
 
-import hashlib
 import json
 import os
 import re
@@ -62,16 +61,6 @@ def incident_key(payload: dict) -> str:
     return str(alerts[0].get("fingerprint") or "unknown")
 
 
-def key_slug(payload: dict) -> str:
-    """A searchable fingerprint of the incident, never the raw group key.
-
-    The board stores a description as HTML, so a group key's quotes come back as
-    &#34; and a `like` on it never matches: every retry opened another card. A hex
-    digest has no character the filter language can mangle.
-    """
-    return hashlib.sha256(incident_key(payload).encode()).hexdigest()[:16]
-
-
 def render_title(payload: dict) -> str:
     """What the card is called: the rule, and where it fired."""
     alerts = payload.get("alerts") or [{}]
@@ -97,7 +86,6 @@ def render_body(payload: dict, key: str, grafana_url: str = "") -> str:
         "pr: none",
         "",
         f"Alert key: {key}",
-        f"Group: {incident_key(payload)}",
         f"State: {payload.get('status') or first.get('status') or 'firing'}",
         f"Rule: {rule}",
         f"Severity: {labels.get('severity', 'unknown')}",
@@ -193,19 +181,13 @@ class Board:
         return self.call("PUT", f"/api/v1/projects/{self.project}/tasks",
                          {"title": title, "description": description})
 
-    def label(self, task: int, name: str) -> bool:
-        """Label the card if the board has that label; a missing one is not fatal.
-
-        An unlabelled card fails the board's own check, so `task` matters; `alert`
-        is decoration, and losing the card over it is worse than the missing label.
-        """
+    def label(self, task: int, name: str) -> None:
+        """Every ticket carries a kind; an unlabelled card fails the board's check."""
         labels = self.call("GET", "/api/v1/labels") or []
         found = next((l["id"] for l in labels if l.get("title") == name), None)
         if found is None:
-            print(f"label {name!r} does not exist on the board", file=sys.stderr, flush=True)
-            return False
+            raise RuntimeError(f"label {name!r} does not exist on the board")
         self.call("PUT", f"/api/v1/tasks/{task}/labels", {"label_id": found})
-        return True
 
     def comment(self, task: int, text: str) -> None:
         self.call("PUT", f"/api/v1/tasks/{task}/comments", {"comment": text})
@@ -226,7 +208,7 @@ class Board:
 # ---------------------------------------------------------------------------
 def handle(payload: dict, board: Board, cooldown: float, now: datetime | None = None) -> str:
     """What to do with one delivery. Returns a word for the log."""
-    key = key_slug(payload)
+    key = incident_key(payload)
     resolved = (payload.get("status") or "").lower() == "resolved"
     card = board.find_open_card(key)
     if card is None:

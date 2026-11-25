@@ -14,8 +14,12 @@
     - packages
     - system
     - firewall
-    # The one role that is not for every host: the export belongs to the node
-    # that holds the disks, and the inventory is where that node is named.
+    # The roles that are not for every host: the union, the export table and the
+    # parity all belong to the node that holds the disks, and the inventory is
+    # where that node is named. The union comes first — the export table names
+    # paths inside it.
+    - role: union
+      when: "'storage' in group_names"
     - role: nfs
       when: "'storage' in group_names"
     - role: snapraid
