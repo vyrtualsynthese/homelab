@@ -25,7 +25,7 @@ than a page: `loki.kub.local` serves Loki's query API and its query frontend, an
 read in Grafana. The `IngressRouteTCP` and `IngressRouteUDP` entries Syncthing and Minecraft
 declare match on `HostSNI(*)`, carry no hostname, and are therefore not rows here — which is
 why `hack/check-exposure.sh` prints `checked: 77 routes`: its grep takes
-`IngressClass` and those four objects as well, and none of them is an `IngressRoute`.
+`IngressClass` and the TCP/UDP objects as well, and none of them is an `IngressRoute`.
 How a request arrives, what the gate does and which certificate answers the handshake are
 [how it works](../how-it-works/network.md); who signs in where is
 [the SSO matrix](sso-applications.md). `Public?` is what `hack/check_exposure.py` allows.

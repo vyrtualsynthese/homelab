@@ -12,6 +12,10 @@ import gen_docs  # noqa: E402
 
 FIXTURE_ROOT = HACK / "fixtures" / "docsgen"
 FIXTURE_CHART = FIXTURE_ROOT / "cluster" / "helm" / "media-stack" / "fixture"
+# The fixture tree has one chart, which renders one `IngressRoute`, and the page claims exactly one
+# further name is live and rendered nowhere, so this tree's live count is 2. Production passes
+# nothing and takes `gen_docs.LIVE_INGRESS_ROUTES`.
+FIXTURE_LIVE_ROUTES = 2
 
 
 @contextlib.contextmanager
@@ -161,19 +165,19 @@ class RenderChartTests(unittest.TestCase):
 
 class RenderRoutesTests(unittest.TestCase):
     def test_the_page_opens_with_the_generated_marker(self):
-        page = gen_docs.render_routes(FIXTURE_ROOT)
+        page = gen_docs.render_routes(FIXTURE_ROOT, live_ingress_routes=FIXTURE_LIVE_ROUTES)
         self.assertTrue(page.startswith(gen_docs.GENERATED_MARKER))
 
     def test_the_page_names_its_regenerate_command(self):
-        self.assertIn("python3 hack/gen_docs.py --write --only routes", gen_docs.render_routes(FIXTURE_ROOT))
+        self.assertIn("python3 hack/gen_docs.py --write --only routes", gen_docs.render_routes(FIXTURE_ROOT, live_ingress_routes=FIXTURE_LIVE_ROUTES))
 
     def test_the_page_carries_no_timestamp(self):
         import re
 
-        self.assertIsNone(re.search(r"20\d\d-\d\d-\d\d", gen_docs.render_routes(FIXTURE_ROOT)))
+        self.assertIsNone(re.search(r"20\d\d-\d\d-\d\d", gen_docs.render_routes(FIXTURE_ROOT, live_ingress_routes=FIXTURE_LIVE_ROUTES)))
 
     def test_the_page_names_the_application_and_its_namespace(self):
-        page = gen_docs.render_routes(FIXTURE_ROOT)
+        page = gen_docs.render_routes(FIXTURE_ROOT, live_ingress_routes=FIXTURE_LIVE_ROUTES)
         self.assertIn("| `fixture.kub.local` |", page)
         self.assertIn("| `media-stack` |", page)
 
@@ -199,7 +203,8 @@ class RenderRoutesTests(unittest.TestCase):
                 ),
             }
         ) as root:
-            page = gen_docs.render_routes(root)
+            # Nothing here renders a route, so the page's claim is one live name and none rendered.
+            page = gen_docs.render_routes(root, live_ingress_routes=1)
         self.assertIn("## Applications this table cannot see", page)
         self.assertIn("- `volume-provisioner`", page)
 
