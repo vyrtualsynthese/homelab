@@ -64,6 +64,35 @@ def test_the_root_device_is_read_not_assumed():
     assert "/proc/mounts" in text
 
 
+def test_render_prints_the_engine_it_would_install():
+    out = run("render", "rbp0")
+    assert out.returncode == 0, out.stderr
+    for pin in ("docker-ce=5:29.*", "docker-ce-cli=5:29.*",
+                "containerd.io=2.4.*", "docker-compose-plugin=5:8.*"):
+        assert pin in out.stdout
+    assert "/etc/apt/keyrings/docker.asc" in out.stdout
+
+
+def test_setup_leaves_the_engine_alone_in_a_fixture(tmp_path):
+    root = tmp_path
+    (root / "home/vronteix/dockers").mkdir(parents=True)
+    (root / "home/vronteix/dockers/pihole.env").write_text("WEBPASSWORD=x\n")
+    (root / "home/vronteix/dockers/wg-easy.env").write_text("WG_HOST=x\n")
+    (root / "proc").mkdir()
+    (root / "proc/mounts").write_text("LABEL=writable / ext4 rw 0 0\n")
+    out = run("setup", "rbp1", root=root)
+    assert out.returncode == 0, out.stderr
+    assert "engine: not touched (PI_ROOT is set)" in out.stdout
+    assert not (root / "etc/apt").exists()
+
+
+def test_the_engine_suite_is_read_not_hard_coded():
+    text = SCRIPT.read_text()
+    assert "/etc/os-release" in text
+    for codename in ("resolute", "noble", "jammy"):
+        assert codename not in text
+
+
 def test_backup_then_restore_puts_the_stack_back(tmp_path):
     root = tmp_path / "pi"
     stack = root / "home/vronteix/dockers"
