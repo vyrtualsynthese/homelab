@@ -19,6 +19,10 @@
 # already exists with the wrong owner, group or mode is refused, never tightened behind the
 # operator's back: a wrong mode there means someone else has been writing to it.
 #
+# The directory a file is installed into is held to the same rule: it must belong to root and must not
+# be writable by its group or by anyone else. A group-writable one lets that group replace the script
+# and the digest together, which is exactly what the digest exists to prevent.
+#
 # Flags: --destdir DIR and --sudoers-line LINE are for the test suite only; both are refused as
 # root, and --sudoers-line is refused outside --destdir.
 set -uo pipefail
@@ -55,6 +59,7 @@ parse() {
 at() { printf '%s%s' "$destdir" "$1"; }
 
 # Same octal number whether stat prints "750" or the caller wrote "0750".
+norm_mode() { printf '%o' $((8#$1)); }
 same_mode() { [ $((8#$1)) = $((8#$2)) ]; }
 
 sha() { sha256sum -- "$1" | cut -d' ' -f1; }
@@ -72,9 +77,10 @@ check_dir() {  # path mode owner group
     have="$(stat -c '%a' -- "$path")"
     have_owner="$(stat -c '%U' -- "$path")"
     have_group="$(stat -c '%G' -- "$path")"
-    same_mode "$have" "$2" || die "$path is mode $have, not $2; fix it and re-run (refusing to tighten it)"
+    same_mode "$have" "$2" || die "$path is mode $have, not $(norm_mode "$2"); fix it and re-run (refusing to tighten it)"
     [ "$have_owner" = "$3" ] || die "$path is owned by $have_owner, not $3; chown it and re-run"
     [ "$have_group" = "$4" ] || die "$path is group $have_group, not $4; chgrp it and re-run"
+    say "already $path ($3:$4 $2)"
     return 0
   fi
   require_user "$3"
@@ -84,11 +90,30 @@ check_dir() {  # path mode owner group
 }
 
 # The destination's own directory is created only when it is missing — a real install lands in
-# directories the system already owns, and a test tree has none of them.
+# directories the system already owns, and a test tree has none of them. An existing one is not
+# created but inspected: see check_parent.
 need_parent() {  # dst
   local dir
   dir="$(dirname -- "$1")"
-  [ -d "$dir" ] || install -d -m 0755 -o "$owner" -g "$group" -- "$dir" || die "cannot create $dir"
+  if [ -e "$dir" ] || [ -L "$dir" ]; then
+    check_parent "$dir"
+    return 0
+  fi
+  install -d -m 0755 -o "$owner" -g "$group" -- "$dir" || die "cannot create $dir"
+}
+
+# A directory the install writes into is only safe when nobody but its owner can write there: the
+# digest names the script's bytes, so whoever may write to the directory may swap both.
+check_parent() {  # dir
+  local dir="$1" have_mode have_owner
+  { [ -d "$dir" ] && [ ! -L "$dir" ]; } || die "$dir is not a directory; move it aside and re-run"
+  have_owner="$(stat -c '%U' -- "$dir")"
+  [ "$have_owner" = "$owner" ] || die "$dir is owned by $have_owner, not $owner; chown it and re-run"
+  have_mode="$(stat -c '%a' -- "$dir")"
+  # The last two digits are the group and other permissions; a write bit in either is the defect.
+  case "${have_mode: -2}" in
+    *[2367]*) die "$dir is writable by more than root; fix it and re-run (refusing to tighten it)" ;;
+  esac
 }
 
 # An unchanged file is left alone, digest and all. A file whose bytes are right but whose mode is
@@ -98,10 +123,11 @@ check_file() {  # src dst mode
   dst="$(at "$2")"
   [ -f "$src" ] || die "no such source file: $src (run this from the tree it lives in)"
   sum="$(sha "$src")" || die "cannot hash $src"
-  if [ -f "$dst" ]; then
+  if [ -e "$dst" ] || [ -L "$dst" ]; then
+    { [ -f "$dst" ] && [ ! -L "$dst" ]; } || die "$dst is not a regular file; move it aside and re-run"
     if [ "$(sha "$dst")" = "$sum" ]; then
       have="$(stat -c '%a' -- "$dst")"
-      same_mode "$have" "$3" || die "$dst is mode $have, not $3; fix it and re-run (refusing to tighten it)"
+      same_mode "$have" "$3" || die "$dst is mode $have, not $(norm_mode "$3"); fix it and re-run (refusing to tighten it)"
       say "already $dst ($sum)"
       return 0
     fi
@@ -117,13 +143,18 @@ write_digest() {  # dst sum
   local dst want tmp have
   dst="$(at "$1")"
   want="$2  switch-change.sh"
-  if [ -f "$dst" ] && [ "$(cat -- "$dst")" = "$want" ]; then
-    say "already $dst ($2)"
-    return 0
+  if [ -e "$dst" ] || [ -L "$dst" ]; then
+    { [ -f "$dst" ] && [ ! -L "$dst" ]; } || die "$dst is not a regular file; move it aside and re-run"
+    if [ "$(cat -- "$dst")" = "$want" ]; then
+      have="$(stat -c '%a' -- "$dst")"
+      same_mode "$have" 0644 || die "$dst is mode $have, not $(norm_mode 0644); fix it and re-run (refusing to tighten it)"
+      say "already $dst ($2)"
+      return 0
+    fi
   fi
   tmp="$dst.tmp.$$"
   need_parent "$dst"
-  printf '%s\n' "$want" > "$tmp" || die "cannot write $tmp"
+  printf '%s\n' "$want" > "$tmp" || { rm -f -- "$tmp"; die "cannot write $tmp"; }
   install -m 0644 -o "$owner" -g "$group" -- "$tmp" "$dst" || { rm -f -- "$tmp"; die "cannot install $dst"; }
   rm -f -- "$tmp"
   say "installed $dst ($2)"
@@ -138,12 +169,16 @@ sudoers_body() {
 }
 
 write_sudoers() {  # dst
-  local dst tmp have
+  local dst tmp have have_owner have_group
   dst="$(at "$1")"
   if [ -e "$dst" ] || [ -L "$dst" ]; then
     { [ -f "$dst" ] && [ ! -L "$dst" ]; } || die "$dst is not a regular file; move it aside and re-run"
     have="$(stat -c '%a' -- "$dst")"
-    same_mode "$have" 0440 || die "$dst is mode $have, not 440; fix it and re-run (refusing to tighten it)"
+    same_mode "$have" 0440 || die "$dst is mode $have, not $(norm_mode 0440); fix it and re-run (refusing to tighten it)"
+    have_owner="$(stat -c '%U' -- "$dst")"
+    have_group="$(stat -c '%G' -- "$dst")"
+    [ "$have_owner" = "$owner" ] || die "$dst is owned by $have_owner, not $owner; chown it and re-run"
+    [ "$have_group" = "$group" ] || die "$dst is group $have_group, not $group; chgrp it and re-run"
     if [ "$(cat -- "$dst")" = "$(sudoers_body)" ]; then
       say "already $dst"
       return 0
@@ -196,8 +231,13 @@ main() {
     repo="$(cd -- "$here/../.." && pwd)" || die "cannot find the repository root from $here"
     git -c "safe.directory=$repo" -C "$repo" rev-parse --git-dir >/dev/null 2>&1 \
       || die "not a git checkout: cannot tell whether ansible/switches is committed"
-    [ -z "$(git -c "safe.directory=$repo" -C "$repo" status --porcelain -- ansible/switches)" ] \
-      || die "ansible/switches has uncommitted changes; commit or merge first"
+    # The exit status is kept apart from the output: an empty answer from a git that failed is not a
+    # clean tree, and reading it as one would install whatever an unreadable checkout holds.
+    dirty=""
+    if ! dirty="$(git -c "safe.directory=$repo" -C "$repo" status --porcelain -- ansible/switches 2>&1)"; then
+      die "cannot ask git whether ansible/switches is committed: $dirty"
+    fi
+    [ -z "$dirty" ] || die "ansible/switches has uncommitted changes; commit or merge first"
   fi
 
   check_dir /var/lib/switch-change/inbox 2750 "$inbox_owner" "$inbox_group"
