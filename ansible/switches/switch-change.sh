@@ -1,11 +1,18 @@
 #!/usr/bin/env bash
 # switch-change.sh — carry one RouterOS change onto a switch with an undo armed on the device.
 #
+#   ./switch-change.sh --target crs326 --change changes/x.rsc --window 10m
+#   ./switch-change.sh --target crs326 --change changes/x.rsc --dry-run --yes
 #   ./switch-change.sh --render-undo --major 7 --change changes/x.rsc \
 #        --export /tmp/opencode/pre.rsc --verbose-export /tmp/opencode/pre-verbose.rsc
 #   ./switch-change.sh --noise-free < an-export.rsc     # drop comments and blanks, for a comparison
 #   ./switch-change.sh --list-targets
 #   ./switch-change.sh --help
+#
+# --target reads a switch, renders the undo for one change, shows it, and — with --yes, or after
+# asking on a terminal — uploads the undo and the change and arms the one-shot timer that runs the
+# undo at the device clock's now + window. --dry-run stops after printing the undo; --arm-only stops
+# after arming, for a change applied by hand from Winbox.
 #
 # --render-undo prints the undo file for one change: guarded one-liners, one per inverse operation,
 # each of which does nothing when its object is already in the state it wants. It reads the change
@@ -27,6 +34,8 @@ SWITCH_CHANGE_POLL="${SWITCH_CHANGE_POLL:-5}"
 
 usage() { awk 'NR > 1 && /^#/ { print; next } NR > 1 { exit }' "${BASH_SOURCE[0]}"; exit 0; }
 die() { printf 'switch-change.sh: %s\n' "$1" >&2; exit 2; }
+say() { printf '%s\n' "$*"; }
+warn() { printf 'switch-change.sh: %s\n' "$*" >&2; }
 
 # Die on a list that is not "name=host", before any pair is printed: a malformed list that emitted
 # the pairs it had already read would look like a good run that lost targets.
@@ -61,6 +70,113 @@ host_of() {
 # the same configuration compare equal.
 noise_free() {
   awk '/^[[:space:]]*#/ { next } /^[[:space:]]*$/ { next } { print }'
+}
+
+# One RouterOS command on a device, its output on stdout. Shaped like the collector's: BatchMode so
+# no password is ever asked, the connect and the command both bounded, and LogLevel=ERROR so ssh's
+# greeting does not land inside an export. The carriage returns go, because RouterOS answers with
+# CRLF and an invisible byte at a line's end makes every comparison wrong.
+ros() {                                   # ros <host> <routeros command...>
+  local host="$1"; shift
+  timeout "$SWITCH_CHANGE_CMD_TIMEOUT" ssh \
+    -i "$SWITCH_CHANGE_KEY" -o BatchMode=yes \
+    -o ConnectTimeout="$SWITCH_CHANGE_CONNECT_TIMEOUT" \
+    -o StrictHostKeyChecking=accept-new \
+    -o LogLevel=ERROR \
+    "$SWITCH_CHANGE_USER@$host" "$*" 2>&1 | tr -d '\r'
+}
+
+# One file onto a device, under the name the timer's on-event will use. `-O` is the legacy protocol:
+# the newer one speaks SFTP, which the deploy account is not given.
+put() {                                   # put <host> <local file> <remote name>
+  local host="$1" file="$2" name="$3"
+  timeout "$SWITCH_CHANGE_CMD_TIMEOUT" scp -O -q \
+    -i "$SWITCH_CHANGE_KEY" -o BatchMode=yes \
+    -o ConnectTimeout="$SWITCH_CHANGE_CONNECT_TIMEOUT" \
+    -o StrictHostKeyChecking=accept-new \
+    -o LogLevel=ERROR \
+    "$file" "$SWITCH_CHANGE_USER@$host:$name" 2>&1 | tr -d '\r'
+}
+
+# The RouterOS major version of a device, from its resource block. It decides the export command
+# (verbose on 7, hide-sensitive verbose on 6) and the parse the renderer expects.
+routeros_major() {                        # routeros_major <host>
+  ros "$1" '/system resource print' | awk '
+    /^[[:space:]]*version:/ { print $2; exit }' | cut -d. -f1
+}
+
+# The device's own clock as "YYYY-MM-DD HH:MM:SS". The entry's start-time is computed from this,
+# never from the workstation's clock: RouterOS dates the entry when it is created.
+device_now() {                            # device_now <host>
+  local out date time
+  out=$(ros "$1" '/system clock print')
+  date=$(printf '%s\n' "$out" | awk '/^[[:space:]]*date:/ { print $2; exit }')
+  time=$(printf '%s\n' "$out" | awk '/^[[:space:]]*time:/ { print $2; exit }')
+  [ -n "$date" ] && [ -n "$time" ] || return 1
+  # RouterOS 6 and 7 write the date differently; one shape for arithmetic.
+  date -d "$date $time" '+%Y-%m-%d %H:%M:%S' 2>/dev/null || return 1
+}
+
+# Warn when the two clocks disagree by more than a minute: the window is measured on the device, so
+# a workstation that is far off would otherwise make the operator read the run's timing wrong.
+warn_on_clock_skew() {                    # warn_on_clock_skew <device stamp>
+  local device difference
+  device=$(date -d "$1" +%s 2>/dev/null) || return 0
+  difference=$(( device - $(date +%s) ))
+  [ "${difference#-}" -le 60 ] && return 0
+  warn "the device clock reads $1, this workstation $(date '+%Y-%m-%d %H:%M:%S'); the window is measured on the device"
+}
+
+# A window as seconds. The ceiling is an hour: a timer left far in the future outlives the run that
+# armed it and quietly puts an old configuration back later.
+window_seconds() {                        # window_seconds <10m|600s|600>
+  local raw="$1" seconds
+  case "$raw" in
+    *m) seconds=$(( ${raw%m} * 60 )) ;;
+    *s) seconds="${raw%s}" ;;
+    *)  seconds="$raw" ;;
+  esac
+  case "$seconds" in
+    ''|*[!0-9]*) die "--window $raw is not a duration: 10m, 600s and 600 mean the same thing" ;;
+  esac
+  [ "$seconds" -ge 60 ] || die "--window $raw is shorter than a minute"
+  [ "$seconds" -le 3600 ] || die "--window $raw is longer than the one-hour ceiling"
+  printf '%s\n' "$seconds"
+}
+
+# The device-clock time of now + window, as the HH:MM:SS RouterOS takes. A window that crosses the
+# device's midnight is refused: RouterOS dates the entry when it is created, so a start-time earlier
+# than today's clock would run hours early, and one on the next day runs a day late. Neither is a
+# revert path, and nothing is armed when this refuses.
+start_time_for() {                        # start_time_for "<date> <time>" <seconds>
+  local stamp="$1" seconds="$2" base day at
+  # Epoch arithmetic, not "date -d '$stamp + 600 seconds'": GNU date reads the `+ 600` there as a
+  # UTC offset and answers a time six hours off. The device's wall clock is taken in the
+  # workstation's zone, which is the same Europe/Paris on both sides of this homelab.
+  base=$(date -d "$stamp" +%s 2>/dev/null) || return 1
+  base=$(( base + seconds ))
+  day=$(date -d "@$base" '+%Y-%m-%d')
+  at=$(date -d "@$base" '+%H:%M:%S')
+  if [ "$day" != "${stamp%% *}" ]; then
+    warn "the $seconds-second window would cross the device's midnight (device time $stamp): nothing was armed"
+    exit 1
+  fi
+  printf '%s\n' "$at"
+}
+
+# Ask the one question this script asks. A pipeline or a cron has no terminal, and a run that assumed
+# yes because nobody was there would arm a timer that changes a switch unattended.
+confirm() {
+  local answer
+  [ "$assume_yes" = 1 ] && return 0
+  [ -t 0 ] || die "no terminal to ask on, and --yes was not given: nothing was changed"
+  printf 'arm the undo on %s and apply %s? [y/N] ' "$target" "$change" >&2
+  read -r answer
+  case "$answer" in
+    y|Y|yes|YES) return 0 ;;
+  esac
+  warn "nothing was changed"
+  exit 1
 }
 
 # Print the undo file for one change, or refuse it. Four arguments: the RouterOS major, the change
@@ -330,6 +446,101 @@ render_undo() {
   ' "$plain" "$verbose" "$change"
 }
 
+# ------------------------------------------------------------------ phases 1 and 2
+# Read the device, render and show the undo, then arm it. Nothing on a switch is written before the
+# undo exists locally and has passed the renderer: a refusal writes nothing at all.
+change_run() {
+  local host major verbose_cmd stamp start seconds id dir plain verbose undo_file change_file
+  local stale detail name
+
+  host=$(host_of "$target") || die "unknown target '$target'"
+  [ -r "$change" ] || { warn "cannot read the change file $change"; exit 1; }
+  seconds=$(window_seconds "$window") || exit 2
+
+  major=$(routeros_major "$host")
+  case "$major" in
+    6) verbose_cmd='/export hide-sensitive verbose' ;;
+    7) verbose_cmd='/export verbose' ;;
+    *) warn "$target did not name a RouterOS major version"; exit 1 ;;
+  esac
+
+  stamp=$(device_now "$host") || { warn "$target did not print its clock"; exit 1; }
+  warn_on_clock_skew "$stamp"
+  # A refusal exits inside the command substitution, so its status has to be carried out by hand:
+  # an empty `start` would otherwise be armed as `start-time=` and fail on the device instead.
+  start=$(start_time_for "$stamp" "$seconds") || exit 1
+
+  id="$target-$(date '+%Y%m%d-%H%M%S')"
+  dir="$SWITCH_CHANGE_WORKDIR/$id"
+  mkdir -p "$dir" || { warn "cannot write to $dir"; exit 1; }
+  plain="$dir/pre-$id.rsc"
+  verbose="$dir/pre-$id-verbose.rsc"
+  undo_file="$dir/undo-$id.rsc"
+  change_file="$dir/change-$id.rsc"
+
+  ros "$host" '/export' > "$plain"
+  [ -s "$plain" ] || { warn "$target did not answer /export"; exit 1; }
+  ros "$host" "$verbose_cmd" > "$verbose"
+  [ -s "$verbose" ] || { warn "$target did not answer $verbose_cmd"; exit 1; }
+
+  # Render before cancelling anything: a change that cannot be inverted must stop the run before its
+  # first write, and cancelling a stale timer is a write.
+  if ! render_undo "$major" "$change" "$plain" "$verbose" > "$undo_file"; then
+    rm -rf "$dir"
+    die "nothing was changed: the change cannot be undone"
+  fi
+  cp "$change" "$change_file"
+
+  # A timer an earlier run left is cancelled and named: two armed undos must never sit on one switch,
+  # because the older one would put back a configuration that is already two changes old.
+  while read -r stale; do
+    [ -n "$stale" ] || continue
+    ros "$host" "/system scheduler remove [find name=\"$stale\"]" >/dev/null
+    say "cancelled the timer an earlier run left armed: $stale"
+  done < <(ros "$host" '/system scheduler print detail' | sed -n 's/.*name="\(revert-[^"]*\)".*/\1/p')
+
+  if [ "$dry_run" = 1 ]; then
+    say "would arm revert-$id at $start device time and apply $change:"
+    cat "$undo_file"
+    rm -rf "$dir"
+    exit 0
+  fi
+
+  if [ "$arm_only" != 1 ]; then
+    warn "the apply and verify phases are not in this build; the undo was rendered, nothing was written"
+    rm -rf "$dir"
+    exit 1
+  fi
+
+  confirm
+
+  put "$host" "$undo_file" "undo-$id.rsc" >/dev/null || { warn "could not upload undo-$id.rsc"; exit 1; }
+  put "$host" "$change_file" "change-$id.rsc" >/dev/null || { warn "could not upload change-$id.rsc"; exit 1; }
+  for name in "undo-$id.rsc" "change-$id.rsc"; do
+    [ -n "$(ros "$host" "/file print where name=\"$name\"")" ] \
+      || { warn "$name is not on the device after the upload"; exit 1; }
+  done
+
+  # The binary backup is the only step allowed to fail: it needs a policy right #485 withholds, and
+  # the undo file does not depend on it. Say so and carry on armed.
+  ros "$host" "/system backup save name=pre-$id" >/dev/null
+  if [ -z "$(ros "$host" "/file print where name=\"pre-$id.backup\"")" ]; then
+    say "no binary fallback for this run: the device did not write pre-$id.backup"
+  fi
+
+  detail=$(ros "$host" "/system scheduler add name=revert-$id policy=read,write,test interval=0s start-time=$start on-event=\"/import file=undo-$id.rsc\"")
+  [ -z "$detail" ] || { warn "the device refused the timer: $detail"; exit 1; }
+
+  detail=$(ros "$host" '/system scheduler print detail')
+  printf '%s\n' "$detail" | grep -q "name=\"revert-$id\"" \
+    || { warn "revert-$id is not on the device after it was added"; exit 1; }
+  printf '%s\n' "$detail" | grep -q "start-time=$start" \
+    || { warn "revert-$id did not keep start-time=$start"; exit 1; }
+
+  say "armed revert-$id on $target for $start device time (window $window)"
+  say "the entry runs /import file=undo-$id.rsc once; the change has not been applied"
+}
+
 # ------------------------------------------------------------------ argument parsing
 major=""; change=""; export_file=""; verbose_export=""; target=""; window="$SWITCH_CHANGE_WINDOW"
 expect=""; assume_yes=0; dry_run=0; arm_only=0; mode=""
@@ -369,9 +580,7 @@ case "$mode" in
     render_undo "$major" "$change" "$export_file" "$verbose_export" ;;
   "")
     [ -n "$target" ] || die "either --target, --render-undo, --noise-free, --list-targets or --help is required"
+    [ -n "$change" ] || die "--target needs --change"
     host_of "$target" >/dev/null || die "unknown target '$target'"
-    # The read, arm, apply and verify phases land in a later change; until then this build renders
-    # and refuses rather than half-touching a switch.
-    printf 'switch-change.sh: the read, arm, apply and verify phases are not in this build\n' >&2
-    exit 1 ;;
+    change_run ;;
 esac
