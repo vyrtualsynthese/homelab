@@ -76,7 +76,7 @@ kubectl -n media-stack exec deploy/qbittorrent -c qbittorrent -- \
 ```
 
 Write the four numbers down. The last one is the torrent list the app itself reports; the `.torrent`
-count and it should be equal, and they are what step 4 and step 8 compare against.
+count and it should be equal, and they are what step 3 and step 8 compare against.
 
 If the Web UI is stalled right now, the second command hangs and the first does not: `find` is a new
 process on a local path, while `curl` asks the parked event loop. Drop the `curl` line, take the
@@ -142,15 +142,27 @@ spec:
       command: ["sh", "-c"]
       args:
         - |
-          set -e
+          set -eu
           mkdir -p /export/.migration
           tar -C /config -czf /export/.migration/qbittorrent-config.tgz .
           tar -C /vpn    -czf /export/.migration/qbittorrent-vpn.tgz .
           chmod 600 /export/.migration/*.tgz
-          echo "files:      $(find /config -type f | wc -l)"
-          echo "torrents:   $(find /config -name '*.torrent' | wc -l)"
-          echo "fastresume: $(find /config -name '*.fastresume' | wc -l)"
-          echo "entries:    $(tar -tzf /export/.migration/qbittorrent-config.tgz | wc -l)"
+
+          # The archive is checked against the claim it came from, not against a number
+          # written down here: the count on the right is what the tar says it holds.
+          cfg=/export/.migration/qbittorrent-config.tgz
+          files=$(find /config -type f | wc -l)
+          on=$(find /config -name '*.torrent' | wc -l)
+          res=$(find /config -name '*.fastresume' | wc -l)
+          a_files=$(tar -tzf "$cfg" | grep -vc '/$' || true)
+          a_on=$(tar -tzf "$cfg" | grep -c '\.torrent$' || true)
+          a_res=$(tar -tzf "$cfg" | grep -c '\.fastresume$' || true)
+          echo "claim:   $files files, $on .torrent, $res .fastresume"
+          echo "archive: $a_files files, $a_on .torrent, $a_res .fastresume"
+          tar -tzf "$cfg" | grep -q 'qBittorrent/qBittorrent.conf'
+          tar -tzf /export/.migration/qbittorrent-vpn.tgz | grep -qi 'wg0.conf'
+          [ "$a_on" = "$on" ] && [ "$a_res" = "$res" ]
+          echo "copy verified"
           ls -l /export/.migration
       volumeMounts:
         - name: config
@@ -164,28 +176,23 @@ kubectl -n media-stack wait --for=condition=Ready pod/qbittorrent-config-copy --
 kubectl -n media-stack logs -f pod/qbittorrent-config-copy
 ```
 
-Success is four counts equal to the ones from step 0, `entries` close to the file count (the
-directories are entries too), and two `.tgz` files of a few hundred MB and a few KB.
+The pod does its own checking, because a pod that has finished cannot be `exec`'d into: the two
+counts on the `archive:` line are compared with the `claim:` line, `qBittorrent.conf` and `wg0.conf`
+must both be found, and a short copy ends in a non-zero exit. `copy verified` is the line that
+matters, followed by two `.tgz` files of a few hundred MB and a few KB.
+
+A failure keeps the pod in `Error` and the archive in place: read the log, and run step 3 again once
+what is missing is clear. Nothing has been deleted yet — this is the cheap point to stop.
 
 The tarballs go into a dot directory on purpose: the export is shared with the *arrs and FileBrowser,
 and nothing they do walks a hidden folder at its root.
 
-## Step 4 — verify the archive, not the copy
+## Step 4 — delete the copy pod
 
 ```bash
-kubectl -n media-stack exec pod/qbittorrent-config-copy -- sh -c '
-  tar -tzf /export/.migration/qbittorrent-config.tgz | grep -c "\.torrent$"
-  tar -tzf /export/.migration/qbittorrent-config.tgz | grep -c "\.fastresume$"
-  tar -tzf /export/.migration/qbittorrent-config.tgz | grep "qBittorrent/qBittorrent.conf"
-  tar -tzf /export/.migration/qbittorrent-vpn.tgz | grep -i "wg0.conf"'
-```
-
-The two counts must be 379 each, and both `grep` lines must print a path. Anything else means the
-copy is short: keep the app stopped, fix what is missing, and re-run step 3 — nothing has been deleted
-yet, this is the cheap point to stop.
-
-```bash
-kubectl -n media-stack delete pod/qbittorrent-config-copy
+kubectl -n media-stack get pod qbittorrent-config-copy      # Completed
+kubectl -n media-stack logs pod/qbittorrent-config-copy     # still readable after it exits
+kubectl -n media-stack delete pod qbittorrent-config-copy
 ```
 
 ## Step 5 — delete the two claims and their volumes
@@ -337,7 +344,7 @@ kubectl -n media-stack exec deploy/qbittorrent -c qbittorrent-vpn -- wg show
 
 A torrent count of zero is the failure this whole copy exists to prevent: it means the config claim
 did not arrive, and the app is running on an empty one. Stop the deployment before it writes over the
-restore (`scale --replicas=0`) and go back to step 4.
+restore (`scale --replicas=0`) and go back to step 3: the archive is the authority.
 
 ## Step 9 — close the migration
 
