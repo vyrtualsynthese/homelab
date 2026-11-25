@@ -163,9 +163,11 @@ sudo ~/hosts/pi/hosts-pi.sh verify <host>
 `restore` copies the tree and then verifies, so on a fresh image it exits 1 twice over: the copy's
 `docker-compose.yml` may predate the template, and the engine is not installed yet. Both are `setup`'s job,
 and the `verify` that follows `setup` is the one whose exit code counts. `setup` writes the two config files
-the stack mounts, `/etc/hostname` and `/etc/hosts`, and leaves `/boot/firmware/config.txt` and
+the stack mounts, `/etc/hostname`, and leaves `/boot/firmware/config.txt` and
 `cmdline.txt` alone: the image's copies are right for the disk they were written to, and `restore` puts
-them back only when the backup's `cmdline.txt` names this disk. It never writes `pihole.env`. Check the
+them back only when the backup's `cmdline.txt` names this disk. It never writes `pihole.env`. `/etc/hosts`
+is cloud-init's: the image rewrites it from its own template on every boot, so a script that owned it
+would be overwritten and then report a difference no run could settle. Check the
 tree is readable by `vronteix` after the copy: a `cp -a` from a stick keeps the owner it was written with.
 
 A fresh image also has no container runtime, and `setup` installs that too: `docker-ce`, `docker-ce-cli`,

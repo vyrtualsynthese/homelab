@@ -81,15 +81,11 @@ desired_hostname() {
     printf '%s\n' "$1"
 }
 
-desired_hosts() {
-    printf '%s\n' \
-        "127.0.0.1 localhost" \
-        "127.0.1.1 $1" \
-        "" \
-        "::1 localhost ip6-localhost ip6-loopback" \
-        "ff02::1 ip6-allnodes" \
-        "ff02::2 ip6-allrouters"
-}
+# /etc/hosts is left to cloud-init, which rewrites it from its own template on
+# every boot (`manage_etc_hosts: true` in these images). A script that owned it
+# would be overwritten by the next boot and would then report a difference
+# nothing could settle; the rendered file names the host and localhost, which is
+# all this stack needs from it.
 
 require_env() {
     local missing=0 file
@@ -377,7 +373,7 @@ cmd_render() {
     echo "--- /etc/hostname"
     desired_hostname "$host"
     echo "--- /etc/hosts"
-    desired_hosts "$host"
+    echo "left to cloud-init, which rewrites it on every boot"
     echo "--- $STACK_DIR/pihole.env"
     echo "required, never printed and never written: it holds the Pi-hole"
     echo "password, and it is gitignored"
@@ -415,7 +411,6 @@ cmd_setup() {
         pihole_changed=1
     fi
     write_abs "$ROOT/etc/hostname" "$(desired_hostname "$host")"
-    write_abs "$ROOT/etc/hosts" "$(desired_hosts "$host")"
 
     if [ -z "$ROOT" ]; then
         # --remove-orphans is what takes a service off a host when this template
@@ -491,14 +486,6 @@ cmd_verify() {
         problems=1
     fi
 
-    if [ ! -f "$ROOT/etc/hosts" ]; then
-        echo "MISSING $ROOT/etc/hosts"
-        problems=1
-    elif [ "$(desired_hosts "$host")" != "$(cat "$ROOT/etc/hosts")" ]; then
-        echo "DIFFERS $ROOT/etc/hosts"
-        problems=1
-    fi
-
     echo "root device: $(root_device)"
 
     engine_drift || problems=1
@@ -547,7 +534,7 @@ cmd_backup() {
     cp -a "$ROOT$STACK_DIR/." "$dir/dockers/"
 
     mkdir -p "$dir/etc"
-    for file in hostname hosts; do
+    for file in hostname; do
         if [ -f "$ROOT/etc/$file" ]; then
             cp -a "$ROOT/etc/$file" "$dir/etc/$file"
         fi
@@ -581,7 +568,7 @@ cmd_restore() {
 
     mkdir -p "$ROOT$STACK_DIR" "$ROOT/boot/firmware" "$ROOT/etc"
     cp -a "$dir/dockers/." "$ROOT$STACK_DIR/"
-    for file in hostname hosts; do
+    for file in hostname; do
         if [ -f "$dir/etc/$file" ]; then
             cp -a "$dir/etc/$file" "$ROOT/etc/$file"
         fi
