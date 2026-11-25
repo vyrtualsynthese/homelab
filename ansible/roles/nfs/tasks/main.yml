@@ -10,7 +10,9 @@
 #
 #   `sync` replaces `async`: with async a client's write is acknowledged before
 #   it reaches the disk, so a database can survive a reboot in a state nobody
-#   planned for.
+#   planned for. The downloads export is the one exception and the template
+#   says why: nothing on it is a database and everything on it can be fetched
+#   again, while its `sync` fsync is what hung the qBittorrent client.
 - name: Refuse to run anywhere but the node that holds the disks
   ansible.builtin.assert:
     that:
