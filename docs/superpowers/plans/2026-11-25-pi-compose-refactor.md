@@ -312,7 +312,7 @@ def test_setup_restarts_pihole_when_a_mounted_file_changed():
     assert "PI_ROOT is set" in text, "the docker branch stays behind the PI_ROOT guard"
 ```
 
-Run it: `uv run --with-requirements hack/tests/requirements.txt python -m pytest -q hack/tests/test_pi_script.py -k force -v` → PASS.
+Run it: `uv run --with-requirements hack/tests/requirements.txt python -m pytest -q hack/tests/test_pi_script.py -k restarts_pihole -v` → PASS.
 
 The docker branch only runs when `PI_ROOT` is unset, so a fixture cannot reach it without writing to `/`; the repository's established proof for that path is a text assertion (`test_setup_removes_a_service_the_template_no_longer_declares` does the same for `--remove-orphans`). Task 4 and the first real `setup` are where it is exercised for real.
 
