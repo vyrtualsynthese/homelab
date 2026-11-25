@@ -1,0 +1,79 @@
+---
+# The bouncer is the half of CrowdSec that costs a host change, and it is here
+# rather than in the cluster because CrowdSec publishes no container for it. The
+# decision list is pulled from the LAPI every ten seconds; a cluster that is down
+# leaves the last known bans in place, which is the failure to prefer.
+
+- name: Refuse to run without the bouncer key
+  ansible.builtin.assert:
+    that:
+      - lookup('env', 'CROWDSEC_BOUNCER_KEY') | length > 32
+    fail_msg: >-
+      CROWDSEC_BOUNCER_KEY is empty or too short. It must be the same value as
+      the `api-key` in the crowdsec-bouncer-key Secret; `openssl rand -hex 32`.
+
+# `deb822_repository` is a thin wrapper over python3-debian, which
+# `--check` reports as a missing dependency rather than a missing package.
+- name: Install the helper deb822_repository needs
+  ansible.builtin.apt:
+    name: python3-debian
+    state: present
+
+- name: Install the repository's signing key
+  ansible.builtin.get_url:
+    url: https://packagecloud.io/crowdsec/crowdsec/gpgkey
+    dest: "{{ crowdsec_keyring }}"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Add the CrowdSec repository
+  ansible.builtin.deb822_repository:
+    name: crowdsec
+    types: [deb]
+    uris: "{{ crowdsec_repo }}"
+    suites: [any]
+    components: [main]
+    signed_by: "{{ crowdsec_keyring }}"
+    state: present
+
+- name: Install the nftables bouncer (crowdsec-firewall-bouncer-nftables)
+  ansible.builtin.apt:
+    name: "{{ crowdsec_package }}"
+    state: present
+    update_cache: true
+
+- name: Configure it
+  ansible.builtin.template:
+    src: bouncer.yaml.j2
+    dest: /etc/crowdsec/bouncers/crowdsec-firewall-bouncer.yaml
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+  notify: Restart crowdsec-firewall-bouncer
+
+- name: Open the metrics listener to the one host that scrapes it
+  community.general.ufw:
+    rule: allow
+    port: "{{ crowdsec_metrics_port }}"
+    proto: tcp
+    from_ip: "{{ crowdsec_scraper }}"
+    comment: "crowdsec bouncer metrics, scraped by prometheus on nas"
+
+- name: Start it
+  ansible.builtin.service:
+    name: crowdsec-firewall-bouncer
+    state: started
+    enabled: true
+
+# The bouncer answers 401 before it has a decision, so a listener that responds
+# at all is a listener that is talking to the LAPI.
+- name: Prove the listener answers
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ crowdsec_metrics_port }}/metrics"
+    status_code: 200
+  retries: 6
+  delay: 5
+  register: crowdsec_metrics
+  until: crowdsec_metrics.status == 200

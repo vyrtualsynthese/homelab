@@ -58,5 +58,42 @@ class TraefikLogsRoleTests(unittest.TestCase):
         self.assertIn("inventory_hostname == 'streaming'", block)
 
 
+class BouncerRoleTests(unittest.TestCase):
+    def setUp(self):
+        self.role = ANSIBLE / "roles/crowdsec"
+
+    def test_the_role_installs_the_nftables_bouncer_and_not_the_iptables_one(self):
+        tasks = (self.role / "tasks/main.yml").read_text()
+        self.assertIn("crowdsec-firewall-bouncer-nftables", tasks)
+        self.assertNotIn("crowdsec-firewall-bouncer-iptables", tasks)
+
+    def test_the_key_is_required_and_comes_from_the_environment(self):
+        tasks = (self.role / "tasks/main.yml").read_text()
+        self.assertIn("CROWDSEC_BOUNCER_KEY", tasks)
+        self.assertIn("lookup('env', 'CROWDSEC_BOUNCER_KEY')", tasks)
+        self.assertIn("no_log: true", tasks)
+
+    def test_the_config_file_carries_the_lan_address_and_no_plaintext_key(self):
+        template = (self.role / "templates/bouncer.yaml.j2").read_text()
+        self.assertIn("api_url: {{ crowdsec_lapi_url }}", template)
+        self.assertIn("api_key: {{ crowdsec_bouncer_key }}", template)
+        for key in ("table: crowdsec", "chain: crowdsec-chain", "deny_action: DROP"):
+            self.assertIn(key, template)
+
+    def test_its_own_prometheus_endpoint_is_on_and_scrapeable(self):
+        template = (self.role / "templates/bouncer.yaml.j2").read_text()
+        self.assertIn("enabled: true", template)
+        self.assertIn("listen_addr: 0.0.0.0", template)
+        self.assertIn("listen_port: 60601", template)
+        prometheus = (ROOT / "cluster/helm/monitoring/prometheus/values.yaml").read_text()
+        self.assertIn("crowdsec-bouncer", prometheus)
+        self.assertIn("192.168.1.46:60601", prometheus)
+
+    def test_site_runs_it_only_on_streaming(self):
+        site = (ANSIBLE / "playbooks/site.yml").read_text()
+        block = site.split("- role: crowdsec")[1].split("- ")[0]
+        self.assertIn("inventory_hostname == 'streaming'", block)
+
+
 if __name__ == "__main__":
     unittest.main()
