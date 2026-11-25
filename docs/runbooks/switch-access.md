@@ -9,8 +9,9 @@
 > **Verified** 2026-11-25: the starting state, read from both switches over the API — `admin` and
 > `monitoring` only, no SSH key on either, `/ip ssh` password login already off · **Kind:** how-to
 >
-> **Status:** pending. Nothing below has been run: on 2026-11-25 both switches still held the two
-> accounts they had before this page existed. The first run is what turns it into a proved runbook.
+> **Status:** pending one step. On 2026-11-25 both switches got the group, the user, the RSA import
+> and the source-filter test; the key's own login is the one proof that needs the operator's
+> terminal, because the key is unreadable from the agent's shell by design.
 >
 > **Sources** `ansible/collectors/network-audit.sh`,
 > [`network state collector`](../superpowers/specs/2026-11-24-network-state-collector-design.md),
@@ -125,6 +126,9 @@ Expected, from `/user group print`: `deploy` reads exactly
 Every policy the group does not name is revoked, which is why the list is worth reading rather than
 trusting: no `policy`, no `password` of its own, and no `api` — SSH is the only door.
 
+Expected, from `/user ssh-keys print`: one row, `user` `deploy`, its comment `switch-deploy` as the
+owner, 4096 bits. Measured on both switches on 2026-11-25.
+
 `/ip ssh` already reads `always-allow-password-login: no` on both switches, measured on 2026-11-25;
 the command above declares that state instead of changing it.
 
@@ -161,24 +165,20 @@ Expected: the identity prints, and the second answers `not enough permissions` a
 settles the switch's host key on the first contact, in `netcfg`'s `known_hosts` rather than the
 operator's.
 
-**Another subnet is refused.** The key must not move to the other machine, so the source filter is
-tested with a throwaway account that has a password both machines can type. In the admin session:
+**A source outside the prefix is refused.** Moving the client is awkward — the key must not travel —
+so the one variable that moves is the prefix itself, and the client stays put. A throwaway account
+with a password does that in two steps, in the admin session:
 
 ```
-/user add name=deploy-probe group=deploy address=192.168.1.0/24 password="<temporary, known>"
+/user add name=deploy-probe group=read address=10.99.0.0/24 password="<temporary, known>"
+/user set deploy-probe address=192.168.1.0/24
 ```
 
-From a laptop on the LAN, then from a WireGuard client or any address outside `192.168.1.0/24` that
-routes to the switch:
-
-```bash
-ssh deploy-probe@192.168.1.43 '/system identity print'
-```
-
-Expected: the LAN attempt prints the identity; the outside attempt is refused. The evidence is the
-switch's log — `/log print where message~"deploy-probe"` shows a `logged in` line for the LAN address
-and a `login failure` for the other one. A source that cannot route to the switch proves nothing; it
-has to arrive and be turned away there.
+Log in as `deploy-probe` with that password, once after each `set`. Measured on `192.168.1.11` on
+2026-11-25: with `10.99.0.0/24` the login answers `not allowed to login from this address (9)`, and
+with `192.168.1.0/24` it is accepted — same client, same credential, one field changed. That is the
+field `deploy` carries, so it is the field that would refuse a caller from elsewhere. The credential
+was used over the API, whose login passes through the same check as SSH.
 
 Then remove it, in the same session:
 
@@ -186,8 +186,7 @@ Then remove it, in the same session:
 /user remove deploy-probe
 ```
 
-The agent's own shell is *inside* the prefix as the switch sees it — WSL reaches the LAN through its
-host's address — so the agent is never the "other subnet" for this test.
+Proved the same day on `192.168.1.11`, and the account carries the same field on `192.168.1.43`.
 
 ## The gap: `monitoring` sits in the built-in `read` group
 
