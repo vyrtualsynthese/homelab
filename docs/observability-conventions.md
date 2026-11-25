@@ -271,9 +271,11 @@ detector was worth that. Fluent Bit removes `RequestPath`, `request_User-Agent` 
 | `ClientUsername`, `ClientPort` | no | dropped by Traefik |
 
 Two consequences worth knowing before writing a query: `{job="fluent-bit", container="traefik"}`
-still resolves, because the file's output carries that label statically, and **a request the bouncer
-dropped has no line at all** — it never reaches Traefik, so a banned address disappears from the log
-rather than appearing with a 403.
+still resolves, because the file's output carries that label statically — but it also matches the
+router's **own stdout**, which is logfmt and not JSON: measured on 2026-11-25, 28,883 stdout lines
+against 3,148 access lines under that selector. A query about requests names `source="accesslog"`.
+The second consequence: **a request the bouncer dropped has no line at all** — it never reaches
+Traefik, so a banned address disappears from the log rather than appearing with a 403.
 
 **Measured 2026-11-22** over the twelve minutes after that day's last restart (01:20–01:32Z): 153 lines
 and 118 kB, so 769 bytes a line and **about 15 MB/day** at the night-time rate, against a pipeline that
@@ -283,11 +285,11 @@ carries 0.09 GB/day. An evening reads higher; the day's own figure is two querie
 # bytes carried in the trailing 24 h — this is the day's volume
 curl -skG -H "Authorization: Bearer $GRAFANA_TOKEN" \
   "https://grafana.kub.local/api/datasources/proxy/uid/P8E80F9AEF21F6940/loki/api/v1/query" \
-  --data-urlencode 'query=sum(bytes_over_time({job="fluent-bit", container="traefik"}[24h]))'
+  --data-urlencode 'query=sum(bytes_over_time({job="fluent-bit", source="accesslog"}[24h]))'
 # lines in the same window; divide the two for the line size
 curl -skG -H "Authorization: Bearer $GRAFANA_TOKEN" \
   "https://grafana.kub.local/api/datasources/proxy/uid/P8E80F9AEF21F6940/loki/api/v1/query" \
-  --data-urlencode 'query=sum(count_over_time({job="fluent-bit", container="traefik"}[24h]))'
+  --data-urlencode 'query=sum(count_over_time({job="fluent-bit", source="accesslog"}[24h]))'
 ```
 
 Two panels on **Homelab · Traefik**, row *Request record*, read it: *Failed requests (4xx/5xx)* and
