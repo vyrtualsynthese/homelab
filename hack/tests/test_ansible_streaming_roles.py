@@ -27,6 +27,9 @@ class TraefikLogsRoleTests(unittest.TestCase):
         self.assertIn("path: \"{{ traefik_logs_dir }}\"", tasks)
         self.assertIn('mode: "2770"', tasks)
         self.assertIn("owner: \"{{ traefik_logs_uid }}\"", tasks)
+        # Without the group the directory is 65532:root, and Traefik's gid can no
+        # longer create the file: the log stops with nothing failing.
+        self.assertIn("group: \"{{ traefik_logs_gid }}\"", tasks)
         self.assertIn("traefik_logs_dir: /var/log/traefik", defaults)
         self.assertIn("traefik_logs_uid: 65532", defaults)
         self.assertIn("traefik_logs_gid: 65532", defaults)
