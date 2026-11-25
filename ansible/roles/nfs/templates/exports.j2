@@ -28,7 +28,11 @@
 /mnt/storage/nfs/books {{ nfs_addresses | map('regex_replace', '$', '(rw,sync,root_squash,no_subtree_check,anonuid=1100,anongid=1100,fsid=4)') | join(' ') }}
 /mnt/ultrafaststorage/nfs {{ nfs_addresses | map('regex_replace', '$', '(rw,sync,root_squash,no_subtree_check,anonuid=1100,anongid=1100,fsid=5)') | join(' ') }}
 /mnt/storage/nfs/stash {{ nfs_addresses | map('regex_replace', '$', '(rw,sync,root_squash,no_subtree_check,anonuid=1100,anongid=1100,fsid=7)') | join(' ') }}
-/mnt/storage/traefik {{ nfs_addresses | map('regex_replace', '$', '(rw,sync,root_squash,no_subtree_check,anonuid=1100,anongid=1100,fsid=8)') | join(' ') }}
+# This export maps a client's root to 65532, not 1100. Its one file is
+# `acme.json`, which Traefik (uid 65532) keeps at 0600, so the backup — which
+# runs as root — only reads it when it lands on the file's owner. Traefik itself
+# connects as 65532 and is unaffected by the squash.
+/mnt/storage/traefik {{ nfs_addresses | map('regex_replace', '$', '(rw,sync,root_squash,no_subtree_check,anonuid=65532,anongid=65532,fsid=8)') | join(' ') }}
 /mnt/storage/nfs/syncthing {{ nfs_addresses | map('regex_replace', '$', '(rw,sync,root_squash,no_subtree_check,anonuid=1100,anongid=1100,fsid=9)') | join(' ') }}
 /mnt/storage/nfs/qbittorrent-config {{ nfs_addresses | map('regex_replace', '$', '(rw,sync,root_squash,no_subtree_check,anonuid=1100,anongid=1100,fsid=11)') | join(' ') }}
 /mnt/storage/nfs/audio {{ nfs_addresses | map('regex_replace', '$', '(rw,sync,root_squash,no_subtree_check,anonuid=1100,anongid=1100,fsid=12)') | join(' ') }}

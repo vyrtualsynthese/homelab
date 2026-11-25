@@ -39,16 +39,17 @@
     backup: true
   notify: Reload the export list
 
-# The only tree this role touches ownership on, and only because the previous
-# table was `no_root_squash`: anything there was written as root and would now be
-# unwritable. A recursive chown anywhere else would walk terabytes that already
-# belong to 1100; the probe after the apply is the check for those.
-- name: Give the certificate store to the identity the squash maps root to
+# The one tree this role touches ownership on. Traefik runs as uid/gid 65532 and
+# keeps `acme.json` at 0600, so that is the identity the file must belong to and
+# the one the export maps a client's root to — the backup reads it as root. The
+# store used to be handed to 1100, back when the router ran as root; that chown
+# would lock the router out of its own store on the next run.
+- name: Give the certificate store to the identity that serves TLS
   ansible.builtin.file:
     path: /mnt/storage/traefik
     state: directory
-    owner: 1100
-    group: 1100
+    owner: 65532
+    group: 65532
     recurse: true
     follow: false
 
