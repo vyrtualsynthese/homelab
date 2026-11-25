@@ -563,6 +563,24 @@ the process — and `server.logging` keeps `warning|error`. Uploads run as uid 1
 the app logs before it reads its config stay at `INFO`; the level applies after that. The 1 Gi
 claims are the ones the previous chart created and a `local-path` claim cannot shrink.
 
+### crowdsec-web-ui
+
+As of 2026-11-25: the reference chart's templates, unchanged, with this image's values (pattern A,
+six objects). It is the second view of the CrowdSec stack: it reads the LAPI over the cluster network
+at `http://crowdsec-lapi:8080` and needs no Prometheus, Loki or Grafana, which is the point — the
+Grafana dashboard is still the trend view, this one has the button that undoes a wrong ban. It
+authenticates with its own OIDC (blueprint `app-crowdsec-web-ui`), the route is `websecure` +
+`internal-tls` + `lan-only` on `crowdsec.kub.local`, and there is no gate in front, because native
+OIDC comes first here. Two credentials it needs are not issued by authentik: the LAPI machine
+(watcher) it logs in as, and the client secret; both are keys of the `crowdsec-web-ui` Secret, made
+by hand. Liveness and readiness share `/api/health` — it reports the HTTP listener, not the LAPI,
+because restarting the UI during a LAPI outage changes nothing and loses the sync. The server
+documents no log-level variable, so container logs stay at its default and the audit log
+(`[audit]` JSON lines on every decision change) is the record instead; that is written next to `env`
+in the values. It runs as uid 1000, the image's own `node` user, on a fresh claim, so no `chown` on
+the node was needed; the claim is 1Gi rather than 128Mi because it mirrors a 168h alert lookback.
+Sizing is unmeasured until the first night: 20m/128Mi requested, 512Mi limit.
+
 ### backup
 
 As of 2026-11-20: one chart, six CronJobs, no library, and the only chart in the repo whose values

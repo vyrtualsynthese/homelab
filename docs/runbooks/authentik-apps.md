@@ -303,6 +303,36 @@ Share links keep working during an authentik outage: the app answers `/share/...
 gate in front. The files themselves are also reachable over SMB/NFS on the NAS, which is the recovery
 that does not need the cluster at all.
 
+## CrowdSec Web UI (OIDC, configured 2026-11-25)
+
+Its own OIDC, from the `app-crowdsec-web-ui` blueprint: client id `crowdsec-web-ui`, confidential,
+callback `https://crowdsec.kub.local/api/auth/oidc/callback`. The chart disables the password form,
+so the first sign-in is the only way in; `/login?local=1` is the way past the automatic redirect.
+
+Unlike every other application here it needs a second credential that authentik does not issue: a
+CrowdSec *machine* (watcher) account, which is how it reads the LAPI's alerts and decisions. Create
+it against the running LAPI, with an admin kubeconfig — the agent's shells are read-only and answer
+`403`:
+
+```bash
+kubectl -n security exec deploy/crowdsec-lapi -- \
+  cscli machines add crowdsec-web-ui --password "$(openssl rand -hex 32)" -f /dev/null
+```
+
+`-f /dev/null` keeps `cscli` from rewriting the container's own credentials file. Then the Secret
+the chart reads, in `security` (its own namespace, because Secrets do not cross namespaces), with
+the same client secret you put in `authentik-sso` as `CROWDSEC_CLIENT_SECRET`:
+
+```bash
+kubectl -n security create secret generic crowdsec-web-ui \
+  --from-literal=lapi-password='<printed by cscli>' \
+  --from-literal=oidc-client-secret='<CROWDSEC_CLIENT_SECRET>'
+```
+
+Order matters once: the `authentik` Application syncs first (it creates the provider), then the
+machine and the Secret, then `crowdsec-web-ui`. A missing Secret is a `CreateContainerConfigError`;
+a missing machine leaves the pod `Running` and the UI empty.
+
 ## The LDAP outpost (The Lounge)
 
 The Lounge has no OIDC, so it authenticates people with an LDAP bind against authentik. The provider,

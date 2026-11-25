@@ -27,6 +27,7 @@ absent from this table has no single sign-on at all — no provider, no gate —
 | Argo CD | OIDC, through the Dex broker it bundles | configured; `admin.enabled: "false"` | `argocd.kub.local` |
 | autobrr | OIDC | configured | `autobrr.kub.local` |
 | Calibre-Web Automated | OIDC | configured, verified live 2026-11-15; its own password kept as break-glass | `calibre.kub.local` |
+| CrowdSec Web UI | OIDC | blueprint `app-crowdsec-web-ui`; password form off, Admins only, `unmatchedRole: deny`; no gate, so the app is its own sign-in | `crowdsec.kub.local` |
 | FreshRSS | OIDC | configured 2026-11-19 — its own OIDC through the official image; no gate, `/api` keeps its own login | `freshrss.kub.home.ashudev.com` |
 | Grafana | OIDC | configured; every sign-in lands as a **Viewer** | `grafana.kub.local` |
 | Kavita | OIDC | configured 2026-11-15; password login disabled | `kavita.kub.home.ashudev.com` |
