@@ -79,14 +79,18 @@ On the machine the agent's shell runs on:
 
 ```bash
 sudo useradd --create-home --home-dir /home/netcfg --shell /usr/sbin/nologin netcfg
+sudo chmod 700 /home/netcfg
 sudo install -d -o netcfg -g netcfg -m 700 /home/netcfg/.ssh
 sudo -u netcfg ssh-keygen -t ed25519 -N '' -C "switch-deploy" \
   -f /home/netcfg/.ssh/switch-deploy
 ```
 
+`useradd` leaves the home at `0750` on Ubuntu, where the group may traverse it; the `chmod` is what
+makes the account's home unreadable to anything but `netcfg` itself.
+
 Expected: two files. `ssh-keygen` prints the fingerprint, which is the one thing worth pasting into
-the card. The private half is `0600`, owned by `netcfg`; a directory that lets anyone list it or read
-it is the defect this step exists to avoid.
+the card. The private half is `0600`, owned by `netcfg`. Proved on 2026-11-25: `test -r` on the key
+answers no from the agent's shell, and the `.ssh` directory cannot be listed.
 
 ## 2. Create the account, on each switch
 
@@ -95,8 +99,9 @@ Copy the public half to the switch, then in the admin session:
 ```
 /file print
 /user group add name=deploy policy=read,write,ssh,test
-/user add name=deploy group=deploy address=192.168.1.0/24 password="<paste a random value>"
+/user add name=deploy group=deploy address=192.168.1.0/24 password="<random>" disabled=yes
 /user ssh-keys import public-key-file=switch-deploy.pub user=deploy
+/user enable deploy
 /ip ssh set always-allow-password-login=no
 /file remove switch-deploy.pub
 ```
@@ -105,6 +110,14 @@ Generate the password on the laptop with `openssl rand -hex 24` and paste it. It
 and it cannot be typed anywhere useful: a user holding a key is refused a password login, so the
 account has no password path at all. It exists so that an edit which turns password login back on
 does not hand out a guessable account — an empty password is a blank login, a random one is not.
+
+**Created disabled and enabled last**, so the account cannot authenticate by password in the window
+between its creation and the import.
+
+Expected, from `/user group print`: `deploy` reads exactly
+`ssh,read,write,test,!local,!telnet,!ftp,!reboot,!policy,!winbox,!password,!web,!sniff,!sensitive,!api,!romon,!dude,!tikapp`.
+Every policy the group does not name is revoked, which is why the list is worth reading rather than
+trusting: no `policy`, no `password` of its own, and no `api` — SSH is the only door.
 
 `/ip ssh` already reads `always-allow-password-login: no` on both switches, measured on 2026-11-25;
 the command above declares that state instead of changing it.
