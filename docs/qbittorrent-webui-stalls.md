@@ -11,8 +11,9 @@
 > evidence gathered on 13 and 25 November, the suspects that were cleared, and what cleared the hang
 > · **Verified** 2026-11-25 21:30: four live stalls read from `/proc`, the client waiting on an I/O
 > that nothing performs while the server and the network measured clean, then a write burst that
-> pinned the node's own SSD; the router's access log and two 15-minute replays of the app's own write
-> pattern against the export · **Kind:** record
+> pinned the node's own SSD — caught in the act with the two file descriptors that name the copy; the
+> router's access log and two 15-minute replays of the app's own write pattern against the export
+> · **Kind:** record
 >
 > **Sources** `cluster/helm/media-stack/qbittorrent/values.yaml`,
 > `cluster/helm/media-stack/qbittorrent-exporter/values.yaml`, live `up` and
@@ -24,9 +25,11 @@ stall came back under it too. The in-flight downloads moved off the export the s
 *The fix: in-flight downloads off the export*, and the WebUI stalled again within three minutes —
 from the local disk the temp path landed on (*The temp path landed on the node's slowest disk*). They
 went back to the export's NVMe at 20:44 (*The decision*), which is the load the wedge comes from:
-that is a trade, not a fix. Documented 2026-11-13, measured again on 2026-11-25 (board cards 758, 777
-and 782). The exporter's alert stays silenced until it is closed or handed over; the note under
-*Why the app was not changed until now* says what to do with that silence.
+that is a trade, not a fix. The local claim was tried again at 21:27 and taken away at 21:32 on the operator's
+decision, so what follows describes the export and not the claim (*Back to the export, 21:32*). Documented
+2026-11-13, measured again on 2026-11-25 (board cards 758, 777 and 782). The exporter's alert stays
+silenced until it is closed or handed over; the note under *Why the app was not changed until now*
+says what to do with that silence.
 
 ## What is seen
 
@@ -472,9 +475,45 @@ The recovery has three traps that are not obvious from the 18:44 version above:
   `root`-owned, which the app cannot write; `sed > /tmp/x && cat > file` keeps `1100:1100` and `0644`.
 
 After the restart the app restored 325 torrents, relocated 91 GB onto the claim at roughly 4 GB a
-minute, and answered `200` in **7–15 ms** throughout. That is the state this page leaves it in: the
-local claim, downloads capped by what that SSD writes (~24 MB/s), and the churn itself still
-unexplained.
+minute, and answered `200` in **7–15 ms** throughout. That held for five minutes; *Back to the export, 21:32*
+records why it did not, and the churn itself is still unexplained.
+
+### Back to the export, 21:32
+
+The local claim above lasted five minutes: the owner of card 777 took the export again at 21:32, on the
+operator's instruction, so the state this page leaves behind is the export and the claim above holds
+16 K. What is worth keeping from the five minutes is the reading that names the work, and the recovery
+that follows a queue of copies rather than a stall.
+
+**The stack names the work.** A thread of `qbittorrent-nox` in `D` (uninterruptible sleep) parked in
+`balance_dirty_pages` → `ext4_buffered_write_iter` → `pwrite64`, with two descriptors open on the same
+film: one in `/downloads/incomplete`, one in `/downloads-temp`. That pair is the whole diagnosis — the
+thread is copying a torrent off the export onto `sda`, and no NFS state is involved.
+
+| Reading, 21:30 | Value |
+|---|---|
+| dirty pages waiting to be written | **1.8 GB** |
+| actually in flight | 12 MB |
+| `sda` throughput | 24–50 MB/s |
+| `/downloads-temp` | 16 K → 48 GB in twenty minutes |
+
+**Three traps the 21:27 recovery did not hit**, so they sit beside its three rather than replacing them:
+
+- **A queued move lives in memory only.** `setPreferences` re-queues the copies in the right direction,
+  but the forward queue already inside the app keeps running first, and the same bytes then cross the
+  disk twice. Replacing the pod drops the queue: each torrent keeps the location it had recorded, and an
+  interrupted copy leaves its source whole.
+- **The two trees left in `/downloads-temp` were not the same kind of thing.** The *Blade Runner 2099*
+  season pack was a duplicate — its 37 GB was intact on the export — and was deleted. *Rings of Power*
+  S03E07 was the only copy of a partial, so it was moved back to `/downloads/incomplete` and rechecked,
+  which returned it to **42%** instead of a fresh download.
+- **`POST /api/v2/torrents/recheck` takes `hashes` in the body.** A `GET` answers `405`, and a `POST`
+  with the hash in the query string answers `400`.
+
+Afterwards: `/downloads-temp` at 16 K, dirty pages 172 kB, `sda` at 0.12 MB/s, 325 torrents, the API at
+3–36 ms. Eight torrents report `missingFiles`; all eight are at 0% and predate the change. The claim is
+now mounted, empty, and the one place a preference can send writes onto the failing SSD — card 785
+carries its removal.
 
 ### What a stall looks like from outside
 
@@ -543,9 +582,13 @@ have is the app's fd handling and its own locking, which is where the next instr
   feature is not enabled on this filesystem); a failing disk (SMART clean, no `nvme` error); the
   network and the server (no retransmission, no timeout, `nfsd` idle); the config volume (moved);
   `DiskIOWriteMode=DisableOSCache` (tested, wedge returned).
-- **The next instrument:** whether the client ever *re-sends* the call it is waiting for, and which
-  file it is waiting on. `retrans` stayed 0 through the earlier wedges, so nothing is queued again and
-  no timeout fires; the two `rpcdebug` masks below name the file while the stall is live.
+- **The next instrument, armed and proven.** A catcher on `streaming` polls the app's own API every
+  seven seconds and, on three consecutive timeouts, writes out the host's `D`-state threads with their
+  kernel stacks, `/proc/net/rpc/nfs` and the process's open descriptors, then turns on
+  `nfs_debug 0x0040` for fifteen seconds and puts the mask back. It was tested against a live `D`
+  thread before being left to run — that reading is what named the copy onto `sda` — and it is waiting
+  for a stall whose wait is in NFS: `retrans` stayed 0 through the earlier wedges, so nothing is queued
+  again and no timeout fires.
 - **A second cause, on the server, worth its own look.** `nas` carried load average 20–28 from 19:45
   to 19:55 while both 970 EVO reported idle traffic and the disk queue stayed at 0.04–0.09: two dozen
   tasks were blocked long enough to move the load average and not long enough to be caught at a
