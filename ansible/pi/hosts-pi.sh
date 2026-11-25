@@ -77,6 +77,12 @@ desired_compose() {
     sed "s/@WG_UDP_PORT@/$(wg_udp_port "$1")/g" "$TEMPLATES/docker-compose.yml"
 }
 
+# The settings both Pi-holes share. One template, no per-host value: the two
+# hosts must end up byte-identical, and 'verify' compares bytes.
+desired_pihole_settings() {
+    cat "$TEMPLATES/pihole.settings"
+}
+
 desired_hostname() {
     printf '%s\n' "$1"
 }
@@ -374,12 +380,14 @@ cmd_render() {
     desired_hostname "$host"
     echo "--- /etc/hosts"
     echo "left to cloud-init, which rewrites it on every boot"
-    echo "--- $STACK_DIR/pihole.env"
-    echo "required, never printed and never written: it holds the Pi-hole"
-    echo "password, and it is gitignored"
+    echo "--- $STACK_DIR/pihole.settings"
+    desired_pihole_settings
     echo "--- $STACK_DIR/config/wg-easy.db"
     echo "wg-easy 15's own database: panel account, host, port, DNS, peers. Not"
     echo "written here, and copied by 'backup' with the rest of the stack"
+    echo "--- $STACK_DIR/pihole.env"
+    echo "required, never printed and never written: the panel password is the"
+    echo "only key it holds, and it is gitignored by the *.env rule"
 }
 
 cmd_setup() {
@@ -407,6 +415,10 @@ cmd_setup() {
     pihole_changed="$CHANGED_THIS_WRITE"
     write_abs "$ROOT$STACK_DIR/etc-dnsmasq.d/02-my-wildcard-dns.conf" \
         "$(cat "$TEMPLATES/02-my-wildcard-dns.conf")"
+    if [ "$CHANGED_THIS_WRITE" -eq 1 ]; then
+        pihole_changed=1
+    fi
+    write_abs "$ROOT$STACK_DIR/pihole.settings" "$(desired_pihole_settings)"
     if [ "$CHANGED_THIS_WRITE" -eq 1 ]; then
         pihole_changed=1
     fi
@@ -475,6 +487,9 @@ cmd_verify() {
     fi
     if ! check_text "$ROOT$STACK_DIR/etc-dnsmasq.d/02-my-wildcard-dns.conf" \
         "$(cat "$TEMPLATES/02-my-wildcard-dns.conf")"; then
+        problems=1
+    fi
+    if ! check_text "$ROOT$STACK_DIR/pihole.settings" "$(desired_pihole_settings)"; then
         problems=1
     fi
 
