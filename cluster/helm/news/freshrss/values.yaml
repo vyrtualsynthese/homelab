@@ -20,7 +20,7 @@ image:
   # runAsNonRoot (see the chart README).
   repository: freshrss/freshrss
   # Pinned, never floating. Bumped by hand with appVersion in Chart.yaml.
-  tag: 1.30.4
+  tag: 1.31.0
   pullPolicy: IfNotPresent
 
 imagePullSecrets: []
