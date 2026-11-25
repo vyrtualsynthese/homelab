@@ -83,7 +83,7 @@ spec:
             fieldRef:
               apiVersion: v1
               fieldPath: metadata.namespace
-        image: rancher/mirrored-library-traefik:2.10.7
+        image: rancher/mirrored-library-traefik:2.11.50
         imagePullPolicy: IfNotPresent
         livenessProbe:
           failureThreshold: 3
