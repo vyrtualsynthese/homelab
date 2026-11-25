@@ -36,7 +36,7 @@ The third fact is a defect independent of the rest: **today's run authenticates 
 identity the laptop happens to own.** It works because the human account's keys have been pasted there
 by hand over time, and it stops working on a laptop that has only `homelab_live`.
 
-Four probes on 2026-11-25 from the validated laptop, `ssh -o BatchMode=yes -i ~/.ssh/homelab_live
+Probes on 2026-11-25 from the validated laptop, `ssh -o BatchMode=yes -i ~/.ssh/homelab_live
 <user>@<host> true`, because the answer decides both the scope and the risk of naming the identity:
 
 | Host | `ansible` | `vronteix` |
@@ -45,10 +45,15 @@ Four probes on 2026-11-25 from the validated laptop, `ssh -o BatchMode=yes -i ~/
 | `rbp2` (192.168.1.48) | **accepted** | not probed |
 | `rbp0` (192.168.1.22) | `Permission denied (publickey,password)` | not probed |
 | `rbp1` (192.168.1.38) | `Permission denied (publickey,password)` | not probed |
+| `nas` (192.168.1.41) | not probed at design time | not probed |
+| `streaming` (192.168.1.46) | not probed at design time | not probed |
 
-So `homelab_live` already reaches the four cluster nodes **as both accounts**, from at least one
-laptop, and the two edge Pis have no `ansible` account at all until they are reflashed (card #481).
-That is why the first apply below is a four-host apply, and why the Pis' path is the reflash runbook.
+So `homelab_live` is *known* to be accepted as `ansible` on `nuc0` and `rbp2`, and **not yet known** for
+`nas` and `streaming`. Naming the identity makes it the only one offered, so those two are probed
+before the first apply — `nas` is the pilot, and the pilot is where a `Permission denied` costs an
+evening rather than a fleet. The two edge Pis have no `ansible` account at all until they are
+reflashed (card #481); that is why the first apply below is a four-host apply, and why the Pis' path is
+the reflash runbook.
 
 ## The decision
 
