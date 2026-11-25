@@ -12,10 +12,11 @@
 # PI_ROOT points every verb at another directory, which is how the tests drive
 # it without a Pi. It defaults to "/" — a real host.
 #
-# What this script never writes: pihole.env, wg-easy.env, .env. They hold the
-# Pi-hole password and the WireGuard key, they are gitignored, and a script that
-# wrote them would either commit a secret or invent one. It requires them and
-# names the one that is missing.
+# What this script never writes: pihole.env. It holds the Pi-hole password, it
+# is gitignored, and a script that wrote it would either commit a secret or
+# invent one. It requires it and names it when it is missing. The WireGuard
+# side has no environment file since wg-easy 15: its settings live in the
+# panel's own database under the stack directory, which `backup` copies.
 #
 # What it also does not invent: /boot/firmware/config.txt and cmdline.txt. After
 # a reflash the image's own copies are right for the disk they were written to,
@@ -92,15 +93,15 @@ desired_hosts() {
 
 require_env() {
     local missing=0 file
-    for file in pihole.env wg-easy.env; do
+    for file in pihole.env; do
         if [ ! -f "$ROOT$STACK_DIR/$file" ]; then
             echo "missing $ROOT$STACK_DIR/$file" >&2
             missing=1
         fi
     done
     if [ "$missing" -eq 1 ]; then
-        echo "these hold secrets and are gitignored. After a reflash, 'restore' is" >&2
-        echo "what brings them back from the backup; on a fresh host, write them once" >&2
+        echo "it holds a secret and is gitignored. After a reflash, 'restore' is" >&2
+        echo "what brings it back from the backup; on a fresh host, write it once" >&2
         echo "by hand." >&2
         exit 1
     fi
@@ -377,9 +378,12 @@ cmd_render() {
     desired_hostname "$host"
     echo "--- /etc/hosts"
     desired_hosts "$host"
-    echo "--- $STACK_DIR/pihole.env and wg-easy.env"
-    echo "required, never printed and never written: they hold the Pi-hole"
-    echo "password and the WireGuard key, and both are gitignored"
+    echo "--- $STACK_DIR/pihole.env"
+    echo "required, never printed and never written: it holds the Pi-hole"
+    echo "password, and it is gitignored"
+    echo "--- $STACK_DIR/config/wg-easy.db"
+    echo "wg-easy 15's own database: panel account, host, port, DNS, peers. Not"
+    echo "written here, and copied by 'backup' with the rest of the stack"
 }
 
 cmd_setup() {
@@ -454,7 +458,7 @@ check_text() {
 cmd_verify() {
     local host="$1" problems=0 file
 
-    for file in pihole.env wg-easy.env; do
+    for file in pihole.env; do
         if [ ! -f "$ROOT$STACK_DIR/$file" ]; then
             echo "MISSING $ROOT$STACK_DIR/$file"
             problems=1
