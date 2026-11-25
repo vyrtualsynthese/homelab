@@ -140,9 +140,14 @@ env:
   # One instance: the cluster's own LAPI, over the cluster network. The
   # NodePort 30500 exists for the host bouncer, which cannot resolve cluster
   # DNS; nothing in the cluster should use it.
+  #
+  # `crowdsec-service`, not `crowdsec-lapi`: the latter is the Deployment and the
+  # pod name, and it answers on no Services — a URL built from it fails in Node
+  # as `fetch failed`, which the app reports as "Authentication failed", so the
+  # first version of this file looked like a wrong password.
   CONFIG_INSTANCES_0_ID: "default"
   CONFIG_INSTANCES_0_NAME: "CrowdSec"
-  CONFIG_INSTANCES_0_LAPI_URL: "http://crowdsec-lapi:8080"
+  CONFIG_INSTANCES_0_LAPI_URL: "http://crowdsec-service:8080"
   # The machine (watcher) this UI logs in as. The password is in the
   # `crowdsec-web-ui` Secret, created by hand — see the chart README for the
   # `cscli machines add` command that issues it.
