@@ -216,15 +216,21 @@ cd ansible
 `--dry-run` prints the undo and writes nothing; `--arm-only` arms the undo for a change applied by
 hand from Winbox; `--window` defaults to `10m` with a one-hour ceiling. The change file is refused
 before anything is written when a line cannot be inverted, and any line under `/system scheduler`,
-`/user`, `/system reset`, `/system backup` or a bare `/import` is refused outright: those could
+`/system reset`, `/system reboot`, `/system backup`, `/system upgrade`, `/user`, `/file` or a bare
+`/import` is refused outright: those could
 remove the timer, the undo file or the account that cancels it. What a change file looks like is
 `switches/changes/README.md`; the procedure, the exit codes and what a fired undo means are
 [`docs/runbooks/switch-change.md`](../docs/runbooks/switch-change.md).
 
-It signs in as `deploy` with `~/.ssh/switches-deploy` — the account card #485 creates, holding
-`read`, `write`, `ssh` and `test`. The binary backup needs `policy` on top of that, which #485 does
-not grant: a refused backup prints `no binary fallback for this run` and the run carries on armed,
-because the textual undo does not depend on it.
+It is run through the gate `/usr/local/sbin/switch-apply`, as the `netcfg` account, which holds the
+key at `/home/netcfg/.ssh/switch-deploy`: the agent's shell runs the command and never reads the key.
+The script then signs in on the switch as `deploy` — the account card #485 creates, holding `read`,
+`write`, `ssh` and `test`. Installing the gate, the digest it holds the script to and the sudoers rule
+that allows the one command are in
+[`docs/runbooks/switch-access.md`](../docs/runbooks/switch-access.md). The binary backup needs
+`policy` on top of that, which #485 does not grant: a refused backup prints
+`no binary fallback for this run` and the run carries on armed, because the textual undo does not
+depend on it.
 
 Unlike the collector it inherits its shape from, this script writes to a switch: two `.rsc` files, one
 scheduler entry, and the backup when the account may take one. Everything it writes is named after the
