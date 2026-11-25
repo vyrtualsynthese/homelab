@@ -85,6 +85,16 @@ fluent-bit:
       # `Path` switches it to opening one directory, and journald's
       # `Storage=auto` means a node may hold only the volatile journal, since
       # nothing in this repository creates `/var/log/journal`.
+      #
+      # "Local" resolves to the host's journal because the chart mounts the
+      # host's `/etc/machine-id`: sd_journal_open(LOCAL_ONLY) looks for
+      # `<journal dir>/<machine-id>`, so that mount is load-bearing for both
+      # inputs and not decoration.
+      #
+      # `Max_Fields 200` is a cap, and an entry over it is **discarded** rather
+      # than trimmed: five times a real `sshd` entry and ten times a kernel one,
+      # so it should never bite, but the first hour of the pod's own log is what
+      # proves that.
       [INPUT]
           Name systemd
           Tag host.ssh
@@ -188,9 +198,12 @@ fluent-bit:
           Labels job=fluent-bit, source=journal, unit=kernel
   # The two position files (`DB` in the inputs above) need a writable directory.
   # The upstream chart mounts `/var/log`, `/var/lib/docker/containers` and
-  # `/etc/machine-id` and nothing else, so this emptyDir is the only writer
-  # there. It dies with the pod, which is why both inputs carry
-  # `Read_From_Tail On`.
+  # `/etc/machine-id` and nothing else, so this emptyDir is the only writable
+  # directory there. It dies with the pod, which is why both inputs carry
+  # `Read_From_Tail On` — and the price of that pair is the lines written
+  # between one pod's death and its replacement's start: they are never shipped.
+  # Replaying the journal instead would ship a week of it on every restart, so
+  # the gap is the decision, not an oversight.
   #
   # The chart mounts `/var/log` but not `/run`, and journald keeps the volatile
   # journal under `/run/log/journal` on a host without a persistent one, so the

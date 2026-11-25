@@ -8,7 +8,7 @@
 >
 > **Sources** `cluster/helm/monitoring/fluent-bit/values.yaml` (the inputs, filters and outputs that
 > decide what is shipped), `cluster/helm/monitoring/loki/values.yaml` (retention and the limits), and
-> Loki's own HTTP API through Grafana's datasource proxy, read on 2026-11-22.
+> the metrics page's reader counts. Read through Loki's own HTTP API on 2026-11-22.
 
 The numbers below were taken from Loki's own HTTP API against the live cluster. Nothing here is
 estimated: every figure has the query that produced it, and a change is only "fixed" if the number
@@ -28,22 +28,28 @@ a log level left at `info`, and three objects applied by hand that nothing in Gi
 Fluent Bit also ships each node's own journal in the change that adds the security detection (sshd
 auth failures as `unit="ssh"`, the kernel's ufw block lines as `unit="kernel"`, `source="journal"`).
 **Its 24-hour line count has not been measured:** the pipeline has never run, so the query answers
-nothing and no number on this page covers it. It is read on **2026-11-26**, once the sync has landed
-and a day has passed:
+nothing and no number on this page covers it. Record it **on or after 2026-11-26**, once the sync has
+landed and a day has passed, with both halves — lines and bytes, because the decision below is about
+the store rather than the line count:
 
 ```bash
 curl -skG -H "Authorization: Bearer $GRAFANA_TOKEN" \
   "https://grafana.kub.local/api/datasources/proxy/uid/P8E80F9AEF21F6940/loki/api/v1/query" \
   --data-urlencode 'query=sum by (unit) (count_over_time({source="journal"}[24h]))'
+curl -skG -H "Authorization: Bearer $GRAFANA_TOKEN" \
+  "https://grafana.kub.local/api/datasources/proxy/uid/P8E80F9AEF21F6940/loki/api/v1/query" \
+  --data-urlencode 'query=sum by (unit) (bytes_over_time({source="journal"}[24h]))'
 ```
 
 Read through the same proxy on 2026-11-25, `{job="fluent-bit"}` answered 176,940 lines over 24 hours
 while `{source="journal"}` and `{source="accesslog"}` both answered nothing — the two streams this
-change adds have never run, so their absence is a measurement rather than a failed query.
+change adds have never run, so their absence is a measurement rather than a failed query. That
+176,940 is well below the 533,803 of the day above; this page does not yet write up what moved it, so
+the headline stays the baseline and that number is only proof the selector answers.
 
-The decision rule: the comparator is the Traefik access log, 12,494 lines and 9.2 MB of the day above.
-A journal pipeline that adds **10 %** to the store is fine. One that **doubles** it is not, and the
-`ssh` input then gains a line filter on `Failed` — an iteration, not a redesign.
+The decision rule, one comparator and one unit: the store for the day above is **13.5 MB** compressed,
+so the journal may add **1.35 MB a day** (10 %), and **13.5 MB a day** would double it. Past the
+second figure the `ssh` input gains a line filter on `Failed` — an iteration, not a redesign.
 
 A `unit="ssh"` count of zero is the case to act on, not the calm one: it means the filter matched no
 daemon on that node. The input selects `_COMM=sshd` rather than `_SYSTEMD_UNIT=ssh.service` because
