@@ -132,7 +132,9 @@ jobs. A failure exits non-zero so `kubectl get jobs` shows it; no alert rule wat
 
 - No investigator agent: the session still does the analysis.
 - No backward move, and no close to `Done` — the operator accepts from `Validation`.
-- No alert rule on the job's failures yet; the runbook says how to read them.
+- No alert rule is added for this job: the existing `JobFailed` rule (warning, uid
+  `cg44fug02x9fke`) already covers every Job — a failed pod with no successful pod in the same Job,
+  younger than two hours. It reaches Discord, not the board, and the runbook says how to read the log.
 - A column rename is safe for the moves (bucket ids are configured) but not for the fix-check, which
   matches the titles `Validation` and `Done`; the six column names are the board contract.
 - A job that cannot read a fix card fails loudly rather than assuming it is open, so a permissions
