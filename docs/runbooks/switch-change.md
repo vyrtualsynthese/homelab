@@ -42,7 +42,8 @@ From `ansible/`:
 
 It reads the switch, renders the undo, prints it, and asks once before writing anything. `--yes`
 skips the question for an unattended run; without either, and with no terminal to ask on, it exits 2
-and touches nothing.
+and touches nothing. So does a `--dry-run`: it prints the undo and names any timer an earlier run
+left armed, and cancels none of them.
 
 ```bash
 ./switches/switch-change.sh --target crs326 --change … --dry-run    # print the undo, write nothing
@@ -59,8 +60,8 @@ itself.
 
 | Phase | What it does | The line it leaves |
 |---|---|---|
-| Read | `/system resource print` for the major version, `/export` and the verbose export, `/system clock print`, and the `revert-*` listing. Any timer an earlier run left armed is cancelled here. | `cancelled the timer an earlier run left armed: revert-…` |
-| Arm | Shows the undo, uploads `undo-<id>.rsc` and `change-<id>.rsc`, reads each back, takes the binary backup, adds the one-shot entry and reads its `start-time` back. | `armed revert-<id> on crs326 for 09:30:00 device time (window 10m)` |
+| Read | `/system resource print` for the major version, `/export` and the verbose export, `/system clock print`, and the `revert-*` listing. | — |
+| Arm | Shows the undo, cancels the timers an earlier run left armed, uploads `undo-<id>.rsc` and `change-<id>.rsc`, checks each is listed on the device, takes the binary backup, adds the one-shot entry and reads its `start-date`, `start-time` and name back. | `cancelled the timer an earlier run left armed: revert-…` · `armed revert-<id> on crs326 for 09:30:00 device time (window 10m)` |
 | Apply | `/import file=change-<id>.rsc verbose=yes`. A dropped session here is expected: the import runs on the device once it has started. | `verifying: applying … and watching 192.168.1.11 until the switch answers` |
 | Verify | Reads the timer's `run-count` first, then polls the expected address until the switch answers or the window plus a reboot allowance runs out. | `applied: …` · `reverted: …` · `the switch did not answer …` |
 
@@ -98,10 +99,10 @@ rendered undo and a copy of the change; none of it is committed and none of it c
 | Code | Meaning |
 |---|---|
 | 0 | the change landed, the timer was removed, and the switch answered |
-| 1 | nothing was touched: a refusal, an unreadable change, a failed preflight or upload, or an interrupt with the timer left armed |
-| 2 | usage error, including a run with no `--yes` and no terminal to ask on |
-| 3 | reverted — by the timer or on demand — and the export is identical to the one taken before |
-| 4 | reverted, and the export **differs** from the one taken before; the diff is printed |
+| 1 | no change was applied, and nothing is left on the switch: a refusal, an unreadable change, a failed upload (whatever it had uploaded is removed), a timer the device refused or would not show back, or an interrupt, which leaves the timer armed on purpose |
+| 2 | usage error, including a run with no `--yes` and no terminal to ask on, a window below a minute or above an hour, and an option given with no value |
+| 3 | the export is identical to the one taken before the change — reverted, or the change was a no-op; with an unreadable `run-count` the line says which of the two is unknown |
+| 4 | the export **differs** from the one taken before; the diff is printed |
 | 5 | the switch never answered again; nothing was removed and nothing is claimed about it |
 
 Codes 3, 4 and 5 are not failures of the script: they are the switch telling you what happened. Read
@@ -142,11 +143,16 @@ A backup written there stays on the switch's flash until it is removed by hand (
 The renderer refuses, before anything is written, and names the line:
 
 - an `add` with no attribute it can find the object by afterwards;
+- an `add` whose key the export already holds: the undo would remove an object the change never made;
 - a selector matching more than one object, or none — undoing one of several is a guess;
-- a `set` whose old value is in neither export;
-- anything but `add`, `set`, `remove`, `enable` and `disable` — `move` included;
-- `/import` in a change, and any line under `/system scheduler`, `/user`, `/system reset` or `/system
-  backup`: those could remove the timer or the account that cancels it.
+- a `set` whose old value is in neither export, or an argument with no `=` in it;
+- a value or old value holding a `}`, which would close the guard the undo is written in;
+- anything but `add`, `set`, `remove`, `enable` and `disable` — `move` included, whether it is
+  written under a section header or on a line of its own;
+- a change that renders no undo line at all, such as a file holding only a section header;
+- `/import`, and any line under `/system scheduler`, `/user`, `/file` or `/system reset`,
+  `/system backup`, `/system reboot`: those could remove the timer, the account that cancels it, or
+  the undo file itself.
 
 The change file itself is a `.rsc` fragment and holds no secret. `switches/changes/README.md` says
 what one looks like.
@@ -154,7 +160,7 @@ what one looks like.
 ## Verified
 
 - `uv run --with-requirements hack/tests/requirements.txt python -m pytest -q hack/tests/test_switch_change.py`
-  — 38 tests, the undo renderer on RouterOS 6 and 7, every refusal, and every exit path driven
+  — 57 tests, the undo renderer on RouterOS 6 and 7, every refusal, and every exit path driven
   through the fake switch.
 - `bash hack/check-docs.sh` — this page's banner, links and nav entry.
 - Not verified: a real switch, a real scheduler entry, and a real timer firing. Card #485 creates the
