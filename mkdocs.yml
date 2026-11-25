@@ -152,6 +152,7 @@ nav:
       - Agent shells are read-only: decisions/2026-11-23-agent-shells-read-only.md
       - Automation sudo account: decisions/2026-11-24-automation-sudo-account.md
       - Declared host access: decisions/2026-11-25-declared-host-access.md
+      - No Ubuntu Pro: decisions/2026-11-25-no-ubuntu-pro.md
       - Longhorn leftovers: cleanup/longhorn-disposition.md
       - The board's database: runbooks/vikunja-database.md
       - The board's first start: runbooks/vikunja-first-start.md

@@ -45,6 +45,7 @@ would cost — but the four above are what every record has.
 | [Agent shells are read-only](2026-11-23-agent-shells-read-only.md) | Every shell OpenCode spawns authenticates as `kube-system/opencode-mcp` by default; the operator's terminal keeps admin, and a write reaches the cluster only through git and Argo CD | 2026-11-23 |
 | [Passwordless sudo belongs to one named account](2026-11-24-automation-sudo-account.md) | `ansible` holds the layer's only passwordless grant and the inventory connects as it; `vronteix` keeps `%sudo` with a password, so the drift report stays runnable unattended | 2026-11-24 |
 | [Host access is a declared list](2026-11-25-declared-host-access.md) | `trusted_ssh_keys` in `group_vars` is the whole list of keys that may log in, written as the whole file to both accounts: adopting a laptop adds a line, retiring one deletes it, and an undeclared key is removed by the next run | 2026-11-25 |
+| [No host is attached to Ubuntu Pro](2026-11-25-no-ubuntu-pro.md) | The six hosts stay un-attached: the security cover is the release they land on, 26.04 LTS to May 2031, and Canonical is a UK company, which the EU-only provider rule puts out | 2026-11-25 |
 
 Below 80 °C on a one-hour soak at 50 % CPU is how the `streaming` record ends; a replacement
 node is how the `nuc0` one does. Until then both are facts about the hardware, not open tickets.
