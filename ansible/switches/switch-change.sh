@@ -80,6 +80,33 @@ noise_free() {
   awk '/^[[:space:]]*#/ { next } /^[[:space:]]*$/ { next } { print }'
 }
 
+# Every command with its path on the same line. RouterOS runs each line of a `verbose=yes` import in
+# the root menu, so a file that sets its menu on a line of its own loses it there: the first command
+# fails with `bad command name <cmd>` and nothing is applied. A plain import carries the menu over
+# but reports `Script file loaded and executed successfully` whatever happened, failed line included,
+# so the verbose form is the only one that can name a failure. Written full-path, a change imports
+# the same either way. A line that is only a path is the section header and is not sent.
+full_path_lines() {
+  awk '
+    BEGIN { n = split("add set remove enable disable", v, " "); for (i = 1; i <= n; i++) verb[v[i]] = 1 }
+    /^[[:space:]]*#/ { print; next }
+    /^[[:space:]]*$/ { next }
+    {
+      line = $0
+      sub(/^[[:space:]]+/, "", line)
+      if (substr(line, 1, 1) == "/") {
+        # The same rule the renderer uses, so the two agree on what a header is: the path is every
+        # token before the first verb, and a line with no verb is a section header, not a command.
+        command = 0
+        k = split(line, t, /[[:space:]]+/)
+        for (i = 2; i <= k; i++) if (t[i] in verb) { command = 1; break }
+        if (!command) { path = line; next }
+        print line; next
+      }
+      if (path != "") { print path " " line } else { print line }
+    }'
+}
+
 # One RouterOS command on a device, its output on stdout. Shaped like the collector's: BatchMode so
 # no password is ever asked, the connect and the command both bounded, and LogLevel=ERROR so ssh's
 # greeting does not land inside an export. The carriage returns go, because RouterOS answers with
@@ -703,7 +730,7 @@ change_apply_and_verify() {                # change_apply_and_verify <host> <id>
       exit 4 ;;
   esac
 
-  say "verifying: applying $change and watching $probe until the switch answers"
+  say "verifying: applying change-$id.rsc on $target and watching $probe until the switch answers"
 
   # A session that dies here is expected, not a failure: the import runs on the device once it has
   # started. Only a line RouterOS itself prints starts the on-demand undo.
@@ -838,7 +865,8 @@ change_run() {
     warn "nothing was changed: the change cannot be undone"
     exit 1
   fi
-  cp "$change" "$change_file"
+  # The device gets one line per command, each with its path: see full_path_lines for why.
+  full_path_lines < "$change" > "$change_file"
 
   # A timer an earlier run left armed is named here and cancelled only once this run writes: two
   # armed undos must never sit on one switch, because the older one would put back a configuration

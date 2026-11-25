@@ -61,7 +61,7 @@ things that do not exist yet, and this design covers both:
   `ros()` and `put()` with a comment naming card #696, which removes it.
 - Nothing under `cluster/` is touched.
 
-Measured on the devices on 2026-11-25, both added after the first live runs:
+Measured on the devices on 2026-11-25 and 2026-11-26, each added after the live run that found it:
 
 - RouterOS serves SCP only to an account holding the `ftp` policy. Without it the key authenticates
   and the file transfer's **exec channel** is refused (`exec request failed on channel 0`). `deploy`
@@ -72,6 +72,11 @@ Measured on the devices on 2026-11-25, both added after the first live runs:
 - A scheduler entry's `start-date` is `mmm/dd/yyyy` (`nov/26/2026`), and an ISO date is refused as
   `invalid date`. The script spells the month itself, so the form does not follow the workstation's
   locale.
+- A `verbose=yes` import runs each of its lines in the root menu: a file that sets its menu on a line
+  of its own fails at its first command with `bad command name <cmd> (line 1 column 1)` and applies
+  nothing, while a plain import applies it but reports `Script file loaded and executed successfully`
+  even when a line failed. The change is uploaded with its path on every command line, which imports
+  correctly under either form and still lets the verbose one name a failure.
 
 ## Approaches considered
 

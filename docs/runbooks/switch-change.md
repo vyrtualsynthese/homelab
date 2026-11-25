@@ -102,7 +102,7 @@ itself.
 |---|---|---|
 | Read | `/system resource print` for the major version, `/export` and the verbose export, `/system clock print`, and the `revert-*` listing. | — |
 | Arm | Shows the undo, cancels the timers an earlier run left armed, uploads `undo-<id>.rsc` and `change-<id>.rsc`, checks each is listed on the device, takes the binary backup, adds the one-shot entry and reads its `start-date`, `start-time` and name back. | `cancelled the timer an earlier run left armed: revert-…` · `armed revert-<id> on crs326 for 09:30:00 device time (window 10m)` |
-| Apply | `/import file=change-<id>.rsc verbose=yes`. A dropped session here is expected: the import runs on the device once it has started. | `verifying: applying … and watching 192.168.1.11 until the switch answers` |
+| Apply | `/import file=change-<id>.rsc verbose=yes`. A dropped session here is expected: the import runs on the device once it has started. | `verifying: applying change-<id>.rsc on crs326 and watching 192.168.1.11 until the switch answers` |
 | Verify | Reads the timer's `run-count` first, then polls the expected address until the switch answers or the window plus a reboot allowance runs out. | `applied: …` · `reverted: …` · `the switch did not answer …` |
 
 If the import prints a RouterOS error, the undo runs **on demand** — imported at once, not waited for
@@ -120,20 +120,30 @@ line with nothing to do does nothing:
 The change was `set … pvid=20`, so the undo sets `pvid` back to the value the **verbose** export
 holds — the plain export omits any value sitting at its default, and the default is what most changes
 move away from. The work directory `/var/lib/switch-change/work/<id>/` keeps the two exports, the
-rendered undo and a copy of the change. Its parent `/var/lib/switch-change/work` is
+rendered undo and the change file exactly as it was uploaded — one command per line, each with its
+path. Its parent `/var/lib/switch-change/work` is
 `netcfg:vsynthese 0750`, so a `vsynthese` shell can step through it and list it; the run's own `<id>`
 directory is `netcfg` `0700` — the gate sets `umask 077` — so nothing inside is readable by the agent
 or by another account. The run prints the diff to its own output, and the operator reads the files
 with `sudo`. The staged copy sits one level up in `work/staged/`, which the gate makes `netcfg`
 `0700`. None of it is committed and none of it contains a secret.
 
-## Two RouterOS facts this rests on
+## Three RouterOS facts this rests on
 
 - **`/import` is additive, and it stops at the first failing line.** Importing the export taken
   before the change would therefore remove nothing the change added: an `add` in the export creates a
   second object, and a `set` back to a value already in place does nothing. That is why the undo is
   built from inverse operations, one guarded line each, and not from a second import of the old
   export.
+- **A `verbose=yes` import runs each line in the root menu**, so a file that sets its menu on a line of
+  its own loses it: `/ip route` on one line, `add …` on the next, and the device answers
+  `bad command name add (line 1 column 1)` and applies nothing. A plain import carries the menu over,
+  but reports `Script file loaded and executed successfully` even when a line failed — so it is the
+  verbose form or no error at all. The run therefore uploads the change with **its path on every
+  command line**, which imports correctly and reports failures either way. A line that is only a path
+  is treated as a section header and dropped from the upload, and a line that already carries its path
+  is left alone. Measured on `crs309` on 2026-11-26, both forms, with a deliberately bad value to make
+  the error visible.
 - **A scheduler entry with `interval=0s` runs once**, at its `start-date` and `start-time`, and
   RouterOS dates the entry on the day it is created. A window that would cross the device's midnight is
   therefore refused before anything is armed: a `start-time` earlier than today's clock would run hours
@@ -319,7 +329,7 @@ Expected, in this order, and exit 3:
 the undo to arm on crs326, at <hh:mm:ss> device time (window 5m):
 :if ([:len [/ip service find name="ssh"]] > 0) do={ /ip service set [find name="ssh"] disabled=no }
 armed revert-crs326-<date>-<time> on crs326 for <hh:mm:ss> device time (window 5m)
-verifying: applying /var/lib/switch-change/work/staged/stage-<epoch>-<pid>.rsc and watching 192.168.1.11 until the switch answers
+verifying: applying change-crs326-<date>-<time>.rsc on crs326 and watching 192.168.1.11 until the switch answers
 the difference against the export taken before the change:
 reverted: the timer revert-crs326-<date>-<time> fired and the export is identical to the one taken before the change
 ```
@@ -341,7 +351,7 @@ section is what the banner's **Verified** line and the **Verified** list below a
 ## Verified
 
 - `uv run --with-requirements hack/tests/requirements.txt python -m pytest -q hack/tests/test_switch_change.py`
-  — 70 tests, the undo renderer on RouterOS 6 and 7, every refusal, and every exit path driven
+  — 71 tests, the undo renderer on RouterOS 6 and 7, every refusal, and every exit path driven
   through the fake switch, whose `/export` carries its scheduler table as a real one does.
 - `hack/tests/test_switch_apply.py` — 21 tests, the gate's target list, its argument set, the pinned
   descriptor, the staged copy, the digest and the work directory.
