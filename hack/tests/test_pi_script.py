@@ -34,26 +34,42 @@ def test_render_prints_the_pinned_images_for_each_pi():
         out = run("render", host)
         assert out.returncode == 0, out.stderr
         assert "jacklul/pihole:2026.11.0" in out.stdout
-        assert "wg-easy:14" in out.stdout
+        assert "wg-easy:15.5.0" in out.stdout
         assert port in out.stdout
 
 
-def test_the_wg_easy_major_is_held_until_the_config_migrates():
-    """v15 moved its configuration into an admin panel and refuses a v14 volume
-    outright; a bump to it crash-looped rbp1's VPN on 2026-11-25."""
+def test_wg_easy_15_gets_its_settings_from_the_panel_not_the_environment():
+    """v15 keeps its configuration in its own database and refuses to start
+    when PASSWORD or PASSWORD_HASH is in the environment — which is what a v14
+    env_file passed in. The three variables it does read are the ones that make
+    the panel answer where the stack says it does."""
     compose = yaml.safe_load(
         (REPO / "ansible/playbooks/templates/runners/docker-compose.yml").read_text()
     )
-    assert compose["services"]["wg-easy"]["image"] == "ghcr.io/wg-easy/wg-easy:14"
+    service = compose["services"]["wg-easy"]
+    assert service["image"] == "ghcr.io/wg-easy/wg-easy:15.5.0"
+    assert "env_file" not in service, (
+        "wg-easy.env held PASSWORD_HASH, and v15 crash-loops on that variable"
+    )
+    environment = dict(item.split("=", 1) for item in service["environment"])
+    assert environment == {
+        "PORT": "5000",
+        "INSECURE": "true",
+        "DISABLE_IPV6": "true",
+    }
+    assert "5000:5000/tcp" in service["ports"]
+
+
+def test_renovate_may_bump_wg_easy_again():
+    """The hold at <15 existed only until the v14 config was migrated. Leaving
+    it behind freezes the image on the release that carried the migration."""
     renovate = json.loads((REPO / ".github/renovate.json").read_text())
     holds = [
         rule
         for rule in renovate["packageRules"]
         if "ghcr.io/wg-easy/wg-easy" in rule.get("matchPackageNames", [])
     ]
-    assert holds and holds[-1]["allowedVersions"] == "<15", (
-        "without the hold, the next Renovate run reopens the bump that broke the VPN"
-    )
+    assert not holds, holds
 
 
 def test_render_refuses_a_host_it_does_not_know():
@@ -79,7 +95,6 @@ def test_the_placed_file_is_what_render_printed(tmp_path):
     stack = root / "home/vronteix/dockers"
     stack.mkdir(parents=True)
     (stack / "pihole.env").write_text("WEBPASSWORD=x\n")
-    (stack / "wg-easy.env").write_text("WG_HOST=x\n")
     (root / "proc").mkdir()
     (root / "proc/mounts").write_text("LABEL=writable / ext4 rw 0 0\n")
 
@@ -92,7 +107,6 @@ def test_setup_is_idempotent(tmp_path):
     root = tmp_path
     (root / "home/vronteix/dockers").mkdir(parents=True)
     (root / "home/vronteix/dockers/pihole.env").write_text("WEBPASSWORD=x\n")
-    (root / "home/vronteix/dockers/wg-easy.env").write_text("WG_HOST=x\n")
     (root / "proc").mkdir()
     (root / "proc/mounts").write_text("LABEL=writable / ext4 rw 0 0\n")
     first = run("setup", "rbp1", root=root)
@@ -164,7 +178,6 @@ def test_setup_leaves_the_engine_alone_in_a_fixture(tmp_path):
     root = tmp_path
     (root / "home/vronteix/dockers").mkdir(parents=True)
     (root / "home/vronteix/dockers/pihole.env").write_text("WEBPASSWORD=x\n")
-    (root / "home/vronteix/dockers/wg-easy.env").write_text("WG_HOST=x\n")
     (root / "proc").mkdir()
     (root / "proc/mounts").write_text("LABEL=writable / ext4 rw 0 0\n")
     out = run("setup", "rbp1", root=root)
@@ -192,7 +205,6 @@ def test_backup_then_restore_puts_the_stack_back(tmp_path):
     stack = root / "home/vronteix/dockers"
     stack.mkdir(parents=True)
     (stack / "pihole.env").write_text("WEBPASSWORD=x\n")
-    (stack / "wg-easy.env").write_text("WG_HOST=x\n")
     (root / "proc").mkdir()
     (root / "proc/mounts").write_text("LABEL=writable / ext4 rw 0 0\n")
 
@@ -272,7 +284,6 @@ def _pi_fixture(root):
     stack = root / "home/vronteix/dockers"
     stack.mkdir(parents=True)
     (stack / "pihole.env").write_text("WEBPASSWORD=x\n")
-    (stack / "wg-easy.env").write_text("WG_HOST=x\n")
     (root / "proc").mkdir()
     (root / "proc/mounts").write_text("LABEL=writable / ext4 rw 0 0\n")
     (root / "boot/firmware").mkdir(parents=True)

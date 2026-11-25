@@ -139,16 +139,6 @@
       "matchPackageNames": [
         "/authentik/"
       ]
-    },
-    {
-      "description": "wg-easy 15 is a rewrite: its configuration moved from the environment and the peer files into an admin panel and a database, and a v15 container refuses a v14 volume outright (`You are using an invalid Configuration`). The edge Pis hold a v14 config and the 14-to-15 migration is a browser wizard (card 732). The pin is held at 14 until that card lands; remove this rule with the bump.",
-      "matchDatasources": [
-        "docker"
-      ],
-      "matchPackageNames": [
-        "ghcr.io/wg-easy/wg-easy"
-      ],
-      "allowedVersions": "<15"
     }
   ]
 }
