@@ -24,7 +24,7 @@ image:
   # (see the chart README).
   repository: ghcr.io/linuxserver/kavita
   # -- Pin the full release tag. `0.9.1` is the series tag and moves; this one does not.
-  tag: "v0.9.1.4-ls132"
+  tag: "v0.9.1.4-ls133"
   pullPolicy: IfNotPresent
 
 imagePullSecrets: []
