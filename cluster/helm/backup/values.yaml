@@ -251,6 +251,9 @@ nodes:
       # can recreate. Logs, the GeoIP database, the VueTorrent archive and the old web UI copy
       # are rebuilt from the image or the internet.
       - {claim: qbittorrent-config, namespace: media-stack, kind: files, exclude: ["logs", "log", "geoip", "ui.prev", ".cache", ".npm", "vuetorrent-*.zip"]}
+      # `qbittorrent-temp` is deliberately absent, and so is every other row for it: since
+      # 2026-11-25 it holds the in-flight part of a download (card 777), which the client
+      # re-fetches. A snapshot of it would be a snapshot of half a file.
       # 7 663.7 MB on disk → 350.7 MB in the snapshot, 350.6 of it the staged databases: the
       # claim itself keeps 26 KB of configuration. What is worth restoring is the library
       # database (collections, playlists, watch state, manual matches) and those files;
