@@ -492,7 +492,7 @@ class ArmTests(unittest.TestCase):
                              "--arm-only", "--yes", "--window", "10m"])
             self.assertEqual(done.returncode, 0, done.stderr)
             detail = f.ros("/system scheduler print detail")
-            self.assertIn("start-date=2026-11-25", detail)
+            self.assertIn("start-date=nov/25/2026", detail)
             self.assertIn("start-time=09:30:00", detail)
             self.assertIn("interval=0s", detail)
             self.assertIn("policy=read,write,test", detail)
@@ -688,6 +688,16 @@ class V6RunTests(unittest.TestCase):
                 "       time-zone-autodetect: no\n"
                 "           time-zone-name: Europe/Paris\n")
 
+    def test_the_timer_date_is_the_form_the_device_takes(self):
+        # Module `mmm/dd/yyyy`, the day zero-padded as the device prints it. An ISO date is refused
+        # there as `invalid date`, which the fake models, so this fails on an ISO start-date.
+        with fake("date-form", now="2026-12-06 09:20:00", step="0") as f:
+            done = f.script(["--target", "crs326", "--change", str(CHANGES / "set-pvid.rsc"),
+                             "--arm-only", "--yes", "--window", "10m"])
+            detail = f.ros("/system scheduler print detail")
+        self.assertEqual(done.returncode, 0, done.stderr)
+        self.assertIn("start-date=dec/06/2026", detail)
+
     def test_a_v6_run_exports_hide_sensitive_verbose_and_reads_its_clock(self):
         with fake("v6run", version="6.49.10", step="0", clock_output=self.V6_CLOCK,
                   config=(EXPORTS / "v6-plain.rsc").read_text(),
@@ -697,7 +707,7 @@ class V6RunTests(unittest.TestCase):
             self.assertEqual(done.returncode, 0, done.stderr)
             self.assertIn("/export hide-sensitive verbose", f.commands())
             detail = f.ros("/system scheduler print detail")
-            self.assertIn("start-date=2026-11-25", detail)
+            self.assertIn("start-date=nov/25/2026", detail)
             self.assertIn("start-time=09:30:00", detail)
 
 

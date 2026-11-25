@@ -134,10 +134,13 @@ with `sudo`. The staged copy sits one level up in `work/staged/`, which the gate
   second object, and a `set` back to a value already in place does nothing. That is why the undo is
   built from inverse operations, one guarded line each, and not from a second import of the old
   export.
-- **A scheduler entry with `interval=0s` runs once**, at its `start-time`, and RouterOS dates the
-  entry on the day it is created. A window that would cross the device's midnight is therefore
-  refused before anything is armed: a `start-time` earlier than today's clock would run hours early,
-  and one on the next day runs a day late. Neither is a way back.
+- **A scheduler entry with `interval=0s` runs once**, at its `start-date` and `start-time`, and
+  RouterOS dates the entry on the day it is created. A window that would cross the device's midnight is
+  therefore refused before anything is armed: a `start-time` earlier than today's clock would run hours
+  early, and one on the next day runs a day late. Neither is a way back. The date is written in the
+  device's own form, `mmm/dd/yyyy` (`nov/26/2026`); an ISO date is refused as `invalid date`, so the
+  script builds the month name itself rather than asking `date`, whose output follows the workstation's
+  locale.
 
 ## Exit codes
 
@@ -338,7 +341,7 @@ section is what the banner's **Verified** line and the **Verified** list below a
 ## Verified
 
 - `uv run --with-requirements hack/tests/requirements.txt python -m pytest -q hack/tests/test_switch_change.py`
-  — 69 tests, the undo renderer on RouterOS 6 and 7, every refusal, and every exit path driven
+  — 70 tests, the undo renderer on RouterOS 6 and 7, every refusal, and every exit path driven
   through the fake switch, whose `/export` carries its scheduler table as a real one does.
 - `hack/tests/test_switch_apply.py` — 21 tests, the gate's target list, its argument set, the pinned
   descriptor, the staged copy, the digest and the work directory.

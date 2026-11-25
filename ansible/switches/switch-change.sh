@@ -799,7 +799,7 @@ change_apply_and_verify() {                # change_apply_and_verify <host> <id>
 # undo exists locally and has passed the renderer: a refusal writes nothing at all.
 change_run() {
   local host major verbose_cmd stamp start seconds id dir plain verbose undo_file change_file
-  local stale detail name
+  local stale detail name months month day
 
   host=$(host_of "$target") || die "unknown target '$target'"
   [ -r "$change" ] || { warn "cannot read the change file $change"; exit 1; }
@@ -891,8 +891,12 @@ change_run() {
   fi
 
   # `start-date` is written rather than left to the device: the entry has to run on the day the
-  # window was measured on, not on whatever day RouterOS would date it by.
-  day=${stamp%% *}
+  # window was measured on, not on whatever day RouterOS would date it by. The form is RouterOS's own,
+  # `mmm/dd/yyyy`; an ISO date is refused as `invalid date`. The month names are spelled here rather
+  # than taken from `date`, whose output follows the workstation's locale.
+  months=(jan feb mar apr may jun jul aug sep oct nov dec)
+  month=${months[$(( 10#${stamp:5:2} - 1 ))]}
+  day="$month/${stamp:8:2}/${stamp:0:4}"
   detail=$(ros "$host" "/system scheduler add name=revert-$id policy=read,write,test interval=0s start-date=$day start-time=$start on-event=\"/import file=undo-$id.rsc\"")
   if [ -n "$detail" ]; then
     warn "the device refused the timer: $detail"
