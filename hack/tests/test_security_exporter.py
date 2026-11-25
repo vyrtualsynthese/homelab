@@ -16,6 +16,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "hack"))
 
 import check_exposure  # noqa: E402
+import gen_docs  # noqa: E402
 
 VALUES = ROOT / "cluster/helm/security/security-exporter/values.yaml"
 
@@ -35,6 +36,14 @@ class ReconciledConstantsTests(unittest.TestCase):
         # Every number is a claim about the cluster today; the note says when it
         # was read, so a stale constant is visible rather than plausible.
         self.assertIn("2026-11-25", self.values["expectedNote"])
+
+    def test_the_page_and_the_threshold_hold_the_same_live_count(self):
+        # The routes page publishes the live count from `gen_docs.LIVE_INGRESS_ROUTES`,
+        # and the alert family compares against `expected.ingressRoutes`. Two copies of
+        # one number, so neither may move alone.
+        self.assertEqual(
+            gen_docs.LIVE_INGRESS_ROUTES, self.values["expected"]["ingressRoutes"]
+        )
 
 
 class WhitelistTests(unittest.TestCase):
