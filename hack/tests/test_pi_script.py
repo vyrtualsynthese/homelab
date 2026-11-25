@@ -123,6 +123,26 @@ def test_setup_refuses_when_an_env_file_is_missing(tmp_path):
     assert "pihole.env" in out.stderr
 
 
+def test_verify_accepts_the_hosts_file_cloud_init_writes(tmp_path):
+    """`manage_etc_hosts: true` in these images makes cloud-init rewrite
+    /etc/hosts on every boot, in its own layout. A script that owned the file
+    would be overwritten and then report a difference no run could settle —
+    which is what rbp1 did after its unattended-upgrades reboot."""
+    root = tmp_path / "pi"
+    _pi_fixture(root)
+    assert run("setup", "rbp1", root=root).returncode == 0
+    (root / "etc/hosts").write_text(
+        "# Your system has configured 'manage_etc_hosts' as True.\n"
+        "127.0.1.1 rbp1 rbp1\n"
+        "127.0.0.1 localhost\n"
+    )
+
+    out = run("verify", "rbp1", root=root)
+
+    assert "etc/hosts" not in out.stdout, out.stdout
+    assert out.returncode == 0, out.stdout
+
+
 def test_verify_names_what_is_missing(tmp_path):
     (tmp_path / "home/vronteix/dockers").mkdir(parents=True)
     out = run("verify", "rbp0", root=tmp_path)
