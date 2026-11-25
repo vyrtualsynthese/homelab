@@ -207,13 +207,26 @@ lives in the `monitoring/mktxp-conf` Secret. That is the same defect this page e
 `deploy`, on the account that predates it; it is filed as its own card rather than changed here,
 because mktxp is a running service and the move needs its egress address pinned.
 
-## The plaintext services are still on
+## The plaintext services are off
 
-Both switches answer on `ftp` (21), `telnet` (23) and `www` (80), measured on 2026-11-25, while
-`www-ssl` is disabled. Telnet and FTP hand the admin password across the LAN in clear text, and
-nothing uses either: the collector and `deploy` sign in over SSH on 22, mktxp reads over the API on
-8728, and Winbox covers what `www` would. Turning them off is card 752 and changes nothing this page
-creates — `deploy` never needs them.
+Both switches answered on `ftp` (21), `telnet` (23) and `www` (80) until 2026-11-25, when all three
+were disabled on both (card 752). Telnet and FTP handed the admin password across the LAN in clear
+text, and nothing used either: the collector and `deploy` sign in over SSH on 22, mktxp reads over the
+API on 8728, and Winbox on 8291 covers what `www` would. What answers now is `ssh` (22), `api`
+(8728) and `winbox` (8291); `www-ssl` (443) and `api-ssl` (8729) stay disabled, the first for want of
+a certificate.
+
+The change was made in an `admin` SSH session, because card 698's apply script does not exist yet. It
+is three commands per switch, and they are repeatable:
+
+```
+/ip service disable [find name=ftp]
+/ip service disable [find name=telnet]
+/ip service disable [find name=www]
+```
+
+Read it back with `/ip service print where disabled`; a closed port on the client is the second
+check, since RouterOS accepts the setting and drops the listener.
 
 ## Rotate a key, or retire the account
 
