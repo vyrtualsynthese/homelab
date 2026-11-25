@@ -65,5 +65,38 @@ class AccessLogPipelineTests(unittest.TestCase):
         self.assertNotIn("Time_Format", block[0])
 
 
+class JournalTests(unittest.TestCase):
+    def test_two_inputs_select_ssh_and_kernel(self):
+        inputs = config()["inputs"]
+        self.assertEqual(inputs.count("Name systemd"), 2, "one input per selection")
+        self.assertIn("Tag host.ssh", inputs)
+        self.assertIn("Tag host.kernel", inputs)
+        # Not `_SYSTEMD_UNIT=ssh.service`: Ubuntu 22.10 and later socket-activate
+        # sshd, so a connection is a transient `ssh@<n>-<addr>.service` and a
+        # filter naming `ssh.service` ships nothing. `_COMM` matches both shapes.
+        self.assertIn("Systemd_Filter _COMM=sshd", inputs)
+        # On the directives, not the whole string: the comment above the block
+        # names the wrong unit to explain why it is not used.
+        directives = "\n".join(
+            line for line in inputs.splitlines() if not line.lstrip().startswith("#")
+        )
+        self.assertNotIn("_SYSTEMD_UNIT=ssh.service", directives)
+        self.assertIn("Systemd_Filter _TRANSPORT=kernel", inputs)
+
+    def test_each_input_resumes_rather_than_replaying(self):
+        # `DB` lives on an emptyDir, so the position dies with the pod; without
+        # Read_From_Tail a restart ships the whole persistent journal again.
+        inputs = config()["inputs"]
+        self.assertEqual(inputs.count("Read_From_Tail On"), 2)
+
+    def test_each_output_carries_a_static_unit_label(self):
+        outputs = config()["outputs"]
+        for tag, unit in (("host.ssh", "ssh"), ("host.kernel", "kernel")):
+            block = [b for b in outputs.split("[OUTPUT]") if f"Match {tag}" in b]
+            self.assertEqual(len(block), 1, tag)
+            self.assertIn(f"unit={unit}", block[0])
+            self.assertIn("source=journal", block[0])
+
+
 if __name__ == "__main__":
     unittest.main()

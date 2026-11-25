@@ -4,7 +4,11 @@
 > selector that reproduces each number — so the next pass can tell a regression from an old event.
 >
 > **Use it when** you are about to reduce log volume, or a week of logs looks larger than the last
-> measurement · **Verified** 2026-11-22 · **Kind:** living page
+> measurement · **Verified** 2026-11-22 · **Kind:** reference
+>
+> **Sources** `cluster/helm/monitoring/fluent-bit/values.yaml` (the inputs, filters and outputs that
+> decide what is shipped), `cluster/helm/monitoring/loki/values.yaml` (retention and the limits), and
+> Loki's own HTTP API through Grafana's datasource proxy, read on 2026-11-22.
 
 The numbers below were taken from Loki's own HTTP API against the live cluster. Nothing here is
 estimated: every figure has the query that produced it, and a change is only "fixed" if the number
@@ -18,6 +22,34 @@ by its stream labels rather than kept whole.
 
 About three quarters of the volume is not a signal anyone acts on: health checks logged as requests,
 a log level left at `info`, and three objects applied by hand that nothing in Git owns.
+
+### The host journal, pending
+
+Fluent Bit also ships each node's own journal in the change that adds the security detection (sshd
+auth failures as `unit="ssh"`, the kernel's ufw block lines as `unit="kernel"`, `source="journal"`).
+**Its 24-hour line count has not been measured:** the pipeline has never run, so the query answers
+nothing and no number on this page covers it. It is read on **2026-11-26**, once the sync has landed
+and a day has passed:
+
+```bash
+curl -skG -H "Authorization: Bearer $GRAFANA_TOKEN" \
+  "https://grafana.kub.local/api/datasources/proxy/uid/P8E80F9AEF21F6940/loki/api/v1/query" \
+  --data-urlencode 'query=sum by (unit) (count_over_time({source="journal"}[24h]))'
+```
+
+Read through the same proxy on 2026-11-25, `{job="fluent-bit"}` answered 176,940 lines over 24 hours
+while `{source="journal"}` and `{source="accesslog"}` both answered nothing — the two streams this
+change adds have never run, so their absence is a measurement rather than a failed query.
+
+The decision rule: the comparator is the Traefik access log, 12,494 lines and 9.2 MB of the day above.
+A journal pipeline that adds **10 %** to the store is fine. One that **doubles** it is not, and the
+`ssh` input then gains a line filter on `Failed` — an iteration, not a redesign.
+
+A `unit="ssh"` count of zero is the case to act on, not the calm one: it means the filter matched no
+daemon on that node. The input selects `_COMM=sshd` rather than `_SYSTEMD_UNIT=ssh.service` because
+Ubuntu socket-activates sshd since 22.10, where each connection is a transient `ssh@<n>-<addr>.service`
+and a unit filter ships nothing — but a container that cannot read the journal, or a node whose
+journal holds no `sshd` line, fails just as quietly, and the count is what says so.
 
 ## How to measure it
 
