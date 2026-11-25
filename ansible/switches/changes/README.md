@@ -8,6 +8,13 @@ section header its lines belong to, then the commands, exactly as `/import` woul
 set [ find interface="sfp-sfpplus1" ] pvid=20
 ```
 
+Write it that way: a path line and then the commands, which is how `/export` prints them and how a
+person reads them. The copy that goes to the switch does not look like that — each command carries its
+path on its own line (`/interface bridge port set [ find interface="sfp-sfpplus1" ] pvid=20`), because
+a verbose import runs each line in the root menu and a path on a line of its own is lost (see
+[`docs/runbooks/switch-change.md`](../../../docs/runbooks/switch-change.md)). A one-line change may be
+written either way.
+
 It is not a diff of two exports. The undo is built from these lines, so every line has to be one the
 renderer can invert: `add`, `set`, `remove`, `enable`, `disable`. A `move`, an `add` with no
 identifying attribute, or a `set` whose old value is in neither export is refused before anything is

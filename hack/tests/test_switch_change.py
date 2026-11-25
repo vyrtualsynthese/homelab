@@ -601,6 +601,31 @@ class RunTests(unittest.TestCase):
         for command in long_names:
             self.assertIn("/file print detail", command, command)
 
+    def test_the_change_is_uploaded_with_its_path_on_every_line(self):
+        # RouterOS runs a verbose import's lines in the root menu, so a file that sets its menu on a
+        # line of its own fails at its first command there — and a plain import cannot report the
+        # failure. The uploaded file therefore carries the path on each command line, and a line that
+        # already carried one is left alone. Three shapes: header then command, header then a
+        # bracket selector, and an absolute line.
+        for change, expected in (
+            ("set-pvid.rsc", '/interface bridge port set [ find interface="sfp-sfpplus2" ] pvid=20'),
+            ("disable-port.rsc", '/interface bridge port disable [ find interface="sfp-sfpplus1" ]'),
+            ("absolute-add.rsc", "/ip address add address=192.168.1.98/24 interface=bridge"),
+        ):
+            with self.subTest(change=change), fake(f"full-path-{change}") as f:
+                # --arm-only leaves the two files on the device.
+                done = f.script(["--target", "crs326", "--change", str(CHANGES / change),
+                                 "--arm-only", "--yes", "--window", "10m"])
+                name = [n for n in f.files() if n.startswith("change-")][0]
+                text = (f.state / "files" / name).read_text()
+            self.assertEqual(done.returncode, 0, done.stderr)
+            body = [line for line in text.splitlines()
+                    if line.strip() and not line.lstrip().startswith("#")]
+            self.assertTrue(body, text)
+            for line in body:
+                self.assertTrue(line.startswith("/"), line)
+            self.assertIn(expected, body)
+
     def test_a_timer_that_survives_its_removal_is_named_instead_of_claimed_gone(self):
         # The device is asked after the removal. An entry that is still there will run its undo at its
         # start-time, so the run must not say it was removed.
