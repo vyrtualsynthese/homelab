@@ -22,7 +22,7 @@ image:
   # (see the chart README).
   repository: ghcr.io/linuxserver/bazarr
   # -- Pin the full release tag. 1.6.2 is the newest stable release (26 Sep 2026).
-  tag: "v1.6.2-ls373"
+  tag: "v1.6.2-ls374"
   pullPolicy: IfNotPresent
 
 imagePullSecrets: []
