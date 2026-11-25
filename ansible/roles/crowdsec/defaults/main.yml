@@ -7,7 +7,10 @@
 crowdsec_lapi_url: "http://{{ hostvars['streaming'].ansible_host }}:30500/"
 crowdsec_package: crowdsec-firewall-bouncer-nftables
 crowdsec_keyring: /etc/apt/keyrings/crowdsec.asc
-crowdsec_repo: https://packagecloud.io/crowdsec/crowdsec/ubuntu
+# The distro-agnostic repository: `suites` below is `[any]`, and that pair must
+# agree — `<repo>/ubuntu` has no `dists/any`. This one also survives a host release
+# upgrade, where a codename suite would stop matching.
+crowdsec_repo: https://packagecloud.io/crowdsec/crowdsec/any
 crowdsec_metrics_port: 60601
 # The only host that scrapes. `ufw` filters the bouncer's listener like any other
 # INPUT port, so this is an allow rule, not a formality.
