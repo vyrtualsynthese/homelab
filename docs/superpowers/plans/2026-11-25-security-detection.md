@@ -85,6 +85,14 @@ class AccessLogTests(unittest.TestCase):
     def test_the_host_directory_is_mounted_read_write(self):
         volumes = {v["name"]: v for v in self.traefik["deployment"]["additionalVolumes"]}
         self.assertEqual(volumes["traefik-access-log"]["hostPath"]["path"], "/var/log/traefik")
+        # DirectoryOrCreate, not Directory: an emptyDir-style hostPath of type
+        # Directory refuses to mount when the path is missing, and the pod that
+        # refuses to start is the router — the whole house offline to add a log.
+        # Traefik itself survives a file it cannot open (accesslog.NewHandler
+        # logs "Unable to create access logger" and returns a nil handler); the
+        # kubelet does not survive a mount it cannot make. The Ansible role then
+        # sets 2770 65532:65532 on the directory the kubelet created as root.
+        self.assertEqual(volumes["traefik-access-log"]["hostPath"]["type"], "DirectoryOrCreate")
         mounts = {m["name"]: m for m in self.traefik["additionalVolumeMounts"]}
         self.assertEqual(mounts["traefik-access-log"]["mountPath"], "/var/log/traefik")
         self.assertFalse(mounts["traefik-access-log"].get("readOnly", False))
@@ -180,10 +188,15 @@ traefik:
     additionalVolumes:
       - name: traefik-access-log
         hostPath:
-          # A directory, not a file: logrotate renames the file, and a
-          # hostPath of type File would leave the pod holding a deleted inode.
+          # A directory, not a file, and `DirectoryOrCreate` rather than
+          # `Directory`: the kubelet refuses to mount a Directory that does not
+          # exist, and a router that will not start is the house offline to add a
+          # log. Created here as root 0755, then corrected to 2770 65532:65532 by
+          # the Ansible role; until that role runs, Traefik logs "Unable to
+          # create access logger" and serves on without writing a line, which
+          # the Phase 0 gate catches.
           path: /var/log/traefik
-          type: Directory
+          type: DirectoryOrCreate
 
   additionalVolumeMounts:
     - name: traefik-access-log
@@ -578,7 +591,7 @@ git commit -m "🚀 feature: own /var/log/traefik and its rotation on streaming"
 **Files:**
 - Modify: `docs/observability-conventions.md`
 - Modify: `docs/reference/metrics.md` (the access-log paragraph, if it names the fields)
-- Modify: `docs/superpowers/specs/2026-11-25-security-detection-design.md` (two corrections: `ClientHost`, not `ClientAddr`, is the source address, and rotation truncates in place because the host cannot signal a process in the pod)
+- Modify: `docs/superpowers/specs/2026-11-25-security-detection-design.md` (three corrections: `ClientHost`, not `ClientAddr`, is the source address; rotation truncates in place because the host cannot signal a process in the pod; the mount creates the directory because a router that will not start is worse than a log that does not)
 - Test: `hack/tests/test_check_docs.py` runs as part of `hack/check-docs.sh`
 
 **Interfaces:**
@@ -642,6 +655,19 @@ Then the rotation paragraph (§6.1, "**Rotation.**") says `create` and a `postro
 The risk row becomes: *Traefik's writer and the two tailers disagree after rotation* → **Low**
 (copy-then-truncate keeps the same inode, so there is no inode to lose; the residual cost is a few
 lines per rotation), and the open question about the inode is answered and deleted.
+
+Then the **Ownership** bullet in §6.1 says the Ansible role *pre-creates* the directory. It does not —
+a `hostPath` of type `Directory` that is missing keeps the pod from starting, so the chart declares
+`DirectoryOrCreate` and the role corrects what the kubelet made. Replace the bullet with:
+
+```markdown
+- **Ownership, and who creates the directory.** The mount is `DirectoryOrCreate`, because a
+  `hostPath` of type `Directory` that is missing refuses to mount and the pod that refuses to start
+  is the router: the whole house offline to add a log. The kubelet creates it as root; the Ansible
+  role then sets `2770` and `65532:65532`, and Traefik creates the file inside it. Until the role
+  runs, Traefik logs "Unable to create access logger" and serves on without a line — the failure
+  this section already says is silent, and the reason the gate reads the file rather than the pod.
+```
 
 - [ ] **Step 3: Run the documentation checks**
 
@@ -1954,7 +1980,8 @@ version: 0.1.0
 appVersion: "3.13.7"
 ```
 
-`values.yaml` completes Task 8's block with:
+`values.yaml` completes Task 8's block — **edit that file, do not overwrite it**: it already holds the
+`expected:` block, and Task 8's test reads it back. Add:
 
 ```yaml
   image:
@@ -2380,12 +2407,12 @@ not a quiet day.
 ### Task 12: The two numbers the danger state needs, measured before they are set
 
 **Files:**
-- Modify: `docs/reference/dashboards.md` (the measurement, in the `Homelab · Security` section Task 13 writes)
+- Modify: `docs/reference/dashboards.md` (creates the `## Homelab · Security` section with the two measured numbers; Task 13 fills in the panel table and the notes)
 - Test: none — the deliverable is a measurement with a command and a date, the way `docs/reference/log-budget.md` records its own
 
 **Interfaces:**
-- Consumes: Task 2's stream.
-- Produces: `rejectedSharePct` and `silenceMinutes`, the two constants in Task 13's expression and Task 14's silence rule.
+- Consumes: Prometheus's own request counters, which exist today, and (after this branch syncs) Task 2's stream as confirmation.
+- Produces: `rejectedSharePct` and `silenceMinutes`, the two constants in Task 13's expression and Task 14's silence rule, plus the section of `docs/reference/dashboards.md` Task 13 completes.
 
 - [ ] **Step 1: Measure the rejected share, by hour, over seven days**
 
@@ -2402,28 +2429,49 @@ curl -sG http://prometheus.kub.local/api/v1/query_range \
 Read the top of the band, not the average: the threshold is what separates a bad hour from a normal
 one, and the busiest hour is the one that would page.
 
-- [ ] **Step 2: Measure the longest gap between lines**
+- [ ] **Step 2: Measure the longest gap between requests**
+
+The silence rule reads access-log lines, but the *rhythm* that decides its threshold is visible today
+in Prometheus — the log's lines and `traefik_router_requests_total`'s increments happen on the same
+requests. Measuring from Prometheus means this task does not wait a week for the new stream:
+
+```bash
+curl -sG http://prometheus.kub.local/api/v1/query_range \
+  --data-urlencode 'query=sum(rate(traefik_router_requests_total[5m]))' \
+  --data-urlencode "start=$(date -d '7 days ago' +%s)" --data-urlencode "end=$(date +%s)" \
+  --data-urlencode 'step=300' | jq -r '.data.result[0].values[] | @tsv'
+```
+
+Read the longest run of consecutive `0` samples: that is the longest gap between requests, in
+five-minute steps, and `SecurityStackBlind` must wait longer than it. Three in a row (fifteen quiet
+minutes at 04:00) is normal for a house LAN; a ten-minute threshold would page every night.
+
+After this branch has synced, confirm against the stream itself — the two must agree within a bucket,
+because a line in the file and an increment of the counter are the same request:
 
 ```bash
 curl -skG -H "Authorization: Bearer $GRAFANA_TOKEN" \
   "https://grafana.kub.local/api/datasources/proxy/uid/P8E80F9AEF21F6940/loki/api/v1/query" \
-  --data-urlencode 'query=max_over_time(sum(count_over_time({job="fluent-bit", container="traefik"}[5m]))[7d:5m])' \
+  --data-urlencode 'query=min_over_time(sum(count_over_time({job="fluent-bit", container="traefik"}[5m]))[7d:5m])' \
   --data-urlencode "time=$(date +%s)"
 ```
 
-And the complement, which is the one that matters: the *smallest* 5-minute bucket over seven days. If it is 0 — no request at all for five minutes — then a ten-minute silence threshold is too tight and the rule pages on a quiet Tuesday.
-
 - [ ] **Step 3: Write the numbers down with their command**
 
-Add a paragraph to `docs/reference/dashboards.md` under the new dashboard's section (Task 13 creates the section; this task writes the paragraph it links to):
+Create the `## Homelab · Security` section in `docs/reference/dashboards.md` with the measurement in
+it; Task 13 adds the table row and the two panel notes to the same section, so neither task has to
+guess what the other wrote:
 
 ```markdown
+## Homelab · Security
+
 **Both thresholds were measured, on 2026-11-25.** The rejected share, by hour over seven days from
 `traefik_router_requests_total`, moved between `X %` and `Y %`; the danger state's threshold is `Z` —
 the top of the observed band plus a margin, not a round number — and it is the same family the panel
-queries, so anyone can re-run the check. The longest gap between access-log lines was `N` minutes and
-the quietest five-minute window held `M` lines, so `SecurityStackBlind` waits `2N`: a silence rule
-tighter than the log's own rhythm is a rule that pages on a quiet night.
+queries, so anyone can re-run the check. The longest gap between requests, in five-minute steps over
+the same week, was `N` steps and the quietest window held `M` requests, so `SecurityStackBlind` waits
+`2N × 5` minutes: a silence rule tighter than the traffic's own rhythm is a rule that pages on a
+quiet night.
 ```
 
 Each `X`, `Y`, `Z`, `N`, `M` is replaced with the measured value, and the commands above are quoted
@@ -2535,7 +2583,8 @@ curl -s -H "Authorization: Bearer $GRAFANA_TOKEN" \
 
 The `README.md` beside it states what the Traefik export's does: this is a snapshot to read in a pull request and to restore after a wipe, nothing applies it, and the database stays authoritative.
 
-`docs/reference/dashboards.md` gains the twelfth screen: a row in the table
+`docs/reference/dashboards.md` gains the twelfth screen **in the section Task 12 created**: its row in
+the table
 (`| Homelab · Security | \`homelab-security\` | 9 | Danger state, bans, volume, rejected share, top
 addresses, sign-in outcomes, host blocks, posture |`), and **the count in the title, the lede and the
 "All eleven refresh…" sentence becomes twelve** — a page whose header says eleven while the folder
