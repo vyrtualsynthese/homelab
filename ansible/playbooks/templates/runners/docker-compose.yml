@@ -12,15 +12,28 @@ services:
       - NET_ADMIN # Required if you are using Pi-hole as your DHCP server, else not needed
     restart: unless-stopped
   wg-easy:
-    # Pinned at 14: v15 moved its configuration into an admin panel and
-    # refuses this v14 volume. The migration is a browser wizard (card 732),
-    # and .github/renovate.json holds the major until it lands.
-    image: ghcr.io/wg-easy/wg-easy:14
+    # 15 keeps its settings — host, port, DNS, allowed IPs, peers — in its own
+    # SQLite database under ./config, not in an environment file. See
+    # docs/runbooks/pi-reflash.md for what that means after a restore.
+    image: ghcr.io/wg-easy/wg-easy:15.5.0
     container_name: wg-easy
-    env_file: "./wg-easy.env"
+    environment:
+      # The panel's port, published below as 5000 like it was on 14.
+      - PORT=5000
+      # No TLS in front of the panel: it answers plain HTTP on the LAN, and
+      # without this it refuses the session cookie it sets itself.
+      - INSECURE=true
+      # 14 handed out IPv4 addresses only, and the v14 backup carries no IPv6
+      # one. Turning it on here would add ::/0 routes to client configs.
+      - DISABLE_IPV6=true
     volumes:
       - ./config:/etc/wireguard
+      # wg-quick loads the WireGuard module on demand, and the container has to
+      # see the host's module tree to do it after a reboot.
+      - /lib/modules:/lib/modules:ro
     ports:
+      # Both sides are the panel's configured port: the interface listens on it
+      # inside the container, so the host mapping is the same number twice.
       - "@WG_UDP_PORT@:@WG_UDP_PORT@/udp"
       - "5000:5000/tcp"
     restart: unless-stopped

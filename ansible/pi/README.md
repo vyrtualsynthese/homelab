@@ -33,7 +33,8 @@ PI_ROOT=/tmp/fake-pi ./hosts-pi.sh setup rbp0
 | `etc-dnsmasq.d/02-my-wildcard-dns.conf` | yes | the wildcard names the LAN resolves through this Pi-hole |
 | `/etc/hostname`, `/etc/hosts` | yes | the name Pi-hole's DNS and the compose file depend on |
 | Docker's repository and the four packages | yes | a fresh image has no runtime; `setup` installs the pinned set from `download.docker.com` |
-| `pihole.env`, `wg-easy.env`, `.env` | **no** | they hold the Pi-hole password and the WireGuard key, and they are gitignored. `setup` requires them and names the one that is missing |
+| `pihole.env` | **no** | it holds the Pi-hole password and is gitignored. `setup` requires it and names it when it is missing |
+| `config/` (wg-easy's database) | **no** | since wg-easy 15 the panel account, host, port, DNS and peers live in `config/wg-easy.db`, not in an environment file. `backup` copies it with the rest of the stack |
 | `/boot/firmware/config.txt`, `cmdline.txt` | **no** | see below |
 
 Both config files live inside the stack directory, so `backup` and `restore` carry them with the
@@ -84,9 +85,9 @@ sudo ./hosts-pi.sh verify  rbp1
 ```
 
 `restore` comes first because a fresh image is not this host yet: its `/etc/hostname` is whatever
-cloud-init wrote, and `pihole.env`/`wg-easy.env` do not exist — `setup` refuses both, correctly, since
-it will not configure a host as something else and will not invent a secret. `restore` puts the
-backup back, and `setup` then finds a host that already calls itself `rbp1`.
+cloud-init wrote, and `pihole.env` does not exist — `setup` refuses both, correctly, since it will
+not configure a host as something else and will not invent a secret. `restore` puts the backup back,
+and `setup` then finds a host that already calls itself `rbp1`.
 
 `rbp1` goes first. `rbp0` answers LAN DNS and WireGuard while it is down, and the reverse order takes
 the house's resolver offline with nothing to fall back to.

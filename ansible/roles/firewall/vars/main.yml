@@ -66,9 +66,10 @@ firewall_rules_edge:
     comment: LAN DNS
   # A VPN client that resolves through this Pi arrives on the tunnel, not on the
   # LAN, and ufw drops it at INPUT unless the tunnel is named. `vpn_cidrs` is
-  # empty until someone reads `wg-easy.env`: if it sets WG_DEFAULT_DNS to this
-  # host's address, put the tunnel subnet (wg-easy's default is 10.8.0.0/24)
-  # there before enabling ufw, or every remote client loses name resolution.
+  # empty until someone reads the wg-easy panel's default DNS: if a client's DNS
+  # names this host's address, put the tunnel subnet (wg-easy's default is
+  # 10.8.0.0/24) there before enabling ufw, or every remote client loses name
+  # resolution.
   - port: 53
     proto: tcp
     source: vpn

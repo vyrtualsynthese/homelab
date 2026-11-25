@@ -31,8 +31,9 @@ is in [the machines](../how-it-works/nodes.md); what it runs today is in the rec
 only resolver left. The other order takes the LAN's DNS offline with nothing behind it.
 
 **A reflash is not an upgrade.** Nothing is carried across. The image writes a fresh root, and the state
-that matters — Pi-hole's blocklists and query database, the WireGuard peer set, the two env files — comes
-back from the copy taken in step 1. That is why the Pis skip the two release hops the cluster nodes take.
+that matters — Pi-hole's blocklists and query database, wg-easy's database with its peer set and panel
+account, the Pi-hole environment file — comes back from the copy taken in step 1. That is why the Pis
+skip the two release hops the cluster nodes take.
 
 ## The image
 
@@ -66,9 +67,9 @@ own `user-data` on the boot partition before the first boot — step 4. The imag
 
 - **One Pi at a time, `rbp1` first**, with the other answering `dig @192.168.1.22 <a LAN name>`.
 - **A copy of the stack off the Pi**, taken in step 1, before the disk is overwritten.
-- **The two env files are yours.** `pihole.env` holds the Pi-hole password and `wg-easy.env` holds the
-  WireGuard key. Both are gitignored, and `hosts-pi.sh` refuses to run without them rather than inventing
-  one.
+- **`pihole.env` is yours.** It holds the Pi-hole password, it is gitignored, and `hosts-pi.sh`
+  refuses to run without it rather than inventing one. wg-easy has no environment file since 15: its
+  panel account, host, port, DNS and peers live in `config/wg-easy.db`, which `backup` copies.
 - **Record what a reflash must not change**: `rpi-eeprom-update` (26.3 on `rbp0`, 13.12 on `rbp1` on
   2026-11-24) and the USB disk's model and serial. The boot order lives in the EEPROM and survives an
   image write, so a version that moves afterwards is a firmware change nobody would notice for a month.
@@ -164,9 +165,8 @@ sudo ~/hosts/pi/hosts-pi.sh verify <host>
 and the `verify` that follows `setup` is the one whose exit code counts. `setup` writes the two config files
 the stack mounts, `/etc/hostname` and `/etc/hosts`, and leaves `/boot/firmware/config.txt` and
 `cmdline.txt` alone: the image's copies are right for the disk they were written to, and `restore` puts
-them back only when the backup's `cmdline.txt` names this disk. It never
-writes the env files. Check the tree is readable by `vronteix` after the copy: a `cp -a` from a stick keeps
-the owner it was written with.
+them back only when the backup's `cmdline.txt` names this disk. It never writes `pihole.env`. Check the
+tree is readable by `vronteix` after the copy: a `cp -a` from a stick keeps the owner it was written with.
 
 A fresh image also has no container runtime, and `setup` installs that too: `docker-ce`, `docker-ce-cli`,
 `containerd.io` and `docker-compose-plugin` from Docker's own repository, then `vronteix` into the `docker`
@@ -203,11 +203,31 @@ Then the same steps are repeated for `rbp0`, once `rbp1` answers DNS. After both
 `ansible/collectors/host-audit.sh` on each host and keep the report beside the 2026-11-24 record, and
 update the measured line in [the machines](../how-it-works/nodes.md).
 
+## The wg-easy panel
+
+Since wg-easy 15 the VPN is configured in a web panel on `http://<host>:5000`, not in files. The panel
+keeps everything in `config/wg-easy.db`: the admin account, the address and port clients dial, the DNS
+servers and allowed IPs handed to new clients, and the peer list itself. `backup` copies that file with
+the rest of the stack, so a reflash brings the panel back as it was, peers included.
+
+- **The panel is plain HTTP, and the compose says so.** `INSECURE=true` is what makes it accept its own
+  login cookie over HTTP; drop the variable and the panel answers on HTTPS and refuses to log in. Port
+  5000 is not forwarded from the router, so the panel is reachable from the LAN only.
+- **The published UDP port must equal the panel's port.** The interface listens inside the container on
+  the port the panel names, and the stack maps the same number to the host (`51821` on `rbp0`, `51822` on
+  `rbp1`). Changing one without the other leaves clients dialling a closed port: the tunnel is up in the
+  panel and nothing connects.
+- **A v14 environment file in front of this container stops it.** v15 exits on startup when `PASSWORD`
+  or `PASSWORD_HASH` is in its environment, naming the migration page. That is why the service takes
+  `environment:` and no `env_file:`; the `wg-easy.env` the Pis used to hold was deleted when they moved.
+- **The admin password is reset from the host**, not by editing a file:
+  `docker compose exec wg-easy cli db:admin:reset` (or `--password <new>`).
+
 ## Rolling back
 
 There is no downgrade here either: the way back is the outgoing release's image on the same disk, then
 `restore` from the copy taken in step 1. Keep that image file until the new host has answered DNS and
-served its stack for a day — the env files and the state come back from the backup, and nothing on the Pi
+served its stack for a day — `pihole.env` and the state come back from the backup, and nothing on the Pi
 writes outside `dockers` except the boot files, which `backup` also copies.
 
 If the new image will not boot, the EEPROM's boot order is intact, so the fix is another image write
