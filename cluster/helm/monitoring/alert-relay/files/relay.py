@@ -77,7 +77,9 @@ def render_title(payload: dict) -> str:
     alerts = payload.get("alerts") or [{}]
     labels = alerts[0].get("labels") or {}
     rule = labels.get("alertname") or payload.get("title") or "Grafana alert"
-    where = labels.get("instance") or labels.get("job") or ""
+    # host first: a real alert carries instance=10.42.1.198:9902 (the scrape target)
+    # and host=nas. The pod IP tells a reader nothing and changes when the pod does.
+    where = labels.get("host") or labels.get("instance") or labels.get("job") or ""
     return f"{rule} on {where}" if where else rule
 
 
