@@ -12,9 +12,9 @@
 > **Status:** pending — the procedure below has been written from the image and the repository, not
 > from a run. The first run makes it `proved`.
 >
-> **Sources** `ansible/pi/hosts-pi.sh`, `ansible/inventory/hosts.yml`, the `edge` and `all` group
-> variables, `ansible/playbooks/templates/runners/`, the 26.04.1 image's `system-boot` partition read on
-> 2026-11-24, and [`docs/audit/hosts-2026-11-24.md`](../audit/hosts-2026-11-24.md)
+> **Sources** `ansible/pi/hosts-pi.sh`, `ansible/pi/README.md`, `ansible/inventory/hosts.yml`, the `edge`
+> and `all` group variables, `ansible/playbooks/templates/runners/`, the 26.04.1 image's `system-boot`
+> partition read on 2026-11-24, and [`docs/audit/hosts-2026-11-24.md`](../audit/hosts-2026-11-24.md)
 
 ## What this touches
 
@@ -157,8 +157,10 @@ sudo ~/hosts/pi/hosts-pi.sh verify <host>
 
 `restore` copies the tree and then verifies, so on a fresh image it exits 1 twice over: the copy's
 `docker-compose.yml` may predate the template, and the engine is not installed yet. Both are `setup`'s job,
-and the `verify` that follows `setup` is the one whose exit code counts. `setup` rewrites
-`/boot/firmware/config.txt` and `cmdline.txt` only because the image already put them there, and it never
+and the `verify` that follows `setup` is the one whose exit code counts. `setup` writes the two config files
+the stack mounts, `/etc/hostname` and `/etc/hosts`, and leaves `/boot/firmware/config.txt` and
+`cmdline.txt` alone: the image's copies are right for the disk they were written to, and `restore` puts
+them back only when the backup's `cmdline.txt` names this disk. It never
 writes the env files. Check the tree is readable by `vronteix` after the copy: a `cp -a` from a stick keeps
 the owner it was written with.
 
