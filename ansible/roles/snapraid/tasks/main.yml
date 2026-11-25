@@ -77,8 +77,33 @@
 # The run is not started here: a parity sync takes hours on this array, and a
 # playbook is not the place to wait for one. What is checked is that the tool
 # still reads the array, which is what the missing Python broke.
+#
+# A sync holds the array's content lock for most of a day, and `snapraid status`
+# then prints `Self test...`, writes `SnapRAID is already in use!` to stderr and
+# exits 1: the array answering "busy", not a host that is broken. Taken as a
+# failure it painted a correct node red at the end of `make apply` for as long
+# as the sync ran (seen on `nas`, 2026-11-25), which cost the drift report for
+# the whole of a 51 TB sync. The lock answer is therefore named in the output and
+# the run continues; every other failure still fails, because the report is in
+# stdout or the role stops.
+#
+# `check_mode: false` is what makes `make check` say anything about the array at
+# all: a `command` task is skipped under `--check`, and its register comes back
+# empty, so without it the drift report described a host it never read.
 - name: Read the array back
   ansible.builtin.command: snapraid status
   register: snapraid_status
   changed_when: false
-  failed_when: "'SnapRAID status report' not in snapraid_status.stdout"
+  check_mode: false
+  failed_when: >-
+    'SnapRAID status report' not in snapraid_status.stdout
+    and 'SnapRAID is already in use!' not in snapraid_status.stderr
+
+- name: Say that a sync holds the lock, so the read saw no report
+  ansible.builtin.debug:
+    msg: >-
+      snapraid status found the array busy, not broken: a sync holds the content
+      lock. Its report is skipped here; the 03:17 runner writes the parity
+      marker the alert reads, and the next run after the sync reads the array
+      again.
+  when: "'SnapRAID is already in use!' in snapraid_status.stderr"

@@ -2,7 +2,9 @@ import os
 import pathlib
 import re
 import subprocess
+from types import SimpleNamespace
 
+import jinja2
 import yaml
 
 REPO = pathlib.Path(__file__).resolve().parents[2]
@@ -200,6 +202,7 @@ def test_a_read_whose_output_another_task_decides_on_runs_in_check_mode():
         ("system", "system_running_kernel"),
         ("packages", "packages_hits"),
         ("nfs", "nfs_exported"),
+        ("snapraid", "snapraid_status"),
     }
     seen = set()
     for role, path in [(p.parent.parent.name, p) for p in sorted(ANSIBLE.glob("roles/*/tasks/*.yml"))]:
@@ -901,3 +904,34 @@ def test_the_identity_is_named_in_one_place():
     for path in yaml_files():
         assert "ansible_ssh_private_key_file" not in path.read_text(), path
         assert "private_key_file" not in path.read_text(), path
+
+
+def test_the_parity_read_accepts_a_syncs_lock_and_nothing_else():
+    """A sync of the whole array holds the content lock for most of a day, and
+    `snapraid status` then prints `Self test...`, writes `SnapRAID is already in
+    use!` to stderr and exits 1. That is the array saying "busy", and taken as a
+    failure it painted a correct node red at the end of the run for as long as
+    the sync lasted — seen on `nas`, 2026-11-25, during the declared-key rollout.
+
+    The condition is evaluated here rather than grepped, because "the lock answer
+    is one escape and nothing else is" is the whole decision. `status` exits 2
+    while blocks are unsynced, which on an array being written to is normal: that
+    case prints the report and stays green.
+    """
+    tasks = yaml.safe_load((ANSIBLE / "roles/snapraid/tasks/main.yml").read_text())
+    read = next(task for task in tasks if task.get("register") == "snapraid_status")
+    failed_when = jinja2.Environment().compile_expression(read["failed_when"])
+
+    def fails(rc, stdout, stderr):
+        return bool(
+            failed_when(snapraid_status=SimpleNamespace(rc=rc, stdout=stdout, stderr=stderr))
+        )
+
+    report = "SnapRAID status report\n  51 TB ...\n"
+    assert fails(0, report, "") is False, "a clean read is green"
+    assert fails(2, report, "") is False, "unsynced blocks print the report and are normal"
+    assert fails(1, "Self test...\n", "SnapRAID is already in use!\n") is False, (
+        "the lock answer is the array answering busy, not a broken host"
+    )
+    assert fails(1, "", "snapraid: error: cannot open /etc/snapraid.conf") is True
+    assert fails(1, "Self test...\n", "") is True, "a run with no report and no lock answer fails"
