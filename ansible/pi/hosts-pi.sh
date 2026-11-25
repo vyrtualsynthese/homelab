@@ -4,7 +4,7 @@
 # the host back together cannot be Ansible.
 #
 #   render  <host>        print every file this script owns; change nothing
-#   setup   <host>        write them, start the stack, print changed=N
+#   setup   <host>        install the engine, write them, start the stack, print changed=N
 #   verify  <host>        name every difference; exit 1 if there is one
 #   backup  <dir> <host>  copy the state a reflash destroys, print the byte count
 #   restore <dir> <host>  copy it back, then verify
@@ -26,6 +26,18 @@ set -euo pipefail
 
 HOSTS="rbp0 rbp1"
 STACK_DIR="/home/vronteix/dockers"
+
+# The engine and the compose plugin, from Docker's own repository. Pinned by
+# band, because nothing in this repository bumps an apt pin: an exact version
+# ages silently, which is what 28.3.2 on both Pis was. Measured 2026-11-25 in
+# the current release's suite for arm64: docker-ce 29.10.1, containerd.io 2.4.2,
+# docker-compose-plugin 5.8.0.
+DOCKER_PIN="5:29.*"
+CONTAINERD_PIN="2.4.*"
+COMPOSE_PIN="5:8.*"
+DOCKER_KEYRING="/etc/apt/keyrings/docker.asc"
+DOCKER_SOURCES="/etc/apt/sources.list.d/docker.sources"
+DOCKER_GROUP_USER="vronteix"
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TEMPLATES="$(cd "$HERE/../playbooks/templates/runners" && pwd)"
 ROOT="${PI_ROOT:-}"
@@ -86,6 +98,137 @@ require_env() {
     fi
 }
 
+# The release's own suite name, read from the running image. A reflash onto the
+# next LTS then names its own suite instead of pointing apt at a codename that
+# no longer exists; an unreadable file stops the run rather than writing an
+# empty suite into a repository line.
+suite_name() {
+    local codename=""
+    if [ -r /etc/os-release ]; then
+        codename="$(. /etc/os-release && printf '%s' "${UBUNTU_CODENAME:-${VERSION_CODENAME:-}}")"
+    fi
+    if [ -z "$codename" ]; then
+        echo "cannot read a release codename from /etc/os-release; not writing an apt suite without one" >&2
+        exit 1
+    fi
+    printf '%s\n' "$codename"
+}
+
+installed_version() {
+    dpkg-query -W -f='${Version}' "$1" 2>/dev/null || true
+}
+
+# The band is a shell glob on purpose: 5:29.10.1-1~ubuntu.26.04 matches 5:29.*
+# with its epoch and packaging suffix, and 5:30.0 does not. Do not quote $2.
+version_in_band() {
+    case "$1" in
+        ${2}) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+# The four packages and their bands, one pair per line.
+engine_pairs() {
+    printf '%s\n' \
+        "docker-ce $DOCKER_PIN" \
+        "docker-ce-cli $DOCKER_PIN" \
+        "containerd.io $CONTAINERD_PIN" \
+        "docker-compose-plugin $COMPOSE_PIN"
+}
+
+# The converged state, and the only one that needs no network.
+engine_present() {
+    local pkg band version
+    while read -r pkg band; do
+        version="$(installed_version "$pkg")"
+        [ -n "$version" ] || return 1
+        version_in_band "$version" "$band" || return 1
+    done < <(engine_pairs)
+    [ -f "$DOCKER_KEYRING" ] && [ -f "$DOCKER_SOURCES" ]
+}
+
+# A fresh image has no runtime; that is what this installs. An engine that is
+# already there is named and left alone: upgrading it restarts the daemon that
+# answers the house's DNS, and on these hosts a reflash is what moves it.
+ensure_engine() {
+    local suite pkg band version missing=0 outside=0 tmp
+
+    if [ -n "$ROOT" ]; then
+        echo "engine: not touched (PI_ROOT is set)"
+        return 0
+    fi
+    if [ "$(id -u)" -ne 0 ]; then
+        echo "the engine install needs root; run this with sudo" >&2
+        exit 1
+    fi
+    if engine_present; then
+        echo "engine: the pinned $DOCKER_PIN / $COMPOSE_PIN set is installed"
+        return 0
+    fi
+
+    while read -r pkg band; do
+        version="$(installed_version "$pkg")"
+        if [ -z "$version" ]; then
+            missing=1
+        elif ! version_in_band "$version" "$band"; then
+            outside=1
+            echo "engine: NOTE $pkg $version is outside the pinned $band; this script does not upgrade an engine in place"
+        fi
+    done < <(engine_pairs)
+
+    if [ "$missing" -eq 0 ]; then
+        return 0
+    fi
+    if [ "$outside" -eq 1 ]; then
+        echo "engine: refusing: a package above is installed outside its pin while another is missing; reflash, or align the pins" >&2
+        exit 1
+    fi
+
+    suite="$(suite_name)"
+    install -d -m 0755 "$(dirname "$DOCKER_KEYRING")"
+    tmp="$(mktemp)"
+    if ! curl -fsSL --max-time 30 https://download.docker.com/linux/ubuntu/gpg -o "$tmp"; then
+        rm -f "$tmp"
+        echo "cannot download Docker's signing key from download.docker.com" >&2
+        exit 1
+    fi
+    if [ -f "$DOCKER_KEYRING" ] && cmp -s "$tmp" "$DOCKER_KEYRING"; then
+        rm -f "$tmp"
+    else
+        install -m 0644 "$tmp" "$DOCKER_KEYRING"
+        rm -f "$tmp"
+        CHANGED=$((CHANGED + 1))
+    fi
+
+    write_abs "$DOCKER_SOURCES" "Types: deb
+URIs: https://download.docker.com/linux/ubuntu
+Suites: $suite
+Components: stable
+Architectures: arm64
+Signed-By: $DOCKER_KEYRING"
+
+    # Pinned to the bands above. A suite that carries a newer major only fails
+    # here, naming both the suite and the pins, rather than silently moving.
+    if ! DEBIAN_FRONTEND=noninteractive apt-get update -qq ||
+       ! DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+           "docker-ce=$DOCKER_PIN" "docker-ce-cli=$DOCKER_PIN" \
+           "containerd.io=$CONTAINERD_PIN" "docker-compose-plugin=$COMPOSE_PIN"; then
+        echo "the engine install failed: check that download.docker.com carries the $suite suite and that the pins above still match it" >&2
+        exit 1
+    fi
+    CHANGED=$((CHANGED + 1))
+    echo "engine: installed $DOCKER_PIN / $COMPOSE_PIN (suite $suite)"
+
+    case " $(id -nG "$DOCKER_GROUP_USER" 2>/dev/null || true) " in
+        *" docker "*) ;;
+        *)
+            usermod -aG docker "$DOCKER_GROUP_USER"
+            CHANGED=$((CHANGED + 1))
+            echo "engine: $DOCKER_GROUP_USER joined the docker group"
+            ;;
+    esac
+}
+
 root_device() {
     if [ -r "$ROOT/proc/mounts" ]; then
         awk '$2 == "/" { print $1; exit }' "$ROOT/proc/mounts"
@@ -97,7 +240,7 @@ root_device() {
 # One file, one counter of changes. Text is compared with its newlines trimmed,
 # so a file written by an older run (or by hand) is a match when the lines are,
 # and the write always ends the file with one newline.
-write_text() {
+write_abs() {
     local dest="$1" content="$2"
     mkdir -p "$(dirname "$dest")"
     if [ -f "$dest" ] && [ "$(cat "$dest")" = "$content" ]; then
@@ -122,6 +265,10 @@ cmd_render() {
     echo "--- $(compose_src "$host")"
     cat "$(compose_src "$host")"
     echo "--- $STACK_DIR/docker-compose.yml (where the block above is written)"
+    echo "--- engine, installed by setup on a real host (not under PI_ROOT)"
+    echo "repository: https://download.docker.com/linux/ubuntu, suite read from /etc/os-release"
+    echo "signed by: $DOCKER_KEYRING"
+    echo "pinned: docker-ce=$DOCKER_PIN docker-ce-cli=$DOCKER_PIN containerd.io=$CONTAINERD_PIN docker-compose-plugin=$COMPOSE_PIN"
     echo "--- /etc/hostname"
     desired_hostname "$host"
     echo "--- /etc/hosts"
@@ -145,9 +292,11 @@ cmd_setup() {
 
     require_env
 
+    ensure_engine
+
     write_from_file "$ROOT$STACK_DIR/docker-compose.yml" "$(compose_src "$host")"
-    write_text "$ROOT/etc/hostname" "$(desired_hostname "$host")"
-    write_text "$ROOT/etc/hosts" "$(desired_hosts "$host")"
+    write_abs "$ROOT/etc/hostname" "$(desired_hostname "$host")"
+    write_abs "$ROOT/etc/hosts" "$(desired_hosts "$host")"
 
     if [ -z "$ROOT" ]; then
         # --remove-orphans is what takes a service off a host when this template

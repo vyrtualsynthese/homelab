@@ -30,8 +30,30 @@ PI_ROOT=/tmp/fake-pi ./hosts-pi.sh setup rbp0
 |---|---|---|
 | `/home/vronteix/dockers/docker-compose.yml` | yes | rendered from `playbooks/templates/runners/<host>/` |
 | `/etc/hostname`, `/etc/hosts` | yes | the name Pi-hole's DNS and the compose file depend on |
+| Docker's repository and the four packages | yes | a fresh image has no runtime; `setup` installs the pinned set from `download.docker.com` |
 | `pihole.env`, `wg-easy.env`, `.env` | **no** | they hold the Pi-hole password and the WireGuard key, and they are gitignored. `setup` requires them and names the one that is missing |
 | `/boot/firmware/config.txt`, `cmdline.txt` | **no** | see below |
+
+### The engine, which `setup` installs
+
+A reflashed image has no container runtime, and the stack is four containers: `setup` installs
+`docker-ce`, `docker-ce-cli`, `containerd.io` and `docker-compose-plugin` from Docker's own
+repository, and puts `vronteix` in the `docker` group.
+
+- **The suite** (the release name apt matches on) is read from `/etc/os-release`, so a reflash onto
+  the next release names its own suite instead of pointing apt at a codename that no longer exists.
+- **The pins are bands** — `docker-ce=5:29.*`, `containerd.io=2.4.*`, `docker-compose-plugin=5:8.*`
+  — because nothing in this repository bumps an apt pin, so an exact version ages silently, which is
+  what 28.3.2 on both Pis was. A band reproduces the same major on a rebuild and refuses a jump; the
+  comment above the constants records the version measured when they were last moved.
+- **An engine that is already there is named, never replaced.** When the packages are installed
+  outside their band, `setup` prints a `NOTE` and leaves them alone: upgrading restarts the daemon
+  that answers the house's DNS, and on these hosts a reflash is what moves it. `verify` prints the
+  same note.
+- **A converged host does no network work**: with the four packages in band and the repository in
+  place, `setup` starts the stack and stops there.
+- This step needs root, so `setup` is run with `sudo`; without it the script refuses before touching
+  apt.
 
 ### Why the boot files are backed up and not written
 
