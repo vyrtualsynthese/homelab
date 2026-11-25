@@ -1,0 +1,122 @@
+"""Check that the two edge Pi-holes answer the same configuration.
+
+rbp0 is the source of truth and rbp1 conforms: when the two disagree, rbp1 is
+wrong. Most of the agreement is structural — `pihole.settings` is rendered from
+one template — but a setting changed in a panel, or a list added there, lives in
+that host's own `pihole.toml` and in no file in this repository. This is the
+check that names the difference instead of leaving it to be noticed.
+
+Input is two panel snapshots, shaped `{"config": {...}, "lists": [...]}`, read
+from each panel's own API:
+
+    GET /api/config   the settings tree
+    GET /api/lists    the blocklists, compared by address
+
+Output is one line per difference, with both values. Empty means clean.
+
+    PIHOLE_RBP0_API_KEY=… PIHOLE_RBP1_API_KEY=… python3 hack/check_pihole_parity.py
+
+Exit: 0 clean, 1 differences, 2 a panel could not be read.
+"""
+
+import json
+import os
+import sys
+import urllib.error
+import urllib.request
+
+HOSTS = {"rbp0": "192.168.1.22", "rbp1": "192.168.1.38"}
+
+# Pi-hole stores password hashes and session secrets inside the config tree. A
+# hash that differs is not drift worth reporting, and printing one is worse.
+SECRET_MARKERS = ("hash", "password", "totp", "sid", "pin")
+
+
+def snapshot(config: dict, adlists: list) -> dict:
+    """The two API answers as one tree, with the adlists keyed by address."""
+    return {
+        "config": config,
+        "lists": sorted(
+            entry.get("address", "") for entry in adlists if entry.get("address")
+        ),
+    }
+
+
+def flatten(node, prefix=""):
+    if isinstance(node, dict):
+        for key, value in node.items():
+            yield from flatten(value, f"{prefix}.{key}" if prefix else key)
+    elif isinstance(node, list):
+        yield prefix, node
+    else:
+        yield prefix, node
+
+
+def diff_panels(source: dict, replica: dict) -> list[str]:
+    """One readable line per setting that differs, source first."""
+    left = dict(flatten(source))
+    right = dict(flatten(replica))
+    lines = []
+    for key in sorted(set(left) | set(right)):
+        if left.get(key) == right.get(key):
+            continue
+        if any(marker in key.lower() for marker in SECRET_MARKERS):
+            lines.append(f"{key}: both set, contents not compared")
+            continue
+        lines.append(
+            f"{key}: rbp0={json.dumps(left.get(key, '<missing>'))[:80]}"
+            f" rbp1={json.dumps(right.get(key, '<missing>'))[:80]}"
+        )
+    return lines
+
+
+def _call(base: str, method: str, path: str, body=None, sid=None):
+    data = json.dumps(body).encode() if body is not None else None
+    request = urllib.request.Request(base + path, data=data, method=method)
+    request.add_header("Content-Type", "application/json")
+    if sid:
+        request.add_header("X-FTL-SID", sid)
+    with urllib.request.urlopen(request, timeout=15) as answer:
+        return json.loads(answer.read() or b"{}")
+
+
+def read_panel(name: str, api_key: str) -> dict:
+    base = f"http://{HOSTS[name]}"
+    session = _call(base, "POST", "/api/auth", {"password": api_key})
+    sid = (session.get("session") or {}).get("sid")
+    if not sid:
+        raise RuntimeError(f"{name}: the API key did not authenticate")
+    config = _call(base, "GET", "/api/config", sid=sid).get("config", {})
+    adlists = _call(base, "GET", "/api/lists", sid=sid).get("lists", [])
+    return snapshot(config, adlists)
+
+
+def main() -> int:
+    keys = {}
+    for name in HOSTS:
+        key = os.environ.get(f"PIHOLE_{name.upper()}_API_KEY", "").strip()
+        if not key:
+            print(f"missing PIHOLE_{name.upper()}_API_KEY in the environment", file=sys.stderr)
+            return 2
+        keys[name] = key
+    try:
+        source = read_panel("rbp0", keys["rbp0"])
+        replica = read_panel("rbp1", keys["rbp1"])
+    except (urllib.error.URLError, RuntimeError, TimeoutError) as error:
+        print(f"could not read a panel: {error}", file=sys.stderr)
+        return 2
+
+    differences = diff_panels(source, replica)
+    if not differences:
+        settings = len(set(flatten(source)))
+        print(f"result: OK ({settings} settings and both blocklist sets agree)")
+        return 0
+    print(f"rbp1 differs from rbp0 in {len(differences)} place(s):")
+    for line in differences:
+        print(f"  {line}")
+    print("result: FAIL")
+    return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())
