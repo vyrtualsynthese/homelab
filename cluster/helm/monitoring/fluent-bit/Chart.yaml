@@ -3,7 +3,7 @@ name: fluent-bit
 description: Fluent Bit - log shipping for observability
 type: application
 version: 0.1.0
-appVersion: "5.2.0"
+appVersion: "5.2.1"
 dependencies:
   - name: fluent-bit
     version: 0.58.3
