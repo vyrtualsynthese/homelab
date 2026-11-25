@@ -10,6 +10,11 @@
 
 **Spec:** `docs/superpowers/specs/2026-11-25-pi-compose-refactor-design.md`
 
+> **Rebase note (2026-11-25).** `develop` had already renamed the writer `write_text` to `write_abs`,
+> as part of the Docker-engine work that landed first, and kept `write_from_file` only for the compose
+> copy this branch replaces. Every `write_text` below is `write_abs` in the merged file, and
+> `write_from_file` goes away with `compose_src`.
+
 ## Global Constraints
 
 - Every file under `ansible/playbooks/templates/runners/` is CRLF. Preserve it; a line-ending change makes every host's next `setup` rewrite a functionally identical file.
