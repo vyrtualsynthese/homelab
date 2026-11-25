@@ -241,6 +241,9 @@ def main(argv):
     _, command = ssh_operands(argv)
     counters()
     write("commands", read("commands", "") + command + "\n")
+    # Every invocation as it arrived, options and all: a test asserts the connection options the
+    # real mode of the device needs are the ones this call would have carried.
+    write("ssh-argv", read("ssh-argv", "") + " ".join(argv) + "\n")
 
     now = datetime.strptime(read("clock").strip(), "%Y-%m-%d %H:%M:%S")
     now += timedelta(seconds=int(os.environ.get("FAKE_STEP", "10")))
