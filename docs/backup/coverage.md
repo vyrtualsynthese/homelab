@@ -55,6 +55,7 @@ nothing, which is a defect rather than a quiet night: the verifier fails it.
 | `tautulli-config` | `media-stack` | streaming | sqlite |
 | `maintainerr-config` | `media-stack` | streaming | sqlite |
 | `qbittorrent-vpn-config` | `media-stack` | streaming | files |
+| `qbittorrent-config` | `media-stack` | streaming | files |
 | `plex-config` | `media-stack` | streaming | sqlite |
 | `kavita-config` | `media-stack` | streaming | sqlite |
 | `calibre-web-automated-config` | `media-stack` | streaming | sqlite |
@@ -67,7 +68,6 @@ nothing, which is a defect rather than a quiet night: the verifier fails it.
 | `syncthing` | `-` | nfs | files |
 | `koillection` | `-` | nfs | files |
 | `traefik` | `-` | nfs | files |
-| `qbittorrent-config` | `-` | nfs | files |
 
 ## Sources
 

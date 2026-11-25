@@ -10,7 +10,7 @@
 
 **Preconditions.** The restic password and the bucket's key pair, from the Bitwarden item
 `homelab-backup-last-resort`. The repository name: `nfs` for the exports (traefik, koillection,
-qbittorrent-config, syncthing), `nodes-<node>` for a claim that lives on a node's own disk. Step 0 of
+syncthing), `nodes-<node>` for a claim that lives on a node's own disk. Step 0 of
 [restore.md](../runbooks/restore.md#step-0-a-restic-shell-in-the-cluster) opens the restic shell every
 command below runs in.
 
