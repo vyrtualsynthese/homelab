@@ -2,16 +2,17 @@
 
 > **In one line.** The Web UI and API go dead because qBittorrent's own write to `/downloads` wedges
 > the NFS client on `streaming`: one page is left waiting to be written for an I/O nothing performs,
-> and every `close()` of that file then blocks forever. Moving `/config` off NFS did not stop it and
-> neither did exporting the download volume `async`; in-flight downloads moved to local disk on
-> 2026-11-25, and the disk they moved to stalls the app the same way, so they went back to the export
-> the same evening, which restores the load that wedges (board cards 758, 777 and 782).
+> and a `close()` on that file then blocks for minutes at a time. Moving `/config` off NFS did not
+> stop it and neither did exporting the download volume `async`; in-flight downloads moved to local
+> disk on 2026-11-25, and the disk they moved to stalls the app the same way, so they went back to the
+> export the same evening, which restores the load that wedges (board cards 758, 777 and 782).
 >
 > **Use it when** qBittorrent's Web UI hangs, the exporter stops being scraped, or you want the
 > evidence gathered on 13 and 25 November, the suspects that were cleared, and what cleared the hang
-> · **Verified** 2026-11-25 21:30: four live stalls read from `/proc`, the client waiting on an I/O
+> · **Verified** 2026-11-25 22:13: five live stalls read from `/proc`, the client waiting on an I/O
 > that nothing performs while the server and the network measured clean, then a write burst that
-> pinned the node's own SSD — caught in the act with the two file descriptors that name the copy; the
+> pinned the node's own SSD — caught in the act with the two file descriptors that name the copy, and
+> later with the file-level `nfs_debug` naming the file one `close()` sat on for six minutes; the
 > router's access log and two 15-minute replays of the app's own write pattern against the export
 > · **Kind:** record
 >
@@ -576,19 +577,52 @@ write rate for a quarter of an hour, with reads mixed in, without a single call 
 wedge is not "many small writes with an open and a close on NFS" by itself. What the replay does not
 have is the app's fd handling and its own locking, which is where the next instrument points.
 
+### The catch, 22:06: one close, six minutes
+
+The catcher was armed again at 21:44 and it fired at 22:06:40, after three consecutive four-second
+timeouts on the app's own API. The app had stopped answering at 22:06:18.
+
+| Where | What the snapshot held |
+|---|---|
+| the whole node | **one** thread in `D`: `qbittorrent-nox`, an unnamed worker of the app's BitTorrent engine (`libtorrent`). qBittorrent's main thread and every other process on `streaming` were running or sleeping |
+| its kernel stack | `close()` → `nfs_file_release` → `nfs4_close_context` → `nfs4_close_sync` → `nfs4_do_close` → `rpc_wait_for_completion_task` → `rpc_wait_bit_killable`: the client was waiting for that CLOSE's remote call to finish. `retrans` stayed 0, so it was never retransmitted: the request had either not gone out or gone and never been answered. A minute later it was in the same syscall at `folio_wait_bit_common`, waiting for writeback |
+| its descriptors | two, and neither on the export: `/config/qBittorrent/lockfile` and the log. The descriptor being closed had already left the table, so the blocked call was on a file the thread had just written |
+| the file, from `nfs_debug` | `Storage.Hunter.Simulator.No.Refunds.Edition-TENOKE/tenoke-storage.hunter.simulator.no.refunds.edition.r55` |
+| the shape, in the same 14 ms | twelve cycles of `open`, `llseek`, `write` 16 KiB at an advancing offset, `flush`, `release` on that one file |
+| the mount, over ten seconds of it | CLOSE 105,304,616 → 105,328,557, about **2,400 a second**, with 408 kB dirty and 328 kB in flight. `retrans` stayed 0 |
+| the app | it did not answer again. The wedge ran six minutes fifty seconds and was ended by a pod replacement, not by itself |
+
+That rules the export out as the thing that stalls, and it moves the question one level in. The mount
+answered two thousand four hundred closes a second while **one** close, on one file, sat unfinished
+for minutes, and no other process on the node waited on the mount. So the wait is a single file's
+open context, not the server's throughput, the network, or the client's transport.
+
+The rate limit matters when reading the window: `nfs_debug` output goes through `printk`, which allows
+a burst and then throttles, so those twelve cycles are the burst the kernel let out, not a census of
+the traffic.
+
+**A defect in the catcher, for the next run.** It slices `dmesg` by absolute line number, and the ring
+buffer on this kernel is full at 1,441 lines, so the slice for the fifteen-second window reads empty:
+the messages are there, having pushed the oldest ones out. The `tail -60` it appends is what carried
+the evidence above.
+
+At 22:13 the pod was replaced, because the merge that removed the `qbittorrent-temp` claim and its
+mount (board 540) changed the pod template, and the app came back answering in 0.00–0.01 s. Which of
+the two ended the wedge cannot be told from these samples: a new pod is the exit described under
+*What is still open*, and the two happened inside the same minute.
+
 ### What is still open
 
 - **Settled, and no longer candidates:** `sync` off (tested, wedge returned); ext4 fast-commit (the
   feature is not enabled on this filesystem); a failing disk (SMART clean, no `nvme` error); the
   network and the server (no retransmission, no timeout, `nfsd` idle); the config volume (moved);
   `DiskIOWriteMode=DisableOSCache` (tested, wedge returned).
-- **The next instrument, armed and proven.** A catcher on `streaming` polls the app's own API every
-  seven seconds and, on three consecutive timeouts, writes out the host's `D`-state threads with their
-  kernel stacks, `/proc/net/rpc/nfs` and the process's open descriptors, then turns on
-  `nfs_debug 0x0040` for fifteen seconds and puts the mask back. It was tested against a live `D`
-  thread before being left to run — that reading is what named the copy onto `sda` — and it is waiting
-  for a stall whose wait is in NFS: `retrans` stayed 0 through the earlier wedges, so nothing is queued
-  again and no timeout fires.
+- **The instrument fired, and the reading is above** (*The catch, 22:06*): one close on one file, left
+  unfinished for minutes, while the mount served 2,400 closes a second and `retrans` stayed 0. What it
+  does not say is why that one CLOSE did not complete, and that is now the question: the file's state
+  on the client, or `nfsd` on `nas` holding that inode. The client half is reachable with a build that
+  carries symbols; the server half with `rpcdebug -m nfsd -s file` run while the client's stack is
+  live.
 - **A second cause, on the server, worth its own look.** `nas` carried load average 20–28 from 19:45
   to 19:55 while both 970 EVO reported idle traffic and the disk queue stayed at 0.04–0.09: two dozen
   tasks were blocked long enough to move the load average and not long enough to be caught at a
@@ -605,9 +639,10 @@ have is the app's fd handling and its own locking, which is where the next instr
 - **Still untested — a stack trace with symbols.** The instrument that names the lock and the line is
   a qBittorrent build that carries its symbols, running under the same NFS volume until the event loop
   parks.
-- **Still untested — the kernel-side shape.** The server's `rpcdebug -m nfsd -s file` names every
-  file handle it serves; the client's `rpcdebug -m nfs -s file` names every file it opens. Run both
-  while the `close()` stack is live and the file is named, not inferred.
+- **Answered for the client, still open on the server.** The client's `nfs_debug` named the file the
+  blocked `close()` was on, so that half of the kernel-side shape is no longer inferred. What is left
+  is the server's: `rpcdebug -m nfsd -s file` on `nas` while the client's `close()` stack is live, to
+  see whether `nfsd` was serving that file, waiting on its disk, or not holding it at all.
 
 The way out of the app when the event loop is parked is still the kernel-side one: stop the pod, detach
 the pod's NFS mounts in the node's mount namespace, start the pod. A container restart alone does not
