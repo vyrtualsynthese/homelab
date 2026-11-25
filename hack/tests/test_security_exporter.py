@@ -6,10 +6,12 @@ posture panel that says the door is shut while a route answers the world. This
 test reads both and fails on a difference.
 """
 
+import json
 import pathlib
 import sys
 import unittest
 import unittest.mock
+from datetime import datetime, timezone
 
 import yaml
 
@@ -247,3 +249,153 @@ class PageTests(unittest.TestCase):
         with unittest.mock.patch.object(exporter, "fetch", side_effect=RuntimeError("403")):
             with self.assertRaises(RuntimeError):
                 exporter.measure(set())
+
+
+class AuthentikTests(unittest.TestCase):
+    """The window arithmetic, which is where a paginated API lies.
+
+    `/api/v3/events/events/` returns a page. A burst is counted only if the
+    request asks for the whole window in one page and the client keeps asking
+    until the window is exhausted; a test with a fixed fixture proves the
+    counting, not the transport. The transport is measured: the server caps
+    `page_size` at 100 whatever is asked, so a client that reads one answer
+    silently undercounts a busy day. No test here touches the network: the
+    opener is injected.
+    """
+
+    class Answer:
+        """The sliver of `http.client.HTTPResponse` the fetcher reads."""
+
+        def __init__(self, body, status=200):
+            self.status = status
+            self._body = json.dumps(body).encode()
+
+        def read(self):
+            return self._body
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+    def load(self):
+        import importlib.util
+        path = ROOT / "cluster/helm/security/security-exporter/files/exporter.py"
+        spec = importlib.util.spec_from_file_location("security_exporter", path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+
+    def now(self):
+        return datetime(2026, 11, 25, 12, 0, tzinfo=timezone.utc)
+
+    def test_outcomes_are_bucketed_the_way_the_rule_reads_them(self):
+        exporter = self.load()
+        events = [
+            {"action": "login_failed"},
+            {"action": "login_failed"},
+            {"action": "login"},
+            {"action": "logout"},
+        ]
+        counts = exporter.count_outcomes(events)
+        assert counts["failure"] == 2
+        assert counts["success"] == 1
+        assert counts["other"] == 1
+
+    def test_the_request_asks_for_the_whole_window_and_the_whole_page(self):
+        exporter = self.load()
+        url = exporter.events_url(datetime(2026, 11, 25, 12, 0, tzinfo=timezone.utc), 15)
+        assert "page_size=1000" in url
+        assert "created__gte=2026-11-25T11%3A45" in url or "created__gte=2026-11-25T11:45" in url
+        assert "ordering=-created" in url
+
+    def test_two_pages_are_followed_and_both_are_counted(self):
+        # The test that fails if the loop is dropped: the server caps a page at
+        # 100 events, so a 24-hour window is several pages and page one is not
+        # the window. `pagination.next` is an integer page number here, not a URL.
+        exporter = self.load()
+        requested = []
+        pages = [
+            {"results": [{"action": "login_failed"}, {"action": "logout"}],
+             "pagination": {"count": 4, "total_pages": 2, "next": 2}},
+            {"results": [{"action": "login_failed"}, {"action": "login"}],
+             "pagination": {"count": 4, "total_pages": 2, "next": None}},
+        ]
+
+        def opener(request, timeout=None):
+            requested.append(request.full_url)
+            return self.Answer(pages.pop(0))
+
+        events = exporter.fetch_authentik("token", self.now(), 15, opener=opener)
+        counts = exporter.count_outcomes(events)
+        self.assertEqual(counts, {"success": 1, "failure": 2, "other": 1})
+        self.assertEqual(len(requested), 2)
+        self.assertIn("page=2", requested[1])
+
+    def test_the_window_is_applied_here_because_the_api_ignores_the_bound(self):
+        # Measured: `/events/events/` has no date filter, so `created__gte` is
+        # ignored and the answer holds the whole retention period. Counting that
+        # as "the last 15 minutes" would publish a week of events. The walk stops
+        # at the first event older than the window, which is also why page two is
+        # never requested here.
+        exporter = self.load()
+        requested = []
+
+        def opener(request, timeout=None):
+            requested.append(request.full_url)
+            return self.Answer({"results": [
+                {"action": "login_failed", "created": "2026-11-25T11:59:00Z"},
+                {"action": "login", "created": "2026-11-25T11:50:00Z"},
+                {"action": "logout", "created": "2026-11-25T11:40:00Z"},
+            ], "pagination": {"next": 2}})
+
+        events = exporter.fetch_authentik("token", self.now(), 15, opener=opener)
+        self.assertEqual(exporter.count_outcomes(events),
+                         {"success": 1, "failure": 1, "other": 0})
+        self.assertEqual(len(requested), 1)
+
+    def test_a_refusal_and_the_page_cap_raise_instead_of_a_partial_count(self):
+        # A partial list would publish a number that is quietly too small, which
+        # reads exactly like a quiet day. Both paths raise.
+        exporter = self.load()
+
+        def refusing(request, timeout=None):
+            return self.Answer({}, status=403)
+
+        with self.assertRaises(RuntimeError):
+            exporter.fetch_authentik("token", self.now(), 15, opener=refusing)
+
+        endless = {"results": [{"action": "login"}], "pagination": {"next": 2}}
+
+        def always_more(request, timeout=None):
+            return self.Answer(endless)
+
+        with self.assertRaises(RuntimeError):
+            exporter.fetch_authentik("token", self.now(), 15, opener=always_more)
+
+    def test_the_signins_appear_only_after_a_successful_authentik_read(self):
+        # No token, or no read yet: the families are absent, never zero. After a
+        # good read all three outcomes are published, because a zero there is a
+        # measurement.
+        exporter = self.load()
+        before = exporter.render(exporter.Snapshot(73, 0, 9, 9, 1795000000.0))
+        self.assertNotIn("homelab_authentik_signins_15m", before)
+        self.assertNotIn("homelab_authentik_signins_24h", before)
+
+        after = exporter.render(exporter.Snapshot(
+            73, 0, 9, 9, 1795000000.0,
+            exporter.SignIns(
+                {"success": 3, "failure": 0, "other": 1},
+                {"success": 9, "failure": 2, "other": 4},
+            ),
+        ))
+        for name in ("homelab_authentik_signins_15m", "homelab_authentik_signins_24h"):
+            self.assertIn(f"# HELP {name} ", after)
+            self.assertIn(f"# TYPE {name} gauge", after)
+        for outcome in ("success", "failure", "other"):
+            self.assertIn(f'outcome="{outcome}"', after)
+        self.assertIn('homelab_authentik_signins_24h{outcome="failure"} 2', after)
+        # An address is never a label: the per-address view is a Loki query.
+        self.assertNotIn("address=", after)
+        self.assertNotIn("client_ip=", after)

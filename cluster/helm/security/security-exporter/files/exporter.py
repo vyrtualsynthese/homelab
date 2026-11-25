@@ -11,7 +11,11 @@ that fails the moment it disagrees with `hack/check_exposure.py`.
 The poll loop and the HTTP server are separate threads on purpose: a poll that
 hangs on the API server must not stop `/metrics` answering, and a failed poll
 leaves both the last snapshot and the success timestamp exactly where they were,
-so `SecurityStackBlind` reads a number that only moves on success.
+so `SecurityStackBlind` reads a number that only moves on success. The timestamp
+covers every configured source: the cluster read always, and the authentik sign-in
+read when a token is present, so an authentik outage stops it rather than leaving
+stale counts looking live. With no token the exporter is posture-only and
+publishes no sign-in family at all — a zero there would read as a quiet day.
 
 Deployed from the chart's ConfigMap; the account reads two lists and nothing
 else, see `templates/rbac.yaml`.
@@ -24,8 +28,9 @@ import ssl
 import sys
 import threading
 import time
+import urllib.parse
 import urllib.request
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import NamedTuple
 
@@ -39,6 +44,13 @@ PORT = int(os.environ.get("PORT", "9105"))
 INTERVAL = int(os.environ.get("INTERVAL_SECONDS", "60"))
 REQUEST_TIMEOUT = 10
 POD_TEMPLATE_HASH = re.compile(r"-[a-z0-9]{5,10}$")
+# From values.yaml, so the endpoint is a chart decision and not a constant in code.
+AUTHENTIK_URL = os.environ.get("AUTHENTIK_URL", "https://authentik.kub.home.ashudev.com")
+# The server caps `page_size` at 100 however large a value is asked for, so a
+# busy day is several pages. Twenty is far past the measured window and is a cap
+# rather than a promise: reaching it raises, because a partial list would publish
+# a sign-in count that is silently too small.
+AUTHENTIK_PAGE_CAP = 20
 
 
 class Posture(NamedTuple):
@@ -47,12 +59,22 @@ class Posture(NamedTuple):
     public: int
 
 
+class SignIns(NamedTuple):
+    """Both windows, bucketed. Present only after a successful authentik read."""
+
+    last_15m: dict[str, int]
+    last_24h: dict[str, int]
+
+
 class Snapshot(NamedTuple):
     routes: int
     ungated: int
     public: int
     privileged: int
     last_success: float
+    # None means "not read": no token configured, or no successful authentik read
+    # yet. `render()` publishes no sign-in family in that case, never a zero.
+    signins: SignIns | None = None
 
 
 def _middleware_names(route):
@@ -189,6 +211,103 @@ def privileged(pods) -> int:
     return len(controllers)
 
 
+def count_outcomes(events):
+    """Bucket authentik's event actions into the three outcomes the rules read.
+
+    `login_failed` is a failure and `login` a success; everything else is
+    `other`, which keeps `model_updated` noise from being counted as a sign-in.
+    `login_success` is not an action the API emits today — it is here for
+    forward-compatibility, so a rename upstream does not read as "no sign-ins".
+
+    One deliberate omission: no event carries an address into a label. The counts
+    are aggregate; the per-address view is a Loki query against the gate's log.
+    """
+    counts = {"success": 0, "failure": 0, "other": 0}
+    for event in events:
+        action = event.get("action") or ""
+        if action == "login_failed":
+            counts["failure"] += 1
+        elif action in ("login", "login_success"):
+            counts["success"] += 1
+        else:
+            counts["other"] += 1
+    return counts
+
+
+def events_url(now, minutes, page=None):
+    """One page of the events window that ends at `now`.
+
+    `page_size=1000` is in the URL because it is asked for, not because it is
+    received: the server caps a page at 100 whatever the request says, so the
+    caller must walk pages rather than trust one answer. `page` is added only when
+    following `pagination.next`, which is an integer page number, not a URL.
+    """
+    since = (now - timedelta(minutes=minutes)).strftime("%Y-%m-%dT%H:%M:%S")
+    url = (f"{AUTHENTIK_URL}/api/v3/events/events/"
+           f"?page_size=1000&ordering=-created&created__gte={urllib.parse.quote(since)}")
+    if page is not None:
+        url += f"&page={page}"
+    return url
+
+
+def _created(event):
+    """The event's own timestamp, or None when the payload has none.
+
+    authentik writes RFC 3339 with a `Z`; `fromisoformat` reads it on 3.11+.
+    """
+    stamp = event.get("created")
+    if not stamp:
+        return None
+    try:
+        return datetime.fromisoformat(str(stamp).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
+def fetch_authentik(token, now, minutes, opener=urllib.request.urlopen):
+    """Every event in the window, walking pages until the window is exhausted.
+
+    The server has no date filter: its OpenAPI schema offers pagination,
+    `ordering` and `search` on `/events/events/` and nothing else, and a measured
+    `created__gte` in the last 24 hours came back with events eight days old. The
+    bound stays in the URL because it is the shape of the request, but the window
+    is applied here, on each event's own `created`, and the walk stops at the first
+    event that is older than the window. Without that the "15m" family would
+    publish every event in the retention period.
+
+    A non-200 raises, and so does a window that still has pages after
+    `AUTHENTIK_PAGE_CAP`: a partial list would undercount a burst while looking
+    exactly like a quiet day, which is the one thing a sign-in count must not do.
+    The opener is injectable so the tests prove the transport without a network.
+    """
+    cutoff = now - timedelta(minutes=minutes)
+    events = []
+    page = None
+    for _ in range(AUTHENTIK_PAGE_CAP):
+        request = urllib.request.Request(
+            events_url(now, minutes, page),
+            headers={"Authorization": f"Bearer {token}", "Accept": "application/json"},
+        )
+        with opener(request, timeout=REQUEST_TIMEOUT) as answer:
+            if answer.status != 200:
+                raise RuntimeError(f"authentik events: HTTP {answer.status}")
+            body = json.loads(answer.read())
+        for event in body.get("results") or []:
+            created = _created(event)
+            # Newest first, so the first old event ends the window. An event with
+            # no readable timestamp is kept: a missing count is invisible, and
+            # this is the only place an event could be lost.
+            if created is not None and created < cutoff:
+                return events
+            events.append(event)
+        page = (body.get("pagination") or {}).get("next")
+        if not page:
+            return events
+    raise RuntimeError(
+        f"authentik events: still more pages after {AUTHENTIK_PAGE_CAP}; refusing a partial count"
+    )
+
+
 def fetch(path: str):
     """One API read under the pod's own read-only identity.
 
@@ -208,13 +327,28 @@ def fetch(path: str):
         return json.loads(answer.read())
 
 
-def measure(public: set[str], now: datetime | None = None) -> Snapshot:
-    """One full poll. Raising here is how a failure keeps the old timestamp."""
+def measure(public: set[str], now: datetime | None = None, opener=urllib.request.urlopen) -> Snapshot:
+    """One full poll. Raising here is how a failure keeps the old timestamp.
+
+    The cluster is always read; authentik only when `AUTHENTIK_TOKEN` is set. A
+    token that is present but cannot be read raises, so both the previous counts
+    and the success timestamp stay where they were — a failed read must never
+    look like a quiet day.
+    """
+    now = now or datetime.now(timezone.utc)
     documents = fetch(INGRESS_ROUTE_URL).get("items") or []
     counted = posture(documents, public)
     pods = fetch(PODS_URL).get("items") or []
-    stamp = (now or datetime.now(timezone.utc)).timestamp()
-    return Snapshot(counted.routes, counted.ungated, counted.public, privileged(pods), stamp)
+    token = os.environ.get("AUTHENTIK_TOKEN", "").strip()
+    signins = None
+    if token:
+        signins = SignIns(
+            count_outcomes(fetch_authentik(token, now, 15, opener=opener)),
+            count_outcomes(fetch_authentik(token, now, 24 * 60, opener=opener)),
+        )
+    return Snapshot(
+        counted.routes, counted.ungated, counted.public, privileged(pods), now.timestamp(), signins
+    )
 
 
 FRESHNESS = [
@@ -224,7 +358,7 @@ FRESHNESS = [
 
 
 def render(state: Snapshot) -> str:
-    """The page, five families and no labels: Prometheus is open on the LAN.
+    """The page, seven families at most, and no labels: Prometheus is open on the LAN.
 
     Before the first successful poll only the freshness family is published. A
     zero for `ungated_routes` or `privileged_workloads` is not "nothing found", it
@@ -232,10 +366,16 @@ def render(state: Snapshot) -> str:
     operator who sees the numbers absent reaches for the freshness family, while
     one who sees a zero believes the cluster. Publishing only the timestamp also
     keeps `up == 1` from meaning anything it does not.
+
+    The sign-in families follow the same rule one step further: they appear only
+    when `signins` is set, which is only after a successful authentik read. With
+    no token there is no read, so there is no family — never three zeros that
+    would read as a quiet day. Once the read succeeds, a zero is a measurement and
+    all three outcomes are published.
     """
     if state.last_success <= 0:
         return "\n".join([*FRESHNESS, "homelab_security_exporter_last_success_timestamp_seconds 0", ""])
-    return "\n".join([
+    lines = [
         "# HELP homelab_security_ingress_routes Live IngressRoute objects that publish a host.",
         "# TYPE homelab_security_ingress_routes gauge",
         f"homelab_security_ingress_routes {state.routes}",
@@ -248,10 +388,24 @@ def render(state: Snapshot) -> str:
         "# HELP homelab_security_privileged_workloads Distinct Running controllers with a privileged container.",
         "# TYPE homelab_security_privileged_workloads gauge",
         f"homelab_security_privileged_workloads {state.privileged}",
+    ]
+    if state.signins is not None:
+        for name, window, counts in (
+            ("homelab_authentik_signins_15m", "the last 15 minutes", state.signins.last_15m),
+            ("homelab_authentik_signins_24h", "the last 24 hours", state.signins.last_24h),
+        ):
+            lines += [
+                f"# HELP {name} Sign-in attempts in {window}, by outcome.",
+                f"# TYPE {name} gauge",
+            ]
+            for outcome in ("failure", "success", "other"):
+                lines.append(f'{name}{{outcome="{outcome}"}} {counts[outcome]}')
+    lines += [
         *FRESHNESS,
         f"homelab_security_exporter_last_success_timestamp_seconds {int(state.last_success)}",
         "",
-    ])
+    ]
+    return "\n".join(lines)
 
 
 # Zero is the honest first answer: nothing has been read yet, and a timestamp of
@@ -309,6 +463,12 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main() -> int:
+    # One line, once, and not once a poll: the Application syncs before the
+    # operator creates the token Secret, and that pod is healthy and posture-only
+    # rather than crashing on a token that is not there yet.
+    if not os.environ.get("AUTHENTIK_TOKEN", "").strip():
+        print("AUTHENTIK_TOKEN is empty: sign-in counting is off until its Secret exists; "
+              "posture only", file=sys.stderr, flush=True)
     threading.Thread(target=poll_forever, args=(PUBLIC_HOSTS, INTERVAL), daemon=True).start()
     # Threaded so a slow scrape cannot hold the next one; the state is a single
     # immutable tuple behind a lock, so there is nothing else to coordinate.
