@@ -83,9 +83,17 @@ Three rules narrow that for the packages where it does not fit:
   clothes — [`postgres-restore.md`](postgres-restore.md) is the procedure, and it is not something a
   merge button should start. Two `packageRules` entries on the `postgres` image do the work:
   `separateMajorMinor: true` keeps 18's patches flowing on their own branch, and
-  `dependencyDashboardApproval: true` scoped to `major` puts 19 on the dependency dashboard under
-  **Pending Approval** without creating a branch. A new major is learned from that entry, and a tick
-  beside it is what creates the pull request; until then no PR exists to merge by accident.
+  `dependencyDashboardApproval: true` scoped to `major` puts a new major on the dependency dashboard
+  under **Pending Approval** without creating a branch. A tick beside it is what creates the pull
+  request; until then no PR exists to merge by accident.
+
+  **The section is not always Pending Approval.** PostgreSQL 19 already had a branch before the rule
+  existed, and the 2026-11-25 repair that rebased every `renovate/*` branch onto `develop` made it
+  manually edited, which Renovate states plainly (`PR Edited (Blocked)`). Closing the PR moves the
+  entry to `PR Closed (Blocked)` with a recreate checkbox rather than to the approval entry — no
+  branch and no PR, so still nothing to merge, but **that checkbox is itself an approval**: on
+  2026-11-25 ticking it opened #1555 in under a minute, and the PR was closed again. Read the state
+  before clicking, and treat the tick as "start the migration", not "ask a question".
 - **Traefik groups the chart and the image it ships.** The wrapper chart in
   `cluster/helm/platform/traefik` pins both the chart dependency and the `image.tag` inside it, and
   each chart release carries the image that belongs with it: chart `43.0.0` ships Traefik `3.8.0`. A
