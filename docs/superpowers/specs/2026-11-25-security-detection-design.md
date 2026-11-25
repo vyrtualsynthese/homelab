@@ -216,13 +216,16 @@ by putting the file in the middle.
    `additionalVolumeMounts`. Traefik writes to the file instead of stdout, so the container's stdout
    no longer carries requests.
 3. Fluent Bit gains a second tail input over that `hostPath`, parses the JSON, **removes
-   `RequestPath` and `request_User-Agent` with a `modify` filter**, and sends the rest to Loki under
-   its own tag. The two Traefik dashboard rows that read the access log keep working, and the
-   30-day store keeps exactly today's field list plus the client address.
+   `RequestPath`, `request_User-Agent` and `RequestReferer` with a `modify` filter**, and sends the
+   rest to Loki under its own tag. `RequestReferer` is already absent from the file, because Traefik
+   drops it before writing; the filter names it anyway, so a later change to that drop list cannot
+   leak it. The two Traefik dashboard rows that read the access log keep working, and the 30-day
+   store keeps exactly today's field list plus the client address.
 
-So the path exists in two places: `/var/log/traefik/access.log` on `streaming`, root-owned and
-rotated, and briefly in the agent's memory, where a scenario's bucket lives and dies. It is a
-capability-bearing string (FileBrowser's share links) and it is not stored for thirty days.
+So the path exists in two places: `/var/log/traefik/access.log` on `streaming`, mode `0660` and owned
+by `65532:65532`, rotated, and briefly in the agent's memory, where a scenario's bucket lives and
+dies. It is a capability-bearing string (FileBrowser's share links) and it is not stored for thirty
+days.
 
 Two mechanical details, settled in this change rather than guessed here:
 
@@ -520,8 +523,7 @@ that touch a host.
 ## 10. What is left to the builder
 
 - The exact `accessLog` key shape in chart 42.4.1 and the JSON key names Traefik actually emits, so
-  the Fluent Bit key-removal filter removes the right two.
-- The directory ownership that lets an unprivileged Traefik write and an unprivileged agent read.
+  the Fluent Bit key-removal filter names the right keys.
 - The CrowdSec parser and the four scenarios, proved against a real line and against normal Plex
   traffic, which is the busiest thing in the log.
 - The bouncer key's route from the cluster to the host, and which of §6.3's two liveness routes works.
