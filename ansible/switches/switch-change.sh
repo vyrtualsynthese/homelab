@@ -650,7 +650,8 @@ change_run() {
   # first write, and cancelling a stale timer is a write.
   if ! render_undo "$major" "$change" "$plain" "$verbose" > "$undo_file"; then
     rm -rf "$dir"
-    die "nothing was changed: the change cannot be undone"
+    warn "nothing was changed: the change cannot be undone"
+    exit 1
   fi
   cp "$change" "$change_file"
 
