@@ -114,7 +114,12 @@ device_now() {                            # device_now <host>
   date=$(printf '%s\n' "$out" | awk '/^[[:space:]]*date:/ { print $2; exit }')
   time=$(printf '%s\n' "$out" | awk '/^[[:space:]]*time:/ { print $2; exit }')
   [ -n "$date" ] && [ -n "$time" ] || return 1
-  # RouterOS 6 and 7 write the date differently; one shape for arithmetic.
+  # RouterOS 6 writes `nov/25/2026` where 7 writes `2026-11-25`, and GNU date reads neither slash
+  # form. Spacing the three parts is the shape it does read.
+  case "$date" in
+    [0-9][0-9][0-9][0-9]-*) : ;;
+    *) date=$(printf '%s' "$date" | awk -F/ 'NF == 3 { printf "%s %s %s", $1, $2, $3 }') ;;
+  esac
   date -d "$date $time" '+%Y-%m-%d %H:%M:%S' 2>/dev/null || return 1
 }
 
@@ -163,6 +168,12 @@ start_time_for() {                        # start_time_for "<date> <time>" <seco
     exit 1
   fi
   printf '%s\n' "$at"
+}
+
+# An option with no value is a usage error, not an unset variable: `--target` alone would otherwise
+# die inside bash's own message with the wrong status.
+need() {
+  [ $# -ge 2 ] || die "$1 needs a value"
 }
 
 # Ask the one question this script asks. A pipeline or a cron has no terminal, and a run that assumed
@@ -325,16 +336,19 @@ render_undo() {
   function emit(s) { out[++outn] = s }
 
   function refuse_path(path, lineno) {
-    if (path ~ /^\/import([ \t]|$)/) { do_refuse(lineno, "/import may not appear in a change: it runs another file"); return 1 }
-    if (path ~ /^\/(system scheduler|user|system reset|system backup)([ \t]|$)/) {
-      do_refuse(lineno, path " may not be changed: it could remove the undo timer or the account that cancels it")
+    if (path ~ /^\/import([ \t=]|$)/) { do_refuse(lineno, "/import may not appear in a change: it runs another file"); return 1 }
+    # The family is matched by prefix, not by a word boundary: `/system reset-configuration` follows
+    # `reset` with a hyphen, and a boundary check let it through as a section header.
+    if (path ~ /^\/(user|file|system[[:space:]]+(scheduler|reset|reboot|backup|upgrade))/ \
+        || path ~ /^\/(user|file)([[:space:]]|$)/) {
+      do_refuse(lineno, path " may not be changed: it could remove the undo timer, the file that holds the undo, or the account that cancels it")
       return 1
     }
     return 0
   }
 
   # ---------------------------------------------------------------- the three verbs
-  function undo_add(path, args, lineno,   t, n, i, keys, kn, k, v, key) {
+  function undo_add(path, args, lineno,   t, n, i, keys, kn, k, v, key, j, existing) {
     n = tokens(args, t)
     split("name comment address dst-address interface mac-address", keys, " "); kn = 6
     for (i = 1; i <= kn; i++) {
@@ -342,6 +356,20 @@ render_undo() {
     }
     if (k == "") {
       do_refuse(lineno, "an add with no identifying attribute (name, comment, address, dst-address, interface, mac-address)")
+      return
+    }
+    if (v ~ /}/) {
+      do_refuse(lineno, "the value of " k " holds a brace, which would close the guard the undo is written in")
+      return
+    }
+    # The undo removes whatever matches the key. If the export already holds an object under it, the
+    # removal could take that one as well, and a revert must never destroy something the change did
+    # not create.
+    existing = 0
+    for (j = 1; j <= ocount[path]; j++)
+      if (unq(obj_value(oargs[path, j], k)) == unq(v)) existing++
+    if (existing > 0) {
+      do_refuse(lineno, "the plain export already holds " existing " object(s) matching " k "=" unq(v) ", so an undo could remove one the change did not add")
       return
     }
     key = render_key(k, v)
@@ -370,9 +398,16 @@ render_undo() {
     an = tokens(after, at)
     for (i = 1; i <= an; i++) {
       k = keyname(at[i])
-      if (k == "") continue
+      if (k == "") {
+        do_refuse(lineno, "cannot undo the argument \"" at[i] "\": it sets no property, so the undo has nothing to put back")
+        return
+      }
       oldv = obj_value(vargs[path, vidx], k)
       if (oldv == "") { do_refuse(lineno, "no old value for " k " in the verbose export"); return }
+      if (oldv ~ /}/) {
+        do_refuse(lineno, "the old value of " k " holds a brace, which would close the guard the undo is written in")
+        return
+      }
       emit(":if ([:len [" path " find " selsel "]] > 0) do={ " path " set [find " selsel "] " k "=" oldv " }")
     }
   }
@@ -382,8 +417,9 @@ render_undo() {
     selsel = render_sel(SEL)
     idx = find_one(path, SEL, "plain", lineno)
     if (!idx) return
-    want = (verb == "disable") ? "enable" : "disable"
-    if (obj_value(oargs[path, idx], "disabled") == "yes") want = (verb == "disable") ? "disable" : "enable"
+    # The undo restores the state the export holds, and the verb says nothing about it: enabling a
+    # port that was already enabled has to stay enabled, not be disabled by its own revert.
+    want = (obj_value(oargs[path, idx], "disabled") == "yes") ? "disable" : "enable"
     emit(":if ([:len [" path " find " selsel "]] > 0) do={ " path " " want " [find " selsel "] }")
   }
 
@@ -396,6 +432,13 @@ render_undo() {
       if (!split_cmd(line, t, n)) {
         path = trim(line)
         if (refuse_path(path, lineno)) return
+        # A line with no known verb is normally a section header. One that carries an argument, a
+        # selector or an assignment is a command written absolutely, and nothing in the undo
+        # covers it: `move [find …] destination=1` was silently dropped here.
+        if (path ~ /[=\[{"]/) {
+          do_refuse(lineno, "cannot undo the command \"" path "\": a line this renderer does not know is not a section header")
+          return
+        }
         cur["change"] = path; return
       }
       path = PATH
@@ -441,6 +484,8 @@ render_undo() {
   END {
     if (p_major != "" && p_major != major)
       fail("says RouterOS " p_major ", but --major " major " was given")
+    if (!refused && outn == 0)
+      fail("the change holds no line this renderer can invert, so there is no undo to arm")
     if (refused) exit 1
     for (i = outn; i >= 1; i--) print out[i]
   }
@@ -476,10 +521,11 @@ files_remove() {                           # files_remove <host> <id>
 
 # The RouterOS error line of a failed import, or nothing. ssh's own words ("Connection closed by
 # remote host") are not a RouterOS error: the change may have landed and taken the session with it,
-# so only a line the device itself prints starts the on-demand undo.
+# so only a line the device itself prints starts the on-demand undo. The whole capture is searched,
+# because `verbose=yes` echoes the commands it ran and the failure is rarely the first line.
 import_error_line() {                      # import_error_line <capture>
-  printf '%s\n' "$1" | awk 'NF { print; exit }' | grep -E \
-    'bad command|expected end of command|syntax error|invalid value|failure:|no such item|input does not match'
+  printf '%s\n' "$1" | grep -E -m1 -e 'bad command' -e 'expected end of command' \
+    -e 'syntax error' -e 'invalid value' -e 'failure:' -e 'no such item' -e 'input does not match'
 }
 
 # Print the difference between the pre-change export and the device's current one, with both sides
@@ -509,8 +555,8 @@ disarm() { ARMED_ENTRY=""; ARMED_HOST=""; ARMED_START=""; }
 
 # Phases 3 and 4: apply the change, then find out which of three things happened — the change landed,
 # the timer put the old configuration back, or the switch never answered again.
-change_apply_and_verify() {                # change_apply_and_verify <host> <id> <dir> <plain>
-  local host="$1" id="$2" dir="$3" plain="$4"
+change_apply_and_verify() {                # change_apply_and_verify <host> <id> <dir> <plain> <seconds>
+  local host="$1" id="$2" dir="$3" plain="$4" seconds="$5"
   local entry="revert-$id" probe="${expect:-$1}"
   local output line after count answered attempt budget interval probe_output
 
@@ -596,18 +642,29 @@ change_apply_and_verify() {                # change_apply_and_verify <host> <id>
   disarm
   files_remove "$answered" "$id"
 
-  if [ "$count" != 0 ]; then
-    if cmp -s "$dir/pre.norm" "$dir/after.norm"; then
-      say "reverted: the timer $entry fired and the export is identical to the one taken before the change"
-      exit 3
-    fi
-    say "reverted: the timer $entry fired and the export differs from the one taken before the change"
-    exit 4
-  fi
-
-  say "applied: $change landed on $target, the timer $entry was removed, and the switch answers again"
-  say "the pre-change binary backup, if the device took one, is pre-$id.backup on the device"
-  exit 0
+  case "$count" in
+    0)
+      say "applied: $change landed on $target, the timer $entry was removed, and the switch answers again"
+      say "the pre-change binary backup, if the device took one, is pre-$id.backup on the device"
+      exit 0 ;;
+    ''|*[!0-9]*)
+      # The count is what proves the timer fired. Without it the export is the only evidence, and it
+      # cannot tell a no-op change from a revert: claim only what the two files show.
+      say "the timer's run-count could not be read, so nothing is claimed about whether it fired"
+      if cmp -s "$dir/pre.norm" "$dir/after.norm"; then
+        say "the export is identical to the one taken before the change"
+        exit 3
+      fi
+      say "the export differs from the one taken before the change"
+      exit 4 ;;
+    *)
+      if cmp -s "$dir/pre.norm" "$dir/after.norm"; then
+        say "reverted: the timer $entry fired and the export is identical to the one taken before the change"
+        exit 3
+      fi
+      say "reverted: the timer $entry fired and the export differs from the one taken before the change"
+      exit 4 ;;
+  esac
 }
 
 # Read the device, render and show the undo, then arm it. Nothing on a switch is written before the
@@ -655,28 +712,44 @@ change_run() {
   fi
   cp "$change" "$change_file"
 
-  # A timer an earlier run left is cancelled and named: two armed undos must never sit on one switch,
-  # because the older one would put back a configuration that is already two changes old.
-  while read -r stale; do
-    [ -n "$stale" ] || continue
-    ros "$host" "/system scheduler remove [find name=\"$stale\"]" >/dev/null
-    say "cancelled the timer an earlier run left armed: $stale"
-  done < <(ros "$host" '/system scheduler print detail' | sed -n 's/.*name="\(revert-[^"]*\)".*/\1/p')
+  # A timer an earlier run left armed is named here and cancelled only once this run writes: two
+  # armed undos must never sit on one switch, because the older one would put back a configuration
+  # that is already two changes old — and --dry-run must not touch the device.
+  stale=$(ros "$host" '/system scheduler print detail' | sed -n 's/.*name="\(revert-[^"]*\)".*/\1/p')
+
+  say "the undo to arm on $target, at $start device time (window $window):"
+  cat "$undo_file"
 
   if [ "$dry_run" = 1 ]; then
-    say "would arm revert-$id at $start device time and apply $change:"
-    cat "$undo_file"
+    for name in $stale; do
+      say "an earlier run left $name armed; a real run would cancel it first"
+    done
+    say "nothing was written: this was --dry-run"
     rm -rf "$dir"
     exit 0
   fi
 
   confirm
 
+  for name in $stale; do
+    timer_remove "$host" "$name"
+    say "cancelled the timer an earlier run left armed: $name"
+  done
+
   put "$host" "$undo_file" "undo-$id.rsc" >/dev/null || { warn "could not upload undo-$id.rsc"; exit 1; }
-  put "$host" "$change_file" "change-$id.rsc" >/dev/null || { warn "could not upload change-$id.rsc"; exit 1; }
+  # Past this point the device holds something, so a failure has to take it away again: a stray undo
+  # file is harmless, a stray timer is not, and neither belongs to a run that stopped.
+  put "$host" "$change_file" "change-$id.rsc" >/dev/null || {
+    warn "could not upload change-$id.rsc"
+    files_remove "$host" "$id"
+    exit 1
+  }
   for name in "undo-$id.rsc" "change-$id.rsc"; do
-    ros "$host" "/file print where name=\"$name\"" | grep -q -- "$name" \
-      || { warn "$name is not on the device after the upload"; exit 1; }
+    ros "$host" "/file print where name=\"$name\"" | grep -q -- "$name" || {
+      warn "$name is not on the device after the upload"
+      files_remove "$host" "$id"
+      exit 1
+    }
   done
 
   # The binary backup is the only step allowed to fail: it needs a policy right #485 withholds, and
@@ -686,17 +759,37 @@ change_run() {
     say "no binary fallback for this run: the device did not write pre-$id.backup"
   fi
 
-  detail=$(ros "$host" "/system scheduler add name=revert-$id policy=read,write,test interval=0s start-time=$start on-event=\"/import file=undo-$id.rsc\"")
-  [ -z "$detail" ] || { warn "the device refused the timer: $detail"; exit 1; }
+  # `start-date` is written rather than left to the device: the entry has to run on the day the
+  # window was measured on, not on whatever day RouterOS would date it by.
+  day=${stamp%% *}
+  detail=$(ros "$host" "/system scheduler add name=revert-$id policy=read,write,test interval=0s start-date=$day start-time=$start on-event=\"/import file=undo-$id.rsc\"")
+  if [ -n "$detail" ]; then
+    warn "the device refused the timer: $detail"
+    files_remove "$host" "$id"
+    exit 1
+  fi
 
-  detail=$(ros "$host" '/system scheduler print detail')
-  printf '%s\n' "$detail" | grep -q "name=\"revert-$id\"" \
-    || { warn "revert-$id is not on the device after it was added"; exit 1; }
-  printf '%s\n' "$detail" | grep -q "start-time=$start" \
-    || { warn "revert-$id did not keep start-time=$start"; exit 1; }
-
+  # From here the entry exists: an interrupt has to leave it in place and say so.
   ARMED_ENTRY="revert-$id"; ARMED_HOST="$host"; ARMED_START="$start"
   trap on_interrupt INT TERM HUP
+
+  detail=$(ros "$host" '/system scheduler print detail')
+  if ! printf '%s\n' "$detail" | grep -q "name=\"revert-$id\""; then
+    warn "revert-$id is not on the device after it was added; it was removed again"
+    timer_remove "$host" "revert-$id"; disarm; files_remove "$host" "$id"
+    exit 1
+  fi
+  if ! printf '%s\n' "$detail" | grep -q "start-date=$day"; then
+    warn "revert-$id did not keep start-date=$day; it was removed again"
+    timer_remove "$host" "revert-$id"; disarm; files_remove "$host" "$id"
+    exit 1
+  fi
+  if ! printf '%s\n' "$detail" | grep -q "start-time=$start"; then
+    warn "revert-$id did not keep start-time=$start; it was removed again"
+    timer_remove "$host" "revert-$id"; disarm; files_remove "$host" "$id"
+    exit 1
+  fi
+
   say "armed revert-$id on $target for $start device time (window $window)"
 
   if [ "$arm_only" = 1 ]; then
@@ -704,7 +797,7 @@ change_run() {
     exit 0
   fi
 
-  change_apply_and_verify "$host" "$id" "$dir" "$plain" "$start"
+  change_apply_and_verify "$host" "$id" "$dir" "$plain" "$seconds"
 }
 
 # ------------------------------------------------------------------ argument parsing
@@ -718,13 +811,13 @@ while [ $# -gt 0 ]; do
     --noise-free)  mode="noise" ;;
     --list-targets) mode="list" ;;
     --help|-h)     usage ;;
-    --target)      target="$2"; shift ;;
-    --change)      change="$2"; shift ;;
-    --major)       major="$2"; shift ;;
-    --export)      export_file="$2"; shift ;;
-    --verbose-export) verbose_export="$2"; shift ;;
-    --window)      window="$2"; shift ;;
-    --expect)      expect="$2"; shift ;;
+    --target)      need "$@"; target="$2"; shift ;;
+    --change)      need "$@"; change="$2"; shift ;;
+    --major)       need "$@"; major="$2"; shift ;;
+    --export)      need "$@"; export_file="$2"; shift ;;
+    --verbose-export) need "$@"; verbose_export="$2"; shift ;;
+    --window)      need "$@"; window="$2"; shift ;;
+    --expect)      need "$@"; expect="$2"; shift ;;
     --yes)         assume_yes=1 ;;
     --dry-run)     dry_run=1 ;;
     --arm-only)    arm_only=1 ;;
