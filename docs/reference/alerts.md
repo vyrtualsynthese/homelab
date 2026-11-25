@@ -1,7 +1,7 @@
 # Alerts: the rules, the silences and the gaps
 
 > **In one line.** Every alert rule in Grafana's two `homelab-core` groups, what each one protects,
-> why the two remaining silences exist, the pattern a rule must follow to fire at all, and the holes
+> why the three remaining silences exist, the pattern a rule must follow to fire at all, and the holes
 > nobody watches.
 >
 > **Use it when** an alert fired and you want to know what it means, you are writing or editing a
@@ -53,7 +53,8 @@ has no severity filter — the routing tree decides, and the relay writes a card
 **Rule set and live state on 2026-11-13 (the three `Cloud*` rows read back on
 2026-11-20, the counts and `GpuNotAllocatable` on 2026-11-22,
 `ArgoAppRenderFailing` added and proved on 2026-11-22, the two `Postgres*` rows
-added on 2026-11-22, the `DriveWorn`/`DriveFailing` split on 2026-11-25, and
+added on 2026-11-22, the `DriveWorn`/`DriveFailing` split and the `DiskTooHot` / `BackupStreamStale`
+threshold corrections on 2026-11-25, and
 `SnapraidParityStale`, which is created through Grafana's provisioning API after
 its metric reached `develop` — the state below is the state it was written with,
 confirmed by the first read-back):**
@@ -69,7 +70,7 @@ confirmed by the first read-back):**
 | `KubeStateMetricsDown` | `absent(up{service=...} == 1)` | 5m | critical | inactive |
 | `NodeFilesystemReadOnly` | filesystem mounted read-only | 5m | critical | inactive |
 | `MonitoringDown` | `1 - up{job="prometheus"}`; `execErrState: Alerting` | 5m | critical | inactive |
-| `DriveWorn` (`bg5bcigrw9xxcb`) | rated life under 10 %, or smartctl exit bit 32 — the error log holds records, nothing is failing yet | 1h | warning | **pending** on `nas /dev/sdf` |
+| `DriveWorn` (`bg5bcigrw9xxcb`) | rated life under 10 %, or smartctl exit bit 32 — the error log holds records, nothing is failing yet | 1h | warning | **firing** on `nas /dev/sdf` |
 | `DriveFailing` (`eg5bcfrf3qs5cf`) | SMART failed, a pending or offline-uncorrectable sector, or exit bits 1–16 / 64 — the damage bits | 10m | critical | inactive |
 | `ScrapeTargetDown` | any non-node target down, including the edge Pis' SMART and Docker exporters; Prometheus and kube-state-metrics excluded (own rules) | 15m | warning | inactive |
 | `NodeCpuHigh` | >90 % by host | 15m | warning | inactive |
@@ -77,7 +78,7 @@ confirmed by the first read-back):**
 | `NodeTemperatureHigh` | hottest CPU or SoC sensor, selected by hwmon driver >80 °C | 10m | warning | **firing** on `streaming` |
 | `GpuTemperatureHigh` | `DCGM_FI_DEV_GPU_TEMP` >80 °C | 10m | warning | inactive |
 | `GpuNotAllocatable` | allocatable `nvidia.com/gpu` reads 0 on a node that registered the card | 10m | warning | inactive |
-| `DiskTooHot` | drive >55 °C | 15m | warning | inactive |
+| `DiskTooHot` | drive >55 °C, or an NVMe >70 °C | 15m | warning | inactive |
 | `DiskFillingUp` | filesystem >85 % | 30m | warning | inactive |
 | `DiskWillFill` | predicted full in 24 h above 80 % used | 30m | warning | inactive |
 | `PVCFillingUp` | claim >85 % (NFS claims only) | 30m | warning | inactive |
@@ -87,7 +88,7 @@ confirmed by the first read-back):**
 | `JobFailed` | any Job with a failed pod, no success, and younger than 2 h | 5m | warning | inactive |
 | `ArgoAppRenderFailing` | an Application carrying a `ComparisonError` — Argo CD could not render it, so it no longer reports sync state | 10m | warning | inactive |
 | `RecyclarrNotSucceeding` | no successful recyclarr run in 26 h | 5m | warning | inactive |
-| `BackupStreamStale` | a CronJob in namespace `backup` whose last success is more than 26 h old | 10m | warning | inactive |
+| `BackupStreamStale` | a CronJob in namespace `backup` whose last success is older than its window — 26 h nightly, 8 days for the weekly `backup-prune` | 10m | warning | **firing** on `backup-nfs` |
 | `BackupJobAbsent` | a backup CronJob with no `kube_cronjob_status_last_successful_time` series, so it is gone or has never succeeded | 5m | warning | inactive |
 | `PostgresDumpStale` | the `databases/postgres-dump` CronJob's last success is more than 26 h old | 10m | warning | inactive |
 | `PostgresDumpAbsent` | no `kube_cronjob_status_last_successful_time` series for `databases/postgres-dump`, so it is gone or has never succeeded | 5m | warning | inactive |
@@ -147,18 +148,22 @@ to recyclarr because KSM 2.20 no longer publishes `kube_cronjob_spec_schedule`,
 so a generic rule cannot know how often each CronJob should succeed.
 
 **`BackupStreamStale`** (2026-11-20) is the same condition for the backup jobs, and it can be
-generic because everything it watches lives in one namespace and runs daily:
-`(time() - kube_cronjob_status_last_successful_time{namespace="backup"}) > 93600`. 93600 s is 26 h,
-one daily slot plus two hours. It covers `backup-node-nas`, `backup-node-nuc0`,
-`backup-node-streaming` and `backup-nfs`; `backup-prune` and `backup-verify` are in the same namespace
-and are watched by the same rule, which is intended — a verifier that stops running is exactly the
-silence this rule exists to break. Its `for` is 10 minutes rather than 5, which is what keeps it in
-`homelab-core`: the split rule puts a 5-minute `for` in the fast group, and a nightly job gains
-nothing from a 60 s evaluation. The summary names `{{ $labels.cronjob }}` rather than a stream
-label because kube-state-metrics does not publish CronJob labels on
-`kube_cronjob_status_last_successful_time`; `backup-node-nas` is the job, `nodes-nas` is the stream,
-and the mapping is in the chart. The verifier has no rule of its own for that reason: a verifier whose
-last success is 26 hours old is already firing this one.
+generic because everything it watches lives in one namespace:
+`(time() - kube_cronjob_status_last_successful_time{namespace="backup", cronjob!="backup-prune"}) > 93600`.
+93600 s is 26 h, one daily slot plus two hours, and it covers the four nightlies — `backup-node-nas`,
+`backup-node-nuc0`, `backup-node-streaming` and `backup-nfs` — plus `backup-verify`. The weekly
+`backup-prune` cannot share that window: it runs on Sunday at noon, so for six days of every seven a
+26-hour threshold is already true and the rule paged through the week on a job that was working. The
+2026-11-25 correction gives it a second branch and its own window: 691200 s is 8 days, one weekly slot
+plus one day, and the branch carries a `window` label so the summary says which one it measured
+(`backup stream {{ $labels.cronjob }} has not succeeded in {{ $labels.window }}`). That keeps the
+verifier under the nightly window with no rule of its own — a verifier whose last success is 26 hours
+old is already firing this one — while the prune is still watched, just on the cadence it actually
+runs. Its `for` is 10 minutes rather than 5, which is what keeps it in `homelab-core`: the split rule
+puts a 5-minute `for` in the fast group, and a nightly job gains nothing from a 60 s evaluation. The
+summary names `{{ $labels.cronjob }}` rather than a stream label because kube-state-metrics does not
+publish CronJob labels on `kube_cronjob_status_last_successful_time`; `backup-node-nas` is the job,
+`nodes-nas` is the stream, and the mapping is in the chart.
 
 A stale backup and a *failing* backup are different faults, and only the second one reaches `JobFailed`
 (the pod failed). A job whose pod starts and exits non-zero is both — `JobFailed` within its two-hour
@@ -167,8 +172,9 @@ the sync removed it, only reaches this rule. That is the case worth having: a ba
 nobody writes to looks exactly like a healthy one until the day it is needed.
 
 **`BackupJobAbsent`** (2026-11-22) covers the third shape of the same silence, and the one
-`BackupStreamStale` cannot see. That rule compares the last-success timestamp against 26 hours;
-when the CronJob is deleted, renamed, or has never once succeeded, kube-state-metrics publishes no
+`BackupStreamStale` cannot see. That rule compares the last-success timestamp against a window — 26
+hours, or 8 days for the weekly `backup-prune`; when the CronJob is deleted, renamed, or has never
+once succeeded, kube-state-metrics publishes no
 `kube_cronjob_status_last_successful_time` series at all, and a threshold over a series that does not
 exist stays green. One `absent()` term per job turns the missing series into a labelled alert: the
 summary names the job, and a chart deleted altogether arrives as one notification carrying six
@@ -328,6 +334,15 @@ quiet afternoon. `DriveFailing` reads the signals that mean move the data now: S
 pending or offline-uncorrectable sector, or the exit-code damage bits. The split is why the
 `/dev/sdf` silence could go: a warning that arrives once does not need suppressing.
 
+**`DiskTooHot` uses one threshold per device class** (2026-11-25). A spinning or SATA drive warns
+above 55 °C, an NVMe above 70 °C, because the number does not mean the same thing on the two: the
+NAS's two 970 EVO Plus drives sit at 58–59 °C under normal load, their NAND sensor runs at 73–79 °C,
+and Samsung's own warning threshold for the part is 81 °C. The single 55 °C limit fired eight times
+in three days on hardware that was behaving. The expression tests each class inside the same
+`label_replace` chain rather than duplicating it, so the host label still resolves exactly as before.
+For an NVMe the usable reading is `smartprom_temperature` (the composite); `smartprom_temperature_sensor2`
+is the flash sensor and runs much hotter.
+
 **`GpuNotAllocatable` watches the scheduler resource, not the card.** The card stays usable through
 the `nvidia` runtime class after a restart, so `GpuTemperatureHigh` and Plex are unaffected and
 `nvidia-smi` still lists it; only `nvidia.com/gpu` on the node drops to 0, and a pod that requests
@@ -418,6 +433,14 @@ covers the pod's `:9100` scrape going quiet while the pod still answers.
   and the action it would ask for (a new node) is already the plan.
   `NodeTemperatureHigh` is one host-agnostic rule, so a silence per host beats
   narrowing the expression.
+- Until 2026-12-09: `alertname="ScrapeTargetDown"` with
+  `app_kubernetes_io_instance="qbittorrent-exporter"` — the exporter cannot be scraped while
+  qBittorrent's Web UI is stalled on its NFS `/config` claim. Measured 2026-11-25: 627 failed
+  scrapes in 24 h, the target down 28 % of 48 h, every scrape pinned at the exporter's 5 s timeout,
+  and 106 firing/resolved transitions in four days as the stall crossed the rule's 15-minute gate.
+  The rule is right and the target is the fault
+  ([`docs/qbittorrent-webui-stalls.md`](../qbittorrent-webui-stalls.md), board card 758). Remove it
+  when `/config` moves to `local-path`, or renew it with a new end date.
 - **Removed 2026-11-25 — the silence on `DriveNeedsReplacement` went with the rule.** The drive
   `nas /dev/sdf` is still known dead and waiting on a replacement
   ([`docs/audit/ansible-hosts.md`](../audit/ansible-hosts.md)), but it is now a `DriveWorn` warning

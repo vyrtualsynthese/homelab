@@ -1,8 +1,19 @@
 # qBittorrent's Web UI stops answering during downloads
 
-Status: **open**, documented 2026-11-13. Nothing has been changed to fix it yet; this file records
-what was measured and what the evidence points at, so the next session starts from data instead of
-from the symptom.
+> **In one line.** The Web UI and API stall for minutes to hours while `/config` sits on NFS; the
+> exporter times out, `ScrapeTargetDown` flaps, and the migration is board card 758.
+>
+> **Use it when** qBittorrent's Web UI hangs, the exporter stops being scraped, or you are moving the
+> config claim · **Verified** 2026-11-25: 627 failed scrapes in 24 h, every failing scrape pinned at
+> the exporter's 5 s timeout · **Kind:** record
+>
+> **Sources** `cluster/helm/media-stack/qbittorrent/values.yaml`,
+> `cluster/helm/media-stack/qbittorrent-exporter/values.yaml`, live `up` and
+> `scrape_duration_seconds` from Prometheus
+
+Status: **open**, documented 2026-11-13 and measured again on 2026-11-25. The exporter's alert is
+silenced until 2026-12-09 and the migration is board card 758; nothing in the app has been changed
+yet, so this file records what was measured and what the evidence points at.
 
 ## What is seen
 
@@ -29,6 +40,27 @@ Prometheus and Loki, 13 November:
 | Container CPU | 0.18 cores, flat, before, during and after |
 | Container memory | 3.0–3.7 GiB working set during the stall (peak 9.81 GiB later in the day, of which 0.24 GiB is RSS) |
 | Web UI probe from the workstation, 17:00 | 403 in **4.2–4.7 ms** (unauthenticated, so it measures the listener, not the token check) |
+
+## The 25 November measurement
+
+The same symptom, twelve days later, measured from Prometheus instead of a single day's logs:
+
+| Observation | Value |
+|---|---|
+| Failed exporter scrapes, last 24 h | **627** samples with `up = 0` at one per minute, about 10.4 h |
+| Target availability over 48 h | **28 % down** (163 of 575 five-minute samples) |
+| Scrape duration | mean 1.35 s, **pinned at 5.002 s** while failing — `exporter.timeoutSeconds` is 5 |
+| Exporter log | `qBittorrent is timing out` once a minute, with gaps where a scrape succeeded |
+| `ScrapeTargetDown` transitions | **106 firing/resolved in four days**, 57 of them on 25 November |
+
+The shape matters: the target is not down for hours at a time any more. It fails for roughly a
+quarter of an hour, recovers for a few scrapes, and fails again. Each success resets the rule's
+15-minute `for`, so the alert cycles — 25 November alone had transitions at 10:40, 10:55, 11:29,
+11:40, 11:55, 12:29, 12:40 and on through the afternoon. That is the notification spam, and it is a
+property of the target flapping, not of the threshold.
+
+The chart is already as tight as it can be without a fix: `enableTracker: false` drops the one call
+that was known to be slow, and `timeoutSeconds` is 5. Neither helps when `app/preferences` blocks.
 
 ## What it is not
 
@@ -65,13 +97,19 @@ while memory-backed requests stay fast, and the reason it blocks for seconds is 
 volume is on NFS.** It is consistent with every measurement above. It is not proven: no per-request
 timing exists in the exporter, so which call timed out is inference, not observation.
 
-## Why nothing was changed yet
+## Why the app has not been changed yet
 
 - Moving `/config` to `local-path` needs the pod stopped. Restarts are not free here: the chart
   records two restarts that dropped 8 and 14 torrent entries (`Failed to restore torrent`) when the
   downloads volume was not ready. A migration is a scheduled operation, not a quick edit.
 - Adding a liveness probe on the Web UI would restart the pod on exactly this symptom, which makes
   the data loss worse. Do not do it before the cause is fixed.
+
+The stopgap that did go in on 2026-11-25 is a **silence**, not a rule change: `ScrapeTargetDown`
+matched on `app_kubernetes_io_instance="qbittorrent-exporter"` until 2026-12-09. The rule is
+correct; silencing it is what stops the flap reaching Discord while card 758 schedules the
+migration. Remove the silence when `/config` moves, or renew it with a new end date — do not widen
+`ScrapeTargetDown`, because that would hide a media exporter that has really died.
 
 ## How to confirm it is happening again
 
