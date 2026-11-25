@@ -509,6 +509,11 @@ traefik_logs_rotate: 7
     group: "{{ traefik_logs_gid }}"
     mode: "2770"
 
+- name: Install logrotate where it is absent
+  ansible.builtin.apt:
+    name: logrotate
+    state: present
+
 - name: Install the rotation rule
   ansible.builtin.template:
     src: logrotate.j2
@@ -517,12 +522,31 @@ traefik_logs_rotate: 7
     group: root
     mode: "0644"
 
-# `logrotate --debug` parses the rule and prints what it would do, so a syntax
-# error fails this task instead of the first rotation three days later.
+# `--debug` parses the rule and prints what it would do, so a syntax error fails
+# this task instead of the first rotation three days later. It reads the whole
+# config, not the drop-in, because that is what cron hands to logrotate, and a
+# stanza can parse alone and still be skipped once the include and the global
+# settings are applied around it. On a real apply the template above has just
+# written the stanza, so the parse covers it; under `--check` the template writes
+# nothing and the parse covers only the host's existing config.
+#
+# The absolute path matches the look-up below: a bare `logrotate` resolved from
+# `PATH` while the guard checks one path is a proof that disappears silently if
+# the two ever differ. A drop-in this role never wrote — apt, dpkg, rsyslog — can
+# be the one that fails a task named after this rule; read the error before
+# blaming `traefik-access`.
+- name: Look for the rotation tool
+  ansible.builtin.stat:
+    path: /usr/sbin/logrotate
+  register: traefik_logs_logrotate
+  check_mode: false
+
 - name: Prove the rotation rule parses
   ansible.builtin.command:
-    cmd: logrotate --debug /etc/logrotate.d/traefik-access
+    cmd: /usr/sbin/logrotate --debug /etc/logrotate.conf
   changed_when: false
+  check_mode: false
+  when: traefik_logs_logrotate.stat.exists
 ```
 
 `ansible/roles/traefik_logs/templates/logrotate.j2`:
