@@ -13,7 +13,7 @@ FAKE_VERSION        what /system resource print answers, default 7.16.1
 State files: config, config-verbose, clock, clock-output, commands, calls, scheduler.json, files/,
 and the flags break, break_after_change, backup_denied, import_error, after_change, after_undo,
 fire_on_arm, stays_down, hide_timer, hide_run_count, hide_run_count_after_change, refuse_upload,
-stubborn_timer (a `remove` the device accepts and does not carry out).
+stubborn_timer, stubborn_file (a `remove` the device accepts and does not carry out).
 
 `/export` answers the configuration followed by the `/system scheduler` table, because a real switch
 exports its live entries — including the timer a run has just armed.
@@ -149,15 +149,22 @@ def answer(command):
         name = re.search(r'name="?([^"\s]+)"?', command)
         listed = []
         files = state / "files"
+        detail = command.startswith("/file print detail")
         if files.is_dir():
             for path in sorted(files.iterdir()):
                 if name and path.name != name.group(1):
                     continue
-                listed.append(f' 0 name="{path.name}" type=".rsc" size=120\n')
+                # A plain listing on RouterOS 6 cuts the NAME column to nineteen characters and
+                # "..."; only `print detail` shows the whole name. The script reads detail for that
+                # reason, and this is what makes the difference visible to a test.
+                shown = path.name if detail or len(path.name) <= 19 else path.name[:19] + "..."
+                listed.append(f' 0 name="{shown}" type=".rsc" size=120\n')
         return "".join(listed)
 
     if command.startswith("/file remove"):
         name = re.search(r'name="?([^"\s\]]+)"?', command)
+        if flag("stubborn_file"):
+            return ""
         path = state / "files" / name.group(1)
         path.unlink(missing_ok=True)
         return ""
