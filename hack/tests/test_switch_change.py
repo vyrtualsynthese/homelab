@@ -75,6 +75,8 @@ class Fake:
             self._write("hide_run_count_after_change", "1")
         if kw.get("stubborn_timer"):
             self._write("stubborn_timer", "1")
+        if kw.get("stubborn_file"):
+            self._write("stubborn_file", "1")
         if kw.get("refuse_upload"):
             self._write("refuse_upload", str(kw["refuse_upload"]))
         if kw.get("clock_output"):
@@ -578,6 +580,26 @@ class RunTests(unittest.TestCase):
             self.assertTrue(calls[tool], f"the fake {tool} was never called")
             for line in calls[tool]:
                 self.assertIn("PubkeyAcceptedAlgorithms=+ssh-rsa", line, (tool, line))
+
+    def test_a_file_that_survives_its_removal_is_named_instead_of_ignored(self):
+        # The device is asked after the removal, and the answer is read from `print detail`: a plain
+        # listing shortens a long name, so the leftover would be invisible.
+        with fake("stubborn-file", after_change=CHANGED, stubborn_file="1") as f:
+            done = f.script(["--target", "crs326", "--change", str(CHANGES / "set-pvid.rsc"), "--yes"])
+        self.assertEqual(done.returncode, 0, done.stderr)
+        self.assertIn("still on the switch", done.stderr)
+
+    def test_the_upload_is_verified_against_the_whole_name(self):
+        # Every name the script uses is longer than the nineteen characters a plain listing shows, so
+        # the fake prints it shortened there, as a real switch does. A run that completes proves the
+        # check reads the whole name.
+        with fake("long-name", after_change=CHANGED) as f:
+            done = f.script(["--target", "crs326", "--change", str(CHANGES / "set-pvid.rsc"), "--yes"])
+            long_names = [n for n in f.commands() if "/file print" in n]
+        self.assertEqual(done.returncode, 0, done.stderr)
+        self.assertTrue(long_names, "the run never checked the uploaded files")
+        for command in long_names:
+            self.assertIn("/file print detail", command, command)
 
     def test_a_timer_that_survives_its_removal_is_named_instead_of_claimed_gone(self):
         # The device is asked after the removal. An entry that is still there will run its undo at its

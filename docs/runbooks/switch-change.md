@@ -29,6 +29,10 @@ this yet
 | `crs326` | `192.168.1.11` | `undo-<id>.rsc`, `change-<id>.rsc`, a scheduler entry `revert-<id>`, and `pre-<id>.backup` if the account may take one |
 | `crs309` | `192.168.1.43` | the same |
 
+Read that list with `/file print detail`. A plain `/file print` cuts the name column to nineteen
+characters and `...`, which is shorter than every name here, so a listing that looks empty may be
+holding the file the run is about to import.
+
 The script signs in as `deploy` with the key at `/home/netcfg/.ssh/switch-deploy` — `switch-deploy`,
 not `switches-deploy`. The gate runs it as `netcfg` with `HOME=/home/netcfg`, which is the account the
 key belongs to. The account is `deploy`, holding `read`, `write`, `ssh` and `test` — card #485's,
@@ -334,7 +338,7 @@ section is what the banner's **Verified** line and the **Verified** list below a
 ## Verified
 
 - `uv run --with-requirements hack/tests/requirements.txt python -m pytest -q hack/tests/test_switch_change.py`
-  — 66 tests, the undo renderer on RouterOS 6 and 7, every refusal, and every exit path driven
+  — 69 tests, the undo renderer on RouterOS 6 and 7, every refusal, and every exit path driven
   through the fake switch, whose `/export` carries its scheduler table as a real one does.
 - `hack/tests/test_switch_apply.py` — 21 tests, the gate's target list, its argument set, the pinned
   descriptor, the staged copy, the digest and the work directory.

@@ -626,9 +626,10 @@ files_remove() {                           # files_remove <host> <id>
   local left
   ros "$1" "/file remove [find name=\"undo-$2.rsc\"]" >/dev/null
   ros "$1" "/file remove [find name=\"change-$2.rsc\"]" >/dev/null
-  left=$(ros "$1" '/file print') || return 0
+  # `print detail` for the same reason as the upload check: a plain listing shortens the name.
+  left=$(ros "$1" '/file print detail') || return 0
   case "$left" in
-    *"undo-$2.rsc"*|*"change-$2.rsc"*)
+    *"name=\"undo-$2.rsc\""*|*"name=\"change-$2.rsc\""*)
       warn "undo-$2.rsc or change-$2.rsc is still on the switch; remove it by hand" ;;
   esac
   return 0
@@ -873,7 +874,9 @@ change_run() {
     exit 1
   }
   for name in "undo-$id.rsc" "change-$id.rsc"; do
-    ros "$host" "/file print where name=\"$name\"" | grep -q -- "$name" || {
+    # `print detail`, because plain `print` truncates a long name to nineteen characters and "..." —
+    # and every name here is longer than that. The check would then miss a file that is present.
+    ros "$host" "/file print detail where name=\"$name\"" | grep -q -- "name=\"$name\"" || {
       warn "$name is not on the device after the upload"
       files_remove "$host" "$id"
       exit 1
@@ -883,7 +886,7 @@ change_run() {
   # The binary backup is the only step allowed to fail: it needs a policy right #485 withholds, and
   # the undo file does not depend on it. Say so and carry on armed.
   ros "$host" "/system backup save name=pre-$id" >/dev/null
-  if ! ros "$host" "/file print where name=\"pre-$id.backup\"" | grep -q -- "pre-$id.backup"; then
+  if ! ros "$host" "/file print detail where name=\"pre-$id.backup\"" | grep -q -- "name=\"pre-$id.backup\""; then
     say "no binary fallback for this run: the device did not write pre-$id.backup"
   fi
 

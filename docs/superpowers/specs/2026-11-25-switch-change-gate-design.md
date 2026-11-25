@@ -61,6 +61,15 @@ things that do not exist yet, and this design covers both:
   `ros()` and `put()` with a comment naming card #696, which removes it.
 - Nothing under `cluster/` is touched.
 
+Measured on the devices on 2026-11-25, both added after the first live runs:
+
+- RouterOS serves SCP only to an account holding the `ftp` policy. Without it the key authenticates
+  and the file transfer's **exec channel** is refused (`exec request failed on channel 0`). `deploy`
+  is a user in the group `deploy`, and that group's policy gained `ftp` with the other four rights
+  unchanged; the user record carries no policy of its own.
+- A plain `/file print` shortens a name to nineteen characters and `...`. Every name here is longer,
+  so every check that looks a file up by name reads `print detail`, which prints it whole.
+
 ## Approaches considered
 
 ### The gate
