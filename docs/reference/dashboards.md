@@ -4,10 +4,11 @@
 > calls that change one.
 >
 > **Use it when** you need to know where to look, are adding or editing a panel, or are explaining why
-> a dashboard is not in git · **Verified** 2026-11-21 · **Kind:** reference
+> a dashboard is not in git · **Verified** 2026-11-25 · **Kind:** reference
 >
-> **Sources** the live Grafana instance, read through its HTTP API on 2026-11-21; the one snapshot in
-> git, `cluster/helm/monitoring/grafana/export/traefik/`, which nothing applies
+> **Sources** `cluster/helm/monitoring/grafana/export/traefik/`, the one snapshot in git and nothing
+> that applies it; the live Grafana instance and its Prometheus datasource, read through the HTTP API on
+> 2026-11-21 and 2026-11-25.
 
 ## Dashboards
 
@@ -117,6 +118,59 @@ job name with two `label_replace` calls (`backup-node-nas` → `nodes-nas`, `bac
 cost panel is arithmetic on the measured size — 34.1 GB at €7.10 per TB-month — not a bill, and it is
 the number to watch: a stream that grows by an order of magnitude is a media directory added to a row
 by mistake, which is what `budgetGiB` and the verifier already fail on.
+
+## Homelab · Security
+
+**Both thresholds were measured on 2026-11-25, before either was set.** The screen's nine panels and the
+danger-state expression that reads these two numbers are described below them; nothing here is a round
+number chosen by feel.
+
+**The rejected share** is the percentage of Traefik's requests that were answered `4xx`, by hour, from
+`traefik_router_requests_total` — the same family the panel queries, so the check can be repeated by
+anyone with the page open. The series is younger than the query: `traefik_router_requests_total` first
+appears on 2026-11-21 18:39, when Traefik 3 replaced 2.11, and Prometheus keeps 90 days, so the
+measurement covers **the whole life of the family** — 92 hourly samples, not the seven days the command
+asks for:
+
+```bash
+curl -sG -H "Authorization: Bearer $GRAFANA_TOKEN" \
+  "https://grafana.kub.local/api/datasources/proxy/uid/PBFA97CFB590B2093/api/v1/query_range" \
+  --data-urlencode 'query=100 * sum(rate(traefik_router_requests_total{code=~"4.."}[1h])) / sum(rate(traefik_router_requests_total[1h]))' \
+  --data-urlencode "start=$(date -d '7 days ago' +%s)" --data-urlencode "end=$(date +%s)" \
+  --data-urlencode 'step=3600'
+```
+
+The band ran from **0.33 %** to **81.13 %** (2026-11-22 11:00), with quartiles at 5.21 %, 17.16 % and
+42.94 %. The danger state's threshold is **85 %** — the top of that band plus a margin of about four
+points, and not the 20 % this work started from.
+
+The 20 % was measured against and dropped, because it sits *inside* the normal band: **42 of the 92
+hours were above it**, and those hours are the routine ones on a public address — a bot burst against
+`ashuvidz`, `ashudev`, FreshRSS or thelounge answers 401–404 to 500–1,300 requests an hour and pushes
+the share to 60–80 % without anything being wrong that a person would act on. A threshold that is true
+half the time is not a signal. At 85 % the term speaks only when refusal is near-total: the forward-auth
+gate answering everything with `403`, or an address flood drowning the legitimate traffic. The attack
+with a name and an address is `SecurityAttackSustained`'s job, and it reads the log rather than a share.
+
+**The silence gap** decides how long `SecurityStackBlind` waits before calling the pipeline dead. It is
+measured on the same counter, at the finest window the scrape interval allows — the global interval is
+1 m, so `increase(...[1m])` covers a single sample and answers nothing, and `2m` is the narrowest window
+that returns a number:
+
+```bash
+curl -sG -H "Authorization: Bearer $GRAFANA_TOKEN" \
+  "https://grafana.kub.local/api/datasources/proxy/uid/PBFA97CFB590B2093/api/v1/query_range" \
+  --data-urlencode 'query=sum(increase(traefik_router_requests_total[2m]))' \
+  --data-urlencode "start=$(date -d '7 days ago' +%s)" --data-urlencode "end=$(date +%s)" \
+  --data-urlencode 'step=120'
+```
+
+Across 2,740 two-minute windows (2026-11-21 17:57 → 2026-11-25 13:41) **not one held zero requests**;
+the quietest held **4** and the median 8. At five-minute steps the answer is the same, so a
+"two gaps of five minutes" rule would have been built on a rhythm this cluster does not have. The
+observed gap is therefore **below the measurement floor**, and the rule waits **10 minutes**: five times
+that floor, roughly 20–40 requests missed at the measured quiet rhythm, and still far shorter than an
+outage anyone would tolerate silently.
 
 ## Changing things
 
