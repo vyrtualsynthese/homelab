@@ -15,6 +15,19 @@ def run(*args, root=None):
     return subprocess.run([str(SCRIPT), *args], capture_output=True, text=True, env=env)
 
 
+COMPOSE_HEADER = "--- /home/vronteix/dockers/docker-compose.yml\n"
+
+
+def rendered_compose(host):
+    """The compose block as text, newline-normalised, ending in one newline —
+    the same shape `read_text()` gives the file written on the Pi."""
+    out = run("render", host)
+    assert out.returncode == 0, out.stderr
+    assert COMPOSE_HEADER in out.stdout, out.stdout
+    block = out.stdout.split(COMPOSE_HEADER, 1)[1]
+    return block.split("\n--- ", 1)[0] + "\n"
+
+
 def test_render_prints_the_pinned_images_for_each_pi():
     for host, port in (("rbp0", "51821"), ("rbp1", "51822")):
         out = run("render", host)
@@ -28,6 +41,32 @@ def test_render_refuses_a_host_it_does_not_know():
     out = run("render", "rbp9")
     assert out.returncode == 2
     assert "rbp9" in out.stderr
+
+
+def test_the_two_hosts_render_the_same_stack_apart_from_the_wireguard_port():
+    rbp0 = rendered_compose("rbp0").replace("51821", "PORT")
+    rbp1 = rendered_compose("rbp1").replace("51822", "PORT")
+    assert rbp0 == rbp1
+
+
+def test_each_host_gets_its_own_wireguard_port():
+    assert "51822" not in rendered_compose("rbp0")
+    assert "51821" not in rendered_compose("rbp1")
+    assert "@WG_UDP_PORT@" not in rendered_compose("rbp0")
+
+
+def test_the_placed_file_is_what_render_printed(tmp_path):
+    root = tmp_path
+    stack = root / "home/vronteix/dockers"
+    stack.mkdir(parents=True)
+    (stack / "pihole.env").write_text("WEBPASSWORD=x\n")
+    (stack / "wg-easy.env").write_text("WG_HOST=x\n")
+    (root / "proc").mkdir()
+    (root / "proc/mounts").write_text("LABEL=writable / ext4 rw 0 0\n")
+
+    assert run("setup", "rbp0", root=root).returncode == 0
+    assert (stack / "docker-compose.yml").read_text() == rendered_compose("rbp0")
+    assert b"\r\n" in (stack / "docker-compose.yml").read_bytes()
 
 
 def test_setup_is_idempotent(tmp_path):
@@ -154,15 +193,17 @@ def test_backup_then_restore_puts_the_stack_back(tmp_path):
     assert (stack / "docker-compose.yml").exists()
 
 
-def test_the_rbp0_template_does_not_start_a_second_router():
+def test_the_template_does_not_start_a_second_router():
     compose = yaml.safe_load(
-        (REPO / "ansible/playbooks/templates/runners/rbp0/docker-compose.yml").read_text()
+        (REPO / "ansible/playbooks/templates/runners/docker-compose.yml").read_text()
     )
     assert "traefik" not in compose["services"], (
-        "rbp0 must not run its own Traefik: the cluster's router owns 80/443 for "
-        "*.kub.home.ashudev.com, and this copy served --api.insecure=true with no "
+        "neither host runs its own Traefik: the cluster's router owns 80/443 for "
+        "*.kub.home.ashudev.com, and a copy here served --api.insecure=true with no "
         "certificate store of its own"
     )
+    for host in ("rbp0", "rbp1"):
+        assert "traefik" not in yaml.safe_load(rendered_compose(host))["services"], host
 
 
 def test_setup_removes_a_service_the_template_no_longer_declares():
