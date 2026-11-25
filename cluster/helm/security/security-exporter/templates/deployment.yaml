@@ -30,6 +30,8 @@ spec:
         runAsNonRoot: true
         runAsUser: 10001
         runAsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: exporter
           image: "{{ .Values.securityExporter.image.repository }}:{{ .Values.securityExporter.image.tag }}"
@@ -47,15 +49,17 @@ spec:
           ports:
             - name: http
               containerPort: {{ .Values.securityExporter.service.port }}
-          # `/metrics` is the only path the process answers, and it answers from
-          # the last good snapshot, so a probe here proves the server is up — not
-          # that the cluster was read. The freshness family is what says that.
+          # Ready only after one successful poll, so a pod that cannot read the
+          # cluster leaves the Service instead of serving plausible zeros.
           readinessProbe:
             httpGet:
-              path: /metrics
+              path: /healthz
               port: http
             initialDelaySeconds: 3
             periodSeconds: 10
+          # Liveness asks only whether the server answers. Pointing it at the poll
+          # would restart the pod on every API blip, which fixes nothing and loses
+          # the last good snapshot.
           livenessProbe:
             httpGet:
               path: /metrics

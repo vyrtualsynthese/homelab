@@ -9,6 +9,7 @@ test reads both and fails on a difference.
 import pathlib
 import sys
 import unittest
+import unittest.mock
 
 import yaml
 
@@ -97,9 +98,38 @@ class PostureTests(unittest.TestCase):
 
     def test_one_ingressroute_with_two_hosts_counts_both(self):
         exporter = self.load()
+        # One object publishing two hostnames is one object and two hostnames.
+        # Counting host matches as "routes" would make one `kubectl get ingressroute`
+        # object weigh two against a constant measured in objects.
         documents = [{"spec": {"routes": [
             {"match": "Host(`a.kub.local`) || Host(`b.kub.local`)", "middlewares": []}]}}]
-        self.assertEqual(exporter.posture(documents, set()).routes, 2)
+        self.assertEqual(exporter.posture(documents, set()).routes, 1)
+        counted = exporter.posture(documents, {"a.kub.local", "b.kub.local"})
+        self.assertEqual(counted.public, 2)
+        self.assertEqual(counted.ungated, 0)
+
+    def test_a_host_two_objects_serve_is_one_host(self):
+        # The plain-HTTP twin of a `websecure` router is a second object on the
+        # same name. Both are real objects, and the name is still one name.
+        exporter = self.load()
+        documents = [
+            {"spec": {"routes": [{"match": "Host(`ashudev.com`)", "middlewares": ["kube-system-lan-only@kubernetescrd"]}]}},
+            {"spec": {"routes": [{"match": "Host(`ashudev.com`)", "middlewares": []}]}},
+        ]
+        counted = exporter.posture(documents, {"ashudev.com"})
+        self.assertEqual(counted.routes, 2)
+        self.assertEqual(counted.public, 1)
+
+    def test_a_gated_route_does_not_gate_its_neighbour(self):
+        # The gate is a router property. An object holding one gated route and one
+        # open route leaves the open one answering, so the host is ungated.
+        exporter = self.load()
+        documents = [{"spec": {"routes": [
+            {"match": "Host(`vikunja.kub.local`)", "middlewares": ["kube-system-lan-only@kubernetescrd"]},
+            {"match": "Host(`vikunja.kub.local`)", "middlewares": []},
+        ]}}]
+        self.assertEqual(exporter.posture(documents, set()).ungated, 1)
+        self.assertFalse(exporter.gated(documents[0]))
 
     def test_the_gate_is_a_middleware_name_not_a_route_shape(self):
         exporter = self.load()
@@ -131,15 +161,23 @@ class PostureTests(unittest.TestCase):
                           "ownerReferences": [{"kind": "ReplicaSet", "name": "mktxp-7d9c8b6f4"}]},
              "spec": {"containers": [{"name": "app", "securityContext": {"privileged": True}}]},
              "status": {"phase": "Running"}},
-            # A DaemonSet, one pod per node: still one workload. The privileged
-            # container here is an init container, which the rule also reads.
+            # Mid-rollout: last week's ReplicaSet still has a Running pod. Two
+            # hashes, one Deployment — the case the strip exists for, and the only
+            # fixture that fails if the strip is removed.
+            {"metadata": {"name": "mktxp-5f8c7d6b9-ghi56",
+                          "ownerReferences": [{"kind": "ReplicaSet", "name": "mktxp-5f8c7d6b9"}]},
+             "spec": {"containers": [{"name": "app", "securityContext": {"privileged": True}}]},
+             "status": {"phase": "Running"}},
+            # A DaemonSet, one pod per node: still one workload. Its only
+            # privileged declaration is an init container, on both pods, so the
+            # count is 1 here only if initContainers are read at all.
             {"metadata": {"name": "smartctl-nas",
                           "ownerReferences": [{"kind": "DaemonSet", "name": "smartctl"}]},
              "spec": {"initContainers": [{"name": "init", "securityContext": {"privileged": True}}]},
              "status": {"phase": "Running"}},
             {"metadata": {"name": "smartctl-nuc0",
                           "ownerReferences": [{"kind": "DaemonSet", "name": "smartctl"}]},
-             "spec": {"containers": [{"name": "app", "securityContext": {"privileged": True}}]},
+             "spec": {"initContainers": [{"name": "init", "securityContext": {"privileged": True}}]},
              "status": {"phase": "Running"}},
             # A job that is over: not a running workload, whatever it declared.
             {"metadata": {"name": "sync-7xk2p",
@@ -152,3 +190,60 @@ class PostureTests(unittest.TestCase):
              "status": {"phase": "Running"}},
         ]
         self.assertEqual(exporter.privileged(pods), 2)  # mktxp and smartctl
+
+    def test_a_workload_is_identified_by_namespace_and_kind_too(self):
+        # `foo` as a Deployment in one namespace and `foo` as a DaemonSet in
+        # another are two workloads. Keying on the bare name counts one.
+        exporter = self.load()
+        pods = [
+            {"metadata": {"name": "foo-abc12", "namespace": "media-stack",
+                          "ownerReferences": [{"kind": "ReplicaSet", "name": "foo-7d9c8b6f4"}]},
+             "spec": {"containers": [{"name": "app", "securityContext": {"privileged": True}}]},
+             "status": {"phase": "Running"}},
+            {"metadata": {"name": "foo-xyz98", "namespace": "kube-system",
+                          "ownerReferences": [{"kind": "DaemonSet", "name": "foo"}]},
+             "spec": {"containers": [{"name": "app", "securityContext": {"privileged": True}}]},
+             "status": {"phase": "Running"}},
+        ]
+        self.assertEqual(exporter.privileged(pods), 2)
+
+
+class PageTests(unittest.TestCase):
+    """The page itself: what it publishes, and what it refuses to publish."""
+
+    def load(self):
+        import importlib.util
+        path = ROOT / "cluster/helm/security/security-exporter/files/exporter.py"
+        spec = importlib.util.spec_from_file_location("security_exporter", path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+
+    def test_the_four_posture_families_appear_with_their_help_lines(self):
+        exporter = self.load()
+        page = exporter.render(exporter.Snapshot(73, 0, 9, 9, 1795000000.0))
+        for name in (
+            "homelab_security_ingress_routes",
+            "homelab_security_ungated_routes",
+            "homelab_security_public_hosts",
+            "homelab_security_privileged_workloads",
+            "homelab_security_exporter_last_success_timestamp_seconds",
+        ):
+            self.assertIn(f"# HELP {name} ", page)
+            self.assertIn(f"# TYPE {name} gauge", page)
+        self.assertIn("homelab_security_privileged_workloads 9", page)
+
+    def test_nothing_is_published_before_the_first_successful_poll(self):
+        # A zero for `ungated_routes` is "nothing read", not "nothing found", and
+        # the two must not look the same on a security page.
+        exporter = self.load()
+        page = exporter.render(exporter.Snapshot(0, 0, 0, 0, 0.0))
+        self.assertIn("homelab_security_exporter_last_success_timestamp_seconds 0", page)
+        self.assertNotIn("homelab_security_ungated_routes", page)
+        self.assertNotIn("homelab_security_privileged_workloads", page)
+
+    def test_a_failed_read_raises_instead_of_publishing_a_zero(self):
+        exporter = self.load()
+        with unittest.mock.patch.object(exporter, "fetch", side_effect=RuntimeError("403")):
+            with self.assertRaises(RuntimeError):
+                exporter.measure(set())
