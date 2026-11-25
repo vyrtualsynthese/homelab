@@ -138,8 +138,14 @@ query.
 # 2 = alerting, 1 = watch, 0 = calm. `bool` on every comparison, each term
 # `or vector(0)` so a missing family counts as false, then clamp_max: a sum.
 clamp_max(
-    2 * (count(ALERTS{alertname=~"Security.*", alertstate="firing"}) > bool 0 or vector(0))
-  + 2 * (delta(sum(fw_bouncer_banned_ips)[1h:1m]) > bool 20 or vector(0))
+    2 * (delta(sum(fw_bouncer_banned_ips)[1h:1m]) > bool 20 or vector(0))
+  + 2 * (count(homelab_security_ungated_routes > 0)
+         or count(homelab_security_public_hosts != 9)
+         or count(homelab_security_privileged_workloads != 9) or vector(0))
+  + 2 * (((time() - homelab_security_exporter_last_success_timestamp_seconds > 600)
+          or absent(homelab_security_exporter_last_success_timestamp_seconds)
+          or absent(fw_bouncer_banned_ips) or absent(cs_active_decisions)
+          or absent(cs_parser_hits_ok_total) or vector(0)) > bool 0)
   + (sum(fw_bouncer_banned_ips) > bool 0 or vector(0))
   + (100 * sum(rate(traefik_router_requests_total{code=~"4.."}[15m]))
       / sum(rate(traefik_router_requests_total[15m])) > bool 85 or vector(0))
@@ -147,12 +153,26 @@ clamp_max(
   2)
 ```
 
-Two of its habits were found by running it, not by reading it. Every comparison is `bool`: without it
-a filtered comparison keeps the sample it matched, so `(sum(fw_bouncer_banned_ips) > 0) * 1` read `3`
-on the screen instead of `1`. And the terms are **added**, not `or`-ed: with `bool` a false term still
-returns a `0` sample, and `or` stops at the first *defined* operand rather than the first *true* one,
-so the `or` chain answered `Calm` while three bans were in force. `delta` on a subquery, not
-`increase`, because the bouncer's family is a gauge.
+**Level 2 means act now**: more than 20 bans in an hour, the posture counts moved, the security
+pipeline is blind (the exporter stale or a family it publishes gone, including the agent's), or
+refusals above 85 % of everything. **Level 1 means watch**: any ban is active, or more than 20
+sign-ins failed in 15 minutes.
+
+The first version had a fifth term that counted `ALERTS{alertname=~"Security.*"}` — and it was dead
+on arrival. **Grafana evaluates every rule in this cluster**, so Prometheus's `ALERTS` family is
+empty: the panel's term could never be true, and the tile's "alerting" state was proved with a
+`vector(2)` probe rather than by a real rule. It now reads the signals the rules are written on, and
+the `Alerting` state was then proved by stopping the detector for real — see the paragraph on
+`SecurityStackBlind` in [`alerts.md`](alerts.md#alerting).
+
+Three habits in the expression were found by running it, not by reading it. Every comparison is
+`bool`: without it a filtered comparison keeps the sample it matched, so
+`(sum(fw_bouncer_banned_ips) > 0) * 1` read `3` on the screen instead of `1`. The terms are
+**added**, not `or`-ed: with `bool` a false term still returns a `0` sample, and `or` stops at the
+first *defined* operand rather than the first *true* one, so the `or` chain answered `Calm` while
+three bans were in force. And each term ends in `or vector(0)` so a family that has never been
+scraped reads `0` instead of emptying the sum; `delta` on a subquery rather than `increase`, because
+the bouncer's family is a gauge.
 
 **Top addresses refused shows who was *answered* 401–499, not who the bouncer dropped.** A dropped
 request never reaches Traefik and has no line in the access log, so an address that is banned and an

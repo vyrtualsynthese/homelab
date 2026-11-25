@@ -8,8 +8,8 @@ export beside it states, for the same reason (two sources of truth in one folder
 
 | File | What it holds |
 |---|---|
-| `dashboard.json` | A direct `POST /api/dashboards/db` body: `{dashboard, folderUid: "homelab", overwrite: true}`. Nine panels, uid `homelab-security`, version 7. |
-| `rules.json` | The seven security rules, as `GET /api/v1/provisioning/alert-rules` returns them. Added by the task that creates them; absent until then. |
+| `dashboard.json` | A direct `POST /api/dashboards/db` body: `{dashboard, folderUid: "homelab", overwrite: true}`. Nine panels, uid `homelab-security`, version 9. |
+| `rules.json` | The seven security rules, as `GET /api/v1/provisioning/alert-rules` returns them, in that order. Six are in `homelab-core-fast`, `SecurityExposureDrift` in `homelab-core`. |
 
 ## What the nine panels read
 
@@ -34,11 +34,18 @@ answers a parse error for the mixed set.
 `2 = alerting, 1 = watch, 0 = calm`, and each of the three was read on the screen once when the panel
 was created:
 
-- **2** — a `Security.*` rule firing, or more than 20 bans landing in an hour. Forced by evaluating
-  `vector(2)` in the panel and read back as a red tile.
-- **1** — any ban active, refusals above 85 % of all requests over 15 minutes, or more than 20 failed
-  sign-ins in 15 minutes. Live at creation: three bans were in force.
+- **2** — more than 20 bans in an hour, the posture counts moved, the security pipeline is blind, or
+  refusals above 85 % of everything. Proved by stopping the detector for real: `kubectl -n security
+  scale deploy/crowdsec-agent --replicas=0` took the tile red within a minute of the agent's series
+  going stale, and scaling it back turned it orange again.
+- **1** — any ban active, or more than 20 failed sign-ins in 15 minutes. Live at creation: three bans
+  were in force.
 - **0** — none of the above; the ban term was neutralised and the tile read green.
+
+The first version's top term counted `ALERTS{alertname=~"Security.*"}` and was dead on arrival:
+Grafana evaluates every rule in this cluster, so Prometheus's `ALERTS` family does not exist and that
+term could never be true. It was replaced by the three signals the rules are written on, which is why
+the red state above was proved by a real cause rather than by a probe.
 
 85 % is the top of the measured hourly band (0.33–81.13 % over 92 samples, 2026-11-21 to 2026-11-25)
 plus a margin. A 20 % threshold was measured against and dropped: 42 of those 92 hours sat above it,
