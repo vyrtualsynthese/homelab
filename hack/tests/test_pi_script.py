@@ -436,6 +436,8 @@ def test_setup_places_the_shared_settings_and_the_resolvers(tmp_path):
     ).read_text()
     netplan = root / "etc/netplan/50-cloud-init.yaml"
     assert netplan.read_text() == rendered_section("rbp1", NETPLAN_HEADER)
+    resolved = root / "etc/systemd/resolved.conf.d/90-pihole-resolvers.conf"
+    assert resolved.read_text() == rendered_section("rbp1", RESOLVED_HEADER)
     assert run("verify", "rbp1", root=root).returncode == 0
 
 
@@ -457,3 +459,18 @@ def test_the_resolver_list_is_the_two_edge_addresses():
         (REPO / "ansible/inventory/hosts.yml").read_text()
     )["all"]["children"]["edge"]["hosts"]
     assert addresses == [edge["rbp0"]["ansible_host"], edge["rbp1"]["ansible_host"]]
+
+
+RESOLVED_HEADER = "--- /etc/systemd/resolved.conf.d/90-pihole-resolvers.conf\n"
+
+
+def test_resolv_conf_lists_the_piholes_instead_of_the_loopback():
+    """With the stub listener on, /etc/resolv.conf is 127.0.0.53, Docker drops
+    that entry and falls back to 8.8.8.8 — the blocklist bypassed from inside
+    the host that serves it. The drop-in also names no server: netplan does."""
+    rbp0 = rendered_section("rbp0", RESOLVED_HEADER)
+    rbp1 = rendered_section("rbp1", RESOLVED_HEADER)
+    assert rbp0 == rbp1, "one file, no per-host server"
+    assert "DNSStubListener=no" in rbp0
+    assert "\nDNS=\n" in rbp0, "the nameservers come from netplan"
+    assert "192.168.1." not in rbp0, "an address here would be a second record of it"

@@ -96,6 +96,14 @@ desired_netplan() {
     sed "s/@PIHOLE_DNS_SERVERS@/$PIHOLE_DNS_SERVERS/g" "$TEMPLATES/50-cloud-init.yaml"
 }
 
+# systemd-resolved's drop-in. Netplan holds the two Pi-hole addresses, so this
+# names no server of its own; what it does is keep the stub listener off, so
+# /etc/resolv.conf lists those two and a container reads them rather than
+# falling back to Docker's 8.8.8.8.
+desired_resolved() {
+    cat "$TEMPLATES/90-pihole-resolvers.conf"
+}
+
 desired_hostname() {
     printf '%s\n' "$1"
 }
@@ -397,6 +405,8 @@ cmd_render() {
     desired_pihole_settings
     echo "--- /etc/netplan/50-cloud-init.yaml"
     desired_netplan
+    echo "--- /etc/systemd/resolved.conf.d/90-pihole-resolvers.conf"
+    desired_resolved
     echo "--- $STACK_DIR/config/wg-easy.db"
     echo "wg-easy 15's own database: panel account, host, port, DNS, peers. Not"
     echo "written here, and copied by 'backup' with the rest of the stack"
@@ -406,7 +416,7 @@ cmd_render() {
 }
 
 cmd_setup() {
-    local host="$1" current_name pihole_changed=0 netplan_changed=0
+    local host="$1" current_name pihole_changed=0 netplan_changed=0 resolved_changed=0
 
     current_name=""
     if [ -f "$ROOT/etc/hostname" ]; then
@@ -439,7 +449,23 @@ cmd_setup() {
     fi
     write_abs "$ROOT/etc/netplan/50-cloud-init.yaml" "$(desired_netplan)"
     netplan_changed="$CHANGED_THIS_WRITE"
+    write_abs "$ROOT/etc/systemd/resolved.conf.d/90-pihole-resolvers.conf" "$(desired_resolved)"
+    resolved_changed="$CHANGED_THIS_WRITE"
     write_abs "$ROOT/etc/hostname" "$(desired_hostname "$host")"
+
+    # The resolvers are a live setting: writing the files changes nothing until
+    # netplan and resolved read them. This runs before the stack is touched,
+    # because a container's /etc/resolv.conf is a copy taken when it is created.
+    if [ -z "$ROOT" ]; then
+        if [ "$netplan_changed" -eq 1 ]; then
+            netplan apply
+            echo "netplan: applied"
+        fi
+        if [ "$resolved_changed" -eq 1 ]; then
+            systemctl restart systemd-resolved
+            echo "resolved: restarted"
+        fi
+    fi
 
     if [ -z "$ROOT" ]; then
         # --remove-orphans is what takes a service off a host when this template
@@ -456,16 +482,15 @@ cmd_setup() {
             ( cd "$STACK_DIR" && docker compose up -d --force-recreate pihole >/dev/null )
             echo "stack: docker compose up -d --force-recreate pihole"
         fi
+        # The two bridge services are the ones that resolve names through the
+        # host's file rather than Pi-hole answering for them; pihole and
+        # node_exporter share the host's namespace and need no recreate.
+        if [ "$resolver_changed" -eq 1 ]; then
+            ( cd "$STACK_DIR" && docker compose up -d --force-recreate wg-easy smartctl-exporter >/dev/null )
+            echo "stack: docker compose up -d --force-recreate wg-easy smartctl-exporter"
+        fi
     else
         echo "stack: not started (PI_ROOT is set)"
-    fi
-
-    # The resolvers are a live network setting: writing the file changes nothing
-    # until netplan is told, and every later boot reads the file. Only when the
-    # bytes moved, and only on a real host.
-    if [ "$netplan_changed" -eq 1 ] && [ -z "$ROOT" ]; then
-        netplan apply
-        echo "netplan: applied"
     fi
 
     echo "changed=$CHANGED"
@@ -518,6 +543,9 @@ cmd_verify() {
         problems=1
     fi
     if ! check_text "$ROOT/etc/netplan/50-cloud-init.yaml" "$(desired_netplan)"; then
+        problems=1
+    fi
+    if ! check_text "$ROOT/etc/systemd/resolved.conf.d/90-pihole-resolvers.conf" "$(desired_resolved)"; then
         problems=1
     fi
 
