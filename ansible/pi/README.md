@@ -59,6 +59,9 @@ prints `changed=0` on a host that already matches.
   settings file now clears: the duplicate is gone and this file carries all six, `ashudev.com`
   included. `ADLISTS_URL` went with them, since no timer or entrypoint runs `pihole-updatelists` on
   these hosts — the blocklists in `gravity.db` are edited through the panel.
+- **`FTLCONF_webserver_api_max_sessions=64`** is there because 16 is the default, a session lasts 30
+  minutes, and an app password cannot close one — only the panel's own password can. The parity check
+  takes a session per host, and the third run in half an hour answered `api_seats_exceeded`.
 - **`FTLCONF_misc_etc_dnsmasq_d=true` is what makes that file read at all.** Pi-hole v6 defaults it
   to false, so `/etc/dnsmasq.d` was ignored on both hosts and the overrides survived only through the
   env duplicate. Measured on 2026-11-25: with the key on, all six answer from `127.0.0.1`.
