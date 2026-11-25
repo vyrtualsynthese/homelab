@@ -11,6 +11,9 @@ Date: 2026-11-21/22 and 2026-11-24 · **Proved** on `v1.30.1+k3s1` → `v1.31.14
 > · **Verified** 2026-11-24: all four nodes on `v1.36.6+k3s1`, containerd `2.3.7-k3s1.36`, Ready,
 > etcd `ok`, both Plans pinned to the version they reached, controller kubectl `v1.36.2`; five minors
 > climbed in three chains on this procedure, quorum never lost, and no ingress blip in the last three
+> hops (6 s at 1.33)
+> · **Changed 2026-11-25:** step 3 is the snapshot alone — K3s uploads it itself, and the restic copy
+> is gone from the backup chart
 > · **Kind:** how-to
 >
 > **Sources** `cluster/infrastructure/system-upgrade/controller.yaml`,
@@ -94,11 +97,14 @@ guide](https://kubernetes.io/docs/reference/using-api/deprecation-guide/) for 1.
 surviving version, a `portworxVolume` moves to its CSI driver. A hit cannot be repaired after the
 node that serves it has restarted.
 
-**3. Copy etcd off the node, because the next step restarts it.** The copy holds the cluster's object
-state, not one node's: any server's copy restores the whole of it. What the node in the file name
-records is *which server wrote the file*, and K3s takes it from where the command runs, not from
-`--name`: a snapshot is `<name>-<node>-<time>`. Pin the pod with `nodeName` to the server whose restart
-is next, pass the version alone to `--name`, and read the printed file name back:
+**3. Take the pre-upgrade snapshot, which uploads itself.** K3s ships every snapshot to the bucket on
+its own since 2026-11-25 (`etcd-s3: true` plus the `k3s-etcd-snapshot-s3-config` Secret, see
+[`../secrets.md`](../secrets.md)), so this step writes a file and checks that it left the node; no
+restic job is involved any more. The snapshot holds the cluster's object state, not one node's: any
+server's snapshot restores the whole of it. What the node in the file name records is *which server
+wrote the file*, and K3s takes it from where the command runs, not from `--name`: a snapshot is
+`<name>-<node>-<time>`. Pin the pod with `nodeName` to the server whose restart is next, pass the
+version alone to `--name`, and read the printed file name back:
 
 ```bash
 kubectl apply -f - <<'YAML'
@@ -127,43 +133,33 @@ The `ls` must show `pre-<version>-<node>-<time>`, with the node you pinned in th
 node there means the manifest was carried over from the previous step, and the copy is not from the
 node it is for: fix the pod, not the tag. The path in that `ls` is the **host's**, reached through the
 `/host` mount: pointed at the pod's own `/var/lib/...` it prints `No such file or directory` while the
-snapshot was in fact written, which is what the 2026-11-24 run saw on `nuc0`.
-
-A worker has nothing to copy: `nas` has no `/var/lib/rancher/k3s/server/db/snapshots` at all, and its
-restart cannot change object state. The server copies across the run are the rollback points for the
-whole upgrade; do not take one "for the worker" on whichever server you happen to be on.
-
-Then push it into the off-site repository, from the node that holds the file. Re-running the whole
-streaming backup job works but reads 9 GiB to upload 60 MiB; a pod that backs up only the snapshot
-directory takes five seconds:
+snapshot was in fact written, which is what the 2026-11-24 run saw on `nuc0`. The upload runs behind
+the write, so the file appears under the `etcd/` prefix about a minute later — a snapshot that is on
+disk alone is a node that could not read its Secret:
 
 ```bash
-# same container spec as the backup job's `restic` container, with:
-#   command: sh -c 'restic backup /host/etcd-snapshots --tag etcd-pre<version>-<node>'
-#   volumes: the `etcd-snapshots` hostPath only (/var/lib/rancher/k3s/server/db/snapshots)
-#   nodeName: <the same node as the snapshot pod>
-kubectl -n backup logs <pod>          # "snapshot <id> saved", then `restic ls` names the file
+aws s3 ls s3://ashudev-homelab-backup/etcd/ | tail -3        # from a laptop, with the OVH key
+kubectl -n kube-system logs etcd-snapshot-once | grep -i s3  # or read the node's own journal
 ```
 
-`--tag` carries the node from the file name, never the plan's target, so the two cannot disagree.
-`--host <node>` does the same for restic's own group key, and it matters for the retention: `forget`
-works per host, and a copy whose host is a pod name is a group of one that no `keep-*` rule can ever
-drop. `rbp2` has no stream of its own, so its copies go to `nodes-streaming`, the control-plane
-stream that is not already carrying them.
+**The retention does not cover these files.** K3s prunes by count within one name, and the count it
+applies to is `etcd-snapshot-*`: a `pre-<version>` file is a group of its own and stays until someone
+removes it. Keep the newest few, one per version the cluster may have to fall back to, and delete the
+rest from the bucket by hand:
 
-**What the 1.31 run left, read on 2026-11-22.** Every snapshot pod in that run was pinned to
-`streaming` while `--name` carried the node being restarted, so four files were written, all on
-`streaming`, and all said so: `pre-131-nuc0-streaming-1795301064`,
-`pre-131-rbp2-streaming-1795303043`, `pre-131-streaming-streaming-1795303491` and
-`pre-131-nas-streaming-1795303870`. The node directories confirm it: `nas` has no snapshot directory,
-and `nuc0` and `rbp2` hold no pre-1.31 file. Nothing was missing — an etcd copy is cluster state — but
-three copies sat in the bucket tagged `etcd-pre131-{rbp2,streaming,nas}`, each under a host of its own,
-so each was a `forget` group of one that no retention rule would ever drop. The two mislabelled ones
-were forgotten on 2026-11-22 (`restic forget 5a6d795d d434572d --prune`, 72 KiB of packs freed);
-`etcd-pre131-streaming` is kept as the pre-1.31 point.
+```bash
+aws s3 rm s3://ashudev-homelab-backup/etcd/pre-131-<node>-<time>.zip
+```
 
-The NAS is not an option: `/mnt/storage` and `/mnt/storage/nfs` are handed to pods read-only, and only
-the per-claim subdirectories are writable. A copy there would land inside a backed-up stream.
+A worker has nothing to snapshot: `nas` has no `/var/lib/rancher/k3s/server/db/snapshots` at all, and
+its restart cannot change object state. A copy there is not an option either: `/mnt/storage` and
+`/mnt/storage/nfs` are handed to pods read-only, and only the per-claim subdirectories are writable.
+The server snapshots across the run are the rollback points for the whole upgrade; do not take one
+"for the worker" on whichever server you happen to be on.
+
+The 1.31 to 1.36 climbs predate the upload and took these copies through restic by hand, in a node job
+that mounted the snapshot directory. That bridge is gone from `cluster/helm/backup`, and so are its
+restic groups: the pre-1.31 point it left is in the bucket as a `pre-131` file.
 
 **4. Pin the version *and* the target node** on the plan the node belongs to. Two plans exist:
 `server-plan` matches `node-role.kubernetes.io/control-plane In [true]`, `agent-plan` matches

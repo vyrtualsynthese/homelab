@@ -59,12 +59,6 @@ spec:
                 path: {{ $root }}
                 type: Directory
             {{- end }}
-            {{- if $cfg.etcdSnapshots }}
-            - name: etcd-snapshots
-              hostPath:
-                path: /var/lib/rancher/k3s/server/db/snapshots
-                type: Directory
-            {{- end }}
           initContainers:
             - name: prepare
               image: {{ include "backup.image" (dict "root" $ "name" "python") }}
@@ -81,10 +75,6 @@ spec:
                 {{- range $.Values.hostPaths }}
                 - --host-path
                 - {{ . }}
-                {{- end }}
-                {{- if $cfg.etcdSnapshots }}
-                - --host-path
-                - {{ $.Values.etcdSnapshotsPath }}
                 {{- end }}
               env:
                 - name: TZ
@@ -104,9 +94,6 @@ spec:
                 - {name: host-etc, mountPath: /host/etc, readOnly: true}
                 {{- range $i, $root := $cfg.roots }}
                 - {name: root-{{ $i }}, mountPath: {{ $root }}, readOnly: true}
-                {{- end }}
-                {{- if $cfg.etcdSnapshots }}
-                - {name: etcd-snapshots, mountPath: {{ $.Values.etcdSnapshotsPath }}, readOnly: true}
                 {{- end }}
           containers:
             - name: restic
@@ -140,8 +127,5 @@ spec:
                 - {name: host-etc, mountPath: /host/etc, readOnly: true}
                 {{- range $i, $root := $cfg.roots }}
                 - {name: root-{{ $i }}, mountPath: {{ $root }}, readOnly: true}
-                {{- end }}
-                {{- if $cfg.etcdSnapshots }}
-                - {name: etcd-snapshots, mountPath: {{ $.Values.etcdSnapshotsPath }}, readOnly: true}
                 {{- end }}
 {{- end }}

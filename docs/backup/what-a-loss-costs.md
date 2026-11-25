@@ -21,9 +21,10 @@ put it back are the rest of this section.
 | Stream | Holds | Where it lands |
 |---|---|---|
 | `nodes-nas` | the PostgreSQL dumps and their `globals.sql`, Grafana's database and alert rules | OVH bucket, nightly 04:30 |
-| `nodes-nuc0` | ten claims from nine applications, the node's `/etc`, an etcd snapshot copy | OVH bucket, nightly 05:00 |
-| `nodes-streaming` | the media stack's configuration, the node's `/etc`, an etcd snapshot copy | OVH bucket, nightly 05:30 |
+| `nodes-nuc0` | ten claims from nine applications, the node's `/etc` | OVH bucket, nightly 05:00 |
+| `nodes-streaming` | the media stack's configuration, the node's `/etc` | OVH bucket, nightly 05:30 |
 | `nfs` | syncthing, koillection's uploads, the ACME certificate store, the qBittorrent config | OVH bucket, nightly 06:00 |
+| `etcd/` (not a restic repository) | the cluster's object state: every Secret, Deployment, ArgoCD Application and claim object, uploaded by each control-plane server | OVH bucket, every six hours from each server |
 
 Every application's configuration is a `local-path` claim, so a node's disk dying costs that day's
 changes and not the settings themselves — as long as the claim has a row in
@@ -36,10 +37,10 @@ file.
 | Where | Lost with it |
 |---|---|
 | `nas`: the mechanical array, and the music, stash, books and media exports | the media library and the books, one copy each, by decision |
-| the etcd snapshot copy | **not** officially uploaded yet: the copy is a file that rides in the two control-plane streams, and restoring one has not been drilled. The official K3s S3 upload lands with the 1.31 upgrade (W5) |
+| the etcd snapshots | the cluster's object state, from the bucket's `etcd/` prefix. It is there every six hours per server, and one was restored into a throwaway cluster on 2026-11-22; what would be lost is the last few hours of object changes |
 | anything a row does not name | a claim added since the last edit of `values.yaml`, a host directory outside the four in the matrix |
 | the two edge Pis | their own state, unchanged: outside the cluster, and their restic path is in the [Ansible audit](../audit/ansible-hosts.md) |
-| a Secret created by hand, until the etcd upload lands | its value is in etcd and nowhere else: `view` RBAC hides it, and no page records it ([secrets.md](../secrets.md)) |
+| a Secret created by hand and not filed in the vault | its value is in etcd and in the bucket's snapshots, but no page records it and `view` RBAC hides it ([secrets.md](../secrets.md)) |
 | the internal CA's root key | only a password-manager note and an offline USB stick, made by hand ([internal-ca.md](../runbooks/internal-ca.md)) |
 | a file changed after 06:00 | up to a day of it, which is what the schedule costs |
 
@@ -77,13 +78,11 @@ comes back and is readable", not "a cluster comes back".
    [postgres-restore.md](../runbooks/postgres-restore.md) after restoring `globals.sql`, the board's
    columns from the [seed script](../runbooks/vikunja-board-seed.md) and its cards from the restored
    dump ([use-the-board.md](../running-it/use-the-board.md)).
-5. **The unknowns.** Whether an etcd copy restores (the file is there, the drill is not), whether a
-   restored claim matches its chart, and which Secret values exist only in the cluster.
+5. **The unknowns.** Whether a restored claim matches its chart, and which Secret values exist only
+   in the cluster.
 
 ## What is still owned elsewhere
 
-- **W5 (Platform)**: the official K3s etcd upload to S3, which replaces the copy riding in the two
-  node streams, and its restore runbook.
 - **W8 (Ansible and docs)**: hosts described in git, playbooks that build one, and a procedure tested
   against the first real restore.
 - **The edge Pis**: their own backups, deferred by decision.

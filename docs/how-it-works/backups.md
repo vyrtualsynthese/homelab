@@ -3,7 +3,8 @@
 > **In one line.** Every night, four `restic` repositories (restic is the backup program: it stores
 > encrypted, deduplicated snapshots — one point-in-time copy each — in one OVH bucket) carry the data
 > a rebuild cannot recreate: application configuration, the PostgreSQL dumps and their roles,
-> syncthing, koillection's uploads, and the etcd snapshot copies.
+> syncthing and koillection's uploads. The cluster's own database sits in the same bucket, uploaded
+> by K3s itself.
 >
 > **Use it when** you are adding a stateful application, a job went red, a stream looks stale, or you
 > are weighing what a loss would cost · **Verified** 2026-11-22: a claim was rebuilt from its snapshot
@@ -28,8 +29,8 @@ own restic repository inside it, so a broken stream cannot damage another's hist
 | Repository | Written by | Runs (Europe/Paris) | Holds |
 |---|---|---|---|
 | `nodes-nas` | `backup-node-nas` | 04:30 | the PostgreSQL dumps and their `globals.sql`, Grafana's database |
-| `nodes-nuc0` | `backup-node-nuc0` | 05:00 | ten claims from nine applications, the node's `/etc`, the etcd copy |
-| `nodes-streaming` | `backup-node-streaming` | 05:30 | the media stack's configuration, the node's `/etc`, the etcd copy |
+| `nodes-nuc0` | `backup-node-nuc0` | 05:00 | ten claims from nine applications, the node's `/etc` |
+| `nodes-streaming` | `backup-node-streaming` | 05:30 | the media stack's configuration, the node's `/etc` |
 | `nfs` | `backup-nfs` | 06:00 | syncthing, koillection's uploads, the ACME store, the qBittorrent config |
 
 The syncthing application's own chart carried a restic CronJob until 2026-11-20. It pointed at an
@@ -77,8 +78,27 @@ something else. A row may also carry `pv:` when two directories on the disk matc
 
 Alongside the claims, the two control-plane jobs copy `/host/etc/rancher/k3s`, `/host/etc/exports`,
 `/host/etc/netplan` and a short list of systemd units. That is not a rebuild; it stops the files a
-rebuild needs from vanishing with the disk. The etcd copy rides in the same stream until the official
-K3s S3 upload lands with the 1.31 upgrade (W5).
+rebuild needs from vanishing with the disk.
+
+## The etcd snapshots, which restic does not carry
+
+The cluster's own database is a fifth prefix in the bucket, `etcd/`, and not a repository inside it.
+Each control-plane server uploads its own snapshot there every six hours, named
+`etcd-snapshot-<server>-<unix seconds>.zip`; three servers at four a day keeps the newest 180
+objects, about fifteen days. The access key is not on the nodes: it lives in the Secret
+`kube-system/k3s-etcd-snapshot-s3-config` (type `etcd.k3s.cattle.io/s3-config-secret`), which K3s
+reads on every snapshot, and `/etc/rancher/k3s/config.yaml` names it along with the bucket, the
+`etcd/` prefix and the retention.
+
+Those uploads are the live record of `nuc0`, `streaming` and `rbp2`, and the one piece of the
+cluster a rebuild cannot re-derive from git: every Secret, every claim object, the ArgoCD
+Applications and the PVCs come back with them. [`runbooks/restore-etcd.md`](../runbooks/restore-etcd.md)
+is the procedure and the drill log.
+
+From 2026-11-20 to 2026-11-25 the two control-plane jobs also copied the snapshot directory into
+their restic streams, as the bridge until this upload landed. Those copies are still inside the
+snapshots the monthly tail keeps, and are still restorable; no night adds one any more, and
+`backup-verify` reads the uploads rather than the copies.
 
 ## What is deliberately not backed up
 
@@ -101,7 +121,10 @@ Measured on 2026-11-20, after every exclusion: **12.2 GB** in scope. The first m
 | `nodes-nuc0` | 0.94 GB | 0.25 GB |
 | `nodes-nas` | 3.10 GB | 0.10 GB |
 | `nfs` | ≈ 3 087 GB | 6.9 GB |
-| etcd copies | 1.11 GB | 1.11 GB |
+
+The etcd snapshots left the streams on 2026-11-25. The 1.11 GB row they used to add is what the
+older `nodes-nuc0` and `nodes-streaming` snapshots still hold, one copy per retained snapshot; no
+night adds a new one, and the uploads themselves are 6–7 MB each per server.
 
 Those are the design's numbers. The repository disagreed with the first row from its first night,
 and the reason was a defect rather than a larger library: on 2026-11-22 the `nodes-streaming`
@@ -136,11 +159,11 @@ as the photos and documents change. Egress is free, so a restore costs nothing b
 
 `budgetGiB` in `values.yaml` is the same number as a ceiling: the verifier fails a stream whose
 repository passes it. The four budgets sum to 55 GiB, well above the top of the expected range: the
-`nodes-streaming` ceiling carries a separate etcd copy per retained snapshot, and the `nfs` one
-holds ten years of yearly versions of the photos and documents. So a stream that picks up a
-directory it should not have still trips the check long before the bill notices. Past its budget,
-raise the number deliberately; a stream hundreds of gigabytes over it is a directory that should
-not be in a row.
+`nodes-streaming` ceiling was raised for a separate etcd copy per retained snapshot, which the older
+snapshots still hold, and the `nfs` one holds ten years of yearly versions of the photos and
+documents. So a stream that picks up a directory it should not have still trips the check long
+before the bill notices. Past its budget, raise the number deliberately; a stream hundreds of
+gigabytes over it is a directory that should not be in a row.
 
 ## The five ways it fails
 
@@ -162,7 +185,11 @@ not be in a row.
    the case with no timestamp left to compare. Only snapshots tagged `stream=<name>` count: a copy
    taken by hand in between, like the etcd copy from the 1.31 upgrade, lands in the same repository
    with a later timestamp, and reading it would make a stopped stream look fresh. A stream that grows
-   past its budget means a row is carrying something it should not.
+   past its budget means a row is carrying something it should not. The etcd uploads are checked on
+   the same run: `backup-verify` asks each control-plane server for its newest object in `etcd/`,
+   prints `etcd-s3 server=<name> file=… age_h=…`, and fails the morning when one is missing or older
+   than 26 hours — a server that stops uploading looks exactly like a healthy one until the day it is
+   needed.
 3. **A `sqlite` row stops staging its database.** The job stays green: the claim itself is still
    backed up, so nothing fails, and a `db:` pattern that upstream moved or renamed matches nothing
    every night from then on. What disappears is the consistent copy the row exists for, the one a

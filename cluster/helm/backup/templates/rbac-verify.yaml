@@ -1,0 +1,47 @@
+# The verifier's own identity, and the only service account in this chart that has one.
+# Every other job sets `automountServiceAccountToken: false`: a backup job reads files and
+# writes restic, and needs nothing from the API. `backup-verify` has one question that only
+# the API can answer — which control-plane servers exist, and what etcd snapshots K3s has
+# published for each — so it carries a token and this two-rule role, and nothing else.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: backup-verify
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "backup.labels" (dict "root" . "stream" "verify") | nindent 4 }}
+automountServiceAccountToken: false
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: backup-verify
+  labels:
+    {{- include "backup.labels" (dict "root" . "stream" "verify") | nindent 4 }}
+rules:
+  # Read the servers, rather than keeping a list of them beside the script: a fourth server
+  # that joins is then checked, and one that leaves stops being expected.
+  - apiGroups: [""]
+    resources: ["nodes"]
+    verbs: ["get", "list"]
+  # The `ETCDSnapshotFile` objects K3s's reconcile publishes, one per object in the bucket.
+  # This is how the verifier learns that each server's upload is still happening: an object
+  # per snapshot, named for the server that took it.
+  - apiGroups: ["k3s.cattle.io"]
+    resources: ["etcdsnapshotfiles"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: backup-verify
+  labels:
+    {{- include "backup.labels" (dict "root" . "stream" "verify") | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: backup-verify
+subjects:
+  - kind: ServiceAccount
+    name: backup-verify
+    namespace: {{ .Release.Namespace }}

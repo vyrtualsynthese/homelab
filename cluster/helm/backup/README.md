@@ -60,14 +60,21 @@ Storage bucket. Four restic repositories, one per stream: `nodes-nas`, `nodes-nu
 
 | Objects | Runs | Reads |
 |---|---|---|
-| `backup-node-nas`, `backup-node-nuc0`, `backup-node-streaming` | 04:30, 05:00, 05:30 Europe/Paris | the node's `local-path` roots, its host configuration, and on the two control planes the K3s snapshot directory |
+| `backup-node-nas`, `backup-node-nuc0`, `backup-node-streaming` | 04:30, 05:00, 05:30 Europe/Paris | the node's `local-path` roots and its host configuration |
 | `backup-nfs` | 06:00 | the `nas` exports: syncthing, koillection uploads, the ACME store, the qBittorrent config export — and its own `exclude` words, naming the ones that match nothing |
 | `backup-prune` | Sunday 12:00 | every repository, each with its own policy: `forget --keep-daily 7 --keep-weekly 4 --keep-monthly 12`, and on the `nfs` stream `--keep-monthly 24 --keep-yearly 10` |
-| `backup-verify` | 08:30 | every repository: newest snapshot age, size against budget, each `sqlite` row's staged database, each `mustMatch` row's files, the etcd copy's age, and each node row's `exclude` entries that matched nothing |
+| `backup-verify` | 08:30 | every repository: newest snapshot age, size against budget, each `sqlite` row's staged database, each `mustMatch` row's files, each control-plane server's own etcd upload, and each node row's `exclude` entries that matched nothing |
 
 Each node job is two containers: `prepare` (Python, stages the databases and writes the two path
 lists) and `restic` (one backup run). The prune and verify jobs own no data; they are here so the
 retention policy and the health check live beside what they check.
+
+`backup-verify` is the only job with a service account and a token. The etcd snapshots are not in
+restic any more: each control-plane server uploads them to the bucket's `etcd/` prefix itself, and
+K3s's reconcile publishes one `ETCDSnapshotFile` per object, naming the server that took it. The
+verifier reads those objects, and the nodes they belong to, through the API — the two read rules are
+in `templates/rbac-verify.yaml` and nothing else is granted. Every other job carries
+`automountServiceAccountToken: false` because a backup job reads files and writes restic.
 
 ## Facts proven against the cluster
 

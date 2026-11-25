@@ -4,7 +4,10 @@
 > calls that change one.
 >
 > **Use it when** you need to know where to look, are adding or editing a panel, or are explaining why
-> a dashboard is not in git · **Verified** 2026-11-21 · **Kind:** living page
+> a dashboard is not in git · **Verified** 2026-11-21 · **Kind:** reference
+>
+> **Sources** the live Grafana instance, read through its HTTP API on 2026-11-21; the one snapshot in
+> git, `cluster/helm/monitoring/grafana/export/traefik/`, which nothing applies
 
 ## Dashboards
 
@@ -22,7 +25,7 @@ Showcase, which still sit in the default `General` folder:
 | Homelab · Showcase | `homelab-showcase` | 13 | Presentation screen: drawn topology, four big numbers, network, storage, GPU |
 | Homelab · Media | `homelab-media` | 9 + rows | Media stack: app health issues, queues, missing items, indexers, release intake, qBittorrent transfer, Plex sessions and library |
 | Cloud | `cloud-services` | 6 | Internet-facing side: endpoints answering, DNS checks passing, days to the earliest certificate, per-probe success and latency, every check in one table |
-| Homelab · Backups | `homelab-backups` | 6 | Backup health: stream age, repository size, snapshot count, etcd copy age, estimated monthly cost, failed jobs |
+| Homelab · Backups | `homelab-backups` | 6 | Backup health: stream age, repository size, snapshot count, each server's etcd upload age, estimated monthly cost, failed jobs |
 | Homelab · Traefik | `homelab-traefik` | 13 + rows | The router in front of everything: traffic by router and by entry point, status classes, p95/p99, 5xx share, bytes and open connections by entry point, failed and slow requests from the access log, the certificate store, config reloads, scrape health |
 
 The old `homelab-investigate` was replaced by `homelab-platform` on 2026-11-12: its workload

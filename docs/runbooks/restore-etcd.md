@@ -4,7 +4,7 @@
 > server, with the token it was taken under, and read the objects out of it.
 >
 > **Use it when** the control plane is unquorate, one server will not start, or the drill that proves
-> the etcd copy restores is due · **Verified** 2026-11-22: a production snapshot restored into a
+> an etcd snapshot restores is due · **Verified** 2026-11-22: a production snapshot restored into a
 > throwaway single-node K3s on the workstation and its objects read back, 16 seconds end to end ·
 > **Kind:** how-to
 >
@@ -24,12 +24,14 @@ back and its applications still empty; the claims come back from the restic stre
 
 ## Preconditions
 
-- **The snapshot file.** One file per server per 12 hours, inside the `nodes-streaming` and
-  `nodes-nuc0` restic repositories, under `/host/etcd-snapshots/`. The official K3s upload to the
-  bucket's `etcd/` prefix has not landed: there is no `etcd/` prefix in the bucket and no
-  `k3s-etcd-snapshot-s3-config` Secret in `kube-system` (read on 2026-11-22). Until it does, the
-  copy in the restic stream is the only one, and its age is what `backup-verify` reports as
-  `etcd stream=… age_h=…`.
+- **The snapshot file.** Each control-plane server uploads its own snapshot to the bucket's `etcd/`
+  prefix every six hours, named `etcd-snapshot-<server>-<unix seconds>.zip`. The bucket is the one
+  the restic repositories live in, reached with the same OVH key pair, and `backup-verify` reports
+  each server's newest upload as `etcd-s3 server=<name> file=… age_h=…`. A server that stops
+  uploading disappears from that line, which is what the check exists for.
+  The restic streams carried a copy of the same directory from 2026-11-20 to 2026-11-25, as the
+  bridge until this landed; those copies are still in the `nodes-nuc0` and `nodes-streaming`
+  snapshots the monthly tail keeps, and are still restorable, but nothing writes them any more.
 - **The K3s server token.** It is what the snapshot was taken under, and the restore refuses to
   finish without it. It is in the password manager, item `homelab-backup-last-resort`, field
   `K3S_SERVER_TOKEN`; [`../secrets.md`](../secrets.md) lists it with the other three values the
@@ -41,28 +43,27 @@ back and its applications still empty; the claims come back from the restic stre
 
 ## Step 1 — pull the snapshot out of the bucket
 
-From a restic shell in the cluster, the one [`restore.md`](restore.md) Step 0 creates, or from a
-laptop with [`last-resort.md`](last-resort.md)'s four values when there is no cluster at all:
+The key pair is the restic one (item `homelab-backup-last-resort`); the prefix holds the servers'
+own uploads and nothing else:
 
 ```sh
-export NODES_STREAMING=s3:https://s3.gra.io.cloud.ovh.net/ashudev-homelab-backup/nodes-streaming
-restic -r "$NODES_STREAMING" ls latest | grep '^/host/etcd-snapshots/'
-restic -r "$NODES_STREAMING" restore latest --target /out --include '/host/etcd-snapshots'
-ls -l /out/host/etcd-snapshots/
+export AWS_ACCESS_KEY_ID=… AWS_SECRET_ACCESS_KEY=…
+aws --endpoint-url https://s3.gra.io.cloud.ovh.net s3 ls s3://ashudev-homelab-backup/etcd/
+aws --endpoint-url https://s3.gra.io.cloud.ovh.net s3 cp \
+  s3://ashudev-homelab-backup/etcd/<file> .
 ```
 
-Success: one file per 12-hour run, named `etcd-snapshot-<server>-<unix seconds>`, plus a
-`pre-131-*` file per server from the 1.31 move. Measured sizes on 2026-11-22: 41–80 MB per file, nine
-files, 514.8 MiB in total, restored in 3 seconds.
+Success: one object per server per six-hour run, `etcd-snapshot-<server>-<unix seconds>.zip`, 6–7 MB
+each with compression on (measured 2026-11-25, three servers within a minute of each other).
 
-The numbers are the snapshot's **creation** time, in Unix seconds; `date -u -d @1795348801` turns
-one back into `2026-11-22 12:00:01Z`. Take the newest file from a control-plane server, which is
-`streaming` or `nuc0` here: `nas` is a worker and `rbp2` a control plane that may be behind, and the
-newest object state is the point of a restore.
+The number in the name is the snapshot's **creation** time, in Unix seconds; `date -u -d @1795569627`
+turns one back into `2026-11-25 01:20:27Z`. All three servers hold the same object state, so the
+newest object from any of them is the one to take — `nas` is a worker and never uploads.
 
-The file is a plain etcd database — `xxd -l 32` shows the bbolt magic bytes `edda0ced` — zipped only
-when `etcd-snapshot-compress` is on, which it is not. Copy it as it is; nothing has to be opened
-before the server sees it.
+The file is a zipped etcd database, because `etcd-snapshot-compress` is on in
+`/etc/rancher/k3s/config.yaml`. K3s decompresses it for the reset itself, so it is handed to
+`--cluster-reset-restore-path` exactly as downloaded; `unzip -l` lists its single member if it has
+to be inspected first.
 
 ## Step 2 — settle the token before anything starts
 
@@ -103,7 +104,7 @@ holding the snapshot's objects.
 itself:
 
 ```sh
-k3s server --cluster-reset --cluster-reset-restore-path=/out/host/etcd-snapshots/<file>
+k3s server --cluster-reset --cluster-reset-restore-path=/out/<file>
 ```
 
 **A server that already runs** — this node's own datastore is damaged and is being replaced. Stop
@@ -111,7 +112,7 @@ K3s first, because the reset takes the etcd port:
 
 ```sh
 sudo systemctl stop k3s
-sudo k3s server --cluster-reset --cluster-reset-restore-path=/out/host/etcd-snapshots/<file>
+sudo k3s server --cluster-reset --cluster-reset-restore-path=/out/<file>
 sudo systemctl start k3s
 ```
 
@@ -215,7 +216,7 @@ The rehearsal leaves nothing behind:
 ```sh
 docker rm -f k3s-drill
 docker volume rm k3s-drill
-rm -rf /out/host/etcd-snapshots
+rm -rf /out
 ```
 
 On a real server there is nothing to uninstall: the datastore is the one that was just restored, and
