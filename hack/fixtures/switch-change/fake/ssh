@@ -208,7 +208,9 @@ def main(argv):
     fire_due(now)
 
     # A link that a change took away answers nothing until the timer puts the configuration back.
-    if flag("break"):
+    # A test inspecting the stored table sets FAKE_IGNORE_BREAK: the break models the link, not the
+    # table the entry sits in.
+    if flag("break") and not os.environ.get("FAKE_IGNORE_BREAK"):
         sys.exit(255)
 
     sys.stdout.write(answer(command))
