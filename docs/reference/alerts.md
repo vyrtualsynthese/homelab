@@ -5,9 +5,9 @@
 > nobody watches.
 >
 > **Use it when** an alert fired and you want to know what it means, you are writing or editing a
-> rule, or you are asking whether something is monitored at all · **Verified** 2026-11-25 · **Kind:** reference
+> rule, or you are asking whether something is monitored at all · **Verified** 2026-11-26 · **Kind:** reference
 >
-> **Sources** the live rules, read from Grafana's API on 2026-11-25 ·
+> **Sources** the live rules, read from Grafana's API on 2026-11-26 ·
 > `cluster/helm/monitoring/grafana/values.yaml`, `docs/observability-conventions.md`, and the two
 > exports under `cluster/helm/monitoring/grafana/export/{traefik,security}/rules.json`
 
@@ -17,8 +17,8 @@ The overview — what runs where, its sizing, and how to query the stack:
 ## Alerting
 
 Grafana unified alerting, folder `Homelab`, **two rule groups split by cadence
-on 2026-11-18**: `homelab-core-fast` at **60 s** (27 rules) and `homelab-core` at
-**300 s** (31 rules). **58 rules**, **two contact points**, and four child routes: two by severity and
+on 2026-11-18**: `homelab-core-fast` at **60 s** (26 rules) and `homelab-core` at
+**300 s** (31 rules). **57 rules**, **two contact points**, and four child routes: two by severity and
 two on `board=card` — one to each contact point.
 
 The split rule is the `for` duration: a rule sits in the fast group when its `for`
@@ -31,8 +31,8 @@ checked every five minutes: `CertificateExpiring`, `CloudTlsCertificateExpiring`
 `RestoreDrillOverdue` (`for: 1h`), the three disk-fill predictions (`for: 30m`), the temperature and
 SLO-ish checks (`for: 10m` and above). The slowest ratio is the `for: 10m` rules in
 `homelab-core`: half their own `for` between checks, so an alert is delayed by up to five
-minutes and never by more than that. At 58 rules the load is **33.2 evaluations a minute** —
-27 rules every 60 s plus 31 every 300 s — against 35.0 when the split was made, with all 35 rules
+minutes and never by more than that. At 57 rules the load is **32.2 evaluations a minute** —
+26 rules every 60 s plus 31 every 300 s — against 35.0 when the split was made, with all 35 rules
 of that day on the fast cadence.
 
 **Delivery**: contact point `discord-homelab` (type `discord`).
@@ -124,7 +124,6 @@ confirmed by the first read-back):**
 | `CloudDnsCheckFailing` | `1 - probe_success{job="blackbox-dns"}` — a zone's check failed at one authoritative server | 10m | critical | inactive |
 | `CloudTlsCertificateExpiring` | days to the earliest public certificate, firing below 21 | 1h | warning | inactive |
 | `SecurityBanBurst` | more than 20 new bans on the `streaming` bouncer in 10 minutes | 5m | warning | inactive |
-| `SecurityAttackSustained` | one address answered 401, 403 or 404 more than 100 times in 10 minutes | 5m | critical | inactive |
 | `AuthentikSignInFailures` | more than 20 failed authentik sign-ins in 15 minutes | 5m | warning | inactive |
 | `HostSshBruteForce` | more than 10 failed SSH passwords on one host in 10 minutes | 5m | warning | inactive |
 | `HostFirewallBlockBurst` | more than 200 `UFW BLOCK` lines on one host in 5 minutes | 5m | warning | inactive |
@@ -437,8 +436,8 @@ None of the three carries a `TraefikDown` twin, and none needs one: the `Deploym
 `kube-system`, so `CoreDeploymentDown` covers a router that stops running, and `ScrapeTargetDown`
 covers the pod's `:9100` scrape going quiet while the pod still answers.
 
-**The seven security rules** (2026-11-25) are the only rules here that read a log rather than a
-metric, and the only ones whose job is a person rather than an application. Six sit in
+**The six security rules** (2026-11-25) are the only rules here that read a log rather than a
+metric, and the only ones whose job is a person rather than an application. Five sit in
 `homelab-core-fast`; `SecurityExposureDrift` sits in `homelab-core` because its `for` is 10 minutes,
 which is the split above, and a posture change is a slow fault that gains nothing from a 60-second
 check.
@@ -446,14 +445,13 @@ check.
 | Rule | Reads | Why that threshold |
 |---|---|---|
 | `SecurityBanBurst` | `delta(sum(fw_bouncer_banned_ips)[10m:1m])`, Prometheus | one or two bans a day is the normal rate; twenty in ten minutes is a scenario matching a stream |
-| `SecurityAttackSustained` | the access log, top address answered 401/403/404 in 10 m | the busiest address on a quiet day is a handful; a hundred is a scanner |
 | `AuthentikSignInFailures` | `homelab_authentik_signins_15m{outcome="failure"}` | the exporter's own count, so the rule cannot disagree with the dashboard's tile |
 | `HostSshBruteForce` | `{source="journal", unit="ssh"}` filtered to failed passwords | 4 in 24 hours across the whole cluster on the day it was written |
 | `HostFirewallBlockBurst` | `{source="journal", unit="kernel"}` filtered to `UFW BLOCK` | about eight per five minutes per node is the background; 200 is a scan |
 | `SecurityExposureDrift` | the exporter's three posture gauges | expected 0 ungated, 9 public hosts, 9 privileged controllers |
 | `SecurityStackBlind` | the exporter's age, three families, and the access-log count | ten minutes — no ten-minute window has ever held zero lines |
 
-**`SecurityStackBlind` is the rule that makes the other six believable**: each of them reports an
+**`SecurityStackBlind` is the rule that makes the other five believable**: each of them reports an
 event, and this one reports that nobody is watching for events. It is the only rule here with two
 datasources, so it is a classic condition over two queries rather than one expression —
 `A > 0 || B < 1`, where `A` is the Prometheus half (exporter older than 600 s, or a family missing)
@@ -474,13 +472,16 @@ number with no way to say which one. The journal input selects `_COMM=sshd` rath
 for the same class of reason: Ubuntu socket-activates sshd, and a unit filter would ship nothing on
 exactly the hosts where a guesser is most visible.
 
-Two of the seven were proved the way this page asks for, on 2026-11-25.
-`SecurityAttackSustained` fired with its threshold temporarily lowered to `> 0`: the message named
-the live address (`45.138.12.215 was refused 2 times in 10 minutes`), both receivers were notified,
-and the relay opened card **768** on the `alerts` board carrying the label, the rendered description
-and the link — that card, not a screenshot, is the readable proof, and it is still there. The Discord
-message cannot be read back from here: the webhook is a secure field and no bot token exists, so the
-card is the artifact this repository keeps.
+**`SecurityAttackSustained` was retired on 2026-11-26, after one day.** It had been proved the way this
+page asks for on 2026-11-25 — threshold temporarily lowered to `> 0`, the message named the live address
+(`45.138.12.215 was refused 2 times in 10 minutes`), both receivers were notified, and the relay opened
+card **768** on the `alerts` board — and the next day's rule history showed why it should not exist:
+seven firings in seven hours, each a different address, each held above the threshold for 7–11 minutes,
+and every one of them already banned at the firewall by CrowdSec. It reported that the internet scans,
+which is not something a person acts on. The per-address record is the dashboard's *Top addresses
+refused* panel, and `SecurityStackBlind` already reports the failure that matters, a detector that
+stopped. The Discord message cannot be read back from here: the webhook is a secure field and no bot
+token exists, so card 768 is the artifact this repository keeps.
 `SecurityStackBlind` was proved by stopping the detector: `kubectl -n security scale
 deploy/crowdsec-agent --replicas=0` removed the agent, `cs_parser_hits_ok_total` went stale five
 minutes later, the rule went `pending` and then fired, and scaling it back resolved it. That is the
@@ -541,6 +542,15 @@ reports `firing` on the Health dashboard.
   inside each line (`_HOSTNAME`) is not a stream label, so a rule has to extract it. The other units
   on every node stay unshipped by decision, and the volume is sized in
   [`log-budget.md`](log-budget.md#the-host-journal-first-numbers).
+- **CrowdSec is watched for silence, not for a dead poll.** `SecurityStackBlind` fires when the
+  firewall bouncer, the LAPI or the agent stops exporting its metrics. A bouncer that keeps exporting
+  while it no longer polls the LAPI — the scrape answers, the decision stream is dead — freezes the ban
+  set with every rule green. `rate(cs_lapi_bouncer_requests_total[10m])` read **0.1 req/s** (one poll
+  every 10 s) on 2026-11-26, so zero for ten minutes would name that case; no rule reads it yet.
+- **A successful authentik sign-in after a burst of failures is invisible.** `AuthentikSignInFailures`
+  counts failures only. The exporter publishes a count per outcome with no address, and CrowdSec reads
+  HTTP status rather than the identity provider's event log, so nothing joins "failures from this
+  address" to "the sign-in that worked". A per-address count from the exporter is the prerequisite.
 - **`PVCFillingUp` is blind for `local-path` claims.** The rule is NFS-only by
   construction; why the metric cannot exist for a `local-path` claim is in
   [`metrics.md`](metrics.md#exporter-quirks). The node filesystem rule covers the
