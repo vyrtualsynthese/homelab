@@ -58,6 +58,12 @@ class RenderTests(unittest.TestCase):
         self.assertTrue(body.startswith("repo: vyrtualsynthese/homelab\n"))
         self.assertIn("Alert key: g1", body)
 
+    def test_body_carries_the_slug_and_the_raw_group(self):
+        p = payload(group='{}/{alertname="DiskFull"}:{alertname="DiskFull", instance="nas"}')
+        body = relay.render_body(p, relay.key_slug(p))
+        self.assertIn(f"Alert key: {relay.key_slug(p)}", body)
+        self.assertIn("Group: " + relay.incident_key(p), body)
+
     def test_body_links_grafana_as_markdown(self):
         body = relay.render_body(payload(), "g1")
         self.assertIn("[open the alert](https://grafana.kub.local/alerting/rule/1)", body)
@@ -74,13 +80,40 @@ class RenderTests(unittest.TestCase):
 
 
 class QueryTests(unittest.TestCase):
-    def test_the_filter_quotes_with_single_quotes(self):
-        """Vikunja's filter language rejects double quotes: 400 Bad Request."""
-        self.assertEqual(relay.find_query("grafana/disk/nas"),
-                         "description like 'grafana/disk/nas' && done = false")
+    def test_the_filter_searches_a_hex_slug_not_the_raw_key(self):
+        """The board stores a description as HTML: a raw group key's quotes come back
+        as &#34; and the search never matches, which opened a card per retry."""
+        p = payload(group='{}/{alertname="DiskFull"}:{alertname="DiskFull", instance="nas"}')
+        self.assertRegex(relay.find_query(relay.key_slug(p)),
+                         r"^description like '[0-9a-f]{16}' && done = false$")
+
+    def test_the_slug_is_stable_for_the_same_group(self):
+        self.assertEqual(relay.key_slug(payload(group="g1")), relay.key_slug(payload(group="g1")))
 
     def test_a_quote_in_the_key_cannot_break_the_filter(self):
         self.assertEqual(relay.find_query("a'b"), "description like 'ab' && done = false")
+
+
+class BoardLabelTests(unittest.TestCase):
+    class Stub(relay.Board):
+        def __init__(self, titles):
+            super().__init__("http://board", "token", 9)
+            self.titles, self.written = titles, []
+
+        def call(self, method, path, body=None):
+            if path == "/api/v1/labels":
+                return [{"id": n, "title": t} for n, t in enumerate(self.titles)]
+            self.written.append((method, path, body))
+            return None
+
+    def test_a_label_the_board_lacks_is_skipped_not_raised(self):
+        """A missing label is decoration; losing the card over it is not acceptable."""
+        self.assertFalse(self.Stub(["task"]).label(1, "alert"))
+
+    def test_a_label_the_board_has_is_attached(self):
+        board = self.Stub(["task", "alert"])
+        self.assertTrue(board.label(1, "alert"))
+        self.assertEqual(board.written, [("PUT", "/api/v1/tasks/1/labels", {"label_id": 1})])
 
 
 class ThrottleTests(unittest.TestCase):
@@ -120,11 +153,22 @@ class ParseTests(unittest.TestCase):
             relay.parse_payload(b'{"status": "firing"}')
 
 
+class CardLookupTests(unittest.TestCase):
+    def test_the_lookup_uses_the_slug_not_the_raw_group(self):
+        """A card is found through the description; the raw key never matches there."""
+        p = payload(group='{}/{alertname="DiskFull"}:{alertname="DiskFull", instance="nas"}')
+        board = FakeBoard()
+        relay.handle(p, board, 600)
+        self.assertEqual(board.looked_up, [relay.key_slug(p)])
+        self.assertIn(f"Alert key: {relay.key_slug(p)}", board.calls[0][2])
+
+
 class FakeBoard:
     def __init__(self, card=None, last=None):
-        self.card, self.last, self.calls = card, last, []
+        self.card, self.last, self.calls, self.looked_up = card, last, [], []
 
     def find_open_card(self, key):
+        self.looked_up.append(key)
         return self.card
 
     def open_card(self, title, description):

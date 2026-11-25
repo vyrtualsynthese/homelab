@@ -50,7 +50,11 @@ Every delivery leaves one log line naming the rule and the outcome —
 rather than inferred from an empty board.
 
 One incident is Grafana's `groupKey`: the same rule on the same labels is the same card, however many
-times it fires. The card is found again by that key, which the relay writes into the description.
+times it fires. The card is found again by a 16-character SHA-256 prefix of that key, which is what
+the description's `Alert key:` line carries — not the key itself. Vikunja stores a description as
+HTML, so a group key's quotes come back as `&#34;` and a search on the raw key matches nothing; that
+is how three test cards were opened by three identical deliveries on 2026-11-24. The raw group key is
+kept on the next line as `Group:`, for a person reading the card.
 
 ## Step 1 — the bot
 
