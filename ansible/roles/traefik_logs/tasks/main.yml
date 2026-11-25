@@ -24,18 +24,29 @@
     group: root
     mode: "0644"
 
-# `logrotate --debug` parses the rule and prints what it would do, so a syntax
-# error fails this task instead of the first rotation three days later. It reads
-# `/etc/logrotate.conf`, not the drop-in, because that is the file cron hands to
-# logrotate: a stanza can parse on its own and still be skipped once the `include
-# /etc/logrotate.d` and the global settings are applied around it. Debug mode
-# writes nothing, so it runs under `--check` as well — `check_mode: false` is what
-# keeps a `--check` run from reporting the rule unproven.
+# `/usr/sbin/logrotate --debug` parses the config and prints what it would do,
+# so a syntax error fails here instead of at the first rotation three days later.
+# It reads `/etc/logrotate.conf`, the file cron hands to logrotate, so the
+# `include /etc/logrotate.d` and the global settings are part of the parse: a
+# stanza can be fine on its own and still be skipped in the full config. Because
+# that is the whole config, a drop-in this role never wrote — apt, dpkg, rsyslog
+# — can be the one that fails a task named after this rule; check what the error
+# names before looking at `traefik-access`.
 #
-# The look-up is what keeps the two honest on a node that does not have the tool:
-# under `--check` the install above only reports, so there is no binary to run,
-# and dying here would bury the real finding (a missing package) under a parse
-# error. The install task reports `changed` in that case, which is the signal.
+# What it proves depends on the run. On a real apply the template above has just
+# written the stanza, so the parse covers it. Under `--check` the template writes
+# nothing, so the parse reads the drop-in already on the host — or none, where
+# this role has never run — and says nothing about the new stanza. `check_mode:
+# false` is here to keep the host's own config parsed rather than silently
+# skipped; it is not a claim that the new content was proven. A temporary render
+# whose parse would prove it is not done, because writing that file is the one
+# thing `--check` must not do.
+#
+# The look-up and the command name the same absolute path on purpose: a bare
+# `logrotate` would come from `PATH`, and a guard on one binary with a command on
+# another is a proof that disappears the day they diverge. The look-up exists
+# because `--check` does not install the package, and dying on a missing binary
+# would bury that finding — the install task reports `changed` instead.
 - name: Look for the rotation tool
   ansible.builtin.stat:
     path: /usr/sbin/logrotate
@@ -44,7 +55,7 @@
 
 - name: Prove the rotation rule parses
   ansible.builtin.command:
-    cmd: logrotate --debug /etc/logrotate.conf
+    cmd: /usr/sbin/logrotate --debug /etc/logrotate.conf
   changed_when: false
   check_mode: false
   when: traefik_logs_logrotate.stat.exists
