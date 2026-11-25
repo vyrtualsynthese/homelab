@@ -4,12 +4,13 @@
 > the NFS client on `streaming`: one page is left waiting to be written for an I/O nothing performs,
 > and every `close()` of that file then blocks forever. Moving `/config` off NFS did not stop it and
 > neither did exporting the download volume `async`; in-flight downloads move to local disk on
-> 2026-11-25 (board cards 758 and 777).
+> 2026-11-25, and the disk they moved to stalls the app the same way (board cards 758, 777 and 782).
 >
 > **Use it when** qBittorrent's Web UI hangs, the exporter stops being scraped, or you want the
 > evidence gathered on 13 and 25 November, the suspects that were cleared, and what cleared the hang
-> · **Verified** 2026-11-25 19:35: two live wedges read from `/proc`, the client waiting on an I/O
-> that nothing performs while the server and the network measured clean · **Kind:** record
+> · **Verified** 2026-11-25 20:30: three live stalls read from `/proc`, the client waiting on an I/O
+> that nothing performs while the server and the network measured clean, then a write burst that
+> pinned the node's own SSD · **Kind:** record
 >
 > **Sources** `cluster/helm/media-stack/qbittorrent/values.yaml`,
 > `cluster/helm/media-stack/qbittorrent-exporter/values.yaml`, live `up` and
@@ -18,8 +19,9 @@
 Status: **second fix deployed 2026-11-25, gate not passed yet.** The config claim was moved off NFS
 on 2026-11-25 and it was not the cause; the downloads export was made `async` that evening and the
 stall came back under it too. The in-flight downloads moved off the export the same evening, under
-*The fix: in-flight downloads off the export*. Documented 2026-11-13, measured again on 2026-11-25
-(board cards 758 and 777). The exporter's alert stays silenced until it is closed or handed over; the
+*The fix: in-flight downloads off the export*, and the WebUI stalled again within three minutes —
+from the local disk the temp path landed on (*The temp path landed on the node's slowest disk*).
+Documented 2026-11-13, measured again on 2026-11-25 (board cards 758, 777 and 782). The exporter's alert stays silenced until it is closed or handed over; the
 note under *Why the app was not changed until now* says what to do with that silence.
 
 ## What is seen
@@ -335,8 +337,62 @@ Two consequences worth knowing:
   comes back with `TempPath` unset and the NFS load returns, silently. Check both keys after any
   rebuild of that claim.
 
+### The temp path landed on the node's slowest disk, 20:10
+
+The fix above is directionally right and it moved the load — onto `streaming`'s only large disk, which
+is the slowest device in the path. `/downloads-temp` is a `local-path` claim, and `local-path` on that
+node is `/dev/sda1`, mounted at `/mnt/ssd0`:
+
+| Where | Observation |
+|---|---|
+| the device | `CT1000BX500SSD1`, 1 TB, **25,241 power-on hours**, SMART PASSED, no reallocated sectors, 33 °C |
+| what else it holds | every media app's `local-path` config claim (the *arrs, cross-seed, maintainerr, calibre) |
+| the work it was given | 22 incomplete torrents, 65 GiB already downloaded, queued for relocation into the temp path |
+
+Between 20:12 and 20:27 that relocation wrote 39 → 92 GB. Measured on the node in the middle of it:
+
+| Observation | Value |
+|---|---|
+| dirty pages waiting to be written | **1.8–2.2 GB** |
+| those actually in flight | **~12 MB** |
+| `sda` throughput | **24 MB/s** at 513 writes/s and a queue depth of ~15 |
+| tasks in `D` | `jbd2/sda1` in `jbd2_journal_commit_transaction`, `kworker/u32:1+flush-8:0` in `wbt_wait` |
+| qBittorrent's blocked thread | `ext4_buffered_write_iter` → `generic_perform_write` → `balance_dirty_pages_ratelimited` → **`balance_dirty_pages`** |
+
+`balance_dirty_pages` is the kernel throttling a writer because too many of its pages are dirty. At
+24 MB/s the disk drains far slower than the copy fills it, so the writer sleeps there — minutes at a
+time — and while it does, qBittorrent's event loop stops running.
+
+The app says so itself. The log has a 6 m 44 s gap and then names the cause:
+
+```
+20:12:33 - Start moving torrent. Torrent: "Blade Runner 2099 S01E07 One More Kiss Dear ..."
+20:19:17 - System wake-up event detected. Re-announcing to all the trackers...
+20:19:17 - Moved torrent successfully. Torrent: "Blade Runner 2099 S01E07 ..."
+```
+
+Through that gap the WebUI was dead to every consumer (one `Failed to connect to qBittorrent` each in
+`sonarr` and `radarr`, `fetch failed` in `cross-seed`), the main thread sat in `futex_wait_queue` at
+about one context switch a second, and the listening socket's accept queue grew from 25 to 32 of its
+50. Not one RPC was pending: this is the local disk, not NFS.
+
+So there are **two stalls with the same symptom**. The one this page is about is the NFS client wedge
+on the export. This one is a write burst against a DRAM-less consumer SSD that has been powered on for
+2.9 years; its write speed after the cache is exhausted is what the copy is limited by, not the line
+rate.
+
+What the node can offer instead is thin: the root filesystem is `nvme0n1p2`, 227 GB with 91 GB free —
+fast, but not enough for a claim that holds 65 GiB of unfinished torrents today. The export's NVMe on
+`nas` measured 456 MB/s under `fsync` at the worst moment of the NFS wedge. Either the download rate
+is capped so `sda` keeps up, or the node needs fast storage of its own; a 400 GiB claim is not the
+problem, the device under it is.
+
 ### What is still open
 
+- **The temp claim's device.** `/downloads-temp` is on `sda`, the slowest disk in the node and the one
+  every media config also lives on. The relocation itself is a one-off burst, but the 205 GiB still to
+  download keep writing there at whatever the disk allows. A global download limit low enough for the
+  disk is a preference, not a chart change, and it is the cheap test.
 - **Settled, and no longer candidates:** `sync` off (tested, wedge returned); ext4 fast-commit (the
   feature is not enabled on this filesystem); a failing disk (SMART clean, no `nvme` error); the
   network and the server (no retransmission, no timeout, `nfsd` idle); the config volume (moved);
