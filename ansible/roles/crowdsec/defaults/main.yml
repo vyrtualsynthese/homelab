@@ -1,0 +1,14 @@
+---
+# The LAPI's NodePort on the cluster, reached through `streaming` itself: the
+# bouncer is a host service and does not resolve cluster DNS. The address is read
+# from the inventory rather than written here — `hack/tests/test_ansible_layer.py`
+# fails any host address repeated in a second file — and the NodePort itself is
+# fixed by the CrowdSec chart's Service.
+crowdsec_lapi_url: "http://{{ hostvars['streaming'].ansible_host }}:30500/"
+crowdsec_package: crowdsec-firewall-bouncer-nftables
+crowdsec_keyring: /etc/apt/keyrings/crowdsec.asc
+crowdsec_repo: https://packagecloud.io/crowdsec/crowdsec/ubuntu
+crowdsec_metrics_port: 60601
+# The only host that scrapes. `ufw` filters the bouncer's listener like any other
+# INPUT port, so this is an allow rule, not a formality.
+crowdsec_scraper: "{{ hostvars['nas'].ansible_host }}"

@@ -1,0 +1,43 @@
+# mode: nftables, and not iptables: `nft list sets` is the audit, and the set is
+# in the kernel, so a ban outlives the pod that created it.
+mode: nftables
+update_frequency: 10s
+log_mode: file
+log_dir: /var/log/
+log_level: info
+log_compression: true
+log_max_size: 100
+log_max_backups: 3
+log_max_age: 30
+api_url: {{ crowdsec_lapi_url }}
+api_key: {{ crowdsec_bouncer_key }}
+insecure_skip_verify: false
+deny_action: DROP
+deny_log: false
+supported_decisions_types:
+  - ban
+nftables:
+  ipv4:
+    enabled: true
+    set-only: false
+    table: crowdsec
+    chain: crowdsec-chain
+    priority: -10
+  # Nothing on this host listens on IPv6 that the router forwards, and an
+  # enabled IPv6 set would create a second place to look for a ban.
+  ipv6:
+    enabled: false
+# `input` covers the host's own services (SSH, the bouncer's listener) and
+# `forward` covers the CNI's portmap, so a NodePort or a published container
+# port is covered by the same decision.
+nftables_hooks:
+  - input
+  - forward
+pf:
+  anchor_name: ""
+prometheus:
+  enabled: true
+  listen_addr: 0.0.0.0
+  # Must stay equal to `crowdsec_metrics_port` in defaults/main.yml: the ufw rule
+  # and the readiness check use the variable, and the bouncer only reads its file.
+  listen_port: 60601
