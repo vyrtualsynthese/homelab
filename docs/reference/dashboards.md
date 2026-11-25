@@ -158,7 +158,7 @@ pipeline is blind (the exporter stale or a family it publishes gone, including t
 refusals above 85 % of everything. **Level 1 means watch**: any ban is active, or more than 20
 sign-ins failed in 15 minutes.
 
-The first version had a fifth term that counted `ALERTS{alertname=~"Security.*"}` — and it was dead
+The first version had a top term that counted `ALERTS{alertname=~"Security.*"}` — and it was dead
 on arrival. **Grafana evaluates every rule in this cluster**, so Prometheus's `ALERTS` family is
 empty: the panel's term could never be true, and the tile's "alerting" state was proved with a
 `vector(2)` probe rather than by a real rule. It now reads the signals the rules are written on, and
@@ -230,8 +230,9 @@ Across 2,740 two-minute windows (2026-11-21 17:57 → 2026-11-25 13:41) **not on
 the quietest held **4** and the median 8. At five-minute steps the answer is the same, so a
 "two gaps of five minutes" rule would have been built on a rhythm this cluster does not have. The
 observed gap is therefore **below the measurement floor**, and the rule waits **10 minutes**: five times
-that floor, roughly 20–40 requests missed at the measured quiet rhythm, and still far shorter than an
-outage anyone would tolerate silently.
+that floor, and still far shorter than an outage anyone would tolerate silently. Over the following
+day the quietest ten-minute window actually observed held **50 lines** — more than the two-minute
+rhythm extrapolates, because quiet stretches do not last ten minutes in a row.
 
 ## Changing things
 

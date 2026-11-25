@@ -15,7 +15,7 @@ export beside it states, for the same reason (two sources of truth in one folder
 
 | Panel | Datasource | Reads |
 |---|---|---|
-| Danger state | Prometheus | `ALERTS`, `fw_bouncer_banned_ips`, `traefik_router_requests_total`, `homelab_authentik_signins_15m` |
+| Danger state | Prometheus | `fw_bouncer_banned_ips`, the three `homelab_security_*` posture gauges, `homelab_security_exporter_last_success_timestamp_seconds`, `cs_active_decisions`, `cs_parser_hits_ok_total`, `traefik_router_requests_total`, `homelab_authentik_signins_15m` |
 | Bans active | Prometheus | `fw_bouncer_banned_ips`, scraped from the host bouncer on `streaming:60601` |
 | Posture | Prometheus | `homelab_security_{ingress_routes,ungated_routes,public_hosts,privileged_workloads}`, `homelab_security_exporter_last_success_timestamp_seconds` |
 | Requests per host, 24 h | Loki | `{job="fluent-bit", source="accesslog"}` with `\| json`, grouped by `RequestHost` |
