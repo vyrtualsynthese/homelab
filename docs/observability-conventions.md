@@ -6,8 +6,12 @@
 > **Use it when** you want a number out of the stack, or you are adding an exporter · **Verified**
 > 2026-11-25 · **Kind:** reference
 >
-> **Sources** the live stack read through Prometheus and Grafana on 2026-11-25,
-> `cluster/helm/monitoring/`, `docs/reference/metrics.md` and `docs/reference/alerts.md`
+> **Sources** `cluster/helm/monitoring/prometheus/values.yaml`,
+> `cluster/helm/monitoring/loki/values.yaml`, `cluster/helm/monitoring/grafana/values.yaml`,
+> `cluster/helm/monitoring/fluent-bit/values.yaml`, `cluster/helm/monitoring/blackbox-exporter/values.yaml`,
+> `cluster/helm/platform/traefik/values.yaml`, `ansible/roles/traefik_logs/tasks/main.yml`,
+> `docs/reference/metrics.md` and `docs/reference/alerts.md`. The live stack was read through
+> Prometheus and Grafana on 2026-11-25.
 
 The general practice — how to choose a threshold, lay out a screen, verify a panel — lives in the
 project skill at `.opencode/skills/observability-and-alerting/SKILL.md`. This file only records what
@@ -27,8 +31,9 @@ after the media chart repairs. Re-verify a measured number before trusting it in
 | Fluent Bit | 5.1.3 | DaemonSet, all 4 nodes |
 | blackbox exporter | v0.29.1 | `nas`, 64 MiB limit |
 
-Fluent Bit tails `/var/log/containers/*.log` only: container output, no host logs and no systemd
-journal. The claim sizes and how long each keeps data are in
+Fluent Bit tails `/var/log/containers/*.log` on every node, plus `/var/log/traefik/access.log` on
+`streaming`; both are files a container writes, so host logs and the systemd journal stay out. The
+claim sizes and how long each keeps data are in
 [`reference/metrics.md#storage-and-retention`](reference/metrics.md#storage-and-retention).
 
 What the pipeline carries in a day — 533,803 lines and 117 MB on 2026-11-22 — and the selector that
@@ -245,31 +250,27 @@ scrape and eight of the ten targets moved to the 5-minute jobs
 
 ## What the router logs
 
-Traefik keeps a per-request access log since 2026-11-22: JSON on stdout, handed to a writer goroutine
-through a 100-slot channel, and carried to Loki by the same Fluent Bit pipeline as everything else. It
-exists for the question the metrics cannot answer — *which* request returned 502, or took four
-seconds — and it is deliberately narrower than a normal access log.
+**The URL is not in the store, and the client is.** Since 2026-11-25 Traefik writes its access log
+to `/var/log/traefik/access.log` on `streaming` — a file owned by `65532:65532`, mode `0660`, rotated
+at 200 MB with seven copies — and Fluent Bit tails it. The file carries the path and the user agent
+because CrowdSec's `crowdsecurity/traefik-logs` parser needs both to recognise probing;
+[the security design](superpowers/specs/2026-11-25-security-detection-design.md) says why the
+detector was worth that. Fluent Bit removes `RequestPath`, `request_User-Agent` and
+`RequestReferer` before Loki, so what the 30-day store holds is:
 
-**The URL and the client are not in it.** `RequestPath` is the URI; from 3.7.3 it can be stripped of
-its query string (`fields.queryParameters`), but not of its path, and the path alone carries
-FileBrowser's `/share/<hash>` capability links. So the whole field is dropped — the query parameters
-with it as a second lock — along with `ClientAddr`, `ClientHost`, `ClientPort` and `ClientUsername`;
-headers stay dropped by the chart default. `loki.kub.local` has been behind `authentik-forwardauth`
-since 2026-11-22, so the store is no longer readable by any LAN device, but the field stays dropped
-for the same reason it began: a full log would still hand Plex's `?X-Plex-Token=`, FileBrowser's share
-links and OIDC `?code=` callbacks to every session that can read it, and to every session created
-later against 30 days of retention. Revisiting the field list is the access-log card's (task 544,
-#410), not this one's.
+| Field | In the store | Why |
+|---|---|---|
+| `ClientHost`, `ClientAddr` | yes | the source address, and the one CrowdSec reads |
+| `DownstreamStatus`, `RouterName`, `RequestHost`, `RequestMethod`, `Duration`, `TLSVersion` | yes | as before |
+| `RequestPath` | **no** | FileBrowser share tokens, Plex tokens; removed by Fluent Bit |
+| every header except `User-Agent` | no | dropped by Traefik before the file is written |
+| `User-Agent` | **no** | in the file for the detector, removed by Fluent Bit |
+| `ClientUsername`, `ClientPort` | no | dropped by Traefik |
 
-**Everything else is kept**, because the file uses `defaultMode: keep` and names only the drops above.
-What a line carries, measured on the live stream rather than read off the docs: the time, the entry
-point name and scheme, the router name with its Kubernetes route namespace, the service name,
-namespace and port, the requested hostname and method, the downstream and origin status, the two
-durations in nanoseconds, the response and request sizes, the retry count, the TLS version and cipher,
-the compression ratio, and the pod address Traefik forwarded the request to (`ServiceAddr`,
-`ServiceURL`). What is left in it is the hostname and cluster-internal addresses, not a credential: a
-record without the hostname cannot say which application failed. A failure Traefik answers itself
-shows `OriginStatus` 0.
+Two consequences worth knowing before writing a query: `{job="fluent-bit", container="traefik"}`
+still resolves, because the file's output carries that label statically, and **a request the bouncer
+dropped has no line at all** — it never reaches Traefik, so a banned address disappears from the log
+rather than appearing with a 403.
 
 **Measured 2026-11-22** over the twelve minutes after that day's last restart (01:20–01:32Z): 153 lines
 and 118 kB, so 769 bytes a line and **about 15 MB/day** at the night-time rate, against a pipeline that
