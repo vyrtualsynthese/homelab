@@ -12,13 +12,14 @@ replicaCount: 1
 vikunja:
   base: http://vikunja.vikunja.svc.cluster.local:3456
   project: 9
+  # The kanban view whose buckets are the columns the relay reads, and the
+  # column a new card is created in. Both are ids, because a board's column
+  # names can be renamed while the ids stay.
+  view: 59
+  backlogBucket: 115
   # Name of the Secret holding bot-alertmanager's token, created by hand.
   secretName: alert-relay
   secretKey: TOKEN
-
-# One comment per incident per window, so a flapping rule cannot write a
-# hundred. Ten minutes matches how often Grafana repeats a critical.
-commentCooldownSeconds: 600
 
 service:
   port: 8080

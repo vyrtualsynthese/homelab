@@ -7,9 +7,12 @@ its own JSON, the board wants a task, and neither speaks the other's shape.
 - `files/relay.py` — the whole service. Pure helpers at the top, tested in
   `hack/tests/test_alert_relay.py`; the board calls and the HTTP handler below.
 - The code ships in a ConfigMap, so there is no image to build.
-- One card per **incident** (Grafana's `groupKey`). A repeat is a comment, capped
-  at one per incident per `commentCooldownSeconds`.
-- A resolve is a comment and never a close: the card waits for an investigation.
-- Only `severity=critical` reaches the board. Warnings stay on Discord.
+- One card per **incident** (Grafana's `groupKey`). A repeat and a resolve write
+  nothing; the card is opened only when the firing is new work or the previous
+  card is in Validation or Done.
+- A resolve never closes and never moves a card: only an investigation that
+  wrote a cause moves one to Validation.
+- Grafana's routing tree decides what reaches the relay; the relay writes a card
+  for whatever arrives.
 
 Procedure: [`docs/runbooks/alert-relay.md`](../../../../docs/runbooks/alert-relay.md).
