@@ -185,13 +185,15 @@ default identity list rather than adding to it — verified against `ssh -G`.
    offers to remove; add any that are still wanted. Then the same command without `--check --diff`,
    then the other three cluster nodes. The two edge
    Pis are not in this pass: they have no `ansible` account until they are reflashed (card #481), and
-   their runbook's step 8 is rewritten in the same change so the reflash bootstraps from this list.
+   their runbook's bootstrap step is rewritten in the same change so the reflash bootstraps from this
+   list (step 7 as the page stands after the engine step was inserted).
 4. **New laptop, proving it.** `ssh -o BatchMode=yes -i ~/.ssh/homelab_live ansible@nas true`, then
    `make init` and `ansible-playbook playbooks/site.yml --check --diff --limit nas` — no `changed` line
    is the proof, because a missing key is drift the role now reports.
-5. **Retirement.** Delete the line, `make apply`. `make check` on any host that still holds it is the
-   check that it worked; a key seen there is a host that did not get the run. A session already open
-   stays open until it ends.
+5. **Retirement.** Delete the line, then `ansible-playbook playbooks/site.yml --limit cluster` (the two
+   edge Pis are not in this pass, and a run that includes them exits non-zero on `unreachable`). A
+   `--check` run on any host that still holds the key is the check that it worked; a key seen there is a
+   host that did not get the run. A session already open stays open until it ends.
 6. **Host keys.** From the validated laptop, `ssh-keyscan -t ed25519 192.168.1.41 192.168.1.27 …`
    prints the four fingerprints; the new laptop compares what its first `ssh` shows against them.
    `host_key_checking` stays `True`, and no host key is committed — a reflashed Pi regenerates its own.
@@ -216,7 +218,7 @@ default identity list rather than adding to it — verified against `ssh -G`.
 - `ansible/Makefile` — the `adopt` target.
 - `ansible/README.MD` — the procedure, and the paragraph that says keys are inherited.
 - `hack/tests/test_ansible_layer.py` — one test replaced, three added.
-- `docs/runbooks/pi-reflash.md` — step 8's "from the keys `vronteix` already accepts".
+- `docs/runbooks/pi-reflash.md` — the bootstrap step's "from the keys `vronteix` already accepts".
 - `docs/runbooks/ansible-laptop-onboarding.md` — the procedure, in `mkdocs.yml`'s nav.
 - `docs/decisions/2026-11-25-declared-host-access.md` — the record that supersedes the trust sentence
   of 2026-11-24.
@@ -238,7 +240,7 @@ default identity list rather than adding to it — verified against `ssh -G`.
   in may also apply. Revisit if a laptop is ever meant to read the drift report without being able to
   change a host.
 - **The two edge Pis in this pass.** They have no `ansible` account until the reflash, so this change
-  reaches four hosts. Their bootstrap arrives through `pi-reflash.md` steps 8–9 when card #481 runs,
+  reaches four hosts. Their bootstrap arrives through `pi-reflash.md` steps 7–8 when card #481 runs,
   and the design only requires that the runbook's paragraph stops promising inheritance.
 
 ## What is left to the builder
