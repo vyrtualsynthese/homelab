@@ -23,6 +23,17 @@ def config():
     return yaml.safe_load(VALUES.read_text())["fluent-bit"]["config"]
 
 
+def _blocks(text, kind, selectors):
+    """The [INPUT]/[OUTPUT] block holding each selector, as a list of blocks."""
+    found = []
+    for selector in selectors:
+        block = [b for b in text.split(f"[{kind}]") if selector in b]
+        if len(block) != 1:
+            raise AssertionError(f"{selector}: {len(block)} blocks")
+        found.append(block[0])
+    return found
+
+
 class AccessLogPipelineTests(unittest.TestCase):
     def test_a_second_input_tails_the_host_file(self):
         inputs = config()["inputs"]
@@ -97,6 +108,36 @@ class JournalTests(unittest.TestCase):
             self.assertIn(f"unit={unit}", block[0])
             self.assertIn("source=journal", block[0])
 
+    def test_neither_journal_input_pins_a_directory(self):
+        # `Path` switches in_systemd from sd_journal_open(LOCAL_ONLY) — both the
+        # persistent and the volatile journal — to opening one directory. A node
+        # whose journal is volatile would then ship nothing while looking
+        # configured, which is the same silent zero the `_COMM` choice exists to
+        # prevent.
+        for block in _blocks(config()["inputs"], "INPUT", ("Tag host.ssh", "Tag host.kernel")):
+            self.assertNotIn("Path ", block)
+
+    def test_each_output_keeps_the_pipeline_options(self):
+        # Copied from the access-log output, which the measured day above proves.
+        # Losing one of these is a silent change to what the store holds.
+        for tag in ("host.ssh", "host.kernel"):
+            block = _blocks(config()["outputs"], "OUTPUT", (f"Match {tag}",))[0]
+            for option in ("Host loki.monitoring.svc.cluster.local", "Port 3100",
+                           "Line_Format json", "Compress gzip", "Retry_Limit no_limits"):
+                self.assertIn(option, block, tag)
+
+    def test_the_chart_mounts_the_runtime_journal_and_a_place_for_the_positions(self):
+        # The chart mounts `/var/log` but not `/run`, so the volatile journal is
+        # invisible without the second mount; and `DB` needs a writable directory,
+        # which the upstream chart does not provide.
+        chart = yaml.safe_load(VALUES.read_text())["fluent-bit"]
+        mounts = {m["mountPath"]: m for m in chart["extraVolumeMounts"]}
+        self.assertTrue(mounts["/run/log/journal"].get("readOnly"))
+        self.assertIn("/var/lib/fluent-bit", mounts)
+        volumes = {v["name"]: v for v in chart["extraVolumes"]}
+        self.assertEqual(volumes["host-run-journal"]["hostPath"]["path"], "/run/log/journal")
+        self.assertEqual(volumes["host-run-journal"]["hostPath"]["type"], "DirectoryOrCreate")
+        self.assertIn("emptyDir", volumes["fb-journal-db"])
 
 if __name__ == "__main__":
     unittest.main()
