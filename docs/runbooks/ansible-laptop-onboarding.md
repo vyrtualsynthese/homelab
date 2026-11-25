@@ -5,12 +5,13 @@
 > deleting one retires it.
 >
 > **Use it when** a laptop has to run `ansible/` against the hosts, a laptop is retired, or you want to
-> know which keys a host actually accepts · **Verified** 2026-11-25: the commands, the two writes and the
-> identity were read from the files they name; no laptop has been adopted by this path yet ·
-> **Kind:** how-to
+> know which keys a host actually accepts · **Verified** 2026-11-25: both writes on all four hosts, the
+> drift report at `changed=0`, the retirement round trip, and `ansible` and `vronteix` logging in with
+> `homelab_live` on every one · **Kind:** how-to
 >
-> **Status:** pending — written from the roles, `ansible.cfg` and the design of 2026-11-25, not from a
-> run. The first adoption makes it `proved`.
+> **Status:** proved for the write, the drift report and the retirement. Adopting a *new* laptop —
+> `make adopt`, paste the line, apply — is exercised by the test suite and not yet by a fresh machine:
+> the operator's work laptop is the first, and a ticket is filed if it fails.
 >
 > **Sources** `ansible/inventory/group_vars/all.yml`, `ansible/Makefile` (the `adopt` target),
 > `ansible/ansible.cfg`, `ansible/roles/automation/tasks/main.yml`,
