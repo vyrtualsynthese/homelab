@@ -3,7 +3,7 @@ image:
   # A floating minor tag: Docker Hub republishes 18.7 with each 18.7.x patch. The
   # reference is the tag alone; digest pinning was decided against on 2026-11-19,
   # so a re-pushed 18.7 changes what runs without being detected here.
-  tag: "18.7"
+  tag: "19.0"
 
 nodeSelector:
   kubernetes.io/hostname: nas
