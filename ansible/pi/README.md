@@ -8,8 +8,8 @@ does not know. A fresh Image has no Ansible and no key, which is why it is bash.
 
 ```bash
 ./hosts-pi.sh render rbp1          # print every file this script owns; changes nothing
-./hosts-pi.sh setup  rbp1          # write them, start the stack, print changed=N
-./hosts-pi.sh verify rbp1          # name every difference; exit 1 if there is one
+./hosts-pi.sh setup  rbp1          # install the engine, write them, start the stack, print changed=N
+./hosts-pi.sh verify rbp1          # name every difference; exit 1 if one needs an apply
 ./hosts-pi.sh backup /mnt/usb/pi rbp1   # copy the state a reflash destroys
 ./hosts-pi.sh restore /mnt/usb/pi rbp1  # copy it back, then verify
 ```
@@ -42,16 +42,20 @@ repository, and puts `vronteix` in the `docker` group.
 
 - **The suite** (the release name apt matches on) is read from `/etc/os-release`, so a reflash onto
   the next release names its own suite instead of pointing apt at a codename that no longer exists.
-- **The pins are bands** — `docker-ce=5:29.*`, `containerd.io=2.4.*`, `docker-compose-plugin=5:8.*`
-  — because nothing in this repository bumps an apt pin, so an exact version ages silently, which is
-  what 28.3.2 on both Pis was. A band reproduces the same major on a rebuild and refuses a jump; the
-  comment above the constants records the version measured when they were last moved.
+- **The pins are bands** — `docker-ce` and `docker-ce-cli` at `5:29.*`, `containerd.io` at `2.4.*`,
+  `docker-compose-plugin` at `5:8.*` — because nothing in this repository bumps an apt pin, so an exact
+  version ages silently, which is what 28.3.2 on both Pis was. A band reproduces the same major on a
+  rebuild and refuses a jump; the comment above the constants records the version measured when they
+  were last moved.
 - **An engine that is already there is named, never replaced.** When the packages are installed
   outside their band, `setup` prints a `NOTE` and leaves them alone: upgrading restarts the daemon
   that answers the house's DNS, and on these hosts a reflash is what moves it. `verify` prints the
-  same note.
+  same note. A partial set — one package missing while another sits off its pin — is refused rather
+  than installed over, and the message says so.
 - **A converged host does no network work**: with the four packages in band and the repository in
-  place, `setup` starts the stack and stops there.
+  place, `setup` starts the stack and stops there. A repository line or keyring that went missing
+  under a converged engine is rewritten, since that is what a later `apt-get update` reads; no
+  package is touched by it.
 - This step needs root, so `setup` is run with `sudo`; without it the script refuses before touching
   apt.
 
