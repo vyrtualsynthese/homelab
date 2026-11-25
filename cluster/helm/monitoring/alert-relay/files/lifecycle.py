@@ -87,15 +87,17 @@ def position_for(card: dict, column_cards: list[dict]) -> float:
     """Where the card sorts among the cards already in the target column.
 
     The board's order is the priority bands: critical first, then high, medium, low,
-    and unlabelled last. A card enters below the cards of its own band, above the
-    first card of a lower band.
+    and unlabelled last. A card that nothing in the column blocks sits above the
+    first card at or below its own band, so an alert card — which carries no
+    priority — enters at the top of the unlabelled cards and below every
+    prioritised one.
     """
     if not column_cards:
         return 1
     mine = band(card)
     index = len(column_cards)
     for place, other in enumerate(column_cards):
-        if band(other) > mine:
+        if band(other) >= mine:
             index = place
             break
     if index == 0:
@@ -150,9 +152,11 @@ class Board:
                   {"task_id": card["id"]})
         # The column is re-read because a task's position is per view and only the
         # board knows where its neighbours sit. The card being moved is excluded so
-        # it cannot become its own neighbour.
+        # it cannot become its own neighbour, and a card whose position the board
+        # did not report is not treated as being at zero.
         neighbours = [other for other in self.alert_cards()
-                      if other.get("column") == target and other.get("id") != card.get("id")]
+                      if other.get("column") == target and other.get("id") != card.get("id")
+                      and isinstance(other.get("position"), (int, float))]
         position = position_for(card, neighbours) if neighbours else STEP
         self.call("PUT", f"/api/v2/tasks/{card['id']}/position",
                   {"position": position, "project_view_id": self.view})
@@ -175,11 +179,13 @@ def run_once(board) -> tuple[int, int]:
             if target is None:
                 continue
             open_fixes = sum(1 for fix in fixes if not closed(fix))
+            # The move is inside the guard: a write that a share forbids fails this
+            # card, not the whole pass.
+            board.move(card, target)
         except (ValueError, urllib.error.URLError) as broken:
             print(f"failed #{card.get('id')}: {broken}", file=sys.stderr)
             failed += 1
             continue
-        board.move(card, target)
         print(f"#{card['id']} {card.get('title', '')}: {card.get('column')} -> {target} "
               f"({open_fixes} fixes open)")
         moved += 1

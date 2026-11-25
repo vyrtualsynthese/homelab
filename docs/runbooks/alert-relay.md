@@ -119,7 +119,8 @@ Each move leaves one line, so the job's own log is the record:
 lifecycle: 1 moved, 0 failed
 ```
 
-A run that moves nothing prints nothing at all.
+A run that moves nothing prints nothing at all; a run that only fails prints the `failed` lines and
+the summary.
 
 **The session's part**, in order:
 
@@ -152,8 +153,9 @@ card is never mistaken for an agent's work.
 `bot-opencode` is the other half: it needs **read+write on `alerts`**, because a session relates the
 fix cards to the alert card and moves it.
 
-These four changes are the operator's, made once. They need `VIKUNJA_API_TOKEN` — the operator's
-token, never the bot token an agent uses. `POST` creates the share and `PUT` changes an existing one:
+These six changes are the operator's, made once — one on `alerts`, five on the repository boards. They
+need `VIKUNJA_API_TOKEN`, the operator's token, never the bot token an agent uses. `POST` creates the
+share and `PUT` changes an existing one:
 
 ```bash
 B=https://vikunja.kub.local/api/v2
@@ -286,6 +288,7 @@ curl -sk -X POST "$B/tasks/<alert>/relations" \
   -H "Authorization: Bearer $VIKUNJA_MCP_TOKEN" -H 'Content-Type: application/json' \
   -d "{\"relation_kind\":\"blocked\",\"other_task_id\":$FIX}"
 kubectl -n monitoring create job --from=cronjob/alert-relay-lifecycle lifecycle-probe
+kubectl -n monitoring wait --for=condition=complete job/lifecycle-probe --timeout=60s
 kubectl -n monitoring logs job/lifecycle-probe
 # → #<alert> TestDiskFull on nas: Backlog -> Doing (1 fixes open)
 
@@ -294,12 +297,24 @@ curl -sk -X PUT "$B/projects/2/views/13/buckets/14/tasks" \
   -H "Authorization: Bearer $VIKUNJA_MCP_TOKEN" -H 'Content-Type: application/json' \
   -d "{\"task_id\":$FIX}"
 kubectl -n monitoring create job --from=cronjob/alert-relay-lifecycle lifecycle-probe-2
+kubectl -n monitoring wait --for=condition=complete job/lifecycle-probe-2 --timeout=60s
 kubectl -n monitoring logs job/lifecycle-probe-2
 # → #<alert> TestDiskFull on nas: Doing -> Validation (0 fixes open)
+
+# the card is in Validation and is NOT done: entering Validation is not an acceptance
+curl -sk -H "Authorization: Bearer $VIKUNJA_MCP_TOKEN" "$B/tasks/<alert>?expand=buckets" \
+  | jq '{done, buckets: [.buckets[].title]}'
+# → {"done": false, "buckets": ["Validation"]}
 ```
 
-A card with no blocked fix must stay where it is on the next run. Freeze one probe card and confirm
-it does not move either. Then trash both probe cards and delete the probe jobs.
+The two negative cases need their own cards, because a card already in Validation is never moved:
+
+- **No fix, no move.** A probe card with no `blocked` relation sits in Backlog through a run.
+- **`frozen` holds it.** Attach a fix to a second probe card, leave that fix in Doing, and set
+  `frozen` on the alert card. It stays in Backlog; the move the job would otherwise make is the one
+  under test, so freezing a card that has already settled proves nothing.
+
+Then trash the probe cards, the probe fix and the probe jobs.
 
 ## Failure modes
 
@@ -311,9 +326,10 @@ it does not move either. Then trash both probe cards and delete the probe jobs.
 | Grafana reports a failed delivery | The relay is down or the Service name is wrong | `kubectl -n monitoring logs deploy/alert-relay` |
 | Cards stop appearing, everything else looks fine | The relay is the single point of failure, and this is what that looks like | Accepted in the design; check the pod |
 | **The relay log is empty, not even an `opened`** | Grafana never dispatched: the fault is in the routing tree, not the relay | Read `GET /api/alertmanager/grafana/api/v2/status` and check the rule's route |
-| Job `alert-relay-lifecycle` Failed | A card could not be read or moved — most often a missing share on a repository board, or the board call failing | `kubectl -n monitoring logs job/<job>`; the line `failed #<id>: …` names the card. Fix the share, then run a pass by hand |
+| Job `alert-relay-lifecycle` Failed | A card could not be read or moved. `failed #N: HTTP Error 403` is a missing share on that card's board; `failed #N: fix #M carries no bucket` means the fix read returned no column at all | `kubectl -n monitoring logs job/<job>`; the line `failed #<id>: …` names the card. Fix the share (or the read), then run a pass by hand |
+| Job Failed with a traceback and no `failed #` line | The board itself could not be read: `GET …/buckets/tasks` answered non-2xx, so no card was even inspected | `kubectl -n monitoring logs job/<job>`; check the `alerts` share and the Service name |
 | An alert stays in Doing with every fix closed | The job cannot read one of those fix cards' boards, so it cannot tell Validation from Doing | Check the share on that board; a 403 in the log is the tell |
-| An alert stays in Backlog with fix cards attached | The relation was never written, or the job cannot read the alert board | `GET /api/v2/tasks/<alert>?expand=buckets` and read `related_tasks.blocked` |
+| An alert stays in Backlog with fix cards attached | The relation was never written, or the job does not see the card in Doing/Backlog | `GET /api/v2/tasks/<alert>?expand=buckets` and read `related_tasks.blocked` |
 
 ## What it deliberately does not do
 

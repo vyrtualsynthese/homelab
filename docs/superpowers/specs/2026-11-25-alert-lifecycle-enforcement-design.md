@@ -70,8 +70,9 @@ line. A run that moves nothing is silent.
 | `bot-opencode` | read on `alerts` (0) | read+write on `alerts` (1) |
 | `bot-alertmanager` | read+write on `alerts` (1), nothing elsewhere | read-only on `homelab` (2), `config` (3), `ashudev-website` (5), `ashuvidz-creator` (8), `infra-main` (12) |
 
-The operator makes the four sharing changes once, through Vikunja's API or the project's **Share**
-dialog. The API calls are in the runbook; the read-only level is `permission: 0`.
+The operator makes the six sharing changes once — one for `bot-opencode` on `alerts`, five for
+`bot-alertmanager` read-only on the repository boards — through Vikunja's API or the project's
+**Share** dialog. The API calls are in the runbook; the read-only level is `permission: 0`.
 
 Why both: `bot-opencode` creates the relation, which requires write on the alert card; the job must
 read each fix card's board to tell `Validation` from `Doing`, and its token has no access there today.
