@@ -43,7 +43,7 @@ The five ways this change bites someone, most likely first. Each is pinned by a 
 - Test: `hack/tests/test_ansible_layer.py`
 
 **Interfaces:**
-- Produces: `make -C ansible adopt KEY=<path.pub>` — exit 0 and two stdout lines (the YAML entry, then a `# fingerprint SHA256:…` line) on success; exit 1 with a message on stderr otherwise. Never writes a file.
+- Produces: `make -C ansible adopt KEY=<path.pub>` — exit 0 and four stdout lines on success (the YAML entry, then a `# fingerprint SHA256:…` line, then the two-line next-step hint); exit 1 with a message on stderr otherwise. Never writes a file.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -450,7 +450,7 @@ private_key_file = ~/.ssh/homelab_live
 ssh -o BatchMode=yes -i ~/.ssh/homelab_live ansible@nas true && echo reachable
 cd ansible && ansible-inventory --host nas | grep -i private_key
 ```
-Expected: `reachable`, and the second command prints the key path or nothing — either is fine, as long as the first succeeded. The probe is the proof: `homelab_live` was accepted as `ansible` on `nas` on 2026-11-25, and this task makes it the only identity offered.
+Expected: `reachable`, and the second command prints the key path or nothing — either is fine, as long as the first succeeded. The probe is the proof, and it is only half taken: `homelab_live` was accepted as `ansible` on `nuc0` and `rbp2` on 2026-11-25, while `nas` and `streaming` are probed as step 1 of Task 6. This task makes it the only identity offered.
 
 - [ ] **Step 5: Run the tests to verify they pass**
 
@@ -472,7 +472,7 @@ git commit -m "🔧 chore: name the homelab identity in ansible.cfg"
 - Create: `docs/runbooks/ansible-laptop-onboarding.md`
 - Modify: `mkdocs.yml` (nav)
 - Modify: `ansible/README.MD`
-- Modify: `docs/runbooks/pi-reflash.md` (step 8)
+- Modify: `docs/runbooks/pi-reflash.md` (step 7 — it was step 8 until an engine step was inserted above it)
 - Create: `docs/decisions/2026-11-25-declared-host-access.md`
 
 **Interfaces:**
@@ -517,7 +517,7 @@ Keep the two-run bootstrap section unchanged, including `-e ansible_user=vrontei
 
 - [ ] **Step 4: Fix the reflash step**
 
-In `docs/runbooks/pi-reflash.md` step 8, replace "the first creates the `ansible` account from the keys `vronteix` already accepts" with "the first creates the `ansible` account holding the keys `trusted_ssh_keys` declares — the same list `roles/accounts` writes into `vronteix`, so a reflashed Pi is adopted by the line that is already there". Read the whole step afterwards; no other sentence may promise inheritance.
+In `docs/runbooks/pi-reflash.md` step 7 — the number moved from 8 when an engine step was inserted above it — replace "the first creates the `ansible` account from the keys `vronteix` already accepts" with "the first creates the `ansible` account holding the keys `trusted_ssh_keys` declares — the same list `roles/accounts` writes into `vronteix`, so a reflashed Pi is adopted by the line that is already there". Read the whole step afterwards; no other sentence may promise inheritance.
 
 - [ ] **Step 5: Write the decision record**
 
