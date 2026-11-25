@@ -70,6 +70,12 @@ Each node's gate, in this order, recorded in the card:
   sync and the runner's own pass brought the array current, and
   [the audit](../audit/hosts-2026-11-24.md#the-parity-synced-2026-11-25) holds the numbers. Check it
   again at the hop rather than trusting this line: a parity that has fallen behind is a gate.
+- **`nas`'s union — settled on 2026-11-25: the line mounts on both releases.** mergerfs is 2.33.3 on
+  jammy, 2.33.5-1ubuntu2 in 24.04 and 2.40.2-5build1 in 26.04. The option set and the `/mnt/hdd*` glob
+  that `roles/union` writes were mounted and round-tripped under both target packages in a throwaway
+  container, and the 2022 `snapraid` binary the runner calls loads on both —
+  [the measurement](../audit/hosts-2026-11-24.md#the-unions-tools-across-the-two-releases-2026-11-25).
+  It still has to answer on the host's own kernel: the step-4 check below is the gate, not this line.
 - **`streaming`'s GPU — settled on 2026-11-24: the module compiles.** Driver 580.178.04 is the last
   branch NVIDIA ships for the Quadro P400, and its module is DKMS-built. Ubuntu 26.04.1 packages the
   same branch as `nvidia-dkms-580-server` 580.178.04, and DKMS built it against both 26.04 kernels —
