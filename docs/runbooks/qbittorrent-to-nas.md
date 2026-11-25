@@ -78,9 +78,11 @@ kubectl -n media-stack exec deploy/qbittorrent -c qbittorrent -- \
 Write the four numbers down. The last one is the torrent list the app itself reports; the `.torrent`
 count and it should be equal, and they are what step 4 and step 8 compare against.
 
-If the Web UI is stalled right now, the exec above may hang: stop and take the recovery in
-[`../qbittorrent-webui-stalls.md`](../qbittorrent-webui-stalls.md#the-recovery-that-worked) first. The
-copy needs the app answering, not the app healthy.
+If the Web UI is stalled right now, the second command hangs and the first does not: `find` is a new
+process on a local path, while `curl` asks the parked event loop. Drop the `curl` line, take the
+torrent count from the last measurement (379 on 2026-11-25 22:40), and do not spend time on the
+recovery in [`../qbittorrent-webui-stalls.md`](../qbittorrent-webui-stalls.md#the-recovery-that-worked)
+— step 2 ends the stall by stopping the app, and nothing in this procedure needs it answering.
 
 ## Step 1 — take the Application's auto-sync off
 
@@ -213,12 +215,14 @@ Job below.
 
 ```bash
 helm template qbittorrent cluster/helm/media-stack/qbittorrent -n media-stack \
-  --show-only templates/persistentvolumeclaim.yaml | kubectl apply -f -
+  --show-only templates/persistentvolumeclaim.yaml | kubectl -n media-stack apply -f -
 kubectl -n media-stack get pvc qbittorrent-config qbittorrent-vpn-config
 ```
 
-Run it from the branch that carries this change (the claim specs are the same on `develop`; the rest
-of the chart is not). `Pending` is the expected state here.
+Run it from a checkout of `develop`, with the chart at `cluster/helm/media-stack/qbittorrent`. The
+`-n media-stack` on `kubectl apply` is not decoration: the rendered claim carries no namespace, and
+without it the two claims land in the current context's default namespace while the Job waits for
+nothing. `Pending` is the expected state here.
 
 ## Step 7 — restore onto `nas`
 
@@ -286,22 +290,30 @@ the app starts, because the app would come up and fail every download instead of
 ```bash
 kubectl -n media-stack get pvc qbittorrent-config qbittorrent-vpn-config   # now Bound
 kubectl get pv -o custom-columns=NAME:.metadata.name,NODE:.spec.nodeAffinity.required.nodeSelectorTerms[0].matchExpressions[0].values[0],HOST:.spec.hostPath.path | grep qbittorrent
+kubectl -n media-stack delete job qbittorrent-config-restore
 ```
 
-Both claims must read `Bound`, and both volumes must name `nas`.
+Both claims must read `Bound`, both volumes must name `nas`, and the Job is deleted once its log has
+been read: a `Completed` Job keeps its name, so a second attempt would be refused until it is gone.
 
-## Step 8 — merge, sync, and start
+## Step 8 — sync, and start
 
-Merge the pull request that carries the chart change, then sync the Application by hand (auto-sync is
-still off), or let the operator do it from the UI:
+The chart change is merged to `develop` before this runs — that is what makes the sync below render
+the new pod. Sync the Application by hand (auto-sync is still off), or let the operator do it from the
+UI:
 
 ```bash
-argocd app sync qbittorrent
+git -C <checkout> switch develop && git pull --ff-only      # the sync reads develop, not a branch
+argocd app sync qbittorrent --revision develop
 kubectl -n media-stack rollout status deploy/qbittorrent --timeout=300s
 kubectl -n media-stack get pod -o wide -l app.kubernetes.io/name=qbittorrent
 ```
 
-Success is `2/2 Running` on `nas` (both PHP containers: the app and the WireGuard sidecar). If it is
+`--revision develop` is the belt to the braces: it names the commit the pod template comes from, so a
+sync cannot quietly apply an older one.
+
+Success is `2/2 Running` on `nas` (both containers in the pod are the app and the WireGuard sidecar;
+the init containers run first and exit). If it is
 `Pending`, look at the reason before touching anything: `claim … is being used by another` or
 `volume node affinity conflict` means a claim still points at `streaming`, and step 5 or 6 was not
 finished.
