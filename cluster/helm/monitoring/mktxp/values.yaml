@@ -74,6 +74,10 @@ resources:
 # Pinned the way every other workload is. The old affinity required
 # `node-type=general`, a label the repo retired and a new node would not carry;
 # mktxp only scheduled because nuc0 carried it; the label was removed on 2026-11-22.
+# Changing the host moves the pod's egress address, and the switches allow the
+# `monitoring` account from nuc0's address only (group `mktxp`, pinned 2026-11-25):
+# move it here and `/user set monitoring address=<new>` on both switches in the
+# same change, or mktxp cannot log in.
 nodeSelector:
   kubernetes.io/hostname: nuc0
 
