@@ -10,6 +10,7 @@
 > `cluster/helm/monitoring/loki/values.yaml`, `cluster/helm/monitoring/grafana/values.yaml`,
 > `cluster/helm/monitoring/fluent-bit/values.yaml`, `cluster/helm/monitoring/blackbox-exporter/values.yaml`,
 > `cluster/helm/platform/traefik/values.yaml`, `ansible/roles/traefik_logs/tasks/main.yml`,
+> `ansible/roles/traefik_logs/defaults/main.yml` (the 200 MB and seven copies),
 > `docs/reference/metrics.md` and `docs/reference/alerts.md`. The live stack was read through
 > Prometheus and Grafana on 2026-11-25.
 
@@ -260,8 +261,8 @@ detector was worth that. Fluent Bit removes `RequestPath`, `request_User-Agent` 
 
 | Field | In the store | Why |
 |---|---|---|
-| `ClientHost`, `ClientAddr` | yes | the source address, and the one CrowdSec reads |
-| `DownstreamStatus`, `RouterName`, `RequestHost`, `RequestMethod`, `Duration`, `TLSVersion` | yes | as before |
+| `ClientHost`, `ClientAddr` | yes | `ClientHost` is the source address and the field CrowdSec reads; `ClientAddr` is kept so the parser's destination field is not empty |
+| `DownstreamStatus`, `RouterName`, `RequestHost`, `RequestMethod`, `Duration`, `TLSVersion` | yes | unchanged since the 2026-11-22 measurement, two paragraphs below |
 | `RequestPath` | **no** | FileBrowser share tokens, Plex tokens; removed by Fluent Bit |
 | every header except `User-Agent` | no | dropped by Traefik before the file is written |
 | `User-Agent` | **no** | in the file for the detector, removed by Fluent Bit |
