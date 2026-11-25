@@ -3,13 +3,18 @@
 > **In one line.** The metric and log side of the `monitoring` stack: the traps in each exporter, what
 > Prometheus and Fluent Bit throw away before storing, how long data is kept, and the numbers taken
 > from the live cluster on 2026-11-19, with the
-> Traefik bucket change and the dashboard reader counts re-checked on 2026-11-21.
+> Traefik bucket change and the dashboard reader counts re-checked on 2026-11-21, and the access
+> log's field list on 2026-11-25.
 >
 > **Use it when** a panel is blank or a metric reads wrong, before trusting a series or volume count
-> or a retention claim, or before proposing a new metric · **Verified** 2026-11-21 · **Kind:** reference
+> or a retention claim, or before proposing a new metric · **Verified** 2026-11-25 · **Kind:** reference
 >
-> **Sources** the live Prometheus and Loki APIs, read on 2026-11-19 and 2026-11-21 · the exporter
-> charts under `cluster/helm/monitoring/` and `cluster/helm/media-stack/`
+> **Sources** `cluster/helm/monitoring/prometheus/values.yaml`,
+> `cluster/helm/monitoring/loki/values.yaml`, `cluster/helm/monitoring/fluent-bit/values.yaml`,
+> `cluster/helm/monitoring/prometheus-smartctl/values.yaml`,
+> `cluster/helm/monitoring/blackbox-exporter/values.yaml`,
+> `cluster/helm/platform/traefik/values.yaml`, and the charts under `cluster/helm/media-stack/`.
+> The live Prometheus and Loki APIs were read on 2026-11-19, 2026-11-21 and 2026-11-25.
 
 The overview — what runs where, its sizing, and how to query the stack:
 [`observability-conventions.md`](../observability-conventions.md).
@@ -292,7 +297,8 @@ bursts alone. What is left of the 0.09 GB/day is mostly a symptom, not chatter:
   `news-freshrss` lines stopped when their claims bound on 2026-11-19 (#386). Since
   2026-11-22 the same namespace carries Traefik's access log: measured over twelve minutes
   that night (01:20–01:32Z), 153 lines and 118 kB, so 769 bytes a line and **about
-  15 MB/day** at the night-time rate, with the URL and the client address dropped
+  15 MB/day** at the night-time rate, with the client address kept and the URL and the user agent
+  dropped
   ([`observability-conventions.md#what-the-router-logs`](../observability-conventions.md#what-the-router-logs)).
   That puts `kube-system` near 21 MB/day, around `authentik`'s size.
 - **vikunja, 5 MB** — request logs at `info`, again including health probes.
