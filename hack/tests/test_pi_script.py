@@ -93,6 +93,13 @@ def test_the_engine_suite_is_read_not_hard_coded():
         assert codename not in text
 
 
+def test_verify_says_it_cannot_check_the_engine_in_a_fixture(tmp_path):
+    (tmp_path / "home/vronteix/dockers").mkdir(parents=True)
+    out = run("verify", "rbp0", root=tmp_path)
+    assert "engine: not checked (PI_ROOT is set)" in out.stdout
+    assert out.returncode == 1  # the stack is still missing, as before
+
+
 def test_backup_then_restore_puts_the_stack_back(tmp_path):
     root = tmp_path / "pi"
     stack = root / "home/vronteix/dockers"
