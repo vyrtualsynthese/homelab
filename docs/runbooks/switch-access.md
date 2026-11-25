@@ -27,7 +27,7 @@ One reads and one writes, and neither can do the other's job.
 | `audit` | `audit` = `read,ssh`; no source-address limit | key only | print, export, monitor — nothing that writes |
 | `deploy` | `deploy` = `read,write,ssh,test`; `address=192.168.1.0/24` | key only | change configuration, and nothing about users |
 | `admin` | built-in `full` | password | everything; this page does not touch it |
-| `monitoring` | built-in `read`, `address=0.0.0.0/0` | password, over the API | what mktxp collects — and it carries `sensitive` and `reboot`, which [the gap below](#the-gap-monitoring-sits-in-the-built-in-read-group) names |
+| `monitoring` | `mktxp` = `read,api,test`; `address=192.168.1.27/32` | password, over the API | what mktxp collects, from `nuc0` only — no `sensitive`, no `reboot` |
 
 A RouterOS *policy* is one permission badge: `read` is "run a print or an export", `write` is "change
 the configuration", `ssh` is "open a session over SSH", and `policy` is "create an account or change
@@ -199,13 +199,49 @@ Then remove it, in the same session:
 
 Proved the same day on `192.168.1.11`, and the account carries the same field on `192.168.1.43`.
 
-## The gap: `monitoring` sits in the built-in `read` group
+## `monitoring`: the account mktxp reads with
 
-Measured on 2026-11-25, both switches carry `monitoring` with `group=read` and
-`address=0.0.0.0/0`. It therefore holds `sensitive` and `reboot` from any address, and its password
-lives in the `monitoring/mktxp-conf` Secret. That is the same defect this page exists to avoid for
-`deploy`, on the account that predates it; it is filed as its own card rather than changed here,
-because mktxp is a running service and the move needs its egress address pinned.
+Measured on both switches on 2026-11-25: `monitoring` is in the group `mktxp`
+(`policy=read,api,test`; every other policy is revoked, `!sensitive` and `!reboot` among them) with
+`address=192.168.1.27/32` — the LAN address of `nuc0`, where the chart's `nodeSelector` keeps the
+pod. Its password is unchanged and stays in the `monitoring/mktxp-conf` Secret.
+
+It used to sit in the built-in `read` group with `address=0.0.0.0/0`. That group carries `sensitive`
+and `reboot`: the account held the right to read any secret the configuration carries and to restart
+the switch, from any address on the network. mktxp reads over the API on 8728 and needs neither, so
+both are gone and the source is the one host that polls.
+
+In an admin session, on each switch:
+
+```
+/user group add name=mktxp policy=read,api,test
+/user set monitoring group=mktxp address=192.168.1.27/32
+```
+
+**A live session keeps the group it logged in with.** RouterOS applies the user's group and address
+at login, so the API connection mktxp opened before the change stayed `group=read`. Deleting the pod
+made it reconnect:
+
+```bash
+kubectl -n monitoring delete pod -l app.kubernetes.io/name=mktxp
+```
+
+Expected after the reconnect, and measured on both switches: `/user print detail` reads
+`group=mktxp address=192.168.1.27/32`; `/user active print` shows one `monitoring` line, from
+`192.168.1.27`, `group=mktxp`; and the switch metrics keep advancing — with the pod up,
+`time()-timestamp(mktxp_system_cpu_load{routerboard_address="192.168.1.11"})` stays under a minute.
+
+**The `sensitive` check is not an export on these devices.** RouterOS 6.49 rejects
+`/export show-sensitive` — that flag is version 7's, and version 6 exports with `hide-sensitive` —
+and neither switch holds a secret-valued attribute in its configuration: there is no wireless
+package, and the SNMP community's authentication and encryption passwords are empty. An export from
+an account without `sensitive` therefore masks nothing that a `full` account would print, and the
+policy string is what proves the restriction. A throwaway account in a group identical apart from
+`ssh` printed configuration and exported fine, and was refused `/user add` with
+`not enough permissions (9)`.
+
+If the address moves, `/user set monitoring address=<new>` on each switch. The pin follows `nuc0`,
+not the pod, because the k3s masquerade rewrites the source to the node address.
 
 ## The plaintext services are off
 
