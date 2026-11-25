@@ -1,0 +1,70 @@
+---
+# mergerfs has two places for its options, and this role writes both:
+#
+#   /etc/fstab                    what the next boot reads, and the only
+#                                 durable half — written by `ansible.posix.mount`
+#                                 in `state: present`, with a backup beside it.
+#   <mount>/.mergerfs             the xattrs of the mount that is running, the
+#                                 one interface mergerfs documents for changing
+#                                 an option without unmounting.
+#
+# Not a remount: `mount -o remount` is handed to libfuse, which answers
+# `fuse: unknown option 'remount'` (rehearsed on `nas` with mergerfs 2.33.3), and
+# `state: mounted` is the state that makes that call. `present` writes the line
+# and leaves the mount alone; the script then moves the running mount to match.
+- name: Refuse to run anywhere but the node that holds the disks
+  ansible.builtin.assert:
+    that:
+      - "'storage' in group_names"
+    fail_msg: >-
+      The union belongs to the node in the `storage` group. Running it here would
+      write another host's fstab line, naming disks that host does not have.
+
+- name: Read what is mounted where the union should be
+  ansible.builtin.command:
+    argv:
+      - findmnt
+      - --noheadings
+      - --output
+      - FSTYPE
+      - --mountpoint
+      - "{{ union_mountpoint }}"
+  register: union_fstype
+  changed_when: false
+  failed_when: false
+  # Read-only, and the assert below decides on its output: skipped under
+  # `--check`, it would come back empty and report the guard as the failure.
+  check_mode: false
+
+- name: Refuse to converge anything but a mounted union
+  ansible.builtin.assert:
+    that:
+      - union_fstype.stdout | trim == 'fuse.mergerfs'
+    fail_msg: >-
+      {{ union_mountpoint }} is not a mounted mergerfs union (findmnt answers
+      '{{ union_fstype.stdout | trim }}'). Mount it with `mount -a` first: a line
+      written over a missing union would read as applied while nothing serves
+      the disks beneath it.
+
+- name: Write the union's line in /etc/fstab, and only that line
+  ansible.posix.mount:
+    path: "{{ union_mountpoint }}"
+    src: "{{ union_branches }}"
+    fstype: fuse.mergerfs
+    opts: "{{ union_options | join(',') }}"
+    state: present
+    # The previous file is what a rollback restores: `cp /etc/fstab.<stamp>`.
+    backup: true
+
+# Skipped under `--check` (a `script` task changes things by nature), and that is
+# what the drift report needs: the script writes only what differs, so a
+# converged union prints `unchanged` and the run stays clean.
+- name: Bring the running union to the options that line names
+  ansible.builtin.script:
+    cmd: union-options.py --apply
+  environment:
+    UNION_RUNTIME: "{{ union_runtime | to_json }}"
+  register: union_apply
+  # The script prints one line, `changed: <options>` or `unchanged`. `is match`
+  # and not `==` because the run's stdout carries the connection's padding.
+  changed_when: union_apply.stdout is match('changed')

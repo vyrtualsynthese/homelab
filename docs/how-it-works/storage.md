@@ -5,10 +5,7 @@
 > not.
 >
 > **Use it when** you are adding a claim, a pod will not start because of one, or you want to know what
-> a backup would save · **Verified** 2026-11-20 · **Kind:** explanation
->
-> **Sources** `cluster/helm/nfs/provisioner/`, `docs/charts/README.md`,
-> `cluster/helm/backup/values.yaml`
+> a backup would save · **Verified** 2026-11-20 · **Kind:** living page
 
 ## Two storage worlds
 
@@ -147,10 +144,7 @@ with the PostgreSQL dumps and their roles, four host `/etc` directories and the 
 restore — neither has been drilled.
 
 The media library, the music and the stash library are **not** backed up: one copy on `nas`, by
-decision, and a fire ends them. One failed disk is the case that is covered: the six ext4 disks carry
-SnapRAID parity above them — spare data that rebuilds one disk from the others — and
-[`../runbooks/snapraid-rebuild.md`](../runbooks/snapraid-rebuild.md) is the procedure, including why a
-parity that was not synced rebuilds an older library rather than the current one. The old paths — the K3s script that dumps a SQLite file this etcd
+decision, and a fire ends them. The old paths — the K3s script that dumps a SQLite file this etcd
 cluster lacks, the NAS script writing to a MinIO path deleted in July 2024, PostgreSQL's `pg_dumpall`
 into a dead Longhorn claim, Syncthing's restic job that never succeeded — are recorded in the
 [audit](../audit/observability-storage.md#3-backups) and are not what runs now.
