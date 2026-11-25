@@ -205,8 +205,12 @@ by putting the file in the middle.
 
 `cluster/helm/platform/traefik/values.yaml` changes three ways:
 
-1. `ClientAddr` leaves the drop list. `ClientHost`, `ClientPort`, `ClientUsername`,
-   `RequestPath`, the query parameters and the headers stay dropped **for the store**.
+1. `ClientHost` **and** `ClientAddr` leave the drop list. CrowdSec's Traefik parser reads the source
+   address from `ClientHost` (`remote_addr`) and treats `ClientAddr` as the destination, so
+   un-dropping one of them alone leaves the agent parsing nothing. `ClientUsername`, `ClientPort`,
+   `RequestPath`, `RequestReferer`, the query parameters and every header except `User-Agent` stay
+   dropped **for the store**; the file is a different target, and §6.1's third point is where the
+   path and the user agent are removed again before Loki.
 2. `accessLog.filePath` writes the full JSON line — path and user agent included — to
    `/var/log/traefik/access.log`, a `hostPath` mounted through `deployment.additionalVolumes` /
    `additionalVolumeMounts`. Traefik writes to the file instead of stdout, so the container's stdout
@@ -220,16 +224,21 @@ So the path exists in two places: `/var/log/traefik/access.log` on `streaming`, 
 rotated, and briefly in the agent's memory, where a scenario's bucket lives and dies. It is a
 capability-bearing string (FileBrowser's share links) and it is not stored for thirty days.
 
-Two mechanical details, both settled when the change is made rather than guessed here:
+Two mechanical details, settled in this change rather than guessed here:
 
-- **Ownership.** Traefik runs unprivileged and CrowdSec must read the file. The Ansible role
-  pre-creates `/var/log/traefik` with an owner and group both pods can use; a failed write shows as a
-  request log that stops, which the silence rule catches.
-- **Rotation.** `logrotate` on `streaming`, 200 MB, seven copies, `create` and a `postrotate` that
-  sends `SIGUSR1` to Traefik: 3.7.19's access-log handler closes and reopens its file on that signal
-  (`Handler.Rotate`, "to allow for rotation by an external source"). The two tailers still have to
-  follow the new inode, so the acceptance test is a ban that follows a forced burst **after** a
-  rotation — the one thing a naive rotation silently breaks.
+- **Ownership, and who creates the directory.** The mount is `DirectoryOrCreate`, because a
+  `hostPath` of type `Directory` that is missing refuses to mount and the pod that refuses to start
+  is the router: the whole house offline to add a log. The kubelet creates it as root; the Ansible
+  role then sets `2770` and `65532:65532`, and Traefik creates the file inside it. Until the role
+  runs, Traefik logs "Unable to create access logger" and serves on without a line — the failure
+  this section already says is silent, and the reason the gate reads the file rather than the pod.
+- **Rotation.** `logrotate` on `streaming`, 200 MB, seven copies, `copytruncate` under `su root root`.
+  Traefik's access-log handler does reopen its file on `SIGUSR1` (`Handler.Rotate`), but the pod runs
+  in its own PID namespace — as every pod does, and as the chart offers no `hostPID` to change — so a
+  `postrotate` on the host cannot find the process to signal. Truncating in place leaves the writer's
+  descriptor valid and asks nothing of the router. The cost is a handful of lines lost between the
+  copy and the truncate, per 200 MB; both tailers see the size shrink and continue from the start of
+  the file, and the acceptance test is a ban *after* a rotation, not a ban before one.
 
 **A file that cannot be opened does not stop the router.** Traefik's startup calls
 `accesslog.NewHandler`, and on failure logs `Unable to create access logger`, returns no handler, and
@@ -496,8 +505,8 @@ that touch a host.
 | Risk | Likelihood | Mitigation |
 |---|---|---|
 | A whitelist error bans the LAN, the pods or a node | Medium, and the worst outcome here | One list, enforced before a decision exists; a test burst from a LAN address that must create nothing; a documented one-command rollback |
-| The path and user agent in the file are read by the wrong process | Low | Root-owned file, one reader, seven rotated copies; a target `chmod` and owner check in the task |
-| Traefik's file writer and the two tailers disagree after rotation | Medium | Rotation is its own verified step, `create` plus `SIGUSR1` first; the acceptance test is a ban after a rotation |
+| The path and user agent in the file are read by the wrong process | Low | File `0660` owned by `65532:65532`, directory `2770`, seven rotated copies; a target owner and mode check in the task |
+| Traefik's file writer and the two tailers disagree after rotation | Low | Copy-then-truncate keeps the same inode, so there is no inode to lose; the residual cost is a few lines per rotation, and the acceptance test is a ban after a rotation |
 | A broken log path costs the log, not the router, so the detector goes blind while every page still loads | Medium | The negative test in §8, and `SecurityStackBlind` keyed on lines arriving rather than on the router being up |
 | A parser mismatch leaves the agent reading lines it cannot parse, so it detects nothing | Medium | The first task parses one real line; `SecurityStackBlind` fires when nothing arrives |
 | The bouncer's liveness cannot be measured cheaply | Medium | §6.3 names the two routes and the fallback: say so on the dashboard and in the runbook |
@@ -515,8 +524,6 @@ that touch a host.
 - The directory ownership that lets an unprivileged Traefik write and an unprivileged agent read.
 - The CrowdSec parser and the four scenarios, proved against a real line and against normal Plex
   traffic, which is the busiest thing in the log.
-- Whether the two tailers follow the inode after logrotate's `create` plus `SIGUSR1`, or need
-  `copytruncate` after all.
 - The bouncer key's route from the cluster to the host, and which of §6.3's two liveness routes works.
 - The reconciled constants for `homelab_security_*`, and how the chart's values stay tied to
   `check_exposure.py` rather than drifting from it.
