@@ -14,32 +14,42 @@ environment variable in the Deployment, so a change rolls the pod by itself.
 
 ## Before the first sync
 
-Two Secrets exist by hand, because neither can be issued from git.
+Two Secrets exist by hand, because neither can be issued from git. Generate both in the shell that
+uses them and print them first: `--password "$(openssl rand -hex 32)"` is expanded by your shell and
+never printed by `cscli`, and `-f /dev/null` discards the file it would have written — the machine
+then exists with a password nobody knows.
 
-1. **A machine credential in the LAPI.** The UI is a *watcher*: a CrowdSec account that can read
-   alerts and decisions, and add or delete decisions. `cscli` has no environment-variable
-   equivalent of a bouncer key for machines, so this is one command against the running LAPI pod
-   with an admin kubeconfig (the agent's shells are read-only and answer `403`):
+```bash
+set -euo pipefail
+LAPI_PW=$(openssl rand -hex 32)
+OIDC_SECRET=$(openssl rand -hex 32)
+printf 'LAPI machine password: %s\nOIDC client secret:   %s\n' "$LAPI_PW" "$OIDC_SECRET"
 
-   ```bash
-   kubectl -n security exec deploy/crowdsec-lapi -- \
-     cscli machines add crowdsec-web-ui --password "$(openssl rand -hex 32)" -f /dev/null
-   ```
+# 1. The machine credential: a *watcher*, i.e. a CrowdSec account that can read
+#    alerts and decisions and add or delete them. `cscli` has no env-var
+#    equivalent of a bouncer key for machines, so this is one command against the
+#    running LAPI with an admin kubeconfig (the agent's shells answer 403).
+#    `-f /dev/null` keeps cscli from rewriting the container's own
+#    local_api_credentials.yaml.
+kubectl -n security exec deploy/crowdsec-lapi -- \
+  cscli machines delete crowdsec-web-ui --ignore-missing
+kubectl -n security exec deploy/crowdsec-lapi -- \
+  cscli machines add crowdsec-web-ui --password "$LAPI_PW" -f /dev/null
 
-   `-f /dev/null` matters: without it `cscli` rewrites the container's own
-   `local_api_credentials.yaml`. Keep the printed password.
+# 2. The authentik half. The blueprint reads !Env CROWDSEC_CLIENT_SECRET when it
+#    is applied, so the key must exist before the worker restarts.
+kubectl -n authentik patch secret authentik-sso --type merge \
+  -p "$(jq -n --arg s "$OIDC_SECRET" '{stringData:{"CROWDSEC_CLIENT_SECRET":$s}}')"
+kubectl -n authentik rollout restart deployment/authentik-worker
 
-2. **The Secret the chart reads:**
+# 3. The Secret the chart reads.
+kubectl -n security create secret generic crowdsec-web-ui \
+  --from-literal=lapi-password="$LAPI_PW" \
+  --from-literal=oidc-client-secret="$OIDC_SECRET" \
+  --dry-run=client -o yaml | kubectl apply -f -
+```
 
-   ```bash
-   kubectl -n security create secret generic crowdsec-web-ui \
-     --from-literal=lapi-password='<the password from step 1>' \
-     --from-literal=oidc-client-secret='<the authentik provider's client secret>'
-   ```
-
-   Sync the `authentik` Application first: its blueprint creates the provider and names
-   `CROWDSEC_CLIENT_SECRET`, a key of the `authentik-sso` Secret. The value has to be the same
-   string in both places, because Secrets do not cross namespaces.
+The value has to be the same string in both places, because Secrets do not cross namespaces.
 
 A missing Secret is a `CreateContainerConfigError`, not a failed sync; a missing machine credential
 is worse, because the pod is `Running` and the UI is simply empty.
