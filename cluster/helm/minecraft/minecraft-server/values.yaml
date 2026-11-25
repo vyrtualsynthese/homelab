@@ -18,7 +18,7 @@ strategy: Recreate
 image:
   repository: ghcr.io/itzg/minecraft-server
   # -- Pin the tag. Never `latest`. Renovate manages this.
-  tag: "2026.11.0-java25-alpine"
+  tag: "2026.11.1-java25-alpine"
   pullPolicy: IfNotPresent
 
 monitor:
