@@ -5,12 +5,12 @@
 # leave a member without the group it belongs to. `validate: visudo -cf %s` is
 # what stops a bad edit from taking sudo away from every account at once.
 #
-# Both removals are gated on the run connecting as `automation_user`. The grant
-# this role removes is the only passwordless path `vronteix` has, so a run that
-# still logs in as `vronteix` and removes it takes away the path it is itself
-# using — the failure is `Missing sudo password`, one task later. `roles/automation`
-# creates the replacement account, and the human account keeps `%sudo`, which
-# asks for a password.
+# The two `%admins` removals are gated on the run connecting as
+# `automation_user`. The grant this role removes is the only passwordless path
+# `vronteix` has, so a run that still logs in as `vronteix` and removes it takes
+# away the path it is itself using — the failure is `Missing sudo password`, one
+# task later. `roles/automation` creates the replacement account, and the human
+# account keeps `%sudo`, which asks for a password.
 #
 # On the two Pis this is the role that can lock the operator out. Their
 # PasswordAuthentication is `yes` today, and their access is the
@@ -72,6 +72,38 @@
     name: admins
     state: absent
   when: ansible_user == automation_user
+
+# cloud-init wrote its own grant on the Pi image, for the `ubuntu` account the
+# rename retired, and the two removals above leave it alone because it names an
+# identity rather than the group. It is a live passwordless root the moment
+# anything creates `ubuntu` again, so the role owns it: a reflash that writes the
+# file again is corrected by the next run. It is not gated on the calling account
+# — unlike `%admins`, nothing here is a path this run could itself be using.
+- name: Remove cloud-init's grant for an account that does not exist
+  ansible.builtin.file:
+    path: /etc/sudoers.d/90-cloud-init-users
+    state: absent
+
+# `getent` exits 2 when the account is absent, 0 when it exists. Only the answer
+# "absent" permits deleting the home: an image that still creates `ubuntu` keeps
+# it, and that account's directory is not this role's to delete.
+- name: Ask whether a cloud-init ubuntu account exists
+  ansible.builtin.command:
+    cmd: getent passwd ubuntu
+  register: accounts_ubuntu_account
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+# The directory is uid 1000's on rbp2 and no account holds that id: it is the
+# 2023 image's home, left behind by `usermod -l`, holding a shell skeleton, an
+# empty `authorized_keys` and a history of the rename. It is removed so a future
+# account cannot inherit it.
+- name: Remove the cloud-init home directory no account owns
+  ansible.builtin.file:
+    path: /home/ubuntu
+    state: absent
+  when: accounts_ubuntu_account.rc == 2
 
 # `lineinfile` rewrites the *last* line its regexp matches, so a pattern that
 # also matches a commented example (`#      X11Forwarding no`, in Ubuntu's
