@@ -53,6 +53,12 @@ class RenderTests(unittest.TestCase):
     def test_title_names_the_rule_and_where(self):
         self.assertEqual(relay.render_title(payload()), "DiskFull on nas")
 
+    def test_the_title_prefers_the_host_over_the_scrape_target(self):
+        """A real alert carries instance=10.42.1.198:9902 and host=nas; the pod IP is noise."""
+        p = payload()
+        p["alerts"][0]["labels"].update({"host": "nas", "instance": "10.42.1.198:9902"})
+        self.assertEqual(relay.render_title(p), "DiskFull on nas")
+
     def test_body_opens_with_the_protocol_block(self):
         body = relay.render_body(payload(), "g1")
         self.assertTrue(body.startswith("repo: vyrtualsynthese/homelab\n"))
