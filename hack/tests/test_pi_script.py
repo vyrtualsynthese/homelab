@@ -64,6 +64,35 @@ def test_the_root_device_is_read_not_assumed():
     assert "/proc/mounts" in text
 
 
+def sh(code):
+    return subprocess.run(["bash", "-c", f'source "{SCRIPT}"; {code}'],
+                          capture_output=True, text=True, env=dict(os.environ))
+
+
+def test_sourcing_the_script_does_not_run_a_verb():
+    out = sh("echo ok")
+    assert out.returncode == 0, out.stderr
+    assert out.stdout.strip() == "ok"
+
+
+def test_a_version_inside_its_band_matches_and_a_major_jump_does_not():
+    assert sh('version_in_band "5:29.10.1-1~ubuntu.26.04" "5:29.*" && echo in').stdout.strip() == "in"
+    assert sh('version_in_band "5:30.0-1~ubuntu.26.04" "5:29.*" || echo out').stdout.strip() == "out"
+    assert sh('version_in_band "5:28.3.2-1~ubuntu.24.04" "5:29.*" || echo out').stdout.strip() == "out"
+
+
+def test_the_pin_list_names_the_four_packages_once_each():
+    out = sh("engine_pairs").stdout.split()
+    assert out == ["docker-ce", "5:29.*", "docker-ce-cli", "5:29.*",
+                   "containerd.io", "2.4.*", "docker-compose-plugin", "5:8.*"]
+
+
+def test_engine_drift_checks_nothing_under_a_fixture():
+    out = sh("ROOT=/tmp; engine_drift; echo rc=$?")
+    assert "engine: not checked (PI_ROOT is set)" in out.stdout
+    assert "rc=0" in out.stdout
+
+
 def test_render_prints_the_engine_it_would_install():
     out = run("render", "rbp0")
     assert out.returncode == 0, out.stderr

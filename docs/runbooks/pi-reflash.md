@@ -155,16 +155,17 @@ sudo ~/hosts/pi/hosts-pi.sh setup <host>
 sudo ~/hosts/pi/hosts-pi.sh verify <host>
 ```
 
-`restore` copies the tree and then verifies, so it names a difference in `docker-compose.yml` when the copy
-predates the template — that is expected, and `setup` is the verb that writes the template's version.
-`setup` rewrites `/boot/firmware/config.txt` and `cmdline.txt` only because the image already put them
-there, and it never writes the env files. Check the tree is readable by `vronteix` after the copy: a `cp -a`
-from a stick keeps the owner it was written with.
+`restore` copies the tree and then verifies, so on a fresh image it exits 1 twice over: the copy's
+`docker-compose.yml` may predate the template, and the engine is not installed yet. Both are `setup`'s job,
+and the `verify` that follows `setup` is the one whose exit code counts. `setup` rewrites
+`/boot/firmware/config.txt` and `cmdline.txt` only because the image already put them there, and it never
+writes the env files. Check the tree is readable by `vronteix` after the copy: a `cp -a` from a stick keeps
+the owner it was written with.
 
 A fresh image also has no container runtime, and `setup` installs that too: `docker-ce`, `docker-ce-cli`,
 `containerd.io` and `docker-compose-plugin` from Docker's own repository, then `vronteix` into the `docker`
 group. The suite (the release name apt matches on) is read from the image's `/etc/os-release`; measured on
-2026-11-25, Docker's repository carried the 26.04 suite for arm64 with `docker-ce` 29.10.1 and
+2026-11-25, Docker's repository carried the 26.04 suite (`resolute`) for arm64 with `docker-ce` 29.10.1 and
 `docker-compose-plugin` 5.8.0, so Ubuntu's `docker.io` is never used. The packages are pinned by band, and
 the pins live in the script's header. This step therefore needs the network, and it runs before the stack
 starts. An engine already present outside its band is named and left alone: the script never upgrades a
