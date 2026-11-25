@@ -55,59 +55,86 @@ class Snapshot(NamedTuple):
     last_success: float
 
 
-def _middleware_names(document):
-    """Every middleware name an IngressRoute's routes reference, normalised.
+def _middleware_names(route):
+    """Every middleware name one router references, normalised.
 
     The CRD carries `{name, namespace}` objects; a rendered chart can also carry
     the legacy `namespace-name@kubernetescrd` string. Both name the same object,
-    so both are reduced to the bare name.
+    so both are reduced to the bare name. A prefix strip, not a replace: a
+    middleware whose own name contains `kube-system-` must not be mangled.
     """
     names = []
-    for route in (document.get("spec") or {}).get("routes") or []:
-        for middleware in route.get("middlewares") or []:
-            name = middleware if isinstance(middleware, str) else middleware.get("name", "")
-            names.append(name.split("@")[0].replace("kube-system-", ""))
+    for middleware in route.get("middlewares") or []:
+        name = middleware if isinstance(middleware, str) else middleware.get("name", "")
+        names.append(str(name).split("@")[0].removeprefix("kube-system-"))
     return names
 
 
-def gated(document) -> bool:
-    """True when any route in an IngressRoute carries a middleware named `lan-only`."""
-    return LAN_GATE in _middleware_names(document)
+def hosts_of(route) -> list[str]:
+    """Every backticked `Host()` one router matches. Only that shape is counted.
 
-
-def hosts_of(document) -> list[str]:
-    """Every `Host()` a document matches. One IngressRoute can carry several."""
+    A `HostRegexp(...)` or `HostSNI(...)` match, or a double-quoted `Host("...")`,
+    contributes nothing and its route leaves the count silently — no chart in this
+    repository uses those forms, and a router shape this cannot read is a change to
+    make deliberately rather than to guess at.
+    """
     out = []
-    for route in (document.get("spec") or {}).get("routes") or []:
-        match = route.get("match") or ""
-        for chunk in match.split("Host(`")[1:]:
-            out.append(chunk.split("`")[0])
+    match = route.get("match") or ""
+    for chunk in match.split("Host(`")[1:]:
+        out.append(chunk.split("`")[0])
     return out
 
 
-def posture(documents, public: set[str]) -> Posture:
-    """Count routes, the ungated ones, and the ones that answer the internet.
+def gated(document) -> bool:
+    """True when every router of an IngressRoute carries a middleware named `lan-only`.
 
-    A route is ungated when its IngressRoute carries no `lan-only` and its host is
-    not on the public list. The two families answer two different questions and
-    are never both incremented by one route: `published` counts the hosts on the
-    allowlist that are live, so it moves when a declared public name loses or
-    gains its route, and `ungated` counts the hosts nobody declared that carry no
-    gate, so it moves when a route is exposed. A name is not classified by what it
-    resolves to: the router chooses by `Host` header, so an ungated `.kub.local`
-    route answers whoever sends that header, and calling it "internal" because DNS
-    says so is the assumption `hack/check_exposure.py` exists to refuse.
+    The gate is per router, so this is the document-wide reading: a document is
+    only fully gated when none of its routes is open. `posture()` works per route
+    for that reason; this helper exists for the one-place check and for tests.
     """
-    total = published = ungated = 0
+    routes = (document.get("spec") or {}).get("routes") or []
+    return bool(routes) and all(LAN_GATE in _middleware_names(route) for route in routes)
+
+
+def posture(documents, public: set[str]) -> Posture:
+    """Count the live objects, the exposed hostnames, and the allowlisted ones.
+
+    Three grains, and each number means exactly one thing:
+
+    * `routes` is `IngressRoute` objects that publish at least one host, so it is
+      the same unit `kubectl get ingressroute | wc -l` counts and the constant in
+      values.yaml is written in. Counting host matches instead would inflate one
+      object that routes `/` and `/api` on one name, and one name that two objects
+      serve (a `websecure` router and its `web` redirect twin).
+    * `published` is the allowlisted **hostnames** that are live: the intersection,
+      so a name served by two objects counts once.
+    * `ungated` is the **hostnames** nobody declared that have at least one router
+      with no `lan-only` middleware. The gate is per router, not per object: an
+      object can hold a gated route and an ungated one, and the ungated one answers
+      whoever sends its `Host` header. A host is therefore ungated when *any* of
+      its routers is, which is the safe reading.
+
+    The two exposed families never count the same name: an allowlisted host is
+    `published` whether or not it is gated, because it is meant to be reachable. A
+    name is not classified by what it resolves to either — the router chooses by
+    `Host` header, so an ungated `.kub.local` route answers whoever sends that
+    header, and calling it "internal" because DNS says so is the assumption
+    `hack/check_exposure.py` exists to refuse.
+    """
+    objects = 0
+    live: set[str] = set()
+    ungated_hosts: set[str] = set()
     for document in documents:
-        gate = gated(document)
-        for host in hosts_of(document):
-            total += 1
-            if host in public:
-                published += 1
-            elif not gate:
-                ungated += 1
-    return Posture(total, ungated, published)
+        seen: list[str] = []
+        for route in (document.get("spec") or {}).get("routes") or []:
+            route_hosts = hosts_of(route)
+            seen.extend(route_hosts)
+            if LAN_GATE not in _middleware_names(route):
+                ungated_hosts.update(route_hosts)
+        if seen:
+            objects += 1
+        live.update(seen)
+    return Posture(objects, len(ungated_hosts - public), len(public & live))
 
 
 def _controller(pod):
@@ -118,17 +145,23 @@ def _controller(pod):
     changes on every rollout, so it is stripped: one Deployment stays one
     workload across a redeploy. A DaemonSet, StatefulSet or Job names itself
     already and is used as it is.
+
+    The identity is the triple `(namespace, kind, name)`: a Deployment `foo` in
+    one namespace and a DaemonSet `foo` in another are two workloads, and keying
+    on the bare name would quietly count them as one.
     """
-    owners = (pod.get("metadata") or {}).get("ownerReferences") or []
+    metadata = pod.get("metadata") or {}
+    owners = metadata.get("ownerReferences") or []
     if not owners:
         return None
     owner = owners[0]
     name = str(owner.get("name") or "")
-    if not name:
+    kind = str(owner.get("kind") or "")
+    if not name or not kind:
         return None
-    if owner.get("kind") == "ReplicaSet":
+    if kind == "ReplicaSet":
         name = POD_TEMPLATE_HASH.sub("", name)
-    return name
+    return (metadata.get("namespace") or "", kind, name)
 
 
 def privileged(pods) -> int:
@@ -184,23 +217,38 @@ def measure(public: set[str], now: datetime | None = None) -> Snapshot:
     return Snapshot(counted.routes, counted.ungated, counted.public, privileged(pods), stamp)
 
 
+FRESHNESS = [
+    "# HELP homelab_security_exporter_last_success_timestamp_seconds Unix time of the last successful poll.",
+    "# TYPE homelab_security_exporter_last_success_timestamp_seconds gauge",
+]
+
+
 def render(state: Snapshot) -> str:
-    """The page, five families and no labels: Prometheus is open on the LAN."""
+    """The page, five families and no labels: Prometheus is open on the LAN.
+
+    Before the first successful poll only the freshness family is published. A
+    zero for `ungated_routes` or `privileged_workloads` is not "nothing found", it
+    is "nothing read", and a security count must never carry that ambiguity: an
+    operator who sees the numbers absent reaches for the freshness family, while
+    one who sees a zero believes the cluster. Publishing only the timestamp also
+    keeps `up == 1` from meaning anything it does not.
+    """
+    if state.last_success <= 0:
+        return "\n".join([*FRESHNESS, "homelab_security_exporter_last_success_timestamp_seconds 0", ""])
     return "\n".join([
-        "# HELP homelab_security_ingress_routes Live IngressRoute objects.",
+        "# HELP homelab_security_ingress_routes Live IngressRoute objects that publish a host.",
         "# TYPE homelab_security_ingress_routes gauge",
         f"homelab_security_ingress_routes {state.routes}",
-        "# HELP homelab_security_ungated_routes Live routes with no LAN gate and a host that is not public.",
+        "# HELP homelab_security_ungated_routes Live hosts with no LAN gate that are not on the allowlist.",
         "# TYPE homelab_security_ungated_routes gauge",
         f"homelab_security_ungated_routes {state.ungated}",
         "# HELP homelab_security_public_hosts Declared public hosts that are live.",
         "# TYPE homelab_security_public_hosts gauge",
         f"homelab_security_public_hosts {state.public}",
-        "# HELP homelab_security_privileged_workloads Running containers that declare privileged: true.",
+        "# HELP homelab_security_privileged_workloads Distinct Running controllers with a privileged container.",
         "# TYPE homelab_security_privileged_workloads gauge",
         f"homelab_security_privileged_workloads {state.privileged}",
-        "# HELP homelab_security_exporter_last_success_timestamp_seconds Unix time of the last successful poll.",
-        "# TYPE homelab_security_exporter_last_success_timestamp_seconds gauge",
+        *FRESHNESS,
         f"homelab_security_exporter_last_success_timestamp_seconds {int(state.last_success)}",
         "",
     ])
@@ -228,7 +276,18 @@ def poll_forever(public: set[str], interval: int) -> None:
 
 class Handler(BaseHTTPRequestHandler):
     def do_GET(self):  # noqa: N802 — the name is the HTTP method
-        if self.path.split("?")[0] != "/metrics":
+        path = self.path.split("?")[0]
+        if path == "/healthz":
+            # Ready only once something has actually been read: a pod that cannot
+            # reach the API must not be a Ready endpoint serving stale zeros, and
+            # an unready pod is absent from the service rather than plausible in it.
+            with LOCK:
+                ready = STATE.last_success > 0
+            self.send_response(200 if ready else 503)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
+        if path != "/metrics":
             self.send_response(404)
             self.send_header("Content-Length", "0")
             self.end_headers()

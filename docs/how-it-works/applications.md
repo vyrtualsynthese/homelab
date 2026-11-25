@@ -91,7 +91,7 @@ belong to is [media.md](media.md).
 | `news-freshrss` | `news` | nuc0 | A | RSS reader, on a claim the chart creates |
 | `renovate` | `renovate` | nas | D | nightly pull requests that bump dependencies |
 | `crowdsec` | `security` | nas | D | attack detection: reads the router's access log on `streaming`, keeps the decisions on `nas`; the banning is a host service, see the CrowdSec runbook |
-| `security-exporter` | `security` | nas | D | posture numbers for the security dashboard: live route count, un-gated routes, public hosts, privileged workloads, sign-in outcomes |
+| `security-exporter` | `security` | nas | A | posture numbers for the security dashboard: live route count, un-gated routes, public hosts, privileged workloads |
 | `syncthing` | `syncthing` | nuc0 | A | file sync between devices |
 | `thelounge` | `thelounge` | nuc0 | A | web IRC client |
 | `vikunja` | `vikunja` | nuc0 | D | the task board, where the state of every ticket lives |
