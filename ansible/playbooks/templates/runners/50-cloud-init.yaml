@@ -4,6 +4,12 @@ network:
       dhcp4: true
       dhcp4-overrides:
         use-dns: false
+      # Both Pi-holes, in the same order on both hosts: rbp0 first because it is
+      # the source of truth, the pair because either one answering is enough.
+      # Never 127.0.0.1 — a container cannot reach the host's loopback, which is
+      # why rbp0 sent 1,720 queries a day to rbp1 instead of to itself — and
+      # never 1.1.1.1, which answered around the blocklist entirely.
+      # hosts-pi.sh fills the list in, so no address is written in this file.
       nameservers:
-        addresses: [1.1.1.1]
+        addresses: [@PIHOLE_DNS_SERVERS@]
   version: 2

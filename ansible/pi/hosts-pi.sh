@@ -39,6 +39,12 @@ COMPOSE_PIN="5:8.*"
 DOCKER_KEYRING="/etc/apt/keyrings/docker.asc"
 DOCKER_SOURCES="/etc/apt/sources.list.d/docker.sources"
 DOCKER_GROUP_USER="vronteix"
+# The resolvers both Pis carry, on both hosts: rbp0 first because it is the
+# source of truth, the second address because either one answering is enough.
+# Written here rather than in the netplan template so no ansible YAML repeats an
+# address; test_the_resolver_list_is_the_two_edge_addresses checks it against
+# the inventory, which stays the record.
+PIHOLE_DNS_SERVERS="192.168.1.22, 192.168.1.38"
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TEMPLATES="$(cd "$HERE/../playbooks/templates/runners" && pwd)"
 ROOT="${PI_ROOT:-}"
@@ -81,6 +87,13 @@ desired_compose() {
 # hosts must end up byte-identical, and 'verify' compares bytes.
 desired_pihole_settings() {
     cat "$TEMPLATES/pihole.settings"
+}
+
+# The resolver list, the same on both hosts: rbp0 first, the pair as the fallback.
+# Written under /etc/netplan and applied by setup. Cloud-init has held no seed for
+# this file since the image was built in 2023, so the repository can own it.
+desired_netplan() {
+    sed "s/@PIHOLE_DNS_SERVERS@/$PIHOLE_DNS_SERVERS/g" "$TEMPLATES/50-cloud-init.yaml"
 }
 
 desired_hostname() {
@@ -382,6 +395,8 @@ cmd_render() {
     echo "left to cloud-init, which rewrites it on every boot"
     echo "--- $STACK_DIR/pihole.settings"
     desired_pihole_settings
+    echo "--- /etc/netplan/50-cloud-init.yaml"
+    desired_netplan
     echo "--- $STACK_DIR/config/wg-easy.db"
     echo "wg-easy 15's own database: panel account, host, port, DNS, peers. Not"
     echo "written here, and copied by 'backup' with the rest of the stack"
@@ -391,7 +406,7 @@ cmd_render() {
 }
 
 cmd_setup() {
-    local host="$1" current_name pihole_changed=0
+    local host="$1" current_name pihole_changed=0 netplan_changed=0
 
     current_name=""
     if [ -f "$ROOT/etc/hostname" ]; then
@@ -422,6 +437,8 @@ cmd_setup() {
     if [ "$CHANGED_THIS_WRITE" -eq 1 ]; then
         pihole_changed=1
     fi
+    write_abs "$ROOT/etc/netplan/50-cloud-init.yaml" "$(desired_netplan)"
+    netplan_changed="$CHANGED_THIS_WRITE"
     write_abs "$ROOT/etc/hostname" "$(desired_hostname "$host")"
 
     if [ -z "$ROOT" ]; then
@@ -441,6 +458,14 @@ cmd_setup() {
         fi
     else
         echo "stack: not started (PI_ROOT is set)"
+    fi
+
+    # The resolvers are a live network setting: writing the file changes nothing
+    # until netplan is told, and every later boot reads the file. Only when the
+    # bytes moved, and only on a real host.
+    if [ "$netplan_changed" -eq 1 ] && [ -z "$ROOT" ]; then
+        netplan apply
+        echo "netplan: applied"
     fi
 
     echo "changed=$CHANGED"
@@ -490,6 +515,9 @@ cmd_verify() {
         problems=1
     fi
     if ! check_text "$ROOT$STACK_DIR/pihole.settings" "$(desired_pihole_settings)"; then
+        problems=1
+    fi
+    if ! check_text "$ROOT/etc/netplan/50-cloud-init.yaml" "$(desired_netplan)"; then
         problems=1
     fi
 
