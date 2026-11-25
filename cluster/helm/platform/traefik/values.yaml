@@ -235,8 +235,11 @@ traefik:
         dnsChallenge:
           provider: ovh
           # The API refreshes the zone, but OVH's public nameservers can lag;
-          # 60 s of wait before the first check beats a failed order.
-          delayBeforeCheck: 60
+          # 60 s of wait before the first check beats a failed order. Traefik
+          # 3.8 deprecates the flat `delayBeforeCheck` and warns at startup;
+          # `propagation` is the same wait under its current name.
+          propagation:
+            delayBeforeChecks: 60
 
   ports:
     # Pinned back to the 2.11 value: chart 42 moved the default to 8080.

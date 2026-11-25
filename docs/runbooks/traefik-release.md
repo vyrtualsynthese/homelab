@@ -4,16 +4,17 @@ Date: 2026-11-21 · **Ownership moved** 2026-11-21 at chart `25.0.3`, revision 8
 the same day, chart `27.0.2` (Traefik `2.11.63`), revision 10 · **Moved to v3** the same day, chart
 `42.4.1` (Traefik `3.7.19`), revision 11 · **Configuration audited** 2026-11-22, revision 12 ·
 **Adopted by ArgoCD** 2026-11-23: Application `traefik`, manual sync, one sync, no diff left, Helm
-record deleted
+record deleted · **Moved to chart `43.0.0`** (Traefik `3.8.0`) 2026-11-25 through that Application,
+with the certificate store's owner repaired the same day
 
 > **In one line.** The Traefik release is this repository's, applied by an ArgoCD Application from a
 > wrapper chart in git, and synced by hand. `helm` is the fallback when ArgoCD is the broken thing.
 >
 > **Use it when** Traefik has to move to a newer chart, its values change, the release has to be
 > inspected or rolled back, or the Application has to be synced by hand or taken back out of ArgoCD ·
-> **Verified** 2026-11-23 on chart `42.4.1`, Traefik `3.7.19`: the pre-sync diff was one `tracking-id`
-> annotation per object and nothing else, the sync left `Synced`/`Healthy` with an empty diff, the pod
-> kept its name, its creation time and its zero restarts, and the Helm release record is gone ·
+> **Verified** 2026-11-25 on chart `43.0.0`, Traefik `3.8.0`: the render against `42.4.1` was empty,
+> the sync left `Synced`/`Healthy` at revision `3640e9fb`, the pod was replaced once with zero
+> restarts, and both public domains answer with a Let's Encrypt certificate ·
 > **Kind:** how-to · **Sources** `cluster/helm/platform/traefik/`,
 > `cluster/argocd/projects/platform/traefik.yaml`, `cluster/infrastructure/traefik/`,
 > `docs/how-it-works/network.md`.
@@ -28,11 +29,11 @@ decoration.
 
 | What | Where |
 |---|---|
-| The values the release runs with | `cluster/helm/platform/traefik/values.yaml` (chart `42.4.1`), nested under `traefik:` |
+| The values the release runs with | `cluster/helm/platform/traefik/values.yaml` (chart `43.0.0`), nested under `traefik:` |
 | The Application that applies them | `cluster/argocd/projects/platform/traefik.yaml`, manual sync, `helm.skipCrds` |
 | The values a rollback to chart `27.0.2` needs | `cluster/infrastructure/traefik/values-2.11.yaml` (flat) |
 | The values a rollback to chart `25.0.3` needs | `cluster/infrastructure/traefik/values-25.0.3.yaml` (flat) |
-| The chart | `traefik` `42.4.1` from the upstream index, pinned in the wrapper's `Chart.yaml`; `25.0.3+up25.0.0` came from K3s's static path (see below) |
+| The chart | `traefik` `43.0.0` from the upstream index, pinned in the wrapper's `Chart.yaml`; `25.0.3+up25.0.0` came from K3s's static path (see below) |
 | The certificate store | claim `pvc-traefik-nfs` mounted at `/data`; PV `pv-traefik-nfs`, NFS, `Retain` |
 | The objects it owns | `Deployment`, `Service`, `IngressClass`, `IngressRoute traefik-dashboard`, `ClusterRole`, `ClusterRoleBinding`, `ServiceAccount` |
 
@@ -450,6 +451,69 @@ own `values.yaml`; `helm lint` and `helm template` both pass. The silent-ignore 
 the chart accepts but never reads, which `helm template` shows in the rendered arguments — the audit
 compared those against the table above.
 
+## Moving to chart `43.0.0` (Traefik 3.8.0), 2026-11-25
+
+A Renovate pull request moved the wrapper's pin from `42.4.1` to `43.0.0`, and the image from
+`v3.7.19` to `v3.8.0`, in one change. Two steps were checked before the Application was synced, and
+one thing broke after it.
+
+**The CRDs first.** Step 2 of *Upgrading the release* is a manual CRD apply, so the two chart tarballs
+were compared file by file: all ten `traefik.io_*` files under `43.0.0`'s `crds/` directory are
+byte-identical to `42.4.1`'s. The apply had nothing to do, and that is a checked fact rather than a
+skipped step.
+
+**The render.** With the wrapper rebuilt against chart 43, `helm template` produced the same documents
+as `42.4.1` once the `helm.sh/chart` label was normalised: no object, argument, volume or port moved.
+
+**The sync.** The `argocd` CLI could not reach the server — its stored refresh token had already been
+claimed, and every call dies on `oauth2: "invalid_grant"`. The Application does not need the CLI: its
+sync is an operation written onto the object.
+
+```bash
+REV=$(git rev-parse origin/develop)
+kubectl -n argocd patch application traefik --type=merge \
+  -p "{\"operation\":{\"sync\":{\"revision\":\"$REV\"}}}"
+kubectl -n argocd get application traefik \
+  -o jsonpath='{.status.operationState.phase} {.status.sync.status} {.status.health.status}'
+```
+
+The phase went `Succeeded` in under a minute. The Deployment became `traefik-43.0.0` on
+`docker.io/traefik:v3.8.0`, the pod was replaced with zero restarts, `traefik version` answers `3.8.0`,
+and the Application sits `Synced`/`Healthy` at revision `3640e9fb`.
+
+**What 3.8 does to the log.** `dnsChallenge.delayBeforeCheck` is deprecated: the same 60 s wait is
+`dnsChallenge.propagation.delayBeforeChecks` now, which the wrapper's values carry as of this change
+and which renders as one argument in place of the old one. The encoded-characters advice and the
+cross-namespace warning are unchanged from 3.7 and still accepted (the audit table above says why).
+
+**What broke: the certificate store's owner.** Right after the sync, every public host answered with
+the internal certificate (`CN = kub.local`) and `dashy.ashudev.com` failed the handshake outright with
+`tlsv1 unrecognized name`. The chart was not at fault. `/data/acme.json` on the NAS was owned by uid
+`1100` while Traefik runs as `65532`, so it could not read its ACME account and started with
+`The ACME resolve is skipped from the resolvers list … permission denied`. With no resolver the
+routers still match on the name, Traefik serves its default certificate for every host, and the sites
+keep answering over a certificate a browser rejects.
+
+A `chown` from inside the cluster cannot fix it: the export on `nas` is `root_squash` with
+`anonuid=1100`, so root is mapped away and the call answers `Operation not permitted`. The fix is on
+the NAS, against the directory it exports:
+
+```bash
+chown 65532:65532 /mnt/storage/traefik/acme.json
+chmod 600 /mnt/storage/traefik/acme.json
+```
+
+After a pod restart the store loads, the resolver registers, and the certificate on the wire is
+Let's Encrypt's. Check the name a browser would use, not the address:
+
+```bash
+echo | openssl s_client -connect 192.168.1.46:443 -servername ashuvidz.com 2>/dev/null \
+  | openssl x509 -noout -subject -issuer -enddate
+```
+
+`issuer=… Let's Encrypt …` is the pass. `ashulab internal CA` means the store was skipped, and the
+line to look for in the pod log is `The ACME resolve is skipped`.
+
 ## Rolling back
 
 - **Values**: `helm -n kube-system get history traefik` lists the revisions. `helm rollback` to the
@@ -504,4 +568,6 @@ compared those against the table above.
 | the dashboard answers `401` on plain HTTP, no TLS | before 2026-11-21 the route was on `web` with basic auth, so the password crossed the LAN in clear; move it to `websecure` with `tls.options: internal-tls` |
 | `https://traefik.kub.local` fails the certificate | the route has no `tls.options: internal-tls`, so it gets no certificate from `kube-system/local-cert` |
 | `acme.json` grows with names nothing serves | certificates stay in the store after their route is deleted, and Traefik renews everything it holds; the orphans are listed in `docs/audit/traefik-2026-11-21.md` |
+| every public host serves `CN = kub.local`, and one name fails the handshake with `tlsv1 unrecognized name` | `/data/acme.json` is owned by a uid other than `65532`, so Traefik cannot read its ACME account, skips the resolver and falls back to the default certificate. Fix the owner on `nas`; see *Moving to chart `43.0.0`* |
+| the log says `Unable to create access logger … permission denied`, and no line reaches Loki | hostPath `/var/log/traefik` on `streaming` is root-owned `0755`, so Traefik (`65532`) cannot create the file. Run the `traefik_logs` Ansible role on that host: it sets the directory `2770` `65532:65532` with the setgid bit and installs the rotation rule |
 | metrics reachable on `192.168.1.46:9101` | `ports.metrics.expose` was `true`; Prometheus scrapes the pod's 9100 through the annotation and needs no Service port |
