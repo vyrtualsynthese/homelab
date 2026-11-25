@@ -3,7 +3,7 @@ fluent-bit:
   kind: DaemonSet
   image:
     repository: cr.fluentbit.io/fluent/fluent-bit
-    tag: 5.2.0
+    tag: 5.2.1
   testFramework:
     enabled: false
   rbac:
