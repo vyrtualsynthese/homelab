@@ -386,6 +386,7 @@ def test_verify_does_not_pass_a_stack_that_is_not_up():
 
 
 SETTINGS_HEADER = "--- /home/vronteix/dockers/pihole.settings\n"
+NETPLAN_HEADER = "--- /etc/netplan/50-cloud-init.yaml\n"
 
 
 def rendered_section(host, header):
@@ -413,3 +414,46 @@ def test_both_pis_get_the_same_pihole_settings():
         assert line in rbp0, line
     assert "WEBPASSWORD" not in rbp0, "the password is a secret and is never rendered"
     assert not re.search(r"^PIHOLE_DNS_=", rbp0, re.M), "a v5 key FTL ignores, next to the one it reads"
+
+
+def test_both_pis_resolve_through_pihole():
+    """1.1.1.1 answered around the blocklist, and 127.0.0.1 is unreachable from
+    inside a container — which is why rbp0's containers queried rbp1 instead."""
+    for host in ("rbp0", "rbp1"):
+        netplan = yaml.safe_load(rendered_section(host, NETPLAN_HEADER))
+        addresses = netplan["network"]["ethernets"]["eth0"]["nameservers"]["addresses"]
+        assert addresses == ["192.168.1.22", "192.168.1.38"], addresses
+        assert "1.1.1.1" not in addresses
+        assert "127.0.0.1" not in addresses
+
+
+def test_setup_places_the_shared_settings_and_the_resolvers(tmp_path):
+    root = tmp_path / "pi"
+    stack = _pi_fixture(root)
+    assert run("setup", "rbp1", root=root).returncode == 0
+    assert (stack / "pihole.settings").read_text() == (
+        REPO / "ansible/playbooks/templates/runners/pihole.settings"
+    ).read_text()
+    netplan = root / "etc/netplan/50-cloud-init.yaml"
+    assert netplan.read_text() == rendered_section("rbp1", NETPLAN_HEADER)
+    assert run("verify", "rbp1", root=root).returncode == 0
+
+
+def test_netplan_is_applied_only_on_a_real_host():
+    """A live resolver change is not something a fixture run should perform."""
+    text = SCRIPT.read_text()
+    assert "netplan apply" in text
+    apply_line = text.index("netplan apply")
+    guard = text.rindex('-z "$ROOT"', 0, apply_line)
+    assert guard > text.index("cmd_setup()"), "the apply sits behind the PI_ROOT guard"
+
+
+def test_the_resolver_list_is_the_two_edge_addresses():
+    """The script carries the two addresses because it runs on the host, where
+    the inventory is not. The inventory stays the record, so they are compared."""
+    netplan = yaml.safe_load(rendered_section("rbp0", NETPLAN_HEADER))
+    addresses = netplan["network"]["ethernets"]["eth0"]["nameservers"]["addresses"]
+    edge = yaml.safe_load(
+        (REPO / "ansible/inventory/hosts.yml").read_text()
+    )["all"]["children"]["edge"]["hosts"]
+    assert addresses == [edge["rbp0"]["ansible_host"], edge["rbp1"]["ansible_host"]]
