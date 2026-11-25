@@ -1,0 +1,186 @@
+# The upstream chart's values, all of them under the dependency's name.
+#
+# Two workloads and a separation that is not a preference: the **agent** must
+# run on `streaming`, because the file it reads is a hostPath that only exists
+# there; the **LAPI** lives on `nas` with the rest of the observability stack,
+# because its SQLite is state (decisions and registered bouncer keys) and
+# `nas` is where state is backed up.
+crowdsec:
+  image:
+    repository: crowdsecurity/crowdsec
+    tag: "v1.8.2"
+
+  # Only the file source below is used. There is no pod-log acquisition, so this
+  # key is inert; it is set to the runtime that writes the container logs anyway,
+  # so a future acquisition does not silently claim the wrong parser.
+  container_runtime: containerd
+
+  config:
+    # The agent's listener, and it is not optional: the chart's default
+    # liveness, readiness and startup probes all GET `/metrics` on port 6060, so
+    # an agent that does not listen there never becomes Ready and dies on the
+    # startup probe. The chart ships no listener configuration of its own, only
+    # the container port.
+    agent_config.yaml.local: |
+      prometheus:
+        listen_addr: 0.0.0.0
+        listen_port: 6060
+
+    # A second copy of the LAN boundary, on purpose, in the one place where it is
+    # a safety control rather than a routing decision.
+    #
+    # The image installs `crowdsecurity/whitelists`, whose ranges (127/8, 10/8,
+    # 172.16/12, 192.168/16, ::1) already cover every address below. That copy is
+    # not in this repository, it is not a reviewable diff, and a hub change is
+    # not a change anyone here approves. This one is, and the test beside it
+    # names the ranges.
+    #
+    # It is a **postoverflow**, so it runs before a decision exists: a
+    # whitelisted address is never banned, as opposed to banned-then-excused.
+    # The bouncer has no allow-list of its own — its configuration has no such
+    # key — so this is the only enforcement point, which is why it is the one
+    # thing here with a test that names addresses.
+    postoverflows:
+      s01-whitelist:
+        whitelist-lan.yaml: |
+          name: homelab/whitelist-lan
+          description: "never create a decision for the LAN, the tunnel, the pods or a node"
+          whitelist:
+            reason: "the operator's own network"
+            ip:
+              - "192.168.1.41"
+              - "192.168.1.27"
+              - "192.168.1.46"
+              - "192.168.1.48"
+            cidr:
+              - "192.168.1.0/24"
+              - "10.8.0.0/24"
+              - "10.42.0.0/16"
+              - "10.43.0.0/16"
+
+    # The chart's default value here holds the auto-registration block that lets
+    # the agent register itself with the LAPI. Overriding this key replaces it,
+    # so it is repeated verbatim and the metrics listener is added beside it.
+    config.yaml.local: |
+      api:
+        server:
+          auto_registration:
+            enabled: true
+            token: "${REGISTRATION_TOKEN}"
+            allowed_ranges:
+              - "127.0.0.1/32"
+              - "192.168.0.0/16"
+              - "10.0.0.0/8"
+              - "172.16.0.0/12"
+      prometheus:
+        # The default binds 127.0.0.1, which the kubelet's scrape cannot reach.
+        # Prometheus here scrapes pods by annotation, so the listener has to be
+        # on the pod address.
+        listen_addr: 0.0.0.0
+        listen_port: 6060
+
+  lapi:
+    replicas: 1
+    nodeSelector:
+      kubernetes.io/hostname: nas
+    strategy:
+      type: Recreate
+    # The image's entrypoint registers every `BOUNCER_KEY_<name>` env var at
+    # start-up (`cscli bouncers add <name> -k <key>`), which is how the host
+    # bouncer gets a key without anyone running `kubectl exec`. The value is a
+    # Secret created by hand; nothing here holds it.
+    env:
+      - name: BOUNCER_KEY_firewall
+        valueFrom:
+          secretKeyRef:
+            name: crowdsec-bouncer-key
+            key: api-key
+      # CAPI off. Without this the LAPI registers with CrowdSec's central API on
+      # its first start and subscribes to the shared blocklist, which is a
+      # decision to take after a few weeks of measuring our own traffic — and
+      # the only part of this that sends anything to a company. The agent gets
+      # the same variable from the chart itself.
+      - name: DISABLE_ONLINE_API
+        value: "true"
+    persistentVolume:
+      data:
+        enabled: true
+        storageClassName: local-path
+        size: 1Gi
+      config:
+        enabled: true
+        storageClassName: local-path
+        size: 100Mi
+    podAnnotations:
+      prometheus.io/scrape: "true"
+      prometheus.io/port: "6060"
+    resources:
+      requests:
+        cpu: 50m
+        memory: 128Mi
+      limits:
+        memory: 512Mi
+    metrics:
+      enabled: true
+
+  agent:
+    # A DaemonSet would land on rbp2 (ARM64) and on `nas`, where the file does
+    # not exist. One Deployment, one node, the one that owns the file.
+    isDeployment: true
+    replicas: 1
+    nodeSelector:
+      kubernetes.io/hostname: streaming
+    env:
+      # `crowdsecurity/traefik` pulls `crowdsecurity/traefik-logs` and
+      # `crowdsecurity/base-http-scenarios` (probing, crawl, bad user agent,
+      # generic brute force, path traversal). The image itself only ships
+      # `crowdsecurity/linux` and the whitelists.
+      - name: COLLECTIONS
+        value: crowdsecurity/traefik
+    additionalAcquisition:
+      - source: file
+        filenames:
+          - /var/log/traefik/access.log
+        labels:
+          # `program` is what `crowdsecurity/traefik-logs` filters on
+          # (`evt.Parsed.program startsWith 'traefik'`); `type` names the source
+          # for everything else it does.
+          type: traefik
+          program: traefik
+    extraVolumes:
+      - name: traefik-logs
+        hostPath:
+          path: /var/log/traefik
+          type: Directory
+    extraVolumeMounts:
+      - name: traefik-logs
+        mountPath: /var/log/traefik
+        readOnly: true
+    # No mount of the host's whole /var/log: this agent reads one file, and the
+    # default `true` would hand it every log on the machine for nothing.
+    hostVarLog: false
+    # The image's entrypoint is not a non-root one: it rsyncs
+    # /staging/etc/crowdsec into /etc/crowdsec, runs `cscli hub update` and
+    # installs the collection there, then writes /var/lib/crowdsec. Forcing a
+    # uid would produce a CrashLoop on the first sync. The trade is accepted and
+    # narrow: root inside one pod, no host mount but the one file, read-only.
+    # If a later image supports it, set podSecurityContext here and prove the
+    # collection still installs.
+    podSecurityContext: {}
+    metrics:
+      enabled: true
+    podAnnotations:
+      prometheus.io/scrape: "true"
+      prometheus.io/port: "6060"
+    resources:
+      requests:
+        cpu: 50m
+        memory: 128Mi
+      limits:
+        memory: 512Mi
+
+  # CAPI is off: the first weeks measure our own traffic, and switching it on is
+  # one setting to review against what it adds. It is also the only part of this
+  # that talks to a company.
+  # tls stays disabled: no cert-manager, no mutual TLS between two pods on the
+  # same cluster, and a bouncer outside that would need it has a CA to install.
