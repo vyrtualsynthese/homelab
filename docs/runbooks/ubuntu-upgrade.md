@@ -64,10 +64,12 @@ Each node's gate, in this order, recorded in the card:
   move needs is the release it lands on, 26.04 LTS to May 2031; the jammy hosts keep standard support
   to April 2027, past these hops. `pro status` reading un-attached is the intended state, not drift —
   [the record](../decisions/2026-11-25-no-ubuntu-pro.md).
-- **`nas`'s parity is synced**: `snapraid status` prints no `NOT fully synced` warning and no `sync in
-  progress` line, and its last `scrub/sync` is 0 days old. On 2026-11-24 the parity and the content both
-  dated from 2024-02-10, so the union has had no protection since; the hop does not start until the
-  nightly runner has brought the array current.
+- **`nas`'s parity is synced — settled on 2026-11-25**: `snapraid status` prints no `NOT fully synced`
+  warning and no `sync in progress` line, and its last `scrub/sync` is 0 days old. On 2026-11-24 the
+  parity and the content both dated from 2024-02-10, so the union had no protection since; the forced
+  sync and the runner's own pass brought the array current, and
+  [the audit](../audit/hosts-2026-11-24.md#the-parity-synced-2026-11-25) holds the numbers. Check it
+  again at the hop rather than trusting this line: a parity that has fallen behind is a gate.
 - **`streaming`'s GPU — settled on 2026-11-24: the module compiles.** Driver 580.178.04 is the last
   branch NVIDIA ships for the Quadro P400, and its module is DKMS-built. Ubuntu 26.04.1 packages the
   same branch as `nvidia-dkms-580-server` 580.178.04, and DKMS built it against both 26.04 kernels —
