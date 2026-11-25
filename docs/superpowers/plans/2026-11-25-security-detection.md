@@ -2636,7 +2636,7 @@ max(
   or (delta(sum(fw_bouncer_banned_ips)[1h:1m]) > 20) * 2
   or (sum(fw_bouncer_banned_ips) > 0) * 1
   or (100 * sum(rate(traefik_router_requests_total{code=~"4.."}[15m]))
-      / sum(rate(traefik_router_requests_total[15m])) > 20) * 1
+      / sum(rate(traefik_router_requests_total[15m])) > 85) * 1
   or (homelab_authentik_signins_15m{outcome="failure"} > 20) * 1
   or vector(0)
 )
@@ -2647,10 +2647,11 @@ a gauge, and `increase()` assumes a counter, silently resetting on any drop. `ma
 terms, not `or` alone, because the terms carry no labels and the first one that matches would win
 otherwise. And `vector(0)` last, so a calm night is the number 0 rather than an empty panel.
 
-`REJECTED_SHARE_PCT` and its `20` are Task 12's measured value, written into the panel's description
-in the same words — the plan uses 20 as the provisional figure and the measurement replaces it before
-the panel is saved. The thresholds are `0/1/2` on a stat panel with three value mappings — Calm, Watch,
-Alerting — and no score out of ten.
+`REJECTED_SHARE_PCT` is **85**, Task 12's measured value, written into the panel's description in the
+same words — the plan's provisional `20` sat inside the band routine bot bursts already produce (42 of
+92 hours were above it), so it would have painted the screen amber on an ordinary Tuesday. The
+thresholds are `0/1/2` on a stat panel with three value mappings — Calm, Watch, Alerting — and no score
+out of ten.
 
 - [ ] **Step 3: Apply it through the API**
 
@@ -2760,7 +2761,7 @@ sum(count_over_time({source="journal", unit="kernel"} |~ "UFW BLOCK" [5m]))
 # Two comparisons, `or`-ed: a route that lost its gate, and a count that moved.
 homelab_security_ungated_routes > 0
   or homelab_security_public_hosts != 9
-  or homelab_security_privileged_workloads != 4
+  or homelab_security_privileged_workloads != 9
 ```
 
 Each rule sets its **no-data behaviour explicitly**, because the two kinds disagree. `SecurityExposureDrift`
@@ -2773,13 +2774,18 @@ nothing" is exactly what a dead exporter looks like.
 spans datasources:
 
 ```
-A (Prometheus): time() - homelab_security_exporter_last_success_timestamp_seconds > 300
+A (Prometheus): time() - homelab_security_exporter_last_success_timestamp_seconds > 600
                 or absent(homelab_security_exporter_last_success_timestamp_seconds)
                 or absent(fw_bouncer_banned_ips)
                 or absent(cs_active_decisions)
 B (Loki):       sum(count_over_time({job="fluent-bit", container="traefik"}[10m]))
 C (classic):    A > 0  ||  B == 0
 ```
+
+Ten minutes, not five: the plan's `2N × 5` formula lands on 0 because Task 12 found no empty window at
+any usable step, and ten minutes is five times the finest window a 1 m scrape interval allows. The
+traffic never pauses that long — the quietest two-minute window still held 4 requests — so a B that
+reads zero is a pipeline that stopped, not a quiet night.
 
 A returns one sample when the exporter is stale or a family has vanished, and nothing when everything
 is alive; `C`'s `A > 0` then reads "blind". The three families live on two pods, and both are annotated
@@ -2832,7 +2838,7 @@ curl -s -H "Authorization: Bearer $GRAFANA_TOKEN" \
 For each rule, `POST /api/v1/eval` with `{condition, data}` copied from its own object — the check the Traefik rules used on 2026-11-21. Then, for the two that can be provoked:
 
 - a burst of ten missing paths from the runbook's outside address creates a decision → `SecurityBanBurst` and `SecurityAttackSustained` fire, with the address in the message;
-- **the operator** scales `deploy/crowdsec-agent` to zero (`kubectl -n security scale`, a write this session must not make) → `SecurityStackBlind` fires within five minutes. **This is the one proof that is not an expression**; the rule's whole value is that a dead agent is not a quiet night, and scaling it down is how that is shown. Scale it back and watch the alert resolve.
+- **the operator** scales `deploy/crowdsec-agent` to zero (`kubectl -n security scale`, a write this session must not make) → `SecurityStackBlind` fires after ten minutes of silence plus the rule's own `for`. **This is the one proof that is not an expression**; the rule's whole value is that a dead agent is not a quiet night, and scaling it down is how that is shown. Scale it back and watch the alert resolve.
 
 - [ ] **Step 4: Read one Discord message and one card as the operator receives them**
 
