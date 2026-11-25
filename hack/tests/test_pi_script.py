@@ -1,3 +1,4 @@
+import json
 import os
 import pathlib
 import subprocess
@@ -33,8 +34,26 @@ def test_render_prints_the_pinned_images_for_each_pi():
         out = run("render", host)
         assert out.returncode == 0, out.stderr
         assert "jacklul/pihole:2026.11.0" in out.stdout
-        assert "wg-easy:15" in out.stdout
+        assert "wg-easy:14" in out.stdout
         assert port in out.stdout
+
+
+def test_the_wg_easy_major_is_held_until_the_config_migrates():
+    """v15 moved its configuration into an admin panel and refuses a v14 volume
+    outright; a bump to it crash-looped rbp1's VPN on 2026-11-25."""
+    compose = yaml.safe_load(
+        (REPO / "ansible/playbooks/templates/runners/docker-compose.yml").read_text()
+    )
+    assert compose["services"]["wg-easy"]["image"] == "ghcr.io/wg-easy/wg-easy:14"
+    renovate = json.loads((REPO / ".github/renovate.json").read_text())
+    holds = [
+        rule
+        for rule in renovate["packageRules"]
+        if "ghcr.io/wg-easy/wg-easy" in rule.get("matchPackageNames", [])
+    ]
+    assert holds and holds[-1]["allowedVersions"] == "<15", (
+        "without the hold, the next Renovate run reopens the bump that broke the VPN"
+    )
 
 
 def test_render_refuses_a_host_it_does_not_know():

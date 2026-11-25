@@ -12,7 +12,10 @@ services:
       - NET_ADMIN # Required if you are using Pi-hole as your DHCP server, else not needed
     restart: unless-stopped
   wg-easy:
-    image: ghcr.io/wg-easy/wg-easy:15
+    # Pinned at 14: v15 moved its configuration into an admin panel and
+    # refuses this v14 volume. The migration is a browser wizard (card 732),
+    # and .github/renovate.json holds the major until it lands.
+    image: ghcr.io/wg-easy/wg-easy:14
     container_name: wg-easy
     env_file: "./wg-easy.env"
     volumes:
