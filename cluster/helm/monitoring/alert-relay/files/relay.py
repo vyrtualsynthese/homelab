@@ -156,7 +156,10 @@ def bucket_title(card: dict, view: int) -> str:
     """
     for bucket in card.get("buckets") or []:
         if bucket.get("project_view_id") == view:
-            return bucket.get("title") or ""
+            title = bucket.get("title")
+            if not title:
+                break
+            return title
     raise ValueError(f"card #{card.get('id')} carries no bucket for view {view}")
 
 

@@ -103,6 +103,11 @@ class BucketTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             relay.bucket_title({"id": 7, "buckets": []}, 59)
 
+    def test_a_bucket_without_a_title_fails_loudly(self):
+        """A bucket row with no column name is still broken data, not 'some other column'."""
+        with self.assertRaises(ValueError):
+            relay.bucket_title({"id": 7, "buckets": [{"project_view_id": 59}]}, 59)
+
 
 class BoardCallTests(unittest.TestCase):
     class Stub(relay.Board):
