@@ -9,7 +9,7 @@
 >
 > **Use it when** qBittorrent's Web UI hangs, the exporter stops being scraped, or you want the
 > evidence gathered on 13 and 25 November, the suspects that were cleared, and what cleared the hang
-> · **Verified** 2026-11-25 21:20: three live stalls read from `/proc`, the client waiting on an I/O
+> · **Verified** 2026-11-25 21:30: four live stalls read from `/proc`, the client waiting on an I/O
 > that nothing performs while the server and the network measured clean, then a write burst that
 > pinned the node's own SSD; the router's access log and two 15-minute replays of the app's own write
 > pattern against the export · **Kind:** record
@@ -427,6 +427,54 @@ Ten minutes later the bill arrived: the exporter stopped answering at **20:54** 
 first — about 100 GB back onto the export and 96 GB of unlinks on `sda` — so that stall is the burst
 and the steady churn together, not a clean test of either. What it does show is the shape of the trade:
 the same load that froze `sda` is taken by the export without complaint, and still costs a stall.
+
+### The steady churn alone wedges the client, 21:13
+
+The 20:54 stall above cannot separate the burst from the churn. The one that followed can, because the
+relocation had finished at 20:51 and nothing was moving files any more:
+
+| Where | Observation |
+|---|---|
+| the WebUI | times out to `sonarr`; `curl` to the pod's own loopback times out at 6 s |
+| the listening socket | **51** connections nothing accepts, backlog 50 |
+| the blocked thread | `folio_wait_writeback` → `nfs_wb_all`, then `rpc_wait_for_completion_task` → `nfs4_do_close` |
+| `Dirty` / `Writeback` on the node | **396 kB** / 1 MB |
+| `sda` | 1.5 MB written per 10 s — the local disk is idle |
+| download rate at the time | **12.8 MB/s**, 18 torrents, all writing to `/downloads/incomplete` |
+
+So 12.8 MB/s of download is enough: the export's 456 MB/s and the 10 GbE link never enter into it. What
+the client cannot take is the shape — 2,000 `open` + `write` + `close` a second — and the replay above
+shows the same shape at 14,000 a second through a plain `pwrite` loop without wedging, so it is the
+combination of that shape with what qBittorrent does around it, not the syscall rate on its own.
+
+### Back to the local claim, 21:27
+
+Measured against each other, the two placements are not close: the export wedged twice in 25 minutes,
+the local claim held for 35 with the WebUI answering in 14 ms. The temp path went back to
+`/downloads-temp` and the app came back at 21:27 with 91 GB to relocate onto the SSD — the burst that
+freezes it in stretches, once.
+
+The recovery has three traps that are not obvious from the 18:44 version above:
+
+- **Argo CD's `selfHeal` puts the deployment back to one replica.** `scale --replicas=0` was reverted
+  within seconds and a new pod appeared, which would have re-mounted the export mid-recovery.
+  Automation is switched off on the Application for the window —
+  `kubectl -n argocd patch application qbittorrent --type merge -p '{"spec":{"syncPolicy":{"automated":null}}}'`
+  — and restored and verified afterwards.
+- **Count the mounts inside the host's namespace, not through `/host/proc/mounts`.** The latter is
+  `/host/proc/self/mounts`, so it reports the *reading process's* namespace with the host root grafted
+  at `/host`, and it showed a `pv-nfs-qbittorrent-config` mount that the host no longer had. The check
+  that settles it is `nsenter -t 1 -m -- grep -c pv-nfs-qbittorrent /proc/mounts`. It answered **0**:
+  kubelet had already detached the download volume, and the stale config mount from pod `05412ba7`
+  went with it. Nothing needed `umount`, which is a first for this procedure.
+- **Edit the preference on the claim, and keep its owner.** `Session\TempPath` is a preference, so it
+  lives in `qBittorrent.conf` and not in git. `sed -i` replaces the inode and leaves the file
+  `root`-owned, which the app cannot write; `sed > /tmp/x && cat > file` keeps `1100:1100` and `0644`.
+
+After the restart the app restored 325 torrents, relocated 91 GB onto the claim at roughly 4 GB a
+minute, and answered `200` in **7–15 ms** throughout. That is the state this page leaves it in: the
+local claim, downloads capped by what that SSD writes (~24 MB/s), and the churn itself still
+unexplained.
 
 ### What a stall looks like from outside
 
