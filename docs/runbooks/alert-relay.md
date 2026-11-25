@@ -1,7 +1,7 @@
 # Turning Grafana alerts into an investigation queue
 
 > **In one line.** A small in-cluster relay turns whatever Grafana routes to it into a card on the
-> `alerts` board, comments on repeats and resolves, and never closes one.
+> `alerts` board, opens one only when the firing is new work, and never moves or closes one.
 >
 > **Use it when** a Grafana alert should reach the board, a card never appeared, or you are changing
 > what the relay does · **Verified** 2026-11-25 · **Kind:** how-to
@@ -39,15 +39,23 @@ carries when it wants one card and no page, which is how a worn drive asks to be
 
 | Grafana sends | The relay does |
 |---|---|
-| `firing`, no open card for this incident | creates one card: the rule and where, with labels, annotations, the Grafana link and a `Next step:`. The card is labelled `task` and `alert` as it is created, because an unlabelled card fails the board's own `--verify` |
-| `firing`, a card is already open | comments `Fired again …`, at most once per `commentCooldownSeconds` |
-| `resolved`, a card is open | comments `Resolved …`, and **never moves or closes the card** |
-| `resolved`, no card at all | writes nothing: a test notification, or a rule deleted mid-flight, is not a new incident |
+| `firing`, no card for this incident | opens one card in Backlog: the rule and where, labels, annotations, the Grafana link and a `Next step:`. The card is labelled `task` and `alert` as it is created, because an unlabelled card fails the board's own `--verify` |
+| `firing`, the newest card is in Backlog or Doing | writes nothing, and logs `ignored, #N in <column>` |
+| `firing`, the newest card is in Validation, Idea, Shaping or Done | opens a new card in Backlog |
+| `resolved` | writes nothing, whatever card exists, and **never moves or closes one** |
 | a body that is not JSON, or has no alerts | answers 400 and logs why — it is never dropped in silence |
 
+The newest card for the key decides. One key recurs over months, so the latest card is the current
+incident, not the oldest — and a card closed in Done does not stop the next one from opening a card.
+A card in Idea or Shaping is not an active investigation, so it does not swallow a firing either.
+
+A resolve is not validation. It writes nothing at all and never moves a card; only an investigation
+that wrote a cause moves a card to Validation.
+
 Every delivery leaves one log line naming the rule and the outcome —
-`firing: DriveWorn on nas: opened #12` — so a relay that carries nothing is visible in its own log
-rather than inferred from an empty board.
+`firing: DriveWorn on nas: opened #12`, `firing: DriveWorn on nas: ignored, #12 in Doing`,
+`resolved: DriveWorn on nas: ignored, #12 in Backlog` — so a relay that carries nothing is visible in
+its own log rather than inferred from an empty board.
 
 One incident is Grafana's `groupKey`: the same rule on the same labels is the same card, however many
 times it fires. The card is found again by a 16-character SHA-256 prefix of that key, which is what
@@ -137,8 +145,8 @@ kubectl -n monitoring logs deploy/alert-relay -f | grep RelayProbe
 ```
 
 Expected, measured 2026-11-25: `firing: RelayProbe: opened #727` at once, then eleven minutes later
-`firing: RelayProbe: commented on #727` — one card, one comment. Delete the rule, remove the route and
-delete the card afterwards.
+`firing: RelayProbe: ignored, #727 in Backlog` — one card, and the repeat wrote nothing. Delete the
+rule, remove the route and delete the card afterwards.
 
 To prove the relay alone, from inside the cluster, send a body straight at it:
 
@@ -153,8 +161,9 @@ curl -s -X POST localhost:8080/alert -H 'Content-Type: application/json' -d '{
 ```
 
 Expected: `firing: TestDiskFull on nas: opened #<id>`, and one card. Send the same body again →
-`commented on #<id>`, still one card. Send it with `"status":"resolved"` → a comment saying the card
-stays open. Send a `resolved` whose `groupKey` was never seen → `resolved with no card`, and no card.
+`ignored, #<id> in Backlog`, still one card and no comment. Send it with `"status":"resolved"` →
+`resolved, ignored, #<id> in Backlog`, and the card stays where it is. Send a `resolved` whose
+`groupKey` was never seen → `resolved, no card`, and no card.
 
 ## Failure modes
 
