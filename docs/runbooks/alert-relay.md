@@ -307,6 +307,21 @@ curl -sk -H "Authorization: Bearer $VIKUNJA_MCP_TOKEN" "$B/tasks/<alert>?expand=
 # → {"done": false, "buckets": ["Validation"]}
 ```
 
+**Measured 2026-11-25** on the live board, with the shares in place and the scheduled runs (no
+hand-started job):
+
+- card #772 with one `blocked` fix (#775, then in `homelab` Backlog) — the first run logged
+  `#772 Lifecycle probe: open fix: Backlog -> Doing (1 fixes open)` and the card was in Doing;
+- #775 moved to `homelab` Validation (bucket 14, `done: false`) — the next run logged
+  `#772 …: Doing -> Validation (0 fixes open)`, and #772 read `done: false` in Validation;
+- card #773, `frozen` with an open fix, and #774, with no relation, both stayed in Backlog through
+  both runs.
+
+The two calls a reviewer could not verify from outside held: `GET /tasks/{id}?expand=buckets` returns
+the card's column, and a cross-project `blocked` relation is accepted with write on the alert card and
+read on the fix. `POST /projects/{p}/tasks` ignores a `labels` array — a card is labelled afterwards
+with `PUT /tasks/{id}/labels/bulk`, which is why the relay labels after creating.
+
 The two negative cases need their own cards, because a card already in Validation is never moved:
 
 - **No fix, no move.** A probe card with no `blocked` relation sits in Backlog through a run.
