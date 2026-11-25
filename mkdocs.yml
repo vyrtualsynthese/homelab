@@ -105,6 +105,7 @@ nav:
       - Cloud monitoring: runbooks/cloud-monitoring.md
       - The alert relay: runbooks/alert-relay.md
       - Add a database: runbooks/postgres-add-database.md
+      - Move qBittorrent to `nas`: runbooks/qbittorrent-to-nas.md
       - Shape the board: runbooks/vikunja-board-seed.md
   - Backups:
       - backup/README.md

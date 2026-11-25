@@ -503,12 +503,13 @@ reaches a person.
   narrowing the expression.
 - Until 2026-12-09: `alertname="ScrapeTargetDown"` with
   `app_kubernetes_io_instance="qbittorrent-exporter"` — the exporter cannot be scraped while
-  qBittorrent's Web UI is stalled on its NFS `/config` claim. Measured 2026-11-25: 627 failed
-  scrapes in 24 h, the target down 28 % of 48 h, every scrape pinned at the exporter's 5 s timeout,
-  and 106 firing/resolved transitions in four days as the stall crossed the rule's 15-minute gate.
-  The rule is right and the target is the fault
-  ([`docs/qbittorrent-webui-stalls.md`](../qbittorrent-webui-stalls.md), board card 758). Remove it
-  when `/config` moves to `local-path`, or renew it with a new end date.
+  qBittorrent's Web UI is stalled. Measured 2026-11-25: 627 failed scrapes in 24 h, the target down
+  28 % of 48 h, every scrape pinned at the exporter's 5 s timeout, and 106 firing/resolved
+  transitions in four days as the stall crossed the rule's 15-minute gate. The rule is right and the
+  target is the fault. The config claim's move off NFS on 2026-11-25 did not clear it; the app moves
+  to `nas` on 2026-11-26 so its download path is local
+  ([`docs/qbittorrent-webui-stalls.md`](../qbittorrent-webui-stalls.md), board card 777). Remove the
+  silence once that move has passed its 24-hour gate, or renew it with a new end date.
 - **Removed 2026-11-25 — the silence on `DriveNeedsReplacement` went with the rule.** The drive
   `nas /dev/sdf` is still known dead and waiting on a replacement
   ([`docs/audit/ansible-hosts.md`](../audit/ansible-hosts.md)), but it is now a `DriveWorn` warning

@@ -155,7 +155,12 @@ time. Examples:
   catalogue, `rbp2` for nothing but the control plane.
   Observability (Prometheus, Grafana, Loki) is a `nas` workload: ~50 GiB of `local-path` claims, no
   NFS. The NAS's `/mnt/ultrafaststorage` is reserved for the qbittorrent download export; nothing
-  else goes there. DaemonSets (`fluent-bit`, `prometheus-node-exporter`) are not pinned: they must
+  else goes there. `qbittorrent` is a `nas` workload for that reason: it writes the export on the
+  disk that serves it and mounts the export root as a host path, while the *arrs read the same
+  directory over NFS (`docs/runbooks/qbittorrent-to-nas.md`). A `local-path` claim cannot follow a
+  move like that one — it binds to the node that first mounts it, so the claim and its volume are
+  rebuilt on the new node, not moved. DaemonSets (`fluent-bit`, `prometheus-node-exporter`) are not
+  pinned: they must
   run on every node, including `rbp2`. The old `node-type` label is retired; do not reintroduce it.
   Traefik is the exception in the other direction: one `Deployment` replica pinned to `streaming`,
   never a DaemonSet. The certificate store is one file with no lock, so a second router alongside the

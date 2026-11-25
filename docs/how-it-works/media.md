@@ -45,7 +45,7 @@ moves the finished file into the library on the same NAS, and Plex reads it.
 | Radarr, `radarr-anime` | films | `streaming` |
 | Lidarr | music | `streaming` |
 | Bazarr, `bazarr-anime` | subtitles for the library | `streaming` |
-| qBittorrent | the download client | `streaming` |
+| qBittorrent | the download client | `nas` |
 | cross-seed | seeds the same release on a second tracker | `streaming` |
 | autobrr | grabs announced releases without a search | `streaming` |
 | unpackerr | extracts packed archives | `streaming` |
@@ -58,10 +58,11 @@ moves the finished file into the library on the same NAS, and Plex reads it.
 The two `-anime` twins give anime its own library roots, profiles and indexers, with separate
 configuration.
 
-**qBittorrent is not healthy.** Its Web UI and API stop answering during downloads, breaking cross-seed,
-autobrr and the qBittorrent exporter while it lasts. The cause was its `/config` claim on NFS, moved to
-`local-path` on 2026-11-25 and waiting on the 24-hour observation: it is an open fault with its own page,
-[qbittorrent-webui-stalls.md](../qbittorrent-webui-stalls.md).
+**qBittorrent was not healthy.** Its Web UI and API stopped answering during downloads, breaking
+cross-seed, autobrr and the qBittorrent exporter while it lasted. Two fixes went in: its `/config` claim
+left NFS on 2026-11-25, and the app itself moves to `nas` on 2026-11-26 so that `/downloads` is a local
+directory rather than an NFS client. It stays an open fault until the 24-hour gate on the second one;
+the whole record is [qbittorrent-webui-stalls.md](../qbittorrent-webui-stalls.md).
 
 ## The books pair
 
@@ -77,9 +78,10 @@ cutover: [completed record](../runbooks/books-cutover.md).
 Media is on the NFS classes from `nas`: `plex-media` for film and television, `nfs-audio` for music,
 `nfs-books` for the books library, `qbittorrent-download` for what is still downloading. Configuration
 sits on `local-path` on the node each app runs on. The one claim that was the exception — qBittorrent's
-`/config` on NFS, which is what the stall above was — moved on 2026-11-25. The classes, the binding
-trap and the absence of backups are [storage.md](storage.md); which claim belongs to which app is
-[applications.md](applications.md).
+`/config` on NFS, which is what the stall above was — moved on 2026-11-25, and the app now reads the
+downloads export from `nas` itself rather than over NFS, with the *arrs still mounting it as a claim.
+The classes, the binding trap and the absence of backups are [storage.md](storage.md); which claim
+belongs to which app is [applications.md](applications.md).
 
 ## What protects each one
 

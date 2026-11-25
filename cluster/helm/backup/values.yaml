@@ -151,8 +151,8 @@ nfs:
       path: /mnt/storage/traefik
 # qBittorrent's config left this stream on 2026-11-25, when the claim moved from the
 # `nfs-qbittorrent-config` export to `local-path` (board card 758). Its row is under `nodes`,
-# `streaming`; the export itself stays on `nas` as the migration's rollback copy, and is backed
-# up by nothing until the follow-up removes both.
+# `nas`, where the pod runs since 2026-11-26; the export itself stays on `nas` as the
+# migration's rollback copy, and is backed up by nothing until the follow-up removes both.
 
 nodes:
   nas:
@@ -176,6 +176,17 @@ nodes:
       # The LAPI's copy of `/etc/crowdsec`: the parsers and scenarios its hub update installed, plus
       # the local configuration. Size follows the row above.
       - {claim: crowdsec-config-pvc, namespace: security, kind: files}
+      # 1.1 KB. The VPN client's keys and config.
+      - {claim: qbittorrent-vpn-config, namespace: media-stack, kind: files}
+      # 435.0 MB on the claim, 181.2 of it worth keeping: the 2026-11-22 snapshot of the same
+      # tree measured that, when it still lived on the `nfs` export. The claim has moved twice:
+      # to this node's `local-path` on 2026-11-25 (card 758), and it follows the qBittorrent pod
+      # from `streaming` to `nas` on 2026-11-26, because a claim is bound to the node that first
+      # mounts it. `qBittorrent/BT_backup/` is one `.torrent` and one `.fastresume` per torrent:
+      # the seed list and the resume data, which no rebuild can recreate. Logs, the GeoIP
+      # database, the VueTorrent archive and the old web UI copy are rebuilt from the image or
+      # the internet.
+      - {claim: qbittorrent-config, namespace: media-stack, kind: files, exclude: ["logs", "log", "geoip", "ui.prev", ".cache", ".npm", "vuetorrent-*.zip"]}
 
   nuc0:
     schedule: "0 5 * * *"
@@ -242,15 +253,6 @@ nodes:
       - {claim: tautulli-config, namespace: media-stack, kind: sqlite, exclude: ["cache/", "logs/", "backups/"]}
       # 25.7 MB → 0.9: the interface bundle is rebuilt from the image.
       - {claim: maintainerr-config, namespace: media-stack, kind: sqlite, exclude: ["ui/", "logs/"]}
-      # 1.1 KB. The VPN client's keys and config.
-      - {claim: qbittorrent-vpn-config, namespace: media-stack, kind: files}
-      # 435.0 MB on the claim, 181.2 of it worth keeping: the 2026-11-22 snapshot of the same
-      # tree measured that, when it still lived on the `nfs` export. The claim moved from that
-      # stream to this one on 2026-11-25 (card 758). `qBittorrent/BT_backup/` is one `.torrent`
-      # and one `.fastresume` per torrent: the seed list and the resume data, which no rebuild
-      # can recreate. Logs, the GeoIP database, the VueTorrent archive and the old web UI copy
-      # are rebuilt from the image or the internet.
-      - {claim: qbittorrent-config, namespace: media-stack, kind: files, exclude: ["logs", "log", "geoip", "ui.prev", ".cache", ".npm", "vuetorrent-*.zip"]}
       # 7 663.7 MB on disk → 350.7 MB in the snapshot, 350.6 of it the staged databases: the
       # claim itself keeps 26 KB of configuration. What is worth restoring is the library
       # database (collections, playlists, watch state, manual matches) and those files;

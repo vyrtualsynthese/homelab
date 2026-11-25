@@ -1,7 +1,7 @@
 # Default values for qbittorrent.
 # Built against the contract in docs/charts/README.md; `autobrr` is the worked
 # example it was reshaped from. What this chart adds on top is a privileged
-# WireGuard sidecar and three claims, only one of which it owns.
+# WireGuard sidecar, two claims of its own, and a host path for the export.
 
 # -- Override the chart name.
 nameOverride: ""
@@ -10,8 +10,9 @@ fullnameOverride: ""
 
 replicaCount: 1
 
-# -- Deployment strategy. `Recreate` is required: the config and downloads
-# claims are ReadWriteOnce and cannot attach to an old and a new pod at once.
+# -- Deployment strategy. `Recreate` is required: the config claim is
+# ReadWriteOnce and cannot attach to an old and a new pod at once, and the
+# downloads directory has exactly one writer by design.
 strategy: Recreate
 
 image:
@@ -46,9 +47,10 @@ podAnnotations:
   setGateway: "true"
 podLabels: {}
 
-# Pod-level security. `fsGroup` is deliberately NOT set: one of the three claims
-# is NFS and the kubelet does not apply it to a hostPath-backed `local-path`
-# claim either, so setting it would look correct and do nothing.
+# Pod-level security. `fsGroup` is deliberately NOT set: the two claims are
+# hostPath-backed `local-path` and `/downloads` is a host path, so the kubelet
+# would apply it to none of them and setting it would look correct and do
+# nothing.
 podSecurityContext:
   seccompProfile:
     type: RuntimeDefault
@@ -216,7 +218,7 @@ ingressRoute:
     # -- Namespace of that TLSOption.
     optionsNamespace: kube-system
 
-# Three claims, and this chart owns two of them.
+# Two claims and one host path: this chart owns both claims.
 storage:
   # qBittorrent's own settings: `qBittorrent.conf`, the resume data and one
   # `.fastresume` per torrent under `qBittorrent/BT_backup`, and the VueTorrent
@@ -241,18 +243,44 @@ storage:
       - ReadWriteOnce
     size: 2Gi
     mountPath: /config
-  # The download export. Same ownership, same warning.
+  # The download export, written on the host that serves it.
+  #
+  # `nas` exports `/mnt/ultrafaststorage/nfs`, and the *arrs, unpackerr and
+  # FileBrowser mount that export as `pvc-nfs-qbittorrent-download-…`, as
+  # before. This pod does not: it runs on `nas` and mounts the exported
+  # directory from the host, so the app's write path is a local filesystem
+  # instead of an NFS client.
+  #
+  # That is the fix for the Web UI stall, not a preference. On `streaming` the
+  # app wrote through the NFS client at roughly 2,000 cycles of open, 16 KiB
+  # write and close a second, and the client left a page waiting to be written
+  # for an I/O nothing performs; the thread that serves the Web UI then waits on
+  # it and answers nothing (six minutes fifty seconds in the last catch, ended
+  # only by replacing the container). The same load on a local filesystem has
+  # not wedged it: the 35 minutes the export spent on a local claim on
+  # `streaming` answered the API in 14 ms throughout, and what failed there was
+  # the disk under it — `/dev/sda1`, a 25,241-hour BX500 at 24-50 MB/s — not the
+  # local path. `/mnt/ultrafaststorage` here is the NVMe the export already
+  # serves from at 456 MB/s. The evidence is in
+  # `docs/qbittorrent-webui-stalls.md`; the migration is
+  # `docs/runbooks/qbittorrent-to-nas.md`.
+  #
+  # `hostPath`, not a claim: this is the export root that already exists, and a
+  # `local-path` claim would create a subdirectory beside it, where no NFS
+  # client would ever look. `type: Directory` fails the pod loudly when the
+  # export is not mounted on `nas`, rather than creating an empty tree and
+  # downloading into it. The pin below is part of the same decision.
   downloads:
-    existingClaim: pvc-nfs-qbittorrent-download-nfs-subdir-external-provisioner
+    hostPath: /mnt/ultrafaststorage/nfs
     mountPath: /downloads
   # There is deliberately no in-flight claim here. A `local-path` temp claim used
   # to exist, and it was removed on 2026-11-25 (board #540) for two reasons: it
   # landed on `streaming`'s 25,241-hour BX500, which froze the app in
   # `balance_dirty_pages`, and the preference pointing at it lives on the config
   # claim, so a rebuilt claim silently put the in-flight writes back on the
-  # export — the load that wedges the WebUI (`docs/qbittorrent-webui-stalls.md`).
+  # export — the load that wedged the WebUI (`docs/qbittorrent-webui-stalls.md`).
   # The app's temp path is the export's own `/downloads/incomplete`; the chart
-  # mounts nothing for it.
+  # mounts nothing for it. On `nas` that path is local, so the churn is local too.
 
   # The WireGuard keys and `wg_confs/`. This one the chart creates. Left empty,
   # the name is `<fullname>-vpn-config`, which is the claim the live pod mounts,
@@ -348,10 +376,13 @@ vueTorrent:
       memory: 64Mi
 
 # qBittorrent drops torrents it cannot restore ("Failed to restore torrent")
-# when it starts before the NFS downloads volume answers. Two restarts earlier
-# today lost 8 and 14 torrent entries that way. This init container waits for
-# /downloads to accept a write before the main container starts, and gives up
-# after two minutes rather than blocking the deployment forever.
+# when it starts before the downloads directory answers. Two restarts earlier
+# today lost 8 and 14 torrent entries that way, on the NFS export, and the wait
+# stays now that the directory is a host path: a `/mnt/ultrafaststorage` mount
+# that did not come up on `nas` fails the same way, just faster. This init
+# container waits for /downloads to accept a write before the main container
+# starts, and gives up after two minutes rather than blocking the deployment
+# forever.
 waitForDownloads:
   enabled: true
   image: busybox:1.38
@@ -406,12 +437,13 @@ resources:
 # listener stops accepting, which is what a restart can fix. It is a gamble with
 # data, and the chart README records why: a stalled WebUI restarts the app without
 # re-running `wait-for-downloads`, so a restart while the downloads export is
-# unready is how torrents have been dropped before. It stayed because the stall it
-# was firing on had a cause outside the app (the config claim on NFS, card 758), and
-# that cause is fixed. There is no readiness probe: the process has no dependency
-# that can fail while it answers — the NFS mount is checked by `wait-for-downloads`
-# at startup, and the torrent session has no status endpoint. The chart README
-# records the same decision in prose.
+# unready is how torrents have been dropped before. It stays because the stall it
+# was firing on had a cause outside the app (the NFS client under `/downloads`,
+# card 777), and a pod on `nas` takes that cause away. There is no readiness probe:
+# the process has no dependency
+# that can fail while it answers — the export mount is checked by
+# `wait-for-downloads` at startup, and the torrent session has no status endpoint.
+# The chart README records the same decision in prose.
 probes:
   liveness:
     enabled: true
@@ -422,8 +454,10 @@ probes:
     failureThreshold: 3
 
 nodeSelector:
-  # -- Every workload is pinned to a named node; the local-path claim is node-bound.
-  kubernetes.io/hostname: streaming
+  # -- Pinned to `nas`, where the download export is a directory on the host.
+  # Moving this pin without moving the `downloads.hostPath` with it points the
+  # app at a different disk; `docs/runbooks/qbittorrent-to-nas.md` is the pair.
+  kubernetes.io/hostname: nas
 
 tolerations: []
 

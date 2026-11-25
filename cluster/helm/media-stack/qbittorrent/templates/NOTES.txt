@@ -21,5 +21,5 @@ The IngressRoute is disabled. Reach it with a port-forward:
 Volumes, and who owns them:
 
   {{ .Values.storage.config.mountPath }}     {{ include "app.configClaimName" . }} (created by this chart — deleting the release deletes the torrents' resume data)
-  {{ .Values.storage.downloads.mountPath }}  {{ .Values.storage.downloads.existingClaim }} (external, not deleted with this release)
+  {{ .Values.storage.downloads.mountPath }}  host path {{ .Values.storage.downloads.hostPath }} (a directory on the node, not deleted with this release)
   {{ .Values.storage.vpn.mountPath }} (vpn)  {{ include "app.vpnClaimName" . }} (created by this chart — deleting the release deletes the WireGuard keys)
