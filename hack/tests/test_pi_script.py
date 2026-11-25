@@ -213,6 +213,14 @@ def test_setup_removes_a_service_the_template_no_longer_declares():
     assert "--remove-orphans" in text
 
 
+def test_setup_restarts_pihole_when_a_mounted_file_changed():
+    """A bind mount is resolved at container start. Writing a config under a
+    running pihole leaves the old mount in place, so the change is invisible."""
+    text = SCRIPT.read_text()
+    assert "--force-recreate pihole" in text
+    assert "PI_ROOT is set" in text, "the docker branch stays behind the PI_ROOT guard"
+
+
 def _pi_fixture(root):
     stack = root / "home/vronteix/dockers"
     stack.mkdir(parents=True)
@@ -224,6 +232,51 @@ def _pi_fixture(root):
     (root / "boot/firmware/cmdline.txt").write_text("console=serial0 root=PARTUUID=aaaa-01 rootwait\n")
     (root / "boot/firmware/config.txt").write_text("arm_64bit=1\n")
     return stack
+
+
+CONFIG_FILES = (
+    ("etc-pihole-updatelists/pihole-updatelists.conf", "pihole-updatelists.conf"),
+    ("etc-dnsmasq.d/02-my-wildcard-dns.conf", "02-my-wildcard-dns.conf"),
+)
+
+
+def test_setup_places_the_two_mounted_config_files(tmp_path):
+    root = tmp_path / "pi"
+    stack = _pi_fixture(root)
+    assert run("setup", "rbp1", root=root).returncode == 0
+    for relative, template in CONFIG_FILES:
+        placed = stack / relative
+        assert placed.is_file(), relative
+        assert placed.read_text() == (
+            REPO / "ansible/playbooks/templates/runners" / template
+        ).read_text()
+
+
+def test_verify_names_each_config_file_that_differs(tmp_path):
+    root = tmp_path / "pi"
+    stack = _pi_fixture(root)
+    assert run("setup", "rbp1", root=root).returncode == 0
+    for relative, _ in CONFIG_FILES:
+        placed = stack / relative
+        kept = placed.read_bytes()
+        placed.write_bytes(b"address=/wrong.local/10.0.0.1\n")
+        out = run("verify", "rbp1", root=root)
+        assert out.returncode == 1
+        assert f"DIFFERS {placed}" in out.stdout
+        placed.write_bytes(kept)
+
+
+def test_a_directory_in_place_of_a_config_file_is_refused_not_deleted(tmp_path):
+    root = tmp_path / "pi"
+    stack = _pi_fixture(root)
+    victim = stack / "etc-dnsmasq.d/02-my-wildcard-dns.conf"
+    victim.mkdir(parents=True)
+
+    out = run("setup", "rbp1", root=root)
+
+    assert out.returncode == 1
+    assert str(victim) in out.stderr
+    assert victim.is_dir(), "the script deletes nothing"
 
 
 def test_restore_keeps_a_boot_line_it_cannot_check(tmp_path):

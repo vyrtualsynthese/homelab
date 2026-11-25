@@ -29,10 +29,15 @@ PI_ROOT=/tmp/fake-pi ./hosts-pi.sh setup rbp0
 | Path | Owned | Why |
 |---|---|---|
 | `/home/vronteix/dockers/docker-compose.yml` | yes | one template in `playbooks/templates/runners/`, rendered per host; the WireGuard port is the only per-host value |
+| `etc-pihole-updatelists/pihole-updatelists.conf` | yes | the file Pi-hole's list updater reads; without it Docker makes the source a directory |
+| `etc-dnsmasq.d/02-my-wildcard-dns.conf` | yes | the wildcard names the LAN resolves through this Pi-hole |
 | `/etc/hostname`, `/etc/hosts` | yes | the name Pi-hole's DNS and the compose file depend on |
 | Docker's repository and the four packages | yes | a fresh image has no runtime; `setup` installs the pinned set from `download.docker.com` |
 | `pihole.env`, `wg-easy.env`, `.env` | **no** | they hold the Pi-hole password and the WireGuard key, and they are gitignored. `setup` requires them and names the one that is missing |
 | `/boot/firmware/config.txt`, `cmdline.txt` | **no** | see below |
+
+Both config files live inside the stack directory, so `backup` and `restore` carry them with the
+rest of it, and `verify` names a difference in either.
 
 ### The engine, which `setup` installs
 
