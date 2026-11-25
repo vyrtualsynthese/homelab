@@ -43,6 +43,7 @@ TEMPLATES="$(cd "$HERE/../playbooks/templates/runners" && pwd)"
 ROOT="${PI_ROOT:-}"
 ROOT="${ROOT%/}"
 CHANGED=0
+CHANGED_THIS_WRITE=0
 
 usage() {
     cat >&2 <<'USAGE'
@@ -332,23 +333,42 @@ root_device() {
     fi
 }
 
+# A bind mount whose source is missing makes Docker create a directory where the
+# file should be. Writing into it fails with an error that names the path but not
+# the cause, so say the cause and stop. Nothing is deleted: that directory is
+# where a future file would live, and it may hold something.
+refuse_directory() {
+    if [ -d "$1" ]; then
+        echo "$1 is a directory: Docker creates one when a bind mount's source is missing." >&2
+        echo "Remove it and run setup again; this script deletes nothing." >&2
+        exit 1
+    fi
+}
+
 # One file, one counter of changes. Text is compared with its newlines trimmed,
 # so a file written by an older run (or by hand) is a match when the lines are,
 # and the write always ends the file with one newline.
 write_abs() {
     local dest="$1" content="$2"
     mkdir -p "$(dirname "$dest")"
+    refuse_directory "$dest"
+    CHANGED_THIS_WRITE=0
     if [ -f "$dest" ] && [ "$(cat "$dest")" = "$content" ]; then
         return 0
     fi
     printf '%s\n' "$content" > "$dest"
     CHANGED=$((CHANGED + 1))
+    CHANGED_THIS_WRITE=1
 }
 
 cmd_render() {
     local host="$1"
     echo "--- $STACK_DIR/docker-compose.yml"
     desired_compose "$host"
+    echo "--- $STACK_DIR/etc-pihole-updatelists/pihole-updatelists.conf"
+    cat "$TEMPLATES/pihole-updatelists.conf"
+    echo "--- $STACK_DIR/etc-dnsmasq.d/02-my-wildcard-dns.conf"
+    cat "$TEMPLATES/02-my-wildcard-dns.conf"
     echo "--- engine, installed by setup on a real host (not under PI_ROOT)"
     echo "repository: https://download.docker.com/linux/ubuntu, suite read from /etc/os-release"
     echo "signed by: $DOCKER_KEYRING"
@@ -363,7 +383,7 @@ cmd_render() {
 }
 
 cmd_setup() {
-    local host="$1" current_name
+    local host="$1" current_name pihole_changed=0
 
     current_name=""
     if [ -f "$ROOT/etc/hostname" ]; then
@@ -379,6 +399,17 @@ cmd_setup() {
     ensure_engine
 
     write_abs "$ROOT$STACK_DIR/docker-compose.yml" "$(desired_compose "$host")"
+    # Both files are bind-mounted by pihole, and a bind mount is resolved when
+    # the container starts: a file written under a running pihole is invisible
+    # to it until the container restarts. Hence the flag, and the recreate below.
+    write_abs "$ROOT$STACK_DIR/etc-pihole-updatelists/pihole-updatelists.conf" \
+        "$(cat "$TEMPLATES/pihole-updatelists.conf")"
+    pihole_changed="$CHANGED_THIS_WRITE"
+    write_abs "$ROOT$STACK_DIR/etc-dnsmasq.d/02-my-wildcard-dns.conf" \
+        "$(cat "$TEMPLATES/02-my-wildcard-dns.conf")"
+    if [ "$CHANGED_THIS_WRITE" -eq 1 ]; then
+        pihole_changed=1
+    fi
     write_abs "$ROOT/etc/hostname" "$(desired_hostname "$host")"
     write_abs "$ROOT/etc/hosts" "$(desired_hosts "$host")"
 
@@ -387,13 +418,34 @@ cmd_setup() {
         # stops declaring it: `up -d` starts what the file names and leaves
         # everything else running. Without the flag, the router this template no
         # longer declares would stay up on rbp0, dashboard on 8080 included.
-        ( cd "$STACK_DIR" && docker compose up -d --remove-orphans >/dev/null )
-        echo "stack: docker compose up -d --remove-orphans"
+        if [ "$pihole_changed" -eq 1 ]; then
+            ( cd "$STACK_DIR" && docker compose up -d --remove-orphans --force-recreate pihole >/dev/null )
+            echo "stack: docker compose up -d --remove-orphans --force-recreate pihole"
+        else
+            ( cd "$STACK_DIR" && docker compose up -d --remove-orphans >/dev/null )
+            echo "stack: docker compose up -d --remove-orphans"
+        fi
     else
         echo "stack: not started (PI_ROOT is set)"
     fi
 
     echo "changed=$CHANGED"
+}
+
+# A file this script owns, compared as bytes so the line endings it writes are
+# part of the contract rather than a diff nobody meant to make.
+check_text() {
+    local dest="$1" content="$2"
+    if [ ! -f "$dest" ]; then
+        echo "MISSING $dest"
+        return 1
+    fi
+    if ! cmp -s <(printf '%s\n' "$content") "$dest"; then
+        echo "DIFFERS $dest"
+        diff -u "$dest" <(printf '%s\n' "$content") || true
+        return 1
+    fi
+    return 0
 }
 
 cmd_verify() {
@@ -412,6 +464,15 @@ cmd_verify() {
     elif ! cmp -s <(desired_compose "$host") "$ROOT$STACK_DIR/docker-compose.yml"; then
         echo "DIFFERS $ROOT$STACK_DIR/docker-compose.yml"
         diff -u "$ROOT$STACK_DIR/docker-compose.yml" <(desired_compose "$host") || true
+        problems=1
+    fi
+
+    if ! check_text "$ROOT$STACK_DIR/etc-pihole-updatelists/pihole-updatelists.conf" \
+        "$(cat "$TEMPLATES/pihole-updatelists.conf")"; then
+        problems=1
+    fi
+    if ! check_text "$ROOT$STACK_DIR/etc-dnsmasq.d/02-my-wildcard-dns.conf" \
+        "$(cat "$TEMPLATES/02-my-wildcard-dns.conf")"; then
         problems=1
     fi
 
