@@ -1,0 +1,85 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}
+  labels:
+    app.kubernetes.io/name: {{ .Release.Name }}
+spec:
+  replicas: {{ .Values.securityExporter.replicaCount }}
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ .Release.Name }}
+      annotations:
+        # The code is a ConfigMap mounted as a volume: Kubernetes refreshes the
+        # file inside the running pod, but Python read it once at start-up. Without
+        # this checksum a code change updates the file and changes nothing until
+        # someone restarts the pod by hand.
+        checksum/config: {{ .Files.Get "files/exporter.py" | sha256sum }}
+        # The repo scrapes through annotations, so the pod carries its own port.
+        prometheus.io/scrape: "true"
+        prometheus.io/port: {{ .Values.securityExporter.service.port | quote }}
+    spec:
+      serviceAccountName: {{ .Release.Name }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+      containers:
+        - name: exporter
+          image: "{{ .Values.securityExporter.image.repository }}:{{ .Values.securityExporter.image.tag }}"
+          command: ["python", "/app/exporter.py"]
+          env:
+            # The allowlist reaches the process as one comma-separated value; the
+            # list itself lives in this file and is tied to hack/check_exposure.py
+            # by a test, so it cannot drift from the checker that owns it.
+            - name: PUBLIC_HOSTS
+              value: {{ join "," .Values.securityExporter.publicHosts | quote }}
+            - name: PORT
+              value: {{ .Values.securityExporter.service.port | quote }}
+            - name: INTERVAL_SECONDS
+              value: {{ .Values.securityExporter.intervalSeconds | quote }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.securityExporter.service.port }}
+          # `/metrics` is the only path the process answers, and it answers from
+          # the last good snapshot, so a probe here proves the server is up — not
+          # that the cluster was read. The freshness family is what says that.
+          readinessProbe:
+            httpGet:
+              path: /metrics
+              port: http
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /metrics
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          resources:
+{{ toYaml .Values.securityExporter.resources | indent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: code
+              mountPath: /app
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: code
+          configMap:
+            name: {{ .Release.Name }}-code
+        - name: tmp
+          emptyDir: {}
+      nodeSelector:
+{{ toYaml .Values.securityExporter.nodeSelector | indent 8 }}
