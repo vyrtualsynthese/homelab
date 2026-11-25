@@ -172,6 +172,14 @@ are the DNS server and the VPN endpoint, so a guessed password does not merely r
 `24.04.5 LTS`, so ESM is the wrong lever — the release move is — but `streaming` carries 151 pending
 updates and `rbp0` 100, and nothing schedules a patch window at all.
 
+*Decision, 2026-11-25 — it stays un-attached.* The free personal subscription covers five machines
+and the estate has six, and all six move to 26.04.1 LTS, whose standard support runs to 2031: ESM
+(Extended Security Maintenance, the paid extension after standard support ends) is what extends a
+release past that point, and no host here will be past it. The backlog the finding measured came
+from the `-updates` pocket, which the default configuration does not install; `unattended-upgrades`
+is enabled on all six and does install `jammy-security`, and the `-updates` backlog was cleared by
+hand that day — `apt-get -s dist-upgrade` prints `0 upgraded` on every host.
+
 **A finding, low.** No server declares an etcd snapshot schedule. The five snapshot files on disk are
 the ones the upgrade plan wrote before each restart, so the nightly backup uploads a copy that only
 changes when somebody runs an upgrade. It restores a bad write; it does not restore a month.
