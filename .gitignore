@@ -56,6 +56,10 @@ cluster/helm/platform/traefik/Chart.lock
 cluster/helm/nfs/provisioner/charts/
 cluster/helm/nfs/provisioner/Chart.lock
 
+# CrowdSec's wrapper chart renders from a pinned dependency.
+cluster/helm/security/*/charts/
+cluster/helm/security/*/Chart.lock
+
 # Python bytecode from the hack/ checkers
 __pycache__/
 *.pyc
