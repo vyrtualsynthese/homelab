@@ -1,26 +1,32 @@
 # qBittorrent's Web UI stops answering during downloads
 
-> **In one line.** The Web UI and API stalled for minutes at a time while `/config` sat on NFS; the
-> claim moved to `local-path` on 2026-11-25 and the 24-hour observation is the only gate left.
+> **In one line.** The Web UI and API stop answering because one file on the downloads export leaves
+> a page stuck in the node's NFS client; the config claim moved to `local-path` on 2026-11-25 and the
+> stall came back six minutes later, so the config volume was not the cause.
 >
-> **Use it when** qBittorrent's Web UI hangs, the exporter stops being scraped, or you want what the
-> config-claim migration changed · **Verified** 2026-11-25: 627 failed scrapes in 24 h, every
-> failing scrape pinned at the exporter's 5 s timeout · **Kind:** record
+> **Use it when** qBittorrent's Web UI hangs, the exporter stops being scraped, or you want the
+> evidence gathered on 13 and 25 November and what cleared the hang · **Verified** 2026-11-25: 627
+> failed scrapes in the previous 24 h, every one pinned at the exporter's 5 s timeout, and the hang
+> reproduced and cleared on the same evening · **Kind:** record
 >
 > **Sources** `cluster/helm/media-stack/qbittorrent/values.yaml`,
 > `cluster/helm/media-stack/qbittorrent-exporter/values.yaml`, live `up` and
-> `scrape_duration_seconds` from Prometheus
+> `scrape_duration_seconds` from Prometheus, kernel stacks read from `streaming` and `nas`
 
-Status: **fix deployed 2026-11-25, waiting on the 24-hour observation**. Documented 2026-11-13,
-measured again on 2026-11-25, and the claim was moved off NFS the same day (board card 758). The
-exporter's alert stays silenced until the card closes; the note under *Why the app was not changed
-until now* says what to do with that silence.
+Status: **open. The config claim was moved off NFS on 2026-11-25 and it was not the cause**; the
+stall reproduced at 18:10 the same evening. The wedge is a stuck writeback on the **downloads**
+export, and the evidence, the recovery and the open question are under *The stall came back* below.
+Documented 2026-11-13, measured again on 2026-11-25 (board card 758). The exporter's alert stays
+silenced until it is closed or handed over; the note under *Why the app was not changed until now*
+says what to do with that silence.
 
 ## What is seen
 
 The Web UI and the Web API become unresponsive while torrents are downloading. The page hangs, and
 anything that talks to the API — the exporter, cross-seed, autobrr — fails at the same time. It
-clears on its own, usually within an hour or two, and it can be gone for a whole day.
+sometimes clears on its own, usually within an hour or two, and it can be gone for a whole day; since
+2026-11-25 it has also been seen to stay wedged until the client's mount is cleared, which is the
+case under *The stall came back*.
 
 There is no restart, no crash and no OOM involved. The BitTorrent session itself stays healthy
 throughout: it keeps seeding, keeps its DHT nodes and keeps the peer connections it had.
@@ -93,12 +99,16 @@ which is rewritten on every preference change and on every resume-data save. `do
 requires `local-path` for config and NFS only for shared media; this claim predates that rule and
 was never converted.
 
-So the leading hypothesis is: **a disk-backed request (preferences, resume data) blocks for seconds
+So the leading hypothesis was: **a disk-backed request (preferences, resume data) blocks for seconds
 while memory-backed requests stay fast, and the reason it blocks for seconds is that the config
 volume is on NFS.** It is consistent with every measurement above, and the measurements alone do not
 prove it: no per-request timing exists in the exporter, so which call timed out is inference, not
-observation. What settles it is the move — the claim is on `local-path` since 2026-11-25, and the
-observation under *The gate* is the test.
+observation.
+
+**The move tested it and the inference was wrong.** Six minutes after `/config` came off NFS on
+2026-11-25 the stall was back, and this time every request hung, memory-backed ones included: that
+is a blocked session, not a slow disk-backed call. The volume that wedges is `/downloads`, on the
+same server. See *The stall came back*.
 
 ## The migration, 2026-11-25
 
@@ -126,10 +136,82 @@ One side effect on `nas`: `snapraid diff` had been reporting about 321 changed f
 of them under this export, because the client rewrites resume data continuously. Nothing writes
 there any more.
 
+## The stall came back, 2026-11-25 18:10
+
+The exporter answered again for the first two minutes (`scrape_duration_seconds` 0.119 s, 379
+torrents, `app/preferences` in 0.8 ms). At 18:11 `up` went to 0 and the duration pinned at 5.00 s
+again — and this time the Web UI itself did not answer: `/`, `/api/v2/app/preferences`,
+`/api/v2/torrents/info` and `/api/v2/sync/maindata` all timed out, and the listening socket held 31
+connections that nothing accepted.
+
+What the node showed, read from a privileged pod with `hostPID` and the node's root at `/host`:
+
+| Where | Observation |
+|---|---|
+| qBittorrent process | one worker thread in state `D` for over 25 minutes, its syscall `close()` |
+| its kernel stack | `nfs4_file_flush` → `nfs_wb_all` → `filemap_write_and_wait_range` → `folio_wait_bit`: waiting for one page to finish being written |
+| which volume | `/downloads` is the only NFS mount the pod still has; `/config` is on `local-path` |
+| `nas` at the same moment | every `nfsd` thread idle, `jbd2` idle, no task blocked on the disk |
+| the data path | a 64 MiB direct write with `fsync` on `/mnt/ultrafaststorage` and an 8 MiB write with `fsync` through the pod's `/downloads` both returned at once; `smartctl` PASSED on both 970 EVO |
+| client `dmesg` | `NFS: server 192.168.1.41 error: fileid changed`, in bursts before and after the cutover |
+
+So the server and both disks were healthy and the filesystem was writable throughout: one page of one
+file on that export was pinned in the client, and the session cannot do anything while a `close()`
+waits for it.
+
+Two things made this worse than the earlier shape of the stall:
+
+- **A restart did not clear it.** The container was restarted at 18:41 and the fresh process was
+  wedged again inside a minute. The state lives in the node's NFS client, not in the app.
+- **The liveness probe cannot see it.** The probe is a TCP connect on the WebUI port; the socket
+  still accepts connections while the event loop is stuck, so the probe passes and the container is
+  never restarted. The 15 restarts in 12 h on 25 November were the probe catching a listener that
+  had gone; now the listener stays up and the hang is invisible to it.
+
+### The recovery that worked
+
+`streaming` held **eight** mounts of `192.168.1.41:/mnt/ultrafaststorage/nfs`, one per qBittorrent pod
+generation — the live one plus seven kubelet had never unmounted. They share a single NFS client
+instance, so the pinned page belonged to all of them.
+
+```bash
+# 1. no process may hold the export: scale to 0 first
+kubectl -n media-stack scale deploy qbittorrent --replicas=0
+
+# 2. detach every leftover mount, in the host's mount namespace
+#    (from a privileged pod with hostPID, the node root at /host)
+for d in /var/lib/kubelet/pods/*/volumes/kubernetes.io~nfs/pv-nfs-qbittorrent-download-*; do
+  umount "$d"
+done
+
+# 3. kubelet mounts it fresh when the pod comes back
+kubectl -n media-stack scale deploy qbittorrent --replicas=1
+```
+
+All seven detached on the first `umount`, none needed `-f`, and the count went to zero. The new pod
+answered `app/preferences` in 0.8–0.9 ms, listed 379 torrents, and Prometheus scraped it in 0.119 s.
+The only errors the consumers saw were inside the 18:44–18:46 window when the app was deliberately
+down: one `Failed to connect to qBittorrent` in `sonarr` and one in `sonarr-anime`.
+
+### What is still open
+
+Why the page ends up stuck is not settled. The `fileid changed` bursts are what a client reports when
+a name it has cached now points at a different inode — what a replaced file looks like, after a mover
+renames over it or through qBittorrent's own temp-file pattern — while the client still holds dirty
+pages for the old inode. Which file that was, and which of the two writes caused it, needs the file's
+identity, and the kernel does not expose it from userspace.
+
+The candidates to bound it are all untested: stop the leftover mounts accumulating on each restart
+(they are what makes one wedge reach every later pod generation), take the `sync` export option off a
+volume written this heavily, or keep replaced names out of the client's page cache. No chart change
+is made for any of them yet.
+
 ## The gate, and the way back
 
-The card closes when `scrape_duration_seconds` stays under a second for 24 h and the torrent list is
-still 379. Both are one query each:
+The config-move card closes when `scrape_duration_seconds` stays under a second for 24 h and the
+torrent list is still 379. **The gate failed at its first observation**: the stall was back six
+minutes after the cutover. It is now the test for whatever clears the wedge, not evidence that the
+move did. Both queries, unchanged:
 
 ```bash
 # the ceiling over the last day
@@ -162,8 +244,10 @@ deleted or modified by the move.
   and during these stalls it does not fix anything. On 2026-11-25 it restarted the container **15
   times in 12 h**, each time mid-stall. A restart is also the moment the torrent list can lose
   entries: `wait-for-downloads` runs at pod start, not at a container restart, so a restart with the
-  downloads export unready is the case that dropped torrents before. The probe stays because the
-  cause it was firing on is now fixed; a different stall would bring the same gamble back.
+  downloads export unready is the case that dropped torrents before. The probe stays, but since the
+  evening of 2026-11-25 it is known to be blind to the wedge: the socket keeps accepting while the
+  session is stuck, so it passes and nothing restarts. A different stall would bring the same gamble
+  back.
 
 The stopgap that went in on 2026-11-25 is a **silence**, not a rule change: `ScrapeTargetDown`
 matched on `app_kubernetes_io_instance="qbittorrent-exporter"` until 2026-12-09. The rule is
@@ -189,8 +273,9 @@ curl -skG -H "Authorization: Bearer $GRAFANA_TOKEN" \
   --data-urlencode 'query={namespace="media-stack",container="cross-seed"} |= "fetch failed"'
 ```
 
-The decisive test was the move: `/config` is on `local-path` since 2026-11-25, and *The gate* above
-says what to watch for the next day.
+The decisive test is the WebUI answering while torrents download. A restart is not a test: on
+2026-11-25 it left the wedge in place, so check the qBittorrent process for a thread in `D` before
+concluding the app itself is at fault.
 
 ## A related defect, already fixed
 
