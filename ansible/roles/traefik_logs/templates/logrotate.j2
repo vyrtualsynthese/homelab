@@ -1,0 +1,24 @@
+{{ traefik_logs_dir }}/{{ traefik_logs_file }} {
+    size {{ traefik_logs_size }}
+    rotate {{ traefik_logs_rotate }}
+    missingok
+    notifempty
+    compress
+    delaycompress
+    # `su root root`: the directory is group-writable for Traefik's gid (2770),
+    # and logrotate refuses to touch a file in such a directory unless it is
+    # told which account should do the work.
+    su root root
+    # `copytruncate`, not `create` plus a signal. Traefik's access-log handler
+    # does reopen its file on SIGUSR1 (Handler.Rotate, "to allow for rotation by
+    # an external source") — but the pod runs in its own PID namespace, as every
+    # pod does and as the chart offers no `hostPID` to change, so a `postrotate`
+    # on the host cannot find the process to signal. Copy-then-truncate leaves
+    # Traefik's descriptor valid and needs no cooperation from it at all.
+    #
+    # The cost is written down rather than hidden: a line written between the
+    # copy and the truncate is lost, which is a handful of lines per 200 MB.
+    # Both tailers see the size shrink and continue from the start of the file;
+    # the acceptance test in Task 7 is a ban *after* a rotation.
+    copytruncate
+}
