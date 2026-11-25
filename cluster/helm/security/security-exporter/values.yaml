@@ -4,7 +4,10 @@
 # it describes, and `expectedNote` says when the live side was last read.
 #
 # Read on 2026-11-25 through the read-only MCP ServiceAccount: 73 IngressRoute
-# objects live, 9 public hosts, and 9 privileged workloads. `ingressRoutes` is the
+# objects live, 9 public hosts, and 9 privileged workloads. This pair reads 75
+# because the change that adds them also adds `crowdsec-web-ui`, whose two routes
+# are live from its first sync; the date stays the last live read, not the last
+# claim. `ingressRoutes` is the
 # object count, the unit `kubectl get ingressroute | wc -l` prints; the number the
 # charts render is counted by hack/gen_docs.py, not typed in, and the one route
 # that explains the gap is named in docs/reference/routes.md, which
@@ -29,10 +32,10 @@
 # computed from what the exporter can see, which is pods.
 securityExporter:
   expected:
-    ingressRoutes: 73
+    ingressRoutes: 75
     publicHosts: 9
     privilegedWorkloads: 9
-  expectedNote: "read 2026-11-25 from the live cluster; see docs/reference/routes.md"
+  expectedNote: "73 read 2026-11-25; 75 with the two crowdsec-web-ui routes, live at its first sync; see docs/reference/routes.md"
   # The same list as `PUBLIC_HOSTS` in hack/check_exposure.py, which owns it.
   # test_security_exporter.py fails the moment the two differ, because a copy in
   # a chart is how a posture panel starts lying.

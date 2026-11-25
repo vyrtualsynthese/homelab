@@ -35,7 +35,7 @@ class ReconciledConstantsTests(unittest.TestCase):
 
     def test_the_expected_counts_are_present_and_explained(self):
         expected = self.values["expected"]
-        self.assertEqual(expected["ingressRoutes"], 73)
+        self.assertEqual(expected["ingressRoutes"], 75)
         self.assertEqual(expected["publicHosts"], 9)
         self.assertEqual(expected["privilegedWorkloads"], 9)
         # Every number is a claim about the cluster today; the note says when it

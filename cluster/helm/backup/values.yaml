@@ -197,6 +197,10 @@ nodes:
       # 20.8 MB when measured on 2026-11-20; the snapshot of 2026-11-22 holds no file from this
       # claim at all, so whatever the application keeps in it is already excluded or gone.
       - {claim: filebrowser-filebrowser-quantum-data, namespace: filebrowser, kind: files, exclude: ["cache/"]}
+      # CrowdSec's web UI: users, settings and a 168h mirror of the LAPI's alerts, so not
+      # just configuration. `cache.db` refills from the LAPI and is left out; `state.db`
+      # and `statistics.db` are the row. Size measured after the first night.
+      - {claim: crowdsec-web-ui-config, namespace: security, kind: sqlite, exclude: ["cache.db"]}
       - {claim: koillection-conf, namespace: koillection, kind: files}
       # 100 KB. index-v* rebuilds itself by rescan.
       - {claim: syncthing-config, namespace: syncthing, kind: files, exclude: ["index-v*"]}

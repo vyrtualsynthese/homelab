@@ -2,7 +2,7 @@
 
 # What is backed up, and where
 
-> **Generated page.** 36 rows over 4 streams, rendered from
+> **Generated page.** 37 rows over 4 streams, rendered from
 > `cluster/helm/backup/values.yaml` by `hack/gen_docs.py`. Do not edit it: the matrix is the
 > values file.
 
@@ -31,6 +31,7 @@ nothing, which is a defect rather than a quiet night: the verifier fails it.
 | `news-freshrss-config` | `news` | nuc0 | sqlite |
 | `filebrowser-filebrowser-quantum-config` | `filebrowser` | nuc0 | sqlite |
 | `filebrowser-filebrowser-quantum-data` | `filebrowser` | nuc0 | files |
+| `crowdsec-web-ui-config` | `security` | nuc0 | sqlite |
 | `koillection-conf` | `koillection` | nuc0 | files |
 | `syncthing-config` | `syncthing` | nuc0 | files |
 | `thelounge-config` | `thelounge` | nuc0 | files |

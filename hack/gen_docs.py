@@ -35,7 +35,7 @@ REDIRECT = "redirect-to-https"
 # ServiceAccount and written down with that date in cluster/helm/security/security-exporter/
 # values.yaml. The rendered side is counted, not typed in; this side cannot be, and the page
 # carries no date of its own, so the date lives in the values file.
-LIVE_INGRESS_ROUTES = 73
+LIVE_INGRESS_ROUTES = 75
 
 
 class GenError(Exception):

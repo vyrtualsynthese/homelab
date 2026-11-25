@@ -1,0 +1,15 @@
+apiVersion: v2
+name: crowdsec-web-ui
+description: A self-hosted web UI for CrowdSec's decisions and alerts, reading the local API directly.
+type: application
+# Chart version. Renovate bumps this when the image tag moves.
+version: 0.1.0
+# Must match image.tag in values.yaml.
+appVersion: "2026.11.12"
+icon: https://raw.githubusercontent.com/TheDuffman85/crowdsec-web-ui/main/client/public/logo.svg
+home: https://github.com/TheDuffman85/crowdsec-web-ui
+sources:
+  - https://github.com/TheDuffman85/crowdsec-web-ui
+keywords:
+  - security
+  - crowdsec
