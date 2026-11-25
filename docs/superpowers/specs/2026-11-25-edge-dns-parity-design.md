@@ -54,6 +54,15 @@ rendered file and `PIHOLE_DNS_` is deleted, so no start can move the upstream to
 the blocklist). `setup` writes the file and runs `netplan apply`; `verify` compares it to the
 template. The file has been static since 2023 and cloud-init no longer holds a seed for it.
 
+Measured while building this, and the reason a second file joins it: `systemd-resolved` keeps its
+stub listener **on** by default, so `/etc/resolv.conf` is `127.0.0.53`; Docker drops that loopback
+entry and falls back to `8.8.8.8`, which resolves around the blocklist from inside the host that
+serves it. The two hosts had worked around it by hand, each naming the *other* Pi in
+`/etc/systemd/resolved.conf`. A rendered drop-in,
+`/etc/systemd/resolved.conf.d/90-pihole-resolvers.conf`, replaces that: `DNS=` empty (netplan is the
+one record of the addresses) and `DNSStubListener=no`. `setup` restarts resolved and recreates the two
+bridge services, because a container's `/etc/resolv.conf` is a copy taken when it is created.
+
 **D7 — parity is checked, not assumed.** `hack/check-pihole-parity.py` reads
 `PIHOLE_RBP0_API_KEY`/`PIHOLE_RBP1_API_KEY`, compares `/api/config` and `/api/lists` across the two
 panels, and exits non-zero naming the keys that differ. The repository's habit is a check that

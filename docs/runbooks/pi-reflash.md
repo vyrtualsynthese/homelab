@@ -166,7 +166,8 @@ sudo ~/hosts/pi/hosts-pi.sh verify <host>
 file the copy predates or the image does not have yet, and an engine that is not installed. Both are
 `setup`'s job, and the `verify` that follows `setup` is the one whose exit code counts. `setup` writes the
 files the stack mounts (`docker-compose.yml`, `pihole.settings`, `etc-dnsmasq.d/02-my-wildcard-dns.conf`),
-the resolver list in `/etc/netplan/50-cloud-init.yaml`, and `/etc/hostname`, and leaves the boot files alone:
+the resolver list in `/etc/netplan/50-cloud-init.yaml`, the resolved drop-in
+(`/etc/systemd/resolved.conf.d/90-pihole-resolvers.conf`), and `/etc/hostname`, and leaves the boot files alone:
 the image's copies are right for the disk they were written to, and `restore` puts them back only when the
 backup's `cmdline.txt` names this disk. It never writes `pihole.env`: after a reflash without the backup,
 the panel has no password until one is set again, and the stack will not start without the file. `/etc/hosts`
