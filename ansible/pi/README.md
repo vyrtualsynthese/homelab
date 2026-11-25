@@ -31,15 +31,38 @@ PI_ROOT=/tmp/fake-pi ./hosts-pi.sh setup rbp0
 | `/home/vronteix/dockers/docker-compose.yml` | yes | one template in `playbooks/templates/runners/`, rendered per host; the WireGuard port is the only per-host value |
 | `etc-pihole-updatelists/pihole-updatelists.conf` | yes | the file Pi-hole's list updater reads; without it Docker makes the source a directory |
 | `etc-dnsmasq.d/02-my-wildcard-dns.conf` | yes | the wildcard names the LAN resolves through this Pi-hole |
+| `pihole.settings` | yes | every Pi-hole setting, rendered from one template so the two hosts are byte-identical. The name avoids `.gitignore`'s `*.env` |
+| `/etc/netplan/50-cloud-init.yaml` | yes | the resolvers: both Pi-holes, so a host resolves through its own blocklist. `setup` applies it with `netplan apply` |
 | `/etc/hostname` | yes | the name Pi-hole's DNS and the compose file depend on |
 | `/etc/hosts` | **no** | cloud-init rewrites it from its own template on every boot (`manage_etc_hosts: true`); its copy already names the host and localhost |
 | Docker's repository and the four packages | yes | a fresh image has no runtime; `setup` installs the pinned set from `download.docker.com` |
-| `pihole.env` | **no** | it holds the Pi-hole password and is gitignored. `setup` requires it and names it when it is missing |
+| `pihole.env` | **no** | it holds the Pi-hole panel password and nothing else, and it is gitignored. `setup` requires it and names it when it is missing |
 | `config/` (wg-easy's database) | **no** | since wg-easy 15 the panel account, host, port, DNS and peers live in `config/wg-easy.db`, not in an environment file. `backup` copies it with the rest of the stack |
 | `/boot/firmware/config.txt`, `cmdline.txt` | **no** | see below |
 
-Both config files live inside the stack directory, so `backup` and `restore` carry them with the
-rest of it, and `verify` names a difference in either.
+The stack's own files live inside the stack directory, so `backup` and `restore` carry them with the
+rest of it. `verify` names a difference in any of them, the netplan file included.
+
+### The two Pi-holes are one configuration
+
+`rbp0` is the source of truth and `rbp1` conforms: when the panels disagree, `rbp1` is the one that
+moves. Parity is not a habit, it is the file. `pihole.settings` is rendered from one template and
+carried to both hosts unchanged, so `render rbp0` and `render rbp1` print the same bytes, and `setup`
+prints `changed=0` on a host that already matches.
+
+- **`pihole.env` holds the password, and nothing else.** Compose reads `pihole.settings` first and
+  `pihole.env` after it, so on a collision the secret wins. Every other `FTLCONF_*` key belongs in the
+  settings file: a key set in the panel rather than in git is drift the next `setup` cannot see.
+- **The resolvers point at both Pis**, `192.168.1.22` then `192.168.1.38`, on both hosts. Never
+  `127.0.0.1`: a container cannot reach the host's loopback, which is why `rbp0` used to send its own
+  queries to `rbp1`. Never `1.1.1.1`: it answers around the blocklist.
+- **A resolver change is live.** `setup` runs `netplan apply` when the file's bytes moved, and the
+  next boot reads the same file. If both Pi-holes are down, a host cannot resolve, so the second
+  address in the list is the fallback rather than a comment.
+- **Panel drift is checked from the workspace**, not from the host: `hack/check_pihole_parity.py`
+  reads both `/api/config` and `/api/lists` through `PIHOLE_RBP0_API_KEY` and `PIHOLE_RBP1_API_KEY`
+  and exits 1 naming every setting that differs. A list added in one panel is invisible to `verify`
+  and visible to it.
 
 ### The engine, which `setup` installs
 

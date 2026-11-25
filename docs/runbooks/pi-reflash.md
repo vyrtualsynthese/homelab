@@ -32,8 +32,8 @@ only resolver left. The other order takes the LAN's DNS offline with nothing beh
 
 **A reflash is not an upgrade.** Nothing is carried across. The image writes a fresh root, and the state
 that matters — Pi-hole's blocklists and query database, wg-easy's database with its peer set and panel
-account, the Pi-hole environment file — comes back from the copy taken in step 1. That is why the Pis
-skip the two release hops the cluster nodes take.
+account, and the Pi-hole panel password in `pihole.env` — comes back from the copy taken in step 1. That
+is why the Pis skip the two release hops the cluster nodes take.
 
 ## The image
 
@@ -67,9 +67,11 @@ own `user-data` on the boot partition before the first boot — step 4. The imag
 
 - **One Pi at a time, `rbp1` first**, with the other answering `dig @192.168.1.22 <a LAN name>`.
 - **A copy of the stack off the Pi**, taken in step 1, before the disk is overwritten.
-- **`pihole.env` is yours.** It holds the Pi-hole password, it is gitignored, and `hosts-pi.sh`
-  refuses to run without it rather than inventing one. wg-easy has no environment file since 15: its
-  panel account, host, port, DNS and peers live in `config/wg-easy.db`, which `backup` copies.
+- **`pihole.env` is yours.** It holds the Pi-hole panel password, it is gitignored, and `hosts-pi.sh`
+  refuses to run without it rather than inventing one. Every other Pi-hole setting lives in
+  `pihole.settings`, which the script renders from one template, so the two hosts cannot drift. wg-easy
+  has no environment file since 15: its panel account, host, port, DNS and peers live in
+  `config/wg-easy.db`, which `backup` copies.
 - **Record what a reflash must not change**: `rpi-eeprom-update` (26.3 on `rbp0`, 13.12 on `rbp1` on
   2026-11-24) and the USB disk's model and serial. The boot order lives in the EEPROM and survives an
   image write, so a version that moves afterwards is a firmware change nobody would notice for a month.
@@ -160,12 +162,14 @@ sudo ~/hosts/pi/hosts-pi.sh setup <host>
 sudo ~/hosts/pi/hosts-pi.sh verify <host>
 ```
 
-`restore` copies the tree and then verifies, so on a fresh image it exits 1 twice over: the copy's
-`docker-compose.yml` may predate the template, and the engine is not installed yet. Both are `setup`'s job,
-and the `verify` that follows `setup` is the one whose exit code counts. `setup` writes the two config files
-the stack mounts, `/etc/hostname`, and leaves `/boot/firmware/config.txt` and
-`cmdline.txt` alone: the image's copies are right for the disk they were written to, and `restore` puts
-them back only when the backup's `cmdline.txt` names this disk. It never writes `pihole.env`. `/etc/hosts`
+`restore` copies the tree and then verifies, so on a fresh image it exits 1 for more than one reason: a
+file the copy predates or the image does not have yet, and an engine that is not installed. Both are
+`setup`'s job, and the `verify` that follows `setup` is the one whose exit code counts. `setup` writes the
+files the stack mounts (`docker-compose.yml`, `pihole.settings`, `etc-dnsmasq.d/02-my-wildcard-dns.conf`),
+the resolver list in `/etc/netplan/50-cloud-init.yaml`, and `/etc/hostname`, and leaves the boot files alone:
+the image's copies are right for the disk they were written to, and `restore` puts them back only when the
+backup's `cmdline.txt` names this disk. It never writes `pihole.env`: after a reflash without the backup,
+the panel has no password until one is set again, and the stack will not start without the file. `/etc/hosts`
 is cloud-init's: the image rewrites it from its own template on every boot, so a script that owned it
 would be overwritten and then report a difference no run could settle. Check the
 tree is readable by `vronteix` after the copy: a `cp -a` from a stick keeps the owner it was written with.
@@ -197,13 +201,26 @@ ansible-playbook playbooks/site.yml --limit rbp1 --check   # expected: changed=0
 docker compose -f /home/vronteix/dockers/docker-compose.yml ps   # four services running
 dig @192.168.1.38 <a LAN name> +short                            # Pi-hole answers
 dig @192.168.1.38 example.com +short                             # and resolution works
+resolvectl query example.com                                     # the host asks Pi-hole, not 1.1.1.1
 docker exec wg-easy wg show                                      # the peers are back
 curl -s localhost:9902/metrics | head -3                         # the smartctl exporter
 ```
 
+`resolvectl` is the line that catches the old netplan: an answer that does not come from `192.168.1.22`
+or `192.168.1.38` means the host is resolving past its own blocklist.
+
 Then the same steps are repeated for `rbp0`, once `rbp1` answers DNS. After both: run
-`ansible/collectors/host-audit.sh` on each host and keep the report beside the 2026-11-24 record, and
-update the measured line in [the machines](../how-it-works/nodes.md).
+`ansible/collectors/host-audit.sh` on each host and keep the report beside the 2026-11-24 record, update
+the measured line in [the machines](../how-it-works/nodes.md), and prove the pair still agrees:
+
+```bash
+set -a; . ~/.config/secrets/homelab.env; set +a
+python3 hack/check_pihole_parity.py    # result: OK, or the settings that differ
+```
+
+The check reads both panels through their own API. It is the one thing `hosts-pi.sh verify` cannot see: a
+setting changed in a panel, or a blocklist added to one host, lives in that host's `pihole.toml` and in no
+file in this repository.
 
 ## The wg-easy panel
 
@@ -230,7 +247,8 @@ the rest of the stack, so a reflash brings the panel back as it was, peers inclu
 There is no downgrade here either: the way back is the outgoing release's image on the same disk, then
 `restore` from the copy taken in step 1. Keep that image file until the new host has answered DNS and
 served its stack for a day — `pihole.env` and the state come back from the backup, and nothing on the Pi
-writes outside `dockers` except the boot files, which `backup` also copies.
+writes outside `dockers` except the boot files, which `backup` copies, and the netplan file, which `setup`
+rewrites from the template.
 
 If the new image will not boot, the EEPROM's boot order is intact, so the fix is another image write
 rather than a firmware change. That is the one failure this procedure cannot walk back one step at a
