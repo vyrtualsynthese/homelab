@@ -506,8 +506,9 @@ reaches a person.
   qBittorrent's Web UI is stalled. Measured 2026-11-25: 627 failed scrapes in 24 h, the target down
   28 % of 48 h, every scrape pinned at the exporter's 5 s timeout, and 106 firing/resolved
   transitions in four days as the stall crossed the rule's 15-minute gate. The rule is right and the
-  target is the fault. The config claim's move off NFS on 2026-11-25 did not clear it; the app moves
-  to `nas` on 2026-11-26 so its download path is local
+  target is the fault. The config claim's move off NFS on 2026-11-25 did not clear it; the app itself
+  moved to `nas` the same evening so its download path is local, and the exporter answered in 0.086 s
+  again from 23:43
   ([`docs/qbittorrent-webui-stalls.md`](../qbittorrent-webui-stalls.md), board card 777). Remove the
   silence once that move has passed its 24-hour gate, or renew it with a new end date.
 - **Removed 2026-11-25 — the silence on `DriveNeedsReplacement` went with the rule.** The drive

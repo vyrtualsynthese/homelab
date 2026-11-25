@@ -145,7 +145,7 @@ export from its own NVMe at 456 MB/s. The whole record is
 at a time, taking the WebUI and every API client with it. It moved on 2026-11-25 (board card 758),
 keeping its name — `qbittorrent-config`, the `<fullname>-config` the contract asks for. The old NFS
 export is retained on `nas` as the rollback copy until the migration has been observed; nothing
-mounts it. It moved again on 2026-11-26, to the node the app now runs on, with its contents copied
+mounts it. It moved again on 2026-11-25, to the node the app now runs on, with its contents copied
 across; the runbook above is the order.
 
 The WireGuard claim holds `wg0.conf` and the peer keys: **deleting the release deletes the tunnel

@@ -5,7 +5,9 @@
 > and a `close()` on that file then blocks for minutes at a time. Moving `/config` off NFS did not
 > stop it and neither did exporting the download volume `async`; in-flight downloads moved to local
 > disk on 2026-11-25, and the disk they moved to stalls the app the same way, so they went back to the
-> export the same evening, which restores the load that wedges (board cards 758, 777 and 782).
+> export the same evening, which restores the load that wedges (board cards 758, 777 and 782). The fix
+> that shipped is the app itself: the pod runs on `nas` since 2026-11-25 23:43 and `/downloads` is a
+> directory there, not an NFS mount.
 >
 > **Use it when** qBittorrent's Web UI hangs, the exporter stops being scraped, or you want the
 > evidence gathered on 13 and 25 November, the suspects that were cleared, and what cleared the hang
@@ -20,17 +22,20 @@
 > `cluster/helm/media-stack/qbittorrent-exporter/values.yaml`, live `up` and
 > `scrape_duration_seconds` from Prometheus, kernel stacks read from `streaming` and `nas`
 
-Status: **second fix deployed 2026-11-25, gate not passed yet.** The config claim was moved off NFS
+Status: **third fix deployed 2026-11-25 23:43, gate not passed yet.** The config claim was moved off NFS
 on 2026-11-25 and it was not the cause; the downloads export was made `async` that evening and the
 stall came back under it too. The in-flight downloads moved off the export the same evening, under
 *The fix: in-flight downloads off the export*, and the WebUI stalled again within three minutes —
 from the local disk the temp path landed on (*The temp path landed on the node's slowest disk*). They
 went back to the export's NVMe at 20:44 (*The decision*), which is the load the wedge comes from:
 that is a trade, not a fix. The local claim was tried again at 21:27 and taken away at 21:32 on the operator's
-decision, so what follows describes the export and not the claim (*Back to the export, 21:32*). Documented
+decision, so what follows describes the export and not the claim (*Back to the export, 21:32*). Then
+the app left the NFS client altogether: the pod moved to `nas` with `/downloads` a host path, and both
+configuration claims followed it — 86 seconds of downtime, 317 torrents restored, and the exporter
+back at 0.086 s from a pinned 5.00 (*The fix: the app leaves the NFS client*). Documented
 2026-11-13, measured again on 2026-11-25 (board cards 758, 777 and 782). The exporter's alert stays
-silenced until it is closed or handed over; the note under *Why the app was not changed until now*
-says what to do with that silence.
+silenced until the 24-hour gate passes or the card is handed over; the note under *Why the app was not
+changed until now* says what to do with that silence.
 
 ## What is seen
 
@@ -141,8 +146,9 @@ Measured before it started: 379 torrents, so 379 `.torrent` files and 379 `.fast
    card retires it, and the eight-line export list in `ansible/roles/nfs/templates/exports.j2` with
    it.
 
-The backup row moved with the claim: `qbittorrent-config` is now a `nodes` row on `streaming` rather
-than an `nfs` row, so the snapshot still holds the seed list and the resume data.
+The backup row moved with the claim: `qbittorrent-config` is a `nodes` row rather than an `nfs` row,
+so the snapshot still holds the seed list and the resume data. It moved once more with the pod that
+evening, from the `streaming` row to the `nas` row.
 
 One side effect on `nas`: `snapraid diff` had been reporting about 321 changed files every run, all
 of them under this export, because the client rewrites resume data continuously. Nothing writes
@@ -650,7 +656,7 @@ clear it, because the wedged state lives in the node's NFS client, which every n
 joins.
 
 
-## The fix: the app leaves the NFS client, 2026-11-26
+## The fix: the app leaves the NFS client, 2026-11-25
 
 Everything above points the same way, and none of it points at throughput, the server, or the network.
 
@@ -671,6 +677,12 @@ answers the other clients at 456 MB/s. The chart change is `nodeSelector: nas` p
 `storage.downloads.hostPath`; the two configuration claims follow the pod, because a `local-path`
 claim is bound to the node that first mounted it. The procedure, with the rollback, is
 [`runbooks/qbittorrent-to-nas.md`](runbooks/qbittorrent-to-nas.md).
+
+It ran on 2026-11-25: 86 seconds from stop to `2/2 Running` on `nas`, a 134 MB archive copied and
+restored with the same three counts on both sides (5,935 files, 361 `.torrent`, 361 `.fastresume`), and
+the app reporting 317 torrents afterwards — the number it had before the stop. The exporter's scrape
+went from a pinned 5.00 s to 0.086 s, the tunnel handshook, and the *arrs were importing within a
+minute. What is not yet known is whether it holds for a day; that is the gate below.
 
 **What was not chosen, and why.** NFSv3 instead of 4.2, and `lookupcache=none` on the downloads mount,
 are both plausible and both weaker: neither has evidence behind it here, both need the same
@@ -696,9 +708,14 @@ still downloads, from outbound peers only — but it is not what took the UI dow
 ## The gate, and the way back
 
 The card closes when `scrape_duration_seconds` stays under a second for 24 h and the torrent list is
-still 379. **The gate failed at its first observation**: the stall was back six minutes after the
-config claim moved, which is what ruled the config volume out. It is now the test for the move to
-`nas`, and it is unchanged — same two queries, same 24 hours, same torrent count. Both queries:
+still what the app restored. **The gate failed at its first observation**: the stall was back six
+minutes after the config claim moved, which is what ruled the config volume out. It is now the test
+for the move to `nas`, and it is unchanged — same two queries, same 24 hours, same torrent count.
+
+The count to compare against is the one the app reported at the move: **317** at 2026-11-25 23:43,
+not the 379 the claim listed. The app has always held fewer torrents than `BT_backup` holds files
+(383 at the top of the day, 316 at the bottom, and every restart drops a few), so a claim-side count
+would fail a healthy move. Both queries:
 
 ```bash
 # the ceiling over the last day
