@@ -24,3 +24,8 @@
       when: "'storage' in group_names"
     - role: snapraid
       when: "'storage' in group_names"
+    # The access log the detector reads: one directory, one owner, one rotation
+    # rule, and only on the node that runs the router. It comes before the
+    # bouncer's role, which is also streaming-only.
+    - role: traefik_logs
+      when: "inventory_hostname == 'streaming'"
