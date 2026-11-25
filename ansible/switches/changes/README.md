@@ -17,13 +17,16 @@ undo looks like.
 
 A change file holds **no secret**. If a line needs a password or a key, it does not belong here.
 
-Two paths may not appear in one change file, in any form:
+Three paths may not appear in one change file, in any form:
 
 - `/system scheduler` — a line under it could remove `revert-<id>`, the timer that cancels the run
   itself;
-- `/user` — a line under it could remove the account that cancels it.
+- `/user` — a line under it could remove the account that cancels it;
+- `/file` — a line under it could rewrite or delete the undo file itself.
 
-`/import`, `/system reset` and `/system backup` are refused for the same reason.
+`/import`, `/system reset`, `/system backup` and `/system reboot` are refused for the same reason. So
+is a line the renderer does not recognise as one of `add`, `set`, `remove`, `enable` and `disable`,
+and so is a value holding a `}`: it would close the guard the undo line is written in.
 
 Nothing in this directory runs on its own. `switch-change.sh` is the only caller, and it refuses a
 change that cannot be undone before it touches a switch.

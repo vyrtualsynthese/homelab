@@ -217,7 +217,7 @@ cd ansible
 hand from Winbox; `--window` defaults to `10m` with a one-hour ceiling. The change file is refused
 before anything is written when a line cannot be inverted, and any line under `/system scheduler`,
 `/user`, `/system reset`, `/system backup` or a bare `/import` is refused outright: those could
-remove the timer or the account that cancels it. What a change file looks like is
+remove the timer, the undo file or the account that cancels it. What a change file looks like is
 `switches/changes/README.md`; the procedure, the exit codes and what a fired undo means are
 [`docs/runbooks/switch-change.md`](../docs/runbooks/switch-change.md).
 
@@ -228,7 +228,8 @@ because the textual undo does not depend on it.
 
 Unlike the collector it inherits its shape from, this script writes to a switch: two `.rsc` files, one
 scheduler entry, and the backup when the account may take one. Everything it writes is named after the
-run (`undo-<id>.rsc`, `change-<id>.rsc`, `revert-<id>`, `pre-<id>.backup`), and every path that
-reaches the device removes the entry and the two files before it exits. On an interrupt the timer is
-left armed on purpose and the command that cancels it is printed.
+run (`undo-<id>.rsc`, `change-<id>.rsc`, `revert-<id>`, `pre-<id>.backup`). Every path that reaches
+the device and then fails takes back what it put there; the two that deliberately leave files are
+exit 5, where the switch stopped answering and nothing is claimed about it, and an interrupt, where
+the timer stays armed on purpose and the command that cancels it is printed.
 

@@ -155,13 +155,16 @@ the change may not exist:
 | `/path add … name=X` (or `comment=`, else refused) | remove the object found by that key |
 | `/path remove [find <selector>]` | re-add the object the pre-change export defines for that selector |
 | `/path set [find <selector>] k=v` | set `k` back to the value the verbose export holds for that object |
-| `/path enable`/`disable [find …]` | the other one |
-| anything else, including `move`, `/system reset`, `/import`, `/system scheduler`, `/user` | refused |
+| `/path enable`/`disable [find …]` | the state the plain export holds for that object, whatever the verb |
+| anything else, including `move`, `/system reset-configuration`, `/import`, `/system scheduler`, `/user`, `/file` | refused |
 
 **Refusals, and what they protect.** A change line that cannot be inverted stops the run before
-anything is written: an `add` with no key to find it by afterwards, a `set` whose old value is in
-neither export, a command outside the table. A change that touches `/system scheduler` or `/user`
-is refused too, because it could remove the timer or the account that cancels it.
+anything is written: an `add` with no key to find it by afterwards, an `add` whose key the export
+already holds (the undo could remove the wrong object), a `set` whose old value is in neither export,
+a value holding a `}` (it closes the guard the undo is written in), a command outside the table, and
+a change that renders no undo line at all. A change that touches `/system scheduler`, `/user` or
+`/file` is refused too, because it could remove the timer, the account that cancels it, or rewrite
+the undo file itself.
 
 **Same parse shape on both generations.** Measured against real exports, RouterOS 6 and 7 both print a
 `/section` header followed by `add …` and `set [ find … ] …` lines, wrapping long lines with a
@@ -199,7 +202,7 @@ CRLF strip are written again rather than lifted from the collector, whose test s
 is worth leaving alone; about thirty lines are shared, and a third script would be the moment to
 extract them.
 
-**Tests.** `--render-revert` is the pure entry point for the renderer, tested against fixtures for
+**Tests.** `--render-undo` is the pure entry point for the renderer, tested against fixtures for
 both export generations, quoting, every row of the table, and each refusal. The run itself is tested
 against a fake device: two shell shims on `PATH`, `ssh` and `scp`, over a state directory holding the
 configuration, the file list, the scheduler table and a fake clock the shims advance on each poll.
