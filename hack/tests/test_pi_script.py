@@ -494,3 +494,30 @@ def test_the_wildcard_file_carries_every_local_override():
         "address=/.ashudev.com/192.168.1.46",
     ):
         assert line in block, line
+
+
+def test_the_netplan_file_is_not_world_readable(tmp_path):
+    """netplan prints 'Permissions ... are too open' on every apply, and the file
+    describes the host's addresses, so setup narrows it."""
+    root = tmp_path / "pi"
+    _pi_fixture(root)
+    assert run("setup", "rbp1", root=root).returncode == 0
+
+    mode = (root / "etc/netplan/50-cloud-init.yaml").stat().st_mode & 0o777
+
+    assert mode == 0o600, oct(mode)
+
+
+def test_every_setup_flag_is_initialised():
+    """The script runs under `set -u`, so a flag used in the branch a fixture
+    never reaches crashes a real host halfway through a rollout — which is how
+    `resolver_changed` reached rbp1 once."""
+    text = SCRIPT.read_text()
+    setup = text[text.index("cmd_setup()"):]
+    local = next(
+        line for line in setup.splitlines() if line.strip().startswith("local host=")
+    )
+    used = {word.strip('"$') for word in text.split() if word.strip('"$').endswith("_changed")}
+    for flag in sorted(used):
+        assert f"{flag}=0" in local, flag
+    assert "--force-recreate wg-easy smartctl-exporter" in text

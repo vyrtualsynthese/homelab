@@ -449,6 +449,9 @@ cmd_setup() {
     fi
     write_abs "$ROOT/etc/netplan/50-cloud-init.yaml" "$(desired_netplan)"
     netplan_changed="$CHANGED_THIS_WRITE"
+    # netplan warns on every run that a world-readable file there is "too open",
+    # and it is right: it describes the host's addresses.
+    chmod 0600 "$ROOT/etc/netplan/50-cloud-init.yaml"
     write_abs "$ROOT/etc/systemd/resolved.conf.d/90-pihole-resolvers.conf" "$(desired_resolved)"
     resolved_changed="$CHANGED_THIS_WRITE"
     write_abs "$ROOT/etc/hostname" "$(desired_hostname "$host")"
@@ -485,7 +488,7 @@ cmd_setup() {
         # The two bridge services are the ones that resolve names through the
         # host's file rather than Pi-hole answering for them; pihole and
         # node_exporter share the host's namespace and need no recreate.
-        if [ "$resolver_changed" -eq 1 ]; then
+        if [ "$netplan_changed" -eq 1 ] || [ "$resolved_changed" -eq 1 ]; then
             ( cd "$STACK_DIR" && docker compose up -d --force-recreate wg-easy smartctl-exporter >/dev/null )
             echo "stack: docker compose up -d --force-recreate wg-easy smartctl-exporter"
         fi
