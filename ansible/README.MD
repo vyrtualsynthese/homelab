@@ -73,6 +73,7 @@ The trade — passwordless root for one named identity instead of a group — is
 | `roles/` | one role per concern, below |
 | `pi/hosts-pi.sh` | the two Pis, which are reflashed and so cannot be configured by Ansible — see `pi/README.md` |
 | `collectors/host-audit.sh` | a read-only report of what a host actually is |
+| `switches/switch-change.sh` | carries one `.rsc` change onto a MikroTik switch with an undo armed first |
 
 | Role | Hosts | What it changes |
 |---|---|---|
@@ -198,4 +199,36 @@ read — is [the switch access runbook](../docs/runbooks/switch-access.md).
 
 <!-- Do not cite a snapshot page from here until one exists: `hack/check_docs.py` resolves every
 `docs/*.md` path in the repository and fails on one that is not there yet. -->
+
+## Changing a switch configuration with a way back
+
+`switches/switch-change.sh` carries one `.rsc` fragment onto a MikroTik switch and arms the way back
+first. It reads the switch, renders an undo file from the change and the export taken before it,
+shows the undo, and — only then — uploads both files and adds a one-shot scheduler entry that runs the
+undo at the device clock's now plus the window:
+
+```bash
+cd ansible
+./switches/switch-change.sh --target crs326 --change switches/changes/<your-change>.rsc --dry-run
+./switches/switch-change.sh --target crs326 --change switches/changes/<your-change>.rsc
+```
+
+`--dry-run` prints the undo and writes nothing; `--arm-only` arms the undo for a change applied by
+hand from Winbox; `--window` defaults to `10m` with a one-hour ceiling. The change file is refused
+before anything is written when a line cannot be inverted, and any line under `/system scheduler`,
+`/user`, `/system reset`, `/system backup` or a bare `/import` is refused outright: those could
+remove the timer or the account that cancels it. What a change file looks like is
+`switches/changes/README.md`; the procedure, the exit codes and what a fired undo means are
+[`docs/runbooks/switch-change.md`](../docs/runbooks/switch-change.md).
+
+It signs in as `deploy` with `~/.ssh/switches-deploy` — the account card #485 creates, holding
+`read`, `write`, `ssh` and `test`. The binary backup needs `policy` on top of that, which #485 does
+not grant: a refused backup prints `no binary fallback for this run` and the run carries on armed,
+because the textual undo does not depend on it.
+
+Unlike the collector it inherits its shape from, this script writes to a switch: two `.rsc` files, one
+scheduler entry, and the backup when the account may take one. Everything it writes is named after the
+run (`undo-<id>.rsc`, `change-<id>.rsc`, `revert-<id>`, `pre-<id>.backup`), and every path that
+reaches the device removes the entry and the two files before it exits. On an interrupt the timer is
+left armed on purpose and the command that cancels it is printed.
 
