@@ -4,7 +4,8 @@
 > the NFS client on `streaming`: one page is left waiting to be written for an I/O nothing performs,
 > and every `close()` of that file then blocks forever. Moving `/config` off NFS did not stop it and
 > neither did exporting the download volume `async`; in-flight downloads move to local disk on
-> 2026-11-25, and the disk they moved to stalls the app the same way (board cards 758, 777 and 782).
+> 2026-11-25, and the disk they moved to stalls the app the same way; they went back to the export the
+> same evening, which restores the load that wedges (board cards 758, 777 and 782).
 >
 > **Use it when** qBittorrent's Web UI hangs, the exporter stops being scraped, or you want the
 > evidence gathered on 13 and 25 November, the suspects that were cleared, and what cleared the hang
@@ -20,7 +21,9 @@ Status: **second fix deployed 2026-11-25, gate not passed yet.** The config clai
 on 2026-11-25 and it was not the cause; the downloads export was made `async` that evening and the
 stall came back under it too. The in-flight downloads moved off the export the same evening, under
 *The fix: in-flight downloads off the export*, and the WebUI stalled again within three minutes —
-from the local disk the temp path landed on (*The temp path landed on the node's slowest disk*).
+from the local disk the temp path landed on (*The temp path landed on the node's slowest disk*). They
+went back to the export's NVMe at 20:44 (*The decision*), which is the load the wedge comes from:
+that is a trade, not a fix.
 Documented 2026-11-13, measured again on 2026-11-25 (board cards 758, 777 and 782). The exporter's alert stays silenced until it is closed or handed over; the
 note under *Why the app was not changed until now* says what to do with that silence.
 
@@ -329,10 +332,11 @@ sequential copy per finished torrent instead of thousands of small random writes
 
 Two consequences worth knowing:
 
-- **A finished torrent is copied, not renamed.** The temp path and the save path are different
-  filesystems, so qBittorrent copies each file and deletes the source. The torrent reaches 100 % when
-  that copy finishes, and only then does the completion hook fire, so an importer never sees a
-  half-copied file.
+- **A finished torrent is copied, not renamed, while the temp path is on another filesystem.** With
+  the temp path on the local claim, qBittorrent copies each file and deletes the source. The torrent
+  reaches 100 % when that copy finishes, and only then does the completion hook fire, so an importer
+  never sees a half-copied file. **Not true after 20:44**: with the temp path back on the export, temp
+  and save path share a filesystem and the finish is a rename (see *The decision*).
 - **The two settings live on the config claim, not in the chart.** A rebuilt `qbittorrent-config`
   comes back with `TempPath` unset and the NFS load returns, silently. Check both keys after any
   rebuild of that claim.
@@ -387,12 +391,38 @@ fast, but not enough for a claim that holds 65 GiB of unfinished torrents today.
 is capped so `sda` keeps up, or the node needs fast storage of its own; a 400 GiB claim is not the
 problem, the device under it is.
 
+### The decision: back to the export, 20:44
+
+The disk above is not what the temp path should sit on, and there is no fast local alternative: the
+node's root is 91 GB free, the claim wants 65 GiB today. So the temp path went back to the export's
+NVMe — same server, same mount, different directory:
+
+| Setting | Value |
+|---|---|
+| `Session\TempPath` | `/downloads/incomplete` |
+| `Session\TempPathEnabled` | `true` |
+| how | `POST /api/v2/app/setPreferences` with `{"temp_path": "/downloads/incomplete", "temp_path_enabled": true}`, 200, no restart |
+
+The move back ran at **~350 MB/s**: `/downloads-temp` fell from 102 GB to single digits in six
+minutes, one torrent every few seconds, against the 40–90 s each one took onto `sda`. That is not a
+surprise in hindsight — `streaming`'s `enp4s0` is a **10 GbE** link, so the export was never limited
+by the wire.
+
+Two consequences, stated so nobody rediscovers them:
+
+- **The per-block NFS write churn is back.** This is knowingly the configuration the wedge comes from:
+  the trade is a disk that keeps up and a wedge that a mount detach clears, over a disk that freezes
+  the app by itself. The gate queries below are how the trade gets judged.
+- **A finished torrent is renamed, not copied.** Temp and save path are on the same filesystem now, so
+  the "copy, then delete the source" note under *The fix* no longer applies. The completion hook fires
+  on a rename, at once.
+
+The chart still renders `qbittorrent-temp` and mounts it at `/downloads-temp`; nothing writes there any
+more. Card 783 removes the claim, its template, its helper and its mount, and the note in
+`cluster/helm/backup/values.yaml` that explains why it was never backed up.
+
 ### What is still open
 
-- **The temp claim's device.** `/downloads-temp` is on `sda`, the slowest disk in the node and the one
-  every media config also lives on. The relocation itself is a one-off burst, but the 205 GiB still to
-  download keep writing there at whatever the disk allows. A global download limit low enough for the
-  disk is a preference, not a chart change, and it is the cheap test.
 - **Settled, and no longer candidates:** `sync` off (tested, wedge returned); ext4 fast-commit (the
   feature is not enabled on this filesystem); a failing disk (SMART clean, no `nvme` error); the
   network and the server (no retransmission, no timeout, `nfsd` idle); the config volume (moved);
