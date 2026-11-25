@@ -10,6 +10,10 @@
 # sudo log names the identity that acted instead of saying `vronteix` twice.
 # The trade is written down in docs/decisions/2026-11-24-automation-sudo-account.md.
 #
+# Since the 2026-11-25 decision, its keys are not inherited from the human
+# account: they are the `trusted_ssh_keys` list in `inventory/group_vars/all.yml`,
+# written as the whole file, so a key nobody declared is gone on the next run.
+#
 # The bootstrap is two runs, and the order is the safety:
 #
 #   ansible-playbook playbooks/site.yml -e ansible_user=vronteix --tags automation
@@ -19,32 +23,20 @@
 # second connects as the account, so `accounts` — which removes the human grant
 # only under that condition — cannot take away the path it is using.
 
-- name: Read the account automation inherits its keys from
-  ansible.builtin.getent:
-    database: passwd
-    key: "{{ automation_key_source_user }}"
-  tags: [automation]
-
-- name: Note where that account keeps the keys that already log in
-  ansible.builtin.set_fact:
-    automation_key_source: "{{ getent_passwd[automation_key_source_user][4] }}/.ssh/authorized_keys"
-  tags: [automation]
-
-- name: Read that file before creating an account no key can reach
-  ansible.builtin.stat:
-    path: "{{ automation_key_source }}"
-  register: automation_key_source_stat
-  tags: [automation]
-
-- name: Stop before an account exists that nothing can log in to
+# The list is checked before the account exists, because an account written from
+# a broken list cannot be logged in to, and the run that would fix it needs that
+# account. Empty and malformed are the two ways to lose the fleet in one edit.
+- name: Refuse a key list that cannot be declared
   ansible.builtin.assert:
     that:
-      - automation_key_source_stat.stat.exists
-      - automation_key_source_stat.stat.size | default(0) > 0
+      - trusted_ssh_keys is defined
+      - trusted_ssh_keys | length > 0
+      - trusted_ssh_keys | reject('match', trusted_ssh_key_pattern) | list | length == 0
     fail_msg: >-
-      {{ automation_key_source }} holds no key. An account created without one
-      cannot be logged in to, and the run that removes the human grant would
-      remove the only way in.
+      trusted_ssh_keys is empty, or holds a line whose shape is not an OpenSSH
+      public key. An account written from that list cannot be logged in to, and
+      the run that would fix it needs that account. Add the line `make adopt`
+      prints, rather than a hand-typed or hand-wrapped one.
   tags: [automation]
 
 - name: Create the automation account, key-only
@@ -65,19 +57,17 @@
     mode: "0700"
   tags: [automation]
 
-# Read on the host and written there: the controller's ~/.ssh is off limits to an
-# agent, and a `*.pub` in the tree is a committed identity. This account accepts
-# what the human account already accepts, so the role trusts nothing new — and a
-# key removed from the human account is still a key that gets in, which is why
-# both files are named here.
-- name: Give it the keys the human account already accepts
+# The whole file, not an appended line: that is what makes a key the operator did
+# not declare disappear on the next run, and what `make check` then reports.
+# `copy` rather than `authorized_key` because only `copy` backs the old file up.
+- name: Give it the keys declared in group_vars
   ansible.builtin.copy:
-    src: "{{ automation_key_source }}"
+    content: "{{ trusted_ssh_keys | join('\n') }}\n"
     dest: "/home/{{ automation_user }}/.ssh/authorized_keys"
-    remote_src: true
     owner: "{{ automation_user }}"
     group: "{{ automation_user }}"
     mode: "0600"
+    backup: true
   tags: [automation]
 
 # `0440` and validated: a typo in this file takes sudo away from the account

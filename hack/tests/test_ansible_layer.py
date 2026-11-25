@@ -1,5 +1,6 @@
 import os
 import pathlib
+import re
 import subprocess
 
 import yaml
@@ -127,17 +128,6 @@ def test_the_human_grant_is_removed_only_by_a_run_that_no_longer_uses_it():
     assert len(removal) == 1
     condition = removal[0].get("when")
     assert condition == "ansible_user == automation_user", condition
-
-
-def test_the_automation_account_takes_its_key_from_the_human_account():
-    """The controller's `~/.ssh` is off limits and a `*.pub` in the tree is a
-    committed identity, so the key is copied on the host, from the account that
-    already logs in: the role trusts nothing it did not trust before."""
-    text = (ANSIBLE / "roles/automation/tasks/main.yml").read_text()
-    assert "remote_src: true" in text
-    assert "lookup('file'" not in text, "a key read on the controller"
-    assert "automation_key_source_user" in text
-    assert "authorized_keys" in text
 
 
 def test_the_automation_role_can_be_applied_alone_and_runs_before_the_removal():
@@ -748,3 +738,68 @@ def test_make_adopt_finds_the_default_key_without_a_key_argument(tmp_path):
     assert run.returncode == 0, run.stderr
     entry = next(line for line in run.stdout.splitlines() if line.startswith("  - "))
     assert yaml.safe_load("keys:\n" + entry)["keys"][0].startswith("ssh-ed25519 ")
+
+def test_the_key_list_is_declared_and_well_formed():
+    defaults = load("inventory/group_vars/all.yml")
+    keys = defaults["trusted_ssh_keys"]
+    assert isinstance(keys, list) and keys, "an empty list locks every host out"
+    pattern = defaults["trusted_ssh_key_pattern"]
+    malformed = [key for key in keys if not re.match(pattern, key)]
+    assert malformed == [], malformed
+    assert defaults["human_user"] == "vronteix"
+
+def test_the_key_pattern_refuses_a_body_that_is_not_whole_base64_groups():
+    """The shape check is the only one an offline run makes, so it has to refuse
+    the ragged paste: a body whose length cannot be a base64 body at all."""
+    pattern = load("inventory/group_vars/all.yml")["trusted_ssh_key_pattern"]
+    assert re.match(pattern, "ssh-ed25519 QUJDRA operator@laptop") is None
+    assert re.match(pattern, "ssh-ed25519 QUJDR operator@laptop") is None
+    assert re.match(pattern, "ssh-ed25519 QUJD= operator@laptop") is None
+    assert re.match(pattern, "ssh-ed25519 A operator@laptop") is None
+    assert re.match(pattern, "ssh-ed25519 QUJDRA== operator@laptop") is not None
+    assert re.match(pattern, "ssh-ed25519 QUJD operator@laptop") is not None
+
+def test_the_list_is_refused_before_an_account_is_written():
+    tasks = yaml.safe_load((ANSIBLE / "roles/automation/tasks/main.yml").read_text())
+    asserts = [
+        task["ansible.builtin.assert"]
+        for task in tasks
+        if isinstance(task, dict) and "ansible.builtin.assert" in task
+    ]
+    joined = "\n".join(str(check) for check in asserts)
+    assert "trusted_ssh_keys is defined" in joined
+    assert "trusted_ssh_keys | length > 0" in joined
+    assert "reject('match', trusted_ssh_key_pattern)" in joined
+    names = [task["name"] for task in tasks if isinstance(task, dict)]
+    assert names.index("Refuse a key list that cannot be declared") < names.index(
+        "Create the automation account, key-only"
+    )
+
+def test_the_automation_account_is_written_from_the_declared_list():
+    tasks = yaml.safe_load((ANSIBLE / "roles/automation/tasks/main.yml").read_text())
+    writes = [
+        task["ansible.builtin.copy"]
+        for task in tasks
+        if isinstance(task, dict) and "ansible.builtin.copy" in task
+        and str(task["ansible.builtin.copy"].get("dest", "")).endswith("/.ssh/authorized_keys")
+    ]
+    assert len(writes) == 1, writes
+    write = writes[0]
+    assert "trusted_ssh_keys | join" in write["content"]
+    # The YAML scalar is double-quoted, so its `\n` are real newlines by the time
+    # Jinja sees them: the join separator is a newline and the file ends with one.
+    # A tidy-up into a single-quoted scalar would turn both into two characters
+    # and write one long line holding two dead keys, so the two assertions below
+    # exist to go red on it.
+    assert "join('\n')" in write["content"], write["content"]
+    assert write["content"].endswith("\n"), write["content"][-8:]
+    assert "automation_user" in write["dest"]
+    assert write["backup"] is True
+    assert write["mode"] == "0600"
+
+def test_no_task_reads_the_human_key_file_any_more():
+    for path in yaml_files():
+        assert "automation_key_source" not in path.read_text(), path
+    role = (ANSIBLE / "roles/automation/tasks/main.yml").read_text()
+    assert "remote_src" not in role
+    assert "getent_passwd" not in role

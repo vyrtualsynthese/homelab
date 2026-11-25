@@ -25,7 +25,30 @@ sshd_password_auth: false
 # docs/decisions/2026-11-24-automation-sudo-account.md is the trade.
 automation_user: ansible
 
-# Automation accepts the keys the human account already accepts — copied on the
-# host, because the controller's ~/.ssh is off limits to an agent and a `*.pub`
-# in the tree is a committed identity.
-automation_key_source_user: vronteix
+# The human account, named once: `roles/accounts` writes the same declared keys
+# into it that `roles/automation` writes into the automation account.
+human_user: vronteix
+
+# Every key in this list logs in as both accounts, on every host this layer
+# reaches. The automation account holds a sudo grant with no password, fleet-wide,
+# so a key here is root on the fleet. One line per laptop; the trailing comment is
+# whose it is. `make adopt` prints the line for the laptop you are on, and
+# deleting a line here is how a laptop is retired.
+# One key is one line: the base64 body cannot be wrapped, so this line stays long
+# and carries the lint exception rather than a fold that would break the key.
+trusted_ssh_keys:
+  - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBIltfI3EkKuIHapGzdy1weSV5AiBigks/Pm4zR9Xqd5 valentin.ronteix@ashudev.com"
+  - "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQDBFY8DJms8KGizjY8Dji47oMyekgTFw62a3LmuapVoAKyBoJv4naMrTJC0+iR2Xm6HsJzcOs8CO95jJlk4LXxRjk3zZ9VcG691NsPgSTTPQz+GF2XWO/hXOeFNvgRvprFKyGnodJ3TDGzELZdsX1c43vTcWPTBoWFX59NIb7iAhs0ZtbUINDpIhKJDTLA9fo5ebazPYD/vQNNkegD1fq2CiYZMFZ/qgbd5KACEqAOGzaWl6zKYQYAZkNhZOS2zjtrQg3pDHNzIFymRm7gKqtbmdD7U4Zwff3qhzIiyf0wQtJts3+vbF/DQRJdIQF+Lzc3BGKtzsQ6AsYWedgGvHwx6hlbqXB7VMXCJ7OVbzlX0iPFQpG7B8P9V7M20DsIx1vxxohr/Z8q40jUfElVRCfOyM7w7/bAx/+fLqszWXVoB3lKgxWwLkeRjtDW2QT7BnR9eIS8IRrDqy/H6PzcOk3DXS5eyW++F6uzmwfINokkanCl3frYee6mD0OSm+GpSM30= vyrtualsynthese@DESKTOP-I3PJEO5"  # noqa: yaml[line-length]
+
+# What a key line may look like: one of these types, then a base64 body of whole
+# groups with its padding, then an optional comment. This is a *shape* check, and
+# an offline run cannot make a stronger one: it refuses an empty line, a line
+# that is not a key, and a body whose length is ragged. It cannot tell a
+# hand-wrapped line from a long comment, or a body cut short by a multiple of
+# four characters from a whole one. `make adopt` is what proves a key is whole —
+# it derives the public half from the private key beside it — so a line is added
+# from that command's output, never typed, and a hand-wrapped one is caught by
+# the `--diff` read on the first host rather than here. The regex stays on one
+# line for the same reason the key does: a fold inside it becomes a space and
+# silently widens the match, so it carries the lint exception too.
+trusted_ssh_key_pattern: '^(ssh-ed25519|ssh-rsa|ecdsa-sha2-nistp256|sk-ssh-ed25519@openssh\.com) ([A-Za-z0-9+/]{4})*([A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=|[A-Za-z0-9+/]{4})( \S+)*$'  # noqa: yaml[line-length]
