@@ -6,7 +6,10 @@
 > Traefik bucket change and the dashboard reader counts re-checked on 2026-11-21.
 >
 > **Use it when** a panel is blank or a metric reads wrong, before trusting a series or volume count
-> or a retention claim, or before proposing a new metric · **Verified** 2026-11-21 · **Kind:** living page
+> or a retention claim, or before proposing a new metric · **Verified** 2026-11-21 · **Kind:** reference
+>
+> **Sources** the live Prometheus and Loki APIs, read on 2026-11-19 and 2026-11-21 · the exporter
+> charts under `cluster/helm/monitoring/` and `cluster/helm/media-stack/`
 
 The overview — what runs where, its sizing, and how to query the stack:
 [`observability-conventions.md`](../observability-conventions.md).
@@ -326,8 +329,9 @@ runs (config shows `retention_enabled: true`,
   media-stack silence is gone.
 - `nas /dev/sdf` (Crucial BX500, holds `local-path`, therefore Prometheus, Loki,
   Grafana and every config volume) is at **0 % life left**, SMART exit code 32.
-  It needs replacing; `DriveNeedsReplacement` fires for it and is silenced until
-  2026-12-12.
+  It needs replacing; `DriveWorn` reports it as a warning that asks once, and no
+  silence hides it (the `DriveNeedsReplacement` rule and its silence were retired
+  on 2026-11-25).
 - `streaming` runs hot: `k10temp` reads **Tctl 81–91 °C** at 10–28 % CPU on
   2026-11-13, and the value follows load, so `NodeTemperatureHigh` firing for it
   is correct. The `gigabyte_wmi` zone mirrors Tctl; the GPU is at 40 °C and the
