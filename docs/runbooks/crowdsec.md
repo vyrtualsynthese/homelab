@@ -30,6 +30,7 @@ its SQLite is state, and `nas` is where state is backed up.
 | Bans, as the kernel has them | `nftables` on `streaming`, table `crowdsec` | `nft list set ip crowdsec crowdsec-blacklists` |
 | Bouncer | host service on `streaming` | `systemctl status crowdsec-firewall-bouncer` |
 | Ban count, and the bouncer's liveness | the bouncer's own listener | `curl -s http://127.0.0.1:60601/metrics \| grep fw_bouncer_banned_ips` |
+| The web UI | Deployment `crowdsec-web-ui`, node `nuc0` | `https://crowdsec.kub.local` — Admins only, reads the LAPI directly, so it works while Grafana does not |
 
 Three ports, and they are not interchangeable: `30500` is the LAPI's API, the NodePort the bouncer
 calls as `http://192.168.1.46:30500/` because a host service cannot resolve cluster DNS; `60601` is
@@ -83,6 +84,9 @@ A false positive is the cost of a detector: FileBrowser share links are opened f
 people with no account, so a visitor who hammers dead links can trip `http-probing`. Deleting the
 decision is enough — the bouncer re-reads the list every ten seconds and the set loses the address
 on that pass.
+
+The web UI at `https://crowdsec.kub.local` does the same deletion with a button, from a phone, and
+lists the alert behind the ban. It needs no Grafana: it reads the LAPI directly.
 
 ## Turn the whole layer off
 

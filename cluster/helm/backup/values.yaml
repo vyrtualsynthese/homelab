@@ -200,7 +200,7 @@ nodes:
       # CrowdSec's web UI: users, settings and a 168h mirror of the LAPI's alerts, so not
       # just configuration. `cache.db` refills from the LAPI and is left out; `state.db`
       # and `statistics.db` are the row. Size measured after the first night.
-      - {claim: crowdsec-web-ui-config, namespace: security, kind: sqlite, exclude: ["cache.db"]}
+      - {claim: crowdsec-web-ui-config, namespace: security, kind: sqlite, exclude: ["cache.db*"]}
       - {claim: koillection-conf, namespace: koillection, kind: files}
       # 100 KB. index-v* rebuilds itself by rescan.
       - {claim: syncthing-config, namespace: syncthing, kind: files, exclude: ["index-v*"]}

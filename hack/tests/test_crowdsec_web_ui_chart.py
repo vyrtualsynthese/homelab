@@ -7,6 +7,7 @@ in this repo meets (`docs/charts/README.md`).
 """
 
 import pathlib
+import re
 import unittest
 
 import yaml
@@ -16,6 +17,7 @@ CHART = ROOT / "cluster/helm/security/crowdsec-web-ui"
 APP = ROOT / "cluster/argocd/projects/security/crowdsec-web-ui.yaml"
 BACKUP = ROOT / "cluster/helm/backup/values.yaml"
 CATALOGUE = ROOT / "docs/how-it-works/applications.md"
+BLUEPRINT = ROOT / "cluster/helm/authentik/files/app-crowdsec-web-ui.yaml"
 
 HOST = "crowdsec.kub.local"
 CALLBACK = f"https://{HOST}/api/auth/oidc/callback"
@@ -161,3 +163,34 @@ class ChartTests(unittest.TestCase):
             if line.startswith("| `")
         }
         self.assertIn("crowdsec-web-ui", rows)
+
+
+class BlueprintTests(unittest.TestCase):
+    """The provider and the chart are two halves of one login; a mismatch is a loop."""
+
+    def setUp(self):
+        self.text = BLUEPRINT.read_text()
+        self.values = yaml.safe_load((CHART / "values.yaml").read_text())
+
+    def test_the_registered_callback_is_the_chart_host(self):
+        # The app builds this from the request's Host and X-Forwarded-* headers.
+        # authentik compares the whole string, so both copies are pinned here.
+        self.assertEqual(re.findall(r"^\s+url:\s*(\S+)\s*$", self.text, re.MULTILINE), [CALLBACK])
+
+    def test_the_client_id_matches_the_chart(self):
+        client_id = self.values["env"]["CONFIG_AUTH_OIDC_CLIENT_ID"]
+        self.assertIn(f"client_id: {client_id}", self.text)
+        self.assertIn(f"https://authentik.kub.home.ashudev.com/application/o/{client_id}/",
+                      self.values["env"]["CONFIG_AUTH_OIDC_ISSUER_URL"])
+
+    def test_it_is_an_oauth2_provider_not_a_proxy_one(self):
+        # A proxy provider would have to be listed on the embedded outpost; this
+        # app authenticates itself, so the outpost must never see it.
+        self.assertIn("authentik_providers_oauth2.oauth2provider", self.text)
+        self.assertNotIn("authentik_providers_proxy.proxyprovider", self.text)
+
+    def test_the_application_launches_the_internal_host_for_admins_only(self):
+        self.assertIn("meta_launch_url: https://crowdsec.kub.local/", self.text)
+        self.assertIn(
+            "group: !Find [authentik_core.group, [name, authentik Admins]]", self.text
+        )
