@@ -531,6 +531,7 @@ import_error_line() {                      # import_error_line <capture>
 # Print the difference between the pre-change export and the device's current one, with both sides
 # cleaned of the dated comment lines that make any two exports differ.
 print_change_diff() {                      # print_change_diff <dir> <plain> <after>
+  say "the difference against the export taken before the change:"
   noise_free < "$2" > "$1/pre.norm"
   noise_free < "$3" > "$1/after.norm"
   diff -u --label "before the change" --label "after" "$1/pre.norm" "$1/after.norm" || true
