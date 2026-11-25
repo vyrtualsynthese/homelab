@@ -69,12 +69,6 @@ so the default moves no data. */}}
 {{- default (printf "%s-vpn-config" (include "app.fullname" .)) .Values.storage.vpn.claimName }}
 {{- end }}
 
-{{/* In-flight download claim name: explicit `storage.temp.claimName`, else
-`<fullname>-temp`. This chart renders the claim; nothing mounts it before. */}}
-{{- define "app.tempClaimName" -}}
-{{- default (printf "%s-temp" (include "app.fullname" .)) .Values.storage.temp.claimName }}
-{{- end }}
-
 {{/* Container port: explicit container.port, else the service port. */}}
 {{- define "app.containerPort" -}}
 {{- default .Values.service.port .Values.container.port }}

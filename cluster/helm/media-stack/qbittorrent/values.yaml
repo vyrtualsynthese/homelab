@@ -245,37 +245,15 @@ storage:
   downloads:
     existingClaim: pvc-nfs-qbittorrent-download-nfs-subdir-external-provisioner
     mountPath: /downloads
-  # In-flight downloads: where a torrent's data is written until it is complete.
-  #
-  # On `local-path` on purpose, and this is the whole point of the claim. The
-  # app writes roughly 2,000 open + write + close a second against the export
-  # while it downloads (16 KiB pieces, ~33 MB/s measured 2026-11-25), over the
-  # single TCP connection `nas` shares with every other mount on `streaming`.
-  # That load is what wedges the client: one page is left waiting to be written
-  # for an I/O nothing performs, and every `close()` of that file then blocks
-  # forever, which takes the WebUI's session mutex with it (board card 777,
-  # `docs/qbittorrent-webui-stalls.md`). With the temp path here, the export only
-  # sees one sequential copy per finished torrent.
-  #
-  # The chart mounts the directory; it does **not** turn the feature on. The app
-  # has to be told, in `qBittorrent.conf` on the config claim:
-  # `Session\TempPath` set to `mountPath` below and `Session\TempPathEnabled=true`
-  # (the WebUI's Downloads > "Keep incomplete torrents in" pair, or
-  # `POST /api/v2/app/setPreferences`). Both are preferences, and preferences
-  # live on the claim — so a rebuilt config claim loses them, silently, and the
-  # NFS load comes back. Check them when this claim is recreated.
-  #
-  # `local-path` does not enforce the request below; it is the working set to
-  # allow for, and the node must have the room (`streaming`'s `/mnt/ssd0` had
-  # 856 GB free on 2026-11-25). Nothing here is worth backing up: it holds only
-  # unfinished torrents, which the client re-downloads.
-  temp:
-    claimName: ""
-    className: local-path
-    accessModes:
-      - ReadWriteOnce
-    size: 400Gi
-    mountPath: /downloads-temp
+  # There is deliberately no in-flight claim here. A `local-path` temp claim used
+  # to exist, and it was removed on 2026-11-25 (board #540) for two reasons: it
+  # landed on `streaming`'s 25,241-hour BX500, which froze the app in
+  # `balance_dirty_pages`, and the preference pointing at it lives on the config
+  # claim, so a rebuilt claim silently put the in-flight writes back on the
+  # export — the load that wedges the WebUI (`docs/qbittorrent-webui-stalls.md`).
+  # The app's temp path is the export's own `/downloads/incomplete`; the chart
+  # mounts nothing for it.
+
   # The WireGuard keys and `wg_confs/`. This one the chart creates. Left empty,
   # the name is `<fullname>-vpn-config`, which is the claim the live pod mounts,
   # so the default is also the no-data-move answer.
