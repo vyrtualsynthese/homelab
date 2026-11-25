@@ -69,6 +69,9 @@ Measured on the devices on 2026-11-25, both added after the first live runs:
   unchanged; the user record carries no policy of its own.
 - A plain `/file print` shortens a name to nineteen characters and `...`. Every name here is longer,
   so every check that looks a file up by name reads `print detail`, which prints it whole.
+- A scheduler entry's `start-date` is `mmm/dd/yyyy` (`nov/26/2026`), and an ISO date is refused as
+  `invalid date`. The script spells the month itself, so the form does not follow the workstation's
+  locale.
 
 ## Approaches considered
 

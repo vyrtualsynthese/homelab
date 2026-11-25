@@ -178,6 +178,11 @@ def answer(command):
     if command.startswith("/system scheduler add"):
         name = re.search(r"name=([^\s]+)", command).group(1)
         event = re.search(r'on-event="([^"]*)"', command).group(1)
+        # The device dates an entry `mmm/dd/yyyy` and answers `invalid date` to anything else; an ISO
+        # date is the shape a hand-written caller reaches for, so the refusal is modelled here.
+        date = re.search(r"start-date=([^\s]+)", command)
+        if date and not re.fullmatch(r"[A-Za-z]{3}/\d{1,2}/\d{4}", date.group(1)):
+            return "invalid date\n"
         entry = {"on-event": event, "run-count": 0}
         for key in ("start-time", "start-date", "interval", "policy"):
             match = re.search(rf"{key}=([^\s]+)", command)
