@@ -1,0 +1,27 @@
+---
+# The one directory in this repository that holds a URL for a week. `/var/log`
+# itself is 0755 and root-owned, so the mode here is what keeps the file out of
+# every other account's reach: 2770 with the group set to Traefik's gid, and the
+# setgid bit so the file the container creates inherits it.
+- name: Create the access-log directory
+  ansible.builtin.file:
+    path: "{{ traefik_logs_dir }}"
+    state: directory
+    owner: "{{ traefik_logs_uid }}"
+    group: "{{ traefik_logs_gid }}"
+    mode: "2770"
+
+- name: Install the rotation rule
+  ansible.builtin.template:
+    src: logrotate.j2
+    dest: /etc/logrotate.d/traefik-access
+    owner: root
+    group: root
+    mode: "0644"
+
+# `logrotate --debug` parses the rule and prints what it would do, so a syntax
+# error fails this task instead of the first rotation three days later.
+- name: Prove the rotation rule parses
+  ansible.builtin.command:
+    cmd: logrotate --debug /etc/logrotate.d/traefik-access
+  changed_when: false

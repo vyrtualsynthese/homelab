@@ -1,0 +1,9 @@
+---
+# Traefik runs as 65532:65532 with `readOnlyRootFilesystem: true` and no
+# privileged capability, so it can only write where the host already lets it.
+traefik_logs_dir: /var/log/traefik
+traefik_logs_file: access.log
+traefik_logs_uid: 65532
+traefik_logs_gid: 65532
+traefik_logs_size: 200M
+traefik_logs_rotate: 7
