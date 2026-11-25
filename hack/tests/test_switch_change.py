@@ -334,6 +334,14 @@ class ArmTests(unittest.TestCase):
             self.assertEqual(done.returncode, 2)
             self.assertEqual(f.ros("/system scheduler print detail"), "")
 
+    def test_a_change_that_cannot_be_undone_touches_nothing(self):
+        with fake("refuse") as f:
+            done = f.script(["--target", "crs326", "--change", str(CHANGES / "refuse-move.rsc"), "--yes"])
+            self.assertEqual(done.returncode, 1, done.stderr)
+            self.assertIn("move", done.stderr)
+            self.assertEqual(f.ros("/system scheduler print detail"), "")
+            self.assertEqual(f.files(), [])
+
     def test_a_refused_backup_still_arms(self):
         with fake("nobackup", backup_denied="1") as f:
             done = f.script(["--target", "crs326", "--change", str(CHANGES / "set-pvid.rsc"),
