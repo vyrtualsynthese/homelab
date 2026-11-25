@@ -1630,10 +1630,11 @@ In `mkdocs.yml`, add under the runbooks section, beside `traefik-release.md`:
 ```
 
 `docs/runbooks/README.md` calls itself the shelf, and a runbook that is not on it is a page nothing
-points at. Add a row to its table, in the Security tab, with the honest status:
+points at. Add a row to its table, in the Running it tab (the shelf's own routing rule keeps Security
+for identity and certificates), with the honest status:
 
 ```markdown
-| [`crowdsec.md`](crowdsec.md) | Security | pending — the four proofs have not been run | Chatty addresses are being refused at the firewall, a legit visitor was banned, or `SecurityStackBlind` fired. |
+| [`crowdsec.md`](crowdsec.md) | Running it | pending — the four proofs have not been run | Chatty addresses are being refused at the firewall, a legit visitor was banned, or `SecurityStackBlind` fired. |
 ```
 
 - [ ] **Step 3: Run the docs checks**
