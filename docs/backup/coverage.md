@@ -2,7 +2,7 @@
 
 # What is backed up, and where
 
-> **Generated page.** 34 rows over 4 streams, rendered from
+> **Generated page.** 36 rows over 4 streams, rendered from
 > `cluster/helm/backup/values.yaml` by `hack/gen_docs.py`. Do not edit it: the matrix is the
 > values file.
 
@@ -19,6 +19,8 @@ nothing, which is a defect rather than a quiet night: the verifier fails it.
 |---|---|---|---|
 | `postgres-dumps` | `databases` | nas | files |
 | `grafana` | `monitoring` | nas | sqlite |
+| `crowdsec-db-pvc` | `security` | nas | sqlite |
+| `crowdsec-config-pvc` | `security` | nas | files |
 
 ## `nodes-nuc0` — 0 5 * * *
 

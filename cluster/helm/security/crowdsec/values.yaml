@@ -89,6 +89,8 @@ crowdsec:
     # start-up (`cscli bouncers add <name> -k <key>`), which is how the host
     # bouncer gets a key without anyone running `kubectl exec`. The value is a
     # Secret created by hand; nothing here holds it.
+    # Helm replaces lists, so this looks like a clobber — but the chart renders its own env
+    # first and appends this list, so `REGISTRATION_TOKEN` and `LOCAL_API_URL` survive it.
     env:
       - name: BOUNCER_KEY_firewall
         valueFrom:
@@ -130,6 +132,8 @@ crowdsec:
     replicas: 1
     nodeSelector:
       kubernetes.io/hostname: streaming
+    # Helm replaces lists, so this looks like a clobber — but the chart renders its own env
+    # first and appends this list, so `LOCAL_API_URL` and the registration token survive it.
     env:
       # `crowdsecurity/traefik` pulls `crowdsecurity/traefik-logs` and
       # `crowdsecurity/base-http-scenarios` (probing, crawl, bad user agent,
