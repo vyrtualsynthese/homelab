@@ -45,8 +45,9 @@ secure field), so the contact point is never rewritten by automation. The Discor
 webhook exists only in that contact point.
 
 **The second contact point is what writes the card.** `vikunja-alerts` posts to `alert-relay` in
-`monitoring`, which opens one card per incident on the `alerts` board and comments on repeats and on
-resolves, never closing one ([`runbooks/alert-relay.md`](../runbooks/alert-relay.md)). Two child
+`monitoring`, which opens one card per incident on the `alerts` board, writes nothing while that card
+sits in Backlog or Doing, opens a fresh card when the newest one is in Validation or Done, and never
+moves or closes one ([`runbooks/alert-relay.md`](../runbooks/alert-relay.md)). Two child
 routes reach it: `severity="critical"` every **6 h**, and `board=card` every **1 y**. The relay itself
 has no severity filter — the routing tree decides, and the relay writes a card for whatever arrives.
 
