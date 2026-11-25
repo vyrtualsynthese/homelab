@@ -515,9 +515,9 @@ Create `ansible/switches/install-switch-change.sh`. Behaviour, in this order:
 4. Owner and group: `root:root` normally, the invoking user when `--destdir` is given.
 5. Dirty check: `SWITCH_INSTALL_DIRTY=1` (with `--destdir` only) or `git -C "$here/../.." diff --quiet -- ansible/switches` returning non-zero → `die "ansible/switches has uncommitted changes; commit or merge first"`.
 6. `install -d` each directory with its mode, then check an existing one: `stat -c '%a'` must equal the expected mode and its group must be right; otherwise `die` naming the current state. Never `chmod` it.
-7. `install -m 0755` the script and the wrapper.
-8. Write the sudoers file to a temp name in the destination, `chmod 0440`, `visudo -cf` it; on failure remove it and `die`; on success `mv` it into place.
-9. Print one `say` line per artefact with its SHA-256, and the first command the agent will use.
+7. For each of the two files, compare the source's SHA-256 with the installed copy: when they are equal, print `already <path> (<sha256>)` and leave it untouched; otherwise `install -m 0755` it and print `installed <path> (<sha256>)`.
+8. Write the sudoers file to a temp name in the destination, `chmod 0440`, `visudo -cf` it; on failure remove it and `die`; on success `mv` it into place, printing `already` or `installed` for it as in step 7.
+9. Print one closing `say` line with the first command the agent will use.
 
 - [ ] **Step 4: Run the tests to verify they pass**
 
