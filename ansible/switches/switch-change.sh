@@ -31,6 +31,7 @@ SWITCH_CHANGE_WORKDIR="${SWITCH_CHANGE_WORKDIR:-/tmp/opencode/switch-change}"
 SWITCH_CHANGE_CONNECT_TIMEOUT="${SWITCH_CHANGE_CONNECT_TIMEOUT:-5}"
 SWITCH_CHANGE_CMD_TIMEOUT="${SWITCH_CHANGE_CMD_TIMEOUT:-20}"
 SWITCH_CHANGE_POLL="${SWITCH_CHANGE_POLL:-5}"
+SWITCH_CHANGE_REBOOT_ALLOWANCE="${SWITCH_CHANGE_REBOOT_ALLOWANCE:-120}"
 
 usage() { awk 'NR > 1 && /^#/ { print; next } NR > 1 { exit }' "${BASH_SOURCE[0]}"; exit 0; }
 die() { printf 'switch-change.sh: %s\n' "$1" >&2; exit 2; }
@@ -446,7 +447,149 @@ render_undo() {
   ' "$plain" "$verbose" "$change"
 }
 
-# ------------------------------------------------------------------ phases 1 and 2
+# One field of one scheduler entry, as `print detail` prints it. A block starts on the line that
+# carries the index and the name and continues until the next index, so a field is read from the
+# block that belongs to this entry and never from the one beside it.
+timer_field() {                            # timer_field <host> <entry> <field>
+  ros "$1" '/system scheduler print detail' | awk -v entry="$2" -v field="$3" '
+    /^[[:space:]]*[0-9]+[[:space:]]/ { current = ($0 ~ ("name=\"" entry "\"")) }
+    current {
+      for (i = 1; i <= NF; i++) {
+        if (index($i, field "=") == 1) {
+          value = substr($i, length(field) + 2)
+          gsub(/"/, "", value)
+          print value
+          exit
+        }
+      }
+    }'
+}
+
+timer_remove() {                           # timer_remove <host> <entry>
+  ros "$1" "/system scheduler remove [find name=\"$2\"]" >/dev/null
+}
+
+files_remove() {                           # files_remove <host> <id>
+  ros "$1" "/file remove [find name=\"undo-$2.rsc\"]" >/dev/null
+  ros "$1" "/file remove [find name=\"change-$2.rsc\"]" >/dev/null
+}
+
+# The RouterOS error line of a failed import, or nothing. ssh's own words ("Connection closed by
+# remote host") are not a RouterOS error: the change may have landed and taken the session with it,
+# so only a line the device itself prints starts the on-demand undo.
+import_error_line() {                      # import_error_line <capture>
+  printf '%s\n' "$1" | awk 'NF { print; exit }' | grep -E \
+    'bad command|expected end of command|syntax error|invalid value|failure:|no such item|input does not match'
+}
+
+# Print the difference between the pre-change export and the device's current one, with both sides
+# cleaned of the dated comment lines that make any two exports differ.
+print_change_diff() {                      # print_change_diff <dir> <plain> <after>
+  noise_free < "$2" > "$1/pre.norm"
+  noise_free < "$3" > "$1/after.norm"
+  diff -u --label "before the change" --label "after" "$1/pre.norm" "$1/after.norm" || true
+}
+
+
+# Phases 3 and 4: apply the change, then find out which of three things happened — the change landed,
+# the timer put the old configuration back, or the switch never answered again.
+change_apply_and_verify() {                # change_apply_and_verify <host> <id> <dir> <plain>
+  local host="$1" id="$2" dir="$3" plain="$4"
+  local entry="revert-$id" probe="${expect:-$1}"
+  local output line after count answered attempt budget interval probe_output
+
+  # Read the timer's count before applying: a timer that has already fired would put the old
+  # configuration back seconds after the change landed, so nothing is applied on that path.
+  count=$(timer_field "$host" "$entry" run-count)
+  case "$count" in
+    0) : ;;
+    ''|*[!0-9]*)
+      warn "cannot read the timer $entry on $host, so the change was not applied"
+      exit 1 ;;
+    *)
+      say "the timer $entry had already fired, so the change was skipped"
+      after="$dir/after-$host.rsc"
+      ros "$host" '/export' > "$after"
+      print_change_diff "$dir" "$plain" "$after"
+      timer_remove "$host" "$entry"
+      files_remove "$host" "$id"
+      if cmp -s "$dir/pre.norm" "$dir/after.norm"; then
+        say "reverted: the export is identical to the one taken before the change"
+        exit 3
+      fi
+      say "reverted: the export differs from the one taken before the change"
+      exit 4 ;;
+  esac
+
+  # A session that dies here is expected, not a failure: the import runs on the device once it has
+  # started. Only a line RouterOS itself prints starts the on-demand undo.
+  output=$(ros "$host" "/import file=change-$id.rsc verbose=yes")
+  if line=$(import_error_line "$output"); then
+    say "the import failed on the device: $line"
+    say "the undo runs on demand, without waiting out the window"
+    ros "$host" "/import file=undo-$id.rsc verbose=yes" >/dev/null
+    timer_remove "$host" "$entry"
+    files_remove "$host" "$id"
+    after="$dir/after-$host.rsc"
+    ros "$host" '/export' > "$after"
+    print_change_diff "$dir" "$plain" "$after"
+    if cmp -s "$dir/pre.norm" "$dir/after.norm"; then
+      say "reverted on demand: the export is identical to the one taken before the change"
+      exit 3
+    fi
+    say "reverted on demand: the export differs from the one taken before the change"
+    exit 4
+  fi
+
+  # Poll the address the change may have moved. The budget is the window plus a reboot allowance, so
+  # a switch that went down for its own reasons still gets its undo timer a chance to fire and come
+  # back; the cancel then goes to whichever address answered.
+  interval="$SWITCH_CHANGE_POLL"
+  case "$interval" in ''|*[!0-9]*) interval=5 ;; esac
+  budget=$(( (seconds + SWITCH_CHANGE_REBOOT_ALLOWANCE) / (interval > 0 ? interval : 1) ))
+
+  answered=""
+  attempt=0
+  while [ "$attempt" -lt "$budget" ]; do
+    # ssh's own words come through `ros` merged with the device's, so a successful status and a
+    # `date:` line are both required: a dropped connection prints text too.
+    if probe_output=$(ros "$probe" '/system clock print') \
+       && printf '%s\n' "$probe_output" | grep -q 'date:'; then
+      answered="$probe"
+      break
+    fi
+    sleep "$interval"
+    attempt=$(( attempt + 1 ))
+  done
+
+  if [ -z "$answered" ]; then
+    say "the switch did not answer at $probe after the change, and its undo timer $entry should have fired"
+    say "it never came back; $entry, undo-$id.rsc and change-$id.rsc are still on the device"
+    say "nothing was removed, and nothing is claimed about the switch's configuration"
+    exit 5
+  fi
+
+  count=$(timer_field "$answered" "$entry" run-count)
+  after="$dir/after-$answered.rsc"
+  ros "$answered" '/export' > "$after"
+  print_change_diff "$dir" "$plain" "$after"
+  timer_remove "$answered" "$entry"
+  files_remove "$answered" "$id"
+
+  if [ "$count" != 0 ]; then
+    if cmp -s "$dir/pre.norm" "$dir/after.norm"; then
+      say "reverted: the timer $entry fired and the export is identical to the one taken before the change"
+      exit 3
+    fi
+    say "reverted: the timer $entry fired and the export differs from the one taken before the change"
+    exit 4
+  fi
+
+  say "applied: $change landed on $target, the timer $entry was removed, and the switch answers again"
+  say "the pre-change binary backup, if the device took one, is pre-$id.backup on the device"
+  exit 0
+}
+
 # Read the device, render and show the undo, then arm it. Nothing on a switch is written before the
 # undo exists locally and has passed the renderer: a refusal writes nothing at all.
 change_run() {
@@ -506,25 +649,19 @@ change_run() {
     exit 0
   fi
 
-  if [ "$arm_only" != 1 ]; then
-    warn "the apply and verify phases are not in this build; the undo was rendered, nothing was written"
-    rm -rf "$dir"
-    exit 1
-  fi
-
   confirm
 
   put "$host" "$undo_file" "undo-$id.rsc" >/dev/null || { warn "could not upload undo-$id.rsc"; exit 1; }
   put "$host" "$change_file" "change-$id.rsc" >/dev/null || { warn "could not upload change-$id.rsc"; exit 1; }
   for name in "undo-$id.rsc" "change-$id.rsc"; do
-    [ -n "$(ros "$host" "/file print where name=\"$name\"")" ] \
+    ros "$host" "/file print where name=\"$name\"" | grep -q -- "$name" \
       || { warn "$name is not on the device after the upload"; exit 1; }
   done
 
   # The binary backup is the only step allowed to fail: it needs a policy right #485 withholds, and
   # the undo file does not depend on it. Say so and carry on armed.
   ros "$host" "/system backup save name=pre-$id" >/dev/null
-  if [ -z "$(ros "$host" "/file print where name=\"pre-$id.backup\"")" ]; then
+  if ! ros "$host" "/file print where name=\"pre-$id.backup\"" | grep -q -- "pre-$id.backup"; then
     say "no binary fallback for this run: the device did not write pre-$id.backup"
   fi
 
@@ -538,7 +675,13 @@ change_run() {
     || { warn "revert-$id did not keep start-time=$start"; exit 1; }
 
   say "armed revert-$id on $target for $start device time (window $window)"
-  say "the entry runs /import file=undo-$id.rsc once; the change has not been applied"
+
+  if [ "$arm_only" = 1 ]; then
+    say "the entry runs /import file=undo-$id.rsc once; the change has not been applied"
+    exit 0
+  fi
+
+  change_apply_and_verify "$host" "$id" "$dir" "$plain" "$start"
 }
 
 # ------------------------------------------------------------------ argument parsing

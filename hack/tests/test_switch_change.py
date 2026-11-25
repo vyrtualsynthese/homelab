@@ -14,6 +14,10 @@ FIXTURE = ROOT / "hack" / "fixtures" / "switch-change"
 EXPORTS = FIXTURE / "exports"
 CHANGES = FIXTURE / "changes"
 
+# The same switch after `set-pvid.rsc` landed: the port now carries pvid=20.
+CHANGED = (EXPORTS / "v7-plain.rsc").read_text().replace(
+    "interface=sfp-sfpplus2 comment=", "interface=sfp-sfpplus2 pvid=20 comment=")
+
 
 def run(args=(), env=None, stdin=None):
     merged = {k: v for k, v in os.environ.items() if not k.startswith("SWITCH_CHANGE_")}
@@ -49,6 +53,8 @@ class Fake:
         self._write("clock", self.env["FAKE_NOW"] + "\n")
         self._write("config", kw.get("config", (EXPORTS / "v7-plain.rsc").read_text()))
         self._write("config-verbose", kw.get("verbose", (EXPORTS / "v7-verbose.rsc").read_text()))
+        self._write("config-original",
+                    kw.get("config", (EXPORTS / "v7-plain.rsc").read_text()))
         for src, name in (("after_change", "after_change"), ("after_undo", "after_undo"),
                           ("import_error", "import_error")):
             if kw.get(src) is not None:
@@ -59,6 +65,8 @@ class Fake:
             self._write("backup_denied", "1")
         if kw.get("fire_on_arm"):
             self._write("fire_on_arm", str(kw["fire_on_arm"]))
+        if kw.get("stays_down"):
+            self._write("stays_down", "1")
 
     def _write(self, name, text):
         (self.state / name).write_text(text)
@@ -127,6 +135,10 @@ class Fake:
     def calls(self):
         p = self.state / "calls"
         return int(p.read_text()) if p.exists() else 0
+
+    def fire_on_arm(self, value="1"):
+        """Have the fake run the entry as soon as it is added, before the first poll."""
+        self._write("fire_on_arm", str(value))
 
 
 @contextlib.contextmanager
@@ -328,6 +340,60 @@ class ArmTests(unittest.TestCase):
             self.assertEqual(done.returncode, 0)
             self.assertIn("no binary fallback", done.stdout)
             self.assertIn("run-count=0", f.ros("/system scheduler print detail"))
+
+
+class RunTests(unittest.TestCase):
+    def test_a_clean_change_cancels_the_timer_and_prints_the_diff(self):
+        with fake("clean", after_change=CHANGED) as f:      # CHANGED = v7-plain with pvid=20
+            done = f.script(["--target", "crs326", "--change", str(CHANGES / "set-pvid.rsc"), "--yes"])
+        self.assertEqual(done.returncode, 0, done.stderr)
+        self.assertIn("applied", done.stdout)
+        self.assertIn("pvid=20", done.stdout)               # the diff, not the export
+        self.assertEqual(f.ros("/system scheduler print detail"), "")
+        self.assertEqual([n for n in f.files() if n.startswith(("undo-", "change-"))], [])
+
+    def test_a_change_that_takes_the_switch_away_is_reverted_and_identical(self):
+        with fake("away", break_after_change="1",
+                  after_change=CHANGED, after_undo=(EXPORTS / "v7-plain.rsc").read_text()) as f:
+            done = f.script(["--target", "crs326", "--change", str(CHANGES / "set-pvid.rsc"),
+                             "--yes", "--window", "3m"])
+        self.assertEqual(done.returncode, 3, done.stderr)
+        self.assertIn("reverted", done.stdout)
+        self.assertIn("identical", done.stdout)
+        self.assertEqual(f.ros("/system scheduler print detail"), "")
+
+    def test_a_revert_that_leaves_a_difference_exits_4(self):
+        with fake("differs", break_after_change="1", after_change=CHANGED,
+                  after_undo=(EXPORTS / "v7-plain.rsc").read_text() + "add name=leftover\n") as f:
+            done = f.script(["--target", "crs326", "--change", str(CHANGES / "set-pvid.rsc"),
+                             "--yes", "--window", "3m"])
+        self.assertEqual(done.returncode, 4, done.stderr)
+        self.assertIn("add name=leftover", done.stdout)
+
+    def test_a_switch_that_never_comes_back_exits_5(self):
+        with fake("gone", break_after_change="1", stays_down="1",
+                  after_change=CHANGED) as f:
+            done = f.script(["--target", "crs326", "--change", str(CHANGES / "set-pvid.rsc"),
+                             "--yes", "--window", "3m"])
+        self.assertEqual(done.returncode, 5)
+        self.assertIn("did not answer", done.stdout)
+
+    def test_an_import_error_undoes_on_demand_without_waiting(self):
+        with fake("error", import_error="bad command (line 1)") as f:
+            done = f.script(["--target", "crs326", "--change", str(CHANGES / "set-pvid.rsc"),
+                             "--yes", "--window", "10m"])
+        self.assertEqual(done.returncode, 3, done.stderr)
+        self.assertIn("on demand", done.stdout)
+        # A ten-minute window is 60 device calls at the fake's 10 s per call; the run made far fewer.
+        self.assertLess(f.calls(), 30)
+
+    def test_an_entry_whose_run_count_is_one_is_reported_as_reverted(self):
+        with fake("fired", after_change=CHANGED) as f:
+            f.fire_on_arm("1")                  # the entry runs before the first poll
+            done = f.script(["--target", "crs326", "--change", str(CHANGES / "set-pvid.rsc"),
+                             "--yes", "--window", "10m"])
+        self.assertEqual(done.returncode, 3, done.stderr)
+        self.assertNotIn("applied", done.stdout)
 
 
 class NoiseFreeTests(unittest.TestCase):

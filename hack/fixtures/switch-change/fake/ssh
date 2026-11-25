@@ -48,9 +48,14 @@ def import_file(name, undo=False):
     """Run one .rsc the way the device would: the change lands, or the undo puts the old one back."""
     if undo:
         after = read("after_undo")
+        if after is None:
+            after = read("config-original")
         if after is not None:
             write("config", after)
-        (state / "break").unlink(missing_ok=True)
+        # The undo puts the management path back only when it actually restored something, and only
+        # when the test did not ask for a switch that stays away.
+        if not flag("stays_down"):
+            (state / "break").unlink(missing_ok=True)
         return None
     error = read("import_error")
     after = read("after_change")
@@ -61,14 +66,14 @@ def import_file(name, undo=False):
     return error
 
 
-def fire_due(now):
+def fire_due(now, force=False):
     """Run every one-shot entry whose start-time has arrived, device-side, whatever the link does."""
     table = json.loads(read("scheduler.json", "{}"))
     changed = False
     for entry in table.values():
         if entry.get("run-count", 0):
             continue
-        if now.strftime("%H:%M:%S") < entry["start-time"]:
+        if not force and now.strftime("%H:%M:%S") < entry["start-time"]:
             continue
         match = re.search(r"/import file=([^\"\s]+)", entry.get("on-event", ""))
         if match:
@@ -137,7 +142,7 @@ def answer(command):
         table[name] = {"start-time": start, "on-event": event, "run-count": 0}
         write("scheduler.json", json.dumps(table))
         if flag("fire_on_arm"):
-            fire_due(datetime.strptime(read("clock").strip(), "%Y-%m-%d %H:%M:%S"))
+            fire_due(datetime.strptime(read("clock").strip(), "%Y-%m-%d %H:%M:%S"), force=True)
         return ""
 
     if command.startswith("/system scheduler remove"):
