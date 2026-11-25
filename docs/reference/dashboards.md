@@ -211,7 +211,9 @@ hours were above it**, and those hours are the routine ones on a public address 
 the share to 60–80 % without anything being wrong that a person would act on. A threshold that is true
 half the time is not a signal. At 85 % the term speaks only when refusal is near-total: the forward-auth
 gate answering everything with `403`, or an address flood drowning the legitimate traffic. The attack
-with a name and an address is `SecurityAttackSustained`'s job, and it reads the log rather than a share.
+with a name and an address is the *Top addresses refused* panel's job — it reads the log rather than a
+share — and the rule that once paged on it, `SecurityAttackSustained`, was retired on 2026-11-26
+because it only reported scanning CrowdSec had already banned.
 
 **The silence gap** decides how long `SecurityStackBlind` waits before calling the pipeline dead. It is
 measured on the same counter, at the finest window the scrape interval allows — the global interval is

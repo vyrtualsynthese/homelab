@@ -1,7 +1,7 @@
 # Security dashboard: an export, not a source
 
 Grafana's database is the authority for `Homelab · Security`. This file is a **snapshot taken on
-2026-11-25**, committed so the panels and their expressions can be read in a pull request and restored
+2026-11-25 and corrected on 2026-11-26**, committed so the panels and their expressions can be read in a pull request and restored
 by hand if the database is lost. Nothing in this repository applies it: there is no configmap, no
 sidecar and no provisioning entry, and Grafana never reads this directory — the same rule the Traefik
 export beside it states, for the same reason (two sources of truth in one folder).
@@ -9,7 +9,7 @@ export beside it states, for the same reason (two sources of truth in one folder
 | File | What it holds |
 |---|---|
 | `dashboard.json` | A direct `POST /api/dashboards/db` body: `{dashboard, folderUid: "homelab", overwrite: true}`. Nine panels, uid `homelab-security`, version 9. |
-| `rules.json` | The seven security rules, as `GET /api/v1/provisioning/alert-rules` returns them, in that order. Six are in `homelab-core-fast`, `SecurityExposureDrift` in `homelab-core`. |
+| `rules.json` | The six security rules, as `GET /api/v1/provisioning/alert-rules` returns them, in that order. Five are in `homelab-core-fast`, `SecurityExposureDrift` in `homelab-core`. `SecurityAttackSustained` was deleted from the database on 2026-11-26 and is no longer in this copy. |
 
 ## What the nine panels read
 
