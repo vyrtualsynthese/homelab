@@ -7,7 +7,7 @@ one-shot entry arrives in a test without waiting.
 
 FAKE_STATE          the state directory (required)
 FAKE_NOW            the starting clock, "YYYY-MM-DD HH:MM:SS"
-FAKE_STEP           seconds the clock moves per call, default 60
+FAKE_STEP           seconds the clock moves per call, default 10
 FAKE_VERSION        what /system resource print answers, default 7.16.1
 
 State files: config, clock, calls, scheduler.json, files/, and the flags break, break_after_change,
@@ -102,8 +102,11 @@ def answer(command):
                 f"       time-zone-autodetect: no\n"
                 f"           time-zone-name: Europe/Paris\n")
 
-    if command in ("/export", "/export verbose", "/export hide-sensitive verbose"):
+    if command == "/export":
         return read("config", "")
+
+    if command in ("/export verbose", "/export hide-sensitive verbose"):
+        return read("config-verbose", read("config", ""))
 
     if command.startswith("/file print"):
         name = re.search(r'name="?([^"\s]+)"?', command)
@@ -195,7 +198,7 @@ def main(argv):
     counters()
 
     now = datetime.strptime(read("clock").strip(), "%Y-%m-%d %H:%M:%S")
-    now += timedelta(seconds=int(os.environ.get("FAKE_STEP", "60")))
+    now += timedelta(seconds=int(os.environ.get("FAKE_STEP", "10")))
     write("clock", now.strftime("%Y-%m-%d %H:%M:%S"))
     fire_due(now)
 

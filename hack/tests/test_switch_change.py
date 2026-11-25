@@ -43,11 +43,12 @@ class Fake:
         self.env = {
             "FAKE_STATE": str(self.state),
             "FAKE_NOW": kw.get("now", "2026-11-25 09:20:00"),
-            "FAKE_STEP": str(kw.get("step", 60)),
+            "FAKE_STEP": str(kw.get("step", 10)),
             "FAKE_VERSION": kw.get("version", "7.16.1"),
         }
         self._write("clock", self.env["FAKE_NOW"] + "\n")
         self._write("config", kw.get("config", (EXPORTS / "v7-plain.rsc").read_text()))
+        self._write("config-verbose", kw.get("verbose", (EXPORTS / "v7-verbose.rsc").read_text()))
         for src, name in (("after_change", "after_change"), ("after_undo", "after_undo"),
                           ("import_error", "import_error")):
             if kw.get(src) is not None:
@@ -87,8 +88,9 @@ class Fake:
             "SWITCH_CHANGE_CONNECT_TIMEOUT": "1",
             "SWITCH_CHANGE_CMD_TIMEOUT": "5",
         })
-        return subprocess.run(["bash", str(SCRIPT), *args], input=stdin, text=True,
-                              capture_output=True, env=env)
+        kwargs = {"stdin": stdin} if isinstance(stdin, int) else {"input": stdin}
+        return subprocess.run(["bash", str(SCRIPT), *args], text=True,
+                              capture_output=True, env=env, **kwargs)
 
     def spawn(self, args):
         env = self._env({
@@ -270,6 +272,62 @@ class RendererV6Tests(unittest.TestCase):
                     "--verbose-export", str(EXPORTS / "v6-verbose.rsc")])
         self.assertEqual(done.returncode, 1)
         self.assertIn("says RouterOS 6", done.stderr)
+
+
+class ArmTests(unittest.TestCase):
+    def test_a_dry_run_prints_the_undo_and_writes_nothing(self):
+        with fake("dry") as f:
+            done = f.script(["--target", "crs326", "--change", str(CHANGES / "set-pvid.rsc"),
+                             "--dry-run", "--yes"])
+            self.assertEqual(done.returncode, 0, done.stderr)
+            self.assertIn("/interface bridge port set [find interface=\"sfp-sfpplus2\"] pvid=1",
+                          done.stdout)
+            self.assertEqual(f.ros("/system scheduler print detail"), "")
+            self.assertEqual(f.files(), [])
+
+    def test_arming_uploads_both_files_and_sets_the_start_time(self):
+        with fake("arm") as f:
+            done = f.script(["--target", "crs326", "--change", str(CHANGES / "set-pvid.rsc"),
+                             "--arm-only", "--yes", "--window", "10m"])
+            self.assertEqual(done.returncode, 0, done.stderr)
+            detail = f.ros('/system scheduler print detail')
+            self.assertIn('name="revert-', detail)
+            self.assertIn("start-time=", detail)
+            self.assertIn("run-count=0", detail)
+            self.assertEqual(len([n for n in f.files() if n.startswith("undo-")]), 1)
+            self.assertEqual(len([n for n in f.files() if n.startswith("change-")]), 1)
+
+    def test_a_previous_runs_timer_is_cancelled_and_named(self):
+        with fake("stale") as f:
+            f.arm("revert-oldrun", "10:00:00")
+            done = f.script(["--target", "crs326", "--change", str(CHANGES / "set-pvid.rsc"),
+                             "--dry-run", "--yes"])
+            self.assertIn("revert-oldrun", done.stdout)
+            self.assertNotIn("revert-oldrun", f.ros("/system scheduler print detail"))
+
+    def test_a_window_across_midnight_is_refused_with_nothing_armed(self):
+        with fake("midnight", now="2026-11-25 23:58:00") as f:
+            done = f.script(["--target", "crs326", "--change", str(CHANGES / "set-pvid.rsc"),
+                             "--arm-only", "--yes"])
+            self.assertEqual(done.returncode, 1)
+            self.assertIn("midnight", done.stderr)
+            self.assertEqual(f.ros("/system scheduler print detail"), "")
+            self.assertEqual(f.files(), [])
+
+    def test_without_yes_and_without_a_terminal_it_refuses(self):
+        with fake("tty") as f:
+            done = f.script(["--target", "crs326", "--change", str(CHANGES / "set-pvid.rsc"),
+                             "--arm-only"], stdin=subprocess.DEVNULL)
+            self.assertEqual(done.returncode, 2)
+            self.assertEqual(f.ros("/system scheduler print detail"), "")
+
+    def test_a_refused_backup_still_arms(self):
+        with fake("nobackup", backup_denied="1") as f:
+            done = f.script(["--target", "crs326", "--change", str(CHANGES / "set-pvid.rsc"),
+                             "--arm-only", "--yes"])
+            self.assertEqual(done.returncode, 0)
+            self.assertIn("no binary fallback", done.stdout)
+            self.assertIn("run-count=0", f.ros("/system scheduler print detail"))
 
 
 class NoiseFreeTests(unittest.TestCase):
