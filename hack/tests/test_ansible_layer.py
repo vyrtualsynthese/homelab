@@ -848,3 +848,14 @@ def test_accounts_refuses_to_close_password_logins_without_a_declared_key():
     assert "sshd_password_auth is defined" in joined
     assert "trusted_ssh_keys | length > 0" in joined
     assert "ansible_user | default('') != 'root'" in joined
+
+
+def test_ansible_cfg_names_the_homelab_identity():
+    cfg = (ANSIBLE / "ansible.cfg").read_text()
+    assert "private_key_file = ~/.ssh/homelab_live" in cfg
+
+
+def test_the_identity_is_named_in_one_place():
+    for path in yaml_files():
+        assert "ansible_ssh_private_key_file" not in path.read_text(), path
+        assert "private_key_file" not in path.read_text(), path
