@@ -38,9 +38,10 @@ listener inside each pod. To read the address the bouncer was configured with:
 `sudo grep '^api_url' /etc/crowdsec/bouncers/crowdsec-firewall-bouncer.yaml`.
 
 `kubectl exec` needs the admin kubeconfig; the agent's shells are read-only and answer `403`. The
-`cscli` calls below are the operator's. Everything that is not a `kubectl` call — the `nft`,
-`systemctl`, `tail` and `curl` to `127.0.0.1:60601` commands — runs on `streaming` itself, not on the
-laptop.
+`cscli` calls below are the operator's. The `nft`, `systemctl`, `tail` and `127.0.0.1:60601`
+commands run on `streaming`, not on a laptop; the `kubectl` ones run from a laptop with the admin
+kubeconfig. The bursts in proofs 1 and 2 come from a phone on mobile data, the one in proof 3 from a
+LAN machine.
 
 ## The four proofs, run once when this was built
 
@@ -67,8 +68,10 @@ laptop.
 Not yet. The page ships with the layer, so nothing above has been observed on this cluster: it is
 what the code is meant to do, not a record of a ban. After the stack converges the operator runs the
 four proofs, writes one dated line per proof under the list above with the command and the output it
-gave, and the shelf row's status becomes `proved <date>`. One that fails is a fix to the chart or the
-role, not a note here.
+gave, and the shelf row's status becomes `proved <date>`; in the same commit the banner's
+**Verified** and this page's **Status:** line are replaced by that date, so a `proved` shelf row
+never sits above a body that still says the proofs were never run. One proof that fails is a fix to
+the chart or the role, not a note here.
 
 ## Undo a ban
 
