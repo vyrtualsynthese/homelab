@@ -225,9 +225,18 @@ Two mechanical details, both settled when the change is made rather than guessed
 - **Ownership.** Traefik runs unprivileged and CrowdSec must read the file. The Ansible role
   pre-creates `/var/log/traefik` with an owner and group both pods can use; a failed write shows as a
   request log that stops, which the silence rule catches.
-- **Rotation.** `logrotate` on `streaming`, 200 MB, seven copies. `copytruncate` is the default
-  because both readers hold the file open; the acceptance test is that a ban still follows a forced
-  burst **after** a rotation, which is the one thing a naive rotation silently breaks.
+- **Rotation.** `logrotate` on `streaming`, 200 MB, seven copies, `create` and a `postrotate` that
+  sends `SIGUSR1` to Traefik: 3.7.19's access-log handler closes and reopens its file on that signal
+  (`Handler.Rotate`, "to allow for rotation by an external source"). The two tailers still have to
+  follow the new inode, so the acceptance test is a ban that follows a forced burst **after** a
+  rotation — the one thing a naive rotation silently breaks.
+
+**A file that cannot be opened does not stop the router.** Traefik's startup calls
+`accesslog.NewHandler`, and on failure logs `Unable to create access logger`, returns no handler, and
+serves on with the chains nil-safe (`AliceConstructor` passes the request through when the handler is
+nil). 3.7.19, read 2026-11-25. So a wrong owner or a missing directory costs the log, not the door —
+and costs it silently. That is why the silence rule reads *lines arriving in the file*, not
+"is Traefik up", and why the negative test in §8 exists.
 
 ### 6.2 CrowdSec in the cluster
 
@@ -310,7 +319,7 @@ design adds one small exporter rather than guessing at log lines.
 
 **No address is a Prometheus label.** Prometheus answers unauthenticated on the LAN and the baseline
 treats the LAN as untrusted, so an attacker's address does not belong in it. The per-address views
-read the gated store instead (§6.7); the exporter stays aggregate. That also removes the cardinality
+read the gated store instead (§6.8); the exporter stays aggregate. That also removes the cardinality
 question the per-IP design would have carried.
 
 A token for authentik and a key for the LAPI are Secrets, both read-only.
@@ -338,14 +347,34 @@ The expected values live in the chart's `values.yaml`, not in a second copy of `
 the checker owns the allowlist, the chart owns the expectation, and Phase 2 begins by reconciling
 77 rendered against 73 live so the expectation is true on the day it is set.
 
-### 6.7 The screen and the rules
+### 6.7 What this does not break: FileBrowser
+
+Checked on 2026-11-25 because FileBrowser is the one public application whose URLs carry capability
+tokens, and the change touches the router in front of it.
+
+- Its route is unaffected: `filebrowser.kub.home.ashudev.com` on `websecure`, one middleware
+  (`kube-system-security`, the header set), its own `filebrowser-tlsoption`, Service port 8080. It is
+  public on purpose — the editor signs in from outside and share links go to people with no account —
+  and nothing in the chart or the route reads Traefik's access log.
+- Its own logging is unaffected: FileBrowser 2.0.2 writes warnings and errors to stdout, which is
+  still the `kube.*` pipeline; the new key-removal filter is scoped to the Traefik file's tag, so no
+  other container's JSON can lose a field to it.
+- **The one real exposure is a ban, not a break.** Share links are opened by people with no account,
+  from outside, and the whitelist covers only the LAN, the tunnel and the cluster — so a visitor who
+  hammers dead share links could trip a scenario and be refused for the decision's lifetime. That is
+  the intended behaviour with a false-positive cost, and it is why the ban list is on the dashboard
+  and why `cscli decisions delete` is in the runbook.
+- The share-link strings themselves now exist in `/var/log/traefik/access.log` for the seven rotated
+  copies, which the operator accepted. They still never reach Loki.
+
+### 6.8 The screen and the rules
 
 **`Homelab · Security`**, nine panels on the first screen, one question each. Every panel carries a
 unit; colour is used only for thresholds.
 
 | Row | Panel | Question | Source |
 |---|---|---|---|
-| Danger | **Danger state** | how bad is it right now? | §6.7 formula |
+| Danger | **Danger state** | how bad is it right now? | §6.8 formula |
 | Danger | Bans active | how many addresses are we refusing? | decisions |
 | Danger | Requests, public hosts, 24 h | is the volume normal? | access log |
 | Danger | Rejected share | what proportion is being refused? | access log status |
@@ -402,8 +431,8 @@ agent looks exactly like a quiet night.
 | 0 | §6.1, the access log: client address, file, Fluent Bit input and key removal, rotation; amend `observability-conventions.md` and supersede #410's field list | one file unblocks everything, and it is reversible alone | 1, 2, 3, 4 |
 | 1 | §6.2 and §6.3, CrowdSec plus the bouncer | the operator's ask, and it needs the file | 2, 4 |
 | 2 | §6.6, then §6.5 and the journal half of §6.4; reconcile the four rendered-not-live routes first | posture needs true constants; the journal feeds a panel and two rules | 3, 4 |
-| 3 | §6.7, the dashboard | reads 1 and 2; useful before the rules exist | — |
-| 4 | §6.7, the seven rules, each threshold measured first | last, because a rule over a series nobody has checked is a page nobody understands | — |
+| 3 | §6.8, the dashboard | reads 1 and 2; useful before the rules exist | — |
+| 4 | §6.8, the seven rules, each threshold measured first | last, because a rule over a series nobody has checked is a page nobody understands | — |
 | 5 | The door work: the Pis, login rate limits, the patch window, the etcd schedule (#506), the Pis' log shipping | independent of the detector, and the Pis are the worst remaining hole | — |
 
 Phases 0 and 1 are one sitting; 2 and 3 can run beside each other; 5 is the existing cards, pulled
@@ -420,6 +449,8 @@ that touch a host.
   no query, no header**.
 - Both Traefik dashboard rows that read the access log still return data.
 - A rotation is followed by a new line reaching both Loki and CrowdSec, and by a ban.
+- **The negative test:** take the write permission off `/var/log/traefik` once and confirm the router
+  keeps answering while the log stops — then that the silence rule fires — before restoring it.
 - `docs/observability-conventions.md` and #410 carry the new field list; #544's "all 0" verification
   is superseded, not contradicted.
 
@@ -466,13 +497,14 @@ that touch a host.
 |---|---|---|
 | A whitelist error bans the LAN, the pods or a node | Medium, and the worst outcome here | One list, enforced before a decision exists; a test burst from a LAN address that must create nothing; a documented one-command rollback |
 | The path and user agent in the file are read by the wrong process | Low | Root-owned file, one reader, seven rotated copies; a target `chmod` and owner check in the task |
-| Traefik's file writer and the two tailers disagree after rotation | Medium | Rotation is its own verified step; `copytruncate` first; the acceptance test is a ban after a rotation |
+| Traefik's file writer and the two tailers disagree after rotation | Medium | Rotation is its own verified step, `create` plus `SIGUSR1` first; the acceptance test is a ban after a rotation |
+| A broken log path costs the log, not the router, so the detector goes blind while every page still loads | Medium | The negative test in §8, and `SecurityStackBlind` keyed on lines arriving rather than on the router being up |
 | A parser mismatch leaves the agent reading lines it cannot parse, so it detects nothing | Medium | The first task parses one real line; `SecurityStackBlind` fires when nothing arrives |
 | The bouncer's liveness cannot be measured cheaply | Medium | §6.3 names the two routes and the fallback: say so on the dashboard and in the runbook |
 | Loki now holds visitor addresses for 30 days | High, accepted | Store is Admins-only; path, query and headers stay out; #410 records the revised list |
 | The exporter's read access is a foothold | Low | Read-only ServiceAccount on named resources; no Secret access; `can-i --list` is an acceptance test |
 | A ban list that grows without bound | Low | Decisions expire (default four hours); the set is bounded by them; the panel shows the count |
-| A security panel stuck on Watch because the threshold was never measured | Medium | §6.7 measures before it fixes a number, and the provisional figures say so |
+| A security panel stuck on Watch because the threshold was never measured | Medium | §6.8 measures before it fixes a number, and the provisional figures say so |
 | The security work is read as "the homelab is secure" | Medium | The anti-goals, and the phases each state what they do not cover |
 | Grafana or `nas` down means no alert at all | Accepted since 2026-11-12 | Unchanged; `SecurityStackBlind` covers the detector, not the platform |
 
@@ -483,7 +515,8 @@ that touch a host.
 - The directory ownership that lets an unprivileged Traefik write and an unprivileged agent read.
 - The CrowdSec parser and the four scenarios, proved against a real line and against normal Plex
   traffic, which is the busiest thing in the log.
-- Whether `copytruncate` or `create` is the rotation the two tailers survive.
+- Whether the two tailers follow the inode after logrotate's `create` plus `SIGUSR1`, or need
+  `copytruncate` after all.
 - The bouncer key's route from the cluster to the host, and which of §6.3's two liveness routes works.
 - The reconciled constants for `homelab_security_*`, and how the chart's values stay tied to
   `check_exposure.py` rather than drifting from it.
@@ -509,3 +542,10 @@ that touch a host.
 - The builder check of 2026-11-25: nine questions, of which §6.1's file/store split, §6.2's single
   whitelist, §6.3's liveness gap, §6.4's phase order, §6.5's address labels and §6.6's constants are
   the changes above.
+- Traefik `v3.7.19` source, read 2026-11-25: `cmd/traefik/traefik.go` `setupAccessLog` warns and
+  returns no handler when the file cannot be opened; `pkg/middlewares/accesslog/logger.go`
+  `Handler.Rotate` reopens on `SIGUSR1`; `AliceConstructor` passes the request through when the
+  handler is nil.
+- `cluster/helm/filebrowser/values.yaml`, `templates/ingressroute.yaml` and the live
+  `IngressRoute/filebrowser`, read 2026-11-25: one public `websecure` route, `kube-system-security`
+  only, its own `TLSOption`, Service port 8080, own OIDC, stdout logging.
