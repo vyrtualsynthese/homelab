@@ -1,0 +1,11 @@
+---
+galaxy_info:
+  role_name: crowdsec
+  author: operator
+  description: The CrowdSec firewall bouncer on the node every forwarded packet reaches
+  license: MIT
+  min_ansible_version: "2.18"
+  platforms:
+    - name: Ubuntu
+      versions:
+        - all

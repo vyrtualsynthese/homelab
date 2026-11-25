@@ -383,6 +383,16 @@ prometheus:
             - 192.168.1.38:9100
             - 192.168.1.38:9902
             - 192.168.1.38:9323
+    # The bouncer's own numbers: `fw_bouncer_banned_ips{origin,ip_type}` is the
+    # only proof that a decision became a dropped packet, and `up` on this target
+    # is the only proof the bouncer is running. A static target because the
+    # bouncer is a host service on a named address, not a pod — the same shape as
+    # the `rbp0` and `rbp1` entries above, keyed by job name.
+    crowdsec-bouncer:
+      enabled: true
+      static_configs:
+        - targets:
+            - 192.168.1.46:60601
     # Loki and Grafana publish their own /metrics and nothing scraped them
     # before 2026-11-18. Without these two jobs the stack watched every app
     # but not itself: a Loki rejecting writes and a Grafana whose rules fail to
