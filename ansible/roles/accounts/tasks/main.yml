@@ -33,10 +33,13 @@
       - sshd_password_auth is defined
       - trusted_ssh_keys is defined
       - trusted_ssh_keys | length > 0
+      - trusted_ssh_keys | reject('match', trusted_ssh_key_pattern) | list | length == 0
     fail_msg: >-
       This play connects as {{ ansible_user | default('an unknown user') }} and
-      trusted_ssh_keys declares no key. The next tasks take the password away,
-      and a host with no declared key and no password has no way in.
+      trusted_ssh_keys is empty, or holds a line whose shape is not an OpenSSH
+      public key. The next tasks take the password away, and a host with no
+      declared key and no password has no way in. Add the line `make adopt`
+      prints.
 
 # The whole file, not an appended line: a key the operator did not declare
 # disappears on the next run, and `make check` then reports it as drift. `copy`

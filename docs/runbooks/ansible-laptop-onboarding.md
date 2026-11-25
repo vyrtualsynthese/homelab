@@ -161,10 +161,11 @@ ansible-playbook playbooks/site.yml --check --diff --limit nas
 ansible-playbook playbooks/site.yml --limit nas
 ```
 
-The first is the drift report. The two `authorized_keys` tasks are the only ones expected to change on
-the first run; every line it prints prefixed with `-` is a key the run would remove. Read them, add
-anything still wanted to the list, and run it again before writing. The second run is the write: expect
-`failed=0`, and `changed` on the two key tasks only.
+The first is the drift report. On a host this layer has already converged, the two `authorized_keys`
+tasks are the only ones expected to change; on one it has never run against — a reflashed Pi is the
+case — the rest of the layer changes too, and all of that diff is worth reading. Every line
+prefixed with `-` under a key task is a key the run would remove: add anything still wanted to the
+list and run it again before writing. The second run is the write: expect `failed=0`.
 
 Then the same pair of commands for `nuc0`, `streaming` and `rbp2`, one at a time.
 
