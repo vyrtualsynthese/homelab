@@ -9,6 +9,7 @@ cd ansible
 make init                      # once: install the collections the roles use
 make check                     # the drift report, --check --diff, changes nothing
 make apply                     # converge a host
+make adopt                     # print this laptop's key line for trusted_ssh_keys
 make lint                      # ansible-lint over the whole layer
 ```
 
@@ -22,7 +23,9 @@ every run and then uses a collection built against a newer core. Bump a range on
 are defects to read, not noise to tolerate.
 
 `make check` and `make apply` reach every host in the inventory. To work one host at a time — which is
-how the first run of a role that touches a firewall or an export list must be done — pass a limit.
+how the first run of a role that touches a firewall or an export list must be done — pass a limit to
+`ansible-playbook` directly: make has no `--limit`, refuses the argument, and exits before running the
+play. The two commands below are the form.
 
 The two edge Pis are the exception until they are reflashed: the 24.04 image has no `ansible`
 account, so a run that includes them answers `unreachable` for those two hosts and exits non-zero.
@@ -51,6 +54,12 @@ ansible-playbook playbooks/site.yml --limit nuc0
 Step 1 is the only command in this directory that names the human account, and the only one an agent
 cannot run on a host where the grant is already gone: that host needs `-K` and a typed password, so it
 is the operator's. A reflashed Pi needs both steps again, because the image has neither account.
+
+`roles/automation` and `roles/accounts` write the same declared list, `trusted_ssh_keys`, into
+`ansible`'s and `vronteix`'s `authorized_keys`: one line per laptop, and a key that is not in the list is
+removed by the next run. `make adopt` prints the line for the machine you are on. The procedure is
+[`docs/runbooks/ansible-laptop-onboarding.md`](../docs/runbooks/ansible-laptop-onboarding.md).
+
 The trade — passwordless root for one named identity instead of a group — is
 [`docs/decisions/2026-11-24-automation-sudo-account.md`](../docs/decisions/2026-11-24-automation-sudo-account.md).
 
@@ -90,7 +99,9 @@ and the system role is the one that collects them after it has named the running
   and a nightly job per node. [`docs/how-it-works/backups.md`](../docs/how-it-works/backups.md) is the
   page.
 - **No secrets.** The Pis' `pihole.env` and `wg-easy.env` are gitignored and the script requires them
-  rather than writing them; every other secret is a Kubernetes Secret, listed in `docs/secrets.md`.
+  rather than writing them; every other secret is a Kubernetes Secret, listed in `docs/secrets.md`. The
+  keys in `trusted_ssh_keys` are public halves: they name a laptop and cannot log in without the private
+  half, which never leaves the machine that made it.
 - **No rule for a published container port.** Docker's DNAT and the CNI's portmap are evaluated in NAT
   and FORWARD, where `ufw`'s INPUT never looks. The role says so where its rules are, and names
   `DOCKER-USER` as the place those are filtered.

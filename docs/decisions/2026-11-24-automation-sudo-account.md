@@ -13,6 +13,8 @@
 Date: 2026-11-24
 Decided by: operator
 Status: active
+Superseded in part: [declared host access](2026-11-25-declared-host-access.md) — the copy of the human
+account's keys is gone; the account and its grant stand.
 
 ## The decision
 
