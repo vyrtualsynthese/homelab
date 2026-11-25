@@ -208,10 +208,18 @@ shows the undo, and — only then — uploads both files and adds a one-shot sch
 undo at the device clock's now plus the window:
 
 ```bash
-cd ansible
-./switches/switch-change.sh --target crs326 --change switches/changes/<your-change>.rsc --dry-run
-./switches/switch-change.sh --target crs326 --change switches/changes/<your-change>.rsc
+install -m 0640 ansible/switches/changes/<your-change>.rsc \
+  /var/lib/switch-change/inbox/<your-change>.rsc
+sudo -u netcfg /usr/local/sbin/switch-apply --target crs326 \
+  --change /var/lib/switch-change/inbox/<your-change>.rsc --dry-run
+sudo -u netcfg /usr/local/sbin/switch-apply --target crs326 \
+  --change /var/lib/switch-change/inbox/<your-change>.rsc
 ```
+
+The gate copies the change out of the inbox and hands the script that copy, so a refusal from the
+script names the staged file rather than the one you wrote. Running `./switches/switch-change.sh`
+directly is the same script with no gate: it is for `netcfg` at this machine, because the key is that
+account's, and not for the agent's shell.
 
 `--dry-run` prints the undo and writes nothing; `--arm-only` arms the undo for a change applied by
 hand from Winbox; `--window` defaults to `10m` with a one-hour ceiling. The change file is refused
@@ -224,7 +232,7 @@ remove the timer, the undo file or the account that cancels it. What a change fi
 
 It is run through the gate `/usr/local/sbin/switch-apply`, as the `netcfg` account, which holds the
 key at `/home/netcfg/.ssh/switch-deploy`: the agent's shell runs the command and never reads the key.
-The script then signs in on the switch as `deploy` — the account card #485 creates, holding `read`,
+The script then signs in on the switch as `deploy` — the account card #485 created, holding `read`,
 `write`, `ssh` and `test`. Installing the gate, the digest it holds the script to and the sudoers rule
 that allows the one command are in
 [`docs/runbooks/switch-access.md`](../docs/runbooks/switch-access.md). The binary backup needs

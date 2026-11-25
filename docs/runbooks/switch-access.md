@@ -113,8 +113,9 @@ cd ~/projets/homelab
 sudo ./ansible/switches/install-switch-change.sh
 ```
 
-It prints `installed` for what it wrote and `already` for what was right, so a second run changes
-nothing. It refuses instead of repairing, and names the reason:
+It prints `installed` for a file it wrote and `created` for a directory it made, then `already` for
+what was right, so a second run changes nothing. It refuses instead of repairing, and names the
+reason:
 
 - a dirty `ansible/switches` tree — commit or merge first, because an unmerged edit must not become
   the code that holds the key;

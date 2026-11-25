@@ -266,6 +266,71 @@ class RendererV7Tests(unittest.TestCase):
         self.assertIn("comment=", out)
 
 
+class ServiceRowTests(unittest.TestCase):
+    """A menu RouterOS exports in short form, and the object that sits at its defaults.
+
+    `/ip service` is exported as `set ssh disabled=no`, not `set [find name=ssh] ...`, and a service
+    left at its defaults is absent from the plain export and listed only in the verbose one. Both are
+    what the SSH change in the runbook's live proof meets.
+    """
+
+    CHANGE = '/ip service\nset [ find name="ssh" ] disabled=yes\n'
+    FLAG_CHANGE = '/ip service\ndisable [ find name="ssh" ]\n'
+    PLAIN_ROW = "/ip service\nset ssh disabled=yes\n"
+    DEFAULT_ROW = "/ip service\nset ssh port=22 disabled=no\n"
+    DNS_CHANGE = '/ip dns\nset [ find servers=192.168.1.1 ] servers=8.8.8.8\n'
+    DNS_ROW = "/ip dns\nset servers=192.168.1.1\n"
+
+    def render(self, change, plain, verbose):
+        with tempfile.TemporaryDirectory(prefix="switch-change-service-") as tmp:
+            d = pathlib.Path(tmp)
+            (d / "change.rsc").write_text(change)
+            (d / "plain.rsc").write_text(plain)
+            (d / "verbose.rsc").write_text(verbose)
+            return run(["--render-undo", "--major", "7",
+                        "--change", str(d / "change.rsc"),
+                        "--export", str(d / "plain.rsc"),
+                        "--verbose-export", str(d / "verbose.rsc")])
+
+    def rendered(self, change, plain, verbose):
+        done = self.render(change, plain, verbose)
+        self.assertEqual(done.returncode, 0, done.stderr)
+        return done.stdout
+
+    def plain(self):
+        return (EXPORTS / "v7-plain.rsc").read_text()
+
+    def verbose(self):
+        return (EXPORTS / "v7-verbose.rsc").read_text()
+
+    def test_an_object_at_its_defaults_is_read_from_the_verbose_export(self):
+        self.assertEqual(
+            self.rendered(self.CHANGE, self.plain(), self.verbose() + self.DEFAULT_ROW).strip(),
+            ':if ([:len [/ip service find name="ssh"]] > 0) '
+            'do={ /ip service set [find name="ssh"] disabled=no }')
+
+    def test_a_short_form_row_in_the_plain_export_is_the_object(self):
+        self.assertEqual(
+            self.rendered(self.CHANGE, self.plain() + self.PLAIN_ROW,
+                          self.verbose() + self.DEFAULT_ROW).strip(),
+            ':if ([:len [/ip service find name="ssh"]] > 0) '
+            'do={ /ip service set [find name="ssh"] disabled=no }')
+
+    def test_a_short_form_row_on_a_menu_not_written_that_way_is_not_an_object(self):
+        done = self.render(self.DNS_CHANGE, self.plain() + self.DNS_ROW, self.verbose())
+        self.assertEqual(done.returncode, 1, done.stdout)
+        self.assertEqual(done.stdout, "")
+        self.assertIn("no object matching", done.stderr)
+        self.assertIn("plain", done.stderr)
+        self.assertIn("verbose", done.stderr)
+
+    def test_a_flag_change_on_an_object_at_its_defaults_renders_the_enable(self):
+        self.assertEqual(
+            self.rendered(self.FLAG_CHANGE, self.plain(), self.verbose() + self.DEFAULT_ROW).strip(),
+            ':if ([:len [/ip service find name="ssh"]] > 0) '
+            'do={ /ip service enable [find name="ssh"] }')
+
+
 class RefusalTests(unittest.TestCase):
     def refused(self, change, export="v7-plain.rsc", verbose="v7-verbose.rsc"):
         done = run(["--render-undo", "--major", "7",
@@ -500,7 +565,13 @@ class RunTests(unittest.TestCase):
             done = f.script(["--target", "crs326", "--change", str(CHANGES / "set-pvid.rsc"),
                              "--yes", "--window", "3m"])
         self.assertEqual(done.returncode, 4, done.stderr)
-        self.assertIn("add name=leftover", done.stdout)
+        diff = done.stdout.split("the difference against the export taken before the change:", 1)[1]
+        diff = diff.split("\nreverted", 1)[0]
+        self.assertIn("+add name=leftover", diff)
+        # The run's own timer was removed before the export was taken, so the only difference is
+        # what the undo left behind.
+        self.assertNotIn("scheduler", diff)
+        self.assertNotIn("revert-", diff)
 
     def test_a_switch_that_never_comes_back_exits_5(self):
         with fake("gone", break_after_change="1", stays_down="1",

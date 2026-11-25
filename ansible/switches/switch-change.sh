@@ -25,7 +25,9 @@ set -uo pipefail
 SCRIPT_VERSION="2026-11-25.1"
 SWITCH_CHANGE_TARGETS="${SWITCH_CHANGE_TARGETS:-crs326=192.168.1.11 crs309=192.168.1.43}"
 SWITCH_CHANGE_USER="${SWITCH_CHANGE_USER:-deploy}"
-SWITCH_CHANGE_KEY="${SWITCH_CHANGE_KEY:-$HOME/.ssh/switches-deploy}"
+# Card #485 created this key for the account the gate runs the script as; the name and the modes are
+# in docs/runbooks/switch-access.md. A direct run may still point SWITCH_CHANGE_KEY elsewhere.
+SWITCH_CHANGE_KEY="${SWITCH_CHANGE_KEY:-$HOME/.ssh/switch-deploy}"
 SWITCH_CHANGE_WINDOW="${SWITCH_CHANGE_WINDOW:-10m}"
 SWITCH_CHANGE_WORKDIR="${SWITCH_CHANGE_WORKDIR:-/tmp/opencode/switch-change}"
 SWITCH_CHANGE_CONNECT_TIMEOUT="${SWITCH_CHANGE_CONNECT_TIMEOUT:-5}"
@@ -264,7 +266,7 @@ render_undo() {
     return 1
   }
 
-  function index_export(mode, line,   t, n, i, path, verb, args) {
+  function index_export(mode, line,   t, n, i, path, verb, args, st, sn, rest) {
     line = trim(line)
     if (line == "" || substr(line, 1, 1) == "#") return
     n = tokens(line, t)
@@ -278,6 +280,17 @@ render_undo() {
     if (path == "") return
     if (verb == "add") store(mode, path, args, "add")
     else if (verb == "set" && split_sel(args)) store(mode, path, trim(SEL " " AFTER), "set")
+    # The short form: a `set` whose arguments open with the item name instead of a selector, as in
+    # `set ssh disabled=no`. Only the menus in SHORT are written that way; on any other path the
+    # first token is a setting, not an object, and inventing one would let an undo claim to restore
+    # something the export never described.
+    else if (verb == "set" && SHORT[path] == 1 && args != "") {
+      sn = tokens(args, st)
+      if (index(st[1], "=") > 0) return          # no bare name: a singleton setting, not a row
+      rest = ""
+      for (i = 2; i <= sn; i++) rest = rest (i > 2 ? " " : "") st[i]
+      store(mode, path, trim("name=" st[1] " " rest), "set")
+    }
   }
 
   # ---------------------------------------------------------------- matching
@@ -327,6 +340,58 @@ render_undo() {
       return 0
     }
     return key
+  }
+
+  # How many objects one export holds under a selector, and where the first one sits. The pair exists
+  # so the two exports can be searched in turn without a refusal firing on the first miss.
+  function match_count(path, sel, mode,   i, n, args, cnt) {
+    n = (mode == "verbose") ? vcount[path] : ocount[path]
+    for (i = 1; i <= n; i++) {
+      args = (mode == "verbose") ? vargs[path, i] : oargs[path, i]
+      if (obj_matches(args, sel)) cnt++
+    }
+    return cnt
+  }
+
+  function match_first(path, sel, mode,   i, n, args) {
+    n = (mode == "verbose") ? vcount[path] : ocount[path]
+    for (i = 1; i <= n; i++) {
+      args = (mode == "verbose") ? vargs[path, i] : oargs[path, i]
+      if (obj_matches(args, sel)) return i
+    }
+    return 0
+  }
+
+  # The object a `set`, `enable` or `disable` acts on: plain first, because that is what the switch
+  # exports as configured, then verbose, because an object sitting entirely at its defaults is left
+  # out of the plain export and described only there. FOUND_MODE/FOUND_IDX say where it was found;
+  # FOUND_VIDX is its verbose row, which is where an old value is read from.
+  function find_object(path, sel, lineno,   pcnt, vcnt) {
+    FOUND_MODE = ""; FOUND_IDX = 0; FOUND_VIDX = 0
+    pcnt = match_count(path, sel, "plain")
+    vcnt = match_count(path, sel, "verbose")
+    if (pcnt > 1) {
+      do_refuse(lineno, render_sel(sel) " matches " pcnt " objects in the plain export")
+      return 0
+    }
+    if (vcnt > 1) {
+      do_refuse(lineno, render_sel(sel) " matches " vcnt " objects in the verbose export")
+      return 0
+    }
+    if (pcnt == 0 && vcnt == 0) {
+      do_refuse(lineno, "no object matching " render_sel(sel) " in the plain or the verbose export")
+      return 0
+    }
+    if (pcnt == 1) {
+      FOUND_MODE = "plain"
+      FOUND_IDX = match_first(path, sel, "plain")
+      FOUND_VIDX = match_first(path, sel, "verbose")
+    } else {
+      FOUND_MODE = "verbose"
+      FOUND_IDX = match_first(path, sel, "verbose")
+      FOUND_VIDX = FOUND_IDX
+    }
+    return 1
   }
 
   function obj_value(args, k,   at, an, j) {
@@ -399,10 +464,8 @@ render_undo() {
   function undo_set(path, args, lineno,   sel, selsel, after, at, an, i, k, oldv, idx, vidx) {
     if (!split_sel(args)) { do_refuse(lineno, "a set this renderer cannot read (no [find ...] selector)"); return }
     selsel = render_sel(SEL); after = AFTER
-    idx = find_one(path, SEL, "plain", lineno)
-    if (!idx) return
-    vidx = find_one(path, SEL, "verbose", lineno)
-    if (!vidx) return
+    if (!find_object(path, SEL, lineno)) return
+    vidx = FOUND_VIDX
     an = tokens(after, at)
     for (i = 1; i <= an; i++) {
       k = keyname(at[i])
@@ -424,14 +487,14 @@ render_undo() {
     }
   }
 
-  function undo_flag(path, verb, args, lineno,   sel, selsel, idx, want) {
+  function undo_flag(path, verb, args, lineno,   sel, selsel, idx, want, found) {
     if (!split_sel(args)) { do_refuse(lineno, "a " verb " this renderer cannot read (no [find ...] selector)"); return }
     selsel = render_sel(SEL)
-    idx = find_one(path, SEL, "plain", lineno)
-    if (!idx) return
+    if (!find_object(path, SEL, lineno)) return
     # The undo restores the state the export holds, and the verb says nothing about it: enabling a
     # port that was already enabled has to stay enabled, not be disabled by its own revert.
-    want = (obj_value(oargs[path, idx], "disabled") == "yes") ? "disable" : "enable"
+    found = (FOUND_MODE == "verbose") ? vargs[path, FOUND_IDX] : oargs[path, FOUND_IDX]
+    want = (obj_value(found, "disabled") == "yes") ? "disable" : "enable"
     emit(":if ([:len [" path " find " selsel "]] > 0) do={ " path " " want " [find " selsel "] }")
   }
 
@@ -481,7 +544,14 @@ render_undo() {
     else index_export(mode, line)
   }
 
-  BEGIN { refused = 0; outn = 0; p_major = "" }
+  BEGIN {
+    refused = 0; outn = 0; p_major = ""
+    # The menus RouterOS exports in the short form `set <name> <args>`, whose first bare token is
+    # the item name rather than a `[find …]` selector. Adding one needs a fixture row that proves
+    # the shape: anywhere else the first token is a setting, and reading it as a name would invent
+    # an object the export never described.
+    SHORT["/ip service"] = 1
+  }
 
   FILENAME == plain {
     if (FNR == 1 && index($0, "by RouterOS ") > 0) {
@@ -583,11 +653,14 @@ change_apply_and_verify() {                # change_apply_and_verify <host> <id>
       exit 1 ;;
     *)
       say "the timer $entry had already fired, so the change was skipped"
+      # The timer goes before the export, as below: its entry is part of /export and would otherwise
+      # be the difference.
+      timer_remove "$host" "$entry"
+      disarm
+      files_remove "$host" "$id"
       after="$dir/after-$host.rsc"
       ros "$host" '/export' > "$after"
       print_change_diff "$dir" "$plain" "$after"
-      timer_remove "$host" "$entry"
-      files_remove "$host" "$id"
       if cmp -s "$dir/pre.norm" "$dir/after.norm"; then
         say "reverted: the export is identical to the one taken before the change"
         exit 3
@@ -647,13 +720,16 @@ change_apply_and_verify() {                # change_apply_and_verify <host> <id>
     exit 5
   fi
 
+  # The count is read first because it proves the timer fired. The export comes after the timer, the
+  # disarm and the files are gone: the run's own scheduler entry is part of /export, so a comparison
+  # taken while it is still there can never be equal.
   count=$(timer_field "$answered" "$entry" run-count)
-  after="$dir/after-$answered.rsc"
-  ros "$answered" '/export' > "$after"
-  print_change_diff "$dir" "$plain" "$after"
   timer_remove "$answered" "$entry"
   disarm
   files_remove "$answered" "$id"
+  after="$dir/after-$answered.rsc"
+  ros "$answered" '/export' > "$after"
+  print_change_diff "$dir" "$plain" "$after"
 
   case "$count" in
     0)
