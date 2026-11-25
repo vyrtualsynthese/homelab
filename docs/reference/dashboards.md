@@ -1,14 +1,14 @@
-# Dashboards: the eleven Homelab screens
+# Dashboards: the twelve Homelab screens
 
-> **In one line.** The eleven Grafana dashboards in the `Homelab` folder, what each is for, and the API
+> **In one line.** The twelve Grafana dashboards in the `Homelab` folder, what each is for, and the API
 > calls that change one.
 >
 > **Use it when** you need to know where to look, are adding or editing a panel, or are explaining why
 > a dashboard is not in git · **Verified** 2026-11-25 · **Kind:** reference
 >
-> **Sources** `cluster/helm/monitoring/grafana/export/traefik/`, the one snapshot in git and nothing
-> that applies it; the live Grafana instance and its Prometheus datasource, read through the HTTP API on
-> 2026-11-21 and 2026-11-25.
+> **Sources** `cluster/helm/monitoring/grafana/export/traefik/` and `cluster/helm/monitoring/grafana/export/security/`,
+> the two snapshots in git and nothing that applies them; the live Grafana instance and its Prometheus
+> and Loki datasources, read through the HTTP API on 2026-11-21 and 2026-11-25.
 
 ## Dashboards
 
@@ -28,6 +28,7 @@ Showcase, which still sit in the default `General` folder:
 | Cloud | `cloud-services` | 6 | Internet-facing side: endpoints answering, DNS checks passing, days to the earliest certificate, per-probe success and latency, every check in one table |
 | Homelab · Backups | `homelab-backups` | 6 | Backup health: stream age, repository size, snapshot count, each server's etcd upload age, estimated monthly cost, failed jobs |
 | Homelab · Traefik | `homelab-traefik` | 13 + rows | The router in front of everything: traffic by router and by entry point, status classes, p95/p99, 5xx share, bytes and open connections by entry point, failed and slow requests from the access log, the certificate store, config reloads, scrape health |
+| Homelab · Security | `homelab-security` | 9 | Danger state, bans, volume, rejected share, top addresses, sign-in outcomes, host blocks, posture |
 
 The old `homelab-investigate` was replaced by `homelab-platform` on 2026-11-12: its workload
 row duplicated the new Applications dashboard, and its node/control-plane/Prometheus panels are
@@ -93,7 +94,7 @@ until card 543 removes them, so a short list is not the healthy state here. The 
 on the right watch the parts that fail silently: a config that stops reloading keeps serving the last
 good one, so the age of the last successful load is the only early sign.
 
-All eleven refresh on a one-minute cadence or faster — Traefik every 30 s, the rest every 1 m — and
+All twelve refresh on a one-minute cadence or faster — Traefik every 30 s, the rest every 1 m — and
 hold a 6 h–24 h default range, except Homelab · Backups: it refreshes
 every 30 minutes over 7 days, because a backup ages in hours and the panels read the verifier's
 nightly log lines rather than a scrape.
@@ -103,11 +104,14 @@ That database is no longer a single copy — the `grafana` claim is one row of t
 `nodes-nas` backup — but the row holds a database, not a reviewable diff, so a dashboard change is
 still described here and applied through the API.
 
-**One exception, and it is a copy, not a source.** Homelab · Traefik and its three rules are exported
-to `cluster/helm/monitoring/grafana/export/traefik/` on 2026-11-21: `dashboard.json` is a ready-to-post API body and `rules.json` the three rules as the
-API returns them. They are a snapshot to read in a pull request and to restore after a wipe. Nothing
-applies them, no sidecar or configmap reads them, and editing them changes nothing in Grafana — the
-database stays authoritative for every dashboard and every rule, including these.
+**Two exceptions, and both are copies, not sources.** Homelab · Traefik and its three rules are
+exported to `cluster/helm/monitoring/grafana/export/traefik/` on 2026-11-21, and Homelab · Security to
+`cluster/helm/monitoring/grafana/export/security/` on 2026-11-25: each `dashboard.json` is a
+ready-to-post API body and each `rules.json` the rules as the API returns them. They are a snapshot to
+read in a pull request and to restore after a wipe — the security one's `rules.json` arrives with
+Task 14's seven rules, so until then only the dashboard is there. Nothing applies either copy, no
+sidecar or configmap reads them, and editing them changes nothing in Grafana — the database stays
+authoritative for every dashboard and every rule, including these.
 
 **Homelab · Backups** was added on 2026-11-20 with the backup work. Two of its panels read
 Prometheus (`kube_cronjob_status_last_successful_time`, `kube_job_status_failed`) and four read the
@@ -121,8 +125,45 @@ by mistake, which is what `budgetGiB` and the verifier already fail on.
 
 ## Homelab · Security
 
-**Both thresholds were measured on 2026-11-25, before either was set.** The screen's nine panels and the
-danger-state expression that reads these two numbers are described below them; nothing here is a round
+**Homelab · Security** was added on 2026-11-25 with the detection work, and it is the screen to open
+when the question is "is anything happening?" rather than "is anything broken?". Nine panels: the
+**danger state** and **bans active** in the top row, the **posture** counts beside them; then requests
+per host over 24 h, the rejected share over time, the top refused addresses, sign-in outcomes by
+result, requests by host and status over 15 minutes, and the host firewall's `UFW BLOCK` lines. The
+danger state is one expression, not six, because a Grafana target reads one datasource — the rejected
+share therefore comes from Traefik's own counters rather than the log, which is the same number in one
+query.
+
+```promql
+# 2 = alerting, 1 = watch, 0 = calm. `bool` on every comparison, each term
+# `or vector(0)` so a missing family counts as false, then clamp_max: a sum.
+clamp_max(
+    2 * (count(ALERTS{alertname=~"Security.*", alertstate="firing"}) > bool 0 or vector(0))
+  + 2 * (delta(sum(fw_bouncer_banned_ips)[1h:1m]) > bool 20 or vector(0))
+  + (sum(fw_bouncer_banned_ips) > bool 0 or vector(0))
+  + (100 * sum(rate(traefik_router_requests_total{code=~"4.."}[15m]))
+      / sum(rate(traefik_router_requests_total[15m])) > bool 85 or vector(0))
+  + (sum(homelab_authentik_signins_15m{outcome="failure"} > bool 20) or vector(0)),
+  2)
+```
+
+Two of its habits were found by running it, not by reading it. Every comparison is `bool`: without it
+a filtered comparison keeps the sample it matched, so `(sum(fw_bouncer_banned_ips) > 0) * 1` read `3`
+on the screen instead of `1`. And the terms are **added**, not `or`-ed: with `bool` a false term still
+returns a `0` sample, and `or` stops at the first *defined* operand rather than the first *true* one,
+so the `or` chain answered `Calm` while three bans were in force. `delta` on a subquery, not
+`increase`, because the bouncer's family is a gauge.
+
+**Top addresses refused shows who was *answered* 401–499, not who the bouncer dropped.** A dropped
+request never reaches Traefik and has no line in the access log, so an address that is banned and an
+address that is merely being refused look the same in the log and not the same here. The exact ban
+list is `cscli decisions list`, and the count is the *Bans active* tile. **Sign-in outcomes is a count
+with no address attached**: the exporter reads authentik's event API and publishes a total per result,
+never who signed in — [the design](../superpowers/specs/2026-11-25-security-detection-design.md) §6.5
+says why.
+
+Both thresholds were measured on 2026-11-25, before either was set. The screen's nine panels and the
+danger-state expression that reads these two numbers are described above; nothing here is a round
 number chosen by feel.
 
 **The rejected share** is the percentage of Traefik's requests that were answered `4xx`, by hour, from
