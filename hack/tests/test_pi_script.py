@@ -474,3 +474,23 @@ def test_resolv_conf_lists_the_piholes_instead_of_the_loopback():
     assert "DNSStubListener=no" in rbp0
     assert "\nDNS=\n" in rbp0, "the nameservers come from netplan"
     assert "192.168.1." not in rbp0, "an address here would be a second record of it"
+
+
+def test_the_wildcard_file_carries_every_local_override():
+    """These six were also in FTLCONF_misc_dnsmasq_lines in each host's
+    pihole.env, which settings now clears. Dropping one here would stop it
+    resolving on the LAN, and `ashudev.com` only ever worked through that
+    duplicate."""
+    out = run("render", "rbp0")
+    assert out.returncode == 0, out.stderr
+    block = out.stdout.split("--- /home/vronteix/dockers/etc-dnsmasq.d/02-my-wildcard-dns.conf\n", 1)[1]
+    block = block.split("\n--- ", 1)[0]
+    for line in (
+        "address=/livebox.local/192.168.1.1",
+        "address=/kub.local/192.168.1.46",
+        "address=/rbp0.local/192.168.1.22",
+        "address=/rbp1.local/192.168.1.38",
+        "address=/kub.home.ashudev.com/192.168.1.46",
+        "address=/.ashudev.com/192.168.1.46",
+    ):
+        assert line in block, line
