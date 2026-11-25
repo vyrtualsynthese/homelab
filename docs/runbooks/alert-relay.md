@@ -144,9 +144,11 @@ the duplicate guard looked broken. To prove the guard, give a rule a short repea
 kubectl -n monitoring logs deploy/alert-relay -f | grep RelayProbe
 ```
 
-Expected, measured 2026-11-25: `firing: RelayProbe: opened #727` at once, then eleven minutes later
-`firing: RelayProbe: ignored, #727 in Backlog` — one card, and the repeat wrote nothing. Delete the
-rule, remove the route and delete the card afterwards.
+The probe measured `firing: RelayProbe: opened #727` at once and, eleven minutes later,
+`firing: RelayProbe: commented on #727` on 2026-11-25 — before this change. After it, the opening
+line is unchanged and the repeat must log `firing: RelayProbe: ignored, #727 in Backlog`: one card,
+and the repeat writes nothing. That second measurement has not been taken yet; take it when the
+change is live. Delete the rule, remove the route and delete the card afterwards.
 
 To prove the relay alone, from inside the cluster, send a body straight at it:
 
