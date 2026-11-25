@@ -2563,6 +2563,15 @@ the same week, was `N` steps and the quietest window held `M` requests, so `Secu
 quiet night.
 ```
 
+Measured on 2026-11-25, and the three figures the snippet assumed were all wrong: the family only
+exists since Traefik 3 replaced 2.11 on 2026-11-21 18:39, so the window is 3 d 19 h and not seven
+days; the hourly share runs 0.33 %–81.13 % with 42 of 92 hours above 20 %, so a 20 % threshold sits
+inside the normal band of routine bot bursts and the number is **85 %** (top of band plus a margin);
+and at 5-minute steps no window is ever empty, nor at the 2-minute floor the 1 m scrape interval
+allows, so `N` is 0 and `2N × 5` is 0 — the rule waits **10 minutes** instead, five times the floor,
+with the quietest two-minute window holding 4 requests against a median of 8. Task 13's expression
+therefore writes `85` where the plan prints `20`.
+
 Each `X`, `Y`, `Z`, `N`, `M` is replaced with the measured value, and the commands above are quoted
 in the page so the next reader can repeat the measurement rather than trust it.
 
