@@ -1303,15 +1303,21 @@ galaxy_info:
 ```yaml
 ---
 # The LAPI's NodePort on the cluster, reached through `streaming` itself: the
-# bouncer is a host service and does not resolve cluster DNS.
-crowdsec_lapi_url: http://192.168.1.46:30500/
+# bouncer is a host service and does not resolve cluster DNS. The address is read
+# from the inventory rather than written here — `hack/tests/test_ansible_layer.py`
+# fails any host address repeated in a second file — and the NodePort itself is
+# fixed by the CrowdSec chart's Service.
+crowdsec_lapi_url: "http://{{ hostvars['streaming'].ansible_host }}:30500/"
 crowdsec_package: crowdsec-firewall-bouncer-nftables
 crowdsec_keyring: /etc/apt/keyrings/crowdsec.asc
-crowdsec_repo: https://packagecloud.io/crowdsec/crowdsec/ubuntu
+# The distro-agnostic repository: `suites` below is `[any]`, and that pair must
+# agree — `<repo>/ubuntu` has no `dists/any`. This one also survives a host release
+# upgrade, where a codename suite would stop matching.
+crowdsec_repo: https://packagecloud.io/crowdsec/crowdsec/any
 crowdsec_metrics_port: 60601
 # The only host that scrapes. `ufw` filters the bouncer's listener like any other
 # INPUT port, so this is an allow rule, not a formality.
-crowdsec_scraper: 192.168.1.41
+crowdsec_scraper: "{{ hostvars['nas'].ansible_host }}"
 ```
 
 `ansible/roles/crowdsec/tasks/main.yml`:
@@ -1326,13 +1332,18 @@ crowdsec_scraper: 192.168.1.41
 - name: Refuse to run without the bouncer key
   ansible.builtin.assert:
     that:
-      - lookup('env', 'CROWDSEC_BOUNCER_KEY') | length > 32
+      - lookup('env', 'CROWDSEC_BOUNCER_KEY') | length >= 32
     fail_msg: >-
-      CROWDSEC_BOUNCER_KEY is empty or too short. It must be the same value as
-      the `api-key` in the crowdsec-bouncer-key Secret; `openssl rand -hex 32`.
+      CROWDSEC_BOUNCER_KEY is empty or too short: it must be exactly the value the
+      `api-key` holds in the crowdsec-bouncer-key Secret. That key is not issued by
+      any command in this repo — the LAPI registers it at start-up from the chart's
+      BOUNCER_KEY_firewall environment variable. Mint a new one with
+      `openssl rand -hex 32` and set the same value in both places.
 
-# `deb822_repository` is a thin wrapper over python3-debian, which
-# `--check` reports as a missing dependency rather than a missing package.
+# `deb822_repository` is a thin wrapper over python3-debian. Under `--check` this
+# task installs nothing, so the module still fails its import; the first `--check`
+# on a host without the helper stops at the repository task and the role has to be
+# run for real once before check mode shows a plan.
 - name: Install the helper deb822_repository needs
   ansible.builtin.apt:
     name: python3-debian
@@ -1386,8 +1397,13 @@ crowdsec_scraper: 192.168.1.41
     state: started
     enabled: true
 
-# The bouncer answers 401 before it has a decision, so a listener that responds
-# at all is a listener that is talking to the LAPI.
+# This proves the bouncer's own listener is up, not that it has authenticated to
+# the LAPI: the exporter is unauthenticated and answers 200. The link to the LAPI
+# is proven by the `fw_bouncer_banned_ips` series in Prometheus, which only exists
+# once the bouncer has pulled a decision list.
+- name: Restart the bouncer before it is probed
+  ansible.builtin.meta: flush_handlers
+
 - name: Prove the listener answers
   ansible.builtin.uri:
     url: "http://127.0.0.1:{{ crowdsec_metrics_port }}/metrics"
@@ -1494,12 +1510,14 @@ helm template test cluster/helm/monitoring/prometheus -f cluster/helm/monitoring
 
 Expected: lint clean, `9 passed`, `1`.
 
-Then the operator, on `streaming`, one host at a time:
+Then the operator, on `streaming`, one host at a time. The first run is real, not `--check`: on a
+host without `python3-debian` the dry run stops at the repository task by design, so check mode only
+shows a plan after the role has run once.
 
 ```bash
 export CROWDSEC_BOUNCER_KEY=...   # the value in ~/.config/secrets/homelab.env
-cd ansible && ansible-playbook playbooks/site.yml --limit streaming --check
 cd ansible && ansible-playbook playbooks/site.yml --limit streaming
+cd ansible && ansible-playbook playbooks/site.yml --limit streaming --check
 # and the proof that it is running:
 systemctl is-active crowdsec-firewall-bouncer
 curl -s http://127.0.0.1:60601/metrics | grep fw_bouncer_banned_ips
