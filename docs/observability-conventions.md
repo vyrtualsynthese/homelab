@@ -75,7 +75,7 @@ low because the cluster produces little log and query traffic: a 30-day Loki
 query or a compaction burst is the case the headroom exists for, so re-measure
 before lowering Loki further.
 
-Four older exporters live beside them: `mktxp` and `pihole-exporter`
+Four exporters live beside them: `mktxp` and `pihole-exporter`
 on `nuc0`, `prometheus-smartctl` as a DaemonSet (its pods on `nas`, `nuc0`,
 `streaming`, `rbp2`), and `snapraid-exporter` on `nas` — a second node-exporter with every default
 collector off, serving the one file the snapraid runner writes after a sync it finished
@@ -202,8 +202,10 @@ Grafana's own data: where they live, and what that costs, is in
   written rather than measured: the runner on `nas` writes the marker file, the pod reads the
   directory, and the textfile collector is the only collector it enables. It publishes a handful of
   series — the timestamp, `node_textfile_mtime_seconds` and
-  `node_scrape_collector_success{collector="textfile"}` — and no `node_*` node metrics, because the
-  defaults are off; `node_scrape_collector_success` answering `0` means the file was rejected, not
+  `node_scrape_collector_success{collector="textfile"}` — and **none of the host's own metrics**
+  (`node_cpu_*`, `node_memory_*`, `node_filesystem_*`), because the defaults are off; the two
+  `node_*` names it does publish are the textfile collector's own.
+  `node_scrape_collector_success` answering `0` means the file was rejected, not
   that the sync is healthy.
 - **Argo CD's three components are annotation discovery since 2026-11-22**, on their **metrics
   Services** — controller 8082, repo-server 8084, server 8083 — not on the pods.

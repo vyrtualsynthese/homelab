@@ -450,18 +450,26 @@ def test_snapraid_writes_the_parity_marker_after_a_successful_sync():
         "the marker must be written after the sync it reports"
     )
     assert "homelab_snapraid_last_sync_timestamp_seconds" in script
+    assert 'chmod 0644 "$tmp"' in script, (
+        "the exporter reads the file as uid 65534; root's umask must not decide whether it can"
+    )
+    assert 'mv "$tmp" "$marker"' in script, "the swap is a rename, never a copy"
+    assert '>"$marker"' not in script, "an in-place write lets a scrape read half a file"
+    assert '$marker.$$' in script, "the temporary name must not end in .prom"
     tasks = (ANSIBLE / "roles/snapraid/tasks/main.yml").read_text()
     assert "/var/lib/node-exporter/textfile" in tasks, "the role owns the directory"
 
 
 def test_snapraid_role_does_not_claim_the_journal_reaches_loki():
     """Fluent Bit tails /var/log/containers/*.log only: no host line reaches Loki.
-    A comment that says otherwise sends the next reader to a store that never held it."""
-    for path in (
-        ANSIBLE / "roles/snapraid/tasks/main.yml",
-        ANSIBLE / "roles/snapraid/files/snapraid-sync.sh",
-    ):
-        assert "already reaches Loki" not in path.read_text(), path
+    Asserted as the sentence that says so, not only as the absence of the false
+    one: a comment that dropped the claim altogether would pass an absence check."""
+    tasks = (ANSIBLE / "roles/snapraid/tasks/main.yml").read_text()
+    script = (ANSIBLE / "roles/snapraid/files/snapraid-sync.sh").read_text()
+    assert "nothing from this host reaches Loki" in tasks
+    assert "not shipped to Loki" in script
+    for text in (tasks, script):
+        assert "already reaches Loki" not in text
 
 
 def test_readme_no_longer_claims_the_layer_does_not_work():

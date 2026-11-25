@@ -23,13 +23,15 @@ marker=/var/lib/node-exporter/textfile/snapraid.prom
 # A timestamp, not an age: the rule subtracts it from now, so a run that stops
 # makes the number grow instead of freezing it. `rename(2)` inside one directory
 # is atomic, so a scrape sees the old body or the new one, never half of either.
+# The mode is set here rather than left to root's umask: the exporter reads the
+# file as uid 65534, and a 0600 marker would read as "no sync ever finished".
 write_marker() {
   local tmp="$marker.$$"
   {
     printf '# HELP homelab_snapraid_last_sync_timestamp_seconds Unix time of the last snapraid sync that finished without an error.\n'
     printf '# TYPE homelab_snapraid_last_sync_timestamp_seconds gauge\n'
     printf 'homelab_snapraid_last_sync_timestamp_seconds %s\n' "$(date +%s)"
-  } >"$tmp" && mv "$tmp" "$marker" && return 0
+  } >"$tmp" && chmod 0644 "$tmp" && mv "$tmp" "$marker" && return 0
   rm -f "$tmp"
   return 1
 }

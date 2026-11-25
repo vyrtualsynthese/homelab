@@ -36,8 +36,10 @@ The overview — what runs where, its sizing, and how to query the stack:
 `homelab_snapraid_last_sync_timestamp_seconds` is **written, not measured** — the runner installed by
 `ansible/roles/snapraid` writes `/var/lib/node-exporter/textfile/snapraid.prom` after a sync exits
 cleanly, and the pod serves it. It is a second node-exporter with `--collector.disable-defaults`, so
-**no `node_*` host family comes from it**; it publishes the timestamp, `node_textfile_mtime_seconds`
-and `node_scrape_collector_success{collector="textfile"}`. That last one answering `0` means
+**no metric of the host itself comes from it** — no `node_cpu_*`, `node_memory_*`,
+`node_filesystem_*`. It publishes the timestamp, `node_textfile_mtime_seconds`
+and `node_scrape_collector_success{collector="textfile"}`, which are the textfile collector's own.
+That last one answering `0` means
 node-exporter rejected the file — a corrupt body, not a healthy sync — and the rule's no-data state
 reports the metric's absence separately.
 
