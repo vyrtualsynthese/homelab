@@ -15,9 +15,10 @@ def labels(*names):
     return [{"title": name} for name in names]
 
 
-def alert_card(column="Backlog", done=False, label="alert", priority=None):
+def alert_card(column="Backlog", done=False, label="alert", priority=None, frozen=False):
+    names = ["task", label] + ([priority] if priority else []) + (["frozen"] if frozen else [])
     card = {"id": 7, "title": "DiskFull on nas", "done": done, "column": column,
-            "labels": labels("task", label, *([priority] if priority else [])),
+            "labels": labels(*names),
             "related_tasks": {"blocked": [{"id": 90}]}}
     return card
 
@@ -66,7 +67,11 @@ class TargetTests(unittest.TestCase):
         self.assertIsNone(lifecycle.target_column(alert_card(label="task"), [fix("Doing")]))
 
     def test_a_frozen_card_is_untouched(self):
-        self.assertIsNone(lifecycle.target_column(alert_card(label="frozen"), [fix("Doing")]))
+        """The card carries both labels: an alert someone pinned. Only `frozen` holds it."""
+        card = alert_card(frozen=True)
+        self.assertTrue(lifecycle.has_label(card, "frozen"))
+        self.assertTrue(lifecycle.has_label(card, "alert"))
+        self.assertIsNone(lifecycle.target_column(card, [fix("Doing")]))
 
     def test_a_done_card_is_untouched(self):
         self.assertIsNone(lifecycle.target_column(alert_card(done=True), [fix("Doing")]))
@@ -76,10 +81,15 @@ class PositionTests(unittest.TestCase):
     def test_an_empty_column_starts_at_one(self):
         self.assertEqual(lifecycle.position_for(alert_card(), []), 1)
 
-    def test_a_no_priority_card_lands_last(self):
+    def test_a_no_priority_card_lands_above_the_unlabelled_ones(self):
+        """The board's rule: a card nothing blocks sits above the first card at or below its band."""
         cards = [{"id": 1, "position": 10, "labels": labels("priority/high")},
                  {"id": 2, "position": 20, "labels": []}]
-        self.assertEqual(lifecycle.position_for(alert_card(), cards), 20 + 1_000_000)
+        self.assertEqual(lifecycle.position_for(alert_card(), cards), 15)
+
+    def test_a_no_priority_card_lands_after_the_prioritised_ones(self):
+        cards = [{"id": 1, "position": 10, "labels": labels("priority/low")}]
+        self.assertEqual(lifecycle.position_for(alert_card(), cards), 10 + 1_000_000)
 
     def test_a_high_priority_card_lands_first(self):
         cards = [{"id": 1, "position": 10, "labels": labels("priority/medium")}]
@@ -127,7 +137,7 @@ class RunTests(unittest.TestCase):
         self.assertEqual(board.moves, [])
 
     def test_a_frozen_card_is_not_moved(self):
-        board = FakeBoard([alert_card("Backlog", label="frozen")], {90: fix("Doing")})
+        board = FakeBoard([alert_card("Backlog", frozen=True)], {90: fix("Doing")})
         self.assertEqual(lifecycle.run_once(board), (0, 0))
         self.assertEqual(board.moves, [])
 
@@ -186,3 +196,36 @@ class ReadFailureTests(unittest.TestCase):
         board = self.Board([alert_card("Backlog"), readable], {91: fix("Doing")})
         self.assertEqual(lifecycle.run_once(board), (1, 1))
         self.assertEqual(board.moves, [(8, "Doing")])
+
+
+class MoveFailureTests(unittest.TestCase):
+    class Board(FakeBoard):
+        def move(self, card, target):
+            if card["id"] == 7:
+                raise urllib.error.HTTPError("http://board", 403, "Forbidden", None, None)
+            super().move(card, target)
+
+    def test_a_move_that_fails_does_not_stop_the_rest(self):
+        other = alert_card("Backlog")
+        other["id"] = 8
+        other["related_tasks"] = {"blocked": [{"id": 91}]}
+        board = self.Board([alert_card("Backlog"), other], {90: fix("Doing"), 91: fix("Doing")})
+        self.assertEqual(lifecycle.run_once(board), (1, 1))
+        self.assertEqual(board.moves, [(8, "Doing")])
+
+
+class PlacementFallbackTests(unittest.TestCase):
+    class Stub(BoardCallTests.Stub):
+        def call(self, method, path, body=None):
+            if path.endswith("/buckets/tasks"):
+                self.calls.append((method, path, body))
+                return {"items": [{"id": 116, "title": "Validation",
+                                   "tasks": [{"id": 9, "title": "b", "done": False,
+                                              "labels": [], "related_tasks": {}}]}]}
+            return super().call(method, path, body)
+
+    def test_a_column_without_positions_appends_the_card(self):
+        """A neighbour with no position is not a neighbour at position zero."""
+        board = self.Stub()
+        board.move({"id": 7, "labels": []}, "Validation")
+        self.assertEqual(board.calls[-1][2]["position"], lifecycle.STEP)

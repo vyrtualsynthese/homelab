@@ -131,10 +131,15 @@ class PositionTests(unittest.TestCase):
     def test_an_empty_column_starts_at_one(self):
         self.assertEqual(lifecycle.position_for(alert_card(), []), 1)
 
-    def test_a_no_priority_card_lands_last(self):
+    def test_a_no_priority_card_lands_above_the_unlabelled_ones(self):
+        """The board's rule: a card nothing blocks sits above the first card at or below its band."""
         cards = [{"id": 1, "position": 10, "labels": labels("priority/high")},
                  {"id": 2, "position": 20, "labels": []}]
-        self.assertEqual(lifecycle.position_for(alert_card(), cards), 20 + 1_000_000)
+        self.assertEqual(lifecycle.position_for(alert_card(), cards), 15)
+
+    def test_a_no_priority_card_lands_after_the_prioritised_ones(self):
+        cards = [{"id": 1, "position": 10, "labels": labels("priority/low")}]
+        self.assertEqual(lifecycle.position_for(alert_card(), cards), 10 + 1_000_000)
 
     def test_a_high_priority_card_lands_first(self):
         cards = [{"id": 1, "position": 10, "labels": labels("priority/medium")}]
