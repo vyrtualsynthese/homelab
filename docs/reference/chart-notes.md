@@ -419,8 +419,8 @@ kernel's 127 s SYN retry budget, 154 times in 24 h. A `vpn-cluster-routes` init 
 `vpn.clusterRoutes`, so a second in-cluster dependency is one line. The hook should also carry
 `--max-time 10`, which is an app preference, not a chart value.
 
-2026-11-26: the chart now owns both claims it mounts, and it no longer references an NFS claim at all.
-`/config` moved to `local-path` on 2026-11-25 (card 758) and to `nas` with the pod the next day; the
+2026-11-25: the chart now owns both claims it mounts, and it no longer references an NFS claim at all.
+`/config` moved to `local-path` on 2026-11-25 (card 758) and to `nas` with the pod that evening; the
 WireGuard claim went with it, because a `local-path` claim is bound to the node that first mounted it
 and a pod elsewhere leaves it `Pending`. `/downloads` is now `storage.downloads.hostPath`, the export
 root `/mnt/ultrafaststorage/nfs` mounted from the host, with `type: Directory` so a missing export

@@ -151,7 +151,7 @@ nfs:
       path: /mnt/storage/traefik
 # qBittorrent's config left this stream on 2026-11-25, when the claim moved from the
 # `nfs-qbittorrent-config` export to `local-path` (board card 758). Its row is under `nodes`,
-# `nas`, where the pod runs since 2026-11-26; the export itself stays on `nas` as the
+# `nas`, where the pod runs since 2026-11-25; the export itself stays on `nas` as the
 # migration's rollback copy, and is backed up by nothing until the follow-up removes both.
 
 nodes:
@@ -181,7 +181,7 @@ nodes:
       # 435.0 MB on the claim, 181.2 of it worth keeping: the 2026-11-22 snapshot of the same
       # tree measured that, when it still lived on the `nfs` export. The claim has moved twice:
       # to this node's `local-path` on 2026-11-25 (card 758), and it follows the qBittorrent pod
-      # from `streaming` to `nas` on 2026-11-26, because a claim is bound to the node that first
+      # from `streaming` to `nas` on 2026-11-25, because a claim is bound to the node that first
       # mounts it. `qBittorrent/BT_backup/` is one `.torrent` and one `.fastresume` per torrent:
       # the seed list and the resume data, which no rebuild can recreate. Logs, the GeoIP
       # database, the VueTorrent archive and the old web UI copy are rebuilt from the image or

@@ -9,8 +9,9 @@ behind on `streaming`. Read the rollback before starting.
 > claims across with it.
 >
 > **Use it when** the Web UI stall fix ships: the chart now pins the pod to `nas` and mounts the
-> export from the host, and the claims are still bound to `streaming` · **Verified** not yet run:
-> this is the plan the chart change requires, written before the first run · **Kind:** how-to
+> export from the host, and the claims are still bound to `streaming` · **Verified** 2026-11-25, one
+> run: 5,935 files and 361 torrents copied and restored, 86 seconds from stop to running, and the
+> exporter back at 0.086 s from a pinned 5.00 · **Kind:** how-to
 >
 > **Sources** `cluster/helm/media-stack/qbittorrent/values.yaml`,
 > `cluster/helm/media-stack/qbittorrent/templates/persistentvolumeclaim.yaml`,
@@ -53,15 +54,19 @@ WireGuard sidecar with no peer identity, and the app then downloads from the hou
 - The ArgoCD UI or CLI, to switch the `qbittorrent` Application's auto-sync off and back on. The
   switch is not in git: no `Application` under `cluster/argocd/projects/` records
   `syncPolicy.automated`, on purpose.
-- Around 2 GiB free under `/mnt/ultrafaststorage/nfs` for the two tarballs.
-- The numbers to check against, measured on 2026-11-25 22:40 with the app answering: **6,045 files**
-  in the config claim, **379** `.torrent`, **379** `.fastresume`, 435 MB on disk of which 156 MB is
-  resume data.
+- Around 1 GiB free under `/mnt/ultrafaststorage/nfs` for the two tarballs: the first run's config
+  archive was 134 MB, and 435 MB is what the claim holds on disk.
+- The numbers to check against, measured at the first run on 2026-11-25 23:42: **5,935 files** in the
+  config claim, **361** `.torrent`, **361** `.fastresume`, of which 156 MB is resume data. These are
+  counts from the claim on disk, not from the WebUI: the app was holding fewer torrents than its own
+  `BT_backup` listed (317), and it restored exactly those 317.
 - No download in flight that matters. An unfinished torrent is re-fetched, but it is not resumed
   across this move: qBittorrent's checkpoint is taken on a clean shutdown, and the pod is stopped
   with `scale`, which is a clean shutdown.
 
-Downtime is the tar plus the restore: expect ten to fifteen minutes on a 435 MB claim.
+Downtime is the tar, the restore and the sync. The first run took **86 seconds** end to end — stopped
+at 23:41:38, new pod running on `nas` at 23:43:04 — because the copy is 20 s of gzip and the restore
+12 s. Budget a few minutes for the typing, not for the data.
 
 ## Step 0 — record the before state
 
@@ -72,23 +77,31 @@ kubectl -n media-stack exec deploy/qbittorrent -c qbittorrent -- sh -c '
   echo "fastresume: $(find /config -name "*.fastresume" | wc -l)"'
 
 kubectl -n media-stack exec deploy/qbittorrent -c qbittorrent -- \
-  curl -s --max-time 10 http://127.0.0.1:8080/api/v2/torrents/info | grep -o '"hash"' | wc -l
+  sh -c 'curl -s --max-time 10 "http://$(hostname -i):8080/api/v2/torrents/info" | grep -o "\"hash\"" | wc -l'
 ```
 
-Write the four numbers down. The last one is the torrent list the app itself reports; the `.torrent`
-count and it should be equal, and they are what step 3 and step 8 compare against.
+Write the four numbers down. The `.torrent` and `.fastresume` counts should be equal to each other,
+and they are what step 3 compares against. The last number is the torrent list the app itself reports,
+which is lower than `.torrent` on every healthy run (317 against 361 at the first): it is the one step
+8 must reproduce, never the claim's.
+
+**From the pod's own address, never `127.0.0.1`.** The auth bypass in `qBittorrent.conf` covers
+`10.42.0.0/16`, and loopback is not in it: a `curl` to `127.0.0.1` answers `403`, and the count reads
+zero on a healthy app. `$(hostname -i)` is the address that works.
 
 If the Web UI is stalled right now, the second command hangs and the first does not: `find` is a new
-process on a local path, while `curl` asks the parked event loop. Drop the `curl` line, take the
-torrent count from the last measurement (379 on 2026-11-25 22:40), and do not spend time on the
+process on a local path, while `curl` asks the parked event loop. Drop the `curl` line and take the
+count from the exporter's last `qbittorrent_global_torrents` value instead (317 on 2026-11-25 22:42),
+and do not spend time on the
 recovery in [`../qbittorrent-webui-stalls.md`](../qbittorrent-webui-stalls.md#the-recovery-that-worked)
 — step 2 ends the stall by stopping the app, and nothing in this procedure needs it answering.
 
 ## Step 1 — take the Application's auto-sync off
 
-In the ArgoCD UI: `qbittorrent` → **App details** → **Auto-sync** off. Then confirm from a shell:
+In the ArgoCD UI: `qbittorrent` → **App details** → **Auto-sync** off. Or from a shell:
 
 ```bash
+argocd app set qbittorrent --sync-policy none
 kubectl -n argocd get application qbittorrent -o jsonpath='{.spec.syncPolicy}'
 ```
 
@@ -197,19 +210,21 @@ kubectl -n media-stack delete pod qbittorrent-config-copy
 
 ## Step 5 — delete the two claims and their volumes
 
+The volume names are derived from each claim's identity, so read them rather than retype them:
+
 ```bash
+CFG_PV=$(kubectl -n media-stack get pvc qbittorrent-config     -o jsonpath='{.spec.volumeName}')
+VPN_PV=$(kubectl -n media-stack get pvc qbittorrent-vpn-config -o jsonpath='{.spec.volumeName}')
+echo "$CFG_PV $VPN_PV"     # the first run's were pvc-32470e8b-… and pvc-46192a70-…
+kubectl get pv "$CFG_PV" "$VPN_PV" -o custom-columns=NAME:.metadata.name,HOST:.spec.hostPath.path
+
 kubectl -n media-stack delete pvc qbittorrent-config qbittorrent-vpn-config
-kubectl delete pv pvc-32470e8b-7fd8-4125-b0ae-07d5573d7a39 pvc-46192a70-1727-468a-9b2a-d21a30984e16
+kubectl delete pv "$CFG_PV" "$VPN_PV"
 ```
 
 Both volumes are `Retain`, so their directories stay on `streaming` under `/mnt/ssd0/` as the
-rollback copy — the deletion releases the names, it does not free the data. Their exact paths are in
-`kubectl get pv` before the deletion:
-
-```bash
-kubectl get pv pvc-32470e8b-7fd8-4125-b0ae-07d5573d7a39 \
-  pvc-46192a70-1727-468a-9b2a-d21a30984e16 -o custom-columns=NAME:.metadata.name,HOST:.spec.hostPath.path
-```
+rollback copy — the deletion releases the names, it does not free the data. The `HOST` column above
+is where they are.
 
 The volumes must be deleted, not only the claims: a released volume of the same name keeps the new
 claim `Pending` forever, because the binding is to that volume's identity.
@@ -310,46 +325,51 @@ the new pod. Sync the Application by hand (auto-sync is still off), or let the o
 UI:
 
 ```bash
-git -C <checkout> switch develop && git pull --ff-only      # the sync reads develop, not a branch
 argocd app sync qbittorrent --revision develop
 kubectl -n media-stack rollout status deploy/qbittorrent --timeout=300s
 kubectl -n media-stack get pod -o wide -l app.kubernetes.io/name=qbittorrent
 ```
 
-`--revision develop` is the belt to the braces: it names the commit the pod template comes from, so a
-sync cannot quietly apply an older one.
+`--revision develop` names the commit the pod template comes from, so a sync cannot quietly apply an
+older one. The local checkout plays no part: ArgoCD reads the repository.
 
 Success is `2/2 Running` on `nas` (both containers in the pod are the app and the WireGuard sidecar;
 the init containers run first and exit). If it is
 `Pending`, look at the reason before touching anything: `claim … is being used by another` or
-`volume node affinity conflict` means a claim still points at `streaming`, and step 5 or 6 was not
+`volume node affinity conflict` means a claim still points at `streaming`, and step 5, 6 or 7 was not
 finished.
 
 Then the four checks that say the app is back, and the same ones the 24-hour gate uses:
 
 ```bash
-# the torrent list the app reports: 379
+# the torrent list the app reports: 317 at the first run, and the same before and after
 kubectl -n media-stack exec deploy/qbittorrent -c qbittorrent -- \
-  curl -s --max-time 10 http://127.0.0.1:8080/api/v2/torrents/info | grep -o '"hash"' | wc -l
+  sh -c 'curl -s --max-time 10 "http://$(hostname -i):8080/api/v2/torrents/info" | grep -o "\"hash\"" | wc -l'
 
-# the exporter is scraping again: 1, and the scrape well under a second
+# the exporter is scraping again: 1, and the scrape well under a second (0.086 s on the first run)
 curl -sG http://prometheus.kub.local/api/v1/query --data-urlencode \
   'query=up{app_kubernetes_io_instance="qbittorrent-exporter"}'
 curl -sG http://prometheus.kub.local/api/v1/query --data-urlencode \
   'query=max(scrape_duration_seconds{app_kubernetes_io_instance="qbittorrent-exporter"})'
 
-# the tunnel is up: a handshake, not a failed wg-quick
+# the tunnel is up: a handshake, and bytes moving
 kubectl -n media-stack exec deploy/qbittorrent -c qbittorrent-vpn -- wg show
 ```
 
-A torrent count of zero is the failure this whole copy exists to prevent: it means the config claim
-did not arrive, and the app is running on an empty one. Stop the deployment before it writes over the
-restore (`scale --replicas=0`) and go back to step 3: the archive is the authority.
+Compare that count with step 0's, not with a number written here: the app holds fewer torrents than
+its `BT_backup` lists, and what must not change is the count the app reports.
+
+A torrent count of zero is the failure this whole copy exists to prevent — **after** checking the
+`403` trap above, which reads as zero on a healthy app. If the pod's own address answers with an empty
+list, the config claim did not arrive and the app is running on an empty one: stop the deployment
+before it writes over the restore (`scale --replicas=0`) and go back to step 3, the archive is the
+authority.
 
 ## Step 9 — close the migration
 
-- Auto-sync back on for `qbittorrent`, and confirm with the same `jsonpath` as step 1: the printed
-  policy is the one that was there before.
+- Auto-sync back on for `qbittorrent` — `argocd app set qbittorrent --sync-policy automated
+  --auto-prune --self-heal` — and confirm with the same `jsonpath` as step 1: it now prints that
+  policy instead of nothing.
 - Delete the two tarballs once a download has completed and a *arr import has picked it up — that is
   the proof the shared path still works for the other consumers:
   `kubectl -n media-stack exec deploy/qbittorrent -c qbittorrent -- rm -rf /downloads/.migration`.
@@ -363,6 +383,27 @@ restore (`scale --replicas=0`) and go back to step 3: the archive is the authori
 - A follow-up card retires the `nfs-qbittorrent-config` export, its Application and its row in
   `ansible/roles/nfs/templates/exports.j2`.
 
+## The first run, 2026-11-25 23:41–23:43
+
+- **86 seconds** from the stop to the new pod running on `nas`.
+- The copy took 20 s and produced a 134 MB archive; it printed `claim: 5,935 files, 361 .torrent, 361
+  .fastresume`, the same on the `archive:` line, and `copy verified`.
+- The restore took 12 s and printed the same three counts. Both claims bound to new volumes on `nas`
+  (`pvc-b111a24a-…` for the config, `pvc-04b87c12-…` for the tunnel), and the old ones stayed on
+  `streaming` as the rollback.
+- The app restored **317** torrents — the same number the exporter reported before the stop
+  (`qbittorrent_global_torrents` last read 317; over the preceding 24 h it moved between 316 and 383,
+  which is the restarts dropping entries, not this move).
+- The exporter went from a scrape pinned at **5.00 s** to **0.086 s**, `up=1`, with
+  `connection_status=connected`; the tunnel showed a handshake 21 s old and 3.15 GiB received.
+- `radarr/` and `tv-sonarr/` were being written again one minute after the pod started, which is the
+  proof the shared directory still works for the other consumers. The tarballs were deleted then.
+- A `pvc-c46cd7e4-…` from the removed `qbittorrent-temp` claim is still `Released` on `local-path`,
+  400 GiB claimed and empty. It is a leftover of the 2026-11-25 removal, not of this move, and it has
+  no consumer left to bind it.
+
+The 24-hour gate below had not been observed when this section was written.
+
 ## The gate
 
 The move is proved when, over 24 hours with torrents running:
@@ -370,7 +411,7 @@ The move is proved when, over 24 hours with torrents running:
 - `max_over_time(scrape_duration_seconds{app_kubernetes_io_instance="qbittorrent-exporter"}[24h])` stays
   under 1 second, and
 - `count_over_time(up{app_kubernetes_io_instance="qbittorrent-exporter"}==0[24h])` is zero, and
-- the torrent list is still 379.
+- the torrent list the app reports is the one it restored (317 at the first run).
 
 Both queries are written out in [`../qbittorrent-webui-stalls.md`](../qbittorrent-webui-stalls.md#the-gate-and-the-way-back).
 A restart is not part of the gate: before this change the liveness probe was restarting the container

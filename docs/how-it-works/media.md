@@ -60,7 +60,7 @@ configuration.
 
 **qBittorrent was not healthy.** Its Web UI and API stopped answering during downloads, breaking
 cross-seed, autobrr and the qBittorrent exporter while it lasted. Two fixes went in: its `/config` claim
-left NFS on 2026-11-25, and the app itself moves to `nas` on 2026-11-26 so that `/downloads` is a local
+left NFS on 2026-11-25, and the app itself moved to `nas` that evening so that `/downloads` is a local
 directory rather than an NFS client. It stays an open fault until the 24-hour gate on the second one;
 the whole record is [qbittorrent-webui-stalls.md](../qbittorrent-webui-stalls.md).
 

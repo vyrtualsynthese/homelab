@@ -13,7 +13,8 @@ This is a snapshot of the repository and of the cluster on 2026-11-22. Pod healt
 daily, and no page keeps up with them: `kubectl get pods -A` and ArgoCD's application list are the
 live answer, and [Every day](../running-it/every-day.md) is the sweep that reads them.
 Two rows were refreshed on 2026-11-20: `koillection` is scheduled again, and `minecraft-server` now
-renders its workload at `0` replicas by decision rather than waiting on a claim.
+renders its workload at `0` replicas by decision rather than waiting on a claim. One more on
+2026-11-25: `qbittorrent` runs on `nas`, where its downloads are a local path.
 
 ## How to read the tables
 
@@ -68,7 +69,7 @@ belong to is [media.md](media.md).
 | `maintainerr` | `media-stack` | streaming | A | removes library items when a rule says so |
 | `plex` | `media-stack` | streaming | A | playback; video conversion on the GPU |
 | `prowlarr` | `media-stack` | streaming | A | the one indexer list the *arr apps share |
-| `qbittorrent` | `media-stack` | streaming | A | the download client, with its VPN sidecar |
+| `qbittorrent` | `media-stack` | nas | A | the download client, with its VPN sidecar |
 | `qbittorrent-exporter` | `media-stack` | streaming | A | Prometheus metrics for qBittorrent |
 | `radarr` | `media-stack` | streaming | A | film library manager |
 | `radarr-anime` | `media-stack` | streaming | A | Radarr for the anime library |
