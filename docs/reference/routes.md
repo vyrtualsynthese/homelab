@@ -2,7 +2,7 @@
 
 # Routes: every hostname, its gate and its certificate
 
-> **Generated page.** 38 hostnames, rendered from the charts of 34
+> **Generated page.** 39 hostnames, rendered from the charts of 35
 > Applications by `hack/gen_docs.py`. Do not edit it: the tables are the charts.
 
 Regenerate: `python3 hack/gen_docs.py --write --only routes`
@@ -13,8 +13,8 @@ The dashboard is the one host whose `web` router is applied by hand rather than 
 `traefik.kub.local` on port 80 is redirected by
 `cluster/infrastructure/traefik/dashboard/redirect.yaml`, and that twin merges into the row
 the chart-rendered `websecure` router gives the host. That twin is also the whole difference
-between what the cluster holds and what these charts render: 73 `IngressRoute`
-objects live against the 72 rendered here, and `kube-system/traefik-dashboard-redirect`
+between what the cluster holds and what these charts render: 75 `IngressRoute`
+objects live against the 74 rendered here, and `kube-system/traefik-dashboard-redirect`
 is the only name on one side and not the other. `cluster/infrastructure/**` is applied by hand,
 so no Application can ever render it, and the gap is a shape of this repository rather than
 drift. The other three ways a router goes missing are empty here: every Application's `path`
@@ -24,7 +24,7 @@ is live. Both counts, with the day the live one was read, are in
 than a page: `loki.kub.local` serves Loki's query API and its query frontend, and the logs are
 read in Grafana. The `IngressRouteTCP` and `IngressRouteUDP` entries Syncthing and Minecraft
 declare match on `HostSNI(*)`, carry no hostname, and are therefore not rows here — which is
-why `hack/check-exposure.sh` prints `checked: 77 routes`: its grep takes
+why `hack/check-exposure.sh` prints `checked: 79 routes`: its grep takes
 `IngressClass` and the TCP/UDP objects as well, and none of them is an `IngressRoute`.
 How a request arrives, what the gate does and which certificate answers the handshake are
 [how it works](../how-it-works/network.md); who signs in where is
@@ -46,7 +46,7 @@ On the allowlist, meant to answer the internet.
 | `www.ashudev.com` | ashudev | `ashudev` | `doc-nginx-www` | Let's Encrypt | yes |
 | `www.ashuvidz.com` | ashuvidz | `ashuvidz` | `doc-nginx-www` | Let's Encrypt | yes |
 
-## Internal over TLS (27)
+## Internal over TLS (28)
 
 | Host | Application | Namespace | Gate | TLS | Public? |
 |---|---|---|---|---|---|
@@ -55,6 +55,7 @@ On the allowlist, meant to answer the internet.
 | `bazarr-anime.kub.local` | bazarr-anime | `media-stack` | `lan-only`, `authentik-forwardauth`, `redirect-to-https` | internal CA | no |
 | `bazarr.kub.local` | bazarr | `media-stack` | `lan-only`, `authentik-forwardauth`, `redirect-to-https` | internal CA | no |
 | `calibre.kub.local` | calibre-web-automated | `media-stack` | `lan-only`, `redirect-to-https` | internal CA | no |
+| `crowdsec.kub.local` | crowdsec-web-ui | `security` | `lan-only`, `redirect-to-https` | internal CA | no |
 | `dashy.kub.local` | dashy | `dashy` | `lan-only`, `redirect-to-dashy` | internal CA | no |
 | `docs.kub.local` | docs-site | `docs` | `lan-only`, `authentik-forwardauth`, `redirect-to-https` | internal CA | no |
 | `freshrss.kub.home.ashudev.com` | news-freshrss | `news` | `lan-only`, `doc-freshrss-redirect-https` | Let's Encrypt | no |

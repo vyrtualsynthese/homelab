@@ -91,6 +91,7 @@ belong to is [media.md](media.md).
 | `news-freshrss` | `news` | nuc0 | A | RSS reader, on a claim the chart creates |
 | `renovate` | `renovate` | nas | D | nightly pull requests that bump dependencies |
 | `crowdsec` | `security` | nas | D | attack detection: reads the router's access log on `streaming`, keeps the decisions on `nas`; the banning is a host service, see the CrowdSec runbook |
+| `crowdsec-web-ui` | `security` | Pending | A | second view of those decisions and alerts, with the buttons to undo a ban; it reads the LAPI directly, so it works while Grafana is the thing that is broken |
 | `security-exporter` | `security` | nas | A | posture numbers for the security dashboard: live route count, un-gated routes, public hosts, privileged workloads |
 | `syncthing` | `syncthing` | nuc0 | A | file sync between devices |
 | `thelounge` | `thelounge` | nuc0 | A | web IRC client |
