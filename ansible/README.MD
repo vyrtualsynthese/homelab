@@ -190,6 +190,12 @@ overrides; `./collectors/network-audit.sh --help` lists the rest of the variable
 stdout, and a device that does not answer is reported in it rather than on the terminal: the exit is 0
 when at least one switch answered it, 1 when none did, 2 on a usage error.
 
+Neither switch holds this `audit` account until the three commands above are run once per switch, so
+the collector reports a device that does not answer rather than configuration until then. The *write*
+account, and the key custody that goes with it — `deploy`, the same key-only login with
+`read,write,ssh,test` and no `policy`, its private half under a UNIX user the agent's shell cannot
+read — is [the switch access runbook](../docs/runbooks/switch-access.md).
+
 <!-- Do not cite a snapshot page from here until one exists: `hack/check_docs.py` resolves every
 `docs/*.md` path in the repository and fails on one that is not there yet. -->
 
