@@ -30,6 +30,13 @@ FTLCONF_dns_listeningMode=ALL
 # day to DNS4EU for its own neighbours.
 FTLCONF_dns_revServers=true,192.168.1.0/24,192.168.1.1,local
 
+# API sessions. The default is 16, they last 30 minutes, and nothing releases one
+# early: an app password cannot delete a session, only the panel's own password
+# can. hack/check_pihole_parity.py takes one per host per run, and the third run
+# in half an hour hit `api_seats_exceeded`. 64 leaves room for the panel, the
+# check and whatever else asks.
+FTLCONF_webserver_api_max_sessions=64
+
 # Pi-hole v6 stops loading /etc/dnsmasq.d unless it is told to: the key
 # defaults to false, so the address= overrides in 02-my-wildcard-dns.conf were
 # silently dead. They had survived because a copy also sat in the old

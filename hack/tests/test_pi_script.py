@@ -532,3 +532,9 @@ def test_the_shared_settings_turn_on_the_dnsmasq_include():
 
     assert "FTLCONF_misc_etc_dnsmasq_d=true" in settings
     assert "\nFTLCONF_misc_dnsmasq_lines=\n" in settings
+
+
+def test_the_shared_settings_leave_room_for_api_sessions():
+    """16 sessions last 30 minutes and an app password cannot close one, so three
+    runs of the parity check in half an hour answered `api_seats_exceeded`."""
+    assert "FTLCONF_webserver_api_max_sessions=64" in rendered_section("rbp0", SETTINGS_HEADER)
