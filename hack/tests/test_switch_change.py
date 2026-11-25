@@ -260,6 +260,11 @@ class RendererV7Tests(unittest.TestCase):
     def test_a_quoted_value_survives_byte_for_byte(self):
         self.assertIn('comment="a \\"b\\" c=d"', self.render("quoted-value.rsc"))
 
+    def test_a_set_whose_selector_uses_another_attribute_still_renders(self):
+        out = self.render("quoted-value.rsc")
+        self.assertIn('find interface="sfp-sfpplus2"', out)
+        self.assertIn("comment=", out)
+
 
 class RefusalTests(unittest.TestCase):
     def refused(self, change, export="v7-plain.rsc", verbose="v7-verbose.rsc"):
@@ -306,6 +311,17 @@ class RefusalTests(unittest.TestCase):
 
     def test_a_value_holding_a_brace_is_refused(self):
         self.assertIn("brace", self.refused("refuse-brace.rsc"))
+
+    def test_a_set_that_rewrites_its_own_selector_is_refused(self):
+        err = self.refused("refuse-selector-rewrite.rsc")
+        self.assertIn("line 2", err)
+        self.assertIn("address", err)
+        self.assertIn("selector", err)
+
+    def test_a_set_that_rewrites_one_of_two_selector_attributes_is_refused(self):
+        err = self.refused("refuse-selector-partial.rsc")
+        self.assertIn("line 2", err)
+        self.assertIn("pvid", err)
 
     def test_a_change_to_the_files_is_refused(self):
         self.assertIn("/file", self.refused("refuse-file.rsc"))
