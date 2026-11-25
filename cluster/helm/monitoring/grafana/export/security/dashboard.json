@@ -14,7 +14,7 @@
           "type": "prometheus",
           "uid": "PBFA97CFB590B2093"
         },
-        "description": "2 = alerting, 1 = watch, 0 = calm. 2 when a Security rule is firing or more than 20 bans landed in the last hour. 1 when any ban is active, when refusals are above 85 % of all requests over 15 minutes, or when more than 20 sign-ins failed in 15 minutes. 85 % is the top of the measured hourly band (0.33-81.13 % over 92 samples) plus a margin; the 20 % this started from sat inside the band, with 42 of 92 hours above it.",
+        "description": "2 = alerting, 1 = watch, 0 = calm. 2 when more than 20 bans landed in the last hour, when the posture counts moved, when the exporter is stale or a family it publishes is gone, or when refusals are above 85 % of all requests. 1 when any ban is active or more than 20 sign-ins failed in 15 minutes. 85 % is the top of the measured hourly band (0.33-81.13 % over 92 samples) plus a margin; the 20 % this started from sat inside the band, with 42 of 92 hours above it. Nothing here reads Prometheus's ALERTS family: Grafana evaluates every rule in this cluster, so that family is empty and a term on it would never fire.",
         "fieldConfig": {
           "defaults": {
             "color": {
@@ -95,7 +95,7 @@
               "type": "prometheus",
               "uid": "PBFA97CFB590B2093"
             },
-            "expr": "clamp_max( 2 * (count(ALERTS{alertname=~\"Security.*\", alertstate=\"firing\"}) > bool 0 or vector(0)) + 2 * (delta(sum(fw_bouncer_banned_ips)[1h:1m]) > bool 20 or vector(0)) + (sum(fw_bouncer_banned_ips) > bool 0 or vector(0)) + (100 * sum(rate(traefik_router_requests_total{code=~\"4..\"}[15m])) / sum(rate(traefik_router_requests_total[15m])) > bool 85 or vector(0)) + (sum(homelab_authentik_signins_15m{outcome=\"failure\"} > bool 20) or vector(0)), 2)",
+            "expr": "clamp_max( 2 * (delta(sum(fw_bouncer_banned_ips)[1h:1m]) > bool 20 or vector(0)) + 2 * (count(homelab_security_ungated_routes > 0)        or count(homelab_security_public_hosts != 9)        or count(homelab_security_privileged_workloads != 9) or vector(0)) + 2 * (((time() - homelab_security_exporter_last_success_timestamp_seconds > 600) or absent(homelab_security_exporter_last_success_timestamp_seconds) or absent(fw_bouncer_banned_ips) or absent(cs_active_decisions) or absent(cs_parser_hits_ok_total) or vector(0)) > bool 0) + (sum(fw_bouncer_banned_ips) > bool 0 or vector(0)) + (100 * sum(rate(traefik_router_requests_total{code=~\"4..\"}[15m])) / sum(rate(traefik_router_requests_total[15m])) > bool 85 or vector(0)) + (sum(homelab_authentik_signins_15m{outcome=\"failure\"} > bool 20) or vector(0)), 2)",
             "instant": true,
             "range": false,
             "refId": "A"
@@ -822,7 +822,7 @@
     "timezone": "browser",
     "title": "Homelab \u00b7 Security",
     "uid": "homelab-security",
-    "version": 7
+    "version": 9
   },
   "folderUid": "homelab",
   "overwrite": true
