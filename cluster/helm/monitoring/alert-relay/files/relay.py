@@ -2,17 +2,16 @@
 """Turn a Grafana alert into a card on the alerts board.
 
 Grafana sends its own JSON; the board creates a card from {"title": …}. Nothing
-translates between them, so this does: one endpoint, one card per incident, a
-comment per repetition, a comment on resolve, and never a close.
+translates between them, so this does: one endpoint, one card per incident, and
+the card's column decides what a delivery does.
 
 The rules it enforces, in order:
 
-  * every delivered notification gets a card — Grafana's routing tree decides
-    what belongs on the board, the relay does not second-guess it;
-  * a firing alert with no open card opens one;
-  * the same alert firing again is a comment on that card, never a second card;
-  * a resolve is a comment and nothing else: the card stays where it is until a
-    session investigates it, and a resolve with no card writes nothing at all;
+  * a firing with no card, or with the newest card in Done, opens one;
+  * a firing whose newest card is in Backlog or Doing writes nothing;
+  * a firing whose newest card is in Validation, or any other open column,
+    opens a new card;
+  * a resolve writes nothing at all and never moves a card;
   * a malformed body is refused out loud, never dropped in silence.
 
 Deployed from the chart's ConfigMap; see docs/runbooks/alert-relay.md.
@@ -23,13 +22,10 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-import re
 import sys
-import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 BOARD_NOTE = "Opened by the alert relay from Grafana. `bot-alertmanager` wrote it."
@@ -128,33 +124,16 @@ def render_body(payload: dict, key: str, grafana_url: str = "") -> str:
     return "\n".join(lines)
 
 
-def render_comment(payload: dict, now: datetime | None = None) -> str:
-    """Repetition and resolution are comments: same incident, more evidence."""
-    now = now or datetime.now(timezone.utc)
-    stamp = now.strftime("%Y-%m-%d %H:%M UTC")
-    alerts = payload.get("alerts") or [{}]
-    if (payload.get("status") or "").lower() == "resolved":
-        return (f"Resolved {stamp}. The card stays open on purpose: what caused it, and what stops it "
-                "coming back, belongs here before it is closed.")
-    count = len(alerts)
-    return f"Fired again {stamp} ({count} alert(s) in this group)."
-
-
-def should_comment(last_comment_epoch: float | None, now_epoch: float, cooldown: float) -> bool:
-    """A flapping rule must not write a hundred comments in an hour."""
-    if last_comment_epoch is None:
-        return True
-    return (now_epoch - last_comment_epoch) >= cooldown
-
-
 def find_query(key: str) -> str:
-    """The search that finds an open card for this incident.
+    """The search that finds the newest card for this incident.
 
-    Vikunja's filter language quotes values with single quotes; double quotes make
-    the API answer 400, which is how this cost a round. A quote inside the key is
-    dropped rather than escaped, because the language has no escape.
+    Done cards are included on purpose: a closed incident must not stop the next
+    one from opening a card. Vikunja's filter language quotes values with single
+    quotes; double quotes make the API answer 400, which is how this cost a
+    round. A quote inside the key is dropped rather than escaped, because the
+    language has no escape.
     """
-    return f"description like '{key.replace(chr(39), '')}' && done = false"
+    return f"description like '{key.replace(chr(39), '')}'"
 
 
 def parse_payload(raw: bytes) -> dict:
@@ -168,14 +147,29 @@ def parse_payload(raw: bytes) -> dict:
     return payload
 
 
+def bucket_title(card: dict, view: int) -> str:
+    """The card's column in the kanban view whose id is `view`.
+
+    A card reported without a bucket is a broken answer, not a card in an unknown
+    place: opening another would duplicate one someone is already holding. Fail the
+    delivery visibly instead, so Grafana records it and no card is created.
+    """
+    for bucket in card.get("buckets") or []:
+        if bucket.get("project_view_id") == view:
+            return bucket.get("title") or ""
+    raise ValueError(f"card #{card.get('id')} carries no bucket for view {view}")
+
+
 # ---------------------------------------------------------------------------
 # The board.
 # ---------------------------------------------------------------------------
 class Board:
-    def __init__(self, base: str, token: str, project: int):
+    def __init__(self, base: str, token: str, project: int, view: int, backlog_bucket: int):
         self.base = base.rstrip("/")
         self.token = token
         self.project = project
+        self.view = view
+        self.backlog_bucket = backlog_bucket
 
     def call(self, method: str, path: str, body: dict | None = None):
         data = json.dumps(body).encode() if body is not None else None
@@ -186,14 +180,23 @@ class Board:
             raw = answer.read()
         return json.loads(raw) if raw else None
 
-    def find_open_card(self, key: str) -> dict | None:
+    def find_card(self, key: str) -> dict | None:
+        """The newest card for the key, with its column already expanded.
+
+        Newest because one key recurs over months: the current incident is the
+        latest card, never the oldest.
+        """
         query = urllib.parse.quote(find_query(key), safe="")
-        found = self.call("GET", f"/api/v1/projects/{self.project}/tasks?per_page=20&filter={query}")
-        return found[0] if found else None
+        path = (f"/api/v2/projects/{self.project}/tasks?per_page=10"
+                f"&sort_by=id&order_by=desc&expand=buckets&filter={query}")
+        found = self.call("GET", path)
+        items = found.get("items") if isinstance(found, dict) else found
+        return items[0] if items else None
 
     def open_card(self, title: str, description: str) -> dict:
-        return self.call("PUT", f"/api/v1/projects/{self.project}/tasks",
-                         {"title": title, "description": description})
+        return self.call("POST", f"/api/v2/projects/{self.project}/tasks?format=markdown",
+                         {"title": title, "description": description,
+                          "bucket_id": self.backlog_bucket})
 
     def label(self, task: int, name: str) -> bool:
         """Label the card if the board has that label; a missing one is not fatal.
@@ -209,52 +212,31 @@ class Board:
         self.call("PUT", f"/api/v1/tasks/{task}/labels", {"label_id": found})
         return True
 
-    def comment(self, task: int, text: str) -> None:
-        self.call("PUT", f"/api/v1/tasks/{task}/comments", {"comment": text})
-
-    def last_comment_epoch(self, task: int) -> float | None:
-        comments = self.call("GET", f"/api/v1/tasks/{task}/comments") or []
-        if not comments:
-            return None
-        created = comments[-1].get("created", "")
-        try:
-            return datetime.fromisoformat(created.replace("Z", "+00:00")).timestamp()
-        except ValueError:
-            return None
-
 
 # ---------------------------------------------------------------------------
 # The endpoint.
 # ---------------------------------------------------------------------------
-def handle(payload: dict, board: Board, cooldown: float, now: datetime | None = None) -> str:
-    """What to do with one delivery. Returns a word for the log."""
+def handle(payload: dict, board: Board) -> str:
+    """What to do with one delivery. Returns the outcome for the log."""
     key = key_slug(payload)
     resolved = (payload.get("status") or "").lower() == "resolved"
-    card = board.find_open_card(key)
-    if card is None:
-        # A resolve for an incident that never opened a card is a test
-        # notification or a rule deleted mid-flight: it is not a new incident.
-        if resolved:
-            return "resolved with no card"
-        created = board.open_card(render_title(payload), render_body(payload, key))
-        for name in ("task", "alert"):
-            board.label(created["id"], name)
-        return f"opened #{created.get('id')}"
-
-    stamp = (now or datetime.now(timezone.utc)).timestamp()
-    last = board.last_comment_epoch(card["id"])
-    # The cooldown exists to keep a flapping alert from writing a hundred comments.
-    # A resolve is an ending, not a flap: it is written even right after a repeat,
-    # or the card would claim the incident is still running.
-    if not resolved and not should_comment(last, stamp, cooldown):
-        return f"throttled on #{card['id']}"
-    board.comment(card["id"], render_comment(payload, now))
-    return f"{'resolved' if resolved else 'commented'} on #{card['id']}"
+    card = board.find_card(key)
+    if resolved:
+        if card is None:
+            return "resolved, no card"
+        return f"resolved, ignored, #{card['id']} in {bucket_title(card, board.view)}"
+    if card is not None and not card.get("done"):
+        column = bucket_title(card, board.view)
+        if column in ("Backlog", "Doing"):
+            return f"ignored, #{card['id']} in {column}"
+    created = board.open_card(render_title(payload), render_body(payload, key))
+    for name in ("task", "alert"):
+        board.label(created["id"], name)
+    return f"opened #{created.get('id')}"
 
 
 class Handler(BaseHTTPRequestHandler):
     board: Board
-    cooldown: float
 
     def do_GET(self):  # noqa: N802 — the name is the HTTP method
         if self.path == "/healthz":
@@ -284,7 +266,7 @@ class Handler(BaseHTTPRequestHandler):
             self.end_headers()
             return
         try:
-            outcome = handle(payload, self.board, self.cooldown)
+            outcome = handle(payload, self.board)
         except Exception as error:  # noqa: BLE001 — a failed delivery must be visible
             print(f"failed: {error}", file=sys.stderr, flush=True)
             self.send_response(502)
@@ -303,9 +285,10 @@ def main() -> int:
         base=os.environ.get("VIKUNJA_BASE", DEFAULT_BASE),
         token=os.environ["VIKUNJA_TOKEN"],
         project=int(os.environ.get("ALERTS_PROJECT", "9")),
+        view=int(os.environ.get("ALERTS_VIEW", "59")),
+        backlog_bucket=int(os.environ.get("ALERTS_BACKLOG_BUCKET", "115")),
     )
     Handler.board = board
-    Handler.cooldown = float(os.environ.get("COMMENT_COOLDOWN_SECONDS", "600"))
     port = int(os.environ.get("PORT", "8080"))
     # Threaded on purpose: one slow board call must not stall the probes. A wrong
     # port once made every request hang for fifteen seconds and the health checks
