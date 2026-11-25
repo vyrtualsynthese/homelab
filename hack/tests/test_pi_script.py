@@ -213,6 +213,34 @@ def test_setup_removes_a_service_the_template_no_longer_declares():
     assert "--remove-orphans" in text
 
 
+def test_setup_converges_every_service_before_recreating_pihole():
+    """`up -d <service>` touches only that service. When a mounted file changed,
+    the plain run must still happen first, or an image bump in the same run is
+    left running the old container while verify (names and state only) says ok."""
+    text = SCRIPT.read_text()
+    plain = "docker compose up -d --remove-orphans >/dev/null"
+    recreate = "docker compose up -d --force-recreate pihole >/dev/null"
+    assert plain in text
+    assert recreate in text, "pihole is recreated with a command of its own"
+    assert text.index(plain) < text.index(recreate), "the full converge comes first"
+
+
+def test_setup_rewrites_a_file_that_verify_would_flag(tmp_path):
+    """A file missing its final newline: setup must repair it, not bless it.
+    Otherwise verify flags it forever and setup's only answer is changed=0."""
+    root = tmp_path / "pi"
+    stack = _pi_fixture(root)
+    assert run("setup", "rbp1", root=root).returncode == 0
+    placed = stack / "etc-dnsmasq.d/02-my-wildcard-dns.conf"
+    placed.write_bytes(placed.read_bytes().rstrip(b"\n"))
+    assert run("verify", "rbp1", root=root).returncode == 1
+
+    out = run("setup", "rbp1", root=root)
+
+    assert "changed=1" in out.stdout, out.stdout
+    assert run("verify", "rbp1", root=root).returncode == 0
+
+
 def test_setup_restarts_pihole_when_a_mounted_file_changed():
     """A bind mount is resolved at container start. Writing a config under a
     running pihole leaves the old mount in place, so the change is invisible."""
