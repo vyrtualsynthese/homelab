@@ -2204,7 +2204,22 @@ def events_url(now, minutes):
             f"?page_size=1000&ordering=-created&created__gte={urllib.parse.quote(since)}")
 ```
 
-`fetch_authentik(token, now)` walks the `pagination.next` cursor until the window is exhausted, with a hard cap of 20 pages, and returns the events. `render()` gains:
+`fetch_authentik(token, now, minutes)` walks pages until the window is exhausted, with a hard cap of
+20 pages, and returns the events. Three measured properties of that endpoint shape it:
+
+- `page_size` is capped at **100** by the server whatever the request asks, so a busy day is several
+  pages and one answer undercounts. `pagination.next` is an **integer page number** (`2`), not a URL
+  to follow.
+- There is **no date filter**. The OpenAPI schema offers `action`, `actions`, `brand_name`,
+  `client_ip`, the `context_*` fields, `username`, `ordering`, `search` and pagination, and nothing
+  else: a `created__gte` parameter is accepted and ignored, and the answer is the whole retention
+  period (~8 days on 2026-11-25). The bound stays in the URL because it is the shape of the request,
+  and the window is applied client-side on each event's own `created`, the walk stopping at the first
+  older event.
+- Reaching the page cap before the window is exhausted **raises**: a partial list would publish a
+  count that is quietly too small, which reads exactly like a quiet day.
+
+`render()` gains:
 
 ```
 # HELP homelab_authentik_signins_15m Sign-in attempts in the last 15 minutes, by outcome.
@@ -2229,19 +2244,34 @@ No address is a label: the counts are aggregate, and the per-address view is a L
     secretKey: token
 ```
 
-and the Deployment maps it to `AUTHENTIK_TOKEN` with `secretKeyRef`.
+and the Deployment maps it to `AUTHENTIK_TOKEN` with `secretKeyRef` and **`optional: true`**: the
+Application syncs before the operator creates the Secret, and the pod must start posture-only rather
+than sit in `CreateContainerConfigError`. With no token the exporter publishes no sign-in family at
+all — never three zeros, which would read as a quiet day. The freshness family covers every
+configured source, so with a token one poll succeeds only when the cluster read *and* the authentik
+read succeed, and an authentik outage stops the timestamp instead of leaving stale counts looking
+live.
 
 - [ ] **Step 4: Create the Secret and prove one number by hand**
 
+These two commands are the operator's: the Secret is created by hand and never committed.
+
 ```bash
 kubectl -n security create secret generic security-exporter-authentik --from-literal=token=$AUTHENTIK_TOKEN
-# The same count the exporter publishes, from the API, so a "0" is a measurement:
-curl -s -H "Authorization: Bearer $AUTHENTIK_TOKEN" \
-  "https://authentik.kub.home.ashudev.com/api/v3/events/events/?page_size=1000&ordering=-created" \
-  | jq '[.results[] | select(.action == "login_failed")] | length'
+# The same count the exporter publishes, from the API, so a "0" is a measurement.
+# Every page, because the server caps a page at 100 events, and the window filtered
+# here, because the endpoint has no date parameter. A page past the end answers
+# `404 {"detail": "Invalid page."}`, hence `.results // []`:
+SINCE=$(date -u -d '24 hours ago' +%Y-%m-%dT%H:%M:%S)
+for p in $(seq 1 20); do
+  curl -s -H "Authorization: Bearer $AUTHENTIK_TOKEN" \
+    "https://authentik.kub.home.ashudev.com/api/v3/events/events/?page_size=100&page=$p&ordering=-created";
+done | jq -s --arg since "$SINCE" \
+    '[.[] | (.results // [])[] | select(.action == "login_failed" and .created >= $since)] | length'
 ```
 
-Expected: the same number as `homelab_authentik_signins_24h{outcome="failure"}` after one poll.
+Expected: the same number as `homelab_authentik_signins_24h{outcome="failure"}` after one poll, once
+the pod has restarted with the token in place.
 
 - [ ] **Step 5: Run and commit**
 
