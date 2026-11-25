@@ -292,8 +292,13 @@ def _merge_hosts(routes: list[Route]) -> list[Route]:
     return merged
 
 
-def render_routes(root: pathlib.Path) -> str:
-    """The routes page, rendered from every chart that declares a route."""
+def render_routes(root: pathlib.Path, live_ingress_routes: int = LIVE_INGRESS_ROUTES) -> str:
+    """The routes page, rendered from every chart that declares a route.
+
+    The page claims one name is live and rendered nowhere, so the live count it prints has to be
+    the rendered count plus one. The live side cannot be measured from the repository, so the count
+    is an argument: production takes `LIVE_INGRESS_ROUTES`, and a fixture tree passes its own.
+    """
     routes: list[Route] = []
     objects = 0
     ingress_objects = 0
@@ -319,6 +324,20 @@ def render_routes(root: pathlib.Path) -> str:
             apps.add(name)
         routes.extend(rendered)
     routes = _merge_hosts(routes)
+
+    # The page says one name is live and rendered nowhere, so the live count has to be the
+    # rendered count plus one. Both numbers are read back here before either is written down:
+    # `LIVE_INGRESS_ROUTES` is typed and `objects` is counted, and only this comparison keeps
+    # them from disagreeing silently.
+    if live_ingress_routes != objects + 1:
+        raise GenError(
+            f"the page would say {live_ingress_routes} `IngressRoute` objects are live against the "
+            f"{objects} the charts render, and that exactly one name is live and rendered nowhere, "
+            "which cannot both be true. Re-measure the live side "
+            "(`kubectl get ingressroute -A --no-headers | wc -l`), then update "
+            "`LIVE_INGRESS_ROUTES` in hack/gen_docs.py and `expected.ingressRoutes` in "
+            "cluster/helm/security/security-exporter/values.yaml together."
+        )
 
     public = [r for r in routes if r.public]
     plain = [r for r in routes if not r.public and r.tls == "none"]
@@ -352,7 +371,7 @@ def render_routes(root: pathlib.Path) -> str:
         "read in Grafana. The `IngressRouteTCP` and `IngressRouteUDP` entries Syncthing and Minecraft",
         "declare match on `HostSNI(*)`, carry no hostname, and are therefore not rows here — which is",
         f"why `hack/check-exposure.sh` prints `checked: {ingress_objects} routes`: its grep takes",
-        "`IngressClass` and those four objects as well, and none of them is an `IngressRoute`.",
+        "`IngressClass` and the TCP/UDP objects as well, and none of them is an `IngressRoute`.",
         "How a request arrives, what the gate does and which certificate answers the handshake are",
         "[how it works](../how-it-works/network.md); who signs in where is",
         "[the SSO matrix](sso-applications.md). `Public?` is what `hack/check_exposure.py` allows.",

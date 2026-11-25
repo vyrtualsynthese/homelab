@@ -4,8 +4,10 @@
 # it describes, and `expectedNote` says when the live side was last read.
 #
 # Read on 2026-11-25 through the read-only MCP ServiceAccount: 73 IngressRoute
-# objects live, against 72 the charts render — the one-object difference is named
-# in docs/reference/routes.md — 9 public hosts, and 4 privileged workloads.
+# objects live, 9 public hosts, and 4 privileged workloads. The rendered number is
+# counted by hack/gen_docs.py, not typed in; the one route that explains the
+# difference between the two is named in docs/reference/routes.md, and that page
+# and this block move together, which test_security_exporter.py enforces.
 #
 # `privilegedWorkloads` counts the charts in this repository that set
 # `privileged: true`: the qbittorrent WireGuard sidecar, and the mktxp,
