@@ -63,9 +63,13 @@ class BouncerRoleTests(unittest.TestCase):
         self.role = ANSIBLE / "roles/crowdsec"
 
     def test_the_role_installs_the_nftables_bouncer_and_not_the_iptables_one(self):
+        # The package literal lives in `defaults`, not in a task name: an assertion
+        # on `tasks/main.yml` would only ever match the title and stop biting.
+        defaults = (self.role / "defaults/main.yml").read_text()
+        self.assertIn("crowdsec-firewall-bouncer-nftables", defaults)
+        self.assertNotIn("crowdsec-firewall-bouncer-iptables", defaults)
         tasks = (self.role / "tasks/main.yml").read_text()
-        self.assertIn("crowdsec-firewall-bouncer-nftables", tasks)
-        self.assertNotIn("crowdsec-firewall-bouncer-iptables", tasks)
+        self.assertIn('name: "{{ crowdsec_package }}"', tasks)
 
     def test_the_key_is_required_and_comes_from_the_environment(self):
         tasks = (self.role / "tasks/main.yml").read_text()
