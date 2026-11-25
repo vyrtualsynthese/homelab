@@ -128,8 +128,12 @@ YAML
 sudo umount /mnt
 ```
 
-A public key in the repository is a committed identity, so that line is pasted at the keyboard and never
-committed. `PASSWD:ALL` keeps the human account's sudo asking for a password, which is the layer's rule
+A key in the repository is a name, not a credential: `trusted_ssh_keys` is committed on purpose, and a
+public half cannot log in without the private half that stays on the laptop that made it. The line
+pasted here is one of those keys — **paste one the list already declares**, because the layer's second
+run replaces `vronteix`'s file with the declaration and removes a key outside it. It goes in at the
+keyboard because a fresh image has no other way in. `PASSWD:ALL` keeps the human account's sudo asking
+for a password, which is the layer's rule
 ([the automation account](../decisions/2026-11-24-automation-sudo-account.md)). Naming `users:` without
 `- default` replaces the image's `ubuntu` account rather than adding to it.
 
@@ -173,9 +177,10 @@ the pins live in the script's header. This step therefore needs the network, and
 starts. An engine already present outside its band is named and left alone: the script never upgrades a
 runtime in place, so a Pi already running 28.3.2 moves on its next reflash, not through `setup`.
 
-**7. Bootstrap the layer.** Two runs, in this order: the first creates the `ansible` account from the keys
-`vronteix` already accepts, the second connects as it. `-K` is needed on the first because a fresh image's
-sudo asks for a password.
+**7. Bootstrap the layer.** Two runs, in this order: the first creates the `ansible` account holding the
+keys `trusted_ssh_keys` declares — the same list `roles/accounts` writes into `vronteix`, so a reflashed
+Pi is adopted by the line that is already there — and the second connects as it. `-K` is needed on the
+first because a fresh image's sudo asks for a password.
 
 ```bash
 cd ansible
