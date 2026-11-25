@@ -3,7 +3,7 @@ name: dashy
 description: Dashy - Mon déploiement custom
 type: application
 version: 0.1.0
-appVersion: "4.9.20"
+appVersion: "4.10.0"
 dependencies:
   - name: dashy
     version: 1.0.0           # Version du chart open-source que tu veux utiliser
