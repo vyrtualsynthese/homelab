@@ -395,7 +395,7 @@ git commit -m "🚀 feat(monitoring): serve the snapraid marker from a textfile-
 
 - [ ] **Step 1: Record the rule in `docs/reference/alerts.md`**
 
-- Header counts: `homelab-core` **29** rules, `homelab-core-fast` 21, **50** rules total (the counts after Task 5 creates it).
+- Header counts: `homelab-core` **30** rules, `homelab-core-fast` 21, **51** rules total (develop's split of `DriveNeedsReplacement` into `DriveWorn`/`DriveFailing` had already taken the group to 29 / 50, so this rule is the thirtieth and fifty-first).
 - Table row, after the `RestoreDrillOverdue` row:
   `| `SnapraidParityStale` | no completed snapraid sync on `nas` for 7 days, or no marker at all | 10m | warning | inactive |`
 - A prose paragraph after the `RestoreDrillOverdue` one, covering: the runner (`ansible/roles/snapraid`) writes `homelab_snapraid_last_sync_timestamp_seconds` into `/var/lib/node-exporter/textfile/snapraid.prom` only after `snapraid sync` exits cleanly; a second textfile-only node-exporter on `nas` serves it; the age is computed in PromQL and the 7-day comparison sits in the threshold for the same reason as the drill rule; seven days is a week of missed nights and longer than the multi-night first sync; `snapraid status` is not called because it refuses while a sync holds the content lock; and that a `[no value]` summary means the marker or the exporter is missing, not that the runner is slow.
@@ -600,7 +600,7 @@ curl -sk -H "Authorization: Bearer $GRAFANA_TOKEN" \
   | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d["interval"], len(d["rules"])); print([ (r["title"], r["for"], r["noDataState"], r["execErrState"]) for r in d["rules"] if r["title"].startswith("Snapraid")])'
 ```
 
-Expected: `300 29`, and `('SnapraidParityStale', '10m', 'Alerting', 'OK')`. If the page disagrees with this read-back, correct `docs/reference/alerts.md` in a one-file commit.
+Expected: `300 30`, and `('SnapraidParityStale', '10m', 'Alerting', 'OK')`. If the page disagrees with this read-back, correct `docs/reference/alerts.md` in a one-file commit.
 
 - [ ] **Step 7: Close the card**
 
