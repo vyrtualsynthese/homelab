@@ -1,25 +1,26 @@
 # qBittorrent's Web UI stops answering during downloads
 
-> **In one line.** The Web UI and API stop answering while torrents keep moving; the config claim
-> moved to `local-path` on 2026-11-25 and the stall came back six minutes later, and exporting the
-> downloads volume `async` the same evening changed nothing, so neither the config volume nor the
-> server's fsync is the cause.
+> **In one line.** The Web UI and API go dead because qBittorrent's own write to `/downloads` wedges
+> the NFS client on `streaming`: one page is left waiting to be written for an I/O nothing performs,
+> and every `close()` of that file then blocks forever. Moving `/config` off NFS did not stop it and
+> neither did exporting the download volume `async`; in-flight downloads move to local disk on
+> 2026-11-25 (board cards 758 and 777).
 >
 > **Use it when** qBittorrent's Web UI hangs, the exporter stops being scraped, or you want the
-> evidence gathered on 13 and 25 November and what cleared the hang · **Verified** 2026-11-25 19:20:
-> the Web UI dead for 20 minutes while the mount wrote 2,000 times a second, with every server-side
-> and network-side suspect measured and cleared · **Kind:** record
+> evidence gathered on 13 and 25 November, the suspects that were cleared, and what cleared the hang
+> · **Verified** 2026-11-25 19:35: two live wedges read from `/proc`, the client waiting on an I/O
+> that nothing performs while the server and the network measured clean · **Kind:** record
 >
 > **Sources** `cluster/helm/media-stack/qbittorrent/values.yaml`,
 > `cluster/helm/media-stack/qbittorrent-exporter/values.yaml`, live `up` and
 > `scrape_duration_seconds` from Prometheus, kernel stacks read from `streaming` and `nas`
 
-Status: **open.** The config claim was moved off NFS on 2026-11-25 and it was not the cause; the
-downloads export was made `async` that evening and the stall came back under it too. What is left is
-a wedge in the app's own event loop, covered under *The async export, and why it did not help*.
-Documented 2026-11-13, measured again on 2026-11-25 (board cards 758 and 777). The exporter's alert
-stays silenced until it is closed or handed over; the note under *Why the app was not changed until
-now* says what to do with that silence.
+Status: **second fix deployed 2026-11-25, gate not passed yet.** The config claim was moved off NFS
+on 2026-11-25 and it was not the cause; the downloads export was made `async` that evening and the
+stall came back under it too. The in-flight downloads moved off the export the same evening, under
+*The fix: in-flight downloads off the export*. Documented 2026-11-13, measured again on 2026-11-25
+(board cards 758 and 777). The exporter's alert stays silenced until it is closed or handed over; the
+note under *Why the app was not changed until now* says what to do with that silence.
 
 ## What is seen
 
@@ -264,11 +265,86 @@ Whether the second is a leftover of the first (a lock taken before the stall and
 be told from outside the binary. The image ships a static, stripped `qbittorrent-nox`, so a backtrace
 of its threads resolves no function: an `addr2line` on those addresses prints `??`.
 
+### The wedge is the client's own write, 19:30
+
+A pod started at 19:24 with a fresh mount was dead by 19:28, and this time the blocked thread's own
+kernel stack was readable. Three samples of the same thread, seconds apart:
+
+| Sample | Stack | Meaning |
+|---|---|---|
+| 1 | `nfs4_file_flush` → `nfs_wb_all` → `filemap_write_and_wait_range` → `folio_wait_writeback` | `close()`, waiting for a page to finish being written |
+| 2 | `nfs4_run_open_task` → `rpc_wait_for_completion_task` → `rpc_wait_bit_killable` | `open()`, waiting for the reply to an `OPEN` |
+| 3 | `nfs4_do_close` → `rpc_wait_for_completion_task` → `rpc_wait_bit_killable` | `close()`, waiting for the reply to a `CLOSE` |
+
+So the thread is not parked on one call: it cycles through them, and each waits for a remote
+procedure call ("RPC", one NFS request) that never completes. What the client reported about those
+calls at the same moment:
+
+| Where | Observation |
+|---|---|
+| the transport's own state | `0x12`, which is `XPRT_CONNECTED` and `XPRT_BOUND`: not congested, not waiting for socket buffer space |
+| the request counters | `retrans 0`, so nothing was ever re-sent |
+| the socket | `ESTAB` to `192.168.1.41:2049`, both directions active within the last millisecond |
+| `nas` | every `nfsd` thread idle, `jbd2` idle, no task in `D` |
+| the lease | `seconds from last renew: 0`, so `SEQUENCE` calls were reaching the server |
+| the page that `close()` was waiting for | `Dirty: 764 kB`, **`Writeback: 0 kB`** |
+
+The last line names the fault: the kernel is waiting for a page that is marked "being written" while
+nothing is writing it. A page in that state never finishes, so every `close()` of that file blocks
+forever, and the thread that serves the WebUI waits on the session lock the blocked thread holds. It
+is a wedge on the client, not a slow server and not a slow disk — no request was on the wire, and
+none was ever retried.
+
+The load that produces it, from the app's own `/proc/<pid>/io` and the client's `/proc/net/rpc/nfs`:
+
+| Operation | Rate while downloading |
+|---|---|
+| `write` | ~2,000 a second, 16 KiB pieces, ~33 MB/s |
+| `open` and `close` | ~2,200 a second each |
+| the transport carrying it | one TCP connection, shared by all 21 mount entries `streaming` holds from `nas` |
+
+`filemap_update_page` in one of the samples is the read side of the same file: a reader waiting for a
+page the writer has left locked. Nothing inside the app can break that deadlock.
+
+### `DisableOSCache` was tried, and it is not the trigger
+
+`Session\DiskIOWriteMode` was `DisableOSCache` — libtorrent's "disable OS cache", which opens torrent
+files `O_DIRECT`, a mode a network filesystem does not like and which forces the open/close churn
+above. It was changed to `EnableOSCache` at 19:39 and the pod restarted: the API answered
+`torrents/info` in 0.033 s with 381 torrents, and it was dead again at 19:41.
+
+The setting stays at `EnableOSCache` (the sane choice for NFS, and it removes the churn). It is a
+preference, so it lives on the claim and nowhere in git; the pre-change file is kept beside it as
+`/config/qBittorrent/qBittorrent.conf.bak-20261125-1939`.
+
+### The fix: in-flight downloads off the export
+
+The write load above is what has to leave the export. `cluster/helm/media-stack/qbittorrent` now
+renders `qbittorrent-temp`, a `local-path` claim mounted at `/downloads-temp`, and the app is told to
+keep incomplete torrents there (`Session\TempPath`, plus `Session\TempPathEnabled=true` which was
+never set). Downloading writes to `streaming`'s own SSD from then on, and the export sees one
+sequential copy per finished torrent instead of thousands of small random writes.
+
+Two consequences worth knowing:
+
+- **A finished torrent is copied, not renamed.** The temp path and the save path are different
+  filesystems, so qBittorrent copies each file and deletes the source. The torrent reaches 100 % when
+  that copy finishes, and only then does the completion hook fire, so an importer never sees a
+  half-copied file.
+- **The two settings live on the config claim, not in the chart.** A rebuilt `qbittorrent-config`
+  comes back with `TempPath` unset and the NFS load returns, silently. Check both keys after any
+  rebuild of that claim.
+
 ### What is still open
 
 - **Settled, and no longer candidates:** `sync` off (tested, wedge returned); ext4 fast-commit (the
   feature is not enabled on this filesystem); a failing disk (SMART clean, no `nvme` error); the
-  network and the server (no retransmission, no timeout, `nfsd` idle); the config volume (moved).
+  network and the server (no retransmission, no timeout, `nfsd` idle); the config volume (moved);
+  `DiskIOWriteMode=DisableOSCache` (tested, wedge returned).
+- **Untested, and the fix makes it moot for downloads:** whether the client ever *re-sends* the call
+  it is waiting for. `retrans` stayed 0 through both wedges, so the call is not queued again and no
+  timeout fires; `rpcdebug -m rpc -s xprt,trans` on `streaming` is what would show it. Worth running
+  only if the stall returns with the write load off the export.
 - **Still untested — replaced names in the page cache.** `lookupcache=none` on the downloads mount is
   the general form of the `fileid changed` messages: 48 of them today, 39 of them in the 17h hour.
   Changing it means recreating the volume, not editing the chart, because mount options come from the
@@ -311,6 +387,11 @@ If the local claim turns out wrong — a torrent count short, a resume file miss
 the export that is still on `nas`: stop the pod, point the chart's `storage.config` at the old claim
 again (a `files` copy back is the same Job in reverse), and start it. Nothing on the export has been
 deleted or modified by the move.
+
+The in-flight downloads have the same way back, and it is one preference pair rather than a copy:
+clear `Session\TempPathEnabled` (WebUI: Downloads, "Keep incomplete torrents in"), or point it back at
+`/downloads/incomplete/`. Nothing is lost either way — `qbittorrent-temp` holds unfinished torrents,
+which the client re-fetches. The claim itself can stay: an unused empty directory costs nothing.
 
 ## Why the app was not changed until now
 

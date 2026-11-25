@@ -342,6 +342,8 @@ spec:
               mountPath: {{ .Values.storage.config.mountPath }}
             - name: downloads
               mountPath: {{ .Values.storage.downloads.mountPath }}
+            - name: temp
+              mountPath: {{ .Values.storage.temp.mountPath }}
             {{- with .Values.volumeMounts }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
@@ -355,6 +357,11 @@ spec:
         - name: downloads
           persistentVolumeClaim:
             claimName: {{ required "storage.downloads.existingClaim is required" .Values.storage.downloads.existingClaim }}
+        # Scratch, not data: see `storage.temp` in `values.yaml` for why the write
+        # load has to stay off the export.
+        - name: temp
+          persistentVolumeClaim:
+            claimName: {{ include "app.tempClaimName" . }}
         - name: dev-tun
           hostPath:
             path: {{ .Values.vpn.tunDevice }}
