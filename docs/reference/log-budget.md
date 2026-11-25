@@ -6,9 +6,9 @@
 > **Use it when** you are about to reduce log volume, or a week of logs looks larger than the last
 > measurement · **Verified** 2026-11-22 · **Kind:** reference
 >
-> **Sources** `cluster/helm/monitoring/fluent-bit/values.yaml` (the inputs, filters and outputs that
-> decide what is shipped), `cluster/helm/monitoring/loki/values.yaml` (retention and the limits), and
-> the metrics page's reader counts. Read through Loki's own HTTP API on 2026-11-22.
+> **Sources** `cluster/helm/monitoring/fluent-bit/values.yaml` (the inputs, filters and outputs),
+> `cluster/helm/monitoring/loki/values.yaml` (retention and the limits), and
+> `docs/reference/metrics.md` (the reader counts). Read through Loki's own HTTP API on 2026-11-22.
 
 The numbers below were taken from Loki's own HTTP API against the live cluster. Nothing here is
 estimated: every figure has the query that produced it, and a change is only "fixed" if the number
@@ -47,9 +47,10 @@ change adds have never run, so their absence is a measurement rather than a fail
 176,940 is well below the 533,803 of the day above; this page does not yet write up what moved it, so
 the headline stays the baseline and that number is only proof the selector answers.
 
-The decision rule, one comparator and one unit: the store for the day above is **13.5 MB** compressed,
-so the journal may add **1.35 MB a day** (10 %), and **13.5 MB a day** would double it. Past the
-second figure the `ssh` input gains a line filter on `Failed` — an iteration, not a redesign.
+The decision rule, in the unit `bytes_over_time` answers in: the day above carried **117.0 MB** of
+lines. The journal may add up to **11.7 MB a day** of lines (10 %, which is about 1.35 MB of the
+compressed store); **117.0 MB a day** would double the day and is the line not to cross. Past it the
+`ssh` input gains a line filter on `Failed` — an iteration, not a redesign.
 
 A `unit="ssh"` count of zero is the case to act on, not the calm one: it means the filter matched no
 daemon on that node. The input selects `_COMM=sshd` rather than `_SYSTEMD_UNIT=ssh.service` because

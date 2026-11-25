@@ -92,9 +92,9 @@ fluent-bit:
       # inputs and not decoration.
       #
       # `Max_Fields 200` is a cap, and an entry over it is **discarded** rather
-      # than trimmed: five times a real `sshd` entry and ten times a kernel one,
-      # so it should never bite, but the first hour of the pod's own log is what
-      # proves that.
+      # than trimmed. A real `sshd` or kernel entry carries a few dozen fields, so
+      # it should never bite — but "should" is the word, and the first hour of the
+      # pod's own log is what replaces it with a fact.
       [INPUT]
           Name systemd
           Tag host.ssh
@@ -198,12 +198,13 @@ fluent-bit:
           Labels job=fluent-bit, source=journal, unit=kernel
   # The two position files (`DB` in the inputs above) need a writable directory.
   # The upstream chart mounts `/var/log`, `/var/lib/docker/containers` and
-  # `/etc/machine-id` and nothing else, so this emptyDir is the only writable
-  # directory there. It dies with the pod, which is why both inputs carry
-  # `Read_From_Tail On` — and the price of that pair is the lines written
-  # between one pod's death and its replacement's start: they are never shipped.
-  # Replaying the journal instead would ship a week of it on every restart, so
-  # the gap is the decision, not an oversight.
+  # `/etc/machine-id` and nothing else, so this emptyDir is the only pod-owned
+  # writable directory there. It dies with the pod, which is why both inputs carry
+  # `Read_From_Tail On` — and the price of that pair is the lines written between
+  # one pod's death and its replacement's start: they are never shipped. Replaying
+  # the journal instead would ship everything the node still holds on every
+  # restart (since boot where the journal is volatile), so the gap is the
+  # decision, not an oversight.
   #
   # The chart mounts `/var/log` but not `/run`, and journald keeps the volatile
   # journal under `/run/log/journal` on a host without a persistent one, so the
