@@ -45,7 +45,11 @@ class ChartTests(unittest.TestCase):
 
     def test_the_instance_points_at_the_lapi_service(self):
         values = env(self.values["env"])
-        self.assertEqual(values["CONFIG_INSTANCES_0_LAPI_URL"], "http://crowdsec-lapi:8080")
+        # `crowdsec-service`, rendered by the upstream crowdsec chart this repo
+        # wraps: `crowdsec-lapi` is the Deployment's name and answers on no
+        # Service, which reaches the app as `fetch failed` and reads like a
+        # wrong password.
+        self.assertEqual(values["CONFIG_INSTANCES_0_LAPI_URL"], "http://crowdsec-service:8080")
         self.assertEqual(values["CONFIG_INSTANCES_0_LAPI_AUTH_USERNAME"], "crowdsec-web-ui")
         # A metrics tab would need the LAPI's 6060, which no Service exposes: Prometheus
         # scrapes that port on the pod IP. Pointing the UI at the Service would leave the

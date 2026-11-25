@@ -17,7 +17,7 @@
 - Host `crowdsec.kub.local`, `websecure` + `tls.options: internal-tls` + `kube-system-lan-only@kubernetescrd`, plus the plain-HTTP redirect mirror. No public host.
 - OIDC client id `crowdsec-web-ui`; issuer `https://authentik.kub.home.ashudev.com/application/o/crowdsec-web-ui/`; callback `https://crowdsec.kub.local/api/auth/oidc/callback` — the same string in the chart and the blueprint.
 - Secrets: `security/crowdsec-web-ui` with `lapi-password` and `oidc-client-secret`; `authentik/authentik-sso` gains `CROWDSEC_CLIENT_SECRET` with the same client-secret value. Created by the operator, never in git.
-- LAPI `http://crowdsec-lapi:8080`. No metrics tab: the LAPI's `6060` is scraped on the pod IP and no Service exposes it.
+- LAPI `http://crowdsec-service:8080`. No metrics tab: the LAPI's `6060` is scraped on the pod IP and no Service exposes it.
 - Claim `crowdsec-web-ui-config`, `local-path`, `1Gi` (it mirrors a 168h alert lookback, not just settings).
 - Probes on `/api/health`; the app has no dependency-aware endpoint, so liveness and readiness share it and the README says why.
 
