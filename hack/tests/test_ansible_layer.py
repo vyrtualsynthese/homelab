@@ -528,12 +528,20 @@ def test_the_kernel_kept_beside_the_running_one_is_a_different_kernel():
     )
 
 
-def test_accounts_checks_for_a_key_before_it_takes_the_password_away():
-    text = (ANSIBLE / "roles/accounts/tasks/main.yml").read_text()
-    guard = text.index("authorized_keys")
-    write = text.index("PasswordAuthentication {{")
-    assert guard < write, "a guard that runs after the change protects nothing"
-    assert "getent" in text
+def test_accounts_checks_the_declared_list_before_it_takes_the_password_away():
+    """The guard used to read `authorized_keys` on disk. This role now writes that
+    file from `trusted_ssh_keys`, so the file is no longer independent evidence:
+    the guard has to read the declared list, and it has to run before the first
+    write it is meant to protect."""
+    tasks = yaml.safe_load((ANSIBLE / "roles/accounts/tasks/main.yml").read_text())
+    names = [task.get("name") for task in tasks if isinstance(task, dict)]
+    guard = names.index("Refuse to close password logins without a declared key")
+    write = names.index("Give the human account the keys declared in group_vars")
+    sshd = names.index("State the password-login policy in the main sshd config")
+    assert guard < write < sshd, "a guard that runs after the change protects nothing"
+    checks = tasks[guard]["ansible.builtin.assert"]["that"]
+    assert "trusted_ssh_keys | length > 0" in checks
+    assert not any("accounts_authorized_keys" in str(task) for task in tasks)
 
 
 def test_the_collections_are_pinned_below_what_the_controller_supports():
@@ -803,3 +811,40 @@ def test_no_task_reads_the_human_key_file_any_more():
     role = (ANSIBLE / "roles/automation/tasks/main.yml").read_text()
     assert "remote_src" not in role
     assert "getent_passwd" not in role
+
+
+def test_the_human_account_is_written_from_the_declared_list():
+    tasks = yaml.safe_load((ANSIBLE / "roles/accounts/tasks/main.yml").read_text())
+    writes = [
+        task["ansible.builtin.copy"]
+        for task in tasks
+        if isinstance(task, dict) and "ansible.builtin.copy" in task
+        and str(task["ansible.builtin.copy"].get("dest", "")).endswith("/.ssh/authorized_keys")
+    ]
+    assert len(writes) == 1, writes
+    write = writes[0]
+    assert "trusted_ssh_keys | join" in write["content"]
+    # Same double-quoted shape as the automation role: a single-quoted tidy-up
+    # would pass backslash-n and write one line holding both keys, dead.
+    assert "join('\n')" in write["content"], write["content"]
+    assert write["content"].endswith("\n"), write["content"][-8:]
+    assert write["owner"] == write["group"] == "{{ human_user }}"
+    assert "human_user" in write["dest"]
+    assert write["backup"] is True
+    assert write["mode"] == "0600"
+    names = [task["name"] for task in tasks if isinstance(task, dict)]
+    assert names.index("Give the human account the keys declared in group_vars") < names.index(
+        "Remove the passwordless sudo grant on the admins group"
+    )
+
+def test_accounts_refuses_to_close_password_logins_without_a_declared_key():
+    tasks = yaml.safe_load((ANSIBLE / "roles/accounts/tasks/main.yml").read_text())
+    guards = [
+        task["ansible.builtin.assert"]
+        for task in tasks
+        if isinstance(task, dict) and "ansible.builtin.assert" in task
+    ]
+    joined = "\n".join(str(check) for check in guards)
+    assert "sshd_password_auth is defined" in joined
+    assert "trusted_ssh_keys | length > 0" in joined
+    assert "ansible_user | default('') != 'root'" in joined
