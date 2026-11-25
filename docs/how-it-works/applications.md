@@ -86,6 +86,7 @@ belong to is [media.md](media.md).
 | `mktxp` | `monitoring` | nuc0 | A | metrics from the MikroTik router |
 | `pihole-exporter` | `monitoring` | nuc0 | A | metrics from Pi-hole |
 | `prometheus` | `monitoring` | nas | D | the metrics database and its scrape configuration |
+| `snapraid-exporter` | `monitoring` | nas | A | the SnapRAID runner's last-success timestamp, served as a metric |
 | `n8n` | `n8n` | nuc0 | A | workflow automation |
 | `news-freshrss` | `news` | nuc0 | A | RSS reader, on a claim the chart creates |
 | `renovate` | `renovate` | nas | D | nightly pull requests that bump dependencies |

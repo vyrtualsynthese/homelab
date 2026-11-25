@@ -32,6 +32,15 @@ The overview — what runs where, its sizing, and how to query the stack:
   `streaming` 2, `rbp2` 1, `rbp0` 1 and `rbp1` 1. The two edge Pi drives carry
   no `node` label; use `instance` to name them.
 
+**SnapRAID** (`snapraid-exporter` on `nas`, one metric):
+`homelab_snapraid_last_sync_timestamp_seconds` is **written, not measured** — the runner installed by
+`ansible/roles/snapraid` writes `/var/lib/node-exporter/textfile/snapraid.prom` after a sync exits
+cleanly, and the pod serves it. It is a second node-exporter with `--collector.disable-defaults`, so
+**no `node_*` host family comes from it**; it publishes the timestamp, `node_textfile_mtime_seconds`
+and `node_scrape_collector_success{collector="textfile"}`. That last one answering `0` means
+node-exporter rejected the file — a corrupt body, not a healthy sync — and the rule's no-data state
+reports the metric's absence separately.
+
 **Fluent Bit** writes the message and nothing else. Since 2026-11-18 the Loki
 output carries `Remove_Keys kubernetes,stream,time,_p` and `Drop_Single_Key raw`,
 so a text log arrives as the app's own message, unquoted, and a pod that logs

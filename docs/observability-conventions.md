@@ -4,7 +4,10 @@
 > query Prometheus, Loki and Grafana without cluster access, and how metrics get in.
 >
 > **Use it when** you want a number out of the stack, or you are adding an exporter · **Verified**
-> 2026-11-20 · **Kind:** living page
+> 2026-11-25 · **Kind:** reference
+>
+> **Sources** the live stack read through Prometheus and Grafana on 2026-11-25,
+> `cluster/helm/monitoring/`, `docs/reference/metrics.md` and `docs/reference/alerts.md`
 
 The general practice — how to choose a threshold, lay out a screen, verify a panel — lives in the
 project skill at `.opencode/skills/observability-and-alerting/SKILL.md`. This file only records what
@@ -72,10 +75,12 @@ low because the cluster produces little log and query traffic: a 30-day Loki
 query or a compaction burst is the case the headroom exists for, so re-measure
 before lowering Loki further.
 
-Three older exporters live beside them: `mktxp` and `pihole-exporter`
-on `nuc0`, and `prometheus-smartctl` as a DaemonSet (its pods on `nas`, `nuc0`,
-`streaming`, `rbp2`). `mktxp` reads the CRS326 and CRS309 switches; since
-2026-11-18 it is scheduled by `nodeSelector` on `nuc0` rather than by the retired
+Four older exporters live beside them: `mktxp` and `pihole-exporter`
+on `nuc0`, `prometheus-smartctl` as a DaemonSet (its pods on `nas`, `nuc0`,
+`streaming`, `rbp2`), and `snapraid-exporter` on `nas` — a second node-exporter with every default
+collector off, serving the one file the snapraid runner writes after a sync it finished
+([`reference/alerts.md`](reference/alerts.md#alerting)). `mktxp` reads the CRS326 and CRS309
+switches; since 2026-11-18 it is scheduled by `nodeSelector` on `nuc0` rather than by the retired
 `node-type` label. Its image stays on `latest`: the registry publishes no
 semver or digest-friendly tags.
 
@@ -193,6 +198,13 @@ Grafana's own data: where they live, and what that costs, is in
 - **mktxp is annotation discovery**, like the in-cluster exporters: one pod with
   `prometheus.io/scrape` on port 49090, and 838 series for the two switches on
   2026-11-18. An unreachable switch publishes nothing rather than `up == 0`.
+- **`snapraid-exporter` is annotation discovery too**, and the only exporter here whose number is
+  written rather than measured: the runner on `nas` writes the marker file, the pod reads the
+  directory, and the textfile collector is the only collector it enables. It publishes a handful of
+  series — the timestamp, `node_textfile_mtime_seconds` and
+  `node_scrape_collector_success{collector="textfile"}` — and no `node_*` node metrics, because the
+  defaults are off; `node_scrape_collector_success` answering `0` means the file was rejected, not
+  that the sync is healthy.
 - **Argo CD's three components are annotation discovery since 2026-11-22**, on their **metrics
   Services** — controller 8082, repo-server 8084, server 8083 — not on the pods.
   `global.addPrometheusAnnotations` stamps the annotation; `controller.metrics` and
