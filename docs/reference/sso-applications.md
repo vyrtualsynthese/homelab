@@ -6,7 +6,10 @@
 > adding a tool.
 >
 > **Use it when** an application's sign-in surprises you, you are choosing how to protect a new one,
-> or a hostname answers 404 from authentik · **Verified** 2026-11-19 · **Kind:** living page
+> or a hostname answers 404 from authentik · **Verified** 2026-11-19 · **Kind:** reference
+>
+> **Sources** `cluster/helm/authentik/files/*.yaml`, `docs/secrets.md`,
+> `cluster/helm/authentik/values.yaml`
 
 What the mechanisms themselves prove — OIDC, proxy auth, the gate, `lan-only` — is
 [how-it-works/identity.md](../how-it-works/identity.md). Hostnames, TLS and whether a name answers
