@@ -30,7 +30,7 @@ KEY ?= $(HOME)/.ssh/homelab_live.pub
 # `make adopt` derives an empty private path and blames the wrong file.
 export KEY
 adopt:
-	@test -f "$(KEY)" || { echo "adopt: $(KEY) is missing — ssh-keygen -t ed25519 -f $(KEY) creates it" >&2; exit 1; }
+	@test -f "$(KEY)" || { echo "adopt: $(KEY) is missing — ssh-keygen -t ed25519 -f $${KEY%.pub} creates it" >&2; exit 1; }
 	@priv=$${KEY%.pub}; \
 	 case "$$(cat "$(KEY)")" in \
 	   ssh-ed25519\ *|ssh-rsa\ *|ecdsa-sha2-nistp256\ *|sk-ssh-ed25519@openssh.com\ *) ;; \

@@ -541,6 +541,10 @@ def test_accounts_checks_the_declared_list_before_it_takes_the_password_away():
     assert guard < write < sshd, "a guard that runs after the change protects nothing"
     checks = tasks[guard]["ansible.builtin.assert"]["that"]
     assert "trusted_ssh_keys | length > 0" in checks
+    assert (
+        "trusted_ssh_keys | reject('match', trusted_ssh_key_pattern) | list | length == 0"
+        in checks
+    ), "a list of the right length and the wrong shape is written all the same"
     assert not any("accounts_authorized_keys" in str(task) for task in tasks)
 
 
@@ -666,6 +670,8 @@ def test_the_union_script_writes_only_what_differs(tmp_path):
     second = run("--apply")
     assert second.returncode == 0
     assert second.stdout.strip() == "unchanged", "a converged mount reported a change"
+
+
 def make_adopt(key=None, env=None):
     command = ["make", "-C", str(ANSIBLE), "adopt"]
     if key is not None:
@@ -691,10 +697,12 @@ def test_make_adopt_prints_a_line_that_loads_as_yaml(tmp_path):
     assert yaml.safe_load("keys:\n" + entry)["keys"][0].startswith("ssh-ed25519 ")
     assert "fingerprint SHA256:" in run.stdout
 
+
 def test_make_adopt_never_edits_the_inventory(tmp_path):
     before = (ANSIBLE / "inventory/group_vars/all.yml").read_bytes()
     assert make_adopt(a_key(tmp_path)).returncode == 0
     assert (ANSIBLE / "inventory/group_vars/all.yml").read_bytes() == before
+
 
 def test_make_adopt_refuses_a_file_that_is_not_a_key(tmp_path):
     junk = tmp_path / "junk.pub"
@@ -702,6 +710,7 @@ def test_make_adopt_refuses_a_file_that_is_not_a_key(tmp_path):
     run = make_adopt(junk)
     assert run.returncode != 0
     assert "not an OpenSSH public key" in run.stderr
+
 
 def test_make_adopt_refuses_a_public_key_without_its_private_half(tmp_path):
     pub = a_key(tmp_path)
@@ -711,6 +720,7 @@ def test_make_adopt_refuses_a_public_key_without_its_private_half(tmp_path):
     assert run.returncode != 0
     assert "proves nothing on its own" in run.stderr
 
+
 def test_make_adopt_refuses_a_mismatched_pair(tmp_path):
     a_key(tmp_path, "first")
     pub = a_key(tmp_path, "second")
@@ -719,11 +729,13 @@ def test_make_adopt_refuses_a_mismatched_pair(tmp_path):
     assert run.returncode != 0
     assert "does not match" in run.stderr
 
+
 def test_make_adopt_survives_a_comment_that_would_break_yaml(tmp_path):
     run = make_adopt(a_key(tmp_path, comment='a"b@laptop'))
     assert run.returncode == 0, run.stderr
     entry = next(line for line in run.stdout.splitlines() if line.startswith("  - "))
     assert yaml.safe_load("keys:\n" + entry)["keys"][0].endswith('a"b@laptop')
+
 
 def test_make_adopt_survives_a_backslash_in_the_comment(tmp_path):
     run = make_adopt(a_key(tmp_path, comment='a\\b@laptop'))
@@ -731,11 +743,13 @@ def test_make_adopt_survives_a_backslash_in_the_comment(tmp_path):
     entry = next(line for line in run.stdout.splitlines() if line.startswith("  - "))
     assert yaml.safe_load("keys:\n" + entry)["keys"][0].endswith('a\\b@laptop')
 
+
 def test_make_adopt_reports_a_passphrase_protected_key(tmp_path):
     pub = a_key(tmp_path, password="secret")
     run = make_adopt(pub)
     assert run.returncode != 0
     assert "cannot be read without a passphrase" in run.stderr
+
 
 def test_make_adopt_finds_the_default_key_without_a_key_argument(tmp_path):
     a_key(tmp_path)
@@ -747,6 +761,29 @@ def test_make_adopt_finds_the_default_key_without_a_key_argument(tmp_path):
     entry = next(line for line in run.stdout.splitlines() if line.startswith("  - "))
     assert yaml.safe_load("keys:\n" + entry)["keys"][0].startswith("ssh-ed25519 ")
 
+
+def test_make_adopt_prints_a_creation_command_that_works(tmp_path):
+    """The hint names the file the target then reads, so `$(KEY)` ending in
+    `.pub` sent `ssh-keygen` to write the private half under that name and the
+    target refused its own output. The command is run here, not matched."""
+    env = {**os.environ, "HOME": str(tmp_path)}
+    missing = make_adopt(env=env)
+    assert missing.returncode != 0, "a laptop with no key was adopted anyway"
+    created = re.search(r"-f (\S+) creates it", missing.stderr)
+    assert created, missing.stderr
+    (tmp_path / ".ssh").mkdir()
+    # The empty answer is the empty passphrase the runbook tells the operator to
+    # accept; a real terminal prompts for it, a test has to supply it.
+    subprocess.run(
+        ["ssh-keygen", "-t", "ed25519", "-f", created.group(1)],
+        check=True, input="", capture_output=True, text=True,
+    )
+    run = make_adopt(env=env)
+    assert run.returncode == 0, run.stderr
+    entry = next(line for line in run.stdout.splitlines() if line.startswith("  - "))
+    assert yaml.safe_load("keys:\n" + entry)["keys"][0].startswith("ssh-ed25519 ")
+
+
 def test_the_key_list_is_declared_and_well_formed():
     defaults = load("inventory/group_vars/all.yml")
     keys = defaults["trusted_ssh_keys"]
@@ -755,6 +792,7 @@ def test_the_key_list_is_declared_and_well_formed():
     malformed = [key for key in keys if not re.match(pattern, key)]
     assert malformed == [], malformed
     assert defaults["human_user"] == "vronteix"
+
 
 def test_the_key_pattern_refuses_a_body_that_is_not_whole_base64_groups():
     """The shape check is the only one an offline run makes, so it has to refuse
@@ -766,6 +804,7 @@ def test_the_key_pattern_refuses_a_body_that_is_not_whole_base64_groups():
     assert re.match(pattern, "ssh-ed25519 A operator@laptop") is None
     assert re.match(pattern, "ssh-ed25519 QUJDRA== operator@laptop") is not None
     assert re.match(pattern, "ssh-ed25519 QUJD operator@laptop") is not None
+
 
 def test_the_list_is_refused_before_an_account_is_written():
     tasks = yaml.safe_load((ANSIBLE / "roles/automation/tasks/main.yml").read_text())
@@ -782,6 +821,7 @@ def test_the_list_is_refused_before_an_account_is_written():
     assert names.index("Refuse a key list that cannot be declared") < names.index(
         "Create the automation account, key-only"
     )
+
 
 def test_the_automation_account_is_written_from_the_declared_list():
     tasks = yaml.safe_load((ANSIBLE / "roles/automation/tasks/main.yml").read_text())
@@ -804,6 +844,7 @@ def test_the_automation_account_is_written_from_the_declared_list():
     assert "automation_user" in write["dest"]
     assert write["backup"] is True
     assert write["mode"] == "0600"
+
 
 def test_no_task_reads_the_human_key_file_any_more():
     for path in yaml_files():
@@ -836,6 +877,7 @@ def test_the_human_account_is_written_from_the_declared_list():
     assert names.index("Give the human account the keys declared in group_vars") < names.index(
         "Remove the passwordless sudo grant on the admins group"
     )
+
 
 def test_accounts_refuses_to_close_password_logins_without_a_declared_key():
     tasks = yaml.safe_load((ANSIBLE / "roles/accounts/tasks/main.yml").read_text())

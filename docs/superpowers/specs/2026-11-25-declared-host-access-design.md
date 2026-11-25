@@ -207,7 +207,7 @@ default identity list rather than adding to it — verified against `ssh -G`.
 | a laptop is really adopted | step 4 above on the new machine, `ansible-playbook playbooks/site.yml --check --diff --limit nas` printing no `changed` |
 | a key really is retired | a throwaway key added by hand on `nas` is reported as drift by `make check` and removed by `make apply`; this is the round trip the tests cannot run |
 | the bootstrap still works | the `README.MD` two-run sequence, run on a host whose `ansible` account does not exist (a reflashed Pi is the case) |
-| the Pi path still works | `docs/runbooks/pi-reflash.md` steps 8–9 read as the declared list, not the inheritance |
+| the Pi path still works | `docs/runbooks/pi-reflash.md` steps 7–8 read as the declared list, not the inheritance |
 
 ## Files this design touches
 
