@@ -64,8 +64,15 @@ check_host() {
     exit 2
 }
 
-compose_src() {
-    echo "$TEMPLATES/$1/docker-compose.yml"
+wg_udp_port() {
+    case "$1" in
+        rbp0) printf '51821\n' ;;
+        rbp1) printf '51822\n' ;;
+    esac
+}
+
+desired_compose() {
+    sed "s/@WG_UDP_PORT@/$(wg_udp_port "$1")/g" "$TEMPLATES/docker-compose.yml"
 }
 
 desired_hostname() {
@@ -338,21 +345,10 @@ write_abs() {
     CHANGED=$((CHANGED + 1))
 }
 
-write_from_file() {
-    local dest="$1" src="$2"
-    mkdir -p "$(dirname "$dest")"
-    if [ -f "$dest" ] && cmp -s "$src" "$dest"; then
-        return 0
-    fi
-    cp "$src" "$dest"
-    CHANGED=$((CHANGED + 1))
-}
-
 cmd_render() {
     local host="$1"
-    echo "--- $(compose_src "$host")"
-    cat "$(compose_src "$host")"
-    echo "--- $STACK_DIR/docker-compose.yml (where the block above is written)"
+    echo "--- $STACK_DIR/docker-compose.yml"
+    desired_compose "$host"
     echo "--- engine, installed by setup on a real host (not under PI_ROOT)"
     echo "repository: https://download.docker.com/linux/ubuntu, suite read from /etc/os-release"
     echo "signed by: $DOCKER_KEYRING"
@@ -382,7 +378,7 @@ cmd_setup() {
 
     ensure_engine
 
-    write_from_file "$ROOT$STACK_DIR/docker-compose.yml" "$(compose_src "$host")"
+    write_abs "$ROOT$STACK_DIR/docker-compose.yml" "$(desired_compose "$host")"
     write_abs "$ROOT/etc/hostname" "$(desired_hostname "$host")"
     write_abs "$ROOT/etc/hosts" "$(desired_hosts "$host")"
 
@@ -413,9 +409,9 @@ cmd_verify() {
     if [ ! -f "$ROOT$STACK_DIR/docker-compose.yml" ]; then
         echo "MISSING $ROOT$STACK_DIR/docker-compose.yml"
         problems=1
-    elif ! cmp -s "$(compose_src "$host")" "$ROOT$STACK_DIR/docker-compose.yml"; then
+    elif ! cmp -s <(desired_compose "$host") "$ROOT$STACK_DIR/docker-compose.yml"; then
         echo "DIFFERS $ROOT$STACK_DIR/docker-compose.yml"
-        diff -u "$ROOT$STACK_DIR/docker-compose.yml" "$(compose_src "$host")" || true
+        diff -u "$ROOT$STACK_DIR/docker-compose.yml" <(desired_compose "$host") || true
         problems=1
     fi
 
