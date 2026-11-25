@@ -193,18 +193,45 @@ answered `app/preferences` in 0.8–0.9 ms, listed 379 torrents, and Prometheus 
 The only errors the consumers saw were inside the 18:44–18:46 window when the app was deliberately
 down: one `Failed to connect to qBittorrent` in `sonarr` and one in `sonarr-anime`.
 
+**It held for three minutes.** At 18:50 `scrape_duration_seconds` was pinned at 5.00 s again and a
+worker was back in the same `close()` → `nfs_wb_all` → `folio_wait_writeback` stack — with a single
+mount this time, so the leftover mounts are not the trigger. Detaching the mount clears the wedge; it
+does not stop it.
+
+### The stuck object is one file's fsync on the server
+
+Read from `nas` while the second hang was live:
+
+| Where | Observation |
+|---|---|
+| one `nfsd` thread | `nfsd4_write` → `vfs_fsync_range` → `ext4_sync_file` → `ext4_fc_commit` → `jbd2_log_wait_commit`, waiting for a transaction that never commits |
+| `jbd2` itself | running, 5.5 ms average commit, no task blocked on the disk |
+| the same filesystem | an 8 MiB write with `fsync` at 456 MB/s, at that moment |
+
+So the disk is fine, the journal is fine, and the write that hangs is one file's fsync in ext4's
+**fast-commit** path. The client waits for the page that write would have completed, and the session
+waits for the `close()`. Because it is one file, a fresh mount resumes onto the same file and wedges
+again within minutes.
+
 ### What is still open
 
-Why the page ends up stuck is not settled. The `fileid changed` bursts are what a client reports when
-a name it has cached now points at a different inode — what a replaced file looks like, after a mover
-renames over it or through qBittorrent's own temp-file pattern — while the client still holds dirty
-pages for the old inode. Which file that was, and which of the two writes caused it, needs the file's
-identity, and the kernel does not expose it from userspace.
+Which file, and why its fsync never commits, is not settled. The `fileid changed` bursts are what a
+client reports when a name it has cached now points at a different inode — what a replaced file looks
+like, after a mover renames over it or through qBittorrent's own temp-file pattern — while the client
+still holds dirty pages for the old inode.
 
-The candidates to bound it are all untested: stop the leftover mounts accumulating on each restart
-(they are what makes one wedge reach every later pod generation), take the `sync` export option off a
-volume written this heavily, or keep replaced names out of the client's page cache. No chart change
-is made for any of them yet.
+The candidates to bound it are all untested:
+
+- take `sync` off the downloads export, so `nfsd` stops fsyncing per write and the client's `COMMIT`
+  has nothing to wait for;
+- turn ext4's fast-commit feature off on `/mnt/ultrafaststorage` (needs the export unmounted, so it is
+  a maintenance-window change);
+- find the file and its access pattern: the kernel does not name it from userspace, so this needs the
+  server's `rpcdebug` file tracing while the wedge is reproduced;
+- keep replaced names out of the client's page cache (`lookupcache=none`), which is the general
+  version of the last point.
+
+No chart or host change is made for any of them yet.
 
 ## The gate, and the way back
 
