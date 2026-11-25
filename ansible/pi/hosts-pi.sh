@@ -229,6 +229,46 @@ Signed-By: $DOCKER_KEYRING"
     esac
 }
 
+# One line per difference the engine can show. A version outside its band is a
+# NOTE, not a failure: setup does not upgrade an engine in place, so there is
+# nothing for the operator to fix from here — the reflash is what moves it.
+engine_drift() {
+    local pkg band version problems=0
+
+    if [ -n "$ROOT" ]; then
+        echo "engine: not checked (PI_ROOT is set)"
+        return 0
+    fi
+
+    while read -r pkg band; do
+        version="$(installed_version "$pkg")"
+        if [ -z "$version" ]; then
+            echo "MISSING package $pkg"
+            problems=1
+        elif ! version_in_band "$version" "$band"; then
+            echo "engine: NOTE $pkg $version is outside the pinned $band; this script does not upgrade an engine in place"
+        fi
+    done < <(engine_pairs)
+
+    if ! command -v docker >/dev/null 2>&1; then
+        echo "MISSING the docker command"
+        problems=1
+    elif ! docker compose version >/dev/null 2>&1; then
+        echo "MISSING the docker compose plugin"
+        problems=1
+    fi
+
+    case " $(id -nG "$DOCKER_GROUP_USER" 2>/dev/null || true) " in
+        *" docker "*) ;;
+        *)
+            echo "DIFFERS $DOCKER_GROUP_USER is not in the docker group"
+            problems=1
+            ;;
+    esac
+
+    return "$problems"
+}
+
 root_device() {
     if [ -r "$ROOT/proc/mounts" ]; then
         awk '$2 == "/" { print $1; exit }' "$ROOT/proc/mounts"
@@ -348,6 +388,8 @@ cmd_verify() {
     fi
 
     echo "root device: $(root_device)"
+
+    engine_drift || problems=1
 
     if [ -z "$ROOT" ]; then
         # --all, and the declared service list compared with what is up: `ps`
