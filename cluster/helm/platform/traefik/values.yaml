@@ -46,7 +46,7 @@ traefik:
 
   image:
     repository: traefik
-    tag: "v3.7.19"
+    tag: "v3.8.0"
 
   priorityClassName: system-cluster-critical
 
