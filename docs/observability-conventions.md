@@ -29,12 +29,14 @@ after the media chart repairs. Re-verify a measured number before trusting it in
 | Prometheus | 3.16.0 | `nas`, 2 GiB limit |
 | Grafana | 13.3.1 | `nas`, 768 MiB limit |
 | Loki | 3.7.9 | `nas`, monolithic |
-| Fluent Bit | 5.1.3 | DaemonSet, all 4 nodes |
+| Fluent Bit | 5.2.1 | DaemonSet, all 4 nodes |
 | blackbox exporter | v0.29.1 | `nas`, 64 MiB limit |
 
 Fluent Bit tails `/var/log/containers/*.log` on every node, plus `/var/log/traefik/access.log` on
-`streaming`; both are files a container writes, so host logs and the systemd journal stay out. The
-claim sizes and how long each keeps data are in
+`streaming`; both are files a container writes. Since the security detection it also reads each node's
+own systemd journal, selected to `sshd` and to kernel messages only — the host's other units stay out
+and the two new streams are sized in [`reference/log-budget.md`](reference/log-budget.md). The claim
+sizes and how long each keeps data are in
 [`reference/metrics.md#storage-and-retention`](reference/metrics.md#storage-and-retention).
 
 What the pipeline carries in a day — 533,803 lines and 117 MB on 2026-11-22 — and the selector that
