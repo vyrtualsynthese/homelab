@@ -95,7 +95,7 @@ def test_the_placed_file_is_what_render_printed(tmp_path):
     root = tmp_path
     stack = root / "home/vronteix/dockers"
     stack.mkdir(parents=True)
-    (stack / "pihole.env").write_text("WEBPASSWORD=x\n")
+    (stack / "pihole.env").write_text("FTLCONF_webserver_api_password=x\n")
     (root / "proc").mkdir()
     (root / "proc/mounts").write_text("LABEL=writable / ext4 rw 0 0\n")
 
@@ -107,7 +107,7 @@ def test_the_placed_file_is_what_render_printed(tmp_path):
 def test_setup_is_idempotent(tmp_path):
     root = tmp_path
     (root / "home/vronteix/dockers").mkdir(parents=True)
-    (root / "home/vronteix/dockers/pihole.env").write_text("WEBPASSWORD=x\n")
+    (root / "home/vronteix/dockers/pihole.env").write_text("FTLCONF_webserver_api_password=x\n")
     (root / "proc").mkdir()
     (root / "proc/mounts").write_text("LABEL=writable / ext4 rw 0 0\n")
     first = run("setup", "rbp1", root=root)
@@ -198,7 +198,7 @@ def test_render_prints_the_engine_it_would_install():
 def test_setup_leaves_the_engine_alone_in_a_fixture(tmp_path):
     root = tmp_path
     (root / "home/vronteix/dockers").mkdir(parents=True)
-    (root / "home/vronteix/dockers/pihole.env").write_text("WEBPASSWORD=x\n")
+    (root / "home/vronteix/dockers/pihole.env").write_text("FTLCONF_webserver_api_password=x\n")
     (root / "proc").mkdir()
     (root / "proc/mounts").write_text("LABEL=writable / ext4 rw 0 0\n")
     out = run("setup", "rbp1", root=root)
@@ -225,7 +225,7 @@ def test_backup_then_restore_puts_the_stack_back(tmp_path):
     root = tmp_path / "pi"
     stack = root / "home/vronteix/dockers"
     stack.mkdir(parents=True)
-    (stack / "pihole.env").write_text("WEBPASSWORD=x\n")
+    (stack / "pihole.env").write_text("FTLCONF_webserver_api_password=x\n")
     (root / "proc").mkdir()
     (root / "proc/mounts").write_text("LABEL=writable / ext4 rw 0 0\n")
 
@@ -304,7 +304,7 @@ def test_setup_restarts_pihole_when_a_mounted_file_changed():
 def _pi_fixture(root):
     stack = root / "home/vronteix/dockers"
     stack.mkdir(parents=True)
-    (stack / "pihole.env").write_text("WEBPASSWORD=x\n")
+    (stack / "pihole.env").write_text("FTLCONF_webserver_api_password=x\n")
     (root / "proc").mkdir()
     (root / "proc/mounts").write_text("LABEL=writable / ext4 rw 0 0\n")
     (root / "boot/firmware").mkdir(parents=True)
@@ -413,6 +413,7 @@ def test_both_pis_get_the_same_pihole_settings():
     ):
         assert line in rbp0, line
     assert "WEBPASSWORD" not in rbp0, "the password is a secret and is never rendered"
+    assert "FTLCONF_webserver_api_password" not in rbp0, "the v6 name of the same secret"
     assert not re.search(r"^PIHOLE_DNS_=", rbp0, re.M), "a v5 key FTL ignores, next to the one it reads"
 
 

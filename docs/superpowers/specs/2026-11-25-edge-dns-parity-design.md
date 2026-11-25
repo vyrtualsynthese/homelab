@@ -38,8 +38,12 @@ holds all `FTLCONF_*` keys, rendered per host by `hosts-pi.sh` and written by `s
 `render`, compared by `verify` — the same treatment `docker-compose.yml` already gets. The two hosts
 end up byte-identical, and a setting that is not in that file is not a setting.
 
-**D3 — `pihole.env` keeps exactly one key: `WEBPASSWORD`.** It stays host-local, gitignored and out of
-the render; the compose reads `pihole.conf.env` then `pihole.env`, so the secret wins on a collision.
+**D3 — `pihole.env` keeps exactly one key: `FTLCONF_webserver_api_password`.** It stays host-local,
+gitignored and out of the render; the compose reads `pihole.settings` then `pihole.env`, so the secret
+wins on a collision. Measured on 2026-11-25 while rolling this out: the file held `WEBPASSWORD`, which
+is the v5 name and this image ignores it — the panel keeps `webserver.api.pwhash` in `pihole.toml`, and
+only the v6 key moves it. The file is `0600` and owned by the account that runs compose, which has to
+read it: `root` and world-readable was how it looked before.
 
 **D4 — the four drifting settings move into the rendered file, with corrected values**: `blockTTL 2`,
 `rateLimit.count 1000`, `listeningMode ALL`, `revServers` on. The source-of-truth rule settles who

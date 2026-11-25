@@ -37,7 +37,7 @@ PI_ROOT=/tmp/fake-pi ./hosts-pi.sh setup rbp0
 | `/etc/hostname` | yes | the name Pi-hole's DNS and the compose file depend on |
 | `/etc/hosts` | **no** | cloud-init rewrites it from its own template on every boot (`manage_etc_hosts: true`); its copy already names the host and localhost |
 | Docker's repository and the four packages | yes | a fresh image has no runtime; `setup` installs the pinned set from `download.docker.com` |
-| `pihole.env` | **no** | it holds the Pi-hole panel password and nothing else, and it is gitignored. `setup` requires it and names it when it is missing |
+| `pihole.env` | **no** | it holds the Pi-hole panel password and nothing else: `FTLCONF_webserver_api_password`, `0600`, owned by the account that runs compose, gitignored. `setup` requires it and names it when it is missing. The v5 name `WEBPASSWORD` is ignored by this image |
 | `config/` (wg-easy's database) | **no** | since wg-easy 15 the panel account, host, port, DNS and peers live in `config/wg-easy.db`, not in an environment file. `backup` copies it with the rest of the stack |
 | `/boot/firmware/config.txt`, `cmdline.txt` | **no** | see below |
 
