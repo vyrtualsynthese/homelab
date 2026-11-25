@@ -10,7 +10,7 @@
 
 **Spec:** `docs/superpowers/specs/2026-11-25-alert-lifecycle-enforcement-design.md`
 
-**Branch:** continue on `feature/alert-relay-column-gate`. PR #1542 is still open; if it has merged by handover time, open a fresh PR for these commits instead.
+**Branch:** `feature/alert-lifecycle-enforcement`, cut from `develop` after PR #1542 (the column gate) merged. It opens its own pull request; the gate is already on `develop`.
 
 ## Global Constraints
 
