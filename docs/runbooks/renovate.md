@@ -62,7 +62,9 @@ it. A second `# renovate:` annotation on `Chart.yaml` was rejected: it would ext
 twice, and it would copy the packaging suffix (`-ls332`, `-distroless`) into `appVersion`, which the
 [chart contract](../charts/README.md#how-appversion-relates-to-imagetag) says is the application's
 own version. `hack/check-app-version.sh` is the guard instead: after merging an image bump, it fails
-until `appVersion` names the version inside the new tag.
+until `appVersion` names the version inside the new tag. Batch the repair rather than following each
+pull request with a commit of its own: on 2026-11-25 twenty pull requests merged and eleven of them
+had moved a tag, so one commit updated eleven `appVersion` lines and the guard went back to `OK`.
 
 ## The newest stable release wins, 2026-11-25
 
@@ -186,6 +188,33 @@ delete.
 | `403` with `rate limit` | GitHub's hourly cap; a manual run after the nightly one can hit it | wait an hour; it is not a configuration fault |
 | `Repository is disabled` for every repository | `renovate.json` is missing from that repository's default branch, or its `ignorePaths` no longer matches | check `.github/renovate.json` on `develop` |
 | Job failed with no renovate output | the container never started — image pull, missing Secret | `kubectl -n renovate describe pod <pod>` |
+| every open Renovate PR reads `dirty` with ~275 changed files, and Renovate does not rebase them | `develop` was force-pushed, so the branches still carry the history that no longer exists on the base | rebase each `renovate/*` branch onto `develop` by hand; see the 2026-11-25 note below |
+
+## What a force-push does to the open branches, 2026-11-25
+
+The history rewrite that let #1525 merge by hand (89 commits of `main` skipped as already applied,
+113 replayed onto `main`) left every open Renovate branch based on the `develop` that no longer
+existed. GitHub then reported each one `dirty` with about 275 changed files and 30 commits, and the
+run that followed did not rebase them: `rebaseWhen: auto` acts on its own notion of a conflict, not
+on GitHub's `mergeable_state`.
+
+The repair is one local rebase per branch, which drops the dead history by patch identity and leaves
+the single Renovate commit:
+
+```bash
+git fetch origin 'refs/heads/renovate/*:refs/remotes/origin/renovate/*'
+for b in $(git branch -r --list 'origin/renovate/*' | sed 's#^ *origin/##'); do
+  git switch --detach "origin/$b" -q &&
+  git rebase origin/develop -q &&
+  git push --force-with-lease="refs/heads/$b:origin/$b" origin "HEAD:refs/heads/$b"
+done
+```
+
+Each branch ends as one commit over `develop` touching one file, and the pull requests go back to
+`clean`. Six pull requests were closed instead of repaired, because the new configuration had already
+replaced them: two against the Traefik snapshot, two Traefik branches the grouping subsumed, the
+`42.4.3` chart patch and the `29.49.0` Prometheus minor, both of which the move to the newest stable
+release had overtaken.
 
 ## The first run, 2026-11-19
 
