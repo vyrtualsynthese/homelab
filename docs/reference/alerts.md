@@ -52,6 +52,15 @@ moves or closes one ([`runbooks/alert-relay.md`](../runbooks/alert-relay.md)). T
 routes reach it: `severity="critical"` every **6 h**, and `board=card` every **1 y**. The relay itself
 has no severity filter — the routing tree decides, and the relay writes a card for whatever arrives.
 
+**The lifecycle is enforced by a job, not remembered.** `alert-relay-lifecycle` runs every five
+minutes in the same chart. It reads the `alerts` board and follows each alert card's `blocked` fix
+cards — the relations a session writes when it opens the work: the alert moves to Doing while any fix
+is open, and to Validation once every fix is in Validation or Done. Validation is terminal, nothing is
+moved backwards or closed, and the job writes only the `alerts` board. It reads the repository boards
+to learn each fix's column, so `bot-alertmanager` holds read-only on boards 2, 3, 5, 8 and 12, and
+`bot-opencode` holds read+write on `alerts` to write the relations and the cause. A fix card it cannot
+read fails that alert card loudly rather than closing it early.
+
 **Rule set and live state on 2026-11-13 (the three `Cloud*` rows read back on
 2026-11-20, the counts and `GpuNotAllocatable` on 2026-11-22,
 `ArgoAppRenderFailing` added and proved on 2026-11-22, the two `Postgres*` rows
