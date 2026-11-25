@@ -6,12 +6,13 @@
 > cannot walk away with the key.
 >
 > **Use it when** you are creating that account, rotating its key, or checking what a switch accepts ·
-> **Verified** 2026-11-25: the starting state, read from both switches over the API — `admin` and
-> `monitoring` only, no SSH key on either, `/ip ssh` password login already off · **Kind:** how-to
+> **Verified** 2026-11-25, run end to end on both switches: the group, the disabled-then-enabled user,
+> the RSA 4096 import, the key's own login, `/user add` refused, and the source filter turning another
+> prefix away · **Kind:** how-to
 >
-> **Status:** pending one step. On 2026-11-25 both switches got the group, the user, the RSA import
-> and the source-filter test; the key's own login is the one proof that needs the operator's
-> terminal, because the key is unreadable from the agent's shell by design.
+> **Status:** proved 2026-11-25. One deviation from the card: the key is **RSA 4096**, not ed25519,
+> because RouterOS 6.49 cannot import ed25519. Card 696 moves the switches to version 7, and the swap
+> back is a new pair and one import.
 >
 > **Sources** `ansible/collectors/network-audit.sh`,
 > [`network state collector`](../superpowers/specs/2026-11-24-network-state-collector-design.md),
@@ -148,22 +149,32 @@ test -r /home/netcfg/.ssh/switch-deploy && echo READABLE || echo "not readable"
 ```
 
 Expected: `Permission denied`, then `not readable`. A `READABLE` here is the whole card failed, not a
-detail: stop and fix the ownership.
+detail: stop and fix the ownership. Measured on 2026-11-25: `not readable`, and `/home/netcfg/.ssh`
+cannot be listed either, so the key's name is not even discoverable from the agent's shell — the run
+above was done through the operator's terminal, under `sudo -u netcfg`, for exactly this reason.
 
 **The key works, and the group is the fence.** As the operator — the only account that may use the
 sudo rule, because only it can type the password sudo asks for:
 
 ```bash
-sudo -H -u netcfg ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
-  -i /home/netcfg/.ssh/switch-deploy deploy@192.168.1.11 '/system identity print'
-sudo -H -u netcfg ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
-  -i /home/netcfg/.ssh/switch-deploy deploy@192.168.1.11 '/user add name=probe group=full'
+K=/home/netcfg/.ssh/switch-deploy
+for h in 192.168.1.11 192.168.1.43; do
+  sudo -H -u netcfg ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
+    -o PubkeyAcceptedAlgorithms=+ssh-rsa -i "$K" deploy@$h '/system identity print'
+  sudo -H -u netcfg ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
+    -o PubkeyAcceptedAlgorithms=+ssh-rsa -i "$K" deploy@$h '/user add name=probe group=full'
+done
 ```
 
-Expected: the identity prints, and the second answers `not enough permissions` and creates nothing.
+Expected, and measured on both switches on 2026-11-25: `name: CR326` on `192.168.1.11` — the switch
+keeps the short form of the model as its identity — and `name: MikroTik` on `192.168.1.43`, which was
+never renamed; then `not enough permissions (9)` from each `/user add`, with no user created.
+
 `BatchMode=yes` is what keeps a refused key from turning into a password prompt, and `accept-new`
 settles the switch's host key on the first contact, in `netcfg`'s `known_hosts` rather than the
-operator's.
+operator's. `PubkeyAcceptedAlgorithms=+ssh-rsa` is in the command because RouterOS 6.49 signs with
+the SHA-1 RSA algorithm, which a current OpenSSH client no longer offers on its own; it costs nothing
+when the server also offers the newer signature. Card 696 removes the need for it.
 
 **A source outside the prefix is refused.** Moving the client is awkward — the key must not travel —
 so the one variable that moves is the prefix itself, and the client stays put. A throwaway account
