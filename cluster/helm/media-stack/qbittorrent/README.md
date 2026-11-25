@@ -27,7 +27,7 @@ helm template qbittorrent cluster/helm/media-stack/qbittorrent --namespace media
 | `templates/deployment.yaml` | the Deployment: three init containers, the WireGuard sidecar, qBittorrent |
 | `templates/service.yaml` | the ClusterIP Service on the WebUI port |
 | `templates/serviceaccount.yaml` | the ServiceAccount, with no API token mounted |
-| `templates/persistentvolumeclaim.yaml` | the WireGuard claim, the only claim this chart owns |
+| `templates/persistentvolumeclaim.yaml` | the two claims this chart owns, on `local-path` |
 | `templates/ingressroute.yaml` | the Traefik IngressRoute and its plain-HTTP redirect |
 | `templates/NOTES.txt` | install notes |
 
@@ -119,19 +119,26 @@ finished*.
 
 | Mount | Claim | Owner |
 |---|---|---|
-| `/config` | `pvc-nfs-qbittorrent-config-nfs-subdir-external-provisioner` | the `nfs-qbittorrent-config` Application — **not this chart** |
+| `/config` | `qbittorrent-config` | this chart, `local-path`, `2Gi` |
 | `/downloads` | `pvc-nfs-qbittorrent-download-nfs-subdir-external-provisioner` | the `nfs-qbittorrent-download` Application — **not this chart** |
 | `/config` (sidecar) | `qbittorrent-vpn-config` | this chart, `local-path`, `128Mi` |
 
-The two NFS claims are named by value and mounted, never created, here. Their names are the live
-ones: renaming either is data loss, and the contract's `<fullname>-config` rule does not apply to a
-claim this chart does not own. The reason the settings live on NFS at all is historical; it is
-recorded debt, not a decision to revisit in a chart pass.
+`/downloads` is the one claim left on NFS here, and it is media rather than configuration: the
+queue is written by qBittorrent and read by unpackerr and the *arrs, and `docs/charts/README.md`
+puts NFS on shared data only. Its name is the live one, so it is named by value and mounted, never
+created; renaming it is data loss.
 
-The WireGuard claim is the only one this chart creates. Its name defaults to
-`<fullname>-vpn-config`, which is exactly the claim the pod mounts today, so the derived name moved
-no data. It holds `wg0.conf` and the peer keys: **deleting the release deletes the tunnel identity**
-and a new peer has to be registered with the VPN provider.
+`/config` was the exception to the `local-path` rule, and it was the case the rule exists for:
+`app/preferences` reads that directory on every exporter scrape, and on NFS it blocked for seconds
+at a time, taking the WebUI and every API client with it (see
+[`docs/qbittorrent-webui-stalls.md`](../../../../docs/qbittorrent-webui-stalls.md)). It moved on
+2026-11-25 (board card 758), keeping its name — `qbittorrent-config`, the `<fullname>-config` the
+contract asks for. The old NFS export is retained on `nas` as the rollback copy until the migration
+has been observed; nothing mounts it.
+
+The WireGuard claim holds `wg0.conf` and the peer keys: **deleting the release deletes the tunnel
+identity** and a new peer has to be registered with the VPN provider. The config claim holds the
+resume data: deleting it loses the torrent list.
 
 ## Ports, one value
 
@@ -153,9 +160,13 @@ everything else under `/api/v2` answers `403` without a session, and the auth by
 inside it. An `httpGet` probe would therefore either fail forever or start depending on the bypass
 by accident — the second failure is worse, because it would break with the login settings.
 
-A TCP probe fails when nothing is listening, which is the case a restart can fix. Readiness would add
-nothing: the NFS mounts are checked by the `wait-for-downloads` init container at startup, and the
-torrent session has no status endpoint to ask.
+A TCP probe fails when nothing is listening, which is the case a restart can fix. It is still a
+gamble with data, and the chart carries it knowingly: a restart does not re-run `wait-for-downloads`,
+so a probe firing while the downloads export is unready is how torrents have been dropped before. It
+stayed during the 2026-11 stall only because that stall had a cause outside the app — the config claim
+on NFS, moved on 2026-11-25 — and it restarted the container 15 times in 12 h while it lasted.
+Readiness would add nothing: the NFS mount is checked by the `wait-for-downloads` init container at
+startup, and the torrent session has no status endpoint to ask.
 
 ## Resources
 

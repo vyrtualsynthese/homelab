@@ -46,9 +46,9 @@ podAnnotations:
   setGateway: "true"
 podLabels: {}
 
-# Pod-level security. `fsGroup` is deliberately NOT set: two of the three claims
-# are NFS and the third is hostPath-backed local-path, so the kubelet would not
-# apply it to either.
+# Pod-level security. `fsGroup` is deliberately NOT set: one of the three claims
+# is NFS and the kubelet does not apply it to a hostPath-backed `local-path`
+# claim either, so setting it would look correct and do nothing.
 podSecurityContext:
   seccompProfile:
     type: RuntimeDefault
@@ -216,13 +216,30 @@ ingressRoute:
     # -- Namespace of that TLSOption.
     optionsNamespace: kube-system
 
-# Three claims, and this chart owns exactly one of them.
+# Three claims, and this chart owns two of them.
 storage:
-  # qBittorrent's own settings, including `qBittorrent.conf` and the VueTorrent
-  # tree under `ui/`. Provisioned by the `nfs-qbittorrent-config` Application, not
-  # by this chart: the name is the live claim, and renaming it is data loss.
+  # qBittorrent's own settings: `qBittorrent.conf`, the resume data and one
+  # `.fastresume` per torrent under `qBittorrent/BT_backup`, and the VueTorrent
+  # tree under `ui/`.
+  #
+  # On `local-path`, because this is configuration: `docs/charts/README.md`
+  # requires it, and this claim is the counter-example that rule was written
+  # for. It spent years on the `nfs-qbittorrent-config` export, where the
+  # exporter's per-scrape `app/preferences` call read it and blocked for the
+  # exporter's whole 5 s timeout — taking the Web UI and every API client with
+  # it. Moved on 2026-11-25, board card 758; `docs/qbittorrent-webui-stalls.md`
+  # has the measurement either side.
+  #
+  # The size is measured, not guessed: 435 MB on the export on 2026-11-25,
+  # 156 MB of it the resume data. 2Gi carries the log and GeoIP trees the app
+  # keeps here as well, which the backup row excludes.
   config:
-    existingClaim: pvc-nfs-qbittorrent-config-nfs-subdir-external-provisioner
+    # -- Claim name. Defaults to `<fullname>-config`, which is `qbittorrent-config`.
+    claimName: ""
+    className: local-path
+    accessModes:
+      - ReadWriteOnce
+    size: 2Gi
     mountPath: /config
   # The download export. Same ownership, same warning.
   downloads:
@@ -377,10 +394,15 @@ resources:
 # would therefore either fail forever or silently start relying on that bypass.
 #
 # The liveness probe is a TCP connect to the WebUI port instead: it fails when the
-# listener is gone, which is what a restart can fix. There is no readiness probe:
-# the process has no dependency that can fail while it answers — the NFS mounts are
-# checked by `wait-for-downloads` at startup, and the torrent session has no status
-# endpoint. The chart README records the same decision in prose.
+# listener stops accepting, which is what a restart can fix. It is a gamble with
+# data, and the chart README records why: a stalled WebUI restarts the app without
+# re-running `wait-for-downloads`, so a restart while the downloads export is
+# unready is how torrents have been dropped before. It stayed because the stall it
+# was firing on had a cause outside the app (the config claim on NFS, card 758), and
+# that cause is fixed. There is no readiness probe: the process has no dependency
+# that can fail while it answers — the NFS mount is checked by `wait-for-downloads`
+# at startup, and the torrent session has no status endpoint. The chart README
+# records the same decision in prose.
 probes:
   liveness:
     enabled: true

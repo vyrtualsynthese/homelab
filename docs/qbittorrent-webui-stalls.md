@@ -1,19 +1,20 @@
 # qBittorrent's Web UI stops answering during downloads
 
-> **In one line.** The Web UI and API stall for minutes to hours while `/config` sits on NFS; the
-> exporter times out, `ScrapeTargetDown` flaps, and the migration is board card 758.
+> **In one line.** The Web UI and API stalled for minutes at a time while `/config` sat on NFS; the
+> claim moved to `local-path` on 2026-11-25 and the 24-hour observation is the only gate left.
 >
-> **Use it when** qBittorrent's Web UI hangs, the exporter stops being scraped, or you are moving the
-> config claim · **Verified** 2026-11-25: 627 failed scrapes in 24 h, every failing scrape pinned at
-> the exporter's 5 s timeout · **Kind:** record
+> **Use it when** qBittorrent's Web UI hangs, the exporter stops being scraped, or you want what the
+> config-claim migration changed · **Verified** 2026-11-25: 627 failed scrapes in 24 h, every
+> failing scrape pinned at the exporter's 5 s timeout · **Kind:** record
 >
 > **Sources** `cluster/helm/media-stack/qbittorrent/values.yaml`,
 > `cluster/helm/media-stack/qbittorrent-exporter/values.yaml`, live `up` and
 > `scrape_duration_seconds` from Prometheus
 
-Status: **open**, documented 2026-11-13 and measured again on 2026-11-25. The exporter's alert is
-silenced until 2026-12-09 and the migration is board card 758; nothing in the app has been changed
-yet, so this file records what was measured and what the evidence points at.
+Status: **fix deployed 2026-11-25, waiting on the 24-hour observation**. Documented 2026-11-13,
+measured again on 2026-11-25, and the claim was moved off NFS the same day (board card 758). The
+exporter's alert stays silenced until the card closes; the note under *Why the app was not changed
+until now* says what to do with that silence.
 
 ## What is seen
 
@@ -94,21 +95,80 @@ was never converted.
 
 So the leading hypothesis is: **a disk-backed request (preferences, resume data) blocks for seconds
 while memory-backed requests stay fast, and the reason it blocks for seconds is that the config
-volume is on NFS.** It is consistent with every measurement above. It is not proven: no per-request
-timing exists in the exporter, so which call timed out is inference, not observation.
+volume is on NFS.** It is consistent with every measurement above, and the measurements alone do not
+prove it: no per-request timing exists in the exporter, so which call timed out is inference, not
+observation. What settles it is the move — the claim is on `local-path` since 2026-11-25, and the
+observation under *The gate* is the test.
 
-## Why the app has not been changed yet
+## The migration, 2026-11-25
+
+Measured before it started: 379 torrents, so 379 `.torrent` files and 379 `.fastresume` files in
+`qBittorrent/BT_backup` (156 MB), and 435 MB in the whole `/config` tree.
+
+1. `qbittorrent-config` was created on `local-path` at `2Gi`, and a copy Job mounted the NAS export
+   read-only beside it and `rsync`ed the tree across while qBittorrent still ran. That first pass is
+   a bulk copy, not a backup: the client kept writing.
+2. Automation for the ArgoCD Application was switched off, the Deployment scaled to zero, and the
+   same Job run again as a delta, with deletions. This is the only window in which the app was
+   down, and it is why the copy is not a snapshot of a moving tree: 379 `.fastresume` on both sides
+   and a matching listing afterwards.
+3. The chart now points `/config` at the claim it owns, so the sync that followed started the pod on
+   the local disk. Automation was switched back on, with the same `prune`/`selfHeal` it had before.
+4. The `nfs-qbittorrent-config` export is still on `nas`, and nothing mounts it. It is the rollback
+   copy: a re-copy is a two-minute Job, while the restic snapshots of it are days old. The follow-up
+   card retires it, and the eight-line export list in `ansible/roles/nfs/templates/exports.j2` with
+   it.
+
+The backup row moved with the claim: `qbittorrent-config` is now a `nodes` row on `streaming` rather
+than an `nfs` row, so the snapshot still holds the seed list and the resume data.
+
+One side effect on `nas`: `snapraid diff` had been reporting about 321 changed files every run, all
+of them under this export, because the client rewrites resume data continuously. Nothing writes
+there any more.
+
+## The gate, and the way back
+
+The card closes when `scrape_duration_seconds` stays under a second for 24 h and the torrent list is
+still 379. Both are one query each:
+
+```bash
+# the ceiling over the last day
+curl -sG http://prometheus.kub.local/api/v1/query --data-urlencode \
+  'query=max_over_time(scrape_duration_seconds{app_kubernetes_io_instance="qbittorrent-exporter"}[24h])'
+
+# failed scrapes in the same window
+curl -sG http://prometheus.kub.local/api/v1/query --data-urlencode \
+  'query=count_over_time(up{app_kubernetes_io_instance="qbittorrent-exporter"}==0[24h])'
+```
+
+The torrent count is the WebUI's own: `curl` from a pod on the pod network against
+`http://qbittorrent.media-stack.svc:8080/api/v2/torrents/info` (the login bypass in
+`qBittorrent.conf` covers `10.42.0.0/16`), or the exporter's own metric page.
+
+If the local claim turns out wrong — a torrent count short, a resume file missing — the way back is
+the export that is still on `nas`: stop the pod, point the chart's `storage.config` at the old claim
+again (a `files` copy back is the same Job in reverse), and start it. Nothing on the export has been
+deleted or modified by the move.
+
+## Why the app was not changed until now
 
 - Moving `/config` to `local-path` needs the pod stopped. Restarts are not free here: the chart
   records two restarts that dropped 8 and 14 torrent entries (`Failed to restore torrent`) when the
-  downloads volume was not ready. A migration is a scheduled operation, not a quick edit.
-- Adding a liveness probe on the Web UI would restart the pod on exactly this symptom, which makes
-  the data loss worse. Do not do it before the cause is fixed.
+  downloads volume was not ready. A migration is a scheduled operation, not a quick edit — which is
+  why the copy above is done in two passes with the app stopped for the second one only.
+- **The liveness probe restarts the app on exactly this symptom, and it always has.** The chart has
+  carried a TCP probe on the WebUI port since 2022, rebuilt in the 2026-11-18 chart pass; the
+  probe's own comment said "it fails when the listener is gone, which is what a restart can fix",
+  and during these stalls it does not fix anything. On 2026-11-25 it restarted the container **15
+  times in 12 h**, each time mid-stall. A restart is also the moment the torrent list can lose
+  entries: `wait-for-downloads` runs at pod start, not at a container restart, so a restart with the
+  downloads export unready is the case that dropped torrents before. The probe stays because the
+  cause it was firing on is now fixed; a different stall would bring the same gamble back.
 
-The stopgap that did go in on 2026-11-25 is a **silence**, not a rule change: `ScrapeTargetDown`
+The stopgap that went in on 2026-11-25 is a **silence**, not a rule change: `ScrapeTargetDown`
 matched on `app_kubernetes_io_instance="qbittorrent-exporter"` until 2026-12-09. The rule is
-correct; silencing it is what stops the flap reaching Discord while card 758 schedules the
-migration. Remove the silence when `/config` moves, or renew it with a new end date — do not widen
+correct; silencing it is what stopped the flap reaching Discord while card 758 scheduled the
+migration. Remove the silence when the card closes, or renew it with a new end date — do not widen
 `ScrapeTargetDown`, because that would hide a media exporter that has really died.
 
 ## How to confirm it is happening again
@@ -129,8 +189,8 @@ curl -skG -H "Authorization: Bearer $GRAFANA_TOKEN" \
   --data-urlencode 'query={namespace="media-stack",container="cross-seed"} |= "fetch failed"'
 ```
 
-The decisive test for the hypothesis is moving `/config` to `local-path` and watching whether
-`scrape_duration_seconds` stays under a second through a download-heavy day.
+The decisive test was the move: `/config` is on `local-path` since 2026-11-25, and *The gate* above
+says what to watch for the next day.
 
 ## A related defect, already fixed
 

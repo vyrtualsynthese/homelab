@@ -5,7 +5,10 @@
 > the rest of the namespace are helpers around that loop.
 >
 > **Use it when** a download has not turned into a library item, you are adding a media app, or you want
-> to know what one of the tools in `media-stack` is for · **Verified** 2026-11-17 · **Kind:** living page
+> to know what one of the tools in `media-stack` is for · **Verified** 2026-11-25 · **Kind:** explanation
+>
+> **Sources** `cluster/helm/media-stack/**/values.yaml`, the live `media-stack` pods and routes read on
+> 2026-11-25, and the per-app pages under `docs/how-it-works/`
 
 ## The pipeline, one diagram
 
@@ -56,7 +59,8 @@ The two `-anime` twins give anime its own library roots, profiles and indexers, 
 configuration.
 
 **qBittorrent is not healthy.** Its Web UI and API stop answering during downloads, breaking cross-seed,
-autobrr and the qBittorrent exporter while it lasts. It is an open fault with its own page:
+autobrr and the qBittorrent exporter while it lasts. The cause was its `/config` claim on NFS, moved to
+`local-path` on 2026-11-25 and waiting on the 24-hour observation: it is an open fault with its own page,
 [qbittorrent-webui-stalls.md](../qbittorrent-webui-stalls.md).
 
 ## The books pair
@@ -72,12 +76,10 @@ cutover: [completed record](../runbooks/books-cutover.md).
 
 Media is on the NFS classes from `nas`: `plex-media` for film and television, `nfs-audio` for music,
 `nfs-books` for the books library, `qbittorrent-download` for what is still downloading. Configuration
-sits on `local-path` on the node each app runs on. The classes, the binding trap and the absence of
-backups are [storage.md](storage.md); which claim belongs to which app is
+sits on `local-path` on the node each app runs on. The one claim that was the exception — qBittorrent's
+`/config` on NFS, which is what the stall above was — moved on 2026-11-25. The classes, the binding
+trap and the absence of backups are [storage.md](storage.md); which claim belongs to which app is
 [applications.md](applications.md).
-
-Exception: qBittorrent's `/config` is on NFS, against that rule, and is the leading explanation for the
-stall above.
 
 ## What protects each one
 

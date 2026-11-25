@@ -106,7 +106,7 @@ they are what everything above stands on.
 | `local-path` | `default` | nas | B | the default storage class: one directory per claim, on the node's own disk |
 | `books-media` | `media-stack` | nuc0 | D | the `nfs-books` class: the books library |
 | `nfs-audio` | `media-stack` | nuc0 | D | the `nfs-audio` class: music |
-| `nfs-qbittorrent-config` | `media-stack` | streaming | D | the `nfs-qbittorrent-config` class: qBittorrent's configuration on the NAS |
+| `nfs-qbittorrent-config` | `media-stack` | streaming | D | the `nfs-qbittorrent-config` class: the export that held qBittorrent's configuration until 2026-11-25, kept as that migration's rollback copy and mounted by nothing |
 | `nfs-qbittorrent-download` | `media-stack` | streaming | D | the `qbittorrent-download` class: what is still downloading, on the fast SSD |
 | `plex-media` | `media-stack` | streaming | D | the `plex-media` class: film and television |
 | `stash-nfs` | `media-stack` | nuc0 | D | the `stash-nfs` class: the assets export — koillection's uploads, and FileBrowser's read of the same directory |

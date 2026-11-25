@@ -351,7 +351,7 @@ spec:
             claimName: {{ include "app.vpnClaimName" . }}
         - name: config
           persistentVolumeClaim:
-            claimName: {{ required "storage.config.existingClaim is required" .Values.storage.config.existingClaim }}
+            claimName: {{ include "app.configClaimName" . }}
         - name: downloads
           persistentVolumeClaim:
             claimName: {{ required "storage.downloads.existingClaim is required" .Values.storage.downloads.existingClaim }}

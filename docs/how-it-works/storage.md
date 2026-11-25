@@ -5,7 +5,11 @@
 > not.
 >
 > **Use it when** you are adding a claim, a pod will not start because of one, or you want to know what
-> a backup would save · **Verified** 2026-11-20 · **Kind:** living page
+> a backup would save · **Verified** 2026-11-25 · **Kind:** explanation
+>
+> **Sources** `cluster/helm/media-stack/qbittorrent/values.yaml`,
+> `cluster/helm/backup/values.yaml`, `ansible/roles/nfs/templates/exports.j2`, the live
+> `StorageClass` and `PersistentVolume` objects
 
 ## Two storage worlds
 
@@ -24,8 +28,10 @@ storage, the same volume on two machines, was Longhorn, gone for the reason in
 ## Claims and names
 
 A configuration claim is `<app>-config`, `128Mi` unless there is a reason: configuration is small, and
-GiB-sized guesses proved wrong. Two exceptions keep book-sized files in their own volume:
-`calibre-web-automated` at `10Gi`, `kavita` at `2Gi`.
+GiB-sized guesses proved wrong. Three claims are larger with a measured reason beside the size:
+`calibre-web-automated` at `10Gi` and `kavita` at `2Gi` for their book-sized files, and
+`qbittorrent`'s config claim at `2Gi` because its resume data alone is 156 MB — one `.fastresume` per
+torrent, which is why it moved off NFS on 2026-11-25 rather than being copied around.
 
 ![Configuration on local-path per node, the media library on NFS classes from nas, and the Longhorn claims that remain](../assets/diagrams/storage.svg)
 
@@ -40,7 +46,7 @@ the classes below are what remains.
 | `nfs-audio` | Immediate | music |
 | `nfs-books` | Immediate | the books library |
 | `qbittorrent-download` | Immediate | qBittorrent's output |
-| `nfs-qbittorrent-config` | Immediate | qBittorrent's state directory |
+| `nfs-qbittorrent-config` | Immediate | nothing since 2026-11-25: qBittorrent's state directory moved to `local-path` (card 758), and the export is kept on `nas` as the migration's rollback copy until the follow-up card retires it |
 | `nfs-syncthing` | Immediate | Syncthing's folder |
 | `stash-nfs` | Immediate | assets and documents: koillection's uploads are provisioned into this export, and FileBrowser reads the same directory |
 | `traefik-nfs` | Immediate | Traefik's certificate store |
