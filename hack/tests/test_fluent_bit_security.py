@@ -7,6 +7,7 @@ panel query resolving.
 """
 
 import pathlib
+import re
 import unittest
 
 import yaml
@@ -24,7 +25,12 @@ def config():
 
 
 def _blocks(text, kind, selectors):
-    """The [INPUT]/[OUTPUT] block holding each selector, as a list of blocks."""
+    """One block per selector, each required to match exactly once.
+
+    A selector that matches no block, or more than one, raises rather than
+    returning a short list: a test that iterates an empty result passes for the
+    wrong reason.
+    """
     found = []
     for selector in selectors:
         block = [b for b in text.split(f"[{kind}]") if selector in b]
@@ -113,9 +119,11 @@ class JournalTests(unittest.TestCase):
         # persistent and the volatile journal — to opening one directory. A node
         # whose journal is volatile would then ship nothing while looking
         # configured, which is the same silent zero the `_COMM` choice exists to
-        # prevent.
+        # prevent. Matched as a directive, so `Path` and `Path=` both fail.
         for block in _blocks(config()["inputs"], "INPUT", ("Tag host.ssh", "Tag host.kernel")):
-            self.assertNotIn("Path ", block)
+            self.assertIsNone(
+                re.search(r"^\s*Path\s*[= ]", block, re.MULTILINE),
+                "a journal input pins a directory")
 
     def test_each_output_keeps_the_pipeline_options(self):
         # Copied from the access-log output, which the measured day above proves.
@@ -134,6 +142,10 @@ class JournalTests(unittest.TestCase):
         mounts = {m["mountPath"]: m for m in chart["extraVolumeMounts"]}
         self.assertTrue(mounts["/run/log/journal"].get("readOnly"))
         self.assertIn("/var/lib/fluent-bit", mounts)
+        # Writable, because the two `DB` files land there: a `readOnly: true`
+        # added to this mount is a position file the plugin cannot write.
+        self.assertFalse(mounts["/var/lib/fluent-bit"].get("readOnly"),
+                         "the position directory must be writable")
         volumes = {v["name"]: v for v in chart["extraVolumes"]}
         self.assertEqual(volumes["host-run-journal"]["hostPath"]["path"], "/run/log/journal")
         self.assertEqual(volumes["host-run-journal"]["hostPath"]["type"], "DirectoryOrCreate")
