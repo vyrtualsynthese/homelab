@@ -54,6 +54,11 @@ prints `changed=0` on a host that already matches.
 - **`pihole.env` holds the password, and nothing else.** Compose reads `pihole.settings` first and
   `pihole.env` after it, so on a collision the secret wins. Every other `FTLCONF_*` key belongs in the
   settings file: a key set in the panel rather than in git is drift the next `setup` cannot see.
+- **The `address=` overrides live in `etc-dnsmasq.d/02-my-wildcard-dns.conf`**, rendered and compared
+  like the settings. Six of them were also in each host's `FTLCONF_misc_dnsmasq_lines`, which the
+  settings file now clears: the duplicate is gone and this file carries all six, `ashudev.com`
+  included. `ADLISTS_URL` went with them, since no timer or entrypoint runs `pihole-updatelists` on
+  these hosts — the blocklists in `gravity.db` are edited through the panel.
 - **The resolvers point at both Pis**, `192.168.1.22` then `192.168.1.38`, on both hosts. Never
   `127.0.0.1`: a container cannot reach the host's loopback. Never `1.1.1.1`: it answers around the
   blocklist.
