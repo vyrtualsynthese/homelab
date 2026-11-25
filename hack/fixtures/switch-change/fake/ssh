@@ -10,8 +10,9 @@ FAKE_NOW            the starting clock, "YYYY-MM-DD HH:MM:SS"
 FAKE_STEP           seconds the clock moves per call, default 10
 FAKE_VERSION        what /system resource print answers, default 7.16.1
 
-State files: config, clock, calls, scheduler.json, files/, and the flags break, break_after_change,
-backup_denied, import_error, after_change, after_undo, fire_on_arm.
+State files: config, config-verbose, clock, clock-output, commands, calls, scheduler.json, files/,
+and the flags break, break_after_change, backup_denied, import_error, after_change, after_undo,
+fire_on_arm, stays_down, hide_timer, hide_run_count, hide_run_count_after_change, refuse_upload.
 """
 
 import json
@@ -63,6 +64,8 @@ def import_file(name, undo=False):
         write("config", after)
     if flag("break_after_change"):
         write("break", "1")
+    if flag("hide_run_count_after_change"):
+        write("hide_run_count", "1")
     return error
 
 
@@ -85,9 +88,10 @@ def fire_due(now, force=False):
 
 
 def scheduler_block(entry, name):
-    return (f' 0    name="{name}" owner="deploy" policy=read,write,test\n'
-            f'      start-date=2026-11-25 start-time={entry["start-time"]} '
-            f'interval=0s run-count={entry.get("run-count", 0)}\n'
+    count = "" if flag("hide_run_count") else f' run-count={entry.get("run-count", 0)}'
+    return (f' 0    name="{name}" owner="deploy" policy={entry.get("policy", "")}\n'
+            f'      start-date={entry.get("start-date", "")} start-time={entry["start-time"]} '
+            f'interval={entry.get("interval", "")}{count}\n'
             f'      on-event="{entry.get("on-event", "")}"\n')
 
 
@@ -100,6 +104,9 @@ def answer(command):
                 f"               build-time: 2026-10-01 09:00:00\n")
 
     if command.startswith("/system clock print"):
+        captured = read("clock-output")
+        if captured is not None:
+            return captured
         now = read("clock").strip()
         date, time = now.split(" ")
         return (f"                  date: {date}\n"
@@ -131,15 +138,20 @@ def answer(command):
         return ""
 
     if command.startswith("/system scheduler print detail"):
+        if flag("hide_timer"):
+            return ""
         table = json.loads(read("scheduler.json", "{}"))
         return "".join(scheduler_block(entry, name) for name, entry in table.items())
 
     if command.startswith("/system scheduler add"):
         name = re.search(r"name=([^\s]+)", command).group(1)
-        start = re.search(r"start-time=([^\s]+)", command).group(1)
         event = re.search(r'on-event="([^"]*)"', command).group(1)
+        entry = {"on-event": event, "run-count": 0}
+        for key in ("start-time", "start-date", "interval", "policy"):
+            match = re.search(rf"{key}=([^\s]+)", command)
+            entry[key] = match.group(1) if match else ""
         table = json.loads(read("scheduler.json", "{}"))
-        table[name] = {"start-time": start, "on-event": event, "run-count": 0}
+        table[name] = entry
         write("scheduler.json", json.dumps(table))
         if flag("fire_on_arm"):
             fire_due(datetime.strptime(read("clock").strip(), "%Y-%m-%d %H:%M:%S"), force=True)
@@ -201,6 +213,7 @@ def ssh_operands(argv):
 def main(argv):
     _, command = ssh_operands(argv)
     counters()
+    write("commands", read("commands", "") + command + "\n")
 
     now = datetime.strptime(read("clock").strip(), "%Y-%m-%d %H:%M:%S")
     now += timedelta(seconds=int(os.environ.get("FAKE_STEP", "10")))

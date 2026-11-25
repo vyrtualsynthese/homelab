@@ -4,6 +4,7 @@ import contextlib
 import json
 import os
 import pathlib
+import re
 import signal
 import subprocess
 import tempfile
@@ -68,6 +69,14 @@ class Fake:
             self._write("fire_on_arm", str(kw["fire_on_arm"]))
         if kw.get("stays_down"):
             self._write("stays_down", "1")
+        if kw.get("hide_timer"):
+            self._write("hide_timer", "1")
+        if kw.get("hide_run_count_after_change"):
+            self._write("hide_run_count_after_change", "1")
+        if kw.get("refuse_upload"):
+            self._write("refuse_upload", str(kw["refuse_upload"]))
+        if kw.get("clock_output"):
+            self._write("clock-output", kw["clock_output"])
 
     def _write(self, name, text):
         (self.state / name).write_text(text)
@@ -137,6 +146,10 @@ class Fake:
         p = self.state / "calls"
         return int(p.read_text()) if p.exists() else 0
 
+    def commands(self):
+        p = self.state / "commands"
+        return p.read_text().splitlines() if p.exists() else []
+
     def fire_on_arm(self, value="1"):
         """Have the fake run the entry as soon as it is added, before the first poll."""
         self._write("fire_on_arm", str(value))
@@ -173,6 +186,17 @@ class UsageTests(unittest.TestCase):
         done = run(["--list-targets"], env={"SWITCH_CHANGE_TARGETS": "crs326=192.168.1.11 broken"})
         self.assertEqual(done.returncode, 2)
         self.assertEqual(done.stdout, "")
+
+    def test_a_missing_option_value_is_a_usage_error(self):
+        done = run(["--target"])
+        self.assertEqual(done.returncode, 2)
+        self.assertIn("--target needs a value", done.stderr)
+
+    def test_a_window_outside_the_ceiling_and_the_floor_is_refused(self):
+        for window in ("30s", "2h", "ten-minutes"):
+            done = run(["--target", "crs326", "--change", str(CHANGES / "set-pvid.rsc"),
+                        "--dry-run", "--yes", "--window", window])
+            self.assertEqual(done.returncode, 2, (window, done.stderr))
 
     def test_list_targets_prints_the_defaults(self):
         done = run(["--list-targets"])
@@ -217,6 +241,19 @@ class RendererV7Tests(unittest.TestCase):
             'do={ /interface bridge port enable [find interface="sfp-sfpplus1"] }',
             self.render("disable-port.rsc"))
 
+    def test_an_enable_of_an_enabled_object_is_undone_by_enabling_it(self):
+        self.assertIn(
+            ':if ([:len [/interface bridge port find interface="sfp-sfpplus1"]] > 0) '
+            'do={ /interface bridge port enable [find interface="sfp-sfpplus1"] }',
+            self.render("enable-port.rsc"))
+
+    def test_an_enable_of_a_disabled_object_is_undone_by_disabling_it(self):
+        self.assertIn(
+            ':if ([:len [/interface bridge port find interface="sfp-sfpplus1"]] > 0) '
+            'do={ /interface bridge port disable [find interface="sfp-sfpplus1"] }',
+            self.render("enable-disabled-port.rsc", export="v7-plain-disabled.rsc",
+                        verbose="v7-verbose-disabled.rsc"))
+
     def test_an_add_keyed_by_comment_uses_the_comment(self):
         self.assertIn('/ip route find comment=uplink', self.render("comment-add.rsc"))
 
@@ -225,11 +262,11 @@ class RendererV7Tests(unittest.TestCase):
 
 
 class RefusalTests(unittest.TestCase):
-    def refused(self, change):
+    def refused(self, change, export="v7-plain.rsc", verbose="v7-verbose.rsc"):
         done = run(["--render-undo", "--major", "7",
                     "--change", str(CHANGES / change),
-                    "--export", str(EXPORTS / "v7-plain.rsc"),
-                    "--verbose-export", str(EXPORTS / "v7-verbose.rsc")])
+                    "--export", str(EXPORTS / export),
+                    "--verbose-export", str(EXPORTS / verbose)])
         self.assertEqual(done.returncode, 1, done.stdout)
         self.assertEqual(done.stdout, "")
         return done.stderr
@@ -251,6 +288,27 @@ class RefusalTests(unittest.TestCase):
 
     def test_an_import_inside_a_change_is_refused(self):
         self.assertIn("/import", self.refused("refuse-import.rsc"))
+
+    def test_resetting_the_configuration_is_refused(self):
+        self.assertIn("/system reset-configuration", self.refused("refuse-reset.rsc"))
+
+    def test_a_move_written_absolutely_is_refused(self):
+        self.assertIn("move", self.refused("refuse-absolute-move.rsc"))
+
+    def test_a_change_with_no_invertible_line_arms_nothing(self):
+        self.assertIn("no line", self.refused("refuse-header-only.rsc"))
+
+    def test_an_add_whose_key_is_already_in_the_export_is_refused(self):
+        self.assertIn("already holds", self.refused("refuse-add-collides.rsc"))
+
+    def test_a_set_argument_without_a_value_is_refused(self):
+        self.assertIn("disabled", self.refused("refuse-unset.rsc"))
+
+    def test_a_value_holding_a_brace_is_refused(self):
+        self.assertIn("brace", self.refused("refuse-brace.rsc"))
+
+    def test_a_change_to_the_files_is_refused(self):
+        self.assertIn("/file", self.refused("refuse-file.rsc"))
 
 
 class RendererV6Tests(unittest.TestCase):
@@ -310,13 +368,55 @@ class ArmTests(unittest.TestCase):
             self.assertEqual(len([n for n in f.files() if n.startswith("undo-")]), 1)
             self.assertEqual(len([n for n in f.files() if n.startswith("change-")]), 1)
 
-    def test_a_previous_runs_timer_is_cancelled_and_named(self):
-        with fake("stale") as f:
+    def test_a_previous_runs_timer_is_named_and_left_alone_by_a_dry_run(self):
+        with fake("stale-dry") as f:
             f.arm("revert-oldrun", "10:00:00")
             done = f.script(["--target", "crs326", "--change", str(CHANGES / "set-pvid.rsc"),
                              "--dry-run", "--yes"])
+            self.assertEqual(done.returncode, 0, done.stderr)
             self.assertIn("revert-oldrun", done.stdout)
+            self.assertIn('name="revert-oldrun"', f.ros("/system scheduler print detail"))
+            self.assertEqual(f.files(), [])
+
+    def test_an_armed_run_cancels_the_timer_an_earlier_run_left(self):
+        with fake("stale-run") as f:
+            f.arm("revert-oldrun", "10:00:00")
+            done = f.script(["--target", "crs326", "--change", str(CHANGES / "set-pvid.rsc"),
+                             "--arm-only", "--yes"])
+            self.assertEqual(done.returncode, 0, done.stderr)
+            self.assertIn("cancelled the timer an earlier run left armed: revert-oldrun", done.stdout)
             self.assertNotIn("revert-oldrun", f.ros("/system scheduler print detail"))
+
+    def test_the_timer_carries_the_device_date_and_the_window(self):
+        with fake("window", now="2026-11-25 09:20:00", step="0") as f:
+            done = f.script(["--target", "crs326", "--change", str(CHANGES / "set-pvid.rsc"),
+                             "--arm-only", "--yes", "--window", "10m"])
+            self.assertEqual(done.returncode, 0, done.stderr)
+            detail = f.ros("/system scheduler print detail")
+            self.assertIn("start-date=2026-11-25", detail)
+            self.assertIn("start-time=09:30:00", detail)
+            self.assertIn("interval=0s", detail)
+            self.assertIn("policy=read,write,test", detail)
+            name = re.search(r'name="(revert-[^"]+)"', detail).group(1)
+            self.assertIn(f'on-event="/import file=undo-{name[len("revert-"):]}.rsc"', detail)
+
+    def test_an_upload_that_fails_removes_the_file_it_put_there(self):
+        with fake("upload", refuse_upload="change-") as f:
+            done = f.script(["--target", "crs326", "--change", str(CHANGES / "set-pvid.rsc"),
+                             "--arm-only", "--yes"])
+            self.assertEqual(done.returncode, 1)
+            self.assertIn("change-", done.stderr)
+            self.assertEqual([n for n in f.files() if n.startswith(("undo-", "change-"))], [])
+            self.assertEqual(f.ros("/system scheduler print detail"), "")
+
+    def test_a_timer_that_cannot_be_read_back_is_removed_again(self):
+        with fake("readback", hide_timer="1") as f:
+            done = f.script(["--target", "crs326", "--change", str(CHANGES / "set-pvid.rsc"),
+                             "--arm-only", "--yes"])
+            self.assertEqual(done.returncode, 1)
+            self.assertIn("revert-", done.stderr)
+            self.assertEqual([n for n in f.files() if n.startswith(("undo-", "change-"))], [])
+            self.assertEqual(json.loads((f.state / "scheduler.json").read_text()), {})
 
     def test_a_window_across_midnight_is_refused_with_nothing_armed(self):
         with fake("midnight", now="2026-11-25 23:58:00") as f:
@@ -341,6 +441,13 @@ class ArmTests(unittest.TestCase):
             self.assertIn("move", done.stderr)
             self.assertEqual(f.ros("/system scheduler print detail"), "")
             self.assertEqual(f.files(), [])
+
+    def test_a_window_is_read_in_minutes_seconds_or_plain_seconds(self):
+        for window in ("10m", "600s", "600"):
+            with fake(f"win-{window}") as f:
+                done = f.script(["--target", "crs326", "--change", str(CHANGES / "set-pvid.rsc"),
+                                 "--dry-run", "--yes", "--window", window])
+                self.assertEqual(done.returncode, 0, (window, done.stderr))
 
     def test_a_refused_backup_still_arms(self):
         with fake("nobackup", backup_denied="1") as f:
@@ -403,6 +510,45 @@ class RunTests(unittest.TestCase):
                              "--yes", "--window", "10m"])
         self.assertEqual(done.returncode, 3, done.stderr)
         self.assertNotIn("applied", done.stdout)
+
+    def test_an_import_error_behind_an_echoed_line_still_undoes_on_demand(self):
+        with fake("error-late", import_error="echo: /ip address add ...\nbad command (line 2)") as f:
+            done = f.script(["--target", "crs326", "--change", str(CHANGES / "set-pvid.rsc"),
+                             "--yes", "--window", "10m"])
+        self.assertEqual(done.returncode, 3, done.stderr)
+        self.assertIn("on demand", done.stdout)
+        self.assertLess(f.calls(), 30)
+
+    def test_a_run_count_that_cannot_be_read_claims_nothing_about_the_timer(self):
+        with fake("nocount", break_after_change="1", after_change=CHANGED,
+                  after_undo=(EXPORTS / "v7-plain.rsc").read_text(),
+                  hide_run_count_after_change="1") as f:
+            done = f.script(["--target", "crs326", "--change", str(CHANGES / "set-pvid.rsc"),
+                             "--yes", "--window", "3m"])
+        self.assertEqual(done.returncode, 3, done.stderr)
+        self.assertIn("run-count could not be read", done.stdout)
+        self.assertNotIn("the timer revert-", done.stdout)
+
+
+class V6RunTests(unittest.TestCase):
+    """A RouterOS 6 switch: the other export command, and a clock written the other way round."""
+
+    V6_CLOCK = ("                  date: nov/25/2026\n"
+                "                  time: 09:20:00\n"
+                "       time-zone-autodetect: no\n"
+                "           time-zone-name: Europe/Paris\n")
+
+    def test_a_v6_run_exports_hide_sensitive_verbose_and_reads_its_clock(self):
+        with fake("v6run", version="6.49.10", step="0", clock_output=self.V6_CLOCK,
+                  config=(EXPORTS / "v6-plain.rsc").read_text(),
+                  verbose=(EXPORTS / "v6-verbose.rsc").read_text()) as f:
+            done = f.script(["--target", "crs326", "--change", str(CHANGES / "add-address-v6.rsc"),
+                             "--arm-only", "--yes", "--window", "10m"])
+            self.assertEqual(done.returncode, 0, done.stderr)
+            self.assertIn("/export hide-sensitive verbose", f.commands())
+            detail = f.ros("/system scheduler print detail")
+            self.assertIn("start-date=2026-11-25", detail)
+            self.assertIn("start-time=09:30:00", detail)
 
 
 class InterruptTests(unittest.TestCase):

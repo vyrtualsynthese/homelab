@@ -6,6 +6,7 @@ a download puts that file on the local disk. `-O` (the legacy protocol the colle
 connection options are accepted and ignored.
 
 FAKE_STATE          the state directory (required)
+refuse_upload       a name prefix the device refuses to receive, for the failure paths
 """
 
 import os
@@ -73,6 +74,10 @@ def main(argv):
 
     if dst_remote:
         name = pathlib.PurePosixPath(dst_remote).name
+        refused = state / "refuse_upload"
+        if refused.exists() and name.startswith(refused.read_text().strip()):
+            sys.stderr.write(f"fake-scp: {name}: permission denied\n")
+            return 1
         (files / name).write_bytes(pathlib.Path(src).read_bytes())
         return 0
 
