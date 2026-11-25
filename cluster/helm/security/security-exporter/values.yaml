@@ -1,0 +1,36 @@
+# The numbers the posture families are compared against. They are claims about
+# the cluster on a date, not a policy: a change here is a change to what the
+# `SecurityExposureDrift` rule treats as normal, so it moves only with the route
+# it describes, and `expectedNote` says when the live side was last read.
+#
+# Read on 2026-11-25 through the read-only MCP ServiceAccount: 73 IngressRoute
+# objects live, against 72 the charts render — the one-object difference is named
+# in docs/reference/routes.md — 9 public hosts, and 4 privileged workloads.
+#
+# `privilegedWorkloads` counts the charts in this repository that set
+# `privileged: true`: the qbittorrent WireGuard sidecar, and the mktxp,
+# pihole-exporter and prometheus-smartctl exporters. It is not a count of pods on
+# the cluster: the GPU operator's own pods and k3s's ephemeral jobs run privileged
+# too, and they are deliberately left out because they are not this repository's
+# decision. A pod count would also drift on its own, with DaemonSet replicas and
+# with every job that starts, so the definition the exporter exports has to be
+# this one.
+securityExporter:
+  expected:
+    ingressRoutes: 73
+    publicHosts: 9
+    privilegedWorkloads: 4
+  expectedNote: "read 2026-11-25 from the live cluster; see docs/reference/routes.md"
+  # The same list as `PUBLIC_HOSTS` in hack/check_exposure.py, which owns it.
+  # test_security_exporter.py fails the moment the two differ, because a copy in
+  # a chart is how a posture panel starts lying.
+  publicHosts:
+    - plex.kub.home.ashudev.com
+    - seerr.kub.home.ashudev.com
+    - ashuvidz.com
+    - www.ashuvidz.com
+    - ashudev.com
+    - www.ashudev.com
+    - dashy.ashudev.com
+    - authentik.kub.home.ashudev.com
+    - filebrowser.kub.home.ashudev.com
