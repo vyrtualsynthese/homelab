@@ -42,6 +42,25 @@ fluent-bit:
           Tag kube.*
           Mem_Buf_Limit 5MB
           Skip_Long_Lines On
+
+      # Traefik's access log, written to a file on the host because two readers
+      # disagree about its contents (cluster/helm/platform/traefik). Parser json
+      # splits the line into fields so the next filter can remove two of them;
+      # Line_Format json puts the rest back as one JSON object, which is what
+      # Loki's `| json` panels already expect.
+      #
+      # No `Time_Key`: Traefik writes RFC3339 with nanoseconds and an offset, and
+      # a `Time_Format` that does not match it is a silent fallback to the wrong
+      # timestamp or a rejected line. The record is stamped at ingestion, a
+      # fraction of a second later, and the line's own `time` field stays in the
+      # JSON for anything that needs the request's own clock.
+      [INPUT]
+          Name tail
+          Path /var/log/traefik/access.log
+          Tag traefik.access
+          Parser json
+          Mem_Buf_Limit 5MB
+          Skip_Long_Lines On
     filters: |
       [FILTER]
           Name kubernetes
@@ -50,6 +69,18 @@ fluent-bit:
           Keep_Log Off
           K8S-Logging.Parser On
           K8S-Logging.Exclude On
+
+      # The only difference between the file and the store. `RequestPath` holds
+      # FileBrowser's /share/<hash> and Plex's token when one slips past the
+      # query-parameter drop; `request_User-Agent` is a fingerprint nobody needs
+      # for 30 days. Scoped by tag: a bare `modify` filter would strip these keys
+      # from every container's JSON in the kube.* pipeline.
+      [FILTER]
+          Name modify
+          Match traefik.access
+          Remove RequestPath
+          Remove request_User-Agent
+          Remove RequestReferer
     # What Loki stores is what a panel reads, and Fluent Bit's default line is the
     # whole record as JSON. Measured on 2026-11-18: 63 % of every line was that
     # `kubernetes` block, repeating labels Loki already holds as stream labels
@@ -77,3 +108,18 @@ fluent-bit:
           Retry_Limit no_limits
           Labels job=fluent-bit, namespace=$kubernetes['namespace_name'], container=$kubernetes['container_name'], node=$kubernetes['host']
           Structured_Metadata pod=$kubernetes['pod_name']
+
+      # Static labels, chosen to match the container pipeline exactly: the
+      # Traefik dashboard's rows and docs/reference/log-budget.md query
+      # `{job="fluent-bit", container="traefik"}`, and they keep resolving
+      # without an edit. `source` is the one addition, so the file's stream can
+      # be told apart from a container that logs to stdout.
+      [OUTPUT]
+          Name loki
+          Match traefik.access
+          Host loki.monitoring.svc.cluster.local
+          Port 3100
+          Line_Format json
+          Compress gzip
+          Retry_Limit no_limits
+          Labels job=fluent-bit, namespace=kube-system, container=traefik, node=streaming, source=accesslog
