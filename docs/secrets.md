@@ -75,6 +75,7 @@ keys at all.
 | `traefik-ovh` | `kube-system` | `OVH_ENDPOINT`, `OVH_APPLICATION_KEY`, `OVH_APPLICATION_SECRET`, `OVH_CONSUMER_KEY` → `envFrom` on the Traefik pod; the consumer key is scoped to `/domain/zone/{ashudev.com,ashuvidz.com}/{record,record/*,refresh}` |
 | `n8n` | `n8n` | `encryption-key` → `N8N_ENCRYPTION_KEY`, the key n8n encrypts stored credentials with |
 | `backup-restic` | `backup` | `RESTIC_PASSWORD`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` (restic's names for any S3 store's pair; the values are OVH's) → `envFrom` in every job of `cluster/helm/backup` |
+| `k3s-etcd-snapshot-s3-config` | `kube-system` | type `etcd.k3s.cattle.io/s3-config-secret`; `etcd-s3-access-key`, `etcd-s3-secret-key`, `etcd-s3-endpoint`, `etcd-s3-region`, `etcd-s3-bucket`, `etcd-s3-folder`, `etcd-s3-retention`, `etcd-s3-skip-ssl-verify` → read by K3s itself on every snapshot, named by `etcd-s3-config-secret` in `/etc/rancher/k3s/config.yaml` |
 
 - **`traefik-dashboard` is keyed `users`, and the key name is the whole contract.** The Middleware
   [`traefik-dashboard`](../cluster/infrastructure/traefik/dashboard/auth.yaml) reads this Secret, and
@@ -122,15 +123,41 @@ access_key_id` and `-raw secret_access_key` in that stack. They are not the stat
 must never be: that one reaches the OpenTofu state. The restic password is not an S3 credential at
 all — it encrypts the repository, and losing it loses the backups.
 
-Three credentials are **not** Kubernetes Secrets, and a rebuild needs all three; the fourth row is a
-Secret that does not exist yet.
+Three credentials are **not** Kubernetes Secrets, and a rebuild needs all three; the fourth row is the
+one Secret K3s reads from outside a chart.
 
 | Credential | Why losing it matters | Where it is kept | Failure domain |
 |---|---|---|---|
 | the restic repository password | every repository is ciphertext under it; without it the bucket is noise, not a backup | Bitwarden, item `homelab-backup-last-resort` (Homelab folder, master-password re-prompt on), written 2026-11-22 | cloud vault |
 | the OVH S3 pair for the bucket | the bucket cannot be opened, though its contents are intact. The cluster's copy is the `backup-restic` Secret, which dies with the cluster | the same vault item, and derivable: `tofu output -raw access_key_id` in `infra-main/infra-main/ovh` reprints it from the OVH API key | cloud vault, and re-derivable |
 | the K3s server join token (`/var/lib/rancher/k3s/server/token`) | an etcd snapshot is encrypted with a key derived from it, so restoring onto a rebuilt host with a different token produces an unreadable snapshot | the same vault item, field `K3S_SERVER_TOKEN` | cloud vault |
-| `k3s-etcd-snapshot-s3-config` | reserved: the Secret the official K3s upload reads, with keys `bucket`, `endpoint`, `access-key`, `secret-key`. Created by the K3s 1.31 upgrade (W5), **not** by the restic work | does not exist yet | — |
+| the `k3s-etcd-snapshot-s3-config` Secret's keys | the servers stop uploading their etcd snapshots; they keep running and keep taking local ones, so nothing looks broken until a restore is needed | the same vault item — the pair is the bucket's own, no second grant | cloud vault |
+
+### The etcd upload's Secret (`kube-system`)
+
+K3s reads the S3 settings from a Secret of its own type, so the access key never lands on a node's
+filesystem. The keys are the flag names, because that is how K3s parses them; a Secret keyed
+`access-key` or `secret-key` is ignored and the upload never starts.
+
+```bash
+kubectl -n kube-system create secret generic k3s-etcd-snapshot-s3-config \
+  --type=etcd.k3s.cattle.io/s3-config-secret \
+  --from-literal=etcd-s3-access-key='<value>' \
+  --from-literal=etcd-s3-secret-key='<value>' \
+  --from-literal=etcd-s3-endpoint=s3.gra.io.cloud.ovh.net \
+  --from-literal=etcd-s3-region=gra \
+  --from-literal=etcd-s3-bucket=ashudev-homelab-backup \
+  --from-literal=etcd-s3-folder=etcd \
+  --from-literal=etcd-s3-retention=180 \
+  --from-literal=etcd-s3-skip-ssl-verify=false
+```
+
+`/etc/rancher/k3s/config.yaml` then carries only `etcd-s3: true` and `etcd-s3-config-secret`, whose
+value is the Secret's name; **any** other `etcd-s3-*` option in that file
+makes K3s ignore the Secret and log a warning, because the Secret is read only when the rest of the
+S3 configuration is left at its defaults. The pair is the same OVH user the bucket uses, declared in
+`infra-main/ovh/backup.tf`; the endpoints, prefix and retention are in the Secret rather than on the
+node for the same reason.
 
 **The first three rows above share one failure domain.** Until 2026-11-22 Bitwarden held neither the
 repository password nor a K3s token, and the note that read like one ("Kluster Backup codes") is the

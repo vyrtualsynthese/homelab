@@ -66,16 +66,15 @@ staging:
 # is named. budgetGiB is the ceiling of the repository's raw data as `restic stats --mode
 # raw-data` reports it: the stream's measured size, plus the churn its retention keeps, plus
 # headroom. Passing it fails the stream, so it is a canary for an accidental media
-# directory appearing in a row as much as for real growth. The control-plane budgets carry the
-# etcd copies, which are the only data that adds a fresh gigabyte-class file every night: the
-# copy rides inside every nightly snapshot, so the 7/4/12 retention keeps one per retained
-# snapshot, and the server with the larger etcd history pays for it every night of that tail.
+# directory appearing in a row as much as for real growth. The control-plane budgets still
+# carry the etcd copies the interim bridge took until 2026-11-25: the 7/4/12 tail keeps one
+# per retained snapshot, and the monthly part of it holds a copy for a year, so the ceilings
+# stay where they were measured rather than dropping to the claims alone.
 streams:
   - name: nodes-nas
     budgetGiB: 2
   - name: nodes-nuc0
     budgetGiB: 4
-    etcd: true
   # 10.04 GB in the nightly snapshot of 2026-11-22 05:30 (7ac41aa9), 6.73 GiB of it Plex's claim,
   # whose excludes had been matching nothing. With the row fixed a snapshot reads 2.56 GiB: 2.05
   # GiB of staged databases, 0.51 GiB of etcd copies, configuration, and 785 files instead of
@@ -94,7 +93,6 @@ streams:
   # on the fifth night.
   - name: nodes-streaming
     budgetGiB: 9
-    etcd: true
   # The only stream whose contents no source can re-supply: the Syncthing photos and
   # documents and koillection's uploads. Overflowing this ceiling means a decade of history
   # is genuinely larger than expected, or a directory that should not be here arrived; both
@@ -126,10 +124,6 @@ hostPaths:
   - /host/etc/exports
   - /host/etc/netplan
   - /host/etc/systemd/system
-
-# Where the control-plane nodes' K3s snapshots are mounted, and handed to restic as a path.
-# The interim bridge until the official S3 upload lands with the 1.31 upgrade.
-etcdSnapshotsPath: /host/etcd-snapshots
 
 # The NFS stream: the exports on `nas` that hold data no rebuild can recreate. The exports the
 # operator excluded (music, media, stash's library, downloads, and since 2026-11-20 the books
@@ -166,7 +160,6 @@ nodes:
     schedule: "30 4 * * *"
     roots:
       - /mnt/ssd0
-    etcdSnapshots: false
     claims:
       # The PostgreSQL backup, deduped. A dump still being written is not a dump, so the
       # partial files are skipped. `mustMatch` is what catches the dump CronJob stopping: the
@@ -181,7 +174,6 @@ nodes:
     roots:
       - /mnt/ssd0
       - /opt/local-path-provisioner
-    etcdSnapshots: true
     claims:
       # Pinned to its PV: a released claim with the same name left a second directory on the
       # disk, and the row must not guess between them.
@@ -211,7 +203,6 @@ nodes:
     schedule: "30 5 * * *"
     roots:
       - /mnt/ssd0
-    etcdSnapshots: true
     claims:
       # Every `→` figure below is the same measurement: snapshot 7ac41aa9 of 2026-11-22, read
       # from the bucket, in MB of 10^6 bytes. It is what the row holds there — the claim with its

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check that every restic repository is still advancing, and that etcd is shipping with it.
+"""Check that every restic repository is still advancing, and that every server is shipping etcd.
 
 The jobs can all be green while a stream has silently stopped: a row that resolves to
 nothing fails its node job, but a repository that receives no snapshot at all fails
@@ -7,18 +7,23 @@ nothing until the day it is needed. This script is the one that says so, once a 
 in a line Loki can index:
 
     stream=<name> snapshots=<n> bytes=<b> newest=<iso8601|none> age_h=<h|->
-    etcd stream=<name> file=<basename> age_h=<h>
+    etcd-s3 server=<name> file=<basename> age_h=<h>
     staged stream=<name> row=<namespace>/<claim> files=<n>
     files stream=<name> row=<namespace>/<claim> matched=<n>
     exclude-unused stream=<name> row=<namespace>/<claim> pattern=<entry>
 
-Exits non-zero when a stream is empty, older than 26 hours, or larger than its budget —
-when a control-plane stream's etcd copy is older than the same window, because the copy is
-the only part of the etcd story this cluster can prove today — when a `sqlite` row has
-staged no database into the stream's newest snapshot, which is what a `db:` pattern that
-went stale looks like from outside: the job stays green and the copy the row exists for is
-gone, and when a `files` row that declares `mustMatch` holds nothing matching it, which is
-a dump CronJob that stopped while its claim directory stayed.
+Exits non-zero when a stream is empty, older than 26 hours, or larger than its budget, when a
+control-plane server has no etcd snapshot in the bucket or one older than the same window,
+when a `sqlite` row has staged no database into the stream's newest snapshot, which is what a
+`db:` pattern that went stale looks like from outside: the job stays green and the copy the row
+exists for is gone, and when a `files` row that declares `mustMatch` holds nothing matching it,
+which is a dump CronJob that stopped while its claim directory stayed.
+
+The etcd half is not read from a restic snapshot. Each server uploads its own snapshots to the
+bucket's `etcd/` prefix, and K3s's reconcile publishes one `ETCDSnapshotFile` per object, naming
+the server that took it. Those objects are the proof: one is asked of every control-plane node,
+and a server whose upload stopped stops appearing in the list, which is exactly the fault the
+restic copy of the snapshot directory used to catch.
 
 It also repeats the node jobs' `exclude-unused` lines — a row's exclusion that matched nothing
 in its claim. Those are warnings and do not fail the run: an application installed and not yet
@@ -33,15 +38,17 @@ import argparse
 import fnmatch
 import json
 import pathlib
+import ssl
 import subprocess
 import sys
+import urllib.request
 from datetime import datetime, timedelta, timezone
 
 STALE_AFTER = timedelta(hours=26)
-# The node job hands restic the value of etcdSnapshotsPath, so the paths stored in the
-# snapshot start there; /etc/rancher/k3s is mounted at /host/etc/rancher/k3s for the
-# same reason.
-ETCD_PREFIX = "/host/etcd-snapshots/"
+# Where the pod's service account is mounted. The request has to carry its token and trust the
+# cluster CA, because the verifier is not a kubectl and the image carries no client binary.
+SERVICE_ACCOUNT = pathlib.Path("/var/run/secrets/kubernetes.io/serviceaccount")
+API = "https://kubernetes.default.svc"
 # prepare.py is given `--staging /staging` and hands restic `<staging>/claims`, so a staged
 # database is stored under this absolute prefix, one directory per row.
 STAGED_PREFIX = "/staging/claims/"
@@ -121,30 +128,72 @@ def check_stream(name: str, snapshots: list[dict], bytes_used: int, budget_bytes
     return problems
 
 
-def newest_etcd(entries: list[dict], now: datetime) -> dict | None:
-    """The newest file the nightly copy left under /host/etcd-snapshots/."""
-    files = [
-        entry for entry in entries
-        if entry.get("path", "").startswith(ETCD_PREFIX)
-        and entry.get("type", "file") != "dir"
-        and "@" not in entry.get("path", "")  # a failed copy leaves a partial file
-        and entry.get("mtime")
-    ]
-    if not files:
-        return None
-    newest = max(files, key=lambda entry: parse_time(entry["mtime"]))
-    return {
-        "file": pathlib.PurePosixPath(newest["path"]).name,
-        "age_h": hours(now - parse_time(newest["mtime"])),
-    }
+def api_get(path: str) -> dict:
+    """One authenticated GET against the cluster's API, as the pod's service account."""
+    token = (SERVICE_ACCOUNT / "token").read_text().strip()
+    context = ssl.create_default_context(cafile=str(SERVICE_ACCOUNT / "ca.crt"))
+    request = urllib.request.Request(
+        f"{API}{path}",
+        headers={"Authorization": f"Bearer {token}", "Accept": "application/json"},
+    )
+    with urllib.request.urlopen(request, context=context, timeout=60) as response:
+        return json.load(response)
 
 
-def check_etcd(name: str, newest: dict | None, now: datetime) -> list[str]:
-    if newest is None:
-        return ["no etcd snapshot"]
-    if newest["age_h"] > STALE_AFTER.total_seconds() / 3600:
-        return [f"etcd copy {newest['age_h']:.1f}h old (>26h)"]
-    return []
+def read_etcd_s3() -> tuple[list[str], list[dict]]:
+    """Every control-plane server, and every etcd snapshot K3s has published.
+
+    The servers are read from the nodes rather than from a list beside this script, so a
+    fourth one that joins is named by the check instead of being believed. The snapshots are
+    `ETCDSnapshotFile` objects: K3s's reconcile writes one for every object it finds in the
+    bucket, so a server whose upload stopped stops appearing in the list.
+    """
+    nodes = api_get("/api/v1/nodes").get("items") or []
+    servers = sorted(
+        node["metadata"]["name"] for node in nodes
+        if "node-role.kubernetes.io/control-plane" in (node["metadata"].get("labels") or {})
+    )
+    snapshots = api_get("/apis/k3s.cattle.io/v1/etcdsnapshotfiles").get("items") or []
+    return servers, snapshots
+
+
+def newest_s3_snapshot(server: str, snapshots: list[dict], now: datetime) -> dict | None:
+    """The newest snapshot one server has uploaded, as its `ETCDSnapshotFile` reports it."""
+    found = []
+    for entry in snapshots:
+        spec = entry.get("spec") or {}
+        status = entry.get("status") or {}
+        if not str(spec.get("location", "")).startswith("s3://"):
+            continue
+        if spec.get("nodeName") != server or not status.get("readyToUse"):
+            continue
+        if (entry.get("metadata") or {}).get("deletionTimestamp"):
+            continue  # mid-delete: it is not this server's newest any more
+        created = status.get("creationTime")
+        if not created:
+            continue
+        found.append({
+            "file": pathlib.PurePosixPath(spec.get("snapshotName", "")).name,
+            "age_h": hours(now - parse_time(created)),
+        })
+    return min(found, key=lambda item: item["age_h"]) if found else None
+
+
+def check_etcd_s3(
+    servers: list[str], snapshots: list[dict], now: datetime
+) -> tuple[list[str], list[str]]:
+    """One line per server, and a problem for each whose upload is missing or stale."""
+    lines, problems = [], []
+    for server in servers:
+        newest = newest_s3_snapshot(server, snapshots, now)
+        if newest is None:
+            lines.append(f"etcd-s3 server={server} file=- age_h=-")
+            problems.append(f"etcd-s3 server={server} has no snapshot in the bucket")
+            continue
+        lines.append(f"etcd-s3 server={server} file={newest['file']} age_h={newest['age_h']}")
+        if newest["age_h"] > STALE_AFTER.total_seconds() / 3600:
+            problems.append(f"etcd-s3 server={server} snapshot {newest['age_h']:.1f}h old (>26h)")
+    return lines, problems
 
 
 def staged_databases(entries: list[dict], namespace: str, claim: str) -> list[str]:
@@ -263,7 +312,7 @@ def read_snapshot_files(repository: str, snapshot_id: str, restic: str = "restic
     return [json.loads(line) for line in text.splitlines() if line.strip()]
 
 
-def main(argv: list[str] | None = None) -> int:
+def main(argv: list[str] | None = None, etcd_s3=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", default="/config/streams.json")
     parser.add_argument("--restic", default="restic", help="the restic binary to run")
@@ -283,21 +332,13 @@ def main(argv: list[str] | None = None) -> int:
         rows = stream.get("staged") or []
         files_rows = stream.get("files") or []
         # The stream's own snapshot, not `latest`: a copy taken by hand in between is newer
-        # and holds none of the claims. Without a tagged one, fall back to the newest, so an
-        # old repository still gets the etcd check it had.
+        # and holds none of the claims.
         snapshot = stream_snapshot(snapshots, name) or newest_snapshot(snapshots)
-        if (stream.get("etcd") or rows or files_rows or stream.get("claims")) and snapshot:
+        if (rows or files_rows or stream.get("claims")) and snapshot:
             # `restic ls` exits 1 when the repository holds no snapshot at all, and a
             # repository with no snapshot is what check_stream just reported; asking for the
             # file list would abort the run instead of naming the stream.
             entries = read_snapshot_files(repository, snapshot["id"], restic=args.restic)
-            if stream.get("etcd"):
-                newest = newest_etcd(entries, now)
-                if newest is None:
-                    print(f"etcd stream={name} file=- age_h=-", flush=True)
-                else:
-                    print(f"etcd stream={name} file={newest['file']} age_h={newest['age_h']}", flush=True)
-                problems.extend(check_etcd(name, newest, now))
             if rows:
                 lines, staged_problems = check_staged(name, rows, entries)
                 for line in lines:
@@ -316,8 +357,6 @@ def main(argv: list[str] | None = None) -> int:
                 for line in exclude_lines(name, report):
                     print(line, flush=True)
         else:
-            if stream.get("etcd"):
-                print(f"etcd stream={name} file=- age_h=-", flush=True)
             for row in rows:
                 print(f"staged stream={name} row={row['namespace']}/{row['claim']} files=-",
                       flush=True)
@@ -327,6 +366,22 @@ def main(argv: list[str] | None = None) -> int:
 
         for problem in problems:
             print(f"problem stream={name} {problem}", flush=True)
+        failures += len(problems)
+
+    # The cluster's own state, not a stream: every server uploads its own etcd snapshots, so
+    # this is asked once and answered per server. An API that cannot be reached is a finding
+    # of its own rather than a reason to lose the stream report above.
+    try:
+        servers, etcd_snapshots = (etcd_s3 or read_etcd_s3)()
+    except Exception as err:  # noqa: BLE001 — any failure here is the finding
+        print(f"problem etcd-s3 api {err}", flush=True)
+        failures += 1
+    else:
+        lines, problems = check_etcd_s3(servers, etcd_snapshots, now)
+        for line in lines:
+            print(line, flush=True)
+        for problem in problems:
+            print(f"problem {problem}", flush=True)
         failures += len(problems)
 
     return 1 if failures else 0

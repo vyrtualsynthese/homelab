@@ -23,7 +23,11 @@ spec:
             {{- include "backup.labels" (dict "root" . "stream" "verify") | nindent 12 }}
         spec:
           restartPolicy: Never
-          automountServiceAccountToken: false
+          # The one job in this chart that talks to the API: it asks for the control-plane
+          # nodes and for the `ETCDSnapshotFile` objects that prove each server's etcd upload
+          # is still happening. The role is two read rules, in rbac-verify.yaml.
+          serviceAccountName: backup-verify
+          automountServiceAccountToken: true
           # Pinned like every other workload here; nothing local is read, so the node only
           # decides where the small amount of CPU goes.
           nodeSelector:

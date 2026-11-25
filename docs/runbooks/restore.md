@@ -27,8 +27,8 @@ bucket proved before anything is pulled.
 | Repository | Written by | Holds |
 |---|---|---|
 | `nodes-nas` | `backup-node-nas`, 04:30 | the PostgreSQL dumps (`globals.sql` and `<db>-<UTC>.dump`), Grafana's database |
-| `nodes-nuc0` | `backup-node-nuc0`, 05:00 | ten claims from nine applications, the node's `/etc`, and the etcd snapshot copy |
-| `nodes-streaming` | `backup-node-streaming`, 05:30 | the media stack's configuration, the node's `/etc`, and the etcd snapshot copy |
+| `nodes-nuc0` | `backup-node-nuc0`, 05:00 | ten claims from nine applications and the node's `/etc` |
+| `nodes-streaming` | `backup-node-streaming`, 05:30 | the media stack's configuration and the node's `/etc` |
 | `nfs` | `backup-nfs`, 06:00 | syncthing, koillection's uploads, the ACME certificate store, the qBittorrent config |
 
 A node job's snapshot carries `stream=<name>` and `node=<name>`; an NFS one carries `stream=nfs`
@@ -314,17 +314,19 @@ first, never into the running one. The procedure, the token requirement, the sin
 and the measured times are [`restore-etcd.md`](restore-etcd.md); this section keeps only where the
 file comes from.
 
-The copy is inside the two control-plane streams, as a directory the node job mounted and handed to
-restic:
+Each control-plane server uploads its own snapshot to the bucket's `etcd/` prefix every six hours,
+so the file is fetched from the bucket rather than out of a restic repository:
 
 ```sh
-restic -r "$NODES_STREAMING" ls latest | grep '^/host/etcd-snapshots/'
-restic -r "$NODES_STREAMING" restore latest --target /out --include '/host/etcd-snapshots'
+export AWS_ACCESS_KEY_ID=… AWS_SECRET_ACCESS_KEY=…
+aws --endpoint-url https://s3.gra.io.cloud.ovh.net s3 ls s3://ashudev-homelab-backup/etcd/
+aws --endpoint-url https://s3.gra.io.cloud.ovh.net s3 cp \
+  s3://ashudev-homelab-backup/etcd/<file> .
 ```
 
-Success: one file per 12-hour run, named `etcd-snapshot-<server>-<unix seconds>`, plus one
-`pre-131-*` per server left by the 1.31 move. Measured 2026-11-22: 41–80 MB per file, nine files,
-514.8 MiB, restored in 3 seconds.
+Success: one object per server per six-hour run, `etcd-snapshot-<server>-<unix seconds>.zip`,
+6–7 MB each (measured 2026-11-25). All three servers hold the same object state; `nas` is a worker
+and never uploads.
 
 **The snapshot opens only under the token it was taken with.** It is the value in
 `/var/lib/rancher/k3s/server/token` on the servers, kept in the password manager, see
@@ -335,9 +337,10 @@ encrypted with different token` — not a partial restore, a server whose bootst
 open. [`restore-etcd.md`](restore-etcd.md) Step 2 has the three failed attempts and the one that
 works.
 
-Once W5 lands the official S3 upload, the file comes from the bucket directly instead of from inside
-this stream, and this section is rewritten with that path. Until then the copy is the bridge, and its
-age is what `backup-verify` reports as `etcd stream=… age_h=…`.
+The two control-plane jobs copied the snapshot directory into their restic streams until 2026-11-25,
+as the bridge until this upload landed. Those copies are still in the snapshots the monthly tail
+keeps and can still be restored, but no night adds one, and `backup-verify` now reports the upload
+as `etcd-s3 server=<name> file=… age_h=…` instead of reading a copy out of the stream.
 
 ## Teardown
 
