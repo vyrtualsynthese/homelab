@@ -2,7 +2,6 @@ import importlib.util
 import pathlib
 import sys
 import unittest
-from datetime import datetime, timezone
 
 RELAY = pathlib.Path(__file__).resolve().parents[1] / ".." / "cluster" / "helm" / "monitoring" / "alert-relay" / "files" / "relay.py"
 spec = importlib.util.spec_from_file_location("relay", RELAY.resolve())
@@ -77,13 +76,6 @@ class RenderTests(unittest.TestCase):
     def test_body_carries_a_next_step(self):
         self.assertIn("## Next step", relay.render_body(payload(), "g1"))
 
-    def test_resolve_comment_says_it_stays_open(self):
-        text = relay.render_comment(payload(status="resolved"))
-        self.assertIn("stays open", text)
-
-    def test_repetition_comment_counts_the_group(self):
-        self.assertIn("1 alert(s)", relay.render_comment(payload()))
-
 
 class QueryTests(unittest.TestCase):
     def test_the_filter_searches_a_hex_slug_not_the_raw_key(self):
@@ -91,19 +83,65 @@ class QueryTests(unittest.TestCase):
         as &#34; and the search never matches, which opened a card per retry."""
         p = payload(group='{}/{alertname="DiskFull"}:{alertname="DiskFull", instance="nas"}')
         self.assertRegex(relay.find_query(relay.key_slug(p)),
-                         r"^description like '[0-9a-f]{16}' && done = false$")
+                         r"^description like '[0-9a-f]{16}'$")
 
     def test_the_slug_is_stable_for_the_same_group(self):
         self.assertEqual(relay.key_slug(payload(group="g1")), relay.key_slug(payload(group="g1")))
 
     def test_a_quote_in_the_key_cannot_break_the_filter(self):
-        self.assertEqual(relay.find_query("a'b"), "description like 'ab' && done = false")
+        self.assertEqual(relay.find_query("a'b"), "description like 'ab'")
+
+
+class BucketTests(unittest.TestCase):
+    def test_the_title_comes_from_the_configured_view(self):
+        card = {"id": 7, "buckets": [{"title": "Doing", "project_view_id": 59},
+                                     {"title": "List", "project_view_id": 56}]}
+        self.assertEqual(relay.bucket_title(card, 59), "Doing")
+
+    def test_a_card_without_a_bucket_fails_loudly(self):
+        """Silently opening would duplicate a card that is already in someone's hands."""
+        with self.assertRaises(ValueError):
+            relay.bucket_title({"id": 7, "buckets": []}, 59)
+
+
+class BoardCallTests(unittest.TestCase):
+    class Stub(relay.Board):
+        def __init__(self):
+            super().__init__("http://board", "token", 9, 59, 115)
+            self.paths, self.calls = [], []
+
+        def call(self, method, path, body=None):
+            self.paths.append(path)
+            self.calls.append((method, path, body))
+            if method == "GET":
+                return {"items": [{"id": 9, "done": False,
+                                   "buckets": [{"title": "Backlog", "project_view_id": 59}]},
+                                  {"id": 7, "done": True,
+                                   "buckets": [{"title": "Done", "project_view_id": 59}]}]}
+            return {"id": 42}
+
+    def test_the_lookup_asks_for_the_newest_card_with_its_bucket(self):
+        board = self.Stub()
+        self.assertEqual(board.find_card("abc")["id"], 9)
+        self.assertIn("/api/v2/projects/9/tasks", board.paths[0])
+        self.assertIn("expand=buckets", board.paths[0])
+        self.assertIn("sort_by=id", board.paths[0])
+        self.assertIn("order_by=desc", board.paths[0])
+        self.assertIn("description%20like", board.paths[0])
+
+    def test_a_new_card_is_created_in_backlog_with_markdown(self):
+        board = self.Stub()
+        board.open_card("DiskFull on nas", "body")
+        method, path, body = board.calls[-1]
+        self.assertEqual(method, "POST")
+        self.assertIn("/api/v2/projects/9/tasks?format=markdown", path)
+        self.assertEqual(body["bucket_id"], 115)
 
 
 class BoardLabelTests(unittest.TestCase):
     class Stub(relay.Board):
         def __init__(self, titles):
-            super().__init__("http://board", "token", 9)
+            super().__init__("http://board", "token", 9, 59, 115)
             self.titles, self.written = titles, []
 
         def call(self, method, path, body=None):
@@ -122,32 +160,6 @@ class BoardLabelTests(unittest.TestCase):
         self.assertEqual(board.written, [("PUT", "/api/v1/tasks/1/labels", {"label_id": 1})])
 
 
-class ThrottleTests(unittest.TestCase):
-    def test_first_comment_always_passes(self):
-        self.assertTrue(relay.should_comment(None, 1000.0, 600))
-
-    def test_a_repeat_inside_the_cooldown_is_held(self):
-        self.assertFalse(relay.should_comment(500.0, 1000.0, 600))
-
-    def test_a_repeat_after_the_cooldown_passes(self):
-        self.assertTrue(relay.should_comment(300.0, 1000.0, 600))
-
-
-class ResolveBypassTests(unittest.TestCase):
-    def test_a_resolve_is_never_throttled(self):
-        """An incident ending right after a repeat must leave a trace."""
-        board = FakeBoard(card={"id": 7}, last=1500.0)
-        now = datetime.fromtimestamp(1600.0, tz=timezone.utc)
-        self.assertEqual(relay.handle(payload(status="resolved"), board, 600, now=now),
-                         "resolved on #7")
-        self.assertEqual([c[0] for c in board.calls], ["comment"])
-
-    def test_a_repeat_is_still_throttled(self):
-        board = FakeBoard(card={"id": 7}, last=1500.0)
-        now = datetime.fromtimestamp(1600.0, tz=timezone.utc)
-        self.assertEqual(relay.handle(payload(), board, 600, now=now), "throttled on #7")
-
-
 class ParseTests(unittest.TestCase):
     def test_non_json_is_refused_with_a_reason(self):
         with self.assertRaises(ValueError) as caught:
@@ -164,16 +176,23 @@ class CardLookupTests(unittest.TestCase):
         """A card is found through the description; the raw key never matches there."""
         p = payload(group='{}/{alertname="DiskFull"}:{alertname="DiskFull", instance="nas"}')
         board = FakeBoard()
-        relay.handle(p, board, 600)
+        relay.handle(p, board)
         self.assertEqual(board.looked_up, [relay.key_slug(p)])
         self.assertIn(f"Alert key: {relay.key_slug(p)}", board.calls[0][2])
 
 
-class FakeBoard:
-    def __init__(self, card=None, last=None):
-        self.card, self.last, self.calls, self.looked_up = card, last, [], []
+def card(id=7, done=False, bucket="Backlog"):
+    return {"id": id, "done": done,
+            "buckets": [{"title": bucket, "project_view_id": 59}]}
 
-    def find_open_card(self, key):
+
+class FakeBoard:
+    view = 59
+
+    def __init__(self, card=None):
+        self.card, self.calls, self.looked_up = card, [], []
+
+    def find_card(self, key):
         self.looked_up.append(key)
         return self.card
 
@@ -181,21 +200,64 @@ class FakeBoard:
         self.calls.append(("open", title, description))
         return {"id": 42}
 
-    def comment(self, task, text):
-        self.calls.append(("comment", task, text))
-
     def label(self, task, name):
         self.calls.append(("label", task, name))
 
-    def last_comment_epoch(self, task):
-        return self.last
-
 
 class HandleTests(unittest.TestCase):
-    def test_a_warning_opens_a_card(self):
+    def write_modes(self, board):
+        return [c[0] for c in board.calls]
+
+    def test_a_new_alert_opens_one_card(self):
         board = FakeBoard()
-        self.assertEqual(relay.handle(payload(severity="warning"), board, 600), "opened #42")
-        self.assertEqual(board.calls[0][0], "open")
+        self.assertEqual(relay.handle(payload(), board), "opened #42")
+        self.assertEqual(self.write_modes(board), ["open", "label", "label"])
+
+    def test_a_new_card_carries_its_labels(self):
+        board = FakeBoard()
+        relay.handle(payload(), board)
+        self.assertEqual([c[2] for c in board.calls if c[0] == "label"], ["task", "alert"])
+
+    def test_a_card_in_backlog_is_left_alone(self):
+        board = FakeBoard(card(bucket="Backlog"))
+        self.assertEqual(relay.handle(payload(), board), "ignored, #7 in Backlog")
+        self.assertEqual(board.calls, [])
+
+    def test_a_card_in_doing_is_left_alone(self):
+        board = FakeBoard(card(bucket="Doing"))
+        self.assertEqual(relay.handle(payload(), board), "ignored, #7 in Doing")
+        self.assertEqual(board.calls, [])
+
+    def test_a_card_in_validation_opens_a_new_card(self):
+        board = FakeBoard(card(bucket="Validation"))
+        self.assertEqual(relay.handle(payload(), board), "opened #42")
+        self.assertEqual(self.write_modes(board), ["open", "label", "label"])
+
+    def test_a_done_card_opens_a_new_card(self):
+        board = FakeBoard(card(done=True, bucket="Done"))
+        self.assertEqual(relay.handle(payload(), board), "opened #42")
+
+    def test_an_unknown_column_opens_a_new_card(self):
+        board = FakeBoard(card(bucket="Idea"))
+        self.assertEqual(relay.handle(payload(), board), "opened #42")
+
+    def test_a_resolve_with_a_card_writes_nothing(self):
+        for bucket in ("Backlog", "Doing", "Validation"):
+            board = FakeBoard(card(bucket=bucket))
+            self.assertEqual(relay.handle(payload(status="resolved"), board),
+                             f"resolved, ignored, #7 in {bucket}")
+            self.assertEqual(board.calls, [])
+
+    def test_a_resolve_without_a_card_writes_nothing(self):
+        board = FakeBoard()
+        self.assertEqual(relay.handle(payload(status="resolved"), board), "resolved, no card")
+        self.assertEqual(board.calls, [])
+
+    def test_a_capitalised_resolve_is_a_resolve(self):
+        board = FakeBoard(card(bucket="Doing"))
+        self.assertEqual(relay.handle(payload(status="Resolved"), board),
+                         "resolved, ignored, #7 in Doing")
+        self.assertEqual(board.calls, [])
 
     def test_a_mixed_group_keeps_the_warning(self):
         p = payload()
@@ -205,38 +267,8 @@ class HandleTests(unittest.TestCase):
             "annotations": {},
         })
         board = FakeBoard()
-        relay.handle(p, board, 600)
+        relay.handle(p, board)
         self.assertIn("carries 2 alerts", board.calls[0][2])
-
-    def test_a_resolve_without_a_card_writes_nothing(self):
-        board = FakeBoard()
-        self.assertEqual(relay.handle(payload(status="resolved"), board, 600),
-                         "resolved with no card")
-        self.assertEqual(board.calls, [])
-
-    def test_a_new_critical_alert_opens_one_card(self):
-        board = FakeBoard()
-        self.assertEqual(relay.handle(payload(), board, 600), "opened #42")
-        self.assertEqual(board.calls[0][0], "open")
-
-    def test_a_new_card_carries_its_labels(self):
-        """An unlabelled card fails the board's own check: every ticket needs a kind."""
-        board = FakeBoard()
-        relay.handle(payload(), board, 600)
-        labels = [c[2] for c in board.calls if c[0] == "label"]
-        self.assertEqual(labels, ["task", "alert"])
-
-    def test_a_repeat_comments_instead_of_opening(self):
-        board = FakeBoard(card={"id": 7}, last=1000.0)
-        now = datetime.fromtimestamp(2000.0, tz=timezone.utc)
-        self.assertEqual(relay.handle(payload(), board, 600, now=now), "commented on #7")
-        self.assertEqual([c[0] for c in board.calls], ["comment"])
-
-    def test_a_repeat_inside_the_cooldown_is_throttled(self):
-        board = FakeBoard(card={"id": 7}, last=1500.0)
-        now = datetime.fromtimestamp(1600.0, tz=timezone.utc)
-        self.assertEqual(relay.handle(payload(), board, 600, now=now), "throttled on #7")
-        self.assertEqual(board.calls, [])
 
 
 if __name__ == "__main__":
