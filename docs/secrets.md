@@ -32,7 +32,12 @@ covered the Secrets deleted the same day are in the vault's trash, not in the fo
 - `homelab-backup-last-resort` — the restic password, the backup bucket's S3 pair and the K3s server
   token. Losing these loses the backups, not just their configuration.
 - `homelab-env`, `homelab-keys-env`, `homelab-ovh-state-backend` — the API tokens and shell
-  credentials from the two files in `~/.config/secrets`, and the OpenTofu state backend pair.
+  credentials from the two files in `~/.config/secrets`, and the OpenTofu state backend pair. The
+  edge Pis' `PIHOLE_RBP0_API_KEY` and `PIHOLE_RBP1_API_KEY` — app passwords that
+  `hack/check_pihole_parity.py` reads both panels with — and the one `PIHOLE_PANEL_PASSWORD` both
+  hosts share, are in `homelab.env`. The panel password is not a Kubernetes Secret and is not set from
+  the cluster: `hosts-pi.sh` renders every other Pi-hole setting, and the password alone is written to
+  each host's `pihole.env` as `FTLCONF_webserver_api_password`.
 - `local-ca-key.pem` — the internal CA's private key, so a rebuild can reissue the `*.kub.local`
   leaf. `homelab-k8s-kube-system-local-cert` — the leaf and key Traefik actually serves, which is the
   pair the copies in `~/.config/secrets/kub-local/` are refreshed from, never the other way round.
