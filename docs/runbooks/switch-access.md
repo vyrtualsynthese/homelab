@@ -14,9 +14,11 @@
 > because RouterOS 6.49 cannot import ed25519. Card 696 moves the switches to version 7, and the swap
 > back is a new pair and one import.
 >
-> **Sources** `ansible/collectors/network-audit.sh`,
+> **Sources** `ansible/collectors/network-audit.sh`, `ansible/switches/switch-apply.sh`,
+> `ansible/switches/install-switch-change.sh`,
 > [`network state collector`](../superpowers/specs/2026-11-24-network-state-collector-design.md),
-> [`declared host access`](../decisions/2026-11-25-declared-host-access.md)
+> [`declared host access`](../decisions/2026-11-25-declared-host-access.md),
+> [`the gate's design`](../superpowers/specs/2026-11-25-switch-change-gate-design.md)
 
 ## What the two accounts are for
 
@@ -56,13 +58,80 @@ flowchart LR
 ```
 
 The custodian is the machine the agent's shell runs on, under a UNIX account of its own, `netcfg`,
-whose shell is `/usr/sbin/nologin`. It exists to hold one file and to run one command through a
-sudoers rule that card 698 adds.
+whose shell is `/usr/sbin/nologin`. It exists to hold one file and to run one command, through the
+sudoers rule in the section below.
 
 **Why not a cluster node.** The agent holds `~/.ssh/homelab_live`, which is root on the four hosts, so
 any key placed on a node is one `sudo cat` away from the agent. On the machine it runs on, `sudo`
 asks for a password no prompt can type, and that is the only boundary in the estate that the agent's
 own compromise does not cross.
+
+## The gate: one command, as `netcfg`
+
+`netcfg` cannot log in, so no one runs anything as it by hand. `sudo` lets the agent say exactly one
+command, and `/usr/local/sbin/switch-apply` is the gate behind it:
+
+```
+vsynthese ALL=(netcfg) NOPASSWD: /usr/local/sbin/switch-apply
+```
+
+The gate takes `--target crs326|crs309` and `--change`, and passes `--window`, `--expect`, `--yes`,
+`--dry-run` and `--arm-only` to the change script unchanged. Every other argument, and the script's
+own `--render-undo`, `--noise-free` and `--list-targets` modes, are out of reach:
+
+```bash
+sudo -u netcfg /usr/local/sbin/switch-apply --target crs326 \
+  --change /var/lib/switch-change/inbox/<change>.rsc --dry-run
+```
+
+| Path | Owner, mode | What it is |
+|---|---|---|
+| `/usr/local/lib/homelab/switch-change.sh` | `root:root 0755` | the change script, the copy the gate runs |
+| `/usr/local/lib/homelab/switch-change.sh.sha256` | `root:root 0644` | the digest the gate holds it to |
+| `/usr/local/sbin/switch-apply` | `root:root 0755` | the gate |
+| `/etc/sudoers.d/50-switch-apply` | `root:root 0440` | the sudoers line above |
+| `/var/lib/switch-change/inbox` | `vsynthese:netcfg 2750` | where the agent stages a change |
+| `/var/lib/switch-change/work` | `netcfg:vsynthese 0750` | where the gate stages a copy, and the script writes its exports |
+
+**The digest is what pins the code.** The gate hashes `switch-change.sh` and compares it with
+`switch-change.sh.sha256` before it does anything, and the installer writes both in the same run, both
+owned by `root`. A change to the script therefore reaches a switch only after it is merged and the
+installer is re-run: the agent's checkout is never the code that reads the key, and the agent cannot
+write either installed file.
+
+**The change is copied before it is read.** The gate accepts only an absolute path inside the inbox,
+to a regular file with one link and no symlink; it opens the file once, checks the descriptor's own
+target, and copies it to `/var/lib/switch-change/work/staged/stage-<epoch>-<pid>.rsc`. The script is
+handed that copy, so the agent-writable inbox cannot aim it elsewhere afterwards. A refusal from the
+script names the staged path, then, not the inbox file. The gate refuses, naming the installer, when
+`/var/lib/switch-change/work` is missing.
+
+One command installs all six, as root, from the canonical checkout:
+
+```bash
+cd ~/projets/homelab
+sudo ./ansible/switches/install-switch-change.sh
+```
+
+It prints `installed` for what it wrote and `already` for what was right, so a second run changes
+nothing. It refuses instead of repairing, and names the reason:
+
+- a dirty `ansible/switches` tree — commit or merge first, because an unmerged edit must not become
+  the code that holds the key;
+- a directory it installs into (`/usr/local/lib/homelab`, `/usr/local/sbin`, `/etc/sudoers.d`) that is
+  not owned by `root`, or that its group or anyone else may write: fix the owner, or run
+  `sudo chmod g-w,o-w <the directory it names>`, and re-run. Some distributions ship `/usr/local/*`
+  group-writable; the installer will not tighten a mode behind your back, because one that drifted is
+  a sign something else has been writing there;
+- `/var/lib/switch-change/inbox` or `work` with a mode, owner or group other than the table's — same
+  rule: fix it by hand, then re-run;
+- a sudoers drop-in `visudo -cf` rejects: the file is not written at all, and the line it refused is
+  printed;
+- `netcfg` or its group missing, when a directory has to be created — section 1 above is what makes
+  them.
+
+This section has not been run yet: installing the gate is the step before the live proof in
+[`switch-change.md`](switch-change.md).
 
 ## Before you start
 
@@ -275,8 +344,8 @@ check, since RouterOS accepts the setting and drops the listener.
 
 ## What this page does not cover
 
-- **The apply script and its revert timer** are card 698: this page creates the account it runs as, and
-  nothing that applies a change.
+- **The change procedure and its revert timer** are [`switch-change.md`](switch-change.md): this page
+  creates the account, the key and the gate that runs the script, and nothing that carries a change.
 - **The `audit` account and the collector.** Neither switch held an `audit` user on 2026-11-25, so
   `ansible/collectors/network-audit.sh` cannot run against a device yet. Creating it is the same
   procedure with `policy=read,ssh`, and its commands are in `ansible/README.MD`.
