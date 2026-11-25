@@ -46,6 +46,18 @@ spec:
               value: {{ .Values.securityExporter.service.port | quote }}
             - name: INTERVAL_SECONDS
               value: {{ .Values.securityExporter.intervalSeconds | quote }}
+            - name: AUTHENTIK_URL
+              value: {{ .Values.securityExporter.authentik.url | quote }}
+            # Optional on purpose: the Application syncs before the operator
+            # creates the Secret, and the pod must start posture-only rather than
+            # sit in CreateContainerConfigError. An empty token means the exporter
+            # publishes no sign-in family at all, never zeros.
+            - name: AUTHENTIK_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.securityExporter.authentik.secretName }}
+                  key: {{ .Values.securityExporter.authentik.secretKey }}
+                  optional: true
           ports:
             - name: http
               containerPort: {{ .Values.securityExporter.service.port }}
