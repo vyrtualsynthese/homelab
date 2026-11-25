@@ -168,6 +168,15 @@ nodes:
       - {claim: postgres-dumps, namespace: databases, kind: files, exclude: ["*.partial"], mustMatch: ["*.dump"]}
       # 58.4 MB, every dashboard and alert rule in the cluster.
       - {claim: grafana, namespace: monitoring, kind: sqlite}
+      # CrowdSec's LAPI state: the decisions and the registered bouncer keys. No size yet, because
+      # the application has not synced — the first night's snapshot supplies the measurement. The
+      # chart mounts this claim under subPath `crowdsec`, so the database is `crowdsec/crowdsec.db`,
+      # and the default `*.db` glob reads the claim root only and would stage nothing (the verifier
+      # fails a `sqlite` row that stages nothing).
+      - {claim: crowdsec-db-pvc, namespace: security, kind: sqlite, db: ["crowdsec/*.db"]}
+      # The LAPI's copy of `/etc/crowdsec`: the parsers and scenarios its hub update installed, plus
+      # the local configuration. Size follows the row above.
+      - {claim: crowdsec-config-pvc, namespace: security, kind: files}
 
   nuc0:
     schedule: "0 5 * * *"

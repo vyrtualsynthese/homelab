@@ -28,7 +28,7 @@ own restic repository inside it, so a broken stream cannot damage another's hist
 
 | Repository | Written by | Runs (Europe/Paris) | Holds |
 |---|---|---|---|
-| `nodes-nas` | `backup-node-nas` | 04:30 | the PostgreSQL dumps and their `globals.sql`, Grafana's database |
+| `nodes-nas` | `backup-node-nas` | 04:30 | the PostgreSQL dumps and their `globals.sql`, Grafana's database, CrowdSec's decision database and its configuration |
 | `nodes-nuc0` | `backup-node-nuc0` | 05:00 | ten claims from nine applications, the node's `/etc` |
 | `nodes-streaming` | `backup-node-streaming` | 05:30 | the media stack's configuration, the node's `/etc` |
 | `nfs` | `backup-nfs` | 06:00 | syncthing, koillection's uploads, the ACME store, the qBittorrent config |
