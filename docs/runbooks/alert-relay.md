@@ -123,6 +123,23 @@ Expected: `{"status":"success",…}`, a `…: opened #N` line in `kubectl -n mon
 and one test card on the `alerts` board. Delete the card afterwards: it is named after the test alert,
 not a real incident.
 
+**The receiver test cannot prove that a repeat finds its card.** Every send through that endpoint
+carries its own group key, so two sends open two cards — correct behaviour for two incidents that
+Grafana considers different. That is how three cards (#719, #720, #721) appeared on 2026-11-24 while
+the duplicate guard looked broken. To prove the guard, give a rule a short repeat and read the log:
+
+```bash
+# a temporary route, so the probe never reaches Discord:
+#   {"receiver":"vikunja-alerts","object_matchers":[["alertname","=","RelayProbe"]],
+#    "group_wait":"5s","group_interval":"60s","repeat_interval":"660s"}
+# then a rule in homelab-core-fast, labels {"severity":"critical"}, expr vector(1), for 0s.
+kubectl -n monitoring logs deploy/alert-relay -f | grep RelayProbe
+```
+
+Expected, measured 2026-11-25: `firing: RelayProbe: opened #727` at once, then eleven minutes later
+`firing: RelayProbe: commented on #727` — one card, one comment. Delete the rule, remove the route and
+delete the card afterwards.
+
 To prove the relay alone, from inside the cluster, send a body straight at it:
 
 ```bash

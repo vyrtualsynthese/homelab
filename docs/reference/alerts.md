@@ -17,8 +17,8 @@ The overview — what runs where, its sizing, and how to query the stack:
 
 Grafana unified alerting, folder `Homelab`, **two rule groups split by cadence
 on 2026-11-18**: `homelab-core-fast` at **60 s** (21 rules) and `homelab-core` at
-**300 s** (29 rules). **50 rules**, one contact point, and three child routes: two by severity, one
-on `board=card`.
+**300 s** (29 rules). **50 rules**, **two contact points**, and four child routes: two by severity and
+two on `board=card` — one to each contact point.
 
 The split rule is the `for` duration: a rule sits in the fast group when its `for`
 is 5 minutes or less, or when it reports that something is down and its `for` is
@@ -43,6 +43,12 @@ Discord and as a card on the `alerts` board, and nothing follows while the condi
 webhook URL is not readable through the API (it is a
 secure field), so the contact point is never rewritten by automation. The Discord
 webhook exists only in that contact point.
+
+**The second contact point is what writes the card.** `vikunja-alerts` posts to `alert-relay` in
+`monitoring`, which opens one card per incident on the `alerts` board and comments on repeats and on
+resolves, never closing one ([`runbooks/alert-relay.md`](../runbooks/alert-relay.md)). Two child
+routes reach it: `severity="critical"` every **6 h**, and `board=card` every **1 y**. The relay itself
+has no severity filter — the routing tree decides, and the relay writes a card for whatever arrives.
 
 **Rule set and live state on 2026-11-13 (the three `Cloud*` rows read back on
 2026-11-20, the counts and `GpuNotAllocatable` on 2026-11-22, and
