@@ -48,6 +48,18 @@ Each node's gate, in this order, recorded in the card:
   three, and no two control planes move in the same evening.
 - **`rbp2`'s boot partition**: 26.04 writes a kernel and firmware into `/boot/firmware` before anything
   else, and 64 MB of 253 MB was free on 2026-11-24. At least 120 MB, measured, or the hop does not start.
+  It held 136 MB on 2026-11-25, once the stale `flash-kernel` `.bak` copies were archived and dropped —
+  [the measurement](../audit/hosts-2026-11-24.md#the-boot-partition-on-rbp2-freed-2026-11-25). Below the
+  bar again, the same two commands and a re-measure, before the hop:
+
+  ```bash
+  sudo mkdir -p /var/backups/rbp2-boot-firmware
+  sudo sh -c 'cd /boot/firmware && find . -name "*.bak" -print0 | \
+    tar -cf /var/backups/rbp2-boot-firmware/boot-firmware-bak.tar --null -T -'
+  sudo sh -c 'cd /boot/firmware && find . -name "*.bak" -delete && sync'
+  df -h /boot/firmware
+  ```
+
 - **`nas`'s parity is synced**: `snapraid status` prints no `NOT fully synced` warning and no `sync in
   progress` line, and its last `scrub/sync` is 0 days old. On 2026-11-24 the parity and the content both
   dated from 2024-02-10, so the union has had no protection since; the hop does not start until the
