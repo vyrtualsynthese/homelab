@@ -177,6 +177,11 @@ the ones the upgrade plan wrote before each restart, so the nightly backup uploa
 changes when somebody runs an upgrade. It restores a bad write; it does not restore a month.
 Card #506 (`etcd: enable K3s S3 upload with the 1.31 upgrade`) is the fix and is still open.
 
+> **Closed 2026-11-25.** The three servers now declare `etcd-snapshot-schedule-cron "0 */6 * * *"`,
+> compress, and upload to the bucket themselves, keeping the newest 180 per prefix, and the restic
+> copy the nightly jobs took is gone. Card #506 carries the evidence;
+> [`../how-it-works/backups.md`](../how-it-works/backups.md) is the page.
+
 ## What is not established
 
 Each line names the missing fact, not a guess about it.
@@ -210,7 +215,7 @@ list the thing that has to be right.
 | Turn `ufw` on with the K3s and Docker rules; install it on `streaming` | §3 LAN → control plane | informational | the export's client list, or the NFS clients break |
 | Drop `%admins ALL=(ALL) NOPASSWD: ALL`; key-only SSH on both Pis | §6 identity | medium, low | nothing |
 | List the four privileged charts and check for a fifth | §5 host → container | medium | nothing |
-| Schedule etcd snapshots and the S3 upload | §6 the control plane's copy | low | card #506 |
+| Schedule etcd snapshots and the S3 upload | §6 the control plane's copy | low | done 2026-11-25, card #506 |
 | Reconcile the four rendered-but-not-live routes | §1 internet → Traefik | — | nothing |
 
 The first four rows belong to the stabilisation card #480 and are why it exists; the Ubuntu move in

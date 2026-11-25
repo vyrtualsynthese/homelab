@@ -103,20 +103,16 @@ class NodeJobTests(unittest.TestCase):
                         mount.get("readOnly"),
                         f"{c['metadata']['name']} {container['name']} {mount['mountPath']}")
 
-    def test_etcd_bridge_only_on_control_plane_nodes(self):
+    def test_no_node_job_copies_the_etcd_snapshot_directory(self):
+        # The interim bridge until 2026-11-25: the two control-plane jobs mounted the directory
+        # and handed it to restic. Each server uploads its own snapshots to the bucket now, so a
+        # mount here would carry the same data a second time.
         snap = "/var/lib/rancher/k3s/server/db/snapshots"
-
-        def mounts(name):
-            return {v["hostPath"]["path"] for v in pod_of(name)["volumes"] if "hostPath" in v}
-
-        def args(name):
-            return next(c for c in pod_of(name)["initContainers"] if c["name"] == "prepare")["args"]
-
-        self.assertIn(snap, mounts("backup-node-streaming"))
-        self.assertIn("/host/etcd-snapshots", args("backup-node-streaming"))
-        self.assertIn(snap, mounts("backup-node-nuc0"))
-        self.assertNotIn(snap, mounts("backup-node-nas"))
-        self.assertNotIn("/host/etcd-snapshots", args("backup-node-nas"))
+        for name in ("backup-node-nas", "backup-node-nuc0", "backup-node-streaming"):
+            hosts = {v["hostPath"]["path"] for v in pod_of(name)["volumes"] if "hostPath" in v}
+            self.assertNotIn(snap, hosts)
+            prepare = next(c for c in pod_of(name)["initContainers"] if c["name"] == "prepare")
+            self.assertNotIn("/host/etcd-snapshots", prepare["args"])
 
 
 class NfsJobTests(unittest.TestCase):
@@ -256,8 +252,36 @@ class VerifyTests(unittest.TestCase):
         cms = {d["metadata"]["name"]: d["data"] for d in render() if d["kind"] == "ConfigMap"}
         streams = json.loads(cms["backup-streams"]["streams.json"])
         self.assertEqual({s["name"] for s in streams}, {"nodes-nas", "nodes-nuc0", "nodes-streaming", "nfs"})
-        self.assertEqual({s["etcd"] for s in streams if s["name"] == "nodes-streaming"}, {True})
-        self.assertEqual({s["etcd"] for s in streams if s["name"] == "nodes-nas"}, {False})
+
+    def test_the_verifier_asks_the_api_with_its_own_identity(self):
+        # The only job in the chart with a token: it asks which servers exist and what etcd
+        # snapshots K3s has published, which no restic repository can answer.
+        job = next(c for c in crons() if c["metadata"]["name"] == "backup-verify")
+        pod = job["spec"]["jobTemplate"]["spec"]["template"]["spec"]
+        self.assertEqual(pod["serviceAccountName"], "backup-verify")
+        self.assertTrue(pod["automountServiceAccountToken"])
+        for cron in crons():
+            if cron["metadata"]["name"] == "backup-verify":
+                continue
+            spec = cron["spec"]["jobTemplate"]["spec"]["template"]["spec"]
+            self.assertFalse(spec.get("automountServiceAccountToken", True),
+                             f"{cron['metadata']['name']} carries a token")
+
+    def test_the_role_grants_only_the_two_reads_the_verifier_makes(self):
+        docs = render()
+        role = next(d for d in docs if d["kind"] == "ClusterRole")
+        self.assertEqual(role["metadata"]["name"], "backup-verify")
+        granted = sorted(
+            (rule["apiGroups"][0], rule["resources"][0], tuple(rule["verbs"]))
+            for rule in role["rules"]
+        )
+        self.assertEqual(granted, [
+            ("", "nodes", ("get", "list")),
+            ("k3s.cattle.io", "etcdsnapshotfiles", ("get", "list")),
+        ])
+        binding = next(d for d in docs if d["kind"] == "ClusterRoleBinding")
+        self.assertEqual(binding["roleRef"]["name"], "backup-verify")
+        self.assertEqual(binding["subjects"][0]["name"], "backup-verify")
 
     def test_the_verifier_cannot_initialise_a_repository(self):
         self.assertNotIn("restic init", scripts()["verify.py"])

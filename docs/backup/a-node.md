@@ -61,9 +61,11 @@ tree sits beside the old one inside the claim until you delete it.
 - **A borrowed volume.** An application whose claim is an NFS class does not care which node it runs
   on; an application whose claim is on a dead node's disk does. Check the claim's class before
   concluding the node is the fault — [storage.md](../how-it-works/storage.md) has the eight classes.
-- **The etcd copy is not a restore.** A control-plane node's stream carries an etcd snapshot file, and
-  restoring one has never been drilled. Two control-plane nodes down is a cluster rebuild, not a node
-  rebuild: that is [when the cluster is gone](no-cluster.md).
+- **The etcd upload is not a node's backup.** A control-plane server uploads the cluster's object
+  state, which holds no claim and no file of the node's own: a rebuilt node takes its claims and its
+  `/etc` from that node's stream. Two control-plane nodes down is a cluster rebuild, not a node
+  rebuild: that is [when the cluster is gone](no-cluster.md), and the object state comes back through
+  [restore-etcd.md](../runbooks/restore-etcd.md).
 
 The full command sequence for a claim remains [restore.md](../runbooks/restore.md); this page decides
 what to do first, and in what order.

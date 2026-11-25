@@ -3,7 +3,7 @@
 The verifier is the only thing that notices a stream which has quietly stopped
 advancing, so its cases are the ways that happens: a repository with no snapshot,
 a snapshot too old to be last night's, a repository that grew past its budget, and
-the etcd copy that lags behind the backups it ships with.
+an etcd server whose own upload stopped reaching the bucket.
 """
 
 import contextlib
@@ -35,6 +35,27 @@ def snaps(*hours, stream="nfs"):
          "tags": [f"stream={stream}"]}
         for i, h in enumerate(hours)
     ]
+
+
+def etcd_s3_stub(*servers, age_h=2.0):
+    """A stand-in for read_etcd_s3: what the API would answer, dated from now.
+
+    `main` asks the API rather than a restic repository, so a test that runs it end to end
+    has to hand it this. The dates are relative to the real clock, because main reports
+    against `datetime.now`.
+    """
+    def read():
+        stamp = (datetime.now(timezone.utc) - timedelta(hours=age_h)).isoformat()
+        return list(servers), [
+            {
+                "metadata": {"name": f"s3-{server}"},
+                "spec": {"location": f"s3://bucket/etcd/snap-{server}.zip",
+                         "nodeName": server, "snapshotName": f"snap-{server}.zip"},
+                "status": {"readyToUse": True, "creationTime": stamp},
+            }
+            for server in servers
+        ]
+    return read
 
 
 class StreamTests(unittest.TestCase):
@@ -99,38 +120,103 @@ class StreamTests(unittest.TestCase):
         self.assertIn("age_h=2.0", load().stream_line("nfs", snaps(9, 2, 5), 1, NOW))
 
 
-class EtcdTests(unittest.TestCase):
-    def test_the_etcd_copy_ages_from_the_newest_file_in_the_snapshots(self):
-        entries = [
-            {"path": "/x/other", "mtime": NOW.isoformat()},
-            {"path": "/host/etcd-snapshots/streaming-1", "mtime": (NOW - timedelta(hours=30)).isoformat()},
-            {"path": "/host/etcd-snapshots/streaming-2", "mtime": (NOW - timedelta(hours=2)).isoformat()},
+class EtcdS3Tests(unittest.TestCase):
+    """Each server's own upload, as K3s publishes it as an `ETCDSnapshotFile`."""
+
+    def snapshot(self, server, hours_ago, name=None, ready=True, location=None, deleting=False):
+        stamp = (NOW - timedelta(hours=hours_ago)).isoformat()
+        entry = {
+            "metadata": {"name": f"{server}-{hours_ago}"},
+            "spec": {
+                "location": location or f"s3://bucket/etcd/{name or f'snap-{server}.zip'}",
+                "nodeName": server,
+                "snapshotName": name or f"snap-{server}.zip",
+            },
+            "status": {"readyToUse": ready, "creationTime": stamp},
+        }
+        if deleting:
+            entry["metadata"]["deletionTimestamp"] = stamp
+        return entry
+
+    def test_the_newest_upload_for_one_server_decides_its_age(self):
+        snapshots = [
+            self.snapshot("nuc0", 30, name="old.zip"),
+            self.snapshot("nuc0", 2, name="new.zip"),
+            self.snapshot("streaming", 1, name="other.zip"),
         ]
-        self.assertEqual(load().newest_etcd(entries, NOW)["age_h"], 2.0)
-        self.assertEqual(load().newest_etcd(entries, NOW)["file"], "streaming-2")
+        newest = load().newest_s3_snapshot("nuc0", snapshots, NOW)
+        self.assertEqual(newest["file"], "new.zip")
+        self.assertEqual(newest["age_h"], 2.0)
 
-    def test_a_directory_entry_is_not_a_snapshot(self):
-        entries = [
-            {"path": "/host/etcd-snapshots", "type": "dir", "mtime": NOW.isoformat()},
-            {"path": "/host/etcd-snapshots/sub", "type": "dir", "mtime": NOW.isoformat()},
-        ]
-        self.assertIsNone(load().newest_etcd(entries, NOW))
+    def test_a_local_snapshot_is_not_an_upload(self):
+        # The same reconcile publishes both kinds. A local one proves the disk, which is the
+        # half that dies with the node.
+        snapshots = [self.snapshot("nuc0", 1,
+                                   location="file:///var/lib/rancher/k3s/server/db/snapshots/a")]
+        self.assertIsNone(load().newest_s3_snapshot("nuc0", snapshots, NOW))
 
-    def test_the_prefix_is_the_path_the_node_job_hands_restic(self):
-        # The chart passes etcdSnapshotsPath as a --host-path argument, so restic stores that
-        # path in the snapshot. A verifier looking anywhere else reports "no etcd snapshot"
-        # every night while the copies are there.
-        import yaml
+    def test_a_snapshot_still_being_written_is_not_counted(self):
+        self.assertIsNone(
+            load().newest_s3_snapshot("nuc0", [self.snapshot("nuc0", 1, ready=False)], NOW)
+        )
 
-        values = yaml.safe_load((CHART / "values.yaml").read_text())
-        self.assertEqual(load().ETCD_PREFIX, values["etcdSnapshotsPath"] + "/")
+    def test_a_snapshot_mid_delete_is_not_counted(self):
+        self.assertIsNone(
+            load().newest_s3_snapshot("nuc0", [self.snapshot("nuc0", 1, deleting=True)], NOW)
+        )
 
-    def test_an_etcd_copy_older_than_the_window_is_a_problem(self):
-        self.assertIn("etcd", load().check_etcd("nodes-streaming", {"age_h": 27.5, "file": "f"}, NOW)[0])
-        self.assertEqual(load().check_etcd("nodes-streaming", {"age_h": 2.0, "file": "f"}, NOW), [])
+    def test_every_server_gets_a_line_and_a_quiet_run_has_no_problem(self):
+        snapshots = [self.snapshot(n, 2) for n in ("nuc0", "streaming", "rbp2")]
+        lines, problems = load().check_etcd_s3(["nuc0", "rbp2", "streaming"], snapshots, NOW)
+        self.assertEqual(problems, [])
+        self.assertEqual(lines, [
+            "etcd-s3 server=nuc0 file=snap-nuc0.zip age_h=2.0",
+            "etcd-s3 server=rbp2 file=snap-rbp2.zip age_h=2.0",
+            "etcd-s3 server=streaming file=snap-streaming.zip age_h=2.0",
+        ])
 
-    def test_a_stream_with_no_etcd_snapshot_at_all_is_a_problem(self):
-        self.assertEqual(load().check_etcd("nodes-streaming", None, NOW), ["no etcd snapshot"])
+    def test_twenty_five_hours_is_fine_and_twenty_seven_is_not(self):
+        fresh, _ = load().check_etcd_s3(["nuc0"], [self.snapshot("nuc0", 25)], NOW)
+        _, problems = load().check_etcd_s3(["nuc0"], [self.snapshot("nuc0", 27)], NOW)
+        self.assertEqual(len(fresh), 1)
+        self.assertEqual(problems, ["etcd-s3 server=nuc0 snapshot 27.0h old (>26h)"])
+
+    def test_a_server_that_uploaded_nothing_is_named(self):
+        # The fault the restic copy used to catch: the other two servers stay green, so the
+        # check has to say which one stopped.
+        snapshots = [self.snapshot(n, 2) for n in ("nuc0", "streaming")]
+        lines, problems = load().check_etcd_s3(["nuc0", "rbp2", "streaming"], snapshots, NOW)
+        self.assertIn("etcd-s3 server=rbp2 file=- age_h=-", lines)
+        self.assertEqual(problems, ["etcd-s3 server=rbp2 has no snapshot in the bucket"])
+
+    def test_the_servers_come_from_the_nodes_and_the_snapshots_from_the_api(self):
+        # One stub API standing in for the two GETs: the role in the chart grants exactly
+        # these two reads, so the paths are part of the contract.
+        calls = []
+
+        def api_get(path):
+            calls.append(path)
+            if path == "/api/v1/nodes":
+                return {"items": [
+                    {"metadata": {"name": "nas", "labels": {"kubernetes.io/hostname": "nas"}}},
+                    {"metadata": {"name": "streaming",
+                                  "labels": {"node-role.kubernetes.io/control-plane": "true"}}},
+                    {"metadata": {"name": "nuc0",
+                                  "labels": {"node-role.kubernetes.io/control-plane": "true"}}},
+                ]}
+            self.assertEqual(path, "/apis/k3s.cattle.io/v1/etcdsnapshotfiles")
+            return {"items": [self.snapshot("nuc0", 1)]}
+
+        module = load()
+        original = module.api_get
+        module.api_get = api_get
+        try:
+            servers, snapshots = module.read_etcd_s3()
+        finally:
+            module.api_get = original
+        self.assertEqual(servers, ["nuc0", "streaming"])
+        self.assertEqual(len(snapshots), 1)
+        self.assertEqual(calls, ["/api/v1/nodes", "/apis/k3s.cattle.io/v1/etcdsnapshotfiles"])
 
 
 class StagedTests(unittest.TestCase):
@@ -236,7 +322,8 @@ class FilesRowTests(unittest.TestCase):
             }]))
             out = io.StringIO()
             with contextlib.redirect_stdout(out):
-                code = load().main(["--config", str(config), "--restic", str(fake)])
+                code = load().main(["--config", str(config), "--restic", str(fake)],
+                                   etcd_s3=etcd_s3_stub("nuc0"))
         self.assertEqual(code, 1)
         self.assertIn("files stream=nodes-nas row=databases/postgres-dumps matched=0", out.getvalue())
         self.assertIn("problem stream=nodes-nas row databases/postgres-dumps holds no *.dump",
@@ -297,14 +384,15 @@ class MainTests(unittest.TestCase):
             'case "$3" in\n'
             f"  snapshots) echo '{snapshot}' ;;\n"
             "  stats) echo '{\"total_size\": 4096}' ;;\n"
-            f"  ls) echo '{{\"path\": \"/host/etcd-snapshots/nuc0-1\", \"type\": \"file\", \"mtime\": \"{ls_mtime}\"}}' ;;\n"
+            f"  ls) echo '{{\"path\": \"/staging/claims/monitoring/grafana/grafana.db\", \"type\": \"file\", \"mtime\": \"{ls_mtime}\"}}' ;;\n"
             "  *) exit 9 ;;\n"
             "esac\n"
         )
         fake.chmod(0o755)
         return fake
 
-    def run_main(self, tmp: pathlib.Path, snapshot_iso: str, ls_mtime: str, streams: list[dict]):
+    def run_main(self, tmp: pathlib.Path, snapshot_iso: str, ls_mtime: str, streams: list[dict],
+                 etcd=None):
         import contextlib
         import io
         import json
@@ -314,7 +402,8 @@ class MainTests(unittest.TestCase):
         fake = self.write_restic(tmp, snapshot_iso, ls_mtime, streams[0]["name"])
         out = io.StringIO()
         with contextlib.redirect_stdout(out):
-            code = load().main(["--config", str(config), "--restic", str(fake)])
+            code = load().main(["--config", str(config), "--restic", str(fake)],
+                               etcd_s3=etcd or etcd_s3_stub("nuc0"))
         return code, out.getvalue()
 
     def test_a_healthy_run_prints_the_line_and_exits_zero(self):
@@ -322,25 +411,55 @@ class MainTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             code, out = self.run_main(
                 pathlib.Path(tmp), stamp, stamp,
-                [{"name": "nfs", "repository": "s3:x/nfs", "budgetGiB": 1, "etcd": False}],
+                [{"name": "nfs", "repository": "s3:x/nfs", "budgetGiB": 1}],
             )
         self.assertEqual(code, 0)
-        self.assertRegex(out, r"^stream=nfs snapshots=1 bytes=4096 newest=\S+ age_h=0\.0$")
+        self.assertRegex(out, r"(?m)^stream=nfs snapshots=1 bytes=4096 newest=\S+ age_h=0\.0$")
+        self.assertIn("etcd-s3 server=nuc0 file=snap-nuc0.zip age_h=2.0", out)
 
     def test_a_stale_stream_exits_one_and_names_the_problem(self):
         old = (datetime.now(timezone.utc) - timedelta(days=3)).isoformat()
         with tempfile.TemporaryDirectory() as tmp:
             code, out = self.run_main(
                 pathlib.Path(tmp), old, old,
-                [{"name": "nodes-nuc0", "repository": "s3:x/nodes-nuc0", "budgetGiB": 1, "etcd": True}],
+                [{"name": "nodes-nuc0", "repository": "s3:x/nodes-nuc0", "budgetGiB": 1}],
             )
         self.assertEqual(code, 1)
         self.assertIn("problem stream=nodes-nuc0 newest snapshot", out)
-        self.assertIn("problem stream=nodes-nuc0 etcd copy", out)
 
-    def test_an_etcd_stream_with_no_snapshot_names_the_stream_and_does_not_abort(self):
+    def test_a_stale_etcd_upload_fails_the_run_even_when_every_stream_is_fresh(self):
+        # The two halves fail independently: the restic streams say nothing about whether a
+        # server is still uploading its own snapshots.
+        stamp = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+        with tempfile.TemporaryDirectory() as tmp:
+            code, out = self.run_main(
+                pathlib.Path(tmp), stamp, stamp,
+                [{"name": "nodes-nuc0", "repository": "s3:x/nodes-nuc0", "budgetGiB": 1}],
+                etcd=etcd_s3_stub("nuc0", "rbp2", age_h=30.0),
+            )
+        self.assertEqual(code, 1)
+        self.assertIn("problem etcd-s3 server=nuc0 snapshot 30.0h old (>26h)", out)
+        self.assertNotIn("problem stream=", out)
+
+    def test_an_api_that_cannot_be_reached_is_a_problem_not_a_crash(self):
+        stamp = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+
+        def broken():
+            raise RuntimeError("dial tcp: connection refused")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            code, out = self.run_main(
+                pathlib.Path(tmp), stamp, stamp,
+                [{"name": "nfs", "repository": "s3:x/nfs", "budgetGiB": 1}],
+                etcd=broken,
+            )
+        self.assertEqual(code, 1)
+        self.assertIn("stream=nfs snapshots=1", out)  # the stream report survives
+        self.assertIn("problem etcd-s3 api dial tcp: connection refused", out)
+
+    def test_an_empty_repository_names_the_stream_and_does_not_abort(self):
         # `restic ls latest` exits 1 with "no snapshot found" on an empty repository: the
-        # verifier must report the empty stream, not die on the etcd query.
+        # verifier must report the empty stream, not die on the file list.
         with tempfile.TemporaryDirectory() as tmp_dir:
             tmp = pathlib.Path(tmp_dir)
             fake = tmp / "restic"
@@ -356,15 +475,15 @@ class MainTests(unittest.TestCase):
             fake.chmod(0o755)
             config = tmp / "streams.json"
             config.write_text(
-                '[{"name": "nodes-nuc0", "repository": "s3:x/nodes-nuc0",'
-                ' "budgetGiB": 1, "etcd": true}]'
+                '[{"name": "nodes-nuc0", "repository": "s3:x/nodes-nuc0", "budgetGiB": 1}]'
             )
             out = io.StringIO()
             with contextlib.redirect_stdout(out):
-                code = load().main(["--config", str(config), "--restic", str(fake)])
+                code = load().main(["--config", str(config), "--restic", str(fake)],
+                                   etcd_s3=etcd_s3_stub("nuc0"))
         self.assertEqual(code, 1)
         self.assertIn("problem stream=nodes-nuc0 no snapshot", out.getvalue())
-        self.assertIn("etcd stream=nodes-nuc0 file=-", out.getvalue())
+        self.assertIn("etcd-s3 server=nuc0 file=snap-nuc0.zip", out.getvalue())
 
     def test_a_sqlite_row_that_staged_nothing_fails_the_run_and_names_the_row(self):
         stamp = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
@@ -388,7 +507,8 @@ class MainTests(unittest.TestCase):
             }]))
             out = io.StringIO()
             with contextlib.redirect_stdout(out):
-                code = load().main(["--config", str(config), "--restic", str(fake)])
+                code = load().main(["--config", str(config), "--restic", str(fake)],
+                                   etcd_s3=etcd_s3_stub("nuc0"))
         self.assertEqual(code, 1)
         self.assertIn("staged stream=nodes-nuc0 row=databases/pgadmin-config files=0", out.getvalue())
         self.assertIn("problem stream=nodes-nuc0 row databases/pgadmin-config staged no database",
@@ -416,7 +536,8 @@ class MainTests(unittest.TestCase):
             }]))
             out = io.StringIO()
             with contextlib.redirect_stdout(out):
-                code = load().main(["--config", str(config), "--restic", str(fake)])
+                code = load().main(["--config", str(config), "--restic", str(fake)],
+                                   etcd_s3=etcd_s3_stub("nuc0"))
         self.assertEqual(code, 0, out.getvalue())
         self.assertIn("staged stream=nodes-nuc0 row=databases/pgadmin-config files=1", out.getvalue())
 
@@ -441,7 +562,7 @@ class MainTests(unittest.TestCase):
                 '  ls) if [ "$5" = "night" ]; then\n'
                 '        echo \'{"path": "/staging/claims/databases/pgadmin-config/sqlite.db", "type": "file"}\' ;\n'
                 "      else\n"
-                f'        echo \'{{"path": "/host/etcd-snapshots/nuc0-1", "type": "file", "mtime": "{adhoc}"}}\' ;\n'
+                f'        echo \'{{"path": "/staging/claims/monitoring/grafana/grafana.db", "type": "file", "mtime": "{adhoc}"}}\' ;\n'
                 "      fi ;;\n"
                 "  *) exit 9 ;;\n"
                 "esac\n"
@@ -454,7 +575,8 @@ class MainTests(unittest.TestCase):
             }]))
             out = io.StringIO()
             with contextlib.redirect_stdout(out):
-                code = load().main(["--config", str(config), "--restic", str(fake)])
+                code = load().main(["--config", str(config), "--restic", str(fake)],
+                                   etcd_s3=etcd_s3_stub("nuc0"))
         self.assertEqual(code, 0, out.getvalue())
         self.assertIn("staged stream=nodes-nuc0 row=databases/pgadmin-config files=1", out.getvalue())
 
@@ -487,7 +609,8 @@ class MainTests(unittest.TestCase):
             }]))
             out = io.StringIO()
             with contextlib.redirect_stdout(out):
-                code = load().main(["--config", str(config), "--restic", str(fake)])
+                code = load().main(["--config", str(config), "--restic", str(fake)],
+                                   etcd_s3=etcd_s3_stub("nuc0"))
         self.assertEqual(code, 0, out.getvalue())
         self.assertIn(
             "exclude-unused stream=nodes-streaming row=media-stack/plex-config pattern=Cache/",
@@ -516,7 +639,8 @@ class MainTests(unittest.TestCase):
             }]))
             out = io.StringIO()
             with contextlib.redirect_stdout(out):
-                code = load().main(["--config", str(config), "--restic", str(fake)])
+                code = load().main(["--config", str(config), "--restic", str(fake)],
+                                   etcd_s3=etcd_s3_stub("nuc0"))
         self.assertEqual(code, 0, out.getvalue())
         self.assertNotIn("exclude-unused", out.getvalue())
 
