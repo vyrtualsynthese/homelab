@@ -28,7 +28,7 @@
 2. **The renderer refusal firing where it must not** — an `add` keyed by an attribute it also sets, or a `set` whose selector uses a *different* attribute: both must still render. Pinned by the existing `test_an_add_keyed_by_comment_uses_the_comment` and `test_a_set_while_the_selector_uses_another_attribute_still_renders` in Task 1.
 3. **Installing twice, and installing over a looser tree** (inbox `0777`, sudoers `0644`): the second run must succeed unchanged, and the loose tree must be refused, not quietly tightened. Test in Task 3.
 4. **`visudo` rejecting the drop-in** (a bad line): the installer removes the file again and exits non-zero, leaving no sudoers file. Test in Task 3.
-5. **Running the gate when the canonical checkout is absent or its copy differs** (the operator upgraded the script and did not reinstall): refuse with one line naming the installer, never run a stale copy. Test in Task 2.
+5. **Running the gate when the installed digest is absent or does not match the script** (the operator edited the script and did not reinstall, or an install was interrupted): refuse with one line naming the installer, never run a stale copy. Test in Task 2.
 
 ---
 
@@ -285,6 +285,11 @@ Expected: every test FAILS — the file does not exist, so `bash` exits 127.
 
 - [ ] **Step 3: Write the gate**
 
+> Controller ruling after the first implementation: `check_installed` compares the script against a
+> root-owned digest at `/usr/local/lib/homelab/switch-change.sh.sha256`, not against the canonical
+> checkout — the gate runs as `netcfg`, which cannot traverse `/home/vsynthese`. The snippet below is
+> the shape; the digest form in the shipped file and in `task-2-report.md` is authoritative.
+
 Create `ansible/switches/switch-apply.sh`:
 
 ```bash
@@ -516,8 +521,9 @@ Create `ansible/switches/install-switch-change.sh`. Behaviour, in this order:
 5. Dirty check: `SWITCH_INSTALL_DIRTY=1` (with `--destdir` only) or `git -C "$here/../.." diff --quiet -- ansible/switches` returning non-zero → `die "ansible/switches has uncommitted changes; commit or merge first"`.
 6. `install -d` each directory with its mode, then check an existing one: `stat -c '%a'` must equal the expected mode and its group must be right; otherwise `die` naming the current state. Never `chmod` it.
 7. For each of the two files, compare the source's SHA-256 with the installed copy: when they are equal, print `already <path> (<sha256>)` and leave it untouched; otherwise `install -m 0755` it and print `installed <path> (<sha256>)`.
-8. Write the sudoers file to a temp name in the destination, `chmod 0440`, `visudo -cf` it; on failure remove it and `die`; on success `mv` it into place, printing `already` or `installed` for it as in step 7.
-9. Print one closing `say` line with the first command the agent will use.
+8. Write `/usr/local/lib/homelab/switch-change.sh.sha256` (owner and group as step 4, mode `0644`) holding `<sha256>  switch-change.sh` for the script just installed, using the same `already` / `installed` line. The gate reads this digest and refuses to run when it does not match, so it is written on every install and never left behind by an older one.
+9. Write the sudoers file to a temp name in the destination, `chmod 0440`, `visudo -cf` it; on failure remove it and `die`; on success `mv` it into place, printing `already` or `installed` for it as in step 7.
+10. Print one closing `say` line with the first command the agent will use.
 
 - [ ] **Step 4: Run the tests to verify they pass**
 
@@ -555,7 +561,7 @@ cd ~/projets/homelab
 sudo ./ansible/switches/install-switch-change.sh
 ```
 
-State that the installed copy is pinned by SHA-256 to the canonical checkout, so a change to the script reaches a switch only after it is merged and the installer is re-run.
+State that the installed copy is pinned by a root-owned SHA-256 digest written beside it, so a change to the script reaches a switch only after it is merged and the installer is re-run.
 
 - [ ] **Step 2: Rewrite the invocation in `switch-change.md`**
 
