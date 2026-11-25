@@ -100,8 +100,11 @@ The wrapper, running as `netcfg`:
 - requires `--target` to be `crs326` or `crs309`;
 - requires `--change` to be an absolute path, a regular file, not a symlink, and — after `realpath` —
   inside the inbox;
-- refuses when the installed script's SHA-256 differs from the canonical checkout's copy, naming the
-  installer: a live change must run the reviewed code, not an older copy of it;
+- pins the change: opens it once, re-checks the descriptor's own target, and hands the script a
+  `netcfg`-only copy under the work directory, so the agent-writable inbox cannot aim it elsewhere;
+- refuses when the installed script's SHA-256 differs from `/usr/local/lib/homelab/switch-change.sh.sha256`,
+  the digest the installer writes, naming the installer: a live change must run the code the operator
+  installed, and `netcfg` cannot read the agent's checkout to compare against it;
 - sets `HOME=/home/netcfg` and `SWITCH_CHANGE_WORKDIR=/var/lib/switch-change/work`, then `exec`s the
   installed script.
 
@@ -114,7 +117,8 @@ The installer:
   --quiet -- ansible/switches/`), so an unmerged edit cannot become the thing that holds the key;
 - creates or checks the two directories. It **refuses** a directory that is group- or
   world-writable, rather than tightening it behind the operator's back;
-- installs both files with `install -m 0755 -o root -g root`;
+- installs both files with `install -m 0755 -o root -g root`, and writes
+  `/usr/local/lib/homelab/switch-change.sh.sha256` beside the script on the same run;
 - writes the sudoers drop-in, validates it with `visudo -cf`, and removes it again if validation
   fails;
 - prints the SHA-256 of both installed files and the one command the agent will use.
@@ -174,8 +178,9 @@ connected — is the same. The address move is the case the renderer now refuses
 
 - The `pre-<id>.backup` step still needs `policy`, which `deploy` does not hold; unchanged.
 - Card #484 (RouterOS 7) still removes the `+ssh-rsa` allowance.
-- The wrapper's drift check pins the canonical checkout at `~/projets/homelab`; a second checkout
-  would need the installer to say so, and it does not yet.
+- The drift check compares the installed script against a root-owned digest, so the digest has to be
+  written in the same run as the script. An install interrupted between the two refuses every run
+  until it is repeated — loud, not silent.
 
 ## Verified
 
