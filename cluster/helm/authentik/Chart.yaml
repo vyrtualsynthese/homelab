@@ -3,7 +3,7 @@ name: authentik
 description: Ashuvidz
 type: application
 version: 0.11.1
-appVersion: "2026.8.6"
+appVersion: "2026.8.7"
 dependencies:
   - name: authentik
     version: 2026.8.6
