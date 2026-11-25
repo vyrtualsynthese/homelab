@@ -2612,7 +2612,7 @@ below; the danger state is Step 2's, and it is written once.
 |---|---|---|
 | Danger state | Prometheus | Step 2 |
 | Bans active | Prometheus | `sum(fw_bouncer_banned_ips)` |
-| Requests, public hosts, 24 h | Loki | `sum by (RequestHost) (count_over_time({job="fluent-bit", source="accesslog"}[24h]))` |
+| Requests, public hosts, 24 h | Loki | `sum by (RequestHost) (count_over_time({job="fluent-bit", source="accesslog"} \| json [24h]))` |
 | Rejected share | Prometheus | `100 * sum(rate(traefik_router_requests_total{code=~"4.."}[15m])) / sum(rate(traefik_router_requests_total[15m]))` |
 | Top addresses refused | Loki | see below |
 | Sign-in outcomes | Prometheus | `homelab_authentik_signins_15m` and `homelab_authentik_signins_24h` |
@@ -2632,7 +2632,9 @@ Every access-log query above names `source="accesslog"`, and the selector is not
 2026-11-25, `{job="fluent-bit", container="traefik"}` matched **28,883 lines of the router's own
 stdout against 3,148 access-log lines**, and a `| json` over that mix answers `JSONParserErr` and
 buckets the unparsed lines under an empty `ClientHost` — a top-addresses panel whose biggest row is
-"nobody". The access stream itself parses with zero errors.
+"nobody". The access stream itself parses with zero errors. The per-host panel needs `| json` **inside
+the query**: without it `RequestHost` is not a label yet, and the panel answered one total (3,699)
+instead of the 47 hosts Traefik actually served.
 
 - [ ] **Step 2: Write the danger state, once, as one expression**
 
@@ -2641,23 +2643,30 @@ why the rejected share uses Traefik's own counters and not the log: `traefik_rou
 is the same number, one query, no second datasource.
 
 ```promql
-# 2 = alerting, 1 = watch, 0 = calm. The panel's description carries this text,
-# with the measured threshold written in it.
-max(
-    (count(ALERTS{alertname=~"Security.*", alertstate="firing"}) > 0) * 2
-  or (delta(sum(fw_bouncer_banned_ips)[1h:1m]) > 20) * 2
-  or (sum(fw_bouncer_banned_ips) > 0) * 1
-  or (100 * sum(rate(traefik_router_requests_total{code=~"4.."}[15m]))
-      / sum(rate(traefik_router_requests_total[15m])) > 85) * 1
-  or (homelab_authentik_signins_15m{outcome="failure"} > 20) * 1
-  or vector(0)
-)
+# 2 = alerting, 1 = watch, 0 = calm. `bool` on every comparison, and each term
+# `or vector(0)` so a missing family counts as false instead of dropping the
+# whole sum, then clamp_max: a sum, not an `or` chain.
+clamp_max(
+    2 * (count(ALERTS{alertname=~"Security.*", alertstate="firing"}) > bool 0 or vector(0))
+  + 2 * (delta(sum(fw_bouncer_banned_ips)[1h:1m]) > bool 20 or vector(0))
+  + (sum(fw_bouncer_banned_ips) > bool 0 or vector(0))
+  + (100 * sum(rate(traefik_router_requests_total{code=~"4.."}[15m]))
+      / sum(rate(traefik_router_requests_total[15m])) > bool 85 or vector(0))
+  + (sum(homelab_authentik_signins_15m{outcome="failure"} > bool 20) or vector(0)),
+  2)
 ```
 
-Three things about it are deliberate. `delta` on a subquery, not `increase`: the bouncer's family is
-a gauge, and `increase()` assumes a counter, silently resetting on any drop. `max()` over `or`-ed
-terms, not `or` alone, because the terms carry no labels and the first one that matches would win
-otherwise. And `vector(0)` last, so a calm night is the number 0 rather than an empty panel.
+Four things about it are deliberate, and the first two were found by running it rather than by reading it.
+`bool` on every comparison, because `(sum(x) > 0) * 1` is **not** 0 or 1: a filtered comparison keeps
+the sample it matched, so the term multiplied the ban count and the panel answered `3`. A **sum**, not
+an `or` chain: with `bool` a false term still returns a `0` sample with no labels, and `or` stops at
+the first *defined* operand, not the first *true* one — the chain answered `Calm` while three bans
+were active. `delta` on a subquery, not `increase`: the bouncer's family is a gauge, and `increase()`
+assumes a counter, silently resetting on any drop. And `or vector(0)` inside each term, so a family
+that has never been scraped reads `0` rather than emptying the sum.
+
+The panel's text mode is `value`, not `value_and_name`: an expression with no legend renders its own
+text as the series name, and the first version showed the whole query above the word `Calm`.
 
 `REJECTED_SHARE_PCT` is **85**, Task 12's measured value, written into the panel's description in the
 same words — the plan's provisional `20` sat inside the band routine bot bursts already produce (42 of
@@ -2683,14 +2692,28 @@ curl -s -H "Authorization: Bearer $GRAFANA_TOKEN" \
 
 Expected: nine titles, each expression one that ran in Step 1. Force the danger state to each of its three values once (a fake alert, a rule that matches nothing, then reality) and read the screen at 1080p from where it will be watched.
 
+Three presentation choices were made on that read-back, and each replaces a panel that rendered wrong
+rather than merely plain. *Requests per host* and *Top addresses refused* are **tables**, not bar
+gauges: an instant Loki query returns one frame per series, and a bargauge names its bars from the raw
+label set (`{RequestHost="grafana.kub.local"}`) — the same defect the Media screen hit on
+`Missing per app` (see `docs/reference/dashboards.md`). *Posture* is six **stat tiles**, not a table: a
+table fed by five Prometheus targets shows only the first frame, so four of the five counts were
+invisible. *Sign-in outcomes* joins its two targets `byField: "outcome"` and hides both `Time` columns,
+because two 15-minute and 24-hour counts otherwise appeared as two unrelated tables.
+
 - [ ] **Step 4: Export the copy and describe it**
 
 ```bash
 mkdir -p cluster/helm/monitoring/grafana/export/security
 curl -s -H "Authorization: Bearer $GRAFANA_TOKEN" \
   https://grafana.kub.local/api/dashboards/uid/homelab-security \
-  | jq '.dashboard' > cluster/helm/monitoring/grafana/export/security/dashboard.json
+  | jq '{dashboard: .dashboard, folderUid: .meta.folderUid, overwrite: true}' \
+  > cluster/helm/monitoring/grafana/export/security/dashboard.json
 ```
+
+The file keeps the wrapper the Traefik export uses — `{dashboard, folderUid, overwrite}` — so it is the
+body `POST /api/dashboards/db` takes, not the bare dashboard. `jq '.dashboard'` alone would restore the
+panels into the wrong folder on a wipe.
 
 The `README.md` beside it states what the Traefik export's does: this is a snapshot to read in a pull request and to restore after a wipe, nothing applies it, and the database stays authoritative.
 
