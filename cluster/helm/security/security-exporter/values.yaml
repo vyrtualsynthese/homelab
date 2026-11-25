@@ -4,24 +4,33 @@
 # it describes, and `expectedNote` says when the live side was last read.
 #
 # Read on 2026-11-25 through the read-only MCP ServiceAccount: 73 IngressRoute
-# objects live, 9 public hosts, and 4 privileged workloads. The rendered number is
+# objects live, 9 public hosts, and 9 privileged workloads. The rendered number is
 # counted by hack/gen_docs.py, not typed in; the one route that explains the
 # difference between the two is named in docs/reference/routes.md, and that page
 # and this block move together, which test_security_exporter.py enforces.
 #
-# `privilegedWorkloads` counts the charts in this repository that set
-# `privileged: true`: the qbittorrent WireGuard sidecar, and the mktxp,
-# pihole-exporter and prometheus-smartctl exporters. It is not a count of pods on
-# the cluster: the GPU operator's own pods and k3s's ephemeral jobs run privileged
-# too, and they are deliberately left out because they are not this repository's
-# decision. A pod count would also drift on its own, with DaemonSet replicas and
-# with every job that starts, so the definition the exporter exports has to be
-# this one.
+# `privilegedWorkloads` counts distinct controllers with at least one Running pod
+# that declares a privileged container, in `containers` or `initContainers`. The
+# controller is the pod's first owner, with a ReplicaSet's trailing pod-template
+# hash dropped so a rollout does not move the number (qbittorrent-7c9bcbc9b7 is
+# qbittorrent). Pods with no owner are not a workload this repository decides on
+# (k3s's own jobs), and a pod whose phase is not Running is over, so completed
+# and failed jobs never enter the count.
+#
+# That is nine today: the five gpu-operator DaemonSets (gpu-feature-discovery,
+# nvidia-container-toolkit-daemonset, nvidia-dcgm-exporter,
+# nvidia-device-plugin-daemonset, nvidia-operator-validator), qbittorrent, mktxp,
+# pihole-exporter and prometheus-smartctl. The per-pod count is 21 and must not
+# be used: prometheus-smartctl alone runs one pod per node, and the k3s job pods
+# come and go. The GPU operator's pods are this repository's the moment their
+# chart is in it; they enter the number by ownership and phase, not by being
+# someone else's decision. A count of the charts in the repository (4) cannot be
+# computed from what the exporter can see, which is pods.
 securityExporter:
   expected:
     ingressRoutes: 73
     publicHosts: 9
-    privilegedWorkloads: 4
+    privilegedWorkloads: 9
   expectedNote: "read 2026-11-25 from the live cluster; see docs/reference/routes.md"
   # The same list as `PUBLIC_HOSTS` in hack/check_exposure.py, which owns it.
   # test_security_exporter.py fails the moment the two differ, because a copy in
@@ -36,3 +45,32 @@ securityExporter:
     - dashy.ashudev.com
     - authentik.kub.home.ashudev.com
     - filebrowser.kub.home.ashudev.com
+
+  # One small Python process on a stock image: the code ships in the chart's
+  # ConfigMap, so there is no image to build and no registry to trust. The same
+  # image as monitoring/alert-relay, because two Python sidecars in one repository
+  # on different minors is drift for no reason.
+  image:
+    repository: python
+    tag: "3.15.2-alpine"
+
+  replicaCount: 1
+
+  nodeSelector:
+    kubernetes.io/hostname: nas
+
+  service:
+    port: 9105
+
+  # 30 MiB was the design's estimate; the request is the relay's, and the limit
+  # leaves room for one large route list.
+  resources:
+    requests:
+      cpu: 10m
+      memory: 32Mi
+    limits:
+      memory: 128Mi
+
+  # How often the cluster is re-read. Prometheus scrapes the last snapshot in
+  # between, so this is the age of the numbers, not of the page.
+  intervalSeconds: 60
