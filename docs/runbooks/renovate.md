@@ -5,7 +5,7 @@
 > how to change the schedule.
 >
 > **Use it when** Renovate has not opened its usual pull requests, its token has to be rotated, or
-> the nightly slot has to move · **Verified** 2026-11-19, coverage re-checked 2026-11-25 ·
+> the nightly slot has to move · **Verified** 2026-11-19, application count re-checked 2026-11-23 ·
 > **Kind:** how-to · **Sources** `.github/renovate.json`, `cluster/helm/renovate/`,
 > `cluster/argocd/projects/`.
 
@@ -17,21 +17,15 @@ Status: **proved 2026-11-19** — the hand-triggered run described below is its 
 Renovate reads `.github/renovate.json` and looks for pins with a set of managers. Each one owns a
 different place where a version is written:
 
-| Manager | What it reads | Scope, re-checked 2026-11-25 |
+| Manager | What it reads | Scope, 2026-11-19 |
 |---|---|---|
-| `helm-values` | every `cluster/helm/**/values.yaml`: an `image:` block, and a single-string `image: repo:tag` | 82 images |
-| custom regex, values | a `# renovate: datasource=… depName=…` line above a `version`, `appVersion`, `initTag`, `dockerTag` or `tag` key | FileBrowser's tag, the local-path helper's `busybox`, qBittorrent's VueTorrent release and the Alpine base of its installer, and n8n's tag |
-| custom regex, templates | a literal `image: repo:tag` under `cluster/helm/**/templates/**` | mktxp's `busybox` and Authentik's kubectl hook |
-| `helmv3` | `dependencies:` in every `Chart.yaml` | 14 chart versions |
+| `helm-values` | every `cluster/helm/**/values.yaml`: an `image:` block, and a single-string `image: repo:tag` | 79 images |
+| custom regex, values | a `# renovate: datasource=… depName=…` line above a `version`, `appVersion`, `initTag`, `dockerTag` or `tag` key | qBittorrent's VueTorrent release, the Alpine base of its installer, and n8n's tag |
+| custom regex, templates | a literal `image: repo:tag` under `cluster/helm/**/templates/**` | five init containers and Authentik's kubectl hook |
+| `helmv3` | `dependencies:` in every `Chart.yaml` | 11 chart versions |
 | `argocd` | `targetRevision:` on a `chart:` in the Applications | the NFS provisioner chart, in two Applications |
-| `docker-compose` | the edge Pis' `docker-compose.yml` under `ansible/` | 8 images, four per host |
+| `docker-compose` | the edge Pis' `docker-compose.yml` under `ansible/` | 9 images |
 | `kubernetes` | `image:` in the hand-applied manifests under `kubectl/` and `cluster/infrastructure/` | one `latest` scratch pod, nothing to update |
-
-The counts are from an extract run on 2026-11-25 with the image the CronJob runs: 141 files, 192
-dependencies across the six managers. The compose row is the one a Pi change can silently break, so
-its two files are worth naming: `ansible/playbooks/templates/runners/rbp0/docker-compose.yml` and
-`rbp1/docker-compose.yml`. A lookup over `--include-paths='ansible/**'` reports `8` dependencies and
-`updates: []` for each, which is what "seen and current" looks like.
 
 Four of the rules in that file exist because of a failure, and they read as arbitrary without it:
 

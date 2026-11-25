@@ -519,3 +519,119 @@ def test_the_collections_are_pinned_below_what_the_controller_supports():
     text = (ANSIBLE / "Makefile").read_text()
     assert "community.general:>=13.0.0,<14.0.0" in text
     assert "ansible.posix:>=" in text and "community.docker:>=" in text
+
+
+def test_the_union_is_owned_by_the_host_layer_with_three_options_changed():
+    """The union's line was hand-written in /etc/fstab on `nas`, so a host
+    rebuilt from this repository came back without it. The three changes are the
+    point of the role: a failed write moves instead of dying, a move has a disk
+    to go to, and a mount that cannot be made refuses instead of hiding writes
+    in the empty mountpoint."""
+    defaults = yaml.safe_load((ANSIBLE / "roles/union/defaults/main.yml").read_text())
+    options = defaults["union_options"]
+    assert defaults["union_mountpoint"] == "/mnt/storage"
+    assert defaults["union_branches"] == "/mnt/hdd*"
+    assert "moveonenospc=true" in options
+    assert "minfreespace=100G" in options
+    assert "nonempty" not in options
+    for kept in (
+        "use_ino",
+        "inodecalc=path-hash",
+        "noforget",
+        "cache.files=off",
+        "dropcacheonclose=true",
+    ):
+        assert kept in options, "the NFS recipe is not this role's to change"
+
+
+def test_the_union_is_written_where_mergerfs_keeps_its_two_places():
+    """`mount -o remount` is rejected by fuse on this host — rehearsed on `nas`
+    with mergerfs 2.33.3, `fuse: unknown option 'remount'` — so a line in
+    /etc/fstab only takes effect at the next boot. The running mount is the
+    xattrs on `<mount>/.mergerfs`, which is the only runtime path mergerfs
+    documents. `state: present` is the safe state here: `mounted` remounts."""
+    tasks = yaml.safe_load((ANSIBLE / "roles/union/tasks/main.yml").read_text())
+    written = [t for t in tasks if isinstance(t, dict) and "ansible.posix.mount" in t]
+    assert len(written) == 1, "one task writes the line"
+    mount = written[0]["ansible.posix.mount"]
+    assert mount["state"] == "present", "`mounted` remounts, and fuse rejects that"
+    assert mount["path"] == "{{ union_mountpoint }}"
+    assert mount["backup"] is True, "the previous file is what a rollback restores"
+    assert any(isinstance(t, dict) and t.get("ansible.builtin.script") for t in tasks), (
+        "nothing converges the running mount"
+    )
+    text = (ANSIBLE / "roles/union/tasks/main.yml").read_text()
+    assert "union-options.py --apply" in text
+    assert "fuse: unknown option" in text, "the next reader has to know why not a remount"
+    assert "is match('changed')" in text, (
+        "the `script` module merges stderr into stdout, so the change marker is matched "
+        "from the start of the output and never compared whole"
+    )
+
+
+def test_the_runtime_pair_is_the_form_mergerfs_reports():
+    """`moveonenospc=true` is mergerfs's alias for the `mfs` policy, so the xattr
+    the card checks — `xattr -p user.mergerfs.moveonenospc .mergerfs` — answers
+    `mfs`, not `true`; and a size is printed in bytes, not as `100G`."""
+    defaults = yaml.safe_load((ANSIBLE / "roles/union/defaults/main.yml").read_text())
+    assert defaults["union_runtime"] == {
+        "moveonenospc": "mfs",
+        "minfreespace": str(100 * 1024**3),
+    }
+
+
+def test_the_union_role_runs_only_where_the_disks_are():
+    site = (ANSIBLE / "playbooks/site.yml").read_text()
+    assert "- role: union" in site
+    tasks = yaml.safe_load((ANSIBLE / "roles/union/tasks/main.yml").read_text())
+    assert any("group_names" in str(t) and "storage" in str(t) for t in tasks)
+    assert site.index("- role: union") < site.index("- role: nfs"), (
+        "the export table names paths inside the union, so the union mounts first"
+    )
+
+
+def test_the_union_script_writes_only_what_differs(tmp_path):
+    """The drift report is the point: a converged union has to print no change.
+    The script is therefore run against a directory whose xattrs stand in for
+    the mount's control file."""
+    import os
+    import subprocess
+    import sys
+
+    control = tmp_path / ".mergerfs"
+    control.write_text("")
+    wanted = {"moveonenospc": "mfs", "minfreespace": "107374182400"}
+    script = str(ANSIBLE / "roles/union/files/union-options.py")
+
+    def run(*args):
+        env = dict(os.environ, UNION_RUNTIME='{"moveonenospc": "mfs", "minfreespace": "107374182400"}')
+        return subprocess.run(
+            [sys.executable, script, "--control", str(control), *args],
+            capture_output=True, text=True, env=env,
+        )
+
+    try:
+        os.setxattr(control, "user.mergerfs.moveonenospc", b"false")
+        os.setxattr(control, "user.mergerfs.minfreespace", b"53687091200")
+    except OSError:
+        import pytest
+
+        pytest.skip("this filesystem does not carry user xattrs")
+
+    read = run()
+    assert read.returncode == 1, "a mount that differs from the file is a failure, not silence"
+    assert "moveonenospc=false" in read.stdout
+    assert "differs: minfreespace, moveonenospc" in read.stderr
+
+    first = run("--apply")
+    assert first.returncode == 0, first.stderr
+    assert first.stdout.startswith("changed"), first.stdout
+    assert "moveonenospc" in first.stdout
+    assert all(
+        os.getxattr(control, "user.mergerfs." + name).decode() == value
+        for name, value in wanted.items()
+    )
+
+    second = run("--apply")
+    assert second.returncode == 0
+    assert second.stdout.strip() == "unchanged", "a converged mount reported a change"
