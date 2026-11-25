@@ -170,7 +170,9 @@ are the DNS server and the VPN endpoint, so a guessed password does not merely r
 
 **A finding, low.** Ubuntu Pro is attached on no host. The five jammy machines are offered
 `24.04.5 LTS`, so ESM is the wrong lever — the release move is — but `streaming` carries 151 pending
-updates and `rbp0` 100, and nothing schedules a patch window at all.
+updates and `rbp0` 100, and nothing schedules a patch window at all. The Pro half is settled: no host
+attaches, the move is the cover —
+[the record](../decisions/2026-11-25-no-ubuntu-pro.md).
 
 *Decision, 2026-11-25 — it stays un-attached.* The free personal subscription covers five machines
 and the estate has six, and all six move to 26.04.1 LTS, whose standard support runs to 2031: ESM

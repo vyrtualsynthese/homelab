@@ -60,6 +60,10 @@ Each node's gate, in this order, recorded in the card:
   df -h /boot/firmware
   ```
 
+- **Ubuntu Pro — settled on 2026-11-25: nothing is attached, and nothing attaches.** The cover this
+  move needs is the release it lands on, 26.04 LTS to May 2031; the jammy hosts keep standard support
+  to April 2027, past these hops. `pro status` reading un-attached is the intended state, not drift —
+  [the record](../decisions/2026-11-25-no-ubuntu-pro.md).
 - **`nas`'s parity is synced**: `snapraid status` prints no `NOT fully synced` warning and no `sync in
   progress` line, and its last `scrub/sync` is 0 days old. On 2026-11-24 the parity and the content both
   dated from 2024-02-10, so the union has had no protection since; the hop does not start until the
