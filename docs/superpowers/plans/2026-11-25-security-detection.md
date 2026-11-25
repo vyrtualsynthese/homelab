@@ -2204,8 +2204,9 @@ def events_url(now, minutes, page=None):
             f"?page_size=1000&ordering=-created&created__gte={urllib.parse.quote(since)}")
 ```
 
-`fetch_authentik(token, now, minutes)` walks pages until the window is exhausted, with a hard cap of
-20 pages, and returns the events. Three measured properties of that endpoint shape it:
+`fetch_authentik(token, now, minutes, cap=…)` walks pages until the window is exhausted, with a hard
+cap per call (20 pages for the fifteen-minute window, 200 for the twenty-four-hour one), and returns
+the events. Three measured properties of that endpoint shape it:
 
 - `page_size` is capped at **100** by the server whatever the request asks, so a busy day is several
   pages and one answer undercounts. `pagination.next` is an **integer page number** (`2`), not a URL
@@ -2254,9 +2255,11 @@ and the Deployment maps it to `AUTHENTIK_TOKEN` with `secretKeyRef` and **`optio
 Application syncs before the operator creates the Secret, and the pod must start posture-only rather
 than sit in `CreateContainerConfigError`. With no token the exporter publishes no sign-in family at
 all — never three zeros, which would read as a quiet day. The freshness family covers every
-configured source, so with a token one poll succeeds only when the cluster read *and* the authentik
-read succeed, and an authentik outage stops the timestamp instead of leaving stale counts looking
-live.
+configured source, so a poll counts as successful only when the cluster read *and* the fifteen-minute
+authentik read succeed; an outage of either stops the timestamp instead of leaving stale counts
+looking live. The twenty-four-hour window is the one exception, and it is deliberate: it is a report,
+not the trigger the rule reads, so when it cannot be walked it keeps its last value, the timestamp
+still stops, and the fifteen-minute count keeps being measured.
 
 - [ ] **Step 4: Create the Secret and prove one number by hand**
 

@@ -14,8 +14,11 @@ leaves both the last snapshot and the success timestamp exactly where they were,
 so `SecurityStackBlind` reads a number that only moves on success. The timestamp
 covers every configured source: the cluster read always, and the authentik sign-in
 read when a token is present, so an authentik outage stops it rather than leaving
-stale counts looking live. With no token the exporter is posture-only and
-publishes no sign-in family at all — a zero there would read as a quiet day.
+stale counts looking live. One asymmetry, in `measure()`: the fifteen-minute window
+is the one the rule reads, so a wide window too large to walk keeps its last value
+and freezes the timestamp instead of taking the narrow count down with it. With no
+token the exporter is posture-only and publishes no sign-in family at all — a zero
+there would read as a quiet day.
 
 Deployed from the chart's ConfigMap; the account reads two lists and nothing
 else, see `templates/rbac.yaml`.
@@ -46,10 +49,11 @@ REQUEST_TIMEOUT = 10
 POD_TEMPLATE_HASH = re.compile(r"-[a-z0-9]{5,10}$")
 # From values.yaml, so the endpoint is a chart decision and not a constant in code.
 AUTHENTIK_URL = os.environ.get("AUTHENTIK_URL", "https://authentik.kub.home.ashudev.com")
-# The server caps `page_size` at 100 however large a value is asked for, so a
-# busy day is several pages. Twenty is far past the measured window and is a cap
-# rather than a promise: reaching it raises, because a partial list would publish
-# a sign-in count that is silently too small.
+# The server caps `page_size` at 100 however large a value is asked for. Twenty
+# pages is 2,000 events, roughly 130 a minute across the fifteen-minute walk, and
+# far past the measured baseline (a handful a day). It is a cap rather than a
+# promise: reaching it raises, because a partial list would publish a sign-in count
+# that is silently too small.
 AUTHENTIK_PAGE_CAP = 20
 # The 24-hour window is a report, not a trigger, and a day can hold far more events
 # than a quarter of an hour: 200 pages is 20,000 events, which a slow spray against
@@ -407,8 +411,9 @@ def render(state: Snapshot) -> str:
     The sign-in families follow the same rule one step further: they appear only
     when `signins` is set, which is only after a successful authentik read. With
     no token there is no read, so there is no family — never three zeros that
-    would read as a quiet day. Once the read succeeds, a zero is a measurement and
-    all three outcomes are published.
+    would read as a quiet day. Once a window is read, a zero there is a measurement
+    and all three of its outcomes are published. A window that was never read is
+    absent, which is why `SignIns.last_24h` can be `None`.
     """
     if state.last_success <= 0:
         return "\n".join([*FRESHNESS, "homelab_security_exporter_last_success_timestamp_seconds 0", ""])
