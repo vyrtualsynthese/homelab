@@ -4,6 +4,7 @@ import contextlib
 import json
 import os
 import pathlib
+import signal
 import subprocess
 import tempfile
 import unittest
@@ -82,7 +83,7 @@ class Fake:
         done = subprocess.run(
             ["ssh", "-i", str(self.state / "key"), "-o", "BatchMode=yes",
              "deploy@192.168.1.11", command],
-            text=True, capture_output=True, env=self._env(),
+            text=True, capture_output=True, env=self._env({"FAKE_IGNORE_BREAK": "1"}),
         )
         return done.stdout if done.returncode == 0 else ""
 
@@ -394,6 +395,21 @@ class RunTests(unittest.TestCase):
                              "--yes", "--window", "10m"])
         self.assertEqual(done.returncode, 3, done.stderr)
         self.assertNotIn("applied", done.stdout)
+
+
+class InterruptTests(unittest.TestCase):
+    def test_a_sigterm_during_verify_leaves_the_timer_armed_and_names_it(self):
+        # the switch never comes back and the fake clock does not advance, so the poll waits
+        with fake("term", break_after_change="1", after_change=CHANGED, step="0") as f:
+            proc = f.spawn(["--target", "crs326", "--change", str(CHANGES / "set-pvid.rsc"), "--yes"])
+            seen = f.wait_for("verifying", proc)   # phase 4 has started, so the entry is armed
+            proc.send_signal(signal.SIGTERM)
+            rest, _ = proc.communicate(timeout=10)
+            out = seen + rest
+            self.assertEqual(proc.returncode, 1)
+            self.assertIn("cancel", out)
+            self.assertIn("revert-", out)
+            self.assertIn("run-count=0", f.ros("/system scheduler print detail"))
 
 
 class NoiseFreeTests(unittest.TestCase):

@@ -490,6 +490,22 @@ print_change_diff() {                      # print_change_diff <dir> <plain> <af
   diff -u --label "before the change" --label "after" "$1/pre.norm" "$1/after.norm" || true
 }
 
+# While a timer is armed, an interrupt must not take it away: the whole point of arming first is that
+# the switch is covered even when the run is not. Name the entry and the command that cancels it, and
+# leave the device exactly as it is.
+on_interrupt() {
+  if [ -n "$ARMED_ENTRY" ]; then
+    say ""
+    say "interrupted: the undo timer $ARMED_ENTRY is still armed on $ARMED_HOST for $ARMED_START"
+    say "the change may or may not have landed; that timer puts the old configuration back at $ARMED_START"
+    say "to cancel it now: ssh -i $SWITCH_CHANGE_KEY $SWITCH_CHANGE_USER@$ARMED_HOST"
+    say "  /system scheduler remove [find name=\"$ARMED_ENTRY\"]"
+  fi
+  exit 1
+}
+
+disarm() { ARMED_ENTRY=""; ARMED_HOST=""; ARMED_START=""; }
+
 
 # Phases 3 and 4: apply the change, then find out which of three things happened — the change landed,
 # the timer put the old configuration back, or the switch never answered again.
@@ -521,6 +537,8 @@ change_apply_and_verify() {                # change_apply_and_verify <host> <id>
       exit 4 ;;
   esac
 
+  say "verifying: applying $change and watching $probe until the switch answers"
+
   # A session that dies here is expected, not a failure: the import runs on the device once it has
   # started. Only a line RouterOS itself prints starts the on-demand undo.
   output=$(ros "$host" "/import file=change-$id.rsc verbose=yes")
@@ -529,6 +547,7 @@ change_apply_and_verify() {                # change_apply_and_verify <host> <id>
     say "the undo runs on demand, without waiting out the window"
     ros "$host" "/import file=undo-$id.rsc verbose=yes" >/dev/null
     timer_remove "$host" "$entry"
+    disarm
     files_remove "$host" "$id"
     after="$dir/after-$host.rsc"
     ros "$host" '/export' > "$after"
@@ -574,6 +593,7 @@ change_apply_and_verify() {                # change_apply_and_verify <host> <id>
   ros "$answered" '/export' > "$after"
   print_change_diff "$dir" "$plain" "$after"
   timer_remove "$answered" "$entry"
+  disarm
   files_remove "$answered" "$id"
 
   if [ "$count" != 0 ]; then
@@ -674,6 +694,8 @@ change_run() {
   printf '%s\n' "$detail" | grep -q "start-time=$start" \
     || { warn "revert-$id did not keep start-time=$start"; exit 1; }
 
+  ARMED_ENTRY="revert-$id"; ARMED_HOST="$host"; ARMED_START="$start"
+  trap on_interrupt INT TERM HUP
   say "armed revert-$id on $target for $start device time (window $window)"
 
   if [ "$arm_only" = 1 ]; then
@@ -686,6 +708,7 @@ change_run() {
 
 # ------------------------------------------------------------------ argument parsing
 major=""; change=""; export_file=""; verbose_export=""; target=""; window="$SWITCH_CHANGE_WINDOW"
+ARMED_ENTRY=""; ARMED_HOST=""; ARMED_START=""
 expect=""; assume_yes=0; dry_run=0; arm_only=0; mode=""
 
 while [ $# -gt 0 ]; do
