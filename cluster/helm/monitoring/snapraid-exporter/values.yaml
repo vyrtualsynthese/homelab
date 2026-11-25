@@ -1,0 +1,32 @@
+# One metric, written on the host by ansible/roles/snapraid. Every default
+# collector is off: a second node-exporter with its defaults on would publish a
+# second, wrong copy of nas's node metrics under its own instance label, read
+# from the container's /proc instead of the host's.
+replicaCount: 1
+
+image:
+  repository: quay.io/prometheus/node-exporter
+  pullPolicy: IfNotPresent
+  tag: v1.13.1
+
+# What the existing pod-annotation job looks for. No Service and no scrape
+# config: mktxp and blackbox-exporter are found the same way.
+podAnnotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/port: "9100"
+  prometheus.io/path: /metrics
+
+# Where the runner writes the marker. The role creates it, and the pod mounts it
+# with `type: Directory` rather than creating it: a missing directory is a pod
+# that will not start, which is louder than a metric that is silently absent.
+textfileDirectory: /var/lib/node-exporter/textfile
+
+nodeSelector:
+  kubernetes.io/hostname: nas
+
+resources:
+  requests:
+    cpu: 5m
+    memory: 16Mi
+  limits:
+    memory: 32Mi
