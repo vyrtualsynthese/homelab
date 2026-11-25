@@ -230,7 +230,7 @@ git commit -m "🚀 feature: Traefik writes its access log to a root-only file o
 
 **Interfaces:**
 - Consumes: `/var/log/traefik/access.log` from Task 1, mounted from the host.
-- Produces: the Loki stream `{job="fluent-bit", namespace="kube-system", container="traefik", node="streaming", source="accesslog"}`, whose **line** carries `ClientHost`, `ClientAddr`, `DownstreamStatus`, `RequestHost`, `RouterName` and no `RequestPath`, no `request_User-Agent`, no query and no header. Every existing `{job="fluent-bit", container="traefik"}` query keeps working because the static labels match what the container pipeline set.
+- Produces: the Loki stream `{job="fluent-bit", namespace="kube-system", container="traefik", node="streaming", source="accesslog"}`, whose **line** carries `ClientHost`, `ClientAddr`, `DownstreamStatus`, `RequestHost`, `RouterName` and no `RequestPath`, no `request_User-Agent`, no query and no header. Every existing `{job="fluent-bit", container="traefik"}` query keeps working because the static labels match what the container pipeline set — but that selector also matches the router's **own stdout**, which is not JSON: measured on 2026-11-25, 28,888 stdout lines against 3,127 access lines in the same 24 h. A query that wants the request log names `source="accesslog"`.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -2572,6 +2572,12 @@ allows, so `N` is 0 and `2N × 5` is 0 — the rule waits **10 minutes** instead
 with the quietest two-minute window holding 4 requests against a median of 8. Task 13's expression
 therefore writes `85` where the plan prints `20`.
 
+The silence figure above is a floor for the stream the rule actually reads: it was taken on the
+counter, and `SecurityStackBlind`'s tunnel half names `source="accesslog"` (the router's own stdout is
+not the request log and would mask a dead tail). Measured again on that stream over its first hour on
+2026-11-25: 50 lines in the quietest ten-minute window, no empty window at 2, 5 or 10 minutes, and the
+longest gap between two lines 34 s — so ten minutes of nothing is a stopped pipeline, not a quiet one.
+
 Each `X`, `Y`, `Z`, `N`, `M` is replaced with the measured value, and the commands above are quoted
 in the page so the next reader can repeat the measurement rather than trust it.
 
@@ -2606,11 +2612,11 @@ below; the danger state is Step 2's, and it is written once.
 |---|---|---|
 | Danger state | Prometheus | Step 2 |
 | Bans active | Prometheus | `sum(fw_bouncer_banned_ips)` |
-| Requests, public hosts, 24 h | Loki | `sum by (RequestHost) (count_over_time({job="fluent-bit", container="traefik"}[24h]))` |
+| Requests, public hosts, 24 h | Loki | `sum by (RequestHost) (count_over_time({job="fluent-bit", source="accesslog"}[24h]))` |
 | Rejected share | Prometheus | `100 * sum(rate(traefik_router_requests_total{code=~"4.."}[15m])) / sum(rate(traefik_router_requests_total[15m]))` |
 | Top addresses refused | Loki | see below |
 | Sign-in outcomes | Prometheus | `homelab_authentik_signins_15m` and `homelab_authentik_signins_24h` |
-| Requests by public host and status | Loki | `sum by (RequestHost, DownstreamStatus) (count_over_time({job="fluent-bit", container="traefik"} \| json [15m]))` |
+| Requests by public host and status | Loki | `sum by (RequestHost, DownstreamStatus) (count_over_time({job="fluent-bit", source="accesslog"} \| json [15m]))` |
 | Host blocks by host and port | Loki | `topk(5, sum by (unit) (count_over_time({source="journal", unit="kernel"} \|~ "UFW BLOCK" [1h])))` and the raw lines, which carry `_HOSTNAME` |
 | Posture table | Prometheus | `homelab_security_ingress_routes`, `homelab_security_ungated_routes`, `homelab_security_public_hosts`, `homelab_security_privileged_workloads`, `time() - homelab_security_exporter_last_success_timestamp_seconds` |
 
@@ -2618,9 +2624,15 @@ The one per-address view on the screen, and it reads the gated log store rather 
 
 ```
 topk(10, sum by (ClientHost) (count_over_time(
-  {job="fluent-bit", container="traefik"} | json
+  {job="fluent-bit", source="accesslog"} | json
   | DownstreamStatus >= 401 | DownstreamStatus < 500 [24h])))
 ```
+
+Every access-log query above names `source="accesslog"`, and the selector is not cosmetic: measured on
+2026-11-25, `{job="fluent-bit", container="traefik"}` matched **28,883 lines of the router's own
+stdout against 3,148 access-log lines**, and a `| json` over that mix answers `JSONParserErr` and
+buckets the unparsed lines under an empty `ClientHost` — a top-addresses panel whose biggest row is
+"nobody". The access stream itself parses with zero errors.
 
 - [ ] **Step 2: Write the danger state, once, as one expression**
 
@@ -2745,7 +2757,7 @@ delta(sum(fw_bouncer_banned_ips)[10m:1m])
 
 # SecurityAttackSustained — critical, for 5m, Loki. Condition: reduce(sum) > 100.
 topk(1, sum by (ClientHost) (count_over_time(
-  {job="fluent-bit", container="traefik"} | json
+  {job="fluent-bit", source="accesslog"} | json
   | DownstreamStatus = 401 or DownstreamStatus = 403 or DownstreamStatus = 404 [10m])))
 
 # AuthentikSignInFailures — warning, for 5m, Prometheus. Condition: last() > 20.
@@ -2778,14 +2790,18 @@ A (Prometheus): time() - homelab_security_exporter_last_success_timestamp_second
                 or absent(homelab_security_exporter_last_success_timestamp_seconds)
                 or absent(fw_bouncer_banned_ips)
                 or absent(cs_active_decisions)
-B (Loki):       sum(count_over_time({job="fluent-bit", container="traefik"}[10m]))
+B (Loki):       sum(count_over_time({job="fluent-bit", source="accesslog"}[10m]))
 C (classic):    A > 0  ||  B == 0
 ```
 
 Ten minutes, not five: the plan's `2N × 5` formula lands on 0 because Task 12 found no empty window at
 any usable step, and ten minutes is five times the finest window a 1 m scrape interval allows. The
 traffic never pauses that long — the quietest two-minute window still held 4 requests — so a B that
-reads zero is a pipeline that stopped, not a quiet night.
+reads zero is a pipeline that stopped, not a quiet night. `B` names `source="accesslog"` on purpose:
+the rule is about the file the detector reads, not about Traefik being alive, and the mixed selector
+would stay above zero on the router's own startup dump while the tail of the file was dead. On the
+access stream itself, measured over the first hour on 2026-11-25: 50 lines in the quietest ten-minute
+window, longest gap between two lines 34 s.
 
 A returns one sample when the exporter is stale or a family has vanished, and nothing when everything
 is alive; `C`'s `A > 0` then reads "blind". The three families live on two pods, and both are annotated
