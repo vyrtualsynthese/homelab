@@ -230,7 +230,7 @@ git commit -m "🚀 feature: Traefik writes its access log to a root-only file o
 
 **Interfaces:**
 - Consumes: `/var/log/traefik/access.log` from Task 1, mounted from the host.
-- Produces: the Loki stream `{job="fluent-bit", namespace="kube-system", container="traefik", node="streaming", source="accesslog"}`, whose **line** carries `ClientHost`, `ClientAddr`, `DownstreamStatus`, `RequestHost`, `RouterName` and no `RequestPath`, no `request_User-Agent`, no query and no header. Every existing `{job="fluent-bit", container="traefik"}` query keeps working because the static labels match what the container pipeline set — but that selector also matches the router's **own stdout**, which is not JSON: measured on 2026-11-25, 28,888 stdout lines against 3,127 access lines in the same 24 h. A query that wants the request log names `source="accesslog"`.
+- Produces: the Loki stream `{job="fluent-bit", namespace="kube-system", container="traefik", node="streaming", source="accesslog"}`, whose **line** carries `ClientHost`, `ClientAddr`, `DownstreamStatus`, `RequestHost`, `RouterName` and no `RequestPath`, no `request_User-Agent`, no query and no header. Every existing `{job="fluent-bit", container="traefik"}` query keeps working because the static labels match what the container pipeline set — but that selector also matches the router's **own stdout**, which is not JSON: measured on 2026-11-25, 28,883 stdout lines against 3,148 access lines in the same 24 h. A query that wants the request log names `source="accesslog"`.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -1687,7 +1687,7 @@ cheaper.
 - Test: `hack/tests/test_security_exporter.py` (`ReconciledConstantsTests`)
 
 **Interfaces:**
-- Produces: three integers — live `IngressRoute` count, public host count, privileged workload count — and the explanation of the four routes that render but do not exist live. Tasks 9 and 14 read them.
+- Produces: three integers — live `IngressRoute` count, public host count, privileged workload count — and the explanation of the one route that is live and not rendered. Tasks 9 and 14 read them.
 - Consumes: nothing.
 
 - [ ] **Step 1: Measure both sides**
@@ -1704,7 +1704,7 @@ kubectl get ingressroute -A --no-headers | wc -l
 kubectl get ingressroute -A -o json | jq -r '.items[].metadata.namespace + "/" + .metadata.name' | sort > /tmp/opencode/live-routes.txt
 ```
 
-Expected today: 77 rendered, 73 live. Dump the rendered names the same way and `comm -3` them. Each difference is one of four causes: a chart not yet synced to `develop`, an Application whose `path` holds no chart, a retired app whose Application still exists, or a route in an Application that is not enabled. **Write down which, for each one, in `docs/reference/routes.md`** — that sentence is the deliverable, not the number.
+Expected today: 72 rendered, 73 live. Dump the rendered names the same way and `comm -3` them. Each difference is one of four causes: a chart not yet synced to `develop`, an Application whose `path` holds no chart, a retired app whose Application still exists, or a route in an Application that is not enabled. **Write down which, for each one, in `docs/reference/routes.md`** — that sentence is the deliverable, not the number. On 2026-11-25 the answer was none of those four: the single extra live route is `kube-system/traefik-dashboard-redirect`, applied by hand from `cluster/infrastructure/`, so no Application can ever render it — a fifth shape, and the only one present.
 
 - [ ] **Step 2: Write the failing test**
 
@@ -1743,7 +1743,7 @@ class ReconciledConstantsTests(unittest.TestCase):
         expected = self.values["expected"]
         self.assertEqual(expected["ingressRoutes"], 73)
         self.assertEqual(expected["publicHosts"], 9)
-        self.assertEqual(expected["privilegedWorkloads"], 4)
+        self.assertEqual(expected["privilegedWorkloads"], 9)
         # Every number is a claim about the cluster today; the note says when it
         # was read, so a stale constant is visible rather than plausible.
         self.assertIn("2026-11-25", self.values["expectedNote"])
@@ -1777,13 +1777,14 @@ Expected: `FileNotFoundError` on the values file.
 # it describes, and `expectedNote` says when the live side was last read.
 #
 # Read on 2026-11-25 through the read-only MCP ServiceAccount: 73 IngressRoute
-# objects live against 77 rendered (the four are named in
-# docs/reference/routes.md), 9 public hosts, 4 pods with `privileged: true`.
+# objects live against 72 rendered (the one extra is applied by hand and named in
+# docs/reference/routes.md), 9 public hosts, 9 controllers with a Running
+# privileged pod.
 securityExporter:
   expected:
     ingressRoutes: 73
     publicHosts: 9
-    privilegedWorkloads: 4
+    privilegedWorkloads: 9
   expectedNote: "read 2026-11-25 from the live cluster; see docs/reference/routes.md"
   # The same list as `PUBLIC_HOSTS` in hack/check_exposure.py, which owns it.
   # test_security_exporter.py fails the moment the two differ, because a copy in
@@ -2002,9 +2003,9 @@ homelab_security_ungated_routes 0
 # HELP homelab_security_public_hosts Hosts that answer the internet.
 # TYPE homelab_security_public_hosts gauge
 homelab_security_public_hosts 9
-# HELP homelab_security_privileged_workloads Running containers that declare privileged: true.
+# HELP homelab_security_privileged_workloads Controllers with a Running privileged container.
 # TYPE homelab_security_privileged_workloads gauge
-homelab_security_privileged_workloads 4
+homelab_security_privileged_workloads 9
 # HELP homelab_security_exporter_last_success_timestamp_seconds Unix time of the last successful poll.
 # TYPE homelab_security_exporter_last_success_timestamp_seconds gauge
 homelab_security_exporter_last_success_timestamp_seconds 1795000000
@@ -2485,7 +2486,7 @@ curl -s http://security-exporter.security.svc:9105/metrics | grep '^homelab_auth
 
 Every family named in Tasks 9 and 10 appears, with values that match Task 8's measured constants —
 `homelab_security_ingress_routes 73`, `homelab_security_ungated_routes 0`,
-`homelab_security_public_hosts 9`, `homelab_security_privileged_workloads 4`. A `0` for
+`homelab_security_public_hosts 9`, `homelab_security_privileged_workloads 9`. A `0` for
 `homelab_authentik_signins_24h` when someone signed in today is the exporter reading the wrong window,
 not a quiet day.
 

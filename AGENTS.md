@@ -16,7 +16,7 @@ A single K3s homelab managed by ArgoCD (GitOps) plus Ansible for host prep.
 - 60 ArgoCD `Application` objects in `cluster/argocd/projects/**/*.yaml`, plus the root application
   at `cluster/argocd/argocd-root.yaml`. The old `calibre` Application and its chart were retired once
   Calibre-Web Automated had the collection.
-- 52 Helm charts under `cluster/helm/`.
+- 55 Helm charts under `cluster/helm/`.
 - No CI. Renovate updates images/chart versions; nothing runs on PR.
 - Secrets are never committed. See §5.
 
@@ -196,7 +196,7 @@ done
 `hack/check-charts.sh` is that loop in bulk plus `helm lint`: requirement 11 of
 [`docs/charts/README.md`](docs/charts/README.md) is both commands, and `helm template` masks a broken
 document separator with the `# Source:` line it injects while lint does not. The script builds each
-dependency chart in a temporary copy, so it lints all 52.
+dependency chart in a temporary copy, so it lints all 55.
 
 Charts that need `helm dependency build`: `monitoring/prometheus`, `monitoring/grafana`,
 `monitoring/loki`, `monitoring/fluent-bit`, `authentik`, `dashy`, `filebrowser`,

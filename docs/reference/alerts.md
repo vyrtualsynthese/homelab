@@ -23,17 +23,17 @@ two on `board=card` — one to each contact point.
 
 The split rule is the `for` duration: a rule sits in the fast group when its `for`
 is 5 minutes or less, or when it reports that something is down and its `for` is
-10 minutes (`NodeDown`, `KubeNodeNotReady`, `MonitoringDown`,
-`KubeStateMetricsDown`, `CoreDeploymentDown`, `CoreStatefulSetDown`,
-`CoreDaemonSetDown`, `MediaDeploymentDown`, and since 2026-11-20
-`CloudEndpointDown` and `CloudDnsCheckFailing`) — `ScrapeTargetDown` joins them
-because its whole job is noticing that data stopped arriving. Everything else is
+longer — `CoreDeploymentDown`, `CoreStatefulSetDown`, `CoreDaemonSetDown`,
+`MediaDeploymentDown` and, since 2026-11-20, `CloudDnsCheckFailing` at ten minutes,
+and `ScrapeTargetDown` at fifteen because its whole job is noticing that data
+stopped arriving. Everything else is
 checked every five minutes: `CertificateExpiring`, `CloudTlsCertificateExpiring` and
 `RestoreDrillOverdue` (`for: 1h`), the three disk-fill predictions (`for: 30m`), the temperature and
 SLO-ish checks (`for: 10m` and above). The slowest ratio is the `for: 10m` rules in
 `homelab-core`: half their own `for` between checks, so an alert is delayed by up to five
-minutes and never by more than that. Measured at 35 rules: 35.0 rule evaluations per minute
-before the split, 20.5 after.
+minutes and never by more than that. At 58 rules the load is **33.2 evaluations a minute** —
+27 rules every 60 s plus 31 every 300 s — against 35.0 when the split was made, with all 35 rules
+of that day on the fast cadence.
 
 **Delivery**: contact point `discord-homelab` (type `discord`).
 `group_by [alertname, instance]`, `group_wait 30s`, `group_interval 5m`.

@@ -4,11 +4,12 @@
 > selector that reproduces each number — so the next pass can tell a regression from an old event.
 >
 > **Use it when** you are about to reduce log volume, or a week of logs looks larger than the last
-> measurement · **Verified** 2026-11-22 · **Kind:** reference
+> measurement · **Verified** 2026-11-25 · **Kind:** reference
 >
 > **Sources** `cluster/helm/monitoring/fluent-bit/values.yaml` (the inputs, filters and outputs),
 > `cluster/helm/monitoring/loki/values.yaml` (retention and the limits), and
-> `docs/reference/metrics.md` (the reader counts). Read through Loki's own HTTP API on 2026-11-22.
+> `docs/reference/metrics.md` (the reader counts). Read through Loki's own HTTP API on 2026-11-22 for
+> the baseline, and on 2026-11-25 for the host journal the security detection added.
 
 The numbers below were taken from Loki's own HTTP API against the live cluster. Nothing here is
 estimated: every figure has the query that produced it, and a change is only "fixed" if the number
@@ -44,9 +45,9 @@ curl -skG -H "Authorization: Bearer $GRAFANA_TOKEN" \
 
 Read at 2026-11-25 16:45 UTC, over 3.1 hours: **4,256 kernel lines (1.62 MB) and 65 ssh lines
 (53 KB)**, 1.67 MB together. At that rate the journal adds about **33,700 lines and 13 MB a day** —
-close to the 11.7 MB line below, and worth watching rather than calling: three hours is a quiet
-Tuesday afternoon, while the `kernel` stream's volume is the four nodes' ufw blocks, which move with
-whatever is probing the public addresses that day.
+above the 11.7 MB line below rather than below it, and worth watching rather than calling: three hours
+is a quiet Wednesday afternoon, while the `kernel` stream's volume is the four nodes' ufw blocks,
+which move with whatever is probing the public addresses that day.
 
 The three quarters of the volume that is not a signal does not include this stream: every kernel line
 here is either a ufw block or the kernel saying something went wrong, and the `ssh` half is
