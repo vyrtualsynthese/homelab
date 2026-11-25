@@ -5,7 +5,7 @@
 #
 #   render  <host>        print every file this script owns; change nothing
 #   setup   <host>        install the engine, write them, start the stack, print changed=N
-#   verify  <host>        name every difference; exit 1 if there is one
+#   verify  <host>        name every difference; exit 1 if one needs an apply
 #   backup  <dir> <host>  copy the state a reflash destroys, print the byte count
 #   restore <dir> <host>  copy it back, then verify
 #
@@ -30,8 +30,8 @@ STACK_DIR="/home/vronteix/dockers"
 # The engine and the compose plugin, from Docker's own repository. Pinned by
 # band, because nothing in this repository bumps an apt pin: an exact version
 # ages silently, which is what 28.3.2 on both Pis was. Measured 2026-11-25 in
-# the current release's suite for arm64: docker-ce 29.10.1, containerd.io 2.4.2,
-# docker-compose-plugin 5.8.0.
+# the current release's suite for arm64: docker-ce 5:29.10.1, containerd.io
+# 2.4.2, docker-compose-plugin 5:8.0.
 DOCKER_PIN="5:29.*"
 CONTAINERD_PIN="2.4.*"
 COMPOSE_PIN="5:8.*"
@@ -114,8 +114,15 @@ suite_name() {
     printf '%s\n' "$codename"
 }
 
+# The version of a package that is actually installed, or empty when it is not.
+# `dpkg-query -W` also prints a package that was removed and left its config
+# behind (`deinstall ok config-files`), which is not an install.
 installed_version() {
-    dpkg-query -W -f='${Version}' "$1" 2>/dev/null || true
+    local status version
+    read -r status version <<< "$(dpkg-query -W -f='${db:Status-Abbrev} ${Version}' "$1" 2>/dev/null || true)"
+    if [ "$status" = "ii" ]; then
+        printf '%s' "$version"
+    fi
 }
 
 # The band is a shell glob on purpose: 5:29.10.1-1~ubuntu.26.04 matches 5:29.*
@@ -136,55 +143,43 @@ engine_pairs() {
         "docker-compose-plugin $COMPOSE_PIN"
 }
 
-# The converged state, and the only one that needs no network.
-engine_present() {
+# Every package installed and inside its band. This is about the packages only;
+# engine_repo_present is the other half of the converged state.
+engine_versions_in_band() {
     local pkg band version
     while read -r pkg band; do
         version="$(installed_version "$pkg")"
         [ -n "$version" ] || return 1
         version_in_band "$version" "$band" || return 1
     done < <(engine_pairs)
+}
+
+engine_repo_present() {
     [ -f "$DOCKER_KEYRING" ] && [ -f "$DOCKER_SOURCES" ]
 }
 
-# A fresh image has no runtime; that is what this installs. An engine that is
-# already there is named and left alone: upgrading it restarts the daemon that
-# answers the house's DNS, and on these hosts a reflash is what moves it.
-ensure_engine() {
-    local suite pkg band version missing=0 outside=0 tmp
+# The group is its own step, not a tail of the install: a run interrupted
+# between apt and usermod leaves an engine that is already converged, and the
+# next run has to finish the group rather than return early.
+ensure_docker_group() {
+    case " $(id -nG "$DOCKER_GROUP_USER" 2>/dev/null || true) " in
+        *" docker "*) ;;
+        *)
+            usermod -aG docker "$DOCKER_GROUP_USER"
+            CHANGED=$((CHANGED + 1))
+            echo "engine: $DOCKER_GROUP_USER joined the docker group"
+            ;;
+    esac
+}
 
-    if [ -n "$ROOT" ]; then
-        echo "engine: not touched (PI_ROOT is set)"
-        return 0
-    fi
-    if [ "$(id -u)" -ne 0 ]; then
-        echo "the engine install needs root; run this with sudo" >&2
-        exit 1
-    fi
-    if engine_present; then
-        echo "engine: the pinned $DOCKER_PIN / $COMPOSE_PIN set is installed"
-        return 0
-    fi
-
-    while read -r pkg band; do
-        version="$(installed_version "$pkg")"
-        if [ -z "$version" ]; then
-            missing=1
-        elif ! version_in_band "$version" "$band"; then
-            outside=1
-            echo "engine: NOTE $pkg $version is outside the pinned $band; this script does not upgrade an engine in place"
-        fi
-    done < <(engine_pairs)
-
-    if [ "$missing" -eq 0 ]; then
-        return 0
-    fi
-    if [ "$outside" -eq 1 ]; then
-        echo "engine: refusing: a package above is installed outside its pin while another is missing; reflash, or align the pins" >&2
-        exit 1
-    fi
+# Docker's repository and signing key, written only when they are missing or
+# changed. Nothing here restarts a container: it is what a later apt run reads.
+# Sets ENGINE_SUITE for the caller's message.
+prepare_docker_repo() {
+    local suite tmp
 
     suite="$(suite_name)"
+    ENGINE_SUITE="$suite"
     install -d -m 0755 "$(dirname "$DOCKER_KEYRING")"
     tmp="$(mktemp)"
     if ! curl -fsSL --max-time 30 https://download.docker.com/linux/ubuntu/gpg -o "$tmp"; then
@@ -200,12 +195,64 @@ ensure_engine() {
         CHANGED=$((CHANGED + 1))
     fi
 
+    # Both Pis are arm64 boards, so the architecture is pinned with the suite
+    # rather than read: the repository mixes amd64, arm64, armhf and more.
     write_abs "$DOCKER_SOURCES" "Types: deb
 URIs: https://download.docker.com/linux/ubuntu
 Suites: $suite
 Components: stable
 Architectures: arm64
 Signed-By: $DOCKER_KEYRING"
+}
+
+# A fresh image has no runtime; that is what this installs. An engine that is
+# already there is named and left alone: upgrading it restarts the daemon that
+# answers the house's DNS, and on these hosts a reflash is what moves it.
+ensure_engine() {
+    local pkg band version missing=0 outside=0
+
+    if [ -n "$ROOT" ]; then
+        echo "engine: not touched (PI_ROOT is set)"
+        return 0
+    fi
+    if [ "$(id -u)" -ne 0 ]; then
+        echo "the engine install needs root; run this with sudo" >&2
+        exit 1
+    fi
+
+    if engine_versions_in_band; then
+        if engine_repo_present; then
+            echo "engine: the pinned $DOCKER_PIN / $COMPOSE_PIN set is installed"
+        else
+            # The packages are right and only the repository line is gone, which
+            # is what a later `apt-get update` needs; no package is touched.
+            echo "engine: the packages are in band; restoring Docker's repository line"
+            prepare_docker_repo
+        fi
+        ensure_docker_group
+        return 0
+    fi
+
+    while read -r pkg band; do
+        version="$(installed_version "$pkg")"
+        if [ -z "$version" ]; then
+            missing=1
+        elif ! version_in_band "$version" "$band"; then
+            outside=1
+            echo "engine: NOTE $pkg $version is outside the pinned $band; this script does not upgrade an engine in place"
+        fi
+    done < <(engine_pairs)
+
+    if [ "$missing" -eq 0 ]; then
+        ensure_docker_group
+        return 0
+    fi
+    if [ "$outside" -eq 1 ]; then
+        echo "engine: refusing: a package above is installed outside its pin while another is missing; reflash, or align the pins" >&2
+        exit 1
+    fi
+
+    prepare_docker_repo
 
     # Pinned to the bands above. A suite that carries a newer major only fails
     # here, naming both the suite and the pins, rather than silently moving.
@@ -213,20 +260,13 @@ Signed-By: $DOCKER_KEYRING"
        ! DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
            "docker-ce=$DOCKER_PIN" "docker-ce-cli=$DOCKER_PIN" \
            "containerd.io=$CONTAINERD_PIN" "docker-compose-plugin=$COMPOSE_PIN"; then
-        echo "the engine install failed: check that download.docker.com carries the $suite suite and that the pins above still match it" >&2
+        echo "the engine install failed: check that the network reaches download.docker.com, that it carries the $ENGINE_SUITE suite, and that the pins above still match it" >&2
         exit 1
     fi
     CHANGED=$((CHANGED + 1))
-    echo "engine: installed $DOCKER_PIN / $COMPOSE_PIN (suite $suite)"
+    echo "engine: installed $DOCKER_PIN / $COMPOSE_PIN (suite $ENGINE_SUITE)"
 
-    case " $(id -nG "$DOCKER_GROUP_USER" 2>/dev/null || true) " in
-        *" docker "*) ;;
-        *)
-            usermod -aG docker "$DOCKER_GROUP_USER"
-            CHANGED=$((CHANGED + 1))
-            echo "engine: $DOCKER_GROUP_USER joined the docker group"
-            ;;
-    esac
+    ensure_docker_group
 }
 
 # One line per difference the engine can show. A version outside its band is a
@@ -249,6 +289,14 @@ engine_drift() {
             echo "engine: NOTE $pkg $version is outside the pinned $band; this script does not upgrade an engine in place"
         fi
     done < <(engine_pairs)
+
+    # Our repository paths are only expected under our own pin: a host carrying
+    # an older engine may hold its repository somewhere else, and setup would
+    # not rewrite that either.
+    if engine_versions_in_band && ! engine_repo_present; then
+        echo "MISSING Docker's repository line or signing key"
+        problems=1
+    fi
 
     if ! command -v docker >/dev/null 2>&1; then
         echo "MISSING the docker command"
@@ -544,4 +592,8 @@ main() {
     esac
 }
 
-main "$@"
+# Sourced by the tests, which drive the pure helpers without running a verb; a
+# direct call still runs one.
+if [ "${BASH_SOURCE[0]}" = "$0" ]; then
+    main "$@"
+fi
