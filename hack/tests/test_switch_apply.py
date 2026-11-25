@@ -132,6 +132,47 @@ DIGEST="{self.digest}"; HOME_DIR="{self.tmp}"
         self.assertEqual(done.returncode, 1)
         self.assertIn("install-switch-change.sh", done.stderr)
 
+    def test_paths_that_reach_it_through_the_environment_are_ignored(self):
+        # sudo resets the environment today; the gate must not depend on that. A surviving SCRIPT and
+        # DIGEST pair would retarget the code the digest vouches for.
+        body = f'''
+SCRIPT=/tmp/not-the-installed-one
+DIGEST=/tmp/not-the-digest
+INBOX=/tmp/not-the-inbox
+source "{GATE}"
+printf "%s\\n%s\\n%s\\n" "$SCRIPT" "$DIGEST" "$INBOX"
+'''
+        done = subprocess.run(["bash", "-c", body], text=True, capture_output=True,
+                              env=clean_env(), timeout=30)
+        self.assertEqual(done.returncode, 0, done.stderr)
+        self.assertEqual(done.stdout.splitlines(), [
+            "/usr/local/lib/homelab/switch-change.sh",
+            "/usr/local/lib/homelab/switch-change.sh.sha256",
+            "/var/lib/switch-change/inbox",
+        ])
+
+    def test_the_scripts_own_overrides_do_not_survive_the_gate(self):
+        # The account, the key and the target list are fixed on disk, not by the caller's environment.
+        shim = self.tmp / "env-shim.sh"
+        shim.write_text('#!/bin/bash\n'
+                        'printf "%s|%s|%s\\n" "${SWITCH_CHANGE_KEY:-none}" '
+                        '"${SWITCH_CHANGE_USER:-none}" "${SWITCH_CHANGE_TARGETS:-none}"\n')
+        shim.chmod(0o755)
+        digest = self.tmp / "env-shim.sh.sha256"
+        self.write_digest(shim, digest)
+        body = f'''
+source "{GATE}"
+INBOX="{self.inbox}"; WORK="{self.work}"; SCRIPT="{shim}"; DIGEST="{digest}"
+HOME_DIR="{self.tmp}"; TARGET_USER="$(id -un)"
+main --target crs326 --change "{self.change}"
+'''
+        env = dict(clean_env(), SWITCH_CHANGE_KEY="/tmp/another-key",
+                   SWITCH_CHANGE_USER="admin", SWITCH_CHANGE_TARGETS="crs999=10.0.0.9")
+        done = subprocess.run(["bash", "-c", body], text=True, capture_output=True,
+                              env=env, timeout=30)
+        self.assertEqual(done.returncode, 0, done.stderr)
+        self.assertEqual(done.stdout.strip(), "none|none|none")
+
     def test_a_matching_install_is_accepted(self):
         self.write_digest(self.script)
         done = self.gate(call="check_installed; echo ok")

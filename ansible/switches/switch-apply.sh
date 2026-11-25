@@ -18,13 +18,16 @@ set -uo pipefail
 PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 umask 077
 
-INBOX="${INBOX:-/var/lib/switch-change/inbox}"
-WORK="${WORK:-/var/lib/switch-change/work}"
-SCRIPT="${SCRIPT:-/usr/local/lib/homelab/switch-change.sh}"
-DIGEST="${DIGEST:-/usr/local/lib/homelab/switch-change.sh.sha256}"
-TARGETS="${TARGETS:-crs326 crs309}"
-TARGET_USER="${TARGET_USER:-netcfg}"
-HOME_DIR="${HOME_DIR:-/home/netcfg}"
+# These are assignments, not defaults: the gate runs through sudo, so a variable that survived into
+# its environment must never be able to retarget a path the root-owned digest and the sudoers rule
+# were written against. A test that wants another tree sets them after sourcing this file.
+INBOX=/var/lib/switch-change/inbox
+WORK=/var/lib/switch-change/work
+SCRIPT=/usr/local/lib/homelab/switch-change.sh
+DIGEST=/usr/local/lib/homelab/switch-change.sh.sha256
+TARGETS="crs326 crs309"
+TARGET_USER=netcfg
+HOME_DIR=/home/netcfg
 
 usage() { awk 'NR > 1 && /^#/ { sub(/^# ?/, ""); print; next } NR > 1 { exit }' "${BASH_SOURCE[0]}"; exit 0; }
 
@@ -70,6 +73,9 @@ check_change() {
   [ -f "$path" ] || refuse "not a regular file: $path"
   [ ! -L "$path" ] || refuse "the change may not be a symlink: $path"
   [ -r "$path" ] || refuse "the change is not readable by $TARGET_USER: $path"
+  # Defence in depth, and not covered by the pin below: the pin copies the bytes a descriptor points
+  # at, and a second name for the same inode can keep writing those bytes while the copy runs. One
+  # link means the agent's staged file is the only name, so nothing else can be writing it.
   [ "$(stat -c %h -- "$path")" = 1 ] || refuse "the change has other links: $path"
   case "$(realpath -- "$path")" in
     "$INBOX"/*) ;;
@@ -143,6 +149,10 @@ main() {
   check_installed
   check_change "$change"
   stage_change
+  # The script's own overrides are cleared rather than inherited: the account, the key path and the
+  # target list are fixed by what this file and the installer put on disk, and an inherited variable
+  # could point the run at another account, key or device.
+  unset SWITCH_CHANGE_TARGETS SWITCH_CHANGE_USER SWITCH_CHANGE_KEY
   HOME="$HOME_DIR" SWITCH_CHANGE_WORKDIR="$WORK" \
     exec "$SCRIPT" --target "$target" --change "$staged" "${passthru[@]}"
 }

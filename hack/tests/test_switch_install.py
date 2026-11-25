@@ -114,6 +114,21 @@ class InstallTests(unittest.TestCase):
         self.assertEqual(done.returncode, 1)
         self.assertEqual(self.mode("var/lib/switch-change/inbox"), 0o777)
 
+    def test_a_loose_installed_file_is_refused_even_when_an_upgrade_would_replace_it(self):
+        # The mode is the signal that something else has been writing there. An upgrade must refuse
+        # and name it, not quietly replace the file and print "installed".
+        lib = self.dest / "usr/local/lib/homelab"
+        lib.mkdir(parents=True)
+        lib.chmod(0o755)
+        stale = lib / "switch-change.sh"
+        stale.write_text("#!/bin/bash\n# an older copy\n")
+        stale.chmod(0o777)
+        done = install(self.dest)
+        self.assertEqual(done.returncode, 1, done.stdout)
+        self.assertIn(str(stale), done.stderr)
+        self.assertIn("is mode", done.stderr)
+        self.assertEqual(self.mode("usr/local/lib/homelab/switch-change.sh"), 0o777)
+
     def test_a_loose_sudoers_file_is_refused(self):
         drop = self.dest / "etc/sudoers.d"
         drop.mkdir(parents=True)

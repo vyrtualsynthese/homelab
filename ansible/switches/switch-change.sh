@@ -138,14 +138,20 @@ warn_on_clock_skew() {                    # warn_on_clock_skew <device stamp>
 # A window as seconds. The ceiling is an hour: a timer left far in the future outlives the run that
 # armed it and quietly puts an old configuration back later.
 window_seconds() {                        # window_seconds <10m|600s|600>
-  local raw="$1" seconds
+  local raw="$1" number seconds
+  # The digits are checked before any arithmetic: `--window` is agent-supplied text that the gate
+  # passes through, and a value only reaches `$(( ))` once it is known to be a number.
   case "$raw" in
-    *m) seconds=$(( ${raw%m} * 60 )) ;;
-    *s) seconds="${raw%s}" ;;
-    *)  seconds="$raw" ;;
+    *m) number="${raw%m}" ;;
+    *s) number="${raw%s}" ;;
+    *)  number="$raw" ;;
   esac
-  case "$seconds" in
+  case "$number" in
     ''|*[!0-9]*) die "--window $raw is not a duration: 10m, 600s and 600 mean the same thing" ;;
+  esac
+  case "$raw" in
+    *m) seconds=$(( number * 60 )) ;;
+    *)  seconds="$number" ;;
   esac
   [ "$seconds" -ge 60 ] || die "--window $raw is shorter than a minute"
   [ "$seconds" -le 3600 ] || die "--window $raw is longer than the one-hour ceiling"
@@ -592,13 +598,33 @@ timer_field() {                            # timer_field <host> <entry> <field>
     }'
 }
 
+# A timer that is gone is what the run claims, so the device is asked rather than trusted: a remove
+# that silently failed leaves a live entry that would put an old configuration back minutes later.
 timer_remove() {                           # timer_remove <host> <entry>
-  ros "$1" "/system scheduler remove [find name=\"$2\"]" >/dev/null
+  local entry="$2" left
+  ros "$1" "/system scheduler remove [find name=\"$entry\"]" >/dev/null
+  if ! left=$(ros "$1" '/system scheduler print detail'); then
+    warn "could not confirm that $entry was removed from the switch; read /system scheduler print on it"
+    return 1
+  fi
+  case "$left" in
+    *"name=\"$entry\""*)
+      warn "$entry is still armed on the switch: it will run its undo at its start-time unless it is removed by hand"
+      return 1 ;;
+  esac
+  return 0
 }
 
 files_remove() {                           # files_remove <host> <id>
+  local left
   ros "$1" "/file remove [find name=\"undo-$2.rsc\"]" >/dev/null
   ros "$1" "/file remove [find name=\"change-$2.rsc\"]" >/dev/null
+  left=$(ros "$1" '/file print') || return 0
+  case "$left" in
+    *"undo-$2.rsc"*|*"change-$2.rsc"*)
+      warn "undo-$2.rsc or change-$2.rsc is still on the switch; remove it by hand" ;;
+  esac
+  return 0
 }
 
 # The RouterOS error line of a failed import, or nothing. ssh's own words ("Connection closed by
@@ -724,7 +750,8 @@ change_apply_and_verify() {                # change_apply_and_verify <host> <id>
   # disarm and the files are gone: the run's own scheduler entry is part of /export, so a comparison
   # taken while it is still there can never be equal.
   count=$(timer_field "$answered" "$entry" run-count)
-  timer_remove "$answered" "$entry"
+  removed=0
+  timer_remove "$answered" "$entry" || removed=1
   disarm
   files_remove "$answered" "$id"
   after="$dir/after-$answered.rsc"
@@ -733,7 +760,11 @@ change_apply_and_verify() {                # change_apply_and_verify <host> <id>
 
   case "$count" in
     0)
-      say "applied: $change landed on $target, the timer $entry was removed, and the switch answers again"
+      if [ "$removed" = 0 ]; then
+        say "applied: $change landed on $target, the timer $entry was removed, and the switch answers again"
+      else
+        say "applied: $change landed on $target and the switch answers again, but the timer $entry may still be armed: the warning above is the one that matters"
+      fi
       say "the pre-change binary backup, if the device took one, is pre-$id.backup on the device"
       exit 0 ;;
     ''|*[!0-9]*)
@@ -821,8 +852,9 @@ change_run() {
   confirm
 
   for name in $stale; do
-    timer_remove "$host" "$name"
-    say "cancelled the timer an earlier run left armed: $name"
+    if timer_remove "$host" "$name"; then
+      say "cancelled the timer an earlier run left armed: $name"
+    fi
   done
 
   put "$host" "$undo_file" "undo-$id.rsc" >/dev/null || { warn "could not upload undo-$id.rsc"; exit 1; }

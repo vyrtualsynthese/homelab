@@ -73,6 +73,8 @@ class Fake:
             self._write("hide_timer", "1")
         if kw.get("hide_run_count_after_change"):
             self._write("hide_run_count_after_change", "1")
+        if kw.get("stubborn_timer"):
+            self._write("stubborn_timer", "1")
         if kw.get("refuse_upload"):
             self._write("refuse_upload", str(kw["refuse_upload"]))
         if kw.get("clock_output"):
@@ -197,6 +199,15 @@ class UsageTests(unittest.TestCase):
             done = run(["--target", "crs326", "--change", str(CHANGES / "set-pvid.rsc"),
                         "--dry-run", "--yes", "--window", window])
             self.assertEqual(done.returncode, 2, (window, done.stderr))
+
+    def test_a_window_that_is_not_a_number_is_refused_before_any_arithmetic(self):
+        # The gate passes --window through, so the text is the caller's. Digits are checked before it
+        # reaches `$(( ))`, and each of these would otherwise be a shell syntax error at best.
+        for window in ("1;2m", "0x10m", "$(x)m", "m", "s"):
+            done = run(["--target", "crs326", "--change", str(CHANGES / "set-pvid.rsc"),
+                        "--dry-run", "--yes", "--window", window])
+            self.assertEqual(done.returncode, 2, (window, done.stderr))
+            self.assertIn("is not a duration", done.stderr, window)
 
     def test_list_targets_prints_the_defaults(self):
         done = run(["--list-targets"])
@@ -548,6 +559,17 @@ class RunTests(unittest.TestCase):
         self.assertIn("pvid=20", done.stdout)               # the diff, not the export
         self.assertEqual(f.ros("/system scheduler print detail"), "")
         self.assertEqual([n for n in f.files() if n.startswith(("undo-", "change-"))], [])
+
+    def test_a_timer_that_survives_its_removal_is_named_instead_of_claimed_gone(self):
+        # The device is asked after the removal. An entry that is still there will run its undo at its
+        # start-time, so the run must not say it was removed.
+        with fake("stubborn", after_change=CHANGED, stubborn_timer="1") as f:
+            done = f.script(["--target", "crs326", "--change", str(CHANGES / "set-pvid.rsc"), "--yes"])
+            self.assertIn('name="revert-', f.ros("/system scheduler print detail"))
+        self.assertEqual(done.returncode, 0, done.stderr)
+        self.assertIn("still armed", done.stderr)
+        self.assertIn("may still be armed", done.stdout)
+        self.assertNotIn("was removed", done.stdout)
 
     def test_a_change_that_takes_the_switch_away_is_reverted_and_identical(self):
         with fake("away", break_after_change="1",

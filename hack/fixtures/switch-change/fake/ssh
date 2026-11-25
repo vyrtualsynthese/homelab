@@ -12,7 +12,8 @@ FAKE_VERSION        what /system resource print answers, default 7.16.1
 
 State files: config, config-verbose, clock, clock-output, commands, calls, scheduler.json, files/,
 and the flags break, break_after_change, backup_denied, import_error, after_change, after_undo,
-fire_on_arm, stays_down, hide_timer, hide_run_count, hide_run_count_after_change, refuse_upload.
+fire_on_arm, stays_down, hide_timer, hide_run_count, hide_run_count_after_change, refuse_upload,
+stubborn_timer (a `remove` the device accepts and does not carry out).
 
 `/export` answers the configuration followed by the `/system scheduler` table, because a real switch
 exports its live entries — including the timer a run has just armed.
@@ -183,6 +184,8 @@ def answer(command):
 
     if command.startswith("/system scheduler remove"):
         name = re.search(r'name="?([^"\s\]]+)"?', command).group(1)
+        if flag("stubborn_timer"):
+            return ""
         table = json.loads(read("scheduler.json", "{}"))
         table.pop(name, None)
         write("scheduler.json", json.dumps(table))
