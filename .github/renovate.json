@@ -126,6 +126,29 @@
       ]
     },
     {
+      "description": "A PostgreSQL major cannot start on the previous data directory: the image exits on the version in PG_VERSION and the pod crash-loops until the data is migrated. The image therefore keeps its own major on its own branch, so a patch on 18 still flows while the 19 step is decided separately.",
+      "matchDatasources": [
+        "docker"
+      ],
+      "matchPackageNames": [
+        "postgres"
+      ],
+      "separateMajorMinor": true
+    },
+    {
+      "description": "The 19 step is a migration, not a tag bump, so it must not be a pull request anybody can merge unread. The dashboard lists it under Pending Approval, which is how a new major is noticed; a tick there is what creates the branch. The migration itself is the dump and restore path in docs/runbooks/postgres-restore.md.",
+      "matchDatasources": [
+        "docker"
+      ],
+      "matchPackageNames": [
+        "postgres"
+      ],
+      "matchUpdateTypes": [
+        "major"
+      ],
+      "dependencyDashboardApproval": true
+    },
+    {
       "description": "The Traefik wrapper chart and the image it ships are one release: chart 43.0.0 carries Traefik 3.8.0, and the tag in values.yaml names that image. One branch carries both.",
       "groupName": "traefik",
       "matchDatasources": [

@@ -73,8 +73,17 @@ one pull request to `43.0.0`, not a `43` branch next to a `42.4.3` one. Prerelea
 `ignoreUnstable`, which is on by default, so a major is only offered once it is a published stable
 release.
 
-Two rules narrow that for the packages where it does not fit:
+Three rules narrow that for the packages where it does not fit:
 
+- **PostgreSQL's major waits for a person.** A PostgreSQL major cannot run on the previous data
+  directory: the image reads the version out of `PG_VERSION`, exits, and the pod crash-loops until
+  the data has been migrated. A pull request to `19` is therefore a migration in a version bump's
+  clothes — [`postgres-restore.md`](postgres-restore.md) is the procedure, and it is not something a
+  merge button should start. Two `packageRules` entries on the `postgres` image do the work:
+  `separateMajorMinor: true` keeps 18's patches flowing on their own branch, and
+  `dependencyDashboardApproval: true` scoped to `major` puts 19 on the dependency dashboard under
+  **Pending Approval** without creating a branch. A new major is learned from that entry, and a tick
+  beside it is what creates the pull request; until then no PR exists to merge by accident.
 - **Traefik groups the chart and the image it ships.** The wrapper chart in
   `cluster/helm/platform/traefik` pins both the chart dependency and the `image.tag` inside it, and
   each chart release carries the image that belongs with it: chart `43.0.0` ships Traefik `3.8.0`. A
