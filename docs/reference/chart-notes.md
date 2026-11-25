@@ -5,7 +5,9 @@
 > up.
 >
 > **Use it when** you are building or reviewing a chart and want the worked example closest to it ·
-> **Verified** 2026-11-17 · **Kind:** living page
+> **Verified** 2026-11-17 · **Kind:** reference
+>
+> **Sources** `cluster/helm/**/values.yaml`, `docs/charts/README.md`, and each chart's templates
 
 ## What good looks like
 

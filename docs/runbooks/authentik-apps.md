@@ -1,5 +1,14 @@
 # Wire an application to authentik
 
+> **In one line.** The procedures that put an application behind authentik: a native OIDC client
+> where the app speaks it, a proxy provider where it does not, and the client secret each one needs.
+>
+> **Use it when** an application needs a sign-in, a login loops, or a provider's client secret has to
+> be reissued · **Verified** 2026-11-19, except the CrowdSec Web UI section added 2026-11-25 and
+> verified locally against the image · **Kind:** how-to
+>
+> **Sources** `cluster/helm/authentik/files/*.yaml`, `docs/secrets.md`, each application's chart
+
 **Native SSO wins over the middleware** (as of 2026-11-16): an application that speaks OIDC is
 configured to speak it, because the forward-auth gate cannot tell the app who the person is — every
 browser that passes it arrives as the same identity.
