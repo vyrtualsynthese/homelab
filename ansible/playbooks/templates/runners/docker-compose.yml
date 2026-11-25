@@ -3,7 +3,12 @@ services:
     container_name: pihole
     image: jacklul/pihole:2026.11.0
     network_mode: host
-    env_file: "./pihole.env"
+    # Two files, in this order. pihole.settings is rendered from the template and
+    # byte-identical on both Pis; pihole.env holds the panel password and stays
+    # on the host. A key in both is won by the later file, i.e. the secret.
+    env_file:
+      - "./pihole.settings"
+      - "./pihole.env"
     volumes:
       - './etc-pihole:/etc/pihole'
       - './etc-dnsmasq.d:/etc/dnsmasq.d'

@@ -1,6 +1,7 @@
 import json
 import os
 import pathlib
+import re
 import subprocess
 
 import yaml
@@ -382,3 +383,33 @@ def test_verify_does_not_pass_a_stack_that_is_not_up():
     text = SCRIPT.read_text()
     assert "docker compose ps --all" in text, "ps without --all hides a stopped container"
     assert "docker compose config --services" in text, "the declared services are the ones to compare"
+
+
+SETTINGS_HEADER = "--- /home/vronteix/dockers/pihole.settings\n"
+
+
+def rendered_section(host, header):
+    """One block of `render`'s output, normalised the way write_abs writes it."""
+    out = run("render", host)
+    assert out.returncode == 0, out.stderr
+    assert header in out.stdout, out.stdout
+    return out.stdout.split(header, 1)[1].split("\n--- ", 1)[0] + "\n"
+
+
+def test_both_pis_get_the_same_pihole_settings():
+    """On 2026-11-25 the two panels differed in four of 167 settings, because the
+    file was hand-kept on each host. One rendered file is what makes that
+    impossible: the password is the only thing left in pihole.env."""
+    rbp0 = rendered_section("rbp0", SETTINGS_HEADER)
+    rbp1 = rendered_section("rbp1", SETTINGS_HEADER)
+    assert rbp0 == rbp1, "the two hosts must render byte-identical settings"
+    for line in (
+        "FTLCONF_dns_upstreams=86.54.11.100;86.54.11.200",
+        "FTLCONF_dns_blockTTL=2",
+        "FTLCONF_dns_rateLimit_count=1000",
+        "FTLCONF_dns_listeningMode=ALL",
+        "FTLCONF_dns_revServers=true,192.168.1.0/24,192.168.1.1,local",
+    ):
+        assert line in rbp0, line
+    assert "WEBPASSWORD" not in rbp0, "the password is a secret and is never rendered"
+    assert not re.search(r"^PIHOLE_DNS_=", rbp0, re.M), "a v5 key FTL ignores, next to the one it reads"

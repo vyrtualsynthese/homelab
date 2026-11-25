@@ -1,0 +1,40 @@
+# One file for both edge Pis. hosts-pi.sh writes it from this template, prints
+# it with 'render' and compares it with 'verify', so the two Pi-holes cannot
+# drift the way two hand-kept copies did: on 2026-11-25 they differed in four of
+# 167 settings and nobody had noticed.
+#
+# Nothing here is a secret. The panel password is the only key in pihole.env,
+# which stays on the host and is never rendered.
+TZ=Europe/Paris
+
+# Upstream resolvers, DNS4EU — an EU member-state resolver, per the providers
+# decision. The old PIHOLE_DNS_ key was a v5 leftover: a throwaway container on
+# 2026-11-25 showed FTL ignores it, so the upstream actually in force was the one
+# written in pihole.toml, and the file said something else.
+FTLCONF_dns_upstreams=86.54.11.100;86.54.11.200
+
+# How long a client caches a blocked answer, in seconds. Two, the default: a day
+# means a site unblocked this morning still fails tonight. rbp0 carried 86400.
+FTLCONF_dns_blockTTL=2
+
+# Queries per client per minute. The default; the two hosts carried 1000 and
+# 10000, and the LAN's peak is about 20.
+FTLCONF_dns_rateLimit_count=1000
+
+# Answer on every address the host holds, including the moving address the
+# failover design puts in front of the pair, so that change needs nothing here.
+FTLCONF_dns_listeningMode=ALL
+
+# Reverse lookups for the LAN answered locally instead of forwarded upstream.
+# rbp0 had this, rbp1 did not, and rbp1 was forwarding about 230 PTR queries a
+# day to DNS4EU for its own neighbours.
+FTLCONF_dns_revServers=true,192.168.1.0/24,192.168.1.1,local
+
+# The address=/... overrides live in etc-dnsmasq.d/02-my-wildcard-dns.conf,
+# which is rendered and compared like this file. This empty value clears the
+# copy the old environment carried, so there is one source, not two.
+FTLCONF_misc_dnsmasq_lines=
+
+# How long the query database keeps its detail.
+FTLCONF_MAXNETAGE=30
+FTLCONF_MAXDBDAYS=30
