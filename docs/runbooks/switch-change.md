@@ -10,10 +10,11 @@ this yet
 > **Use it when** a switch's configuration has to change and a mistake would cut the way in — a
 > bridge port's VLAN, an address, a route, a port that must be disabled and enabled again — and you
 > want the way back to be on the device rather than in your session.
-> · **Verified** 2026-11-25: the undo renderer, the refusals, the gate and the installer are green
-> against `hack/fixtures/switch-change/`, a fake switch that answers `ssh` and `scp` from a state
-> directory. **No timer has fired on a real switch yet** — the runs that will prove it are in "The
-> first live runs" below, and their output is not yet in this page.
+> · **Verified** 2026-11-25: the undo renderer, the refusals and the run loop are green against
+> `hack/fixtures/switch-change/`, a fake switch that answers `ssh` and `scp` from a state directory;
+> the gate and the installer are green against their own stubs, in `hack/tests/test_switch_apply.py`
+> and `hack/tests/test_switch_install.py`. **No timer has fired on a real switch yet** — the runs
+> that will prove it are in "The first live runs" below, and their output is not yet in this page.
 > · **Kind:** how-to
 >
 > **Sources** `ansible/switches/switch-change.sh`, `ansible/switches/switch-apply.sh`,
@@ -257,11 +258,11 @@ configuration alone:
 
 ```bash
 sudo -u netcfg /usr/local/sbin/switch-apply --target crs309 \
-  --change /var/lib/switch-change/inbox/arm-only.rsc --arm-only --window 3m
+  --change /var/lib/switch-change/inbox/arm-only.rsc --arm-only --window 3m --yes
 ```
 
-Arming is a write, so the run asks once first. From a terminal, answer `y`; from an agent's shell
-there is no terminal to ask on, so add `--yes` — without it the run exits 2 and touches nothing.
+Arming is a write, so the run asks once first; `--yes` answers it. The flag is not optional from an
+agent's shell, which has no terminal to ask on: without it the run exits 2 and touches nothing.
 
 Expected, and exit 0:
 
@@ -327,8 +328,11 @@ section is what the banner's **Verified** line and the **Verified** list below a
 ## Verified
 
 - `uv run --with-requirements hack/tests/requirements.txt python -m pytest -q hack/tests/test_switch_change.py`
-  — 57 tests, the undo renderer on RouterOS 6 and 7, every refusal, and every exit path driven
-  through the fake switch.
+  — 64 tests, the undo renderer on RouterOS 6 and 7, every refusal, and every exit path driven
+  through the fake switch, whose `/export` carries its scheduler table as a real one does.
+- `hack/tests/test_switch_apply.py` — 19 tests, the gate's target list, its argument set, the pinned
+  descriptor, the staged copy, the digest and the work directory.
+- `hack/tests/test_switch_install.py` — 15 tests, the installer against a temporary `--destdir`.
 - `bash hack/check-docs.sh` — this page's banner, links and nav entry.
 - Not verified: a real switch, a real scheduler entry, and a real timer firing. "The first live runs"
   above is that proof, and its output is pasted there when the runs happen. Card #485 created the

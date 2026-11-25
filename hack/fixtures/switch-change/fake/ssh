@@ -13,6 +13,9 @@ FAKE_VERSION        what /system resource print answers, default 7.16.1
 State files: config, config-verbose, clock, clock-output, commands, calls, scheduler.json, files/,
 and the flags break, break_after_change, backup_denied, import_error, after_change, after_undo,
 fire_on_arm, stays_down, hide_timer, hide_run_count, hide_run_count_after_change, refuse_upload.
+
+`/export` answers the configuration followed by the `/system scheduler` table, because a real switch
+exports its live entries — including the timer a run has just armed.
 """
 
 import json
@@ -95,6 +98,21 @@ def scheduler_block(entry, name):
             f'      on-event="{entry.get("on-event", "")}"\n')
 
 
+def scheduler_export():
+    """The `/system scheduler` section a real `/export` prints, one add line per live entry.
+
+    RouterOS writes the live table into the export, so an export taken while a run's timer is armed
+    carries that timer. Without it the fake could not show the comparison that never comes out equal.
+    """
+    table = json.loads(read("scheduler.json", "{}"))
+    if not table:
+        return ""
+    lines = ["/system scheduler"]
+    for name, entry in table.items():
+        lines.append(f'add name={name} on-event="{entry.get("on-event", "")}"')
+    return "\n".join(lines) + "\n"
+
+
 def answer(command):
     command = command.strip()
 
@@ -115,7 +133,13 @@ def answer(command):
                 f"           time-zone-name: Europe/Paris\n")
 
     if command == "/export":
-        return read("config", "")
+        text = read("config", "")
+        section = scheduler_export()
+        if section:
+            if text and not text.endswith("\n"):
+                text += "\n"
+            text += section
+        return text
 
     if command in ("/export verbose", "/export hide-sensitive verbose"):
         return read("config-verbose", read("config", ""))

@@ -639,8 +639,11 @@ Expected: the phase-1 read, and one undo line `set [find name=ssh] disabled=no`;
 
 ```bash
 sudo -u netcfg /usr/local/sbin/switch-apply --target crs309 \
-  --change /var/lib/switch-change/inbox/arm-only.rsc --arm-only --window 3m
+  --change /var/lib/switch-change/inbox/arm-only.rsc --arm-only --window 3m --yes
 ```
+
+`--yes` is not optional here: `confirm` runs for `--arm-only` too, and an agent's shell has no
+terminal to ask on, so without it the run exits 2 and touches nothing.
 
 Expected: `armed revert-… for <hh:mm:ss> device time (window 3m)` and exit 0. Three minutes later the switch's `/log print` shows `/import file=undo-….rsc`, and `ansible/collectors/network-audit.sh`-style reads still answer. Remove the two files by hand afterwards.
 
