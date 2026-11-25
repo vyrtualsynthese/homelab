@@ -33,7 +33,7 @@ strategy: Recreate
 image:
   repository: ghcr.io/gtsteffaniak/filebrowser
   # renovate: datasource=docker depName=gtsteffaniak/filebrowser
-  tag: 2.0.2-stable
+  tag: 2.1.0-stable
   pullPolicy: IfNotPresent
 
 # The one port value: the container port, the Service, every probe and
