@@ -88,10 +88,14 @@ already brings them back.
    bind mount whose source was missing, and it may hold something. `setup` prints the path, says
    why it is a directory, and exits 1; the operator removes it and reruns.
 2. *A changed mounted file restarts pihole.* A bind mount is resolved when the container starts, so
-   a file created afterwards is invisible until it restarts. When either of pihole's two files
-   changed, `setup` runs `docker compose up -d --remove-orphans --force-recreate pihole` — one
-   container, a couple of seconds of DNS, and only on a run that changed something. Otherwise the
-   command is the plain `up -d --remove-orphans` it runs today.
+   a file created afterwards is invisible until it restarts. `setup` always runs the plain
+   `docker compose up -d --remove-orphans` first — `up -d <service>` converges that service alone,
+   so this is the run that applies a definition or image change to the other three — and then, when
+   either of pihole's two files changed, `docker compose up -d --force-recreate pihole`: one
+   container, a couple of seconds of DNS, and only on a run that changed something.
+
+`verify` compares the same bytes `setup` writes, so a file `setup` leaves alone is one `verify`
+accepts — a file with a missing final newline is rewritten, not blessed.
 
 `verify` compares the rendered bytes, not the template, and diffs the same way it does for
 `/etc/hosts`.

@@ -345,15 +345,15 @@ refuse_directory() {
     fi
 }
 
-# One file, one counter of changes. Text is compared with its newlines trimmed,
-# so a file written by an older run (or by hand) is a match when the lines are,
-# and the write always ends the file with one newline.
+# A file is written only when its bytes differ: the same comparison `verify`
+# makes, so a file `setup` leaves alone is one `verify` accepts. The write always
+# ends the file with exactly one newline.
 write_abs() {
     local dest="$1" content="$2"
     mkdir -p "$(dirname "$dest")"
     refuse_directory "$dest"
     CHANGED_THIS_WRITE=0
-    if [ -f "$dest" ] && [ "$(cat "$dest")" = "$content" ]; then
+    if [ -f "$dest" ] && cmp -s <(printf '%s\n' "$content") "$dest"; then
         return 0
     fi
     printf '%s\n' "$content" > "$dest"
@@ -418,12 +418,15 @@ cmd_setup() {
         # stops declaring it: `up -d` starts what the file names and leaves
         # everything else running. Without the flag, the router this template no
         # longer declares would stay up on rbp0, dashboard on 8080 included.
+        ( cd "$STACK_DIR" && docker compose up -d --remove-orphans >/dev/null )
+        echo "stack: docker compose up -d --remove-orphans"
+        # `up -d <service>` converges that service alone, so the run above is the
+        # one that applies a definition or image change to the other three. This
+        # one is here because a bind mount is resolved when the container starts:
+        # a file written above is invisible to a pihole that kept running.
         if [ "$pihole_changed" -eq 1 ]; then
-            ( cd "$STACK_DIR" && docker compose up -d --remove-orphans --force-recreate pihole >/dev/null )
-            echo "stack: docker compose up -d --remove-orphans --force-recreate pihole"
-        else
-            ( cd "$STACK_DIR" && docker compose up -d --remove-orphans >/dev/null )
-            echo "stack: docker compose up -d --remove-orphans"
+            ( cd "$STACK_DIR" && docker compose up -d --force-recreate pihole >/dev/null )
+            echo "stack: docker compose up -d --force-recreate pihole"
         fi
     else
         echo "stack: not started (PI_ROOT is set)"
