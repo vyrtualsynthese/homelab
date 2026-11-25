@@ -61,6 +61,45 @@ fluent-bit:
           Parser json
           Mem_Buf_Limit 5MB
           Skip_Long_Lines On
+
+      # The host's own journal: `ssh` auth failures and the kernel's ufw block
+      # lines (ufw logs through the kernel). Fluent Bit runs as a DaemonSet, so
+      # each node reads its own journal and `_HOSTNAME` inside the line says
+      # which. UFW rate-limits its own logging, so a burst is visible as a burst
+      # and the exact packet count is not.
+      #
+      # Two inputs, not one: the systemd plugin ANDs filters that name different
+      # fields and ORs ones that name the same field, so one input carrying both
+      # selectors would match nothing — a pipeline that looks configured and
+      # ships zero lines.
+      #
+      # `_COMM=sshd`, not `_SYSTEMD_UNIT=ssh.service`: Ubuntu 22.10 and later
+      # socket-activate sshd, so the listener is `ssh.socket` and each connection
+      # is a transient `ssh@<n>-<addr>.service`. A unit filter would ship nothing
+      # on exactly the hosts where a brute-force attempt is most visible, and
+      # report zero rather than fail. `_COMM=sshd` matches the daemon in both
+      # shapes.
+      #
+      # No `Path`: the plugin's default calls sd_journal_open(LOCAL_ONLY), which
+      # reads both `/var/log/journal` and the volatile `/run/log/journal`.
+      # `Path` switches it to opening one directory, and journald's
+      # `Storage=auto` means a node may hold only the volatile journal, since
+      # nothing in this repository creates `/var/log/journal`.
+      [INPUT]
+          Name systemd
+          Tag host.ssh
+          DB /var/lib/fluent-bit/ssh.db
+          Read_From_Tail On
+          Max_Fields 200
+          Systemd_Filter _COMM=sshd
+
+      [INPUT]
+          Name systemd
+          Tag host.kernel
+          DB /var/lib/fluent-bit/kernel.db
+          Read_From_Tail On
+          Max_Fields 200
+          Systemd_Filter _TRANSPORT=kernel
     filters: |
       [FILTER]
           Name kubernetes
@@ -123,3 +162,51 @@ fluent-bit:
           Compress gzip
           Retry_Limit no_limits
           Labels job=fluent-bit, namespace=kube-system, container=traefik, node=streaming, source=accesslog
+
+      # Constant labels, one per unit, so a rule selects on `unit="ssh"` or
+      # `unit="kernel"` without depending on a record accessor resolving to the
+      # right key. The node is not a label: it is `_HOSTNAME` inside the line,
+      # and a label that does not resolve is worse than none.
+      [OUTPUT]
+          Name loki
+          Match host.ssh
+          Host loki.monitoring.svc.cluster.local
+          Port 3100
+          Line_Format json
+          Compress gzip
+          Retry_Limit no_limits
+          Labels job=fluent-bit, source=journal, unit=ssh
+
+      [OUTPUT]
+          Name loki
+          Match host.kernel
+          Host loki.monitoring.svc.cluster.local
+          Port 3100
+          Line_Format json
+          Compress gzip
+          Retry_Limit no_limits
+          Labels job=fluent-bit, source=journal, unit=kernel
+  # The two position files (`DB` in the inputs above) need a writable directory.
+  # The upstream chart mounts `/var/log`, `/var/lib/docker/containers` and
+  # `/etc/machine-id` and nothing else, so this emptyDir is the only writer
+  # there. It dies with the pod, which is why both inputs carry
+  # `Read_From_Tail On`.
+  #
+  # The chart mounts `/var/log` but not `/run`, and journald keeps the volatile
+  # journal under `/run/log/journal` on a host without a persistent one, so the
+  # runtime directory is mounted too. `DirectoryOrCreate`, not `Directory`: a
+  # host with a persistent journal has no `/run/log/journal`, and a plain
+  # directory mount would keep the pod from starting on it.
+  extraVolumes:
+    - name: fb-journal-db
+      emptyDir: {}
+    - name: host-run-journal
+      hostPath:
+        path: /run/log/journal
+        type: DirectoryOrCreate
+  extraVolumeMounts:
+    - name: fb-journal-db
+      mountPath: /var/lib/fluent-bit
+    - name: host-run-journal
+      mountPath: /run/log/journal
+      readOnly: true
