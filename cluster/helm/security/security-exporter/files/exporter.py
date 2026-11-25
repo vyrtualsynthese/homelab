@@ -51,6 +51,11 @@ AUTHENTIK_URL = os.environ.get("AUTHENTIK_URL", "https://authentik.kub.home.ashu
 # rather than a promise: reaching it raises, because a partial list would publish
 # a sign-in count that is silently too small.
 AUTHENTIK_PAGE_CAP = 20
+# The 24-hour window is a report, not a trigger, and a day can hold far more events
+# than a quarter of an hour: 200 pages is 20,000 events, which a slow spray against
+# the sign-in page can still exceed. Past it the narrow window keeps counting and
+# the wide one keeps its last value, see `measure()`.
+AUTHENTIK_WIDE_PAGE_CAP = 200
 
 
 class Posture(NamedTuple):
@@ -60,10 +65,15 @@ class Posture(NamedTuple):
 
 
 class SignIns(NamedTuple):
-    """Both windows, bucketed. Present only after a successful authentik read."""
+    """Both windows, bucketed. Present only after a successful authentik read.
+
+    `last_24h` is optional on purpose: the narrow window is the one the sign-in
+    rule reads, so a wide window too large to walk carries the previous value
+    forward (or nothing) instead of taking the narrow count down with it.
+    """
 
     last_15m: dict[str, int]
-    last_24h: dict[str, int]
+    last_24h: dict[str, int] | None = None
 
 
 class Snapshot(NamedTuple):
@@ -259,12 +269,17 @@ def _created(event):
     if not stamp:
         return None
     try:
-        return datetime.fromisoformat(str(stamp).replace("Z", "+00:00"))
+        parsed = datetime.fromisoformat(str(stamp).replace("Z", "+00:00"))
     except ValueError:
         return None
+    # authentik always writes an offset. A serialiser that ever writes a naive
+    # one would otherwise raise `TypeError` on the comparison below, and that
+    # exception escapes the per-event loop: one bad event would freeze every
+    # family for as long as the event stays in the retention period.
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
 
 
-def fetch_authentik(token, now, minutes, opener=urllib.request.urlopen):
+def fetch_authentik(token, now, minutes, cap=AUTHENTIK_PAGE_CAP, opener=urllib.request.urlopen):
     """Every event in the window, walking pages until the window is exhausted.
 
     The server has no date filter: its OpenAPI schema offers pagination,
@@ -275,15 +290,17 @@ def fetch_authentik(token, now, minutes, opener=urllib.request.urlopen):
     event that is older than the window. Without that the "15m" family would
     publish every event in the retention period.
 
-    A non-200 raises, and so does a window that still has pages after
-    `AUTHENTIK_PAGE_CAP`: a partial list would undercount a burst while looking
-    exactly like a quiet day, which is the one thing a sign-in count must not do.
-    The opener is injectable so the tests prove the transport without a network.
+    A non-200 raises, and so does a window that still has pages after `cap`: a
+    partial list would undercount a burst while looking exactly like a quiet day,
+    which is the one thing a sign-in count must not do. The cap is a parameter
+    because the two windows are sized apart: a busy day must not blind the
+    fifteen-minute view that `AuthentikSignInFailures` reads. The opener is
+    injectable so the tests prove the transport without a network.
     """
     cutoff = now - timedelta(minutes=minutes)
     events = []
     page = None
-    for _ in range(AUTHENTIK_PAGE_CAP):
+    for _ in range(cap):
         request = urllib.request.Request(
             events_url(now, minutes, page),
             headers={"Authorization": f"Bearer {token}", "Accept": "application/json"},
@@ -304,7 +321,7 @@ def fetch_authentik(token, now, minutes, opener=urllib.request.urlopen):
         if not page:
             return events
     raise RuntimeError(
-        f"authentik events: still more pages after {AUTHENTIK_PAGE_CAP}; refusing a partial count"
+        f"authentik events: still more pages after {cap}; refusing a partial count"
     )
 
 
@@ -327,13 +344,23 @@ def fetch(path: str):
         return json.loads(answer.read())
 
 
-def measure(public: set[str], now: datetime | None = None, opener=urllib.request.urlopen) -> Snapshot:
+def measure(public: set[str], now: datetime | None = None, previous: Snapshot | None = None,
+            opener=urllib.request.urlopen) -> Snapshot:
     """One full poll. Raising here is how a failure keeps the old timestamp.
 
     The cluster is always read; authentik only when `AUTHENTIK_TOKEN` is set. A
     token that is present but cannot be read raises, so both the previous counts
     and the success timestamp stay where they were — a failed read must never
     look like a quiet day.
+
+    The two authentik windows are not symmetrical. The narrow one is what
+    `AuthentikSignInFailures` reads, so it is read first and a failure there is
+    fatal. The wide one is a report, and a day too large to walk must not take the
+    narrow count down during the very burst that made it large: on failure it keeps
+    its last value (or none) and the freshness stamp stops, which says "the
+    24-hour view is stale" without pretending the 15-minute one is. On a first poll
+    with nothing to carry, the wide failure is fatal like any other, because a
+    partly-read stack has no measurement to publish.
     """
     now = now or datetime.now(timezone.utc)
     documents = fetch(INGRESS_ROUTE_URL).get("items") or []
@@ -341,13 +368,23 @@ def measure(public: set[str], now: datetime | None = None, opener=urllib.request
     pods = fetch(PODS_URL).get("items") or []
     token = os.environ.get("AUTHENTIK_TOKEN", "").strip()
     signins = None
+    stamp = now.timestamp()
     if token:
-        signins = SignIns(
-            count_outcomes(fetch_authentik(token, now, 15, opener=opener)),
-            count_outcomes(fetch_authentik(token, now, 24 * 60, opener=opener)),
-        )
+        narrow = count_outcomes(fetch_authentik(token, now, 15, opener=opener))
+        try:
+            wide = count_outcomes(
+                fetch_authentik(token, now, 24 * 60, cap=AUTHENTIK_WIDE_PAGE_CAP, opener=opener)
+            )
+        except Exception as error:  # noqa: BLE001 — reported, and the narrow count stands
+            if previous is None or previous.signins is None:
+                raise
+            print(f"authentik 24h window not read, keeping its last value: {error}",
+                  file=sys.stderr, flush=True)
+            wide = previous.signins.last_24h
+            stamp = previous.last_success
+        signins = SignIns(narrow, wide)
     return Snapshot(
-        counted.routes, counted.ungated, counted.public, privileged(pods), now.timestamp(), signins
+        counted.routes, counted.ungated, counted.public, privileged(pods), stamp, signins
     )
 
 
@@ -394,6 +431,9 @@ def render(state: Snapshot) -> str:
             ("homelab_authentik_signins_15m", "the last 15 minutes", state.signins.last_15m),
             ("homelab_authentik_signins_24h", "the last 24 hours", state.signins.last_24h),
         ):
+            # A window whose fetch was never completed is absent, never zero.
+            if counts is None:
+                continue
             lines += [
                 f"# HELP {name} Sign-in attempts in {window}, by outcome.",
                 f"# TYPE {name} gauge",
@@ -418,8 +458,10 @@ def poll_forever(public: set[str], interval: int) -> None:
     """Refresh the snapshot on a timer, and never touch it on a failure."""
     global STATE
     while True:
+        with LOCK:
+            previous = STATE
         try:
-            fresh = measure(public)
+            fresh = measure(public, previous=previous)
         except Exception as error:  # noqa: BLE001 — a failed poll is logged, not fatal
             print(f"poll failed, keeping the last snapshot: {error}", file=sys.stderr, flush=True)
         else:
