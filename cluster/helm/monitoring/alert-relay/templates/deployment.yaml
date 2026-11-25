@@ -35,8 +35,10 @@ spec:
               value: {{ .Values.vikunja.base | quote }}
             - name: ALERTS_PROJECT
               value: {{ .Values.vikunja.project | quote }}
-            - name: COMMENT_COOLDOWN_SECONDS
-              value: {{ .Values.commentCooldownSeconds | quote }}
+            - name: ALERTS_VIEW
+              value: {{ .Values.vikunja.view | quote }}
+            - name: ALERTS_BACKLOG_BUCKET
+              value: {{ .Values.vikunja.backlogBucket | quote }}
             - name: VIKUNJA_TOKEN
               valueFrom:
                 secretKeyRef:
