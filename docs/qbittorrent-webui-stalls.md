@@ -422,6 +422,12 @@ The chart still renders `qbittorrent-temp` and mounts it at `/downloads-temp`; n
 more. Card 783 removes the claim, its template, its helper and its mount, and the note in
 `cluster/helm/backup/values.yaml` that explains why it was never backed up.
 
+Ten minutes later the bill arrived: the exporter stopped answering at **20:54** and started again at
+**21:16**, with one container restart in between (the pod's first since 20:09). The relocation ran
+first — about 100 GB back onto the export and 96 GB of unlinks on `sda` — so that stall is the burst
+and the steady churn together, not a clean test of either. What it does show is the shape of the trade:
+the same load that froze `sda` is taken by the export without complaint, and still costs a stall.
+
 ### What a stall looks like from outside
 
 Thirty minutes of samples, one every two minutes, across both of the stalls above. Times are
