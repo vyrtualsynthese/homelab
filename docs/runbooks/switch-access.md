@@ -207,6 +207,14 @@ lives in the `monitoring/mktxp-conf` Secret. That is the same defect this page e
 `deploy`, on the account that predates it; it is filed as its own card rather than changed here,
 because mktxp is a running service and the move needs its egress address pinned.
 
+## The plaintext services are still on
+
+Both switches answer on `ftp` (21), `telnet` (23) and `www` (80), measured on 2026-11-25, while
+`www-ssl` is disabled. Telnet and FTP hand the admin password across the LAN in clear text, and
+nothing uses either: the collector and `deploy` sign in over SSH on 22, mktxp reads over the API on
+8728, and Winbox covers what `www` would. Turning them off is card 752 and changes nothing this page
+creates — `deploy` never needs them.
+
 ## Rotate a key, or retire the account
 
 1. **Rotate:** replace `/home/netcfg/.ssh/switch-deploy`, then `/user ssh-keys remove [find user=deploy]`
