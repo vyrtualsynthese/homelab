@@ -1,13 +1,13 @@
 # Alerts: the rules, the silences and the gaps
 
 > **In one line.** Every alert rule in Grafana's two `homelab-core` groups, what each one protects,
-> why five silences exist, the pattern a rule must follow to fire at all, and the holes nobody
-> watches.
+> why the two remaining silences exist, the pattern a rule must follow to fire at all, and the holes
+> nobody watches.
 >
 > **Use it when** an alert fired and you want to know what it means, you are writing or editing a
-> rule, or you are asking whether something is monitored at all · **Verified** 2026-11-22 · **Kind:** reference
+> rule, or you are asking whether something is monitored at all · **Verified** 2026-11-25 · **Kind:** reference
 >
-> **Sources** the live rules, read from Grafana's API on 2026-11-22 ·
+> **Sources** the live rules, read from Grafana's API on 2026-11-25 ·
 > `cluster/helm/monitoring/grafana/values.yaml`, `docs/observability-conventions.md`
 
 The overview — what runs where, its sizing, and how to query the stack:
@@ -17,7 +17,8 @@ The overview — what runs where, its sizing, and how to query the stack:
 
 Grafana unified alerting, folder `Homelab`, **two rule groups split by cadence
 on 2026-11-18**: `homelab-core-fast` at **60 s** (21 rules) and `homelab-core` at
-**300 s** (28 rules). **49 rules**, one contact point, two routes by severity.
+**300 s** (29 rules). **50 rules**, one contact point, and three child routes: two by severity, one
+on `board=card`.
 
 The split rule is the `for` duration: a rule sits in the fast group when its `for`
 is 5 minutes or less, or when it reports that something is down and its `for` is
@@ -36,7 +37,10 @@ before the split, 20.5 after.
 **Delivery**: contact point `discord-homelab` (type `discord`).
 `group_by [alertname, instance]`, `group_wait 30s`, `group_interval 5m`.
 Warnings repeat every **12 h**; a child route matching `severity="critical"`
-repeats every **1 h**. The webhook URL is not readable through the API (it is a
+repeats every **1 h**. A third child matches `board=card` and repeats every **8760 h** — Grafana
+stores it as `1y`. A rule carrying that label is one a person wants told once: the notice lands in
+Discord and as a card on the `alerts` board, and nothing follows while the condition holds. The
+webhook URL is not readable through the API (it is a
 secure field), so the contact point is never rewritten by automation. The Discord
 webhook exists only in that contact point.
 
@@ -56,7 +60,8 @@ added on 2026-11-22):**
 | `KubeStateMetricsDown` | `absent(up{service=...} == 1)` | 5m | critical | inactive |
 | `NodeFilesystemReadOnly` | filesystem mounted read-only | 5m | critical | inactive |
 | `MonitoringDown` | `1 - up{job="prometheus"}`; `execErrState: Alerting` | 5m | critical | inactive |
-| `DriveNeedsReplacement` | SMART failed, exit != 0, <10 % life, or pending sectors | 10m | critical | **firing** on `nas /dev/sdf` |
+| `DriveWorn` (`bg5bcigrw9xxcb`) | rated life under 10 %, or smartctl exit bit 32 — the error log holds records, nothing is failing yet | 1h | warning | **pending** on `nas /dev/sdf` |
+| `DriveFailing` (`eg5bcfrf3qs5cf`) | SMART failed, a pending or offline-uncorrectable sector, or exit bits 1–16 / 64 — the damage bits | 10m | critical | inactive |
 | `ScrapeTargetDown` | any non-node target down, including the edge Pis' SMART and Docker exporters; Prometheus and kube-state-metrics excluded (own rules) | 15m | warning | inactive |
 | `NodeCpuHigh` | >90 % by host | 15m | warning | inactive |
 | `NodeMemoryHigh` | >90 % of `MemAvailable` | 15m | warning | inactive |
@@ -275,9 +280,16 @@ value `0` when true, and the threshold condition is "above 0" — so it can neve
 fire. Rules must return a **positive value when firing**: `1 - up`,
 `replicas - ready`, `0 - predict_linear(...)`, `1 - kube_node_status_condition`,
 or an explicit `> 85` / `> 55` / `> 80` inside the expression. The original set
-had `NodeDown` and `MonitoringDown` silently dead this way, and
+had `NodeDown` and `MonitoringDown` silently dead this way, and the retired
 `DriveNeedsReplacement` survived only because the failing drive also reported
 `exit_code = 32`.
+
+**The drive rules split on 2026-11-25: one asks, one pages.** `DriveWorn` reads
+life under 10 % or smartctl's exit bit 32 — a history of errors, with SMART still passing and no
+sector waiting to be remapped — and tells a person once, because a worn drive can be replaced on a
+quiet afternoon. `DriveFailing` reads the signals that mean move the data now: SMART failed, a
+pending or offline-uncorrectable sector, or the exit-code damage bits. The split is why the
+`/dev/sdf` silence could go: a warning that arrives once does not need suppressing.
 
 **`GpuNotAllocatable` watches the scheduler resource, not the card.** The card stays usable through
 the `nvidia` runtime class after a restart, so `GpuTemperatureHigh` and Plex are unaffected and
@@ -369,10 +381,10 @@ covers the pod's `:9100` scrape going quiet while the pod still answers.
   and the action it would ask for (a new node) is already the plan.
   `NodeTemperatureHigh` is one host-agnostic rule, so a silence per host beats
   narrowing the expression.
-- Until 2026-12-12: `alertname="DriveNeedsReplacement"` with the `nas /dev/sdf`
-  labels — the drive is known dead
-  ([`docs/audit/ansible-hosts.md`](../audit/ansible-hosts.md)) and waiting on a
-  replacement. Only the notification is suppressed; the rule still fires.
+- **Removed 2026-11-25 — the silence on `DriveNeedsReplacement` went with the rule.** The drive
+  `nas /dev/sdf` is still known dead and waiting on a replacement
+  ([`docs/audit/ansible-hosts.md`](../audit/ansible-hosts.md)), but it is now a `DriveWorn` warning
+  that asks once a year rather than a critical that had to be muted.
 - **Removed 2026-11-19 — the silence on `nfs-ssd` can go.** Until then one silence read
   `pod=~"nfs-ssd-nfs-subdir-external-provisioner-.*"`: that pod could not mount
   `192.168.1.41:/mnt/ssd0/nfs` because the export did not exist on `nas`, it belonged to no chart
