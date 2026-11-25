@@ -115,26 +115,38 @@ a chart value, and it should carry `--max-time 10` so a future route fault costs
 than two minutes. Set it under Tools → Options → Downloads → *Run external program on torrent
 finished*.
 
-## The three claims
+## The two claims, and one host path
 
-| Mount | Claim | Owner |
+| Mount | What backs it | Owner |
 |---|---|---|
-| `/config` | `qbittorrent-config` | this chart, `local-path`, `2Gi` |
-| `/downloads` | `pvc-nfs-qbittorrent-download-nfs-subdir-external-provisioner` | the `nfs-qbittorrent-download` Application — **not this chart** |
-| `/config` (sidecar) | `qbittorrent-vpn-config` | this chart, `local-path`, `128Mi` |
+| `/config` | claim `qbittorrent-config` | this chart, `local-path`, `2Gi` |
+| `/downloads` | host path `/mnt/ultrafaststorage/nfs` | the `nas` host, through `storage.downloads.hostPath` |
+| `/config` (sidecar) | claim `qbittorrent-vpn-config` | this chart, `local-path`, `128Mi` |
 
-`/downloads` is the one claim left on NFS here, and it is media rather than configuration: the
-queue is written by qBittorrent and read by unpackerr and the *arrs, and `docs/charts/README.md`
-puts NFS on shared data only. Its name is the live one, so it is named by value and mounted, never
-created; renaming it is data loss.
+`/downloads` is the export root, and the pod reads and writes it **from `nas` itself**, where the
+directory already is. The *arrs, unpackerr and FileBrowser keep mounting the same directory through
+the `nfs-qbittorrent-download` Application; this chart no longer references that claim at all. A
+`hostPath` rather than a claim because the export root exists already, and a `local-path` claim would
+create a subdirectory beside it that no NFS client would read. `type: Directory` makes a missing
+export fail the pod instead of creating an empty tree and downloading into it.
+
+The reason is the Web UI stall, and it is measured rather than guessed: on `streaming` the app's
+~2,000 cycles a second of open, 16 KiB write and close made the NFS client leave a page waiting to
+be written for an I/O nothing performs, and the thread serving the Web UI waited on it for six
+minutes fifty seconds. On a local filesystem the same load did not wedge it — the 35 minutes the
+export spent on a local claim on `streaming` answered the API in 14 ms throughout — and the failure
+there was the disk under it, a 25,241-hour BX500 at 24-50 MB/s, not the local path. `nas` writes the
+export from its own NVMe at 456 MB/s. The whole record is
+[`docs/qbittorrent-webui-stalls.md`](../../../../docs/qbittorrent-webui-stalls.md), the move is
+[`docs/runbooks/qbittorrent-to-nas.md`](../../../../docs/runbooks/qbittorrent-to-nas.md).
 
 `/config` was the exception to the `local-path` rule, and it was the case the rule exists for:
 `app/preferences` reads that directory on every exporter scrape, and on NFS it blocked for seconds
-at a time, taking the WebUI and every API client with it (see
-[`docs/qbittorrent-webui-stalls.md`](../../../../docs/qbittorrent-webui-stalls.md)). It moved on
-2026-11-25 (board card 758), keeping its name — `qbittorrent-config`, the `<fullname>-config` the
-contract asks for. The old NFS export is retained on `nas` as the rollback copy until the migration
-has been observed; nothing mounts it.
+at a time, taking the WebUI and every API client with it. It moved on 2026-11-25 (board card 758),
+keeping its name — `qbittorrent-config`, the `<fullname>-config` the contract asks for. The old NFS
+export is retained on `nas` as the rollback copy until the migration has been observed; nothing
+mounts it. It moved again on 2026-11-26, to the node the app now runs on, with its contents copied
+across; the runbook above is the order.
 
 The WireGuard claim holds `wg0.conf` and the peer keys: **deleting the release deletes the tunnel
 identity** and a new peer has to be registered with the VPN provider. The config claim holds the
@@ -163,9 +175,10 @@ by accident — the second failure is worse, because it would break with the log
 A TCP probe fails when nothing is listening, which is the case a restart can fix. It is still a
 gamble with data, and the chart carries it knowingly: a restart does not re-run `wait-for-downloads`,
 so a probe firing while the downloads export is unready is how torrents have been dropped before. It
-stayed during the 2026-11 stall only because that stall had a cause outside the app — the config claim
-on NFS, moved on 2026-11-25 — and it restarted the container 15 times in 12 h while it lasted.
-Readiness would add nothing: the NFS mount is checked by the `wait-for-downloads` init container at
+stayed during the 2026-11 stall only because that stall had a cause outside the app — the NFS client
+under `/downloads`, which the move to `nas` takes away — and it restarted the container 15 times in
+12 h while it lasted.
+Readiness would add nothing: the export mount is checked by the `wait-for-downloads` init container at
 startup, and the torrent session has no status endpoint to ask.
 
 ## Resources
@@ -252,7 +265,8 @@ from here; it stays debt until upstream adds a level.
 - The Deployment rolls by itself: the pod template changed. `strategy: Recreate` means a short
   outage of the WebUI, and an in-flight download is not affected — qBittorrent checkpoints to its
   config claim.
-- The three claims are unchanged, so there is no first-start step and no data move. A **rebuilt**
+- The two claims and the `/downloads` host path are unchanged on an ordinary upgrade, so there is no
+  first-start step and no data move. A **rebuilt**
   config volume starts with no `/config/ui` and no `qBittorrent.conf`: the installer fetches the UI
   from the cached archive or GitHub and sets the preference, so it needs nothing here. It does need
   the bypass preferences above re-applied, and a **deleted** WireGuard claim needs the tunnel
@@ -261,6 +275,7 @@ from here; it stays debt until upstream adds a level.
 
 ## Uninstalling
 
-Deleting the release deletes the `qbittorrent-vpn-config` claim with it. Take a copy of the WireGuard
-keys first if the tunnel has to survive. The two NFS claims belong to other Applications and are
-untouched.
+Deleting the release deletes the `qbittorrent-vpn-config` and `qbittorrent-config` claims with it.
+Take a copy of the WireGuard keys first if the tunnel has to survive, and of the config claim if the
+torrent list does. `/downloads` is a directory on `nas`, not an object of this release: nothing here
+deletes it, and the *arrs keep reading it over NFS.

@@ -650,12 +650,55 @@ clear it, because the wedged state lives in the node's NFS client, which every n
 joins.
 
 
+## The fix: the app leaves the NFS client, 2026-11-26
+
+Everything above points the same way, and none of it points at throughput, the server, or the network.
+
+- Every recorded stuck stack was NFSv4-specific — `nfs4_do_close`, `nfs4_run_open_task` — or a page
+  left in writeback for an I/O nothing performs. Nothing in the stack was in qBittorrent's own code.
+- `retrans` stayed 0, `nfsd` on `nas` was idle, and the other six consumers of the same export kept
+  working throughout. A saturated line or a failing disk has neither shape.
+- A synthetic replay of the same pattern at seven times the rate did not wedge the export. So the
+  trigger is not the volume of writes; it is the app's own pattern of open, 16 KiB write and close,
+  through this client.
+- On a local filesystem the pattern did not wedge it: 35 minutes of real downloads on a `local-path`
+  claim answered the API in 14 ms throughout. What failed in that attempt was the disk underneath —
+  `streaming`'s 25,241-hour BX500, at 24–50 MB/s — not the local path itself.
+
+So the app moves to the machine that exports the downloads, and mounts the export as a directory on
+that machine. `nas` writes `/mnt/ultrafaststorage/nfs` from its own NVMe, the same disk that already
+answers the other clients at 456 MB/s. The chart change is `nodeSelector: nas` plus
+`storage.downloads.hostPath`; the two configuration claims follow the pod, because a `local-path`
+claim is bound to the node that first mounted it. The procedure, with the rollback, is
+[`runbooks/qbittorrent-to-nas.md`](runbooks/qbittorrent-to-nas.md).
+
+**What was not chosen, and why.** NFSv3 instead of 4.2, and `lookupcache=none` on the downloads mount,
+are both plausible and both weaker: neither has evidence behind it here, both need the same
+coordinated restart of seven consumers, and the second needs a volume recreated because mount options
+come from the volume once it exists. They leave the client in the write path, which is where every
+stack that was caught points. `DisableOSCache` was already tested and did not help.
+
+**What this does not claim.** It does not make downloads faster and it does not explain the server
+half: the one `close()` that never returned was on the client, and whether `nfsd` on `nas` was serving
+that file at the time is still the open question above. If the stall comes back with the app on `nas`
+and `/downloads` a local path, the NFS client is out of the picture and what is left is qBittorrent
+itself — which is the answer the next catch would be worth having.
+
+**The two complaints, answered separately.** "Unreachable from outside" was the stall, not a routing
+change: `qbittorrent.kub.local` is `lan-only` behind the authentik gate by design, and it answered
+`302` to the sign-in page throughout. "Downloads are slow" was the app, not the line: over the six
+hours before the last wedge the reported download rate had a median of 28 MB/s with 800 peer
+connections open, and no rate limit set. One `firewalled` sample appeared in that window beside
+`connected`, which is worth a look on its own — a tunnel that does not forward its listening port
+still downloads, from outbound peers only — but it is not what took the UI down.
+
+
 ## The gate, and the way back
 
-The config-move card closes when `scrape_duration_seconds` stays under a second for 24 h and the
-torrent list is still 379. **The gate failed at its first observation**: the stall was back six
-minutes after the cutover. It is now the test for whatever clears the wedge, not evidence that the
-move did. Both queries, unchanged:
+The card closes when `scrape_duration_seconds` stays under a second for 24 h and the torrent list is
+still 379. **The gate failed at its first observation**: the stall was back six minutes after the
+config claim moved, which is what ruled the config volume out. It is now the test for the move to
+`nas`, and it is unchanged — same two queries, same 24 hours, same torrent count. Both queries:
 
 ```bash
 # the ceiling over the last day

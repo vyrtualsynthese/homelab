@@ -419,6 +419,21 @@ kernel's 127 s SYN retry budget, 154 times in 24 h. A `vpn-cluster-routes` init 
 `vpn.clusterRoutes`, so a second in-cluster dependency is one line. The hook should also carry
 `--max-time 10`, which is an app preference, not a chart value.
 
+2026-11-26: the chart now owns both claims it mounts, and it no longer references an NFS claim at all.
+`/config` moved to `local-path` on 2026-11-25 (card 758) and to `nas` with the pod the next day; the
+WireGuard claim went with it, because a `local-path` claim is bound to the node that first mounted it
+and a pod elsewhere leaves it `Pending`. `/downloads` is now `storage.downloads.hostPath`, the export
+root `/mnt/ultrafaststorage/nfs` mounted from the host, with `type: Directory` so a missing export
+fails the pod rather than creating an empty tree — the pod is pinned to `nas`, which is the node that
+exports it, and the *arrs keep mounting the same directory over NFS. The reason is the Web UI stall:
+with the app writing through an NFS client, one `close()` stopped returning and took the API with it,
+and the same load on a local filesystem did not. A `local-path` claim would have created a
+subdirectory beside the export root that no NFS client reads, which is why this one mount is a host
+path. [`../how-it-works/storage.md`](../how-it-works/storage.md) states the rule,
+[`../qbittorrent-webui-stalls.md`](../qbittorrent-webui-stalls.md) carries the evidence, and
+[`../runbooks/qbittorrent-to-nas.md`](../runbooks/qbittorrent-to-nas.md) is the move, including the
+two claims' copy and its rollback.
+
 ### ashuvidz-website
 
 As of 2026-11-18: the public site, the one public chart taken through the pass, and the one that went

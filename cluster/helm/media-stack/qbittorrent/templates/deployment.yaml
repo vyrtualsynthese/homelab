@@ -45,8 +45,8 @@ spec:
       initContainers:
         {{- if .Values.waitForDownloads.enabled }}
         # Runs as the same uid as qBittorrent (PUID) so the probe sees exactly
-        # what the main container will see on the NFS export. Bounded wait:
-        # after 2 minutes it proceeds and lets qBittorrent start anyway.
+        # what the main container will see on the export's directory. Bounded
+        # wait: after 2 minutes it proceeds and lets qBittorrent start anyway.
         - name: wait-for-downloads
           image: {{ .Values.waitForDownloads.image }}
           securityContext:
@@ -197,8 +197,9 @@ spec:
                   BEGIN { line = "WebUI\\AlternativeUIEnabled=true"; key = "WebUI\\AlternativeUIEnabled=" }
                   /^\[/ {
                     if (inprefs && !done) { print line; done = 1 }
-                    # Tolerate a CRLF file: qBittorrent writes LF, but the claim is
-                    # on NFS and an editor elsewhere can change that. Without this,
+                    # Tolerate a CRLF file: qBittorrent writes LF, but the claim
+                    # is a directory on the node and an editor elsewhere can
+                    # change that. Without this,
                     # the key would land in a second [Preferences] section.
                     inprefs = ($0 == "[Preferences]" || $0 == "[Preferences]\r")
                     print
@@ -353,8 +354,9 @@ spec:
           persistentVolumeClaim:
             claimName: {{ include "app.configClaimName" . }}
         - name: downloads
-          persistentVolumeClaim:
-            claimName: {{ required "storage.downloads.existingClaim is required" .Values.storage.downloads.existingClaim }}
+          hostPath:
+            path: {{ required "storage.downloads.hostPath is required" .Values.storage.downloads.hostPath }}
+            type: Directory
         - name: dev-tun
           hostPath:
             path: {{ .Values.vpn.tunDevice }}

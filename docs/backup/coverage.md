@@ -21,6 +21,8 @@ nothing, which is a defect rather than a quiet night: the verifier fails it.
 | `grafana` | `monitoring` | nas | sqlite |
 | `crowdsec-db-pvc` | `security` | nas | sqlite |
 | `crowdsec-config-pvc` | `security` | nas | files |
+| `qbittorrent-vpn-config` | `media-stack` | nas | files |
+| `qbittorrent-config` | `media-stack` | nas | files |
 
 ## `nodes-nuc0` — 0 5 * * *
 
@@ -55,8 +57,6 @@ nothing, which is a defect rather than a quiet night: the verifier fails it.
 | `seerr-config` | `media-stack` | streaming | sqlite |
 | `tautulli-config` | `media-stack` | streaming | sqlite |
 | `maintainerr-config` | `media-stack` | streaming | sqlite |
-| `qbittorrent-vpn-config` | `media-stack` | streaming | files |
-| `qbittorrent-config` | `media-stack` | streaming | files |
 | `plex-config` | `media-stack` | streaming | sqlite |
 | `kavita-config` | `media-stack` | streaming | sqlite |
 | `calibre-web-automated-config` | `media-stack` | streaming | sqlite |
