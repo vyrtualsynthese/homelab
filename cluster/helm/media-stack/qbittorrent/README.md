@@ -158,6 +158,24 @@ resume data: deleting it loses the torrent list.
 announce port (`torrent.port`, 18515) is opened on the container as TCP and UDP and forwarded through
 the tunnel; it is deliberately not on the Service, because nothing in the cluster talks to it.
 
+**The port is open from the internet, and that is the provider's doing.** Nothing here creates the
+forwarding: qBittorrent's own UPnP/NAT-PMP is off (`upnp: false`), and the sidecar is a plain
+`wg-quick` client with no port-forward client in it, so the rule that forwards 18515 is one the VPN
+provider holds, not one this chart declares. Verified 2026-11-26 (board card 541): a TCP connect from
+outside to `109.235.50.35:18515`, the tunnel's exit address and the port qBittorrent reports as
+`listen_port`, succeeded while 18514 and 18516 were refused; the pod's own socket table showed inbound
+`ESTABLISHED` connections on `10.191.241.13:18515` from public peer addresses; and
+`/api/v2/transfer/info` answered `connection_status: connected` with
+`last_external_address_v4: 109.235.50.35`. Two consequences:
+
+- `qbittorrent_transfer_connection_status` reads `firewalled` for a few minutes after a restart and
+  then returns to `connected`. That is the normal wait for the first incoming peer, not a broken
+  forward — a forward that is gone stays `firewalled`.
+- The forwarding is provider-side state, not GitOps state. Rebuilding the tunnel identity
+  (`qbittorrent-vpn-config`) is the moment to check it again, and nothing in the cluster notices if
+  it is missing: the client keeps downloading from outgoing peers only, and no alert watches that
+  metric.
+
 The WebUI really does listen on 8080: the previous values carried 32400, Plex's port left over from
 the scaffold, and the Service template ignored the value, so the two could disagree silently.
 
