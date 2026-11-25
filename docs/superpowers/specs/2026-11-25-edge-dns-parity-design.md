@@ -83,6 +83,12 @@ in front of the Pis. The security baseline's finding stays open with that pointe
 
 - No moving address, keepalived, or wg-easy database replica — the next design.
 - No metrics board — the design after that.
+- **One measured correction, applied during the rollout.** Pi-hole v6 defaults `misc.etc_dnsmasq_d`
+  to false, so `/etc/dnsmasq.d/02-my-wildcard-dns.conf` had been ignored since the v6 move: the six
+  local overrides worked only through the `FTLCONF_misc_dnsmasq_lines` copy in `pihole.env`, which
+  this change empties. The rendered settings file now carries `FTLCONF_misc_etc_dnsmasq_d=true`, and
+  all six answer again from `127.0.0.1` on both hosts.
+
 - No change to the blocklist strategy. The 26 lists and 418/418 domains are identical on both hosts,
   so parity does not depend on settling it; the overlap between the hand-added hagezi list and the
   firebog set stays a separate decision.

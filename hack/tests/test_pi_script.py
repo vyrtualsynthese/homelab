@@ -522,3 +522,13 @@ def test_every_setup_flag_is_initialised():
     for flag in sorted(used):
         assert f"{flag}=0" in local, flag
     assert "--force-recreate wg-easy smartctl-exporter" in text
+
+
+def test_the_shared_settings_turn_on_the_dnsmasq_include():
+    """Pi-hole v6 defaults misc.etc_dnsmasq_d to false, so the address= file was
+    dead on both hosts — the overrides only worked through the env copy that
+    settings now clears. Measured on rbp1: with the key, all six resolve again."""
+    settings = rendered_section("rbp0", SETTINGS_HEADER)
+
+    assert "FTLCONF_misc_etc_dnsmasq_d=true" in settings
+    assert "\nFTLCONF_misc_dnsmasq_lines=\n" in settings

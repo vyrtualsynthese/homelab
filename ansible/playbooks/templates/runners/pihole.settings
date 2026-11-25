@@ -30,9 +30,16 @@ FTLCONF_dns_listeningMode=ALL
 # day to DNS4EU for its own neighbours.
 FTLCONF_dns_revServers=true,192.168.1.0/24,192.168.1.1,local
 
+# Pi-hole v6 stops loading /etc/dnsmasq.d unless it is told to: the key
+# defaults to false, so the address= overrides in 02-my-wildcard-dns.conf were
+# silently dead. They had survived because a copy also sat in the old
+# FTLCONF_misc_dnsmasq_lines, which this file now owns and empties.
+FTLCONF_misc_etc_dnsmasq_d=true
+
 # The address=/... overrides live in etc-dnsmasq.d/02-my-wildcard-dns.conf,
-# which is rendered and compared like this file. This empty value clears the
-# copy the old environment carried, so there is one source, not two.
+# which is rendered and compared like this file, and mounted by the compose. The
+# empty value below clears the copy the old environment carried, so there is one
+# source, not two.
 FTLCONF_misc_dnsmasq_lines=
 
 # How long the query database keeps its detail.

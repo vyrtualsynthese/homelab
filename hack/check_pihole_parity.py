@@ -70,6 +70,15 @@ def diff_panels(source: dict, replica: dict) -> list[str]:
     return lines
 
 
+def count_settings(snapshot: dict) -> int:
+    """How many leaf settings and blocklist entries the snapshot holds.
+
+    `flatten` yields (key, value) pairs, and a value can be a list, so the pairs
+    go into a dict: a set of them would raise on the first list it met.
+    """
+    return len(dict(flatten(snapshot)))
+
+
 def _call(base: str, method: str, path: str, body=None, sid=None):
     data = json.dumps(body).encode() if body is not None else None
     request = urllib.request.Request(base + path, data=data, method=method)
@@ -108,8 +117,7 @@ def main() -> int:
 
     differences = diff_panels(source, replica)
     if not differences:
-        settings = len(set(flatten(source)))
-        print(f"result: OK ({settings} settings and both blocklist sets agree)")
+        print(f"result: OK ({count_settings(source)} settings and both blocklist sets agree)")
         return 0
     print(f"rbp1 differs from rbp0 in {len(differences)} place(s):")
     for line in differences:
