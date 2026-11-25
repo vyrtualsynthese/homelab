@@ -27,13 +27,14 @@ One reads and one writes, and neither can do the other's job.
 | Account | Group, and what it carries | Signs in with | May |
 |---|---|---|---|
 | `audit` | `audit` = `read,ssh`; no source-address limit | key only | print, export, monitor — nothing that writes |
-| `deploy` | `deploy` = `read,write,ssh,test`; `address=192.168.1.0/24` | key only | change configuration, and nothing about users |
+| `deploy` | `deploy` = `read,write,ssh,test,ftp`; `address=192.168.1.0/24` | key only | change configuration, carry files, and nothing about users |
 | `admin` | built-in `full` | password | everything; this page does not touch it |
 | `monitoring` | `mktxp` = `read,api,test`; `address=192.168.1.27/32` | password, over the API | what mktxp collects, from `nuc0` only — no `sensitive`, no `reboot` |
 
 A RouterOS *policy* is one permission badge: `read` is "run a print or an export", `write` is "change
-the configuration", `ssh` is "open a session over SSH", and `policy` is "create an account or change
-what a group may do".
+the configuration", `ssh` is "open a session over SSH", `ftp` is "read and write files on the device
+(whatever the transport: FTP, SCP or SFTP)", and `policy` is "create an account or change what a group
+may do".
 
 **`deploy` holds no `policy`.** That is the whole fence: an account that passes the gate can change a
 firewall rule, and cannot make itself an administrator. `admin` keeps the password login it already
@@ -176,7 +177,7 @@ both of which this switch accepts — then in the admin session:
 
 ```
 /file print
-/user group add name=deploy policy=read,write,ssh,test
+/user group add name=deploy policy=read,write,ssh,test,ftp
 /user add name=deploy group=deploy address=192.168.1.0/24 password="<random>" disabled=yes
 /user ssh-keys import public-key-file=switch-deploy.pub user=deploy
 /user enable deploy
@@ -192,10 +193,18 @@ does not hand out a guessable account — an empty password is a blank login, a 
 **Created disabled and enabled last**, so the account cannot authenticate by password in the window
 between its creation and the import.
 
-Expected, from `/user group print`: `deploy` reads exactly
-`ssh,read,write,test,!local,!telnet,!ftp,!reboot,!policy,!winbox,!password,!web,!sniff,!sensitive,!api,!romon,!dude,!tikapp`.
+Expected, from `/user group print detail`: `deploy` reads exactly
+`ssh,ftp,read,write,test,!local,!telnet,!reboot,!policy,!winbox,!password,!web,!sniff,!sensitive,!api,!romon,!dude,!tikapp`.
 Every policy the group does not name is revoked, which is why the list is worth reading rather than
 trusting: no `policy`, no `password` of its own, and no `api` — SSH is the only door.
+
+`ftp` is the file-transfer badge, and the gate cannot work without it: the undo and the change file
+are uploaded with `scp` and the timer imports them from the device. RouterOS answers an upload from an
+account without it by refusing the transfer's exec channel (`exec request failed on channel 0`) while
+the key authenticates normally, so the failure looks like a login fault and is not one. Measured on
+2026-11-25, first without it (the refusal) and then with it (the files land); `write` alone is not
+enough. It grants file transfer and nothing else: the rest of the list still denies `policy`, `password`
+and `api`.
 
 Expected, from `/user ssh-keys print`: one row, `user` `deploy`, its comment `switch-deploy` as the
 owner, 4096 bits. Measured on both switches on 2026-11-25.

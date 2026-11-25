@@ -35,7 +35,7 @@ holding the file the run is about to import.
 
 The script signs in as `deploy` with the key at `/home/netcfg/.ssh/switch-deploy` — `switch-deploy`,
 not `switches-deploy`. The gate runs it as `netcfg` with `HOME=/home/netcfg`, which is the account the
-key belongs to. The account is `deploy`, holding `read`, `write`, `ssh` and `test` — card #485's,
+key belongs to. The account is `deploy`, holding `read`, `write`, `ssh`, `test` and `ftp` — card #485's,
 proved in [`switch-access.md`](switch-access.md). The binary backup needs `policy` on top of those,
 and its refusal is why that one step is allowed to fail.
 
