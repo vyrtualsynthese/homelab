@@ -50,7 +50,10 @@ spec:
             - name: http
               containerPort: {{ .Values.securityExporter.service.port }}
           # Ready only after one successful poll, so a pod that cannot read the
-          # cluster leaves the Service instead of serving plausible zeros.
+          # cluster leaves the Service rather than serving plausible zeros. That
+          # gate governs the Service, not the scrape: Prometheus finds this pod by
+          # its annotation and does not consult readiness, which is why the page
+          # itself publishes nothing but the timestamp until the first good read.
           readinessProbe:
             httpGet:
               path: /healthz
