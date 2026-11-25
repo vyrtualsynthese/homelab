@@ -4,10 +4,11 @@
 # it describes, and `expectedNote` says when the live side was last read.
 #
 # Read on 2026-11-25 through the read-only MCP ServiceAccount: 73 IngressRoute
-# objects live, 9 public hosts, and 9 privileged workloads. The rendered number is
-# counted by hack/gen_docs.py, not typed in; the one route that explains the
-# difference between the two is named in docs/reference/routes.md, and that page
-# and this block move together, which test_security_exporter.py enforces.
+# objects live, 9 public hosts, and 9 privileged workloads. `ingressRoutes` is the
+# object count, the unit `kubectl get ingressroute | wc -l` prints; the number the
+# charts render is counted by hack/gen_docs.py, not typed in, and the one route
+# that explains the gap is named in docs/reference/routes.md, which
+# test_security_exporter.py ties to `LIVE_INGRESS_ROUTES`.
 #
 # `privilegedWorkloads` counts distinct controllers with at least one Running pod
 # that declares a privileged container, in `containers` or `initContainers`. The
