@@ -81,9 +81,14 @@ On the machine the agent's shell runs on:
 sudo useradd --create-home --home-dir /home/netcfg --shell /usr/sbin/nologin netcfg
 sudo chmod 700 /home/netcfg
 sudo install -d -o netcfg -g netcfg -m 700 /home/netcfg/.ssh
-sudo -u netcfg ssh-keygen -t ed25519 -N '' -C "switch-deploy" \
+sudo -u netcfg ssh-keygen -t rsa -b 4096 -N '' -C "switch-deploy" \
   -f /home/netcfg/.ssh/switch-deploy
 ```
+
+**RSA, not ed25519, and the switch decides that.** RouterOS 6.49 rejects an ed25519 key with
+`unable to load key file (wrong format?)` — measured on 2026-11-25 — because ed25519 import arrived
+in 7.x. The card asks for ed25519; the device runs 6.49, so the pair is RSA 4096 until card 696 moves
+them to version 7, and the swap is then a new pair and one import.
 
 `useradd` leaves the home at `0750` on Ubuntu, where the group may traverse it; the `chmod` is what
 makes the account's home unreadable to anything but `netcfg` itself.
@@ -94,7 +99,8 @@ answers no from the agent's shell, and the `.ssh` directory cannot be listed.
 
 ## 2. Create the account, on each switch
 
-Copy the public half to the switch, then in the admin session:
+Copy the public half to the switch — `scp switch-deploy.pub admin@192.168.1.11:` or FTP as `admin`,
+both of which this switch accepts — then in the admin session:
 
 ```
 /file print
