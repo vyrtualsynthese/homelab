@@ -17,7 +17,7 @@ The overview — what runs where, its sizing, and how to query the stack:
 
 Grafana unified alerting, folder `Homelab`, **two rule groups split by cadence
 on 2026-11-18**: `homelab-core-fast` at **60 s** (21 rules) and `homelab-core` at
-**300 s** (29 rules). **50 rules**, **two contact points**, and four child routes: two by severity and
+**300 s** (30 rules). **51 rules**, **two contact points**, and four child routes: two by severity and
 two on `board=card` — one to each contact point.
 
 The split rule is the `for` duration: a rule sits in the fast group when its `for`
@@ -89,6 +89,7 @@ added on 2026-11-22):**
 | `PostgresDumpStale` | the `databases/postgres-dump` CronJob's last success is more than 26 h old | 10m | warning | inactive |
 | `PostgresDumpAbsent` | no `kube_cronjob_status_last_successful_time` series for `databases/postgres-dump`, so it is gone or has never succeeded | 5m | warning | inactive |
 | `RestoreDrillOverdue` | newest restore-drill timestamp older than 90 days | 1h | warning | inactive |
+| `SnapraidParityStale` | no completed snapraid sync on `nas` for 7 days, or no marker at all | 10m | warning | inactive |
 | `FluentBitDroppingLogs` | output batches abandoned after retries, or records dropped from the logger queue | 10m | warning | inactive |
 | `CertificateExpiring` | newest Traefik cert per SAN <21 days | 1h | warning | inactive |
 | `TraefikRouterErrorRate` | 5xx share above 10 % per router, with a 0.01 req/s floor so one failed probe on an idle router cannot fire it | 10m | warning | inactive |
@@ -211,6 +212,28 @@ the metric is missing — so the fault is the exporter, not a missed drill; the 
 and the proof is on card #406. When two drills share a UTC date, either stream may be named:
 `topk(1, …)` breaks a tie arbitrarily, and the alert reports the newest *date*, not one stream.
 
+**`SnapraidParityStale`** (2026-11-25) covers the other half of the same question, one layer below the
+backups. SnapRAID keeps a redundant copy — the **parity** — of the six data disks on `nas`, and a
+nightly run (a **sync**) brings that copy up to date; a disk lost while the parity is old costs every
+write since the last finished sync. `ansible/roles/snapraid` writes the Unix time of each sync that
+exited cleanly into `/var/lib/node-exporter/textfile/snapraid.prom`, and a second node-exporter on
+`nas`, with **every default collector off**, serves that value alone as
+`homelab_snapraid_last_sync_timestamp_seconds`. The chart is `snapraid-exporter`, at
+`cluster/helm/monitoring/snapraid-exporter`.
+Why a second exporter rather than the one already running: `--collector.textfile.directory` is a
+**single** directory, and the DaemonSet's is `/restore-drills`; adding a host directory "beside" it is
+not possible, and moving the drill log would break its refresh.
+
+The value is a **timestamp, not an age**. The expression is
+`time() - homelab_snapraid_last_sync_timestamp_seconds`, so a runner that stops makes the number grow
+instead of freezing the last age it wrote, and the **7-day** comparison sits in the threshold for the
+reason given under the drill rule. Seven days is a week of missed or failed nights, and longer than
+the first full sync, which reads 13 TiB and resumes across nights. The rule never calls
+`snapraid status`: it refuses while a sync holds the **content lock** (the lock a running sync keeps
+on the array's own files), which is exactly when someone would want it. A **`[no value]` summary**
+means the marker or the exporter is missing — this rule reports no data as Alerting — not that a sync
+is slow: the runner's failure is a number that keeps growing, the exporter's is a number that is gone.
+
 **`PodPending` and `PodNotStarting` split one symptom by cause.** `Pending` covers
 two different faults: a pod that was never scheduled (unbound claim, node selector,
 resource request) and a pod that was scheduled but whose container never started
@@ -274,12 +297,17 @@ its logger queue. Both counters were unscraped until then, so the pipeline that
 ships every line Loki stores could lose lines while every measurement was taken
 from what did arrive.
 
-`noDataState` is `OK` on every rule **except `LokiSilent`** and `RestoreDrillOverdue`, which are
-`Alerting` on no data: `LokiSilent`'s expression returns an empty vector when no lines arrive, and
-`RestoreDrillOverdue`'s metric disappears with its ConfigMap, which is exactly the condition each
-must report. `MonitoringDown` and `LokiSilent` also raise on evaluation errors (`execErrState:
+`noDataState` is `OK` on every rule **except `LokiSilent`**, `RestoreDrillOverdue` and
+`SnapraidParityStale`, which are `Alerting` on no data: `LokiSilent`'s expression returns an empty
+vector when no lines arrive, `RestoreDrillOverdue`'s metric disappears with its ConfigMap, and
+`SnapraidParityStale`'s disappears with the host marker — each exactly the condition it must report.
+`MonitoringDown` and `LokiSilent` also raise on evaluation errors (`execErrState:
 Alerting`), so a Prometheus restart or a dead Loki produces one message rather than none;
 `RestoreDrillOverdue` does the same, because a rule that cannot read the log must not report health.
+`SnapraidParityStale` is the one exception in the other direction: its `execErrState` is `OK`,
+because a query that fails is the monitoring stack's fault — `MonitoringDown` and
+`GrafanaAlertEvaluationFailing` own that — while a *missing* value is the marker's, and the no-data
+state is what reports it.
 
 **The rule pattern matters.** A PromQL comparison such as `up == 0` returns the
 value `0` when true, and the threshold condition is "above 0" — so it can never
@@ -409,6 +437,12 @@ reports `firing` on the Health dashboard.
 
 ## Known gaps
 
+- **No host log line reaches Loki.** Fluent Bit tails `/var/log/containers/*.log` only, with
+  `nodeAccess: false` and no host mount, so systemd, kernel and cron lines stay in each host's own
+  journal: a failed unit, an OOM kill from outside a container, or the snapraid runner's own output is
+  nowhere in the cluster. `SnapraidParityStale` reads a marker file for that reason rather than a log
+  line, and shipping the host journal is a decision of its own — host mounts, volume and retention on
+  the one pipeline that carries every namespace — not a step of that card.
 - **`PVCFillingUp` is blind for `local-path` claims.** The rule is NFS-only by
   construction; why the metric cannot exist for a `local-path` claim is in
   [`metrics.md`](metrics.md#exporter-quirks). The node filesystem rule covers the
