@@ -33,6 +33,18 @@ traefik:
     # corrupt it and re-request every name.
     kind: Deployment
     replicas: 1
+    additionalVolumes:
+      - name: traefik-access-log
+        hostPath:
+          # A directory, not a file, and `DirectoryOrCreate` rather than
+          # `Directory`: the kubelet refuses to mount a Directory that does not
+          # exist, and a router that will not start is the house offline to add a
+          # log. Created here as root 0755, then corrected to 2770 65532:65532 by
+          # the Ansible role; until that role runs, Traefik logs "Unable to
+          # create access logger" and serves on without writing a line, which
+          # the Phase 0 gate catches.
+          path: /var/log/traefik
+          type: DirectoryOrCreate
 
   # Recreate, not a rolling update: a rolling one runs both pods together for a
   # few seconds, which is two certificate owners again.
@@ -82,42 +94,62 @@ traefik:
     limits:
       memory: 256Mi
 
-  # A per-request record, with the request URL and the client address removed.
-  # Traefik's `RequestPath` is the URI, and v3.7.3+ can drop its query string
-  # (`queryParameters` below) but not its path. The path alone still carries
-  # FileBrowser's `/share/<hash>` capability links, and Loki has no authentication
-  # and a 30-day retention, so the whole field is dropped. Plex's `?X-Plex-Token=`
-  # and OIDC `?code=` never reach the log, and the query-parameter drop is a second
-  # lock in case a field is ever re-added.
+  # A per-request record. The line lands in a host file so CrowdSec can read the
+  # path and the user agent; Fluent Bit removes those two keys before Loki, which
+  # has no authentication and a 30-day retention.
   #
-  # `defaultMode: keep` keeps everything else, so a line is wider than the six
+  # `defaultMode: keep` keeps everything else, so a line is wider than the seven
   # names below suggest: the requested hostname, the method, the entry point, both
   # statuses and durations, sizes, the retry count, the TLS version and cipher, and
-  # the pod address Traefik forwarded to. No path, no query, no header, no client
-  # address. `docs/observability-conventions.md` lists the fields in full.
+  # the pod address Traefik forwarded to. `docs/observability-conventions.md` lists
+  # the fields in full.
   accessLog:
     enabled: true
     format: json
-    # Hand each line to a writer goroutine through a 100-slot channel instead of
-    # writing on the request path. There is no timed flush in Traefik: the delay
-    # between a request and its line in Loki is Fluent Bit's, a few seconds.
+    # The line is written to a file instead of stdout, and that is the whole
+    # design: CrowdSec needs the path and the user agent to recognise probing,
+    # and the 30-day store must not hold either. Fluent Bit tails this file and
+    # removes those two keys before Loki (cluster/helm/monitoring/fluent-bit),
+    # so the store keeps exactly the field list it had, plus the client address.
+    #
+    # Measured 2026-11-22: ~15 MB a day, 769 bytes a line. `bufferingSize` hands
+    # each line to a writer goroutine, so a slow disk delays the log, never a
+    # response.
+    filePath: /var/log/traefik/access.log
     bufferingSize: 100
     fields:
-      # The chart always renders this key, so it must be set; `keep` is the
-      # default and the five names below are the exceptions.
       defaultMode: keep
       names:
-        RequestPath: drop
-        ClientAddr: drop
-        ClientHost: drop
-        ClientPort: drop
+        # Both, and not by accident. `crowdsecurity/traefik-logs` reads
+        # `ClientHost` into `remote_addr` — the field CrowdSec turns into the
+        # decision's source address — and uses `ClientAddr` as dest_addr.
+        # Un-dropping only one of them leaves the agent parsing nothing.
+        ClientHost: keep
+        ClientAddr: keep
+        # Kept for the file's two readers; removed by Fluent Bit before Loki.
+        RequestPath: keep
+        # A URL in the query string can carry a FileBrowser share token or a
+        # Plex token. It stays out of the log entirely, which is also why
+        # `RequestPath` carries no `?...` from v3.7.3 on.
         ClientUsername: drop
+        ClientPort: drop
+        # The Referer header is only a core field in the CLF format, but this is
+        # where it would live if Traefik started writing it.
+        RequestReferer: drop
       headers:
-        # Already the default; written out so a future reader sees that no
-        # Authorization or Cookie header is logged.
+        # One header, kept on purpose: the user agent is how a scanner is
+        # recognised. Everything else — Cookie, Authorization, Referer — is
+        # dropped, so a stolen session never reaches this file or the store.
         defaultMode: drop
+        names:
+          User-Agent: keep
       queryParameters:
         defaultMode: drop
+
+  # The other half of the mount: volumes live under `deployment`, mounts here.
+  additionalVolumeMounts:
+    - name: traefik-access-log
+      mountPath: /var/log/traefik
 
   # The chart does not expose serversTransport.maxIdleConnsPerHost, and its v3
   # default of 0 means Go's DefaultMaxIdleConnsPerHost, two idle connections per
