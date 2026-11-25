@@ -6,7 +6,10 @@
 #
 # Two decisions, both recorded here rather than in a commit nobody reads:
 #   The runner is retired, not ported. Its whole job was sync, a scrub and a mail
-#   this homelab cannot send from a host; the journal already reaches Loki.
+#   this homelab cannot send from a host. The journal is not shipped either:
+#   Fluent Bit tails container logs only, so nothing from this host reaches Loki.
+#   What the parity alert reads instead is the marker this role's runner writes
+#   (the `snapraid-exporter` Application).
 #   03:17 keeps it out of the day and ahead of the 05:00 backups, which read the
 #   same disks.
 - name: Refuse to run anywhere but the node that holds the array
@@ -39,6 +42,18 @@
     executable: /bin/bash
   register: snapraid_crontab
   changed_when: "'removed' in snapraid_crontab.stdout"
+
+# The parity alert reads the marker the runner writes here. A node-exporter pod
+# pinned to this node serves this directory through its textfile collector, and
+# the rule compares the timestamp with now. The directory is created here rather
+# than by the pod so a missing one is a failed role, not a silently empty metric.
+- name: Create the directory the parity marker is written to
+  ansible.builtin.file:
+    path: /var/lib/node-exporter/textfile
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
 
 - name: Install the runner
   ansible.builtin.copy:

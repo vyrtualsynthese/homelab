@@ -1,7 +1,8 @@
 #!/bin/bash
 # SnapRAID's nightly work without /opt/snapraid-runner, which needs a Python that
 # is not installed on this host and never will be again. The result goes to the
-# journal: it already reaches Loki, and this homelab has no mail path of its own.
+# journal, and into the marker below, which is what the parity alert reads: this
+# homelab has no mail path of its own and the journal is not shipped to Loki.
 set -euo pipefail
 
 # A sync of a 51 TB array outlives the night it starts in, and SnapRAID refuses a
@@ -17,9 +18,29 @@ fi
 
 rc=0
 
+marker=/var/lib/node-exporter/textfile/snapraid.prom
+
+# A timestamp, not an age: the rule subtracts it from now, so a run that stops
+# makes the number grow instead of freezing it. `rename(2)` inside one directory
+# is atomic, so a scrape sees the old body or the new one, never half of either.
+write_marker() {
+  local tmp="$marker.$$"
+  {
+    printf '# HELP homelab_snapraid_last_sync_timestamp_seconds Unix time of the last snapraid sync that finished without an error.\n'
+    printf '# TYPE homelab_snapraid_last_sync_timestamp_seconds gauge\n'
+    printf 'homelab_snapraid_last_sync_timestamp_seconds %s\n' "$(date +%s)"
+  } >"$tmp" && mv "$tmp" "$marker" && return 0
+  rm -f "$tmp"
+  return 1
+}
+
 logger -t snapraid "sync starting"
 /usr/bin/snapraid sync
 logger -t snapraid "sync finished"
+
+# Not fatal: the monthly scrub must not be lost to it, and a marker that stops
+# being written is already what the alert reports.
+write_marker || logger -t snapraid "ERROR could not write $marker"
 
 # `status` exits 2 while blocks are unsynced, which on a live array means a file
 # changed during the sync — the normal outcome on a NAS that is being written to,

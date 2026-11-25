@@ -441,6 +441,29 @@ def test_snapraid_skips_a_night_that_overlaps_a_running_sync():
     )
 
 
+def test_snapraid_writes_the_parity_marker_after_a_successful_sync():
+    """The alert reads a timestamp the runner writes. An age written once a night
+    would be frozen by the dead runner it exists to expose."""
+    script = (ANSIBLE / "roles/snapraid/files/snapraid-sync.sh").read_text()
+    assert "write_marker ||" in script, "the call must tolerate a failed write and log it"
+    assert script.index("write_marker ||") > script.index("/usr/bin/snapraid sync"), (
+        "the marker must be written after the sync it reports"
+    )
+    assert "homelab_snapraid_last_sync_timestamp_seconds" in script
+    tasks = (ANSIBLE / "roles/snapraid/tasks/main.yml").read_text()
+    assert "/var/lib/node-exporter/textfile" in tasks, "the role owns the directory"
+
+
+def test_snapraid_role_does_not_claim_the_journal_reaches_loki():
+    """Fluent Bit tails /var/log/containers/*.log only: no host line reaches Loki.
+    A comment that says otherwise sends the next reader to a store that never held it."""
+    for path in (
+        ANSIBLE / "roles/snapraid/tasks/main.yml",
+        ANSIBLE / "roles/snapraid/files/snapraid-sync.sh",
+    ):
+        assert "already reaches Loki" not in path.read_text(), path
+
+
 def test_readme_no_longer_claims_the_layer_does_not_work():
     text = (REPO / "ansible/README.MD").read_text()
     assert "does not currently work" not in text
