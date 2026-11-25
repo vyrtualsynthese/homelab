@@ -52,6 +52,8 @@ def remote_path(arg):
 
 
 def main(argv):
+    with (state / "scp-argv").open("a") as log:
+        log.write(" ".join(argv) + "\n")
     ops = operands(argv)
     if len(ops) < 2:
         sys.stderr.write("fake-scp: a source and a destination are required\n")

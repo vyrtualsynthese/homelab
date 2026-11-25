@@ -34,6 +34,11 @@ SWITCH_CHANGE_CONNECT_TIMEOUT="${SWITCH_CHANGE_CONNECT_TIMEOUT:-5}"
 SWITCH_CHANGE_CMD_TIMEOUT="${SWITCH_CHANGE_CMD_TIMEOUT:-20}"
 SWITCH_CHANGE_POLL="${SWITCH_CHANGE_POLL:-5}"
 SWITCH_CHANGE_REBOOT_ALLOWANCE="${SWITCH_CHANGE_REBOOT_ALLOWANCE:-120}"
+# RouterOS 6.49 (both switches, until card #696) signs a key login with the SHA-1 `ssh-rsa`
+# algorithm, which OpenSSH 8.8 and later dropped from the default list: without this the handshake
+# ends at "Permission denied (publickey,password)" on a key the device already trusts. Card #696
+# moves the switches to RouterOS 7, whose ed25519 key needs no allowance, and removes this line.
+SWITCH_CHANGE_SSH_KEY_ALGORITHM="PubkeyAcceptedAlgorithms=+ssh-rsa"
 
 usage() { awk 'NR > 1 && /^#/ { print; next } NR > 1 { exit }' "${BASH_SOURCE[0]}"; exit 0; }
 die() { printf 'switch-change.sh: %s\n' "$1" >&2; exit 2; }
@@ -83,6 +88,7 @@ ros() {                                   # ros <host> <routeros command...>
   local host="$1"; shift
   timeout "$SWITCH_CHANGE_CMD_TIMEOUT" ssh \
     -i "$SWITCH_CHANGE_KEY" -o BatchMode=yes \
+    -o "$SWITCH_CHANGE_SSH_KEY_ALGORITHM" \
     -o ConnectTimeout="$SWITCH_CHANGE_CONNECT_TIMEOUT" \
     -o StrictHostKeyChecking=accept-new \
     -o LogLevel=ERROR \
@@ -95,6 +101,7 @@ put() {                                   # put <host> <local file> <remote name
   local host="$1" file="$2" name="$3"
   timeout "$SWITCH_CHANGE_CMD_TIMEOUT" scp -O -q \
     -i "$SWITCH_CHANGE_KEY" -o BatchMode=yes \
+    -o "$SWITCH_CHANGE_SSH_KEY_ALGORITHM" \
     -o ConnectTimeout="$SWITCH_CHANGE_CONNECT_TIMEOUT" \
     -o StrictHostKeyChecking=accept-new \
     -o LogLevel=ERROR \
@@ -653,7 +660,7 @@ on_interrupt() {
     say ""
     say "interrupted: the undo timer $ARMED_ENTRY is still armed on $ARMED_HOST for $ARMED_START"
     say "the change may or may not have landed; that timer puts the old configuration back at $ARMED_START"
-    say "to cancel it now: ssh -i $SWITCH_CHANGE_KEY $SWITCH_CHANGE_USER@$ARMED_HOST"
+    say "to cancel it now: ssh -i $SWITCH_CHANGE_KEY -o $SWITCH_CHANGE_SSH_KEY_ALGORITHM $SWITCH_CHANGE_USER@$ARMED_HOST"
     say "  /system scheduler remove [find name=\"$ARMED_ENTRY\"]"
   fi
   exit 1

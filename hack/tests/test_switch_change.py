@@ -152,6 +152,11 @@ class Fake:
         p = self.state / "commands"
         return p.read_text().splitlines() if p.exists() else []
 
+    def argv(self, tool):
+        """Every argv the fake `ssh` or `scp` was called with, one line per call."""
+        p = self.state / f"{tool}-argv"
+        return p.read_text().splitlines() if p.exists() else []
+
     def fire_on_arm(self, value="1"):
         """Have the fake run the entry as soon as it is added, before the first poll."""
         self._write("fire_on_arm", str(value))
@@ -559,6 +564,20 @@ class RunTests(unittest.TestCase):
         self.assertIn("pvid=20", done.stdout)               # the diff, not the export
         self.assertEqual(f.ros("/system scheduler print detail"), "")
         self.assertEqual([n for n in f.files() if n.startswith(("undo-", "change-"))], [])
+
+    def test_every_call_carries_the_routeros_6_signature_allowance(self):
+        # Both switches run RouterOS 6.49, which signs a key login with the SHA-1 `ssh-rsa` algorithm
+        # that OpenSSH 8.8 and later dropped from the default list. A call without the allowance ends
+        # at "Permission denied (publickey,password)" on a key the device already trusts, which is
+        # what the first live run hit.
+        with fake("ssh-rsa", after_change=CHANGED) as f:
+            done = f.script(["--target", "crs326", "--change", str(CHANGES / "set-pvid.rsc"), "--yes"])
+            calls = {tool: f.argv(tool) for tool in ("ssh", "scp")}
+        self.assertEqual(done.returncode, 0, done.stderr)
+        for tool in ("ssh", "scp"):
+            self.assertTrue(calls[tool], f"the fake {tool} was never called")
+            for line in calls[tool]:
+                self.assertIn("PubkeyAcceptedAlgorithms=+ssh-rsa", line, (tool, line))
 
     def test_a_timer_that_survives_its_removal_is_named_instead_of_claimed_gone(self):
         # The device is asked after the removal. An entry that is still there will run its undo at its

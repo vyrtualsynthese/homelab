@@ -56,9 +56,9 @@ things that do not exist yet, and this design covers both:
 - `netcfg` cannot traverse `/home/vsynthese` or write under `/tmp/opencode`; both paths have to change
   for the gate, and neither can be widened.
 - `crs309` (`192.168.1.43`) still runs RouterOS 6.49, which signs with SHA-1 RSA; #485's proof needed
-  `PubkeyAcceptedAlgorithms=+ssh-rsa`, which `switch-change.sh` does not pass. The first `--dry-run`
-  will say whether that is still needed. If it is, one line is added, commented with card #696 as the
-  removal.
+  `PubkeyAcceptedAlgorithms=+ssh-rsa`. **Measured on 2026-11-25 by the first `--dry-run`: it is still
+  needed**, the login ended at `Permission denied (publickey,password)`, so one line was added to
+  `ros()` and `put()` with a comment naming card #696, which removes it.
 - Nothing under `cluster/` is touched.
 
 ## Approaches considered
