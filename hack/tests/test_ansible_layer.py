@@ -403,14 +403,15 @@ def test_exports_drop_mnt_and_squash_root():
     assert not any(line.split()[0] == "/mnt" for line in lines), "/mnt must not be exported"
 
 
-def test_the_certificate_store_belongs_to_the_squashed_identity():
-    """Traefik runs as root and writes acme.json. Squashing root without giving
-    that store to 1100 breaks certificate renewal on a delay nobody watches."""
+def test_the_certificate_store_belongs_to_the_identity_that_serves_tls():
+    """Traefik runs as 65532 and keeps acme.json at 0600. The restic job arrives
+    as root over the export, so the chown and the export must both name 65532;
+    1100 would lock the backup out, and widening the mode would stop the router."""
     text = (ANSIBLE / "roles/nfs/tasks/main.yml").read_text()
     assert "/mnt/storage/traefik" in text
-    assert "1100" in text
+    assert "65532" in text
     tpl = (ANSIBLE / "roles/nfs/templates/exports.j2").read_text()
-    assert "anonuid=1100" in tpl, "fsid 8 maps the squashed root back to the writer"
+    assert "anonuid=65532" in tpl, "fsid 8 must map the squashed root to acme.json's owner"
 
 
 def test_the_nfs_role_runs_only_where_the_export_is():
@@ -537,9 +538,11 @@ def test_every_firewall_rule_names_a_source_set_that_resolves():
 
 def test_every_export_maps_the_squashed_root_to_the_writer():
     """Mapping root to `nobody` turns a container's start-up chown into EACCES on
-    files the app itself owns. 1100 is what every writer here runs as."""
+    files the app itself owns. 1100 is what every writer here runs as, except the
+    certificate store, whose writer is Traefik at 65532."""
     for line in export_lines():
-        assert "anonuid=1100" in line and "anongid=1100" in line, line
+        expected = "65532" if line.startswith("/mnt/storage/traefik") else "1100"
+        assert f"anonuid={expected}" in line and f"anongid={expected}" in line, line
 
 
 def test_the_read_back_checks_the_table_not_its_line_count():

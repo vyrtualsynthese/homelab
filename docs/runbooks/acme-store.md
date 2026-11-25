@@ -28,6 +28,11 @@ the OVH API, with Let's Encrypt as the authority. Its state is one file, `acme.j
 | Contents | the `ovhresolver` account registration, then one array entry per certificate |
 | Not in it | the internal `*.kub.local` leaf, which is the Secret `kube-system/local-cert` — see [`internal-ca.md`](internal-ca.md) |
 
+The backup reads it through the same export. `/mnt/storage/traefik` maps a client's root to uid/gid
+`65532` rather than the usual `1100`, because the restic job runs as root and a `0600` file owned by
+`65532` is readable only by its owner; widening the mode instead would stop Traefik from starting.
+The other exports keep `1100`.
+
 The file holds no index of which hostnames are live. A route that sets `tls.certResolver: ovhresolver`
 asks for a certificate; once issued, the entry stays, and Traefik renews every entry it holds until
 it reaches the renewal window (30 days before expiry) whether or not a router still names it. Hosts
