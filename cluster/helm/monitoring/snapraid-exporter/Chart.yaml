@@ -1,0 +1,6 @@
+apiVersion: v2
+name: snapraid-exporter
+description: The SnapRAID runner's last successful sync, served as a node-exporter textfile metric
+type: application
+version: 0.1.0
+appVersion: "1.13.1"
