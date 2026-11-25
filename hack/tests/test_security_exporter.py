@@ -7,7 +7,9 @@ test reads both and fails on a difference.
 """
 
 import json
+import os
 import pathlib
+import shutil
 import sys
 import unittest
 import unittest.mock
@@ -399,3 +401,132 @@ class AuthentikTests(unittest.TestCase):
         # An address is never a label: the per-address view is a Loki query.
         self.assertNotIn("address=", after)
         self.assertNotIn("client_ip=", after)
+
+    def test_a_timestamp_without_an_offset_is_read_as_utc(self):
+        # A naive `created` compared with an aware cutoff raises `TypeError` inside
+        # the page loop, and that exception is not caught there: one such event
+        # would fail every poll for as long as it stays in the retention period.
+        exporter = self.load()
+        self.assertEqual(
+            exporter._created({"created": "2026-11-25T11:59:00"}),
+            datetime(2026, 11, 25, 11, 59, tzinfo=timezone.utc),
+        )
+
+
+class WiringTests(unittest.TestCase):
+    """`measure()` with a token: what moves, what is carried, what is refused."""
+
+    class Answer:
+        def __init__(self, body, status=200):
+            self.status = status
+            self._body = json.dumps(body).encode()
+
+        def read(self):
+            return self._body
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+    def load(self):
+        import importlib.util
+        path = ROOT / "cluster/helm/security/security-exporter/files/exporter.py"
+        spec = importlib.util.spec_from_file_location("security_exporter", path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+
+    def now(self):
+        return datetime(2026, 11, 25, 12, 0, tzinfo=timezone.utc)
+
+    def test_no_token_means_no_signin_family_and_a_successful_cluster_poll(self):
+        exporter = self.load()
+        with unittest.mock.patch.dict(os.environ, {"AUTHENTIK_TOKEN": ""}), \
+             unittest.mock.patch.object(exporter, "fetch", return_value={"items": []}):
+            snapshot = exporter.measure(set(), now=self.now())
+        self.assertIsNone(snapshot.signins)
+        self.assertEqual(snapshot.last_success, self.now().timestamp())
+        self.assertNotIn("homelab_authentik_signins_15m", exporter.render(snapshot))
+
+    def test_a_token_publishes_both_windows_and_moves_the_timestamp(self):
+        exporter = self.load()
+
+        def opener(request, timeout=None):
+            return self.Answer({"results": [
+                {"action": "login_failed", "created": "2026-11-25T11:59:00Z"}],
+                "pagination": {"next": None}})
+
+        with unittest.mock.patch.dict(os.environ, {"AUTHENTIK_TOKEN": "token"}), \
+             unittest.mock.patch.object(exporter, "fetch", return_value={"items": []}):
+            snapshot = exporter.measure(set(), now=self.now(), opener=opener)
+        self.assertEqual(snapshot.last_success, self.now().timestamp())
+        self.assertEqual(snapshot.signins.last_15m["failure"], 1)
+        self.assertEqual(snapshot.signins.last_24h["failure"], 1)
+        page = exporter.render(snapshot)
+        self.assertIn('homelab_authentik_signins_15m{outcome="failure"} 1', page)
+        self.assertIn('homelab_authentik_signins_24h{outcome="failure"} 1', page)
+
+    def test_a_wide_window_that_cannot_be_walked_keeps_counting_the_narrow_one(self):
+        # The narrow window is what the sign-in rule reads. A day too large to walk
+        # must not take it down during the burst that made it large — the wide value
+        # is carried and the freshness stamp stops, which is the signal for it.
+        exporter = self.load()
+        previous = exporter.Snapshot(
+            1, 0, 0, 0, 100.0,
+            exporter.SignIns({"success": 0, "failure": 0, "other": 0},
+                             {"success": 7, "failure": 1, "other": 0}),
+        )
+        calls = {"n": 0}
+
+        def opener(request, timeout=None):
+            calls["n"] += 1
+            if calls["n"] == 1:
+                return self.Answer({"results": [
+                    {"action": "login_failed", "created": "2026-11-25T11:59:00Z"}],
+                    "pagination": {"next": None}})
+            return self.Answer({}, status=500)
+
+        with unittest.mock.patch.dict(os.environ, {"AUTHENTIK_TOKEN": "token"}), \
+             unittest.mock.patch.object(exporter, "fetch", return_value={"items": []}):
+            snapshot = exporter.measure(set(), now=self.now(), previous=previous, opener=opener)
+        self.assertEqual(snapshot.signins.last_15m["failure"], 1)
+        self.assertEqual(snapshot.signins.last_24h["success"], 7)
+        self.assertEqual(snapshot.last_success, 100.0)
+        page = exporter.render(snapshot)
+        self.assertIn('homelab_authentik_signins_15m{outcome="failure"} 1', page)
+        self.assertIn('homelab_authentik_signins_24h{outcome="success"} 7', page)
+
+    def test_a_first_poll_with_no_wide_window_publishes_nothing(self):
+        # Nothing to carry: a partly read stack has no measurement to publish, so
+        # the poll is a failure like any other and the page stays at freshness only.
+        exporter = self.load()
+
+        calls = {"n": 0}
+
+        def first_narrow_then_fail(request, timeout=None):
+            calls["n"] += 1
+            if calls["n"] == 1:
+                return self.Answer({"results": [], "pagination": {"next": None}})
+            return self.Answer({}, status=500)
+
+        with unittest.mock.patch.dict(os.environ, {"AUTHENTIK_TOKEN": "token"}), \
+             unittest.mock.patch.object(exporter, "fetch", return_value={"items": []}):
+            with self.assertRaises(RuntimeError):
+                exporter.measure(set(), now=self.now(), previous=None, opener=first_narrow_then_fail)
+
+    @unittest.skipUnless(shutil.which("helm"), "helm is not installed")
+    def test_the_chart_keeps_the_token_optional(self):
+        # Losing `optional: true` turns the no-token state from "healthy,
+        # posture-only" into `CreateContainerConfigError` — a failure nobody notices
+        # until the Secret is deleted.
+        import subprocess
+        chart = ROOT / "cluster/helm/security/security-exporter"
+        rendered = subprocess.run(
+            ["helm", "template", "test", str(chart), "-f", str(chart / "values.yaml")],
+            capture_output=True, text=True, check=True).stdout
+        documents = [d for d in yaml.safe_load_all(rendered) if d and d.get("kind") == "Deployment"]
+        containers = documents[0]["spec"]["template"]["spec"]["containers"]
+        token = next(e for e in containers[0]["env"] if e["name"] == "AUTHENTIK_TOKEN")
+        self.assertIs(token["valueFrom"]["secretKeyRef"]["optional"], True)

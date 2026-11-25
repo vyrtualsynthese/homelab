@@ -2198,7 +2198,7 @@ def count_outcomes(events):
     return counts
 
 
-def events_url(now, minutes):
+def events_url(now, minutes, page=None):
     since = (now - timedelta(minutes=minutes)).strftime("%Y-%m-%dT%H:%M:%S")
     return (f"{AUTHENTIK_URL}/api/v3/events/events/"
             f"?page_size=1000&ordering=-created&created__gte={urllib.parse.quote(since)}")
@@ -2218,6 +2218,12 @@ def events_url(now, minutes):
   older event.
 - Reaching the page cap before the window is exhausted **raises**: a partial list would publish a
   count that is quietly too small, which reads exactly like a quiet day.
+- The two windows are sized apart, because they are not symmetrical. The 15-minute window is what
+  `AuthentikSignInFailures` reads, so it is read first and a failure there is fatal. The 24-hour
+  window is a report with a cap of 200 pages; when it cannot be walked, it keeps its last value and
+  the freshness timestamp stops, so a day large enough to break the wide walk never silences the
+  narrow count during the burst that made it large. On a first poll with nothing to carry, the wide
+  failure is fatal like any other.
 
 `render()` gains:
 
@@ -2258,20 +2264,27 @@ These two commands are the operator's: the Secret is created by hand and never c
 
 ```bash
 kubectl -n security create secret generic security-exporter-authentik --from-literal=token=$AUTHENTIK_TOKEN
-# The same count the exporter publishes, from the API, so a "0" is a measurement.
-# Every page, because the server caps a page at 100 events, and the window filtered
-# here, because the endpoint has no date parameter. A page past the end answers
-# `404 {"detail": "Invalid page."}`, hence `.results // []`:
+# The same count the exporter publishes, from the API, so a "0" is a measurement —
+# which it is not if the token or the network is bad, hence -f and jq -e:
 SINCE=$(date -u -d '24 hours ago' +%Y-%m-%dT%H:%M:%S)
-for p in $(seq 1 20); do
-  curl -s -H "Authorization: Bearer $AUTHENTIK_TOKEN" \
+PAGES=$(curl -sf -H "Authorization: Bearer $AUTHENTIK_TOKEN" \
+  "https://authentik.kub.home.ashudev.com/api/v3/events/events/?page_size=100&ordering=-created" \
+  | jq -er '.pagination.total_pages') || { echo "cannot read the first page; check the token" >&2; exit 1; }
+for p in $(seq 1 "$PAGES"); do
+  curl -sf -H "Authorization: Bearer $AUTHENTIK_TOKEN" \
     "https://authentik.kub.home.ashudev.com/api/v3/events/events/?page_size=100&page=$p&ordering=-created";
 done | jq -s --arg since "$SINCE" \
-    '[.[] | (.results // [])[] | select(.action == "login_failed" and .created >= $since)] | length'
+  '[.[] | (.results // [])[] | select(.action == "login_failed" and .created >= $since)] | length'
 ```
 
+Every page, because the server caps a page at 100 events; the window filtered here, because the
+endpoint has no date parameter; `-f` and `jq -e` so a bad token or an unreachable host fails loudly
+instead of printing `0`. `total_pages` is read first so the loop stops at the last page rather than
+collecting `404 Invalid page.` bodies.
+
 Expected: the same number as `homelab_authentik_signins_24h{outcome="failure"}` after one poll, once
-the pod has restarted with the token in place.
+the pod has restarted with the token in place. Verified on 2026-11-25: `0`, and exit 1 with a bad
+token.
 
 - [ ] **Step 5: Run and commit**
 
@@ -2281,7 +2294,7 @@ git add cluster/helm/security/security-exporter hack/tests/test_security_exporte
 git commit -m "🚀 feature: count sign-in outcomes without putting an address in Prometheus"
 ```
 
-Expected: `8 passed` — Task 8's three, Task 9's three, and these two.
+Expected: green. The file held 26 tests after this task: Task 8's three, Task 9's ten, and these.
 
 ---
 
