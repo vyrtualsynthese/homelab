@@ -3,3 +3,5 @@
 #   uv run --with-requirements hack/tests/requirements.txt python -m pytest -q hack/tests
 pytest
 pyyaml
+# The snapraid parity read has its `failed_when` condition evaluated, not grepped.
+jinja2
