@@ -3,15 +3,16 @@
 > **In one line.** The Web UI and API go dead because qBittorrent's own write to `/downloads` wedges
 > the NFS client on `streaming`: one page is left waiting to be written for an I/O nothing performs,
 > and every `close()` of that file then blocks forever. Moving `/config` off NFS did not stop it and
-> neither did exporting the download volume `async`; in-flight downloads move to local disk on
-> 2026-11-25, and the disk they moved to stalls the app the same way; they went back to the export the
-> same evening, which restores the load that wedges (board cards 758, 777 and 782).
+> neither did exporting the download volume `async`; in-flight downloads moved to local disk on
+> 2026-11-25, and the disk they moved to stalls the app the same way, so they went back to the export
+> the same evening, which restores the load that wedges (board cards 758, 777 and 782).
 >
 > **Use it when** qBittorrent's Web UI hangs, the exporter stops being scraped, or you want the
 > evidence gathered on 13 and 25 November, the suspects that were cleared, and what cleared the hang
-> · **Verified** 2026-11-25 20:30: three live stalls read from `/proc`, the client waiting on an I/O
+> · **Verified** 2026-11-25 21:20: three live stalls read from `/proc`, the client waiting on an I/O
 > that nothing performs while the server and the network measured clean, then a write burst that
-> pinned the node's own SSD · **Kind:** record
+> pinned the node's own SSD; the router's access log and two 15-minute replays of the app's own write
+> pattern against the export · **Kind:** record
 >
 > **Sources** `cluster/helm/media-stack/qbittorrent/values.yaml`,
 > `cluster/helm/media-stack/qbittorrent-exporter/values.yaml`, live `up` and
@@ -23,9 +24,9 @@ stall came back under it too. The in-flight downloads moved off the export the s
 *The fix: in-flight downloads off the export*, and the WebUI stalled again within three minutes —
 from the local disk the temp path landed on (*The temp path landed on the node's slowest disk*). They
 went back to the export's NVMe at 20:44 (*The decision*), which is the load the wedge comes from:
-that is a trade, not a fix.
-Documented 2026-11-13, measured again on 2026-11-25 (board cards 758, 777 and 782). The exporter's alert stays silenced until it is closed or handed over; the
-note under *Why the app was not changed until now* says what to do with that silence.
+that is a trade, not a fix. Documented 2026-11-13, measured again on 2026-11-25 (board cards 758, 777
+and 782). The exporter's alert stays silenced until it is closed or handed over; the note under
+*Why the app was not changed until now* says what to do with that silence.
 
 ## What is seen
 
@@ -421,16 +422,85 @@ The chart still renders `qbittorrent-temp` and mounts it at `/downloads-temp`; n
 more. Card 783 removes the claim, its template, its helper and its mount, and the note in
 `cluster/helm/backup/values.yaml` that explains why it was never backed up.
 
+### What a stall looks like from outside
+
+Thirty minutes of samples, one every two minutes, across both of the stalls above. Times are
+Europe/Paris, as the app's own log writes them.
+
+| Observation | Value |
+|---|---|
+| stalls | 20:14–20:20 and 20:35–20:37, each cleared by itself in two to four minutes |
+| restarts | **0** |
+| healthy windows | exporter scrape 0.085–0.108 s, API 0.026–0.039 s, 323 torrents |
+
+Three measurements taken while the app was frozen, and one around them:
+
+| Where | Observation |
+|---|---|
+| the router's access log (`/var/log/traefik/access.log` on `streaming`) | the only routes that hang are qBittorrent's. In the eleven minutes of the 20:12 stall the router logged 340 requests — `authentik`, `prometheus`, `vikunja`, the public sites — and qBittorrent accounted for all six that crossed five seconds |
+| qBittorrent's own static files | `GET /`, `/sw.js` and `/workbox-c35ca7bb.js` hung for 60–492 s. They are served from the program's own image and never touch the export |
+| a write probe from inside the pod, between stalls | 200 MB written with `fsync` in 0.8 s; 200 files created and unlinked in under 100 ms each. The same probe from `sonarr`: 0.4 s |
+| `nas` during the 20:12–20:20 stall | load 1.2–1.6, nothing blocked at the samples taken |
+
+So every consumer on the node keeps answering while qBittorrent's HTTP workers are blocked: the frozen
+part is the process. That holds for both stalls, and it is what makes them one symptom with two
+different waits inside it — NFS writeback in the earlier ones, `balance_dirty_pages` on `sda` in these.
+
+One of the two is also a user's own action, recorded because it is easy to misread as automation: at
+20:14:10 a delete of 61 torrents arrived from a browser as `POST /api/v2/torrents/delete` from
+`192.168.1.13` (Firefox on Windows), 2.6 KB of ids, and it answered at 20:20:20 — **six minutes ten
+seconds** — with the content deleted along with the entries.
+
+### A replay of the write pattern does not wedge the export
+
+To hold the export and the client apart from the app, a privileged pod on `streaming` mounted the same
+`192.168.1.41:/mnt/ultrafaststorage/nfs` — the kernel hands back the mount that already exists, so it
+is the same NFS client instance and the same TCP connection — and replayed the shape the app produces.
+
+| Replay | Load | Result |
+|---|---|---|
+| 1, 15 min | 12 threads: `open`, 16 KiB `pwrite` at a random offset, `close`, on 64 preallocated files | 12.9 M writes, **14,376 a second** (seven times the app's), worst call **1.0 s**, none over 5 s, 0 errors |
+| 2, 15 min | 8 writers as above plus 6 readers on the same files — the seed-while-download shape — 300 files, `fallocate` instead of `ftruncate` | 16,000 operations a second (7,000 writes, 9,000 reads), worst call **1.0 s**, none over 5 s, 0 errors |
+
+The two mount points are worth stating plainly: a second mount of the same `server:/path` reuses the
+kernel's existing superblock, so an experiment cannot give itself different mount options on the live
+export — `vers=4.1`, `nconnect=4` and `lookupcache=none` are silently ignored, and testing one means
+its own export path on `nas`.
+
+Throughput measured the same way, quiet times only:
+
+| Test | Result |
+|---|---|
+| 19 GB copied from `/downloads` to `/downloads-temp` | **39.5 s**, 485 MB/s |
+| 2 GB written sequentially to `/downloads` | 4.4 s, 456 MB/s |
+
+The 485 MB/s matters against the 24 MB/s above: `sda` is not a slow device at rest, and one sequential
+copy satisfies it. It collapsed under the relocation because that was thousands of random 16 KiB writes
+across 22 torrents at once, which is the pattern a download actually produces.
+
+For the export, the replay is a negative result and an important one: it carried seven times the app's
+write rate for a quarter of an hour, with reads mixed in, without a single call over a second. So the
+wedge is not "many small writes with an open and a close on NFS" by itself. What the replay does not
+have is the app's fd handling and its own locking, which is where the next instrument points.
+
 ### What is still open
 
 - **Settled, and no longer candidates:** `sync` off (tested, wedge returned); ext4 fast-commit (the
   feature is not enabled on this filesystem); a failing disk (SMART clean, no `nvme` error); the
   network and the server (no retransmission, no timeout, `nfsd` idle); the config volume (moved);
   `DiskIOWriteMode=DisableOSCache` (tested, wedge returned).
-- **Untested, and the fix makes it moot for downloads:** whether the client ever *re-sends* the call
-  it is waiting for. `retrans` stayed 0 through both wedges, so the call is not queued again and no
-  timeout fires; `rpcdebug -m rpc -s xprt,trans` on `streaming` is what would show it. Worth running
-  only if the stall returns with the write load off the export.
+- **The next instrument:** whether the client ever *re-sends* the call it is waiting for, and which
+  file it is waiting on. `retrans` stayed 0 through the earlier wedges, so nothing is queued again and
+  no timeout fires; the two `rpcdebug` masks below name the file while the stall is live.
+- **A second cause, on the server, worth its own look.** `nas` carried load average 20–28 from 19:45
+  to 19:55 while both 970 EVO reported idle traffic and the disk queue stayed at 0.04–0.09: two dozen
+  tasks were blocked long enough to move the load average and not long enough to be caught at a
+  sample. The app's 19:52 stall starts inside that window, and it is the only stall tonight that the
+  client cannot explain on its own.
+- **Mount options cannot be tried on the live export.** A second mount of the same
+  `server:/path` reuses the kernel's existing superblock, so `vers=4.1`, `nconnect=4` or
+  `lookupcache=none` are silently ignored — the option has to live on the mount that exists, which
+  means its own export path on `nas` for an experiment.
 - **Still untested — replaced names in the page cache.** `lookupcache=none` on the downloads mount is
   the general form of the `fileid changed` messages: 48 of them today, 39 of them in the 17h hour.
   Changing it means recreating the volume, not editing the chart, because mount options come from the
@@ -438,9 +508,9 @@ more. Card 783 removes the claim, its template, its helper and its mount, and th
 - **Still untested — a stack trace with symbols.** The instrument that names the lock and the line is
   a qBittorrent build that carries its symbols, running under the same NFS volume until the event loop
   parks.
-- **Still untested — the kernel-side shape, if it returns.** The server's `rpcdebug -m nfsd -s file`
-  names every file handle it serves; the client's `rpcdebug -m nfs -s file` names every file it opens.
-  Run both while the `close()` stack is live and the file is named, not inferred.
+- **Still untested — the kernel-side shape.** The server's `rpcdebug -m nfsd -s file` names every
+  file handle it serves; the client's `rpcdebug -m nfs -s file` names every file it opens. Run both
+  while the `close()` stack is live and the file is named, not inferred.
 
 The way out of the app when the event loop is parked is still the kernel-side one: stop the pod, detach
 the pod's NFS mounts in the node's mount namespace, start the pod. A container restart alone does not
@@ -474,10 +544,11 @@ the export that is still on `nas`: stop the pod, point the chart's `storage.conf
 again (a `files` copy back is the same Job in reverse), and start it. Nothing on the export has been
 deleted or modified by the move.
 
-The in-flight downloads have the same way back, and it is one preference pair rather than a copy:
-clear `Session\TempPathEnabled` (WebUI: Downloads, "Keep incomplete torrents in"), or point it back at
-`/downloads/incomplete/`. Nothing is lost either way — `qbittorrent-temp` holds unfinished torrents,
-which the client re-fetches. The claim itself can stay: an unused empty directory costs nothing.
+The in-flight downloads have the same way back, and it is one preference pair rather than a copy. They
+are back where they started — `Session\TempPath=/downloads/incomplete`, `Session\TempPathEnabled=true`
+— so the whole setting is that pair, applied through `app/setPreferences`, no restart and no copy.
+Nothing is lost either way: an unfinished torrent is re-fetched. `qbittorrent-temp` is empty and used
+by nothing; card 783 removes the claim.
 
 ## Why the app was not changed until now
 
