@@ -32,11 +32,13 @@ own restic repository inside it, so a broken stream cannot damage another's hist
 | `nodes-nuc0` | `backup-node-nuc0` | 05:00 | ten claims from nine applications, the node's `/etc` |
 | `nodes-streaming` | `backup-node-streaming` | 05:30 | the media stack's configuration, the node's `/etc` |
 | `nfs` | `backup-nfs` | 06:00 | syncthing, koillection's uploads, the ACME store, the qBittorrent config |
-| `edge-rbp0` | `hosts-pi.sh stream` on `rbp0` | 04:30 UTC | Pi-hole's `gravity.db` and its blocklist config, wg-easy's database (panel account and peers), the host's boot files |
-| `edge-rbp1` | the same on `rbp1` | 04:30 UTC | the same |
+| `edge-rbp0` | `hosts-pi.sh stream` on `rbp0` | 04:30 | Pi-hole's `gravity.db` and its blocklist config, wg-easy's database (panel account and peers), the host's boot files |
+| `edge-rbp1` | the same on `rbp1` | 04:30 | the same |
 
-The two edge rows run on the hosts' own clocks, which are UTC; every other row is local time in
-Paris, where the cluster's nodes are. The Pis are described below.
+The two edge rows are the hosts' own timers. The unit pins `Europe/Paris` in the calendar, so they
+fire at the same instant as the cluster rows: `rbp0`'s clock is `Europe/Paris` and `rbp1`'s is
+`Etc/UTC`, and the zone in the unit is what keeps that from mattering. A 15-minute random delay
+spreads the timer's start. The Pis are described below.
 
 The syncthing application's own chart carried a restic CronJob until 2026-11-20. It pointed at an
 AWS bucket that never existed, so it had never written a snapshot; the `nfs` row above is what
@@ -116,7 +118,7 @@ newest snapshot is over 26 hours old, over its 1 GiB budget, or missing either d
 It never prunes them; each host prunes its own at 05:30 on Sunday with the chart's 7/4/12 retention,
 so two `forget` runs never race over the lock.
 
-The nightly run is at 04:30 on both hosts, whose clocks are UTC. It stages the stack under
+The nightly run is at 04:30 `Europe/Paris` on both hosts. It stages the stack under
 `/var/lib/pi-backup/tree`, copies every SQLite database through SQLite's own backup API — a live
 `gravity.db` keeps its committed rows in the `-wal` file beside it, so a byte copy is not a backup —
 and hands the tree to restic `0.19.1`. That version is installed as a checksum-verified static

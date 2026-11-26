@@ -58,8 +58,13 @@ ends that.
 ## The shape
 
 ```text
-rbp0 ── systemd timer 04:30 (UTC) ── restic ──▶ s3:…/ashudev-homelab-backup/edge-rbp0
-rbp1 ── systemd timer 04:30 (UTC) ── restic ──▶ s3:…/ashudev-homelab-backup/edge-rbp1
+rbp0 ── systemd timer 04:30 Europe/Paris ── restic ──▶ s3:…/ashudev-homelab-backup/edge-rbp0
+rbp1 ── systemd timer 04:30 Europe/Paris ── restic ──▶ s3:…/ashudev-homelab-backup/edge-rbp1
+
+> **Corrected 2026-11-26.** This diagram first said the timers were UTC, on the assumption that the
+> Pis ran UTC. They do not agree: `rbp0`'s clock is `Europe/Paris` and `rbp1`'s is `Etc/UTC`
+> (`timedatectl show -p Timezone`). The calendar in both units therefore names `Europe/Paris`, so the
+> two hosts fire at the same instant whatever their own clock is set to.
                                                    ▲
 cluster: backup-verify reads both, checks age, contents and budget; prune skips them
 
