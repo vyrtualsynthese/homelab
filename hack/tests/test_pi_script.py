@@ -1274,6 +1274,44 @@ def test_stream_refuses_a_world_readable_credential(tmp_path):
     assert "0600" in out.stderr
 
 
+def test_stream_refuses_an_env_file_a_failed_command_wrote(tmp_path):
+    """What rbp0 did on 2026-11-26: an error box landed in the credential file,
+    sourcing it printed `│: not found`, and restic answered with an invalid
+    Authorization header. The refusal must name the file and the line count."""
+    root = tmp_path / "pi"
+    _pi_fixture(root)
+    (root / "etc/restic/edge.env").write_text(
+        "RESTIC_REPOSITORY=s3:https://example.invalid/bucket/edge-rbp0\n"
+        "RESTIC_PASSWORD=test\n"
+        "AWS_ACCESS_KEY_ID=\n"
+        "│ Error: No value for required variable\n"
+        "│\n"
+        "AWS_SECRET_ACCESS_KEY=\n"
+    )
+
+    out = run("stream", "rbp0", root=root, env=fake_restic(tmp_path))
+    assert out.returncode != 0
+    assert "/etc/restic/edge.env holds 6 lines" in out.stderr, out.stderr
+
+
+def test_verify_names_an_env_file_whose_keys_are_not_the_four(tmp_path):
+    root = tmp_path / "pi"
+    _pi_fixture(root)
+    assert run("setup", "rbp1", root=root).returncode == 0
+    env_file = root / "etc/restic/edge.env"
+    env_file.write_text(
+        "RESTIC_REPOSITORY=s3:https://example.invalid/bucket/edge-rbp1\n"
+        "RESTIC_PASSWORD=test\n"
+        "AWS_ACCESS_KEY_ID=test\n"
+        "AWS_SECRET_KEY_ID=test\n"
+    )
+    env_file.chmod(0o600)
+
+    out = run("verify", "rbp1", root=root)
+    assert out.returncode == 1
+    assert "AWS_SECRET_KEY_ID" in out.stderr, out.stderr
+
+
 def test_stream_leaves_no_tree_behind_after_a_successful_run(tmp_path):
     root = tmp_path / "pi"
     _pi_fixture(root)
