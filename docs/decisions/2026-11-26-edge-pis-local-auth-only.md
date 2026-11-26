@@ -9,7 +9,7 @@
 >
 > **Sources** [`reference/sso-applications.md`](../reference/sso-applications.md),
 > [`runbooks/pi-reflash.md`](../runbooks/pi-reflash.md),
-> `cluster/helm/authentik/files/app-wg-easy.yaml`, the vault items `wg.rbp0.local` and `wg.rbp1.local`
+> the vault items `wg.rbp0.local` and `wg.rbp1.local`
 
 Date: 2026-11-26
 Decided by: operator
@@ -25,10 +25,11 @@ provider, no forward-auth gate, no outpost, no cluster route — before it lets 
   `docker compose exec wg-easy cli db:admin:reset`.
 - **Pi-hole's admin** uses its own password, the `PIHOLE_PANEL_PASSWORD` both hosts share in
   `~/.config/secrets/homelab.env`, filed in the vault as a field of `homelab-env`.
-- **The `wg-easy` entry in the authentik blueprint**,
-  `cluster/helm/authentik/files/app-wg-easy.yaml`, is dead configuration under this rule: no `wg-easy`
-  provider exists in authentik, and none is to be created. `OAUTH_OIDC_CLIENT_SECRET` in each host's
-  `wg-easy.env` is unused for the same reason, and goes when the file is next touched.
+- **The authentik blueprint entry for the panel**,
+  `cluster/helm/authentik/files/app-wg-easy.yaml`, was deleted on 2026-11-26. Neither a `wg-easy`
+  provider, an application, nor its email scope mapping ever existed in authentik, and none is to be
+  created. `OAUTH_OIDC_CLIENT_SECRET` in each host's `wg-easy.env` is unused for the same reason, and
+  goes when the file is next touched.
 
 authentik stays usable *from* the edge, in a browser on a Pi. The edge never asks it whether a person
 may enter.
