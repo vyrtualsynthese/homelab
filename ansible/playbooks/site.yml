@@ -14,6 +14,12 @@
     - packages
     - system
     - firewall
+    # The units the nodes are not supposed to carry: no swap, no leftover
+    # `rc.local`, `wait-online` told which interface it has, and the failed state
+    # of a unit that is gone cleared. The four cluster nodes are the scope; the
+    # edge Pis are not.
+    - role: units
+      when: "'cluster' in group_names"
     # The roles that are not for every host: the data lines, the union, the
     # export table and the parity all belong to the node that holds the disks,
     # and the inventory is where that node is named. The disks come first (the
