@@ -103,9 +103,14 @@ twenty-one pods call each other on addresses stored in the applications' own dat
 git, and `values/media-stack.yaml` names the source of each pair.
 
 **Egress is not covered.** The chart denies inbound connections only, so a pod in one of those
-namespaces still opens whatever it likes on its own. And whether this K3s enforces a `NetworkPolicy`
-peer at all is not settled: the chart's README records the two measurements that disagree and the three
-commands that decide it.
+namespaces still opens whatever it likes on its own.
+
+**The fence is real, and it was proven the hard way.** The three Applications were synced on
+2026-11-26 and it is a `NetworkPolicy` engine that enforces, not a tally in git: one caller nobody had
+listed — the `monitoring` alert relay, which opens a board card by calling `vikunja:3456` directly
+rather than through Traefik — was refused with `Connection refused` the minute the floor landed, and
+its allow was added. That is also why the callers that act on an event are the ones to grep for before
+calling a values file complete; the chart's README has the checks and the story.
 
 ## TLS on `kub.local`
 
