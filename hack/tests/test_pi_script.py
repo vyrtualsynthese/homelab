@@ -1319,3 +1319,86 @@ def test_the_pi_retention_matches_the_chart():
     )
     assert out.stdout.split() == [str(values["keepDaily"]), str(values["keepWeekly"]),
                                   str(values["keepMonthly"])]
+
+
+def test_setup_writes_the_backup_units_for_its_host(tmp_path):
+    root = tmp_path / "pi"
+    _pi_fixture(root)
+
+    assert run("setup", "rbp1", root=root).returncode == 0
+    service = (root / "etc/systemd/system/pi-backup.service").read_text()
+    assert "ExecStart=/usr/local/sbin/hosts-pi.sh stream rbp1" in service
+    assert "EnvironmentFile=/etc/restic/edge.env" in service
+    timer = (root / "etc/systemd/system/pi-backup.timer").read_text()
+    assert "OnCalendar=*-*-* 04:30:00" in timer
+    assert "RandomizedDelaySec=15min" in timer
+    assert "Persistent=true" in timer
+    prune = (root / "etc/systemd/system/pi-backup-prune.timer").read_text()
+    assert "OnCalendar=Sun *-*-* 05:30:00" in prune
+
+
+def test_setup_installs_the_script_where_root_will_run_it(tmp_path):
+    root = tmp_path / "pi"
+    _pi_fixture(root)
+
+    assert run("setup", "rbp1", root=root).returncode == 0
+    installed = root / "usr/local/sbin/hosts-pi.sh"
+    assert installed.exists()
+    assert (installed.stat().st_mode & 0o777) == 0o555
+    assert installed.read_text() == SCRIPT.read_text()
+
+
+def test_setup_retires_the_legacy_cron_and_its_dead_keys(tmp_path):
+    root = tmp_path / "pi"
+    _pi_fixture(root)
+    cron = root / "var/spool/cron/crontabs/root"
+    cron.parent.mkdir(parents=True)
+    cron.write_text("0 4 * * * /home/vronteix/scripts/backup.sh\nMAILTO=root\n")
+    env = root / "etc/environment"
+    env.write_text("PATH=/usr/bin:/bin\nRESTIC_PASSWORD=x\nAWS_ACCESS_KEY_ID=x\n"
+                   "AWS_SECRET_ACCESS_KEY=x\nRESTIC_REPOSITORY=x\n")
+
+    assert run("setup", "rbp1", root=root).returncode == 0
+    assert "backup.sh" not in cron.read_text()
+    assert "MAILTO=root" in cron.read_text()
+    assert env.read_text() == "PATH=/usr/bin:/bin\n"
+
+
+def test_setup_converges_a_host_that_never_had_the_legacy_job(tmp_path):
+    root = tmp_path / "pi"
+    _pi_fixture(root)
+
+    assert run("setup", "rbp0", root=root).returncode == 0
+
+
+def test_setup_is_idempotent_for_the_retirement(tmp_path):
+    root = tmp_path / "pi"
+    _pi_fixture(root)
+    cron = root / "var/spool/cron/crontabs/root"
+    cron.parent.mkdir(parents=True)
+    cron.write_text("0 4 * * * /home/vronteix/scripts/backup.sh\nMAILTO=root\n")
+
+    assert run("setup", "rbp1", root=root).returncode == 0
+    first = cron.read_text()
+    out = run("setup", "rbp1", root=root)
+    assert out.returncode == 0, out.stderr
+    assert cron.read_text() == first
+
+
+def test_setup_installs_nothing_and_touches_no_service_under_pi_root(tmp_path):
+    """A developer machine must not gain a restic binary or a started unit."""
+    root = tmp_path / "pi"
+    _pi_fixture(root)
+
+    out = run("setup", "rbp0", root=root)
+    assert out.returncode == 0, out.stderr
+    assert "restic: not installed under PI_ROOT" in out.stdout
+    assert "systemd: not touched under PI_ROOT" in out.stdout
+
+
+def test_render_prints_the_units_it_would_write():
+    out = run("render", "rbp0")
+    assert out.returncode == 0, out.stderr
+    assert "--- /etc/systemd/system/pi-backup.service" in out.stdout
+    assert "stream rbp0" in out.stdout
+    assert "0.19.1" in out.stdout

@@ -46,6 +46,15 @@ RESTIC_BIN="${PI_RESTIC:-/usr/local/bin/restic}"
 RETENTION_DAILY=7
 RETENTION_WEEKLY=4
 RETENTION_MONTHLY=12
+# restic is installed from the project's own release, not apt: the two images
+# carry 0.16.4 and 0.12.1, and a repository wants one writer version.
+RESTIC_VERSION="0.19.1"
+RESTIC_SHA256="a5f64aaab53d51e311fa3829124c5b703f2d14cf187d8640b6be3b2b49376465"
+RESTIC_URL="https://github.com/restic/restic/releases/download/v${RESTIC_VERSION}/restic_${RESTIC_VERSION}_linux_arm64.bz2"
+# The 04:00 root job this replaces ran `scripts/backup.sh` against an S3 bucket
+# whose keys were revoked; its RESTIC_/AWS_ variables sit dead in /etc/environment.
+LEGACY_CRON_MATCH="scripts/backup.sh"
+LEGACY_ENV_PATTERN="^[[:space:]]*(export[[:space:]]+)?(RESTIC_REPOSITORY|RESTIC_PASSWORD|AWS_ACCESS_KEY_ID|AWS_SECRET_ACCESS_KEY)="
 
 # SSH and sudo: the two settings ansible/roles/accounts owns on the four cluster
 # nodes, written here because the layer cannot reach the Pis until they are
@@ -214,6 +223,71 @@ desired_sshd_dropin() {
 # Written by ansible/pi/hosts-pi.sh; an edit here is reverted on the next setup.
 PasswordAuthentication no
 X11Forwarding no
+EOF
+}
+
+# The two timers. Both run the installed copy of this script, because systemd
+# starts them from / and not from a checkout; both are oneshot so a slow restic
+# run is a job, not a service that stays "active" for a day. The 15 minutes of
+# jitter keep the two hosts off the bucket's API at the same second.
+desired_backup_service() {
+    cat <<EOF
+# Written by ansible/pi/hosts-pi.sh; an edit here is reverted on the next setup.
+[Unit]
+Description=Nightly edge backup stream
+
+[Service]
+Type=oneshot
+EnvironmentFile=$BACKUP_ENV
+ExecStart=/usr/local/sbin/hosts-pi.sh stream $1
+Nice=10
+TimeoutStartSec=1h
+EOF
+}
+
+desired_backup_timer() {
+    cat <<'EOF'
+# Written by ansible/pi/hosts-pi.sh; an edit here is reverted on the next setup.
+[Unit]
+Description=Nightly edge backup stream
+
+[Timer]
+OnCalendar=*-*-* 04:30:00
+RandomizedDelaySec=15min
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+EOF
+}
+
+desired_prune_service() {
+    cat <<EOF
+# Written by ansible/pi/hosts-pi.sh; an edit here is reverted on the next setup.
+[Unit]
+Description=Weekly prune of the edge backup stream
+
+[Service]
+Type=oneshot
+EnvironmentFile=$BACKUP_ENV
+ExecStart=/usr/local/sbin/hosts-pi.sh prune $1
+Nice=10
+TimeoutStartSec=2h
+EOF
+}
+
+desired_prune_timer() {
+    cat <<'EOF'
+# Written by ansible/pi/hosts-pi.sh; an edit here is reverted on the next setup.
+[Unit]
+Description=Weekly prune of the edge backup stream
+
+[Timer]
+OnCalendar=Sun *-*-* 05:30:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target
 EOF
 }
 
@@ -980,9 +1054,73 @@ cmd_render() {
     echo "'hack/internal-cert.sh --host $(pihole_host "$host")'. Pi-hole reads it"
     echo "through FTLCONF_webserver_tls_cert; ./certs is mounted read-only into"
     echo "the pihole container and the cluster's exporter verifies it on 443"
+    echo "--- /usr/local/sbin/hosts-pi.sh"
+    echo "this script, installed at mode 0555: systemd starts it from /, not from a checkout"
+    echo "--- restic $RESTIC_VERSION"
+    echo "static linux-arm64 release from github.com/restic/restic, sha256 $RESTIC_SHA256"
+    echo "--- /etc/systemd/system/pi-backup.service"
+    desired_backup_service "$host"
+    echo "--- /etc/systemd/system/pi-backup.timer"
+    desired_backup_timer
+    echo "--- /etc/systemd/system/pi-backup-prune.service"
+    desired_prune_service "$host"
+    echo "--- /etc/systemd/system/pi-backup-prune.timer"
+    desired_prune_timer
     echo "--- the panel"
     echo "https://$(panel_host "$host"):8443, sign-in through authentik (OIDC) and"
     echo "the panel's own password when the cluster is down"
+}
+
+# The checksum is checked against the published release, so a truncated download
+# fails before it can replace a working binary.
+install_restic() {
+    if [ -n "$ROOT" ]; then
+        echo "restic: not installed under PI_ROOT"
+        return 0
+    fi
+    if command -v restic >/dev/null 2>&1 && restic version | grep -q "restic $RESTIC_VERSION "; then
+        echo "restic: already $RESTIC_VERSION"
+        return 0
+    fi
+
+    local tmp
+    tmp="$(mktemp -d)"
+    # A RETURN trap would stay installed after this function and fire on every
+    # later function return, so cleanup is pinned to the script's own exit.
+    trap 'rm -rf "$tmp"' EXIT
+    curl -fsSL "$RESTIC_URL" -o "$tmp/restic.bz2"
+    printf '%s  %s\n' "$RESTIC_SHA256" "$tmp/restic.bz2" | sha256sum -c - >/dev/null
+    bunzip2 -c "$tmp/restic.bz2" > "$tmp/restic"
+    chmod 0555 "$tmp/restic"
+    mv "$tmp/restic" /usr/local/bin/restic.tmp
+    mv /usr/local/bin/restic.tmp /usr/local/bin/restic
+    rm -rf "$tmp"
+    trap - EXIT
+    echo "restic: installed $RESTIC_VERSION"
+}
+
+# The legacy job is retired, not replaced: its `docker system prune -af` goes with
+# it (the nightly stream does not need the disk back), and its credential lines are
+# revoked keys that would only confuse the next reader of /etc/environment.
+retire_legacy_backup() {
+    local cron="$ROOT/var/spool/cron/crontabs/root" envfile="$ROOT/etc/environment" tmp
+
+    if [ -f "$cron" ] && grep -qF "$LEGACY_CRON_MATCH" "$cron"; then
+        tmp="$cron.retired"
+        grep -vF "$LEGACY_CRON_MATCH" "$cron" > "$tmp" || true
+        cat "$tmp" > "$cron"
+        rm -f "$tmp"
+        echo "retired: $LEGACY_CRON_MATCH from $cron"
+        CHANGED=$((CHANGED + 1))
+    fi
+    if [ -f "$envfile" ] && grep -qE "$LEGACY_ENV_PATTERN" "$envfile"; then
+        tmp="$envfile.retired"
+        grep -vE "$LEGACY_ENV_PATTERN" "$envfile" > "$tmp" || true
+        cat "$tmp" > "$envfile"
+        rm -f "$tmp"
+        echo "retired: the dead RESTIC/AWS keys from $envfile"
+        CHANGED=$((CHANGED + 1))
+    fi
 }
 
 cmd_setup() {
@@ -1039,6 +1177,21 @@ cmd_setup() {
     write_abs "$ROOT/etc/systemd/resolved.conf.d/90-pihole-resolvers.conf" "$(desired_resolved)"
     resolved_changed="$CHANGED_THIS_WRITE"
     write_abs "$ROOT/etc/hostname" "$(desired_hostname "$host")"
+
+    install_restic
+    install -D -m 0555 "$HERE/hosts-pi.sh" "$ROOT/usr/local/sbin/hosts-pi.sh"
+    write_abs "$ROOT/etc/systemd/system/pi-backup.service" "$(desired_backup_service "$host")"
+    write_abs "$ROOT/etc/systemd/system/pi-backup.timer" "$(desired_backup_timer)"
+    write_abs "$ROOT/etc/systemd/system/pi-backup-prune.service" "$(desired_prune_service "$host")"
+    write_abs "$ROOT/etc/systemd/system/pi-backup-prune.timer" "$(desired_prune_timer)"
+    retire_legacy_backup
+    if [ -z "$ROOT" ]; then
+        systemctl daemon-reload
+        systemctl enable --now pi-backup.timer pi-backup-prune.timer
+        echo "systemd: pi-backup.timer and pi-backup-prune.timer enabled"
+    else
+        echo "systemd: not touched under PI_ROOT"
+    fi
 
     # The resolvers are a live setting: writing the files changes nothing until
     # netplan and resolved read them. This runs before the stack is touched,
