@@ -21,6 +21,7 @@
 | rotate a secret | [Rotate a secret](rotate-a-secret.md) — every copy of the value, then the restart that makes it take |
 | use the board | [Use the board](use-the-board.md) — columns, kinds, and which moves are yours alone |
 | rebuild the docs site | [Rebuild the docs site](rebuild-the-docs-site.md) — the builder, the manual Job, and why a page is missing |
+| cut a release | [Cutting a release](../runbooks/release.md) — the release pull request, the tag and its body, then `main` back into `develop` |
 | recover from a loss | not this tab: [Backups](../backup/README.md) takes a dead disk, a broken database, a node and a total loss, one page each |
 
 Each page opens with a summary blockquote and the date it was last checked against the cluster; read
