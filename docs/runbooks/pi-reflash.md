@@ -71,12 +71,13 @@ own `user-data` on the boot partition before the first boot — step 4. The imag
 - **`pihole.env` is yours.** It holds the Pi-hole panel password, it is gitignored, and `hosts-pi.sh`
   refuses to run without it rather than inventing one. Every other Pi-hole setting lives in
   `pihole.settings`, which the script renders from one template, so the two hosts cannot drift.
-- **Three more files are yours, and the script refuses without them**: `wg-easy.env` (the panel's
-  authentik client secret), and `certs/tls.pem` with `certs/tls-key.pem` (its TLS leaf and key, from
-  `hack/internal-cert.sh --host`). wg-easy's own settings — account, host, port, DNS and peers — live
-  in `config/wg-easy.db`, which `backup` copies with the rest. The file holds every peer's private key,
-  so `setup` narrows it to `0600` once the panel has created it: a fresh container writes `0644`, and
-  `verify` names the file when that mode is back.
+- **Three more files are yours, and the script refuses without them**: `wg-easy.env` (one key,
+  `OAUTH_OIDC_CLIENT_SECRET`, which opens nothing today), and `certs/tls.pem` with
+  `certs/tls-key.pem` (its TLS leaf and key, from `hack/internal-cert.sh --host`). wg-easy's own
+  settings — account, host, port, DNS and peers — live in `config/wg-easy.db`, which `backup` copies
+  with the rest. The file holds every peer's private key, so `setup` narrows it to `0600` once the
+  panel has created it: a fresh container writes `0644`, and `verify` names the file when that mode is
+  back.
 - **Record what a reflash must not change**: `rpi-eeprom-update` (26.3 on `rbp0`, 13.12 on `rbp1` on
   2026-11-24) and the USB disk's model and serial. The boot order lives in the EEPROM and survives an
   image write, so a version that moves afterwards is a firmware change nobody would notice for a month.
@@ -270,13 +271,11 @@ It answers at `https://vpn-rbp0.kub.local:8443` on `rbp0` and `https://vpn-rbp1.
   and `tls-key.pem`. It is not the shared `*.kub.local` leaf: that key on an edge host would be a key to
   every internal name. The leaf lasts two years; re-issue it before it expires, or a reflash restores an
   expired pair with the rest of the stack.
-- **The gate is OIDC, and the panel's password is the fallback.** `wg-easy.env` holds one key,
-  `OAUTH_OIDC_CLIENT_SECRET`, the panel's client secret from `authentik-sso`'s
-  `WG_EASY_CLIENT_SECRET`. Sign-in goes through authentik, Administrators only. Keep the panel's own
-  password: authentik lives on the cluster, and the panel must still open when the cluster is down.
-  The two identities link by email: wg-easy's auto-register is off, so a sign-in whose email matches
-  the panel's account is linked to it, and any other address is refused rather than made a second
-  admin. Set the panel account's address to the authentik one before the first OIDC sign-in.
+- **The panel has no gate, by decision.** It signs in with its own account and password, and nothing on
+  an edge host goes through authentik: the VPN is the way back into the LAN, so it must open when the
+  cluster is down ([the record](../decisions/2026-11-26-edge-pis-local-auth-only.md)). `wg-easy.env`
+  still carries `OAUTH_OIDC_CLIENT_SECRET` from the earlier attempt; no `wg-easy` provider exists, so
+  the value opens nothing, and it goes when `hosts-pi.sh` stops requiring the file.
 - **The published UDP port must equal the panel's port.** The interface listens inside the container on
   the port the panel names, and the stack maps the same number to the host (`51821` on `rbp0`, `51822` on
   `rbp1`). Changing one without the other leaves clients dialling a closed port: the tunnel is up in the

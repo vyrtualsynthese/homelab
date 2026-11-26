@@ -92,6 +92,9 @@ password here.
   keeps an API key; **Calibre-Web** keeps a local password that works on `http://localhost` only.
 - **authentik itself** keeps the local `akadmin` account, deliberately without an MFA device, so a
   broken source cannot lock the operator out of fixing it.
+- **The edge Pis** are outside the boundary altogether: nothing on `rbp0` or `rbp1` asks authentik,
+  because DNS and the VPN must open with the cluster down
+  ([the record](../decisions/2026-11-26-edge-pis-local-auth-only.md)).
 
 ## MFA
 
