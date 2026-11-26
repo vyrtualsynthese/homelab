@@ -1,0 +1,9 @@
+# Base values, rendered alone by `hack/check-charts.sh` and by nothing else.
+#
+# The chart is applied once per namespace, each time through its own ArgoCD
+# Application and its own file under values/: `values/vikunja.yaml`,
+# `values/filebrowser.yaml`, `values/databases.yaml`. Those files are the matrix
+# the reviewer reads; this one stays empty so a render with no values file emits
+# no object at all.
+defaultDeny: false
+accept: []

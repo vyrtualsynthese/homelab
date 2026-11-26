@@ -1,0 +1,8 @@
+apiVersion: v2
+name: network-policy
+description: One namespace's ingress floor, and the allows each consumer needs on top of it.
+type: application
+version: 0.1.0
+# appVersion-check: exempt — the chart renders NetworkPolicy objects only and runs
+# no image, so there is no tag for appVersion to name.
+appVersion: "1.0.0"

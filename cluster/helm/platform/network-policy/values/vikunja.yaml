@@ -1,0 +1,30 @@
+# vikunja — the board. One pod, two callers.
+#
+# Measured 2026-11-26 against the live cluster: the pod carries
+# app.kubernetes.io/name: vikunja, listens on 3456, and IngressRoute/vikunja
+# sends vikunja.kub.local there. The same port carries the scrape the pod
+# advertises through prometheus.io/port.
+#
+# The reverse direction is not policed here: the pod opens PostgreSQL in
+# `databases` and the OIDC provider in `authentik` on its own, and an ingress
+# floor does not touch it.
+defaultDeny: true
+accept:
+  - name: vikunja
+    podSelector:
+      app.kubernetes.io/name: vikunja
+    from:
+      # Traefik is the only thing that serves this hostname, public or not.
+      - namespace: kube-system
+        podSelector:
+          app.kubernetes.io/name: traefik
+        ports: [3456]
+      # The annotation-driven scrape. Prometheus is one pod; kube-system holds
+      # more than Traefik, monitoring holds a whole stack, which is why the two
+      # infrastructure callers name a pod and the application consumers below
+      # name a namespace only.
+      - namespace: monitoring
+        podSelector:
+          app.kubernetes.io/name: prometheus
+          app.kubernetes.io/component: server
+        ports: [3456]

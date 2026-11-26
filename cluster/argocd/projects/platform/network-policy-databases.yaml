@@ -1,0 +1,24 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: network-policy-databases
+  namespace: argocd
+spec:
+  project: default
+  destination:
+    server: 'https://kubernetes.default.svc'
+    namespace: databases
+  syncPolicy:
+    syncOptions:
+      # A policy chart is the one place pruning has to be on: an allow removed
+      # from values/ has to leave the cluster, or a port stays open under a
+      # justification that was deleted from git.
+      - Prune=true
+  source:
+    repoURL: 'https://github.com/vyrtualsynthese/homelab.git'
+    targetRevision: develop
+    path: cluster/helm/platform/network-policy
+    helm:
+      releaseName: network-policy
+      valueFiles:
+        - values/databases.yaml

@@ -9,8 +9,8 @@
 > **Kind:** explanation
 >
 > **Sources** `cluster/helm/**/templates/*.yaml`, `cluster/argocd/projects/**/*.yaml`,
-> `cluster/infrastructure/traefik/`, `hack/check_exposure.py`, and the router's own rules in
-> [the Livebox record](../audit/livebox-2026-11-26.md)
+> `cluster/infrastructure/traefik/`, `cluster/helm/platform/network-policy/`, `hack/check_exposure.py`,
+> and the router's own rules in [the Livebox record](../audit/livebox-2026-11-26.md)
 
 ## How a request arrives
 
@@ -84,6 +84,25 @@ The order of preference is native OIDC first, then proxy auth where the app is b
 gate, then `lan-only` alone with the reason written next to it. Per-app detail is in
 [reference/sso-applications.md](../reference/sso-applications.md); what the mechanisms are is
 [identity.md](identity.md).
+
+## Pod to pod, inside the cluster
+
+Nothing above applies between two pods: Traefik is not involved, no middleware runs, and any Service is
+reachable by name from any namespace. The fence there is a `NetworkPolicy`, and it is the one this
+cluster is short of — a compromised Plex or Seerr reaches PostgreSQL, authentik, the CrowdSec LAPI and
+Prometheus, and only each service's own login stands in the way.
+
+`cluster/helm/platform/network-policy` holds the fence: a `default-deny-ingress` that selects every pod
+of a namespace, and one `allow-<consumer>` per caller that opens exactly the port it uses. It is applied
+once per namespace by its own Application, so a rollout and a rollback are one namespace wide —
+`vikunja`, `filebrowser` and `databases` today. `media-stack` is not there yet: its twenty-six pods call
+each other on addresses stored in the applications' own databases rather than in git, so that matrix has
+to be measured before it is written.
+
+**Egress is not covered.** The chart denies inbound connections only, so a pod in one of those
+namespaces still opens whatever it likes on its own. And whether this K3s enforces a `NetworkPolicy`
+peer at all is not settled: the chart's README records the two measurements that disagree and the three
+commands that decide it.
 
 ## TLS on `kub.local`
 

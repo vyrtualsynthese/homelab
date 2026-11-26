@@ -1,0 +1,19 @@
+# filebrowser — one pod and one caller.
+#
+# Measured 2026-11-26: the pod carries app: filebrowser-quantum, its Service is
+# filebrowser-filebrowser-quantum on 8080, and IngressRoute/filebrowser sends
+# filebrowser.kub.home.ashudev.com there. The pod carries no prometheus.io
+# annotation, so Prometheus does not connect to it.
+#
+# Nothing else in the cluster calls FileBrowser: its share links are opened by a
+# browser through Traefik, and the editor signs in the same way.
+defaultDeny: true
+accept:
+  - name: filebrowser
+    podSelector:
+      app: filebrowser-quantum
+    from:
+      - namespace: kube-system
+        podSelector:
+          app.kubernetes.io/name: traefik
+        ports: [8080]

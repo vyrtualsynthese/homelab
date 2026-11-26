@@ -1,0 +1,62 @@
+# databases — the shared PostgreSQL instance and its web front end.
+#
+# This is the namespace the card's own example is about: a pod in any namespace
+# can open 5432 today. The matrix below is the one `databases/postgres` carried
+# switched off (`networkPolicy.enabled: false`), moved here so that the floor and
+# the allows are declared in one file, plus the consumer that list was missing.
+#
+# Consumers were read from the configuration on 2026-11-26:
+#   authentik      cluster/helm/authentik/values.yaml, postgres.databases...:5432
+#   koillection    DB_HOST/DB_PORT in its Deployment; the instance is the only
+#                  PostgreSQL in the cluster
+#   vikunja        cluster/helm/vikunja/values.yaml, VIKUNJA_DATABASE_HOST
+#   pgadmin        the operator's front end, same namespace
+#   postgres-bootstrap / postgres-dump   the chart's own Job and CronJob
+# `vikunja` was absent from the old list and would have been cut off by the
+# policy it was written for.
+#
+# Application consumers name a namespace and no pod: their pod labels come from
+# the upstream charts and move on upgrade, and the allow is the namespace's
+# database access, not a particular pod's. The infrastructure callers are
+# narrowed to a pod, because kube-system and monitoring hold more than one.
+defaultDeny: true
+accept:
+  - name: postgres
+    podSelector:
+      app: postgres
+    from:
+      - namespace: authentik
+        ports: [5432]
+      - namespace: koillection
+        ports: [5432]
+      - namespace: vikunja
+        ports: [5432]
+      # The chart's own bootstrap Job and nightly dump, which the floor would
+      # otherwise refuse: without the first the instance never gets a client
+      # credential, and without the second there is no backup.
+      - podSelector:
+          app: postgres-bootstrap
+        ports: [5432]
+      - podSelector:
+          app: postgres-dump
+        ports: [5432]
+      # pgAdmin connects as an ordinary client.
+      - podSelector:
+          app: pgadmin
+        ports: [5432]
+      # The exporter sidecar in the postgres pod, found by the prometheus.io
+      # annotations on the pod rather than by a Service.
+      - namespace: monitoring
+        podSelector:
+          app.kubernetes.io/name: prometheus
+          app.kubernetes.io/component: server
+        ports: [9187]
+
+  - name: pgadmin
+    podSelector:
+      app: pgadmin
+    from:
+      - namespace: kube-system
+        podSelector:
+          app.kubernetes.io/name: traefik
+        ports: [80]

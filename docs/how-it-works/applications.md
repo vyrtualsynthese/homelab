@@ -117,6 +117,9 @@ they are what everything above stands on.
 | `prometheus-smartctl` | `monitoring` | every node | A | DaemonSet: drive health (SMART) metrics |
 | `traefik` | `kube-system` | streaming | D | the ingress router: the one door the house router forwards to |
 | `traefik-gate` | `kube-system` | — | A | middlewares, TLS options and the `lan-only` gate: no workload of its own |
+| `network-policy-databases` | `databases` | — | A | the ingress floor of `databases`, and the allows PostgreSQL and pgAdmin need |
+| `network-policy-filebrowser` | `filebrowser` | — | A | the ingress floor of `filebrowser`, and the one allow FileBrowser needs |
+| `network-policy-vikunja` | `vikunja` | — | A | the ingress floor of `vikunja`, and the two allows the board needs |
 
 All seven provisioners are one release each of the wrapper chart at
 `cluster/helm/nfs/provisioner/`, one values file per export, and every release asks for `streaming`.
