@@ -12,13 +12,13 @@
 # PI_ROOT points every verb at another directory, which is how the tests drive
 # it without a Pi. It defaults to "/" — a real host.
 #
-# What this script never writes: pihole.env, wg-easy.env and certs/. The first
-# holds the Pi-hole password, the second the VPN panel's OIDC client secret, and
-# the third the panel's TLS leaf and key. All three are gitignored, and a script
-# that wrote them would either commit a secret or invent one. It requires them
-# and names them when they are missing. The WireGuard side has no environment
-# file since wg-easy 15: its settings live in the panel's own database under the
-# stack directory, which `backup` copies.
+# What this script never writes: pihole.env and certs/. The first holds the
+# Pi-hole password, the second the panel's TLS leaf and key. Both are
+# gitignored, and a script that wrote them would either commit a secret or
+# invent one. It requires them and names them when they are missing. The
+# WireGuard side has no environment file since wg-easy 15: its settings live in
+# the panel's own database under the stack directory, which `backup` copies,
+# and its sign-in is its own account.
 #
 # What it also does not invent: /boot/firmware/config.txt and cmdline.txt. After
 # a reflash the image's own copies are right for the disk they were written to,
@@ -321,18 +321,18 @@ EOF
 
 require_env() {
     local missing=0 file
-    for file in pihole.env wg-easy.env certs/tls.pem certs/tls-key.pem certs/pihole.pem; do
+    for file in pihole.env certs/tls.pem certs/tls-key.pem certs/pihole.pem; do
         if [ ! -f "$ROOT$STACK_DIR/$file" ]; then
             echo "missing $ROOT$STACK_DIR/$file" >&2
             missing=1
         fi
     done
     if [ "$missing" -eq 1 ]; then
-        echo "pihole.env holds the Pi-hole panel password, wg-easy.env the VPN" >&2
-        echo "panel's authentik OIDC client secret, and certs/ the TLS leaf" >&2
-        echo "minted by 'hack/internal-cert.sh --host <name>'. All three are" >&2
-        echo "gitignored. After a reflash, 'restore' is what brings them back" >&2
-        echo "from the backup; on a fresh host, write or copy them once by hand." >&2
+        echo "pihole.env holds the Pi-hole panel password, and certs/ the TLS" >&2
+        echo "leaves and key minted by 'hack/internal-cert.sh --host <name>'." >&2
+        echo "Both are gitignored. After a reflash, 'restore' is what brings" >&2
+        echo "them back from the backup; on a fresh host, write or copy them" >&2
+        echo "once by hand." >&2
         exit 1
     fi
 }
@@ -1069,12 +1069,10 @@ cmd_render() {
     echo "written here, and copied by 'backup' with the rest of the stack."
     echo "setup narrows it to $WG_DB_MODE once the panel has created it, and"
     echo "'verify' reads the mode back: it holds every peer's private key"
+    echo "the panel signs in with its own account: no OAuth provider, no secret file"
     echo "--- $STACK_DIR/pihole.env"
     echo "required, never printed and never written: the panel password is the"
     echo "only key it holds, and it is gitignored by the *.env rule"
-    echo "--- $STACK_DIR/wg-easy.env"
-    echo "required, never printed and never written: one key,"
-    echo "OAUTH_OIDC_CLIENT_SECRET, the VPN panel's authentik client secret"
     echo "--- $STACK_DIR/certs/tls.pem and tls-key.pem"
     echo "required, never printed and never written: this host's own leaf from"
     echo "the internal CA, 'hack/internal-cert.sh --host $(panel_host "$host")'."
@@ -1098,8 +1096,8 @@ cmd_render() {
     echo "--- /etc/systemd/system/pi-backup-prune.timer"
     desired_prune_timer
     echo "--- the panel"
-    echo "https://$(panel_host "$host"):8443, sign-in through authentik (OIDC) and"
-    echo "the panel's own password when the cluster is down"
+    echo "https://$(panel_host "$host"):8443, the panel's own account: no provider,"
+    echo "which is also why it answers when the cluster is down"
 }
 
 # The checksum is checked against the published release, so a truncated download
@@ -1319,7 +1317,7 @@ cmd_verify() {
         exit 1
     fi
 
-    for file in pihole.env wg-easy.env certs/tls.pem certs/tls-key.pem certs/pihole.pem; do
+    for file in pihole.env certs/tls.pem certs/tls-key.pem certs/pihole.pem; do
         if [ ! -f "$ROOT$STACK_DIR/$file" ]; then
             echo "MISSING $ROOT$STACK_DIR/$file"
             problems=1
