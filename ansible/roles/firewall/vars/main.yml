@@ -119,6 +119,14 @@ firewall_rules_edge:
     proto: tcp
     source: nodes
     comment: the Docker metrics endpoint daemon.json opens on 0.0.0.0
+  # VRRP is IP protocol 112, not a port: `port 112 proto udp` matches nothing,
+  # because a port only exists inside TCP or UDP. keepalived on the two Pis
+  # advertises the one address they share, so the rule names the protocol and
+  # carries no port at all. The source is the *other* Pi — an advertisement from
+  # this host's own address would be a second master on the same link.
+  - proto: vrrp
+    source: peer
+    comment: VRRP advertisements from the other edge host
 
 # The exports the cluster mounts. NFSv4 puts everything on 2049; 111 and 20048
 # are the v3 path the provisioner does not use. They stay for the nodes, the

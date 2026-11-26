@@ -20,13 +20,13 @@
 - name: Allow what this host runs, from the addresses that use it
   community.general.ufw:
     rule: allow
-    port: "{{ item.port }}"
+    port: "{{ item.port | default(omit) }}"
     proto: "{{ item.proto }}"
     from_ip: "{{ item.from }}"
     comment: "{{ item.comment }}"
   loop: "{{ firewall_entries }}"
   loop_control:
-    label: "{{ item.port }}/{{ item.proto }} from {{ item.from }}"
+    label: "{{ item.port | default('proto') }}/{{ item.proto }} from {{ item.from }}"
 
 - name: Refuse everything else on the way in
   community.general.ufw:
