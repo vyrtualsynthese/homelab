@@ -1,0 +1,11 @@
+---
+galaxy_info:
+  role_name: disks
+  author: operator
+  description: Writes the node's nine data mounts, optional at boot so a missing disk cannot lock the host out
+  license: MIT
+  min_ansible_version: "2.18"
+  platforms:
+    - name: Ubuntu
+      versions:
+        - all

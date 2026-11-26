@@ -978,3 +978,68 @@ def test_the_parity_read_accepts_a_syncs_lock_and_nothing_else():
     )
     assert fails(1, "", "snapraid: error: cannot open /etc/snapraid.conf") is True
     assert fails(1, "Self test...\n", "") is True, "a run with no report and no lock answer fails"
+
+
+def test_the_disks_role_keeps_a_failed_data_mount_from_holding_the_boot():
+    """A mount that fails under `local-fs.target` starts `emergency.target`,
+    which pulls in no `sshd`: the headless `nas` is then reachable only from a
+    console. Every data line therefore carries `nofail` and a device timeout,
+    while `/` and the ESP stay strict — a host that cannot mount its root is
+    not one to keep booting."""
+    defaults = ANSIBLE / "roles/disks/defaults/main.yml"
+    assert defaults.exists(), "no disks role: the nine data lines are owned by nobody"
+    options = load("roles/disks/defaults/main.yml")["disks_mount_options"]
+    assert "nofail" in options
+    assert any(option.startswith("x-systemd.device-timeout=") for option in options)
+
+    tasks = yaml.safe_load((ANSIBLE / "roles/disks/tasks/main.yml").read_text())
+    writes = [task["ansible.posix.mount"] for task in tasks
+              if isinstance(task, dict) and "ansible.posix.mount" in task]
+    assert writes, "nothing writes the data lines"
+    for write in writes:
+        assert write["state"] == "present", "`mounted` would remount a disk that is live"
+        assert write["backup"] is True, "the previous file is what a rollback restores"
+        assert "disks_mount_options" in str(write["opts"]), (
+            "one option list, or a line drifts from the test above"
+        )
+
+
+def test_every_data_disk_is_declared_once_and_nothing_essential_is_optional():
+    host = load("inventory/host_vars/nas.yml")
+    assert "disks_mounts" in host, "the data lines are not declared for the host that holds them"
+    mounts = host["disks_mounts"]
+    paths = [mount["path"] for mount in mounts]
+    assert set(paths) == {
+        "/mnt/hdd0", "/mnt/hdd1", "/mnt/hdd2", "/mnt/hdd3",
+        "/mnt/hdd4", "/mnt/hdd5", "/mnt/snap", "/mnt/ssd0", "/mnt/ultrafaststorage",
+    }
+    assert len(paths) == len(set(paths)) == 9
+    assert not {"/", "/boot", "/boot/efi"} & set(paths), (
+        "a host that cannot mount these should not come up"
+    )
+    for mount in mounts:
+        assert mount["src"], "a line without a source is not a mount"
+
+
+def test_the_disks_role_refuses_a_source_the_host_does_not_carry():
+    """A declared UUID that no device carries would be written into fstab and
+    fail at the next boot. The run, with a human present, is where it is refused."""
+    path = ANSIBLE / "roles/disks/tasks/main.yml"
+    assert path.exists(), "no disks role to guard the table"
+    text = path.read_text()
+    assert "'storage' in group_names" in text
+    assert "lsblk" in text and "UUID" in text
+    assert "isblk" in text, "the LVM source is a path, and it is checked as one"
+
+
+def test_the_union_cannot_hold_the_boot_either():
+    options = load("roles/union/defaults/main.yml")["union_options"]
+    assert "nofail" in options, (
+        "a mergerfs that fails to mount must not stop the host from reaching sshd"
+    )
+
+
+def test_the_disks_are_owned_before_the_union_is_made_over_them():
+    site = (ANSIBLE / "playbooks/site.yml").read_text()
+    assert "- role: disks" in site
+    assert site.index("- role: disks") < site.index("- role: union")
