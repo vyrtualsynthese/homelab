@@ -147,12 +147,15 @@ is where the authentik `Loki` tile points.
 
 Queries from a script go through Grafana's datasource proxy, which holds the Loki datasource and
 authenticates as Grafana does. `GRAFANA_TOKEN` is a Grafana service-account token in
-`~/.config/secrets/homelab.env`; `-k` skips the internal CA check, which a client without the
-`ashulab` root installed would otherwise fail. The uid `P8E80F9AEF21F6940` is the Loki datasource's,
-and every path from [`reference/log-budget.md`](reference/log-budget.md) appends to it.
+`~/.config/secrets/homelab.env`. Every call below passes
+`--cacert ~/.config/secrets/kub-local/local-ca.pem`, because `grafana.kub.local` is served by the
+cluster's internal CA; `-k` would accept whatever answered and hand it the token. The uid
+`P8E80F9AEF21F6940` is the Loki datasource's, and every path from
+[`reference/log-budget.md`](reference/log-budget.md) appends to it.
 
 ```bash
-curl -skG -H "Authorization: Bearer $GRAFANA_TOKEN" \
+curl -sG --cacert ~/.config/secrets/kub-local/local-ca.pem \
+  -H "Authorization: Bearer $GRAFANA_TOKEN" \
   "https://grafana.kub.local/api/datasources/proxy/uid/P8E80F9AEF21F6940/loki/api/v1/query" \
   --data-urlencode 'query={job="fluent-bit"} | detected_level="error"'
 ```
@@ -301,11 +304,13 @@ carries 0.09 GB/day. An evening reads higher; the day's own figure is two querie
 
 ```bash
 # bytes carried in the trailing 24 h — this is the day's volume
-curl -skG -H "Authorization: Bearer $GRAFANA_TOKEN" \
+curl -sG --cacert ~/.config/secrets/kub-local/local-ca.pem \
+  -H "Authorization: Bearer $GRAFANA_TOKEN" \
   "https://grafana.kub.local/api/datasources/proxy/uid/P8E80F9AEF21F6940/loki/api/v1/query" \
   --data-urlencode 'query=sum(bytes_over_time({job="fluent-bit", source="accesslog"}[24h]))'
 # lines in the same window; divide the two for the line size
-curl -skG -H "Authorization: Bearer $GRAFANA_TOKEN" \
+curl -sG --cacert ~/.config/secrets/kub-local/local-ca.pem \
+  -H "Authorization: Bearer $GRAFANA_TOKEN" \
   "https://grafana.kub.local/api/datasources/proxy/uid/P8E80F9AEF21F6940/loki/api/v1/query" \
   --data-urlencode 'query=sum(count_over_time({job="fluent-bit", source="accesslog"}[24h]))'
 ```

@@ -15,6 +15,10 @@ The numbers below were taken from Loki's own HTTP API against the live cluster. 
 estimated: every figure has the query that produced it, and a change is only "fixed" if the number
 moved.
 
+Every Grafana call below passes `--cacert ~/.config/secrets/kub-local/local-ca.pem`, because
+`grafana.kub.local` is served by the cluster's internal CA; `-k` would accept whatever answered and
+hand it the token.
+
 ## The day
 
 **2026-11-22, 24 hours, `{job="fluent-bit"}`: 533,803 lines, 117.0 MB** uncompressed as Loki counts
@@ -35,10 +39,12 @@ answer the same number, because nothing is older than that. Read the two command
 rather than the line count:
 
 ```bash
-curl -skG -H "Authorization: Bearer $GRAFANA_TOKEN" \
+curl -sG --cacert ~/.config/secrets/kub-local/local-ca.pem \
+  -H "Authorization: Bearer $GRAFANA_TOKEN" \
   "https://grafana.kub.local/api/datasources/proxy/uid/P8E80F9AEF21F6940/loki/api/v1/query" \
   --data-urlencode 'query=sum by (unit) (count_over_time({source="journal"}[24h]))'
-curl -skG -H "Authorization: Bearer $GRAFANA_TOKEN" \
+curl -sG --cacert ~/.config/secrets/kub-local/local-ca.pem \
+  -H "Authorization: Bearer $GRAFANA_TOKEN" \
   "https://grafana.kub.local/api/datasources/proxy/uid/P8E80F9AEF21F6940/loki/api/v1/query" \
   --data-urlencode 'query=sum by (unit) (bytes_over_time({source="journal"}[24h]))'
 ```
@@ -71,7 +77,8 @@ datasource proxy: prefix every path in the table below with
 `https://grafana.kub.local/api/datasources/proxy/uid/P8E80F9AEF21F6940`, and send the token.
 
 ```bash
-curl -skG -H "Authorization: Bearer $GRAFANA_TOKEN" \
+curl -sG --cacert ~/.config/secrets/kub-local/local-ca.pem \
+  -H "Authorization: Bearer $GRAFANA_TOKEN" \
   "https://grafana.kub.local/api/datasources/proxy/uid/P8E80F9AEF21F6940/loki/api/v1/query" \
   --data-urlencode 'query=sum(count_over_time({job="fluent-bit"}[24h]))'
 ```

@@ -777,6 +777,10 @@ migration. Remove the silence when the card closes, or renew it with a new end d
 
 ## How to confirm it is happening again
 
+Both Grafana calls pass `--cacert ~/.config/secrets/kub-local/local-ca.pem`, because
+`grafana.kub.local` is served by the cluster's internal CA; `-k` would accept whatever answered and
+hand it the token.
+
 ```bash
 set -a; . ~/.config/secrets/homelab.env; set +a
 # is the API slow right now? (value > 4 means at least one call crossed 5s)
@@ -784,12 +788,14 @@ curl -sG -u "ops:$PROMETHEUS_AUTH_PASSWORD" http://prometheus.kub.local/api/v1/q
   --data-urlencode 'query=max(scrape_duration_seconds{app_kubernetes_io_instance="qbittorrent-exporter"})'
 
 # how many timeouts in the last 30 minutes (Loki is gated; ask through Grafana's datasource proxy)
-curl -skG -H "Authorization: Bearer $GRAFANA_TOKEN" \
+curl -sG --cacert ~/.config/secrets/kub-local/local-ca.pem \
+  -H "Authorization: Bearer $GRAFANA_TOKEN" \
   "https://grafana.kub.local/api/datasources/proxy/uid/P8E80F9AEF21F6940/loki/api/v1/query_range" \
   --data-urlencode 'query=sum(count_over_time({namespace="media-stack",container="qbittorrent-exporter"} |= "timing out" [30m]))'
 
 # the same symptom seen from another consumer
-curl -skG -H "Authorization: Bearer $GRAFANA_TOKEN" \
+curl -sG --cacert ~/.config/secrets/kub-local/local-ca.pem \
+  -H "Authorization: Bearer $GRAFANA_TOKEN" \
   "https://grafana.kub.local/api/datasources/proxy/uid/P8E80F9AEF21F6940/loki/api/v1/query_range" \
   --data-urlencode 'query={namespace="media-stack",container="cross-seed"} |= "fetch failed"'
 ```

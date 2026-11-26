@@ -91,13 +91,16 @@ keys at all.
   Secret that carries its hash under any other key — `auth` was the mistake, live from 2023 to
   2026-11-22 — gives a middleware with **no users**, which answers `401` to every request, correct
   password included. That looks like a working password prompt, which is why it survived so long.
-  Recreate it and prove it in one sitting:
+  Recreate it and prove it in one sitting. The proof passes
+  `--cacert ~/.config/secrets/kub-local/local-ca.pem`, because `traefik.kub.local` is served by the
+  cluster's internal CA; `-k` would accept whatever answered and hand it the password:
 
 ```bash
 htpasswd -nbB vronteix '<password>' \
   | kubectl -n kube-system create secret generic traefik-dashboard \
       --from-file=users=/dev/stdin --dry-run=client -o yaml | kubectl apply -f -
-curl -sk -o /dev/null -w '%{http_code}\n' -u 'vronteix:<password>' \
+curl -s --cacert ~/.config/secrets/kub-local/local-ca.pem \
+  -o /dev/null -w '%{http_code}\n' -u 'vronteix:<password>' \
   --resolve traefik.kub.local:443:192.168.1.46 https://traefik.kub.local/dashboard/   # 200
 ```
 
