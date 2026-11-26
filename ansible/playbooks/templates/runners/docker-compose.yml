@@ -62,9 +62,12 @@ services:
       # see the host's module tree to do it after a reboot.
       - /lib/modules:/lib/modules:ro
     ports:
-      # One UDP port, the WireGuard listener. The panel's 5000 is deliberately
-      # absent: it answers on the compose network and nowhere else.
-      - "@WG_UDP_PORT@:@WG_UDP_PORT@/udp"
+      # One UDP port, the WireGuard listener, and the same number on both hosts:
+      # they share one panel database, so a config minted on either names this
+      # port and a client keeps dialling it whichever host answers. The panel's
+      # 5000 is deliberately absent: it answers on the compose network and
+      # nowhere else.
+      - "51821:51821/udp"
     networks:
       - panel
     restart: unless-stopped

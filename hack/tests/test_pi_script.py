@@ -46,12 +46,12 @@ def rendered_caddyfile(host):
 
 
 def test_render_prints_the_pinned_images_for_each_pi():
-    for host, port in (("rbp0", "51821"), ("rbp1", "51822")):
+    for host in ("rbp0", "rbp1"):
         out = run("render", host)
         assert out.returncode == 0, out.stderr
         assert "jacklul/pihole:2026.11.0" in out.stdout
         assert "wg-easy:15.5.0" in out.stdout
-        assert port in out.stdout
+        assert '"51821:51821/udp"' in out.stdout
 
 
 def test_wg_easy_15_gets_its_settings_from_the_panel_not_the_environment():
@@ -85,7 +85,7 @@ def test_the_panel_is_not_published_and_caddy_is_the_only_way_in():
         (REPO / "ansible/playbooks/templates/runners/docker-compose.yml").read_text()
     )
     assert compose["services"]["wg-easy"]["ports"] == [
-        "@WG_UDP_PORT@:@WG_UDP_PORT@/udp"
+        "51821:51821/udp"
     ], "only the WireGuard UDP port is published; the panel's 5000 is not"
 
     caddy = compose["services"]["caddy"]
@@ -149,16 +149,18 @@ def test_render_refuses_a_host_it_does_not_know():
     assert "rbp9" in out.stderr
 
 
-def test_the_two_hosts_render_the_same_stack_apart_from_the_wireguard_port():
-    rbp0 = rendered_compose("rbp0").replace("51821", "PORT")
-    rbp1 = rendered_compose("rbp1").replace("51822", "PORT")
-    assert rbp0 == rbp1
+def test_the_two_hosts_render_the_same_stack():
+    """One database, one port, one endpoint: the two hosts must render the same
+    bytes, or a config minted on one names something the other does not serve."""
+    assert rendered_compose("rbp0") == rendered_compose("rbp1")
 
 
-def test_each_host_gets_its_own_wireguard_port():
-    assert "51822" not in rendered_compose("rbp0")
-    assert "51821" not in rendered_compose("rbp1")
-    assert "@WG_UDP_PORT@" not in rendered_compose("rbp0")
+def test_both_hosts_publish_the_wireguard_port():
+    for host in ("rbp0", "rbp1"):
+        block = rendered_compose(host)
+        assert '"51821:51821/udp"' in block, block
+        assert "51822" not in block, block
+        assert "@WG_UDP_PORT@" not in block, block
 
 
 def test_each_host_serves_the_panel_on_its_own_name():
