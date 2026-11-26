@@ -119,11 +119,33 @@ curl -sG -u "ops:$PROMETHEUS_AUTH_PASSWORD" http://prometheus.kub.local/api/v1/q
 A `kubectl` probe from the LAN or a node is the one thing that cannot answer: it runs as the node, not
 as a pod, so a NetworkPolicy does not apply to it and it reports `OPEN` whether or not the floor works.
 
-For `media-stack` the probe above is not enough. A missed allow breaks one caller at its next run,
-not at a page load, so after the sync walk the download path end to end — an *arr grabs from
-Prowlarr, Prowlarr answers the Torznab query, qBittorrent accepts it, cross-seed sees the hook — and
-load every routed hostname. The Pods column of `kubectl get networkpolicy -n media-stack` and the
-application logs are where a missing pair shows; the values file's header names each one.
+## `media-stack`, applied and walked on 2026-11-26
+
+The namespace went last, at 18:55 UTC, once the three floors before it had proven the engine. The three
+checks above are not enough for it: a missed allow breaks one caller at its next run rather than at a
+page load, so every pair in its values file was walked instead of sampled.
+
+| Check | What it proves | Result |
+|---|---|---|
+| `nc` from a pod in `default` to six Services, `vikunja` among them as the control | the floor | six refused |
+| the 51 pairs whose caller lives in the namespace, each resolved to its running pod and probed on its Service | the allows | 51 accepted — the `qbittorrent` one only through the ClusterIP its `hostAlias` names, because that pod resolves with public DNS |
+| a throwaway pod carrying `app.kubernetes.io/name=recyclarr`, because that caller is a completed Job | the `recyclarr` allow | four *arrs accepted; a pod that has just started is refused for its first second |
+| `indexer/test` and `downloadclient/test` through Radarr's and Sonarr's own APIs | the *arr to Prowlarr and *arr to qBittorrent hops, not just the socket | Radarr 13 of 14 indexers, Sonarr 13 of 15, the failures upstream `429`s; qBittorrent accepted by both |
+| `up{namespace="media-stack"}` | the `monitoring` peer, per exporter | 10 of 10 at `1` |
+| every routed hostname of the namespace | the `kube-system/traefik` peer | 16 answers, each the app's own status code |
+| seven pairs the matrix does not carry, `bazarr` to `qbittorrent` and `radarr` to `plex` among them | nothing extra gets in | seven refused |
+
+No pod restarted and no readiness probe failed across the sync, and no application log holds a
+connection error from it.
+
+Two things cost time in the probing, and both read as a denial when they are not:
+
+- `busybox` `nc` takes the host and the port as two arguments. `host:port` prints `nc: missing port
+  number` and exits non-zero. The images differ — `busybox` in some, `netcat-openbsd` in others — so one
+  one-liner is not portable across the namespace; split the arguments.
+- `qbittorrent` runs with `dnsPolicy: None` and public resolvers, so `cross-seed.media-stack.svc` does
+  not resolve in its pod. It reaches the Service through the `hostAlias` the chart sets there, and a
+  probe of that ClusterIP is the one that answers.
 
 **The lesson the miss cost, and it is the point of this section:** a green suite proves the allows that
 exist, not the ones that should. The callers most likely to be forgotten are the ones that act on an
