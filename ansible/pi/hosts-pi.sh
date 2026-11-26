@@ -35,6 +35,7 @@ STACK_DIR="/home/$HUMAN_USER/dockers"
 # else. The credential is a file the operator writes (setup never invents one),
 # and PI_RESTIC lets the tests stand a recorder in for the binary.
 BACKUP_ENV="/etc/restic/edge.env"
+BACKUP_ENV_KEYS="AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY RESTIC_PASSWORD RESTIC_REPOSITORY "
 STAGING_DIR="/var/lib/pi-backup"
 # The query log is a log (385 MB on rbp0, rewritten every minute); listsCache is
 # re-downloaded by `pihole -g`; gravity_old.db is the updater's copy of the
@@ -1420,6 +1421,8 @@ cmd_verify() {
     elif [ "$(stat -c %a "$ROOT$BACKUP_ENV")" != "600" ]; then
         echo "DIFFERS $ROOT$BACKUP_ENV: mode $(stat -c %a "$ROOT$BACKUP_ENV"), not 600"
         problems=1
+    elif ! backup_env_problem "$ROOT$BACKUP_ENV"; then
+        problems=1
     fi
     if ! command -v python3 >/dev/null 2>&1; then
         echo "MISSING python3: stage_sqlite and prune need it"
@@ -1602,6 +1605,27 @@ PY
 
 # The credential is the operator's file: setup never writes it, and stream refuses
 # rather than contacting the bucket with whatever the environment happens to hold.
+backup_env_problem() {
+    # Four lines, the four keys, nothing else. A paste that lost a line, or a
+    # command whose error box landed in the file, used to be sourced line by
+    # line: the shell printed `│: not found`, then restic failed on an invalid
+    # Authorization header and the real cause was never named. rbp0 did exactly
+    # that on 2026-11-26.
+    local file="$1" lines keys
+    lines="$(grep -c '' "$file" 2>/dev/null)"
+    [ -n "$lines" ] || lines=0
+    if [ "$lines" -ne 4 ]; then
+        echo "$BACKUP_ENV holds $lines lines, not the four KEY=value lines it must hold" >&2
+        return 1
+    fi
+    keys="$(sed -n 's/^\([A-Z_][A-Z0-9_]*\)=.*/\1/p' "$file" | LC_ALL=C sort | tr '\n' ' ')"
+    if [ "$keys" != "$BACKUP_ENV_KEYS" ]; then
+        echo "$BACKUP_ENV holds the keys [$keys], not [$BACKUP_ENV_KEYS]" >&2
+        return 1
+    fi
+    return 0
+}
+
 require_backup_env() {
     local file="$ROOT$BACKUP_ENV"
 
@@ -1613,6 +1637,7 @@ require_backup_env() {
         echo "$BACKUP_ENV must be mode 0600, not $(stat -c %a "$file")" >&2
         exit 1
     fi
+    backup_env_problem "$file" || exit 1
     if [ -z "${RESTIC_REPOSITORY:-}" ]; then
         set -a
         # shellcheck source=/dev/null

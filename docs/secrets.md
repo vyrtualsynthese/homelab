@@ -223,7 +223,10 @@ scoped to `ashudev-homelab-backup/edge-rbp0/*` and `.../edge-rbp1/*`. A compromi
 delete the cluster's streams, and the cluster's own user keeps read on the two prefixes, which is how
 `backup-verify` checks them. `hosts-pi.sh setup` never writes this file, and it retires the revoked
 `RESTIC_*`/`AWS_*` lines the old 04:00 cron left in `/etc/environment`; see
-[`how-it-works/backups.md`](how-it-works/backups.md).
+[`how-it-works/backups.md`](how-it-works/backups.md). `stream` and `prune` refuse a file that is not
+exactly those four `KEY=value` lines, naming the file and counting what they found, and `verify`
+reports the same: a command whose error output landed in the file used to be sourced line by line,
+which surfaced as `│: not found` and then as an S3 signature error.
 
 Each file is stored verbatim as a Bitwarden secure note (`edge-rbp0.env`, `edge-rbp1.env`), because
 what a reflashed Pi needs before its first timer run is exactly those four lines. The password inside
