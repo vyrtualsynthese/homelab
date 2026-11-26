@@ -157,6 +157,8 @@ few minutes is a finding in `verify`.
 **D7 — the standby pulls the snapshot and only replaces the database when it changed.** A root timer
 on `rbp1`:
 
+0. stops without touching anything if this host holds the address: it is serving the tunnel, and
+   restarting its panel to install a file would drop it;
 1. reads the snapshot over SSH as the `wg-sync` account — a system account, home
    `/var/lib/wg-sync`, `/bin/sh`, no password, no group — whose key line on `rbp0` carries
    `restrict`, `from="192.168.1.38"` and a forced `cat` of that one file, so the account can read the
@@ -167,7 +169,8 @@ on `rbp1`:
 3. if the local fingerprint equals the last one it installed, sees the same fingerprint in the
    snapshot, and stops — no restart, no flap;
 4. otherwise stops `wg-easy`, installs the snapshot, starts it again, and records the new fingerprint
-   in `/var/lib/wg-easy-sync/last-installed`.
+   in `/var/lib/wg-easy-sync/last-installed`, one line per table (`<table> <sha256>`), so a later
+   divergence names the table that moved.
 
 A database replacement restarts the standby's panel and resets its login sessions; that is acceptable,
 and it happens only when the authority actually changed.
@@ -230,14 +233,19 @@ has), and each script writes one file atomically, `0644` so the container's `nob
 
 | file | series |
 |---|---|
-| `wg-vpn-snapshot.prom` on `rbp0` | `wg_vpn_snapshot_age_seconds`, `wg_vpn_snapshot_ok` |
-| `wg-vpn-sync.prom` on `rbp1` | `wg_vpn_sync_age_seconds`, `wg_vpn_sync_ok`, `wg_vpn_sync_diverged` |
+| `wg-vpn-snapshot.prom` on `rbp0` | `wg_vpn_snapshot_timestamp_seconds`, `wg_vpn_snapshot_ok` |
+| `wg-vpn-sync.prom` on `rbp1` | `wg_vpn_sync_timestamp_seconds`, `wg_vpn_sync_ok`, `wg_vpn_sync_diverged` |
 | `wg-vpn-vrrp.prom` on both | `wg_vpn_vrrp_master` — 1 on the holder, 0 on the backup, written by a keepalived notify script |
 
+Each series is a **timestamp of the last good run**, not an age: an age written by a script that
+stopped running freezes at its last value and never goes stale, which is the failure being watched
+for. The age is `time() - wg_vpn_snapshot_timestamp_seconds` in the rule.
+
 Four rules are created through Grafana's API, because they live in its database and not in git:
-`EdgeVpnSnapshotStale` (`wg_vpn_snapshot_age_seconds > 600`, warning),
-`EdgeVpnStandbyStale` (`wg_vpn_sync_age_seconds > 600 and wg_vpn_vrrp_master == 0`, warning — the
-standby is stale while it is the backup; a backup that has taken over is allowed to be behind),
+`EdgeVpnSnapshotStale` (`time() - wg_vpn_snapshot_timestamp_seconds > 600`, warning),
+`EdgeVpnStandbyStale` (`time() - wg_vpn_sync_timestamp_seconds > 600 and wg_vpn_vrrp_master == 0`,
+warning — the standby is stale while it is the backup; a backup that has taken over is allowed to be
+behind),
 `EdgeVpnSyncDiverged` (`wg_vpn_sync_diverged == 1`, warning) and `EdgeVpnAddressUnheld`
 (`sum(wg_vpn_vrrp_master) < 1`, critical — neither host holds the address). They join the
 `homelab-core` group at 300 s with `for: 10m`, like the other staleness rules, and no data is treated
