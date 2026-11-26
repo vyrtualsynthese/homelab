@@ -170,6 +170,7 @@ nav:
       - Observability and storage: audit/observability-storage.md
       - Media stack (2026-11-18): audit/media-stack-2026-11-18.md
       - Traefik (2026-11-21): audit/traefik-2026-11-21.md
+      - The Livebox (2026-11-26): audit/livebox-2026-11-26.md
   - Agent work:
       - How to read a plan: agent-work.md
       - The board protocol: agent-protocol.md
