@@ -32,11 +32,14 @@ its SQLite is state, and `nas` is where state is backed up.
 | Ban count, and the bouncer's liveness | the bouncer's own listener | `curl -s http://127.0.0.1:60601/metrics \| grep fw_bouncer_banned_ips` |
 | The web UI | Deployment `crowdsec-web-ui`, node `nuc0` | `https://crowdsec.kub.local` — Admins only, reads the LAPI directly, so it works while Grafana does not |
 
-Three ports, and they are not interchangeable: `30500` is the LAPI's API, the NodePort the bouncer
-calls as `http://192.168.1.46:30500/` because a host service cannot resolve cluster DNS; `60601` is
-the bouncer's own metrics listener, the one Prometheus scrapes from `nas`; `6060` is the metrics
-listener inside each pod. To read the address the bouncer was configured with:
-`sudo grep '^api_url' /etc/crowdsec/bouncers/crowdsec-firewall-bouncer.yaml`.
+Two ports, and they are not interchangeable: `60601` is the bouncer's own metrics listener, the one
+Prometheus scrapes from `nas`; `6060` is the metrics listener inside each pod. The LAPI's API is
+`8080`, and the bouncer reaches it at a ClusterIP pinned for it in the chart
+(`crowdsec-lapi-host`), not at a NodePort: the NodePort that came first answered on every node's LAN
+address, and a registration endpoint every device in the house can reach is a surface that can be
+talked into minting a machine. A ClusterIP answers a cluster node's own network namespace — the
+bouncer's, on `streaming` — and no host on the LAN. To read the address the bouncer was configured
+with: `sudo grep '^api_url' /etc/crowdsec/bouncers/crowdsec-firewall-bouncer.yaml`.
 
 `kubectl exec` needs the admin kubeconfig; the agent's shells are read-only and answer `403`. The
 `cscli` calls below are the operator's. The `nft`, `systemctl`, `tail` and `127.0.0.1:60601`

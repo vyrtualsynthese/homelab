@@ -137,9 +137,10 @@ storage:
 env:
   TZ: "Europe/Paris"
 
-  # One instance: the cluster's own LAPI, over the cluster network. The
-  # NodePort 30500 exists for the host bouncer, which cannot resolve cluster
-  # DNS; nothing in the cluster should use it.
+  # One instance: the cluster's own LAPI, over the cluster network. The host
+  # bouncer reaches the same Service from the node that runs it, through the
+  # ClusterIP the chart pins for it; nothing outside the cluster can, and there
+  # is no NodePort.
   #
   # `crowdsec-service`, not `crowdsec-lapi`: the latter is the Deployment and the
   # pod name, and it answers on no Services — a URL built from it fails in Node

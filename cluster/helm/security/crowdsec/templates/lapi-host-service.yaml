@@ -1,0 +1,42 @@
+# The one address outside the cluster that may reach the LAPI: the firewall
+# bouncer on `streaming` is a host service, so it cannot resolve cluster DNS and
+# needs a literal one.
+#
+# It is a ClusterIP, not a NodePort. A NodePort answers on every node's LAN
+# address, which publishes the API's management surface — where a machine
+# registers, and the list of decisions every bouncer reads — to every device on
+# the 192.168.1.0/24 for one consumer. A ClusterIP is reachable from the node's
+# own network namespace through kube-proxy and from no host on the LAN. The
+# bouncer's key is still the control that matters; this is the network floor
+# under it.
+#
+# `clusterIP` is pinned because the address is a fact of this repository:
+# `ansible/roles/crowdsec/defaults/main.yml` writes it into the bouncer's
+# configuration. The chart's own Service (`crowdsec-service`) is allocated
+# dynamically and its template carries no field to fix it, and a dynamic address
+# would silently stop matching a file in git the day the Service is recreated.
+# An explicit address is also reserved in the allocator, so no later Service can
+# take it. `hack/tests/test_ansible_streaming_roles.py` fails when the two files
+# disagree.
+#
+# The selector omits the chart's `version: v1` label on purpose: the pods carry
+# it today, a version bump would rename it, and this Service must keep finding
+# the LAPI across such a bump.
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-lapi-host
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: {{ .Chart.Name }}
+spec:
+  type: ClusterIP
+  clusterIP: 10.43.249.250
+  selector:
+    k8s-app: {{ .Release.Name }}
+    type: lapi
+  ports:
+    - name: api
+      port: 8080
+      targetPort: 8080
+      protocol: TCP

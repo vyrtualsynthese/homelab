@@ -6,6 +6,7 @@ nobody is in is a role that silently never runs.
 """
 
 import pathlib
+import re
 import unittest
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
@@ -77,12 +78,35 @@ class BouncerRoleTests(unittest.TestCase):
         self.assertIn("lookup('env', 'CROWDSEC_BOUNCER_KEY')", tasks)
         self.assertIn("no_log: true", tasks)
 
-    def test_the_config_file_carries_the_lan_address_and_no_plaintext_key(self):
+    def test_the_config_file_carries_the_pinned_address_and_no_plaintext_key(self):
         template = (self.role / "templates/bouncer.yaml.j2").read_text()
         self.assertIn("api_url: {{ crowdsec_lapi_url }}", template)
         self.assertIn("api_key: {{ crowdsec_bouncer_key }}", template)
         for key in ("table: crowdsec", "chain: crowdsec-chain", "deny_action: DROP"):
             self.assertIn(key, template)
+
+    def test_the_lapi_address_is_the_pinned_clusterip_and_not_a_node_address(self):
+        # The bouncer is a host service and needs a literal address. The chart
+        # pins it so this file stays true across a Service recreation, and the
+        # address is a ClusterIP: the NodePort that came first answered on every
+        # node's LAN address (card #570).
+        defaults = (self.role / "defaults/main.yml").read_text()
+        template = (
+            ROOT / "cluster/helm/security/crowdsec/templates/lapi-host-service.yaml"
+        ).read_text()
+        pinned = re.search(r"^  clusterIP: (\S+)$", template, re.MULTILINE).group(1)
+        self.assertIn(f'crowdsec_lapi_url: "http://{pinned}:8080/"', defaults)
+        self.assertNotIn("30500", defaults)
+        # No cluster URL read from the inventory: the address is fixed, not
+        # discovered, so a run cannot write a stale one.
+        self.assertNotIn("http://{{", defaults)
+
+    def test_the_play_proves_the_lapi_before_it_writes_the_configuration(self):
+        # A stale address would leave the bouncer polling nothing while its own
+        # listener stays healthy, so the play fails before it touches the file.
+        tasks = (self.role / "tasks/main.yml").read_text()
+        self.assertIn('url: "{{ crowdsec_lapi_url }}health"', tasks)
+        self.assertLess(tasks.index("Prove the LAPI answers"), tasks.index("name: Configure it"))
 
     def test_its_own_prometheus_endpoint_is_on_and_scrapeable(self):
         template = (self.role / "templates/bouncer.yaml.j2").read_text()
