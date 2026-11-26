@@ -72,11 +72,12 @@ Every client on the LAN asks `192.168.1.22` and then `192.168.1.38`, the two edg
 holds the local records and the blocklist, and it forwards everything it does not know to DNS4EU's
 **unfiltered** pair, `86.54.11.100` and `86.54.11.200`. Nothing in the house asks Cloudflare, Google
 or Quad9, and no filtered DNS4EU variant is used, because Pi-hole is the only filter in the path.
-Two pods carry the same pair in their own `dnsConfig` rather than resolving through the cluster:
-`qbittorrent`, whose tracker lookups must not depend on cluster DNS, and `blackbox-exporter`, whose
-probes must see the public zone rather than Pi-hole's LAN override. A public resolver beside the
-Pi-hole on a node is a fault, not a fallback: on 2026-11-26 `nuc0`'s `/etc/resolv.conf` named
-`1.1.1.1`, and CoreDNS sent about one `*.kub.local` query in three there instead of to the Pi-hole.
+Two pods carry their own resolvers rather than resolving through the cluster: `qbittorrent`, whose
+tracker lookups leave through an AirVPN tunnel and are answered by that tunnel's resolver, `10.4.0.1`,
+and `blackbox-exporter`, whose probes must see the public zone rather than Pi-hole's LAN override and
+so ask DNS4EU directly. A public resolver beside the Pi-hole on a node is a fault, not a fallback: on
+2026-11-26 `nuc0`'s `/etc/resolv.conf` named `1.1.1.1`, and CoreDNS sent about one `*.kub.local` query
+in three there instead of to the Pi-hole.
 
 The addresses, the rejections and the cost of being wrong are in
 [`decisions/2026-11-27-public-dns-is-dns4eu-unfiltered.md`](../decisions/2026-11-27-public-dns-is-dns4eu-unfiltered.md).
