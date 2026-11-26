@@ -4,7 +4,7 @@
 > query Prometheus, Loki and Grafana without cluster access, and how metrics get in.
 >
 > **Use it when** you want a number out of the stack, or you are adding an exporter · **Verified**
-> 2026-11-25 · **Kind:** reference
+> 2026-11-26, with the Prometheus basic auth live · **Kind:** reference
 >
 > **Sources** `cluster/helm/monitoring/prometheus/values.yaml`,
 > `cluster/helm/monitoring/loki/values.yaml`, `cluster/helm/monitoring/grafana/values.yaml`,

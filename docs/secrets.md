@@ -110,17 +110,27 @@ curl -sk -o /dev/null -w '%{http_code}\n' -u 'vronteix:<password>' \
   sync mounts it — the volume has no `optional` — and the `ops` password belongs in
   `~/.config/secrets/homelab.env` as `PROMETHEUS_AUTH_PASSWORD`:
 
+The three passwords are not echoed while typed, so a silent shell is waiting for them, not stuck, and
+`htpasswd` is not assumed: the hash comes from `python3`'s `bcrypt`, which is installed where the
+recipe is run from. A rotation needs both pods restarted afterwards — the mounted file updates in
+place, but Prometheus reads the web config once, at startup, and Grafana reads the environment the
+same way:
+
 ```bash
-read -rs OPS; read -rs GRAFANA; read -rs RELOAD
-{ printf 'basic_auth_users:\n'
-  printf '  ops: %s\n'     "$(htpasswd -nbB ops "$OPS" | cut -d: -f2)"
-  printf '  grafana: %s\n' "$(htpasswd -nbB grafana "$GRAFANA" | cut -d: -f2)"
-  printf '  reload: %s\n'  "$(htpasswd -nbB reload "$RELOAD" | cut -d: -f2)"
-} | kubectl -n monitoring create secret generic prometheus-basicauth \
-      --from-file=web-config.yml=/dev/stdin \
-      --from-literal=grafana-password="$GRAFANA" \
-      --from-literal=reload-password="$RELOAD" \
-      --dry-run=client -o yaml | kubectl apply -f -
+printf 'ops password: ';     read -rs OPS;     echo
+printf 'grafana password: '; read -rs GRAFANA; echo
+printf 'reload password (letters and digits only): '; read -rs RELOAD; echo
+python3 - "$OPS" "$GRAFANA" "$RELOAD" <<'EOF' | kubectl -n monitoring apply -f -
+import base64, bcrypt, sys
+cfg = "basic_auth_users:\n" + "".join(
+    f"  {u}: {bcrypt.hashpw(p.encode(), bcrypt.gensalt()).decode()}\n"
+    for u, p in zip(["ops", "grafana", "reload"], sys.argv[1:4]))
+print("apiVersion: v1\nkind: Secret\nmetadata:\n  name: prometheus-basicauth\n  namespace: monitoring\ntype: Opaque\ndata:")
+for k, v in {"web-config.yml": cfg,
+             "grafana-password": sys.argv[2],
+             "reload-password": sys.argv[3]}.items():
+    print(f"  {k}: {base64.b64encode(v.encode()).decode()}")
+EOF
 curl -s -o /dev/null -w '%{http_code}\n' http://prometheus.kub.local/-/healthy        # 401
 curl -s -o /dev/null -w '%{http_code}\n' -u "ops:$OPS" \
   http://prometheus.kub.local/-/healthy                                              # 200
