@@ -122,7 +122,14 @@ LAN_CIDR="192.168.1.0/24"
 CLUSTER_ADDRESSES="192.168.1.41 192.168.1.27 192.168.1.46 192.168.1.48"
 VPN_CIDR="10.8.0.0/24"
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-TEMPLATES="$(cd "$HERE/../playbooks/templates/runners" && pwd)"
+# Resolved lazily: `setup` installs this script at /usr/local/sbin, which is where
+# the systemd timers run it from, and ../playbooks does not exist there. A hard
+# `cd` here made stream and prune die at load on a real host, before dispatch,
+# so the nightly timer could never have written a snapshot.
+TEMPLATES=""
+if [ -d "$HERE/../playbooks/templates/runners" ]; then
+    TEMPLATES="$(cd "$HERE/../playbooks/templates/runners" && pwd)"
+fi
 ROOT="${PI_ROOT:-}"
 ROOT="${ROOT%/}"
 CHANGED=0
@@ -135,6 +142,14 @@ usage: hosts-pi.sh render|setup|verify|stream|prune <host>
 hosts: rbp0 rbp1
 USAGE
     exit 2
+}
+
+require_templates() {
+    if [ -z "$TEMPLATES" ]; then
+        echo "no playbooks/templates/runners beside $0: run this verb from the" \
+            "ansible tree (ansible/pi/hosts-pi.sh), where the templates travel" >&2
+        exit 1
+    fi
 }
 
 check_host() {
@@ -252,7 +267,7 @@ desired_backup_timer() {
 Description=Nightly edge backup stream
 
 [Timer]
-OnCalendar=*-*-* 04:30:00
+OnCalendar=*-*-* 04:30:00 Europe/Paris
 RandomizedDelaySec=15min
 Persistent=true
 
@@ -283,7 +298,7 @@ desired_prune_timer() {
 Description=Weekly prune of the edge backup stream
 
 [Timer]
-OnCalendar=Sun *-*-* 05:30:00
+OnCalendar=Sun *-*-* 05:30:00 Europe/Paris
 Persistent=true
 
 [Install]
@@ -990,6 +1005,8 @@ cert_mode_drift() {
 
 cmd_render() {
     local host="$1"
+
+    require_templates
     echo "--- $STACK_DIR/docker-compose.yml"
     desired_compose "$host"
     echo "--- $STACK_DIR/Caddyfile"
@@ -1133,6 +1150,8 @@ retire_legacy_backup() {
 cmd_setup() {
     local host="$1" current_name pihole_changed=0 caddy_changed=0 netplan_changed=0 resolved_changed=0
 
+    require_templates
+
     current_name=""
     if [ -f "$ROOT/etc/hostname" ]; then
         current_name="$(tr -d '[:space:]' < "$ROOT/etc/hostname")"
@@ -1274,6 +1293,8 @@ check_text() {
 
 cmd_verify() {
     local host="$1" problems=0 file content
+
+    require_templates
 
     if [ -z "$ROOT" ] && [ "$(id -u)" -ne 0 ]; then
         echo "verify reads $SUDOERS, $SSHD_CONFIG, the firewall and the VPN database; run it with sudo" >&2

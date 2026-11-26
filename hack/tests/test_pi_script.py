@@ -11,12 +11,13 @@ REPO = pathlib.Path(__file__).resolve().parents[2]
 SCRIPT = REPO / "ansible/pi/hosts-pi.sh"
 
 
-def run(*args, root=None, env=None):
+def run(*args, root=None, env=None, script=None):
     merged = dict(os.environ)
     if root:
         merged["PI_ROOT"] = str(root)
     merged.update(env or {})
-    return subprocess.run([str(SCRIPT), *args], capture_output=True, text=True, env=merged)
+    return subprocess.run([str(script or SCRIPT), *args], capture_output=True, text=True,
+                          env=merged)
 
 
 COMPOSE_HEADER = "--- /home/vronteix/dockers/docker-compose.yml\n"
@@ -1342,11 +1343,13 @@ def test_setup_writes_the_backup_units_for_its_host(tmp_path):
     assert "ExecStart=/usr/local/sbin/hosts-pi.sh stream rbp1" in service
     assert "EnvironmentFile=/etc/restic/edge.env" in service
     timer = (root / "etc/systemd/system/pi-backup.timer").read_text()
-    assert "OnCalendar=*-*-* 04:30:00" in timer
+    # The zone is part of the calendar: rbp1's clock is UTC and rbp0's is
+    # Europe/Paris, and both must fire at the same instant (measured 2026-11-26).
+    assert "OnCalendar=*-*-* 04:30:00 Europe/Paris" in timer
     assert "RandomizedDelaySec=15min" in timer
     assert "Persistent=true" in timer
     prune = (root / "etc/systemd/system/pi-backup-prune.timer").read_text()
-    assert "OnCalendar=Sun *-*-* 05:30:00" in prune
+    assert "OnCalendar=Sun *-*-* 05:30:00 Europe/Paris" in prune
 
 
 def test_setup_installs_the_script_where_root_will_run_it(tmp_path):
@@ -1358,6 +1361,36 @@ def test_setup_installs_the_script_where_root_will_run_it(tmp_path):
     assert installed.exists()
     assert (installed.stat().st_mode & 0o777) == 0o555
     assert installed.read_text() == SCRIPT.read_text()
+
+
+def installed_copy(tmp_path):
+    """The script where `setup` puts it, with no ../playbooks beside it — which is
+    what /usr/local/sbin looks like on a host, and where the timers run it."""
+    installed = tmp_path / "usr/local/sbin/hosts-pi.sh"
+    installed.parent.mkdir(parents=True)
+    installed.write_text(SCRIPT.read_text())
+    installed.chmod(0o555)
+    return installed
+
+
+def test_stream_runs_from_the_installed_copy_with_no_templates_beside_it(tmp_path):
+    """The nightly timer runs /usr/local/sbin/hosts-pi.sh, not the ansible tree.
+    A hard `cd` to ../playbooks at load made every verb die there before dispatch,
+    so the first real run could never have staged or streamed anything."""
+    root = tmp_path / "pi"
+    _pi_fixture(root)
+    _stack_with_excludables(root)
+
+    out = run("stream", "rbp0", root=root, env=fake_restic(tmp_path),
+              script=installed_copy(tmp_path))
+    assert out.returncode == 0, out.stderr
+    assert "streamed rbp0" in out.stdout
+
+
+def test_a_verb_that_renders_says_which_tree_has_the_templates(tmp_path):
+    out = run("render", "rbp0", script=installed_copy(tmp_path))
+    assert out.returncode == 1
+    assert "ansible tree" in out.stderr
 
 
 def test_setup_retires_the_legacy_cron_and_its_dead_keys(tmp_path):
