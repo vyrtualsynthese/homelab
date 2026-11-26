@@ -1,13 +1,14 @@
-# Default values for dashy.
+# Default values for pihole-exporter.
 # This is a YAML-formatted file.
 # Declare variables to be passed into your templates.
-
-replicaCount: 1
 
 image:
   repository: ekofr/pihole-exporter
   pullPolicy: Always
-  # Overrides the image tag whose default is the chart appVersion.
+  # v1.4.0 is the first release that speaks Pi-hole v6's own API: it posts the
+  # password to /api/auth for a session id and reads /api/stats/summary. The
+  # chart runs the same tag as the image it was already on; the defect was in
+  # the environment, not the version.
   tag: v1.4.0
 
 imagePullSecrets: []
@@ -23,47 +24,78 @@ serviceAccount:
   # If not set and create is true, a name is generated using the fullname template
   name: ""
 
-podAnnotations:
-  prometheus.io/scrape: "true"
-  prometheus.io/scheme: "http"
-  prometheus.io/port: "9617"
+pihole:
+  # Both edge Pis, in this order: rbp0 (192.168.1.22, the source of truth) then
+  # rbp1 (192.168.1.38). One exporter reads all of them and labels every series
+  # with its hostname, so Prometheus scrapes one target.
+  hostnames:
+    - 192.168.1.22
+    - 192.168.1.38
 
-podSecurityContext: {}
+  # Pi-hole v6 serves its panel and API over TLS on 443 with a certificate it
+  # mints at first start: CN pi.hole, self-signed, valid thirty years. The name
+  # is no use to a client reaching two hosts — both Pis present the same one —
+  # and the root is not in the image, so verification cannot pass. The hop from
+  # nuc0 to each Pi is encrypted; the peer is not authenticated. Replacing this
+  # needs a leaf per Pi from the internal CA (hack/internal-cert.sh --host),
+  # which is a Pi change of its own and is not in this chart.
+  protocol: https
+  port: 443
+  skipTLSVerification: true
 
-  # fsGroup: 2000
+  # Application passwords, one per hostname above and in the same order, because
+  # the exporter's PIHOLE_PASSWORD_FILE is a comma-separated list it pairs
+  # positionally with PIHOLE_HOSTNAME. Created per Pi-hole under
+  # Settings > Web interface / API; the keys double as the mounted file names.
+  # The operator owns the Secret; this chart only references it.
+  passwordSecret:
+    name: pihole-exporter
+    mountPath: /etc/pihole-exporter
+    keys:
+      - rbp0
+      - rbp1
+
+metrics:
+  # One number, three consumers: PORT in the environment, the containerPort and
+  # the scrape annotation. The chart declared 9902 for a listener on 9617, so
+  # nothing that read the container port could find the exporter.
+  port: 9617
+
+# Fluent Bit ships every line to Loki unfiltered. `warn` keeps what matters —
+# the once-a-minute authentication failures — and drops the startup chatter.
+logLevel: warn
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 65532
+  runAsGroup: 65532
+  seccompProfile:
+    type: RuntimeDefault
 
 securityContext:
-  privileged: true
-  # capabilities:
-  #   drop:
-  #   - ALL
-  # readOnlyRootFilesystem: true
-  # runAsNonRoot: true
-  # runAsUser: 1000
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
 
+# Sized the way docs/reference/chart-sizing.md says: measured against Prometheus
+# on 2026-11-26 over the seven days the TSDB then held — 9.2 MiB average, 11.4
+# MiB p95, 12.2 MiB peak — so request = p95 (12Mi) and limit = peak x 1.5 (24Mi).
+# The old 28Mi/56Mi pair was a guess. The exporter holds one HTTP session per
+# Pi-hole and nothing else, so the band is narrow.
 resources:
   requests:
     cpu: 1m
-    memory: 28Mi
+    memory: 12Mi
   limits:
-    memory: 56Mi
-  # We usually recommend not to specify default resources and to leave this as a conscious
-  # choice for the user. This also increases chances charts run on environments with little
-  # resources, such as Minikube. If you do want to specify resources, uncomment the following
-  # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
-  # limits:
-  #   cpu: 100m
-  #   memory: 128Mi
-  # requests:
-  #   cpu: 100m
-  #   memory: 128Mi
+    memory: 24Mi
 
-# Pinned the way every other workload is: a hostname, not the retired
-# `node-type` label. `nuc0` is where this pod has run, and the exporter
-# reaches the Pi-holes over the network, so the node is a home, not a need.
+# Pinned the way every other workload is. The pod reads both Pis over the LAN,
+# so the node is a home, not a need; it stays where it has run since 2023.
 nodeSelector:
   kubernetes.io/hostname: nuc0
 
-tolerations: {}
+tolerations: []
 
 affinity: {}

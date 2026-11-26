@@ -624,6 +624,36 @@ whatever the stream overrides on its own entry — so the schedule and the polic
 and the verifier is a script rather than a rule so its line can be the dashboard's input as well as
 the alert's.
 
+### pihole-exporter
+
+As of 2026-11-26: one object, the Deployment. The app is stateless and Prometheus
+discovers the pod by annotation, so there is no Service, no claim and no route; the
+three scrape annotations are rendered in the template from `metrics.port`, which is
+also `PORT` and the `containerPort`, because the chart had announced `9902` for a
+listener on `9617`.
+
+One instance reads both edge Pis (`PIHOLE_HOSTNAME` is a list), and the two app
+passwords are mounted as files and named to the exporter through
+`PIHOLE_PASSWORD_FILE`, one path per host in the same order: the Pis mint their own
+passwords, so a single `PIHOLE_PASSWORD` could not carry both, and a file keeps the
+secret out of the process environment. `values.yaml` fails to render when the two
+lists differ in length, because the pairing is positional.
+
+The hop to each Pi is HTTPS on 443 — Pi-hole v6 terminates TLS itself — with
+`SKIP_TLS_VERIFICATION=true`. The certificate is the one each Pi mints at first
+start: CN `pi.hole`, self-signed, and the same CN on both hosts, so no client can
+verify it against a name it reached. What that buys is encryption between `nuc0`
+and the Pis, not an authenticated peer; the fix is a leaf per Pi from the internal
+CA (`hack/internal-cert.sh --host`), which is a Pi change and a card of its own.
+
+Liveness and readiness share the image's own `-healthcheck`, which asks `/liveness`
+on `PORT`. The only failure that leaves the process up is Pi-hole refusing the
+session, and restarting cannot fix a credential: it shows as a warning in the log
+and as missing `pihole_*` series. The image is `scratch`, so the binary is the probe
+— there is no shell to run one. `privileged: true`, copied from the boilerplate,
+was dropped with `capabilities.drop: [ALL]`, `seccompProfile: RuntimeDefault`, a
+read-only root filesystem and the image's own uid 65532.
+
 ## Charts still to align
 Only non-public apps with hand-maintained charts are in scope for now. Public-facing apps wait,
 because their ingress, TLS and auth wiring is what changes first in W5 and W7; `ashuvidz-website` is

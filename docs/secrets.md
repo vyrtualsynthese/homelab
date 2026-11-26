@@ -37,7 +37,10 @@ covered the Secrets deleted the same day are in the vault's trash, not in the fo
   `hack/check_pihole_parity.py` reads both panels with — and the one `PIHOLE_PANEL_PASSWORD` both
   hosts share, are in `homelab.env`. The panel password is not a Kubernetes Secret and is not set from
   the cluster: `hosts-pi.sh` renders every other Pi-hole setting, and the password alone is written to
-  each host's `pihole.env` as `FTLCONF_webserver_api_password`.
+  each host's `pihole.env` as `FTLCONF_webserver_api_password`. The two app passwords are also what
+  the `pihole-exporter` Secret in `monitoring` carries, under the keys `rbp0` and `rbp1`: the exporter
+  reads both panels as well, and it needs one password per host because the two Pis mint different
+  ones.
 - The edge Pis' `wg-easy.env` holds one key, `OAUTH_OIDC_CLIENT_SECRET`: the VPN panel's own client
   secret, copied from `WG_EASY_CLIENT_SECRET` in `authentik-sso`. It is written by hand on each host,
   gitignored, required by `hosts-pi.sh`, and carried off the host only by `backup`. The panel's TLS
@@ -78,7 +81,7 @@ keys at all.
 | `postgres-secrets` | `databases` | Bitnami PostgreSQL `existingSecret` |
 | `pgadmin` | `databases` | external chart `existingSecret` |
 | `renovate` | `renovate` | external chart `existingSecret` |
-| `pihole-exporter` | `monitoring` | `key` |
+| `pihole-exporter` | `monitoring` | `rbp0`, `rbp1` — one Pi-hole app password per edge Pi, mounted as files; the keys are the file names and the order follows `PIHOLE_HOSTNAME` |
 | `mktxp-conf` | `monitoring` | mounted as a file |
 | `grafana` | `monitoring` | `admin-user`, `admin-password` — required; the chart reads it via `admin.existingSecret` |
 | `prometheus-basicauth` | `monitoring` | `web-config.yml` → `--web.config.file` (bcrypt users `ops`, `grafana`, `reload`); `grafana-password` → `PROMETHEUS_GRAFANA_PASSWORD` in Grafana's pod; `reload-password` → `PROMETHEUS_RELOAD_PASSWORD` in the config-reloader's |
