@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Issue the cluster's default TLS certificate: the private `*.kub.local` one.
+# Issue the cluster's default TLS certificate: the private `*.kub.local` one —
+# and, with `--host`, a leaf for a machine that is not the cluster.
 #
 # Traefik serves `kube-system/local-cert` (through the default TLSStore) to any
 # `websecure` router that sets neither `secretName` nor `certResolver`. A `.local`
@@ -12,6 +13,8 @@
 #   hack/internal-cert.sh                later run: reuse the CA, sign a fresh leaf
 #   hack/internal-cert.sh --force-ca     new CA — every client must re-install it
 #   hack/internal-cert.sh --out DIR      where to write (default: below)
+#   hack/internal-cert.sh --host NAME    a leaf for one host that is not the
+#                                        cluster's; same CA, its own name and key
 #
 # Nothing here is committed: keys never enter the repository. Replacing the Secret
 # takes effect at once, without a Traefik restart — but it has to be deleted and
@@ -36,6 +39,7 @@ set -euo pipefail
 
 OUT="${HOME}/.config/secrets/kub-local"
 FORCE_CA=0
+HOST_NAME=""
 CA_DAYS=3650
 LEAF_DAYS=730
 # One label only: `*.kub.local` covers calibre.kub.local, not a.b.kub.local.
@@ -45,7 +49,8 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --out) OUT="${2:?--out needs a directory}"; shift 2 ;;
     --force-ca) FORCE_CA=1; shift ;;
-    -h|--help) sed -n '2,32p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    --host) HOST_NAME="${2:?--host needs a name}"; shift 2 ;;
+    -h|--help) sed -n '2,37p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "unknown argument: $1" >&2; exit 2 ;;
   esac
 done
@@ -60,7 +65,64 @@ CA_KEY="local-ca-key.pem"
 CA_CRT="local-ca.pem"
 LEAF_KEY="kub.local-key.pem"
 LEAF_CRT="kub.local.pem"
-LEAF_CSR="kub.local.csr"
+LEAF_CSR="leaf.csr"
+
+# Sign one leaf with the CA in this directory. $1 is the common name, $2 the
+# subjectAltName list, $3 and $4 the certificate and key to write. One function
+# for both leaves because the extensions are the whole contract, and a host leaf
+# that drifted from the cluster one would be a second recipe to get wrong.
+sign_leaf() {
+  local cn="$1" san="$2" crt="$3" key="$4"
+
+  openssl req -new -newkey rsa:2048 -sha256 -nodes \
+    -keyout "$key" -out "$LEAF_CSR" \
+    -subj "/CN=$cn" >/dev/null 2>&1
+
+  cat > leaf.ext <<EOF
+basicConstraints=critical,CA:FALSE
+keyUsage=critical,digitalSignature,keyEncipherment
+extendedKeyUsage=serverAuth
+subjectAltName=$san
+authorityKeyIdentifier=keyid,issuer
+subjectKeyIdentifier=hash
+EOF
+
+  openssl x509 -req -in "$LEAF_CSR" -CA "$CA_CRT" -CAkey "$CA_KEY" \
+    -CAcreateserial -days "$LEAF_DAYS" -sha256 -extfile leaf.ext \
+    -out "$crt" >/dev/null 2>&1
+
+  # OpenSSL 3 writes the serial next to the CA as local-ca.srl (the older
+  # local-ca.pem.srl is removed too, so a leftover from either naming goes).
+  rm -f "$LEAF_CSR" leaf.ext "${CA_CRT%.pem}.srl" "$CA_CRT".srl 2>/dev/null || true
+  chmod 600 "$key" "$CA_KEY"
+  chmod 644 "$crt" "$CA_CRT"
+}
+
+# A host leaf: same root, one name, its own key. It never touches the cluster's
+# `*.kub.local` pair, so issuing one cannot break a route that already works.
+if [ -n "$HOST_NAME" ]; then
+  if [ ! -f "$CA_KEY" ] || [ ! -f "$CA_CRT" ]; then
+    echo "$OUT holds no CA: run this script once without --host first" >&2
+    exit 1
+  fi
+  HOST_CRT="$HOST_NAME.pem"
+  HOST_KEY="$HOST_NAME-key.pem"
+  echo "==> reusing the existing CA: $OUT/$CA_CRT"
+  echo "==> signing the leaf for: $HOST_NAME"
+  sign_leaf "$HOST_NAME" "DNS:$HOST_NAME" "$HOST_CRT" "$HOST_KEY"
+
+  echo
+  echo "leaf   : $OUT/$HOST_CRT"
+  openssl x509 -in "$HOST_CRT" -noout -subject -dates -ext subjectAltName | sed 's/^/         /'
+  echo "root   : $OUT/$CA_CRT   (the root every client already trusts)"
+  echo
+  echo "==> put the pair on the host that serves the name:"
+  printf '    ssh vronteix@<host> mkdir -p ~/dockers/certs\n    scp %s/%s vronteix@<host>:~/dockers/certs/tls.pem\n    scp %s/%s vronteix@<host>:~/dockers/certs/tls-key.pem\n' \
+    "$OUT" "$HOST_CRT" "$OUT" "$HOST_KEY"
+  echo "    (the key never enters git, chat or a ticket; the copy in ~/dockers is"
+  echo "     what 'backup' carries off the host)"
+  exit 0
+fi
 
 if [ -f "$CA_KEY" ] && [ "$FORCE_CA" = 0 ]; then
   echo "==> reusing the existing CA: $OUT/$CA_CRT"
@@ -77,26 +139,7 @@ else
 fi
 
 echo "==> signing the leaf for: ${SAN#DNS:}"
-openssl req -new -newkey rsa:2048 -sha256 -nodes \
-  -keyout "$LEAF_KEY" -out "$LEAF_CSR" \
-  -subj "/CN=kub.local" >/dev/null 2>&1
-
-cat > leaf.ext <<EOF
-basicConstraints=critical,CA:FALSE
-keyUsage=critical,digitalSignature,keyEncipherment
-extendedKeyUsage=serverAuth
-subjectAltName=${SAN}
-authorityKeyIdentifier=keyid,issuer
-subjectKeyIdentifier=hash
-EOF
-
-openssl x509 -req -in "$LEAF_CSR" -CA "$CA_CRT" -CAkey "$CA_KEY" \
-  -CAcreateserial -days "$LEAF_DAYS" -sha256 -extfile leaf.ext \
-  -out "$LEAF_CRT" >/dev/null 2>&1
-
-rm -f "$LEAF_CSR" leaf.ext "$CA_CRT".srl 2>/dev/null || true
-chmod 600 "$CA_KEY" "$LEAF_KEY"
-chmod 644 "$CA_CRT" "$LEAF_CRT"
+sign_leaf "kub.local" "$SAN" "$LEAF_CRT" "$LEAF_KEY"
 
 echo
 echo "leaf   : $OUT/$LEAF_CRT"

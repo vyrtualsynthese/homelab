@@ -14,7 +14,9 @@
 
 ## How a request arrives
 
-Traefik is the only door for HTTP and HTTPS. It runs as a Kubernetes `LoadBalancer` Service in
+Traefik is the only door for HTTP and HTTPS on the cluster's names — the two edge Pis are the one
+exception, and it is written down [below](#the-edge-pis-are-the-one-exception). It runs as a
+Kubernetes `LoadBalancer` Service in
 `kube-system`, with no cloud load balancer behind the name: the house router forwards 80 and 443
 (TCP), 25565 (TCP), 22000 (TCP and UDP) and 21027 (UDP) to **one** cluster address, `192.168.1.46`
 (`streaming`), which is also what the edge Pi-hole answers for `*.kub.local`. The 25565 and
@@ -116,6 +118,23 @@ redirect would send a plain-HTTP visitor through authentik and back to plain HTT
 Clients install the CA root once. Without it a browser warns and can be clicked past; with it the lock
 is real. The root, its two backups and the restore drill are
 [runbooks/internal-ca.md](../runbooks/internal-ca.md).
+
+### The edge Pis are the one exception
+
+The two Pi-holes serve their own admin surfaces from the host, not through this router. Pi-hole's panel
+answers on 443 with a certificate it mints itself; the wg-easy VPN panel answers on 8443 behind a Caddy
+container, on a per-host leaf from the same internal CA — `vpn-rbp0.kub.local` and
+`vpn-rbp1.kub.local`, mapped by Pi-hole's own `02-my-wildcard-dns.conf` above its `*.kub.local`
+wildcard. The leaf is per host on purpose: the shared `*.kub.local` key on an edge host would be a key
+to every internal name.
+
+Neither is a Traefik route, and that is the point: the VPN panel has to open when the cluster is down,
+which is also why its password login stays beside its authentik OIDC client. Its sign-in through
+authentik is a cluster dependency; the password is not. Both panels were plain HTTP on `0.0.0.0:5000`
+until 2026-11-26.
+
+`8443` is not among the ports the router forwards — only the list at the top of this page is — so the
+panel is reachable from the LAN and not from outside, the same position Pi-hole's own `443` holds.
 
 ## TLS on the public names
 

@@ -32,6 +32,7 @@ PI_ROOT=/tmp/fake-pi ./hosts-pi.sh setup rbp0
 | Path | Owned | Why |
 |---|---|---|
 | `/home/vronteix/dockers/docker-compose.yml` | yes | one template in `playbooks/templates/runners/`, rendered per host; the WireGuard port is the only per-host value |
+| `Caddyfile` | yes | the VPN panel's TLS endpoint, rendered per host from `playbooks/templates/runners/Caddyfile`: the panel's name is the only per-host value. `setup` force-recreates `caddy` when it writes it, because a bind mount is resolved at container start |
 | `etc-pihole-updatelists/pihole-updatelists.conf` | yes | the file Pi-hole's list updater reads; without it Docker makes the source a directory |
 | `etc-dnsmasq.d/02-my-wildcard-dns.conf` | yes | the wildcard names the LAN resolves through this Pi-hole |
 | `pihole.settings` | yes | every Pi-hole setting, rendered from one template so the two hosts are byte-identical. The name avoids `.gitignore`'s `*.env` |
@@ -47,6 +48,8 @@ PI_ROOT=/tmp/fake-pi ./hosts-pi.sh setup rbp0
 | `/etc/hosts` | **no** | cloud-init rewrites it from its own template on every boot (`manage_etc_hosts: true`); its copy already names the host and localhost |
 | Docker's repository and the four packages | yes | a fresh image has no runtime; `setup` installs the pinned set from `download.docker.com` |
 | `pihole.env` | **no** | it holds the Pi-hole panel password and nothing else: `FTLCONF_webserver_api_password`, `0600`, owned by the account that runs compose, gitignored. `setup` requires it and names it when it is missing. The v5 name `WEBPASSWORD` is ignored by this image |
+| `wg-easy.env` | **no** | one key, `OAUTH_OIDC_CLIENT_SECRET`, the VPN panel's own client secret in authentik. Gitignored, `0600`, required by `setup` and never written by it; the same value is `WG_EASY_CLIENT_SECRET` in the cluster's `authentik-sso` Secret, because Secrets do not leave the cluster |
+| `certs/` | **no** | `tls.pem` and `tls-key.pem`, this host's own leaf from the internal CA (`hack/internal-cert.sh --host <name>`) and the key Caddy serves on 8443. Required by `setup`, never written, and carried off the host by `backup` |
 | `config/` (wg-easy's database) | **no** | since wg-easy 15 the panel account, host, port, DNS and peers live in `config/wg-easy.db`, not in an environment file. `backup` copies it with the rest of the stack |
 | `/boot/firmware/config.txt`, `cmdline.txt` | **no** | see below |
 
@@ -105,7 +108,7 @@ prints `changed=0` on a host that already matches.
   `127.0.0.1`: a container cannot reach the host's loopback. Never `1.1.1.1`: it answers around the
   blocklist.
 - **A resolver change is live.** `setup` runs `netplan apply` and restarts `systemd-resolved` when the
-  bytes moved, and recreates the two bridge services (`wg-easy`, `smartctl-exporter`), because a
+  bytes moved, and recreates the bridge services (`wg-easy`, `caddy`, `smartctl-exporter`), because a
   container's `/etc/resolv.conf` is a copy taken when it is created. If both Pi-holes are down, a host
   cannot resolve, so the second address in the list is the fallback rather than a comment.
 - **The drop-in, not the packaged file.** `90-pihole-resolvers.conf` keeps resolved's stub listener
@@ -119,9 +122,29 @@ prints `changed=0` on a host that already matches.
   `hack/pihole/`, so the app password never crosses the LAN in the clear; a reflash mints a new
   certificate and the check fails until that pair is re-exported and committed.
 
+### The VPN panel is served by Caddy, on the host itself
+
+wg-easy 15 has no TLS server of its own: it expects a proxy in front, and its `INSECURE=true` is only
+for the case where there is none. Both Pis used to publish it as plain HTTP on `0.0.0.0:5000`, which
+put the login, the session cookie and every peer's key on the LAN in the clear. The panel now listens
+on the compose network and nothing else, and `caddy` holds the only socket the LAN can open: `8443`,
+this host's own certificate, and no ACME.
+
+- **The name is per host**: `vpn-rbp0.kub.local` on `rbp0`, `vpn-rbp1.kub.local` on `rbp1`. Pi-hole
+  answers both from `02-my-wildcard-dns.conf`, above the `*.kub.local` wildcard, and the certificate
+  is a per-host leaf — never the shared `*.kub.local` key, which would let either Pi impersonate every
+  internal name.
+- **The leaf is issued on the workstation**, with `hack/internal-cert.sh --host <name>`, and the pair
+  is copied to `certs/tls.pem` and `certs/tls-key.pem` on the host. `setup` refuses to run without
+  both and writes neither; `backup` is what carries them off the host.
+- **The gate is the panel's own OIDC client in authentik**, Administrators only. The panel's password
+  stays next to it because a cluster that is down cannot answer an OIDC challenge, and the reason this
+  arrangement exists is that the VPN panel must work when the cluster does not.
+- **Port 8443, not 443**: Pi-hole owns 80 and 443 on these hosts.
+
 ### The engine, which `setup` installs
 
-A reflashed image has no container runtime, and the stack is four containers: `setup` installs
+A reflashed image has no container runtime, and the stack is five containers: `setup` installs
 `docker-ce`, `docker-ce-cli`, `containerd.io` and `docker-compose-plugin` from Docker's own
 repository, and puts `vronteix` in the `docker` group.
 

@@ -12,11 +12,13 @@
 # PI_ROOT points every verb at another directory, which is how the tests drive
 # it without a Pi. It defaults to "/" — a real host.
 #
-# What this script never writes: pihole.env. It holds the Pi-hole password, it
-# is gitignored, and a script that wrote it would either commit a secret or
-# invent one. It requires it and names it when it is missing. The WireGuard
-# side has no environment file since wg-easy 15: its settings live in the
-# panel's own database under the stack directory, which `backup` copies.
+# What this script never writes: pihole.env, wg-easy.env and certs/. The first
+# holds the Pi-hole password, the second the VPN panel's OIDC client secret, and
+# the third the panel's TLS leaf and key. All three are gitignored, and a script
+# that wrote them would either commit a secret or invent one. It requires them
+# and names them when they are missing. The WireGuard side has no environment
+# file since wg-easy 15: its settings live in the panel's own database under the
+# stack directory, which `backup` copies.
 #
 # What it also does not invent: /boot/firmware/config.txt and cmdline.txt. After
 # a reflash the image's own copies are right for the disk they were written to,
@@ -92,8 +94,25 @@ wg_udp_port() {
     esac
 }
 
+# The name the VPN panel answers on. One label under the internal wildcard, so
+# Pi-hole's existing record sends it here (02-my-wildcard-dns.conf carries the
+# two specific addresses) and the certificate is a per-host leaf, not the shared
+# `*.kub.local` one.
+panel_host() {
+    case "$1" in
+        rbp0) printf 'vpn-rbp0.kub.local\n' ;;
+        rbp1) printf 'vpn-rbp1.kub.local\n' ;;
+    esac
+}
+
 desired_compose() {
     sed "s/@WG_UDP_PORT@/$(wg_udp_port "$1")/g" "$TEMPLATES/docker-compose.yml"
+}
+
+# The panel's TLS endpoint, rendered per host because the name differs and the
+# certificate must match it.
+desired_caddyfile() {
+    sed "s/@PANEL_HOST@/$(panel_host "$1")/g" "$TEMPLATES/Caddyfile"
 }
 
 # The settings both Pi-holes share. One template, no per-host value: the two
@@ -142,16 +161,18 @@ EOF
 
 require_env() {
     local missing=0 file
-    for file in pihole.env; do
+    for file in pihole.env wg-easy.env certs/tls.pem certs/tls-key.pem; do
         if [ ! -f "$ROOT$STACK_DIR/$file" ]; then
             echo "missing $ROOT$STACK_DIR/$file" >&2
             missing=1
         fi
     done
     if [ "$missing" -eq 1 ]; then
-        echo "it holds a secret and is gitignored. After a reflash, 'restore' is" >&2
-        echo "what brings it back from the backup; on a fresh host, write it once" >&2
-        echo "by hand." >&2
+        echo "pihole.env holds the Pi-hole panel password, wg-easy.env the VPN" >&2
+        echo "panel's authentik OIDC client secret, and certs/ the TLS leaf" >&2
+        echo "minted by 'hack/internal-cert.sh --host <name>'. All three are" >&2
+        echo "gitignored. After a reflash, 'restore' is what brings them back" >&2
+        echo "from the backup; on a fresh host, write or copy them once by hand." >&2
         exit 1
     fi
 }
@@ -527,6 +548,8 @@ cmd_render() {
     local host="$1"
     echo "--- $STACK_DIR/docker-compose.yml"
     desired_compose "$host"
+    echo "--- $STACK_DIR/Caddyfile"
+    desired_caddyfile "$host"
     echo "--- $STACK_DIR/etc-pihole-updatelists/pihole-updatelists.conf"
     cat "$TEMPLATES/pihole-updatelists.conf"
     echo "--- $STACK_DIR/etc-dnsmasq.d/02-my-wildcard-dns.conf"
@@ -566,10 +589,20 @@ cmd_render() {
     echo "--- $STACK_DIR/pihole.env"
     echo "required, never printed and never written: the panel password is the"
     echo "only key it holds, and it is gitignored by the *.env rule"
+    echo "--- $STACK_DIR/wg-easy.env"
+    echo "required, never printed and never written: one key,"
+    echo "OAUTH_OIDC_CLIENT_SECRET, the VPN panel's authentik client secret"
+    echo "--- $STACK_DIR/certs/tls.pem and tls-key.pem"
+    echo "required, never printed and never written: this host's own leaf from"
+    echo "the internal CA, 'hack/internal-cert.sh --host $(panel_host "$host")'."
+    echo "caddy serves it on 8443 and wg-easy's 5000 stays on the compose network"
+    echo "--- the panel"
+    echo "https://$(panel_host "$host"):8443, sign-in through authentik (OIDC) and"
+    echo "the panel's own password when the cluster is down"
 }
 
 cmd_setup() {
-    local host="$1" current_name pihole_changed=0 netplan_changed=0 resolved_changed=0
+    local host="$1" current_name pihole_changed=0 caddy_changed=0 netplan_changed=0 resolved_changed=0
 
     current_name=""
     if [ -f "$ROOT/etc/hostname" ]; then
@@ -593,6 +626,11 @@ cmd_setup() {
     ensure_sshd_policy
 
     write_abs "$ROOT$STACK_DIR/docker-compose.yml" "$(desired_compose "$host")"
+    # Caddy reads this at start, and it is a bind mount: a file written under a
+    # running caddy is invisible until the container restarts. Hence the flag and
+    # the recreate at the bottom, the same rule pihole's files follow.
+    write_abs "$ROOT$STACK_DIR/Caddyfile" "$(desired_caddyfile "$host")"
+    caddy_changed="$CHANGED_THIS_WRITE"
     # Both files are bind-mounted by pihole, and a bind mount is resolved when
     # the container starts: a file written under a running pihole is invisible
     # to it until the container restarts. Hence the flag, and the recreate below.
@@ -639,19 +677,23 @@ cmd_setup() {
         ( cd "$STACK_DIR" && docker compose up -d --remove-orphans >/dev/null )
         echo "stack: docker compose up -d --remove-orphans"
         # `up -d <service>` converges that service alone, so the run above is the
-        # one that applies a definition or image change to the other three. This
+        # one that applies a definition or image change to the other four. This
         # one is here because a bind mount is resolved when the container starts:
         # a file written above is invisible to a pihole that kept running.
         if [ "$pihole_changed" -eq 1 ]; then
             ( cd "$STACK_DIR" && docker compose up -d --force-recreate pihole >/dev/null )
             echo "stack: docker compose up -d --force-recreate pihole"
         fi
-        # The two bridge services are the ones that resolve names through the
+        if [ "$caddy_changed" -eq 1 ]; then
+            ( cd "$STACK_DIR" && docker compose up -d --force-recreate caddy >/dev/null )
+            echo "stack: docker compose up -d --force-recreate caddy"
+        fi
+        # The three bridge services are the ones that resolve names through the
         # host's file rather than Pi-hole answering for them; pihole and
         # node_exporter share the host's namespace and need no recreate.
         if [ "$netplan_changed" -eq 1 ] || [ "$resolved_changed" -eq 1 ]; then
-            ( cd "$STACK_DIR" && docker compose up -d --force-recreate wg-easy smartctl-exporter >/dev/null )
-            echo "stack: docker compose up -d --force-recreate wg-easy smartctl-exporter"
+            ( cd "$STACK_DIR" && docker compose up -d --force-recreate wg-easy caddy smartctl-exporter >/dev/null )
+            echo "stack: docker compose up -d --force-recreate wg-easy caddy smartctl-exporter"
         fi
     else
         echo "stack: not started (PI_ROOT is set)"
@@ -684,7 +726,7 @@ cmd_verify() {
         exit 1
     fi
 
-    for file in pihole.env; do
+    for file in pihole.env wg-easy.env certs/tls.pem certs/tls-key.pem; do
         if [ ! -f "$ROOT$STACK_DIR/$file" ]; then
             echo "MISSING $ROOT$STACK_DIR/$file"
             problems=1
@@ -697,6 +739,10 @@ cmd_verify() {
     elif ! cmp -s <(desired_compose "$host") "$ROOT$STACK_DIR/docker-compose.yml"; then
         echo "DIFFERS $ROOT$STACK_DIR/docker-compose.yml"
         diff -u "$ROOT$STACK_DIR/docker-compose.yml" <(desired_compose "$host") || true
+        problems=1
+    fi
+
+    if ! check_text "$ROOT$STACK_DIR/Caddyfile" "$(desired_caddyfile "$host")"; then
         problems=1
     fi
 

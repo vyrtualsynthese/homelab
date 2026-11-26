@@ -23,24 +23,46 @@ services:
     image: ghcr.io/wg-easy/wg-easy:15.5.0
     container_name: wg-easy
     environment:
-      # The panel's port, published below as 5000 like it was on 14.
+      # The panel listens on this port inside the compose network. It is not
+      # published, so nothing on the LAN reaches it directly: caddy below is the
+      # only thing that can.
       - PORT=5000
-      # No TLS in front of the panel: it answers plain HTTP on the LAN, and
-      # without this it refuses the session cookie it sets itself.
-      - INSECURE=true
+      # TLS is terminated by caddy. The cookie is Secure and the panel's public
+      # URL is https, which is what INSECURE=false says; the hop from caddy to
+      # this container is plain HTTP on the compose network alone.
+      - INSECURE=false
+      # caddy is the only address allowed to tell the panel which scheme and
+      # host the browser used. Without it the OAuth redirect URI is built from
+      # the proxy's own name and the callback lands on the wrong URL.
+      - TRUSTED_PROXIES=172.30.0.0/24
       # 14 handed out IPv4 addresses only, and the v14 backup carries no IPv6
       # one. Turning it on here would add ::/0 routes to client configs.
       - DISABLE_IPV6=true
+      # Native single sign-on: the panel is its own OIDC client in authentik.
+      # The password login stays as the way in when the cluster is down, which
+      # is the whole point of this stack not depending on it. OAUTH_AUTO_LAUNCH
+      # is deliberately unset for the same reason: auto-launch sends the login
+      # page straight to the provider, and the provider is not there when the
+      # cluster is down.
+      - OAUTH_PROVIDERS=oidc
+      - OAUTH_OIDC_SERVER=https://authentik.kub.home.ashudev.com/application/o/wg-easy/
+      - OAUTH_OIDC_CLIENT_ID=wg-easy
+      - OAUTH_OIDC_NAME=authentik
+    env_file:
+      # One key, OAUTH_OIDC_CLIENT_SECRET. It is gitignored and 'setup' refuses
+      # to run without it, the same rule pihole.env follows.
+      - "./wg-easy.env"
     volumes:
       - ./config:/etc/wireguard
       # wg-quick loads the WireGuard module on demand, and the container has to
       # see the host's module tree to do it after a reboot.
       - /lib/modules:/lib/modules:ro
     ports:
-      # Both sides are the panel's configured port: the interface listens on it
-      # inside the container, so the host mapping is the same number twice.
+      # One UDP port, the WireGuard listener. The panel's 5000 is deliberately
+      # absent: it answers on the compose network and nowhere else.
       - "@WG_UDP_PORT@:@WG_UDP_PORT@/udp"
-      - "5000:5000/tcp"
+    networks:
+      - panel
     restart: unless-stopped
     cap_add:
       - NET_ADMIN
@@ -48,9 +70,32 @@ services:
     sysctls:
       - net.ipv4.ip_forward=1
       - net.ipv4.conf.all.src_valid_mark=1
+  caddy:
+    # The panel's TLS, on the Pi itself. This is here rather than on the
+    # cluster's Traefik on purpose: the VPN panel has to answer when the
+    # cluster is down, and a route on a router in another machine cannot.
+    # One certificate from the internal CA, one name, one port, no ACME.
+    image: caddy:2.11.9
+    container_name: caddy
+    depends_on:
+      - wg-easy
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # tls.pem and tls-key.pem, minted by hack/internal-cert.sh --host and
+      # copied here. Never written by the setup script.
+      - ./certs:/certs:ro
+    ports:
+      - "8443:8443"
+    networks:
+      - panel
+    restart: unless-stopped
   # No router here, by decision (task 480, 2026-11-24). The cluster's Traefik on
   # `streaming` answers every *.kub.home.ashudev.com name and holds the only
   # certificate store; the copy these Pis ran had none, so it could not serve TLS.
+  #
+  # caddy above is not that router: one name, one upstream, no dashboard, no
+  # discovery, and nothing but the VPN panel. It is here because the panel must
+  # open when the cluster is down, which a route on another machine cannot do.
   #
   # Its whole configuration was --api.insecure=true: a dashboard on 8080 with no
   # authentication, on a host that faces the LAN, and `docker ps` had not shown it
@@ -73,3 +118,11 @@ services:
     ports:
       - "9902:9902"
     restart: unless-stopped
+
+networks:
+  panel:
+    # A fixed subnet so wg-easy can name the only address allowed to reach it
+    # through TRUSTED_PROXIES. caddy is the only other service on it.
+    ipam:
+      config:
+        - subnet: 172.30.0.0/24
