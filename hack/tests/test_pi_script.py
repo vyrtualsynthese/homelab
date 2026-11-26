@@ -57,8 +57,8 @@ def test_render_prints_the_pinned_images_for_each_pi():
 def test_wg_easy_15_gets_its_settings_from_the_panel_not_the_environment():
     """v15 keeps its configuration in its own database and refuses to start
     when PASSWORD or PASSWORD_HASH is in the environment — which is what a v14
-    env_file passed in. What it does read is the panel's port, the proxy it sits
-    behind, and the provider it signs in with."""
+    env_file passed in. What it does read is the panel's port and the proxy it
+    sits behind."""
     compose = yaml.safe_load(
         (REPO / "ansible/playbooks/templates/runners/docker-compose.yml").read_text()
     )
@@ -68,13 +68,16 @@ def test_wg_easy_15_gets_its_settings_from_the_panel_not_the_environment():
     assert environment["PORT"] == "5000"
     assert environment["INSECURE"] == "false", "caddy terminates TLS in front of it"
     assert environment["TRUSTED_PROXIES"] == "172.30.0.0/24"
-    assert environment["OAUTH_PROVIDERS"] == "oidc"
-    assert environment["OAUTH_OIDC_CLIENT_ID"] == "wg-easy"
     assert "PASSWORD" not in environment
     assert "PASSWORD_HASH" not in environment
-    assert service["env_file"] == ["./wg-easy.env"], (
-        "the OIDC client secret is the secret, and it does not live in the template"
-    )
+
+
+def test_the_panel_carries_no_oauth_block():
+    """The edge-auth decision: no provider exists, sign-in is local, and the
+    compose file's next touch is when the unused block goes."""
+    block = rendered_compose("rbp0")
+    assert "OAUTH" not in block, block
+    assert "wg-easy.env" not in block, block
 
 
 def test_the_panel_is_not_published_and_caddy_is_the_only_way_in():
@@ -195,7 +198,7 @@ def test_setup_places_the_caddyfile_and_verify_names_a_different_one(tmp_path):
 
 
 def test_setup_refuses_without_the_panel_secret_or_its_certificate(tmp_path):
-    for missing in ("wg-easy.env", "certs/tls.pem", "certs/tls-key.pem", "certs/pihole.pem"):
+    for missing in ("certs/tls.pem", "certs/tls-key.pem", "certs/pihole.pem"):
         root = tmp_path / missing.replace("/", "-")
         stack = _pi_fixture(root)
         (stack / missing).unlink()
@@ -435,7 +438,6 @@ def _pi_fixture(root):
     stack = root / "home/vronteix/dockers"
     stack.mkdir(parents=True)
     (stack / "pihole.env").write_text("FTLCONF_webserver_api_password=x\n")
-    (stack / "wg-easy.env").write_text("OAUTH_OIDC_CLIENT_SECRET=x\n")
     (stack / "certs").mkdir()
     (stack / "certs/tls.pem").write_text("-----BEGIN CERTIFICATE-----\n")
     (stack / "certs/tls-key.pem").write_text("-----BEGIN PRIVATE KEY-----\n")

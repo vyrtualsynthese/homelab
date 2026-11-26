@@ -36,26 +36,13 @@ services:
       # this container is plain HTTP on the compose network alone.
       - INSECURE=false
       # caddy is the only address allowed to tell the panel which scheme and
-      # host the browser used. Without it the OAuth redirect URI is built from
-      # the proxy's own name and the callback lands on the wrong URL.
+      # host the browser used, or the login URL is built from the proxy's own
+      # name. Sign-in is the panel's own account, not a provider: no OAuth
+      # block, no auto-launch, and no secret file to supply.
       - TRUSTED_PROXIES=172.30.0.0/24
       # 14 handed out IPv4 addresses only, and the v14 backup carries no IPv6
       # one. Turning it on here would add ::/0 routes to client configs.
       - DISABLE_IPV6=true
-      # Native single sign-on: the panel is its own OIDC client in authentik.
-      # The password login stays as the way in when the cluster is down, which
-      # is the whole point of this stack not depending on it. OAUTH_AUTO_LAUNCH
-      # is deliberately unset for the same reason: auto-launch sends the login
-      # page straight to the provider, and the provider is not there when the
-      # cluster is down.
-      - OAUTH_PROVIDERS=oidc
-      - OAUTH_OIDC_SERVER=https://authentik.kub.home.ashudev.com/application/o/wg-easy/
-      - OAUTH_OIDC_CLIENT_ID=wg-easy
-      - OAUTH_OIDC_NAME=authentik
-    env_file:
-      # One key, OAUTH_OIDC_CLIENT_SECRET. It is gitignored and 'setup' refuses
-      # to run without it, the same rule pihole.env follows.
-      - "./wg-easy.env"
     volumes:
       - ./config:/etc/wireguard
       # wg-quick loads the WireGuard module on demand, and the container has to
