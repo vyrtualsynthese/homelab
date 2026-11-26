@@ -646,8 +646,13 @@ and `pihole-rbp1.kub.local`. The exporter dials those names and trusts the root
 through `SSL_CERT_FILE`, pointed at a ConfigMap that carries it: the peer is
 authenticated, and `SKIP_TLS_VERIFICATION` is gone. The names are Pi-hole's own
 records in `02-my-wildcard-dns.conf`, above the `*.kub.local` wildcard that points
-at the router; the exporter resolves them through cluster DNS, which forwards off
-the node.
+at the router, and they are also written into the pod's `/etc/hosts` from
+`pihole.addresses`: cluster DNS forwards to the node's `resolv.conf`, and `nuc0`,
+where this pod runs, listed `1.1.1.1` beside the Pi-hole — so roughly one
+`*.kub.local` query in three came back NXDOMAIN from Cloudflare and the series
+flapped once a minute while every certificate check passed. The name is still
+what the leaf is verified against; only the address is pinned, and the chart
+refuses to render a hostname that has no address.
 
 Liveness and readiness share the image's own `-healthcheck`, which asks `/liveness`
 on `PORT`. The only failure that leaves the process up is Pi-hole refusing the

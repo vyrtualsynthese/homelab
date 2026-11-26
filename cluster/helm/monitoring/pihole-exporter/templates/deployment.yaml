@@ -5,6 +5,11 @@
 {{- range $key := .Values.pihole.passwordSecret.keys }}
 {{- $files = append $files (printf "%s/%s" $.Values.pihole.passwordSecret.mountPath $key) }}
 {{- end }}
+{{- range $host := .Values.pihole.hostnames }}
+{{- if not (hasKey $.Values.pihole.addresses $host) }}
+{{- fail (printf "pihole.addresses has no entry for %s: the pod would fall back to cluster DNS, which races a public resolver for *.kub.local" $host) }}
+{{- end }}
+{{- end }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -37,6 +42,17 @@ spec:
       serviceAccountName: {{ include "serviceAccountName" . }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      # The two names, resolved before the process starts: Go reads /etc/hosts
+      # first, so no query leaves the pod for them. Ordered by `hostnames`, the
+      # same list PIHOLE_HOSTNAME and PIHOLE_PASSWORD_FILE follow.
+      {{- with .Values.pihole.addresses }}
+      hostAliases:
+        {{- range $host := $.Values.pihole.hostnames }}
+        - ip: {{ index $.Values.pihole.addresses $host | quote }}
+          hostnames:
+            - {{ $host | quote }}
+        {{- end }}
+      {{- end }}
       volumes:
         # The Secret's keys are the hosts: each key is mounted as a file of the
         # same name, and PIHOLE_PASSWORD_FILE lists them in hostname order.
