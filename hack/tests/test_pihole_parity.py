@@ -1,5 +1,8 @@
+import json
 import pathlib
 import sys
+
+import pytest
 
 HACK = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(HACK))
@@ -58,6 +61,74 @@ def test_the_clean_line_counts_a_tree_that_holds_lists():
     what the adlist set is: counting them in a set raised on the first panel that
     agreed."""
     assert parity.count_settings(panel()) > 0
+
+
+class Answer:
+    """A urlopen answer holding only what `_call` reads from it."""
+
+    def __init__(self, payload):
+        self._payload = json.dumps(payload).encode()
+
+    def read(self):
+        return self._payload
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc_info):
+        return False
+
+
+def test_the_api_key_is_posted_over_https_only(monkeypatch):
+    """The panel answers HTTPS on the same address, so the scheme is a choice,
+    and over http an on-path LAN device reads a live app password."""
+    calls = []
+    answers = iter(
+        [
+            {"session": {"sid": "s1"}},
+            {"config": {"dns": {"blockTTL": 2}}},
+            {"lists": []},
+            {},
+        ]
+    )
+
+    def fake_urlopen(request, timeout=None, context=None):
+        calls.append((request, context))
+        return Answer(next(answers))
+
+    monkeypatch.setattr(parity.urllib.request, "urlopen", fake_urlopen)
+
+    parity.read_panel("rbp0", "dummy-key")
+
+    assert [request.full_url for request, _ in calls] == [
+        "https://192.168.1.22/api/auth",
+        "https://192.168.1.22/api/config",
+        "https://192.168.1.22/api/lists",
+        "https://192.168.1.22/api/auth/session/s1",
+    ]
+    assert b"dummy-key" in calls[0][0].data
+    assert all(context is not None for _, context in calls)
+
+
+def test_the_connection_trusts_only_the_panels_pinned_certificate():
+    """Pi-hole mints a self-signed leaf whose only name is `pi.hole`, so the
+    address the check dials can never match it: the committed leaf is the whole
+    trust store instead, and a server without its key cannot complete the
+    handshake."""
+    context = parity._context("rbp0")
+
+    assert context.cert_store_stats()["x509"] == 1
+    assert context.check_hostname is False
+    assert parity.CERTIFICATES["rbp0"].read_text() != parity.CERTIFICATES["rbp1"].read_text()
+
+
+def test_a_pin_that_cannot_be_read_stops_the_check(monkeypatch, tmp_path):
+    """No pin means no verified connection: the read fails, it does not fall back
+    to plain http or to an unverified context."""
+    monkeypatch.setitem(parity.CERTIFICATES, "rbp0", tmp_path / "missing.pem")
+
+    with pytest.raises(RuntimeError, match="pinned certificate"):
+        parity.read_panel("rbp0", "dummy-key")
 
 
 def test_a_panel_session_is_closed_after_the_read():

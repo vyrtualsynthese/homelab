@@ -229,9 +229,12 @@ set -a; . ~/.config/secrets/homelab.env; set +a
 python3 hack/check_pihole_parity.py    # result: OK, or the settings that differ
 ```
 
-The check reads both panels through their own API. It is the one thing `hosts-pi.sh verify` cannot see: a
-setting changed in a panel, or a blocklist added to one host, lives in that host's `pihole.toml` and in no
-file in this repository.
+The check reads both panels through their own API, over HTTPS, and trusts only each panel's own
+certificate, kept in `hack/pihole/`. It is the one thing `hosts-pi.sh verify` cannot see: a setting
+changed in a panel, or a blocklist added to one host, lives in that host's `pihole.toml` and in no file
+in this repository. A reflash mints a new certificate, so the read fails until the pair is re-exported
+with the commands in the script's header and committed — the failure is by design, an unknown
+certificate being the one thing this check must not accept silently.
 
 ## The wg-easy panel
 

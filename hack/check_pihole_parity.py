@@ -7,10 +7,13 @@ that host's own `pihole.toml` and in no file in this repository. This is the
 check that names the difference instead of leaving it to be noticed.
 
 Input is two panel snapshots, shaped `{"config": {...}, "lists": [...]}`, read
-from each panel's own API:
+from each panel's own API over HTTPS:
 
     GET /api/config   the settings tree
     GET /api/lists    the blocklists, compared by address
+
+Each connection trusts only that panel's own certificate, kept beside this file
+in `pihole/`; see `CERTIFICATES` for why and how it is refreshed.
 
 Output is one line per difference, with both values. Empty means clean.
 
@@ -21,11 +24,33 @@ Exit: 0 clean, 1 differences, 2 a panel could not be read.
 
 import json
 import os
+import pathlib
+import ssl
 import sys
 import urllib.error
 import urllib.request
 
 HOSTS = {"rbp0": "192.168.1.22", "rbp1": "192.168.1.38"}
+
+# Pi-hole mints its own self-signed leaf, and its only name is `pi.hole`, so the
+# address this check dials could never match it. Each host is pinned to its own
+# leaf instead: the PEM beside this file is the only trust anchor its connection
+# accepts, which says more than a name check, because a server without that key
+# cannot complete the handshake. HTTP answers on the same address, and that is
+# how the app password used to cross the LAN readable to any device on it; it
+# is not an option here.
+#
+# A reflash mints a new certificate, and the read then fails until the pin is
+# refreshed — deliberately, since an unknown certificate is the one thing this
+# must not accept silently. Re-export the pair and commit them:
+#
+#     for h in 192.168.1.22 192.168.1.38; do
+#         echo | openssl s_client -connect "$h:443" 2>/dev/null | openssl x509
+#     done
+CERTIFICATES = {
+    name: pathlib.Path(__file__).resolve().parent / "pihole" / f"{name}.pem"
+    for name in HOSTS
+}
 
 # Pi-hole stores password hashes and session secrets inside the config tree. A
 # hash that differs is not drift worth reporting, and printing one is worse.
@@ -79,30 +104,46 @@ def count_settings(snapshot: dict) -> int:
     return len(dict(flatten(snapshot)))
 
 
-def _call(base: str, method: str, path: str, body=None, sid=None):
+def _context(host: str) -> ssl.SSLContext:
+    """A TLS context that trusts the panel's pinned leaf, and nothing else."""
+    try:
+        context = ssl.create_default_context(cafile=str(CERTIFICATES[host]))
+    except OSError as error:
+        raise RuntimeError(f"{host}: cannot read its pinned certificate: {error}") from error
+    # A self-signed leaf is a trust anchor only under the partial-chain rule, and
+    # it carries no name for the address: the certificate itself is the pin.
+    context.verify_flags |= ssl.VERIFY_X509_PARTIAL_CHAIN
+    context.check_hostname = False
+    return context
+
+
+def _call(
+    base: str, method: str, path: str, body=None, sid=None, *, context: ssl.SSLContext
+):
     data = json.dumps(body).encode() if body is not None else None
     request = urllib.request.Request(base + path, data=data, method=method)
     request.add_header("Content-Type", "application/json")
     if sid:
         request.add_header("X-FTL-SID", sid)
-    with urllib.request.urlopen(request, timeout=15) as answer:
+    with urllib.request.urlopen(request, timeout=15, context=context) as answer:
         return json.loads(answer.read() or b"{}")
 
 
 def read_panel(name: str, api_key: str) -> dict:
-    base = f"http://{HOSTS[name]}"
-    session = _call(base, "POST", "/api/auth", {"password": api_key})
+    base = f"https://{HOSTS[name]}"
+    context = _context(name)
+    session = _call(base, "POST", "/api/auth", {"password": api_key}, context=context)
     sid = (session.get("session") or {}).get("sid")
     if not sid:
         raise RuntimeError(f"{name}: the API key did not authenticate")
     try:
-        config = _call(base, "GET", "/api/config", sid=sid).get("config", {})
-        adlists = _call(base, "GET", "/api/lists", sid=sid).get("lists", [])
+        config = _call(base, "GET", "/api/config", sid=sid, context=context).get("config", {})
+        adlists = _call(base, "GET", "/api/lists", sid=sid, context=context).get("lists", [])
     finally:
         # A panel keeps a handful of sessions and answers 429 with none left, so
         # a check that ran twice in ten minutes would stop being runnable.
         try:
-            _call(base, "DELETE", f"/api/auth/session/{sid}", sid=sid)
+            _call(base, "DELETE", f"/api/auth/session/{sid}", sid=sid, context=context)
         except (urllib.error.URLError, TimeoutError):
             pass
     return snapshot(config, adlists)

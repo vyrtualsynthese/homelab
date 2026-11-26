@@ -115,7 +115,9 @@ prints `changed=0` on a host that already matches.
 - **Panel drift is checked from the workspace**, not from the host: `hack/check_pihole_parity.py`
   reads both `/api/config` and `/api/lists` through `PIHOLE_RBP0_API_KEY` and `PIHOLE_RBP1_API_KEY`
   and exits 1 naming every setting that differs. A list added in one panel is invisible to `verify`
-  and visible to it.
+  and visible to it. It dials HTTPS and trusts only each panel's own certificate, kept in
+  `hack/pihole/`, so the app password never crosses the LAN in the clear; a reflash mints a new
+  certificate and the check fails until that pair is re-exported and committed.
 
 ### The engine, which `setup` installs
 
