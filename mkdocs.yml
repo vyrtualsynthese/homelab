@@ -97,6 +97,7 @@ nav:
       - Moving K3s to a new minor: runbooks/k3s-upgrade.md
       - Moving Ubuntu to a new LTS: runbooks/ubuntu-upgrade.md
       - Changing a switch: runbooks/switch-change.md
+      - Moving a switch to RouterOS 7: runbooks/switch-firmware.md
       - Adopting a laptop for Ansible: runbooks/ansible-laptop-onboarding.md
       - An account on the switches: runbooks/switch-access.md
       - Reflashing an edge Pi: runbooks/pi-reflash.md
@@ -105,6 +106,7 @@ nav:
       - Cloud monitoring: runbooks/cloud-monitoring.md
       - The alert relay: runbooks/alert-relay.md
       - Add a database: runbooks/postgres-add-database.md
+      - Move qBittorrent to `nas`: runbooks/qbittorrent-to-nas.md
       - Shape the board: runbooks/vikunja-board-seed.md
   - Backups:
       - backup/README.md
@@ -168,6 +170,7 @@ nav:
       - Observability and storage: audit/observability-storage.md
       - Media stack (2026-11-18): audit/media-stack-2026-11-18.md
       - Traefik (2026-11-21): audit/traefik-2026-11-21.md
+      - The Livebox (2026-11-26): audit/livebox-2026-11-26.md
   - Agent work:
       - How to read a plan: agent-work.md
       - The board protocol: agent-protocol.md

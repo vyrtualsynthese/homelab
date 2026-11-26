@@ -1,0 +1,23 @@
+---
+# The nine data mounts, declared for the host in `host_vars/nas.yml` and written
+# by this role. `/` and `/boot/efi` are deliberately absent: they are the two
+# lines that must fail the boot, because a host without its root or its ESP is
+# not one to keep going.
+#
+# `nofail` is the lockout fix. A mount that fails under `local-fs.target` starts
+# `emergency.target`, and emergency mode brings in no `sshd`: `nas` is headless,
+# so a dead disk, a loose cable or an LVM volume that did not activate meant a
+# console and a monitor. With `nofail` the boot reaches multi-user.
+#
+# The 30 s timeout is the other half. Without it systemd waits its default 90 s
+# for a device that will never appear, separately for each missing disk.
+#
+# The trade is named so nobody is surprised: a *branch* disk that fails no
+# longer stops the host, it shrinks the mergerfs union, so the media on that
+# disk is invisible until someone looks. That is the state the branch-count
+# alert on the board is for; this role does not hide it, it makes it reachable.
+disks_fstype: ext4
+disks_mount_options:
+  - defaults
+  - nofail
+  - x-systemd.device-timeout=30s

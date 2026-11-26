@@ -4,7 +4,10 @@
 # it describes, and `expectedNote` says when the live side was last read.
 #
 # Read on 2026-11-25 through the read-only MCP ServiceAccount: 73 IngressRoute
-# objects live, 9 public hosts, and 9 privileged workloads. `ingressRoutes` is the
+# objects live, 9 public hosts, and 9 privileged workloads. This pair reads 75
+# because the change that adds them also adds `crowdsec-web-ui`, whose two routes
+# are live from its first sync; the date stays the last live read, not the last
+# claim. `ingressRoutes` is the
 # object count, the unit `kubectl get ingressroute | wc -l` prints; the number the
 # charts render is counted by hack/gen_docs.py, not typed in, and the one route
 # that explains the gap is named in docs/reference/routes.md, which
@@ -29,10 +32,10 @@
 # computed from what the exporter can see, which is pods.
 securityExporter:
   expected:
-    ingressRoutes: 73
+    ingressRoutes: 75
     publicHosts: 9
     privilegedWorkloads: 9
-  expectedNote: "read 2026-11-25 from the live cluster; see docs/reference/routes.md"
+  expectedNote: "73 read 2026-11-25; 75 with the two crowdsec-web-ui routes, live at its first sync; see docs/reference/routes.md"
   # The same list as `PUBLIC_HOSTS` in hack/check_exposure.py, which owns it.
   # test_security_exporter.py fails the moment the two differ, because a copy in
   # a chart is how a posture panel starts lying.
@@ -67,12 +70,21 @@ securityExporter:
   # hand in this Secret and is never in git:
   #
   #   kubectl -n security create secret generic security-exporter-authentik \
-  #     --from-literal=token="$AUTHENTIK_TOKEN"
+  #     --from-literal=token="$AUTHENTIK_TOKEN" \
+  #     --from-literal=address-salt="$(openssl rand -hex 32)"
   #
   # No token is a healthy state, not an error: the Deployment marks the reference
   # `optional`, the exporter runs posture-only, and it publishes no sign-in family
   # at all rather than three zeros that would read as a quiet day. Counting starts
   # on the next pod start after the Secret exists.
+  #
+  # The salt is the second key of the same Secret, and it is what turns an address
+  # into the `source` label of `homelab_authentik_signins_15m_by_source`. It is a
+  # Secret because IPv4 has only four billion values: an unsalted hash is a
+  # spreadsheet lookup, so a salt in git would be no salt. Without the key the
+  # aggregate windows still publish and only the per-source family is absent, so
+  # the burst rule has nothing to read until it exists — a missing Secret key is a
+  # deploy step, and the exporter says so once at start-up.
   #
   # The freshness family covers every configured source: with a token, one poll
   # succeeds only when the cluster read *and* the authentik read succeed, so
@@ -83,6 +95,7 @@ securityExporter:
     url: https://authentik.kub.home.ashudev.com
     secretName: security-exporter-authentik
     secretKey: token
+    saltKey: address-salt
 
   # 30 MiB was the design's estimate; the request is the relay's, and the limit
   # leaves room for one large route list.

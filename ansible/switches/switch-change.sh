@@ -25,7 +25,9 @@ set -uo pipefail
 SCRIPT_VERSION="2026-11-25.1"
 SWITCH_CHANGE_TARGETS="${SWITCH_CHANGE_TARGETS:-crs326=192.168.1.11 crs309=192.168.1.43}"
 SWITCH_CHANGE_USER="${SWITCH_CHANGE_USER:-deploy}"
-SWITCH_CHANGE_KEY="${SWITCH_CHANGE_KEY:-$HOME/.ssh/switches-deploy}"
+# Card #485 created this key for the account the gate runs the script as; the name and the modes are
+# in docs/runbooks/switch-access.md. A direct run may still point SWITCH_CHANGE_KEY elsewhere.
+SWITCH_CHANGE_KEY="${SWITCH_CHANGE_KEY:-$HOME/.ssh/switch-deploy}"
 SWITCH_CHANGE_WINDOW="${SWITCH_CHANGE_WINDOW:-10m}"
 SWITCH_CHANGE_WORKDIR="${SWITCH_CHANGE_WORKDIR:-/tmp/opencode/switch-change}"
 SWITCH_CHANGE_CONNECT_TIMEOUT="${SWITCH_CHANGE_CONNECT_TIMEOUT:-5}"
@@ -71,6 +73,33 @@ host_of() {
 # the same configuration compare equal.
 noise_free() {
   awk '/^[[:space:]]*#/ { next } /^[[:space:]]*$/ { next } { print }'
+}
+
+# Every command with its path on the same line. RouterOS runs each line of a `verbose=yes` import in
+# the root menu, so a file that sets its menu on a line of its own loses it there: the first command
+# fails with `bad command name <cmd>` and nothing is applied. A plain import carries the menu over
+# but reports `Script file loaded and executed successfully` whatever happened, failed line included,
+# so the verbose form is the only one that can name a failure. Written full-path, a change imports
+# the same either way. A line that is only a path is the section header and is not sent.
+full_path_lines() {
+  awk '
+    BEGIN { n = split("add set remove enable disable", v, " "); for (i = 1; i <= n; i++) verb[v[i]] = 1 }
+    /^[[:space:]]*#/ { print; next }
+    /^[[:space:]]*$/ { next }
+    {
+      line = $0
+      sub(/^[[:space:]]+/, "", line)
+      if (substr(line, 1, 1) == "/") {
+        # The same rule the renderer uses, so the two agree on what a header is: the path is every
+        # token before the first verb, and a line with no verb is a section header, not a command.
+        command = 0
+        k = split(line, t, /[[:space:]]+/)
+        for (i = 2; i <= k; i++) if (t[i] in verb) { command = 1; break }
+        if (!command) { path = line; next }
+        print line; next
+      }
+      if (path != "") { print path " " line } else { print line }
+    }'
 }
 
 # One RouterOS command on a device, its output on stdout. Shaped like the collector's: BatchMode so
@@ -136,14 +165,20 @@ warn_on_clock_skew() {                    # warn_on_clock_skew <device stamp>
 # A window as seconds. The ceiling is an hour: a timer left far in the future outlives the run that
 # armed it and quietly puts an old configuration back later.
 window_seconds() {                        # window_seconds <10m|600s|600>
-  local raw="$1" seconds
+  local raw="$1" number seconds
+  # The digits are checked before any arithmetic: `--window` is agent-supplied text that the gate
+  # passes through, and a value only reaches `$(( ))` once it is known to be a number.
   case "$raw" in
-    *m) seconds=$(( ${raw%m} * 60 )) ;;
-    *s) seconds="${raw%s}" ;;
-    *)  seconds="$raw" ;;
+    *m) number="${raw%m}" ;;
+    *s) number="${raw%s}" ;;
+    *)  number="$raw" ;;
   esac
-  case "$seconds" in
+  case "$number" in
     ''|*[!0-9]*) die "--window $raw is not a duration: 10m, 600s and 600 mean the same thing" ;;
+  esac
+  case "$raw" in
+    *m) seconds=$(( number * 60 )) ;;
+    *)  seconds="$number" ;;
   esac
   [ "$seconds" -ge 60 ] || die "--window $raw is shorter than a minute"
   [ "$seconds" -le 3600 ] || die "--window $raw is longer than the one-hour ceiling"
@@ -219,6 +254,32 @@ render_undo() {
   function keyname(tok,   i) { i = index(tok, "="); return i ? substr(tok, 1, i - 1) : "" }
   function keyval(tok,   i)  { i = index(tok, "="); return i ? substr(tok, i + 1) : "" }
 
+  # The property a selector token matches on, whichever way RouterOS spells it: `pvid=10` and the
+  # bare flag `disabled` name their property plainly, `!disabled` and `?comment` carry a prefix, and
+  # `pvid!=10` carries the `!=` operator. The prefix is read as RouterOS reads it, so the key is the
+  # property and never the token: a comparison on the whole token misses every prefixed one.
+  function selkey(tok,   k, i) {
+    k = tok
+    if (substr(k, 1, 1) == "!" || substr(k, 1, 1) == "?") k = substr(k, 2)
+    i = index(k, "=")
+    if (i) {
+      k = substr(k, 1, i - 1)
+      if (substr(k, length(k), 1) == "!") k = substr(k, 1, length(k) - 1)
+    }
+    return k
+  }
+
+  # A row value as a flag reads it: anything but an absent value, `no` or `false` is on.
+  function truthy(v) { return v != "" && v != "no" && v != "false" }
+
+  # A selector the change itself rewrites can never match when the undo runs: the attribute it finds
+  # the object by is the one the change replaced.
+  function sel_uses(sel, k,   st, sn, i) {
+    sn = tokens(sel, st)
+    for (i = 1; i <= sn; i++) if (selkey(st[i]) == k) return 1
+    return 0
+  }
+
   # A value with its surrounding quotes removed, so "a" and a compare equal.
   function unq(v) {
     if (length(v) >= 2 && substr(v, 1, 1) == "\"" && substr(v, length(v), 1) == "\"")
@@ -256,7 +317,7 @@ render_undo() {
     return 1
   }
 
-  function index_export(mode, line,   t, n, i, path, verb, args) {
+  function index_export(mode, line,   t, n, i, path, verb, args, st, sn, rest) {
     line = trim(line)
     if (line == "" || substr(line, 1, 1) == "#") return
     n = tokens(line, t)
@@ -270,16 +331,37 @@ render_undo() {
     if (path == "") return
     if (verb == "add") store(mode, path, args, "add")
     else if (verb == "set" && split_sel(args)) store(mode, path, trim(SEL " " AFTER), "set")
+    # The short form: a `set` whose arguments open with the item name instead of a selector, as in
+    # `set ssh disabled=no`. Only the menus in SHORT are written that way; on any other path the
+    # first token is a setting, not an object, and inventing one would let an undo claim to restore
+    # something the export never described.
+    else if (verb == "set" && SHORT[path] == 1 && args != "") {
+      sn = tokens(args, st)
+      if (index(st[1], "=") > 0) return          # no bare name: a singleton setting, not a row
+      rest = ""
+      for (i = 2; i <= sn; i++) rest = rest (i > 2 ? " " : "") st[i]
+      store(mode, path, trim("name=" st[1] " " rest), "set")
+    }
   }
 
   # ---------------------------------------------------------------- matching
-  function obj_matches(args, sel,   st, sn, at, an, i, j, ok) {
+  # A selector token matches the way RouterOS reads it: `key=value` compares the value, `key!=value`
+  # excludes it, the bare flag `key` wants it on, `!key` wants it off and `?key` wants it set. A
+  # skipped token is not "no condition": it makes the guard select something else than the object
+  # the change rewrote.
+  function obj_matches(args, sel,   st, sn, at, an, i, j, tok, k, v, ok) {
     sn = tokens(sel, st); an = tokens(args, at)
     for (i = 1; i <= sn; i++) {
-      if (index(st[i], "=") == 0) continue
+      tok = st[i]; k = selkey(tok)
+      if (k == "") continue
+      v = unq(obj_value(args, k))
+      if (substr(tok, 1, 1) == "!") { if (truthy(v)) return 0; continue }
+      if (substr(tok, 1, 1) == "?") { if (v == "") return 0; continue }
+      if (index(tok, "=") == 0) { if (!truthy(v)) return 0; continue }
+      if (substr(tok, index(tok, "=") - 1, 1) == "!") { if (v == unq(keyval(tok))) return 0; continue }
       ok = 0
       for (j = 1; j <= an; j++)
-        if (keyname(at[j]) == keyname(st[i]) && unq(keyval(at[j])) == unq(keyval(st[i]))) { ok = 1; break }
+        if (keyname(at[j]) == k && unq(keyval(at[j])) == unq(keyval(tok))) { ok = 1; break }
       if (!ok) return 0
     }
     return 1
@@ -319,6 +401,58 @@ render_undo() {
       return 0
     }
     return key
+  }
+
+  # How many objects one export holds under a selector, and where the first one sits. The pair exists
+  # so the two exports can be searched in turn without a refusal firing on the first miss.
+  function match_count(path, sel, mode,   i, n, args, cnt) {
+    n = (mode == "verbose") ? vcount[path] : ocount[path]
+    for (i = 1; i <= n; i++) {
+      args = (mode == "verbose") ? vargs[path, i] : oargs[path, i]
+      if (obj_matches(args, sel)) cnt++
+    }
+    return cnt
+  }
+
+  function match_first(path, sel, mode,   i, n, args) {
+    n = (mode == "verbose") ? vcount[path] : ocount[path]
+    for (i = 1; i <= n; i++) {
+      args = (mode == "verbose") ? vargs[path, i] : oargs[path, i]
+      if (obj_matches(args, sel)) return i
+    }
+    return 0
+  }
+
+  # The object a `set`, `enable` or `disable` acts on: plain first, because that is what the switch
+  # exports as configured, then verbose, because an object sitting entirely at its defaults is left
+  # out of the plain export and described only there. FOUND_MODE/FOUND_IDX say where it was found;
+  # FOUND_VIDX is its verbose row, which is where an old value is read from.
+  function find_object(path, sel, lineno,   pcnt, vcnt) {
+    FOUND_MODE = ""; FOUND_IDX = 0; FOUND_VIDX = 0
+    pcnt = match_count(path, sel, "plain")
+    vcnt = match_count(path, sel, "verbose")
+    if (pcnt > 1) {
+      do_refuse(lineno, render_sel(sel) " matches " pcnt " objects in the plain export")
+      return 0
+    }
+    if (vcnt > 1) {
+      do_refuse(lineno, render_sel(sel) " matches " vcnt " objects in the verbose export")
+      return 0
+    }
+    if (pcnt == 0 && vcnt == 0) {
+      do_refuse(lineno, "no object matching " render_sel(sel) " in the plain or the verbose export")
+      return 0
+    }
+    if (pcnt == 1) {
+      FOUND_MODE = "plain"
+      FOUND_IDX = match_first(path, sel, "plain")
+      FOUND_VIDX = match_first(path, sel, "verbose")
+    } else {
+      FOUND_MODE = "verbose"
+      FOUND_IDX = match_first(path, sel, "verbose")
+      FOUND_VIDX = FOUND_IDX
+    }
+    return 1
   }
 
   function obj_value(args, k,   at, an, j) {
@@ -391,15 +525,17 @@ render_undo() {
   function undo_set(path, args, lineno,   sel, selsel, after, at, an, i, k, oldv, idx, vidx) {
     if (!split_sel(args)) { do_refuse(lineno, "a set this renderer cannot read (no [find ...] selector)"); return }
     selsel = render_sel(SEL); after = AFTER
-    idx = find_one(path, SEL, "plain", lineno)
-    if (!idx) return
-    vidx = find_one(path, SEL, "verbose", lineno)
-    if (!vidx) return
+    if (!find_object(path, SEL, lineno)) return
+    vidx = FOUND_VIDX
     an = tokens(after, at)
     for (i = 1; i <= an; i++) {
       k = keyname(at[i])
       if (k == "") {
         do_refuse(lineno, "cannot undo the argument \"" at[i] "\": it sets no property, so the undo has nothing to put back")
+        return
+      }
+      if (sel_uses(SEL, k)) {
+        do_refuse(lineno, "the change sets " k ", which its own selector matches on, so the undo would find nothing to put back; select the object by an attribute the change leaves alone")
         return
       }
       oldv = obj_value(vargs[path, vidx], k)
@@ -412,14 +548,32 @@ render_undo() {
     }
   }
 
-  function undo_flag(path, verb, args, lineno,   sel, selsel, idx, want) {
+  # The properties of one object after a flag verb ran: the flag it writes gets the value the verb
+  # gives it, and any earlier spelling of that flag is dropped so it is read once.
+  function flag_set(args, v,   at, an, j, o) {
+    an = tokens(args, at); o = ""
+    for (j = 1; j <= an; j++) {
+      if (keyname(at[j]) == "disabled") continue
+      o = o (o == "" ? "" : " ") at[j]
+    }
+    return o (o == "" ? "" : " ") "disabled=" v
+  }
+
+  function undo_flag(path, verb, args, lineno,   sel, selsel, idx, want, found) {
     if (!split_sel(args)) { do_refuse(lineno, "a " verb " this renderer cannot read (no [find ...] selector)"); return }
     selsel = render_sel(SEL)
-    idx = find_one(path, SEL, "plain", lineno)
-    if (!idx) return
+    if (!find_object(path, SEL, lineno)) return
     # The undo restores the state the export holds, and the verb says nothing about it: enabling a
     # port that was already enabled has to stay enabled, not be disabled by its own revert.
-    want = (obj_value(oargs[path, idx], "disabled") == "yes") ? "disable" : "enable"
+    found = (FOUND_MODE == "verbose") ? vargs[path, FOUND_IDX] : oargs[path, FOUND_IDX]
+    want = (obj_value(found, "disabled") == "yes") ? "disable" : "enable"
+    # The guard runs after the verb, so a selector that tests the flag the verb writes is read
+    # against the state the verb leaves: `disable [find !disabled]` matches before the change and
+    # nothing after it, and such an undo would find no object to put back.
+    if (!obj_matches(flag_set(found, (verb == "disable") ? "yes" : "no"), SEL)) {
+      do_refuse(lineno, "the change writes disabled, which its own selector matches on, so the undo would find nothing to put back; select the object by an attribute the change leaves alone")
+      return
+    }
     emit(":if ([:len [" path " find " selsel "]] > 0) do={ " path " " want " [find " selsel "] }")
   }
 
@@ -469,7 +623,14 @@ render_undo() {
     else index_export(mode, line)
   }
 
-  BEGIN { refused = 0; outn = 0; p_major = "" }
+  BEGIN {
+    refused = 0; outn = 0; p_major = ""
+    # The menus RouterOS exports in the short form `set <name> <args>`, whose first bare token is
+    # the item name rather than a `[find …]` selector. Adding one needs a fixture row that proves
+    # the shape: anywhere else the first token is a setting, and reading it as a name would invent
+    # an object the export never described.
+    SHORT["/ip service"] = 1
+  }
 
   FILENAME == plain {
     if (FNR == 1 && index($0, "by RouterOS ") > 0) {
@@ -510,13 +671,34 @@ timer_field() {                            # timer_field <host> <entry> <field>
     }'
 }
 
+# A timer that is gone is what the run claims, so the device is asked rather than trusted: a remove
+# that silently failed leaves a live entry that would put an old configuration back minutes later.
 timer_remove() {                           # timer_remove <host> <entry>
-  ros "$1" "/system scheduler remove [find name=\"$2\"]" >/dev/null
+  local entry="$2" left
+  ros "$1" "/system scheduler remove [find name=\"$entry\"]" >/dev/null
+  if ! left=$(ros "$1" '/system scheduler print detail'); then
+    warn "could not confirm that $entry was removed from the switch; read /system scheduler print on it"
+    return 1
+  fi
+  case "$left" in
+    *"name=\"$entry\""*)
+      warn "$entry is still armed on the switch: it will run its undo at its start-time unless it is removed by hand"
+      return 1 ;;
+  esac
+  return 0
 }
 
 files_remove() {                           # files_remove <host> <id>
+  local left
   ros "$1" "/file remove [find name=\"undo-$2.rsc\"]" >/dev/null
   ros "$1" "/file remove [find name=\"change-$2.rsc\"]" >/dev/null
+  # `print detail` for the same reason as the upload check: a plain listing shortens the name.
+  left=$(ros "$1" '/file print detail') || return 0
+  case "$left" in
+    *"name=\"undo-$2.rsc\""*|*"name=\"change-$2.rsc\""*)
+      warn "undo-$2.rsc or change-$2.rsc is still on the switch; remove it by hand" ;;
+  esac
+  return 0
 }
 
 # The RouterOS error line of a failed import, or nothing. ssh's own words ("Connection closed by
@@ -571,11 +753,14 @@ change_apply_and_verify() {                # change_apply_and_verify <host> <id>
       exit 1 ;;
     *)
       say "the timer $entry had already fired, so the change was skipped"
+      # The timer goes before the export, as below: its entry is part of /export and would otherwise
+      # be the difference.
+      timer_remove "$host" "$entry"
+      disarm
+      files_remove "$host" "$id"
       after="$dir/after-$host.rsc"
       ros "$host" '/export' > "$after"
       print_change_diff "$dir" "$plain" "$after"
-      timer_remove "$host" "$entry"
-      files_remove "$host" "$id"
       if cmp -s "$dir/pre.norm" "$dir/after.norm"; then
         say "reverted: the export is identical to the one taken before the change"
         exit 3
@@ -584,7 +769,7 @@ change_apply_and_verify() {                # change_apply_and_verify <host> <id>
       exit 4 ;;
   esac
 
-  say "verifying: applying $change and watching $probe until the switch answers"
+  say "verifying: applying change-$id.rsc on $target and watching $probe until the switch answers"
 
   # A session that dies here is expected, not a failure: the import runs on the device once it has
   # started. Only a line RouterOS itself prints starts the on-demand undo.
@@ -635,17 +820,25 @@ change_apply_and_verify() {                # change_apply_and_verify <host> <id>
     exit 5
   fi
 
+  # The count is read first because it proves the timer fired. The export comes after the timer, the
+  # disarm and the files are gone: the run's own scheduler entry is part of /export, so a comparison
+  # taken while it is still there can never be equal.
   count=$(timer_field "$answered" "$entry" run-count)
+  removed=0
+  timer_remove "$answered" "$entry" || removed=1
+  disarm
+  files_remove "$answered" "$id"
   after="$dir/after-$answered.rsc"
   ros "$answered" '/export' > "$after"
   print_change_diff "$dir" "$plain" "$after"
-  timer_remove "$answered" "$entry"
-  disarm
-  files_remove "$answered" "$id"
 
   case "$count" in
     0)
-      say "applied: $change landed on $target, the timer $entry was removed, and the switch answers again"
+      if [ "$removed" = 0 ]; then
+        say "applied: $change landed on $target, the timer $entry was removed, and the switch answers again"
+      else
+        say "applied: $change landed on $target and the switch answers again, but the timer $entry may still be armed: the warning above is the one that matters"
+      fi
       say "the pre-change binary backup, if the device took one, is pre-$id.backup on the device"
       exit 0 ;;
     ''|*[!0-9]*)
@@ -672,7 +865,7 @@ change_apply_and_verify() {                # change_apply_and_verify <host> <id>
 # undo exists locally and has passed the renderer: a refusal writes nothing at all.
 change_run() {
   local host major verbose_cmd stamp start seconds id dir plain verbose undo_file change_file
-  local stale detail name
+  local stale detail name months month day
 
   host=$(host_of "$target") || die "unknown target '$target'"
   [ -r "$change" ] || { warn "cannot read the change file $change"; exit 1; }
@@ -711,7 +904,8 @@ change_run() {
     warn "nothing was changed: the change cannot be undone"
     exit 1
   fi
-  cp "$change" "$change_file"
+  # The device gets one line per command, each with its path: see full_path_lines for why.
+  full_path_lines < "$change" > "$change_file"
 
   # A timer an earlier run left armed is named here and cancelled only once this run writes: two
   # armed undos must never sit on one switch, because the older one would put back a configuration
@@ -733,8 +927,9 @@ change_run() {
   confirm
 
   for name in $stale; do
-    timer_remove "$host" "$name"
-    say "cancelled the timer an earlier run left armed: $name"
+    if timer_remove "$host" "$name"; then
+      say "cancelled the timer an earlier run left armed: $name"
+    fi
   done
 
   put "$host" "$undo_file" "undo-$id.rsc" >/dev/null || { warn "could not upload undo-$id.rsc"; exit 1; }
@@ -746,7 +941,9 @@ change_run() {
     exit 1
   }
   for name in "undo-$id.rsc" "change-$id.rsc"; do
-    ros "$host" "/file print where name=\"$name\"" | grep -q -- "$name" || {
+    # `print detail`, because plain `print` truncates a long name to nineteen characters and "..." —
+    # and every name here is longer than that. The check would then miss a file that is present.
+    ros "$host" "/file print detail where name=\"$name\"" | grep -q -- "name=\"$name\"" || {
       warn "$name is not on the device after the upload"
       files_remove "$host" "$id"
       exit 1
@@ -756,13 +953,17 @@ change_run() {
   # The binary backup is the only step allowed to fail: it needs a policy right #485 withholds, and
   # the undo file does not depend on it. Say so and carry on armed.
   ros "$host" "/system backup save name=pre-$id" >/dev/null
-  if ! ros "$host" "/file print where name=\"pre-$id.backup\"" | grep -q -- "pre-$id.backup"; then
+  if ! ros "$host" "/file print detail where name=\"pre-$id.backup\"" | grep -q -- "name=\"pre-$id.backup\""; then
     say "no binary fallback for this run: the device did not write pre-$id.backup"
   fi
 
   # `start-date` is written rather than left to the device: the entry has to run on the day the
-  # window was measured on, not on whatever day RouterOS would date it by.
-  day=${stamp%% *}
+  # window was measured on, not on whatever day RouterOS would date it by. The form is RouterOS's own,
+  # `mmm/dd/yyyy`; an ISO date is refused as `invalid date`. The month names are spelled here rather
+  # than taken from `date`, whose output follows the workstation's locale.
+  months=(jan feb mar apr may jun jul aug sep oct nov dec)
+  month=${months[$(( 10#${stamp:5:2} - 1 ))]}
+  day="$month/${stamp:8:2}/${stamp:0:4}"
   detail=$(ros "$host" "/system scheduler add name=revert-$id policy=read,write,test interval=0s start-date=$day start-time=$start on-event=\"/import file=undo-$id.rsc\"")
   if [ -n "$detail" ]; then
     warn "the device refused the timer: $detail"

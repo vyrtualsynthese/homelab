@@ -5,7 +5,9 @@
 > up.
 >
 > **Use it when** you are building or reviewing a chart and want the worked example closest to it ·
-> **Verified** 2026-11-17 · **Kind:** living page
+> **Verified** 2026-11-17 · **Kind:** reference
+>
+> **Sources** `cluster/helm/**/values.yaml`, `docs/charts/README.md`, and each chart's templates
 
 ## What good looks like
 
@@ -417,6 +419,21 @@ kernel's 127 s SYN retry budget, 154 times in 24 h. A `vpn-cluster-routes` init 
 `vpn.clusterRoutes`, so a second in-cluster dependency is one line. The hook should also carry
 `--max-time 10`, which is an app preference, not a chart value.
 
+2026-11-25: the chart now owns both claims it mounts, and it no longer references an NFS claim at all.
+`/config` moved to `local-path` on 2026-11-25 (card 758) and to `nas` with the pod that evening; the
+WireGuard claim went with it, because a `local-path` claim is bound to the node that first mounted it
+and a pod elsewhere leaves it `Pending`. `/downloads` is now `storage.downloads.hostPath`, the export
+root `/mnt/ultrafaststorage/nfs` mounted from the host, with `type: Directory` so a missing export
+fails the pod rather than creating an empty tree — the pod is pinned to `nas`, which is the node that
+exports it, and the *arrs keep mounting the same directory over NFS. The reason is the Web UI stall:
+with the app writing through an NFS client, one `close()` stopped returning and took the API with it,
+and the same load on a local filesystem did not. A `local-path` claim would have created a
+subdirectory beside the export root that no NFS client reads, which is why this one mount is a host
+path. [`../how-it-works/storage.md`](../how-it-works/storage.md) states the rule,
+[`../qbittorrent-webui-stalls.md`](../qbittorrent-webui-stalls.md) carries the evidence, and
+[`../runbooks/qbittorrent-to-nas.md`](../runbooks/qbittorrent-to-nas.md) is the move, including the
+two claims' copy and its rollback.
+
 ### ashuvidz-website
 
 As of 2026-11-18: the public site, the one public chart taken through the pass, and the one that went
@@ -562,6 +579,24 @@ the process — and `server.logging` keeps `warning|error`. Uploads run as uid 1
 1000; the primary group is the mergerfs requirement, not a preference. Debt: the four startup lines
 the app logs before it reads its config stay at `INFO`; the level applies after that. The 1 Gi
 claims are the ones the previous chart created and a `local-path` claim cannot shrink.
+
+### crowdsec-web-ui
+
+As of 2026-11-25: the reference chart's templates, unchanged, with this image's values (pattern A,
+six objects). It is the second view of the CrowdSec stack: it reads the LAPI over the cluster network
+at `http://crowdsec-service:8080` and needs no Prometheus, Loki or Grafana, which is the point — the
+Grafana dashboard is still the trend view, this one has the button that undoes a wrong ban. It
+authenticates with its own OIDC (blueprint `app-crowdsec-web-ui`), the route is `websecure` +
+`internal-tls` + `lan-only` on `crowdsec.kub.local`, and there is no gate in front, because native
+OIDC comes first here. Two credentials it needs are not issued by authentik: the LAPI machine
+(watcher) it logs in as, and the client secret; both are keys of the `crowdsec-web-ui` Secret, made
+by hand. Liveness and readiness share `/api/health` — it reports the HTTP listener, not the LAPI,
+because restarting the UI during a LAPI outage changes nothing and loses the sync. The server
+documents no log-level variable, so container logs stay at its default and the audit log
+(`[audit]` JSON lines on every decision change) is the record instead; that is written next to `env`
+in the values. It runs as uid 1000, the image's own `node` user, on a fresh claim, so no `chown` on
+the node was needed; the claim is 1Gi rather than 128Mi because it mirrors a 168h alert lookback.
+Sizing is unmeasured until the first night: 20m/128Mi requested, 512Mi limit.
 
 ### backup
 

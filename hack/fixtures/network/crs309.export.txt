@@ -1,4 +1,4 @@
-# 2026-11-24 08:14:41 by RouterOS 6.49.10
+# 2026-11-24 08:14:41 by RouterOS 6.49.7
 # software id = WXYZ-5678
 #
 /interface bridge

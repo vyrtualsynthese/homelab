@@ -5,7 +5,10 @@
 > the rest of the namespace are helpers around that loop.
 >
 > **Use it when** a download has not turned into a library item, you are adding a media app, or you want
-> to know what one of the tools in `media-stack` is for · **Verified** 2026-11-17 · **Kind:** living page
+> to know what one of the tools in `media-stack` is for · **Verified** 2026-11-25 · **Kind:** explanation
+>
+> **Sources** `cluster/helm/media-stack/**/values.yaml`, the live `media-stack` pods and routes read on
+> 2026-11-25, and the per-app pages under `docs/how-it-works/`
 
 ## The pipeline, one diagram
 
@@ -42,7 +45,7 @@ moves the finished file into the library on the same NAS, and Plex reads it.
 | Radarr, `radarr-anime` | films | `streaming` |
 | Lidarr | music | `streaming` |
 | Bazarr, `bazarr-anime` | subtitles for the library | `streaming` |
-| qBittorrent | the download client | `streaming` |
+| qBittorrent | the download client | `nas` |
 | cross-seed | seeds the same release on a second tracker | `streaming` |
 | autobrr | grabs announced releases without a search | `streaming` |
 | unpackerr | extracts packed archives | `streaming` |
@@ -55,9 +58,11 @@ moves the finished file into the library on the same NAS, and Plex reads it.
 The two `-anime` twins give anime its own library roots, profiles and indexers, with separate
 configuration.
 
-**qBittorrent is not healthy.** Its Web UI and API stop answering during downloads, breaking cross-seed,
-autobrr and the qBittorrent exporter while it lasts. It is an open fault with its own page:
-[qbittorrent-webui-stalls.md](../qbittorrent-webui-stalls.md).
+**qBittorrent was not healthy.** Its Web UI and API stopped answering during downloads, breaking
+cross-seed, autobrr and the qBittorrent exporter while it lasted. Two fixes went in: its `/config` claim
+left NFS on 2026-11-25, and the app itself moved to `nas` that evening so that `/downloads` is a local
+directory rather than an NFS client. It stays an open fault until the 24-hour gate on the second one;
+the whole record is [qbittorrent-webui-stalls.md](../qbittorrent-webui-stalls.md).
 
 ## The books pair
 
@@ -72,12 +77,11 @@ cutover: [completed record](../runbooks/books-cutover.md).
 
 Media is on the NFS classes from `nas`: `plex-media` for film and television, `nfs-audio` for music,
 `nfs-books` for the books library, `qbittorrent-download` for what is still downloading. Configuration
-sits on `local-path` on the node each app runs on. The classes, the binding trap and the absence of
-backups are [storage.md](storage.md); which claim belongs to which app is
-[applications.md](applications.md).
-
-Exception: qBittorrent's `/config` is on NFS, against that rule, and is the leading explanation for the
-stall above.
+sits on `local-path` on the node each app runs on. The one claim that was the exception — qBittorrent's
+`/config` on NFS, which is what the stall above was — moved on 2026-11-25, and the app now reads the
+downloads export from `nas` itself rather than over NFS, with the *arrs still mounting it as a claim.
+The classes, the binding trap and the absence of backups are [storage.md](storage.md); which claim
+belongs to which app is [applications.md](applications.md).
 
 ## What protects each one
 

@@ -56,6 +56,12 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
 {{- end }}
 
+{{/* Configuration claim name: explicit `storage.config.claimName`, else
+`<fullname>-config`. */}}
+{{- define "app.configClaimName" -}}
+{{- default (printf "%s-config" (include "app.fullname" .)) .Values.storage.config.claimName }}
+{{- end }}
+
 {{/* WireGuard claim name: explicit `storage.vpn.claimName`, else `<fullname>-vpn-config`.
 The derived name equals the claim the live pod mounts (`qbittorrent-vpn-config`),
 so the default moves no data. */}}

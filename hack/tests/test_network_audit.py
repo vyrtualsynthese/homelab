@@ -10,6 +10,7 @@ import unittest
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / "ansible" / "collectors" / "network-audit.sh"
 FIXTURE = ROOT / "hack" / "fixtures" / "network"
+V7_FIXTURE = ROOT / "hack" / "fixtures" / "network-v7"
 
 
 def run(args=(), env=None, stdin=None):
@@ -159,8 +160,21 @@ class FetchTests(unittest.TestCase):
         self.assertIn("(unreachable:", done.stdout)
 
     def test_the_routeros_major_is_read_from_the_resource_block(self):
-        self.assertEqual(run(["--major", "crs326"], env=self.env()).stdout.strip(), "7")
+        # Both devices were read on 2026-11-25 and both run version 6: 6.49.8 on the CRS326 and
+        # 6.49.7 on the CRS309. A fixture saying 7 would send a v6 device the bare `/export`.
+        self.assertEqual(run(["--major", "crs326"], env=self.env()).stdout.strip(), "6")
         self.assertEqual(run(["--major", "crs309"], env=self.env()).stdout.strip(), "6")
+
+    def test_a_deliberate_v7_fixture_exercises_the_v7_export(self):
+        # Neither device runs 7 yet, so the v7 export path is pinned by a fixture marked 7 on
+        # purpose rather than by a v6 capture pretending to be one.
+        env = {"NET_AUDIT_FROM_FIXTURE": str(V7_FIXTURE)}
+        self.assertEqual(run(["--major", "crs326"], env=env).stdout.strip(), "7")
+        done = run(["--dump", "crs326", "export"], env=env)
+        self.assertEqual(done.returncode, 0)
+        self.assertIn("/ip ssh set password-authentication=yes-if-no-key", done.stdout)
+        self.assertIn('private-key=<redacted>', done.stdout)
+        self.assertNotIn("fixture-v7-private-key", done.stdout)
 
     def test_the_export_command_follows_the_routeros_major(self):
         six = run(["--export-command", "6"])
@@ -346,13 +360,13 @@ class PageTests(unittest.TestCase):
         page = self.page()
         self.assertIn("## crs326 — 192.168.1.11", page)
         self.assertIn("## crs309 — 192.168.1.43", page)
-        # The labelled line, not the bare value: 7.16.1 is also in the package fixture
-        # (`crs326.package.txt`, the `0 routeros 7.16.1` row), so only `routeros: 7.16.1` shows
+        # The labelled line, not the bare value: 6.49.8 is also in the package fixture
+        # (`crs326.package.txt`, the `0 routeros 6.49.8` row), so only `routeros: 6.49.8` shows
         # the version was read from the resource block's own `version:` field.
         self.assertIn("identity: CR326", page)
         self.assertIn("model: CRS326-24G-2S+", page)
         self.assertIn("serial: HE908ABCD", page)
-        self.assertIn("routeros: 7.16.1", page)
+        self.assertIn("routeros: 6.49.8", page)
 
     def test_the_ethernet_table_labels_every_port(self):
         page = self.page()

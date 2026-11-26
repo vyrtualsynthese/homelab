@@ -230,7 +230,7 @@ git commit -m "🚀 feature: Traefik writes its access log to a root-only file o
 
 **Interfaces:**
 - Consumes: `/var/log/traefik/access.log` from Task 1, mounted from the host.
-- Produces: the Loki stream `{job="fluent-bit", namespace="kube-system", container="traefik", node="streaming", source="accesslog"}`, whose **line** carries `ClientHost`, `ClientAddr`, `DownstreamStatus`, `RequestHost`, `RouterName` and no `RequestPath`, no `request_User-Agent`, no query and no header. Every existing `{job="fluent-bit", container="traefik"}` query keeps working because the static labels match what the container pipeline set.
+- Produces: the Loki stream `{job="fluent-bit", namespace="kube-system", container="traefik", node="streaming", source="accesslog"}`, whose **line** carries `ClientHost`, `ClientAddr`, `DownstreamStatus`, `RequestHost`, `RouterName` and no `RequestPath`, no `request_User-Agent`, no query and no header. Every existing `{job="fluent-bit", container="traefik"}` query keeps working because the static labels match what the container pipeline set — but that selector also matches the router's **own stdout**, which is not JSON: measured on 2026-11-25, 28,883 stdout lines against 3,148 access lines in the same 24 h. A query that wants the request log names `source="accesslog"`.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -1687,7 +1687,7 @@ cheaper.
 - Test: `hack/tests/test_security_exporter.py` (`ReconciledConstantsTests`)
 
 **Interfaces:**
-- Produces: three integers — live `IngressRoute` count, public host count, privileged workload count — and the explanation of the four routes that render but do not exist live. Tasks 9 and 14 read them.
+- Produces: three integers — live `IngressRoute` count, public host count, privileged workload count — and the explanation of the one route that is live and not rendered. Tasks 9 and 14 read them.
 - Consumes: nothing.
 
 - [ ] **Step 1: Measure both sides**
@@ -1704,7 +1704,7 @@ kubectl get ingressroute -A --no-headers | wc -l
 kubectl get ingressroute -A -o json | jq -r '.items[].metadata.namespace + "/" + .metadata.name' | sort > /tmp/opencode/live-routes.txt
 ```
 
-Expected today: 77 rendered, 73 live. Dump the rendered names the same way and `comm -3` them. Each difference is one of four causes: a chart not yet synced to `develop`, an Application whose `path` holds no chart, a retired app whose Application still exists, or a route in an Application that is not enabled. **Write down which, for each one, in `docs/reference/routes.md`** — that sentence is the deliverable, not the number.
+Expected today: 72 rendered, 73 live. Dump the rendered names the same way and `comm -3` them. Each difference is one of four causes: a chart not yet synced to `develop`, an Application whose `path` holds no chart, a retired app whose Application still exists, or a route in an Application that is not enabled. **Write down which, for each one, in `docs/reference/routes.md`** — that sentence is the deliverable, not the number. On 2026-11-25 the answer was none of those four: the single extra live route is `kube-system/traefik-dashboard-redirect`, applied by hand from `cluster/infrastructure/`, so no Application can ever render it — a fifth shape, and the only one present.
 
 - [ ] **Step 2: Write the failing test**
 
@@ -1743,7 +1743,7 @@ class ReconciledConstantsTests(unittest.TestCase):
         expected = self.values["expected"]
         self.assertEqual(expected["ingressRoutes"], 73)
         self.assertEqual(expected["publicHosts"], 9)
-        self.assertEqual(expected["privilegedWorkloads"], 4)
+        self.assertEqual(expected["privilegedWorkloads"], 9)
         # Every number is a claim about the cluster today; the note says when it
         # was read, so a stale constant is visible rather than plausible.
         self.assertIn("2026-11-25", self.values["expectedNote"])
@@ -1777,13 +1777,14 @@ Expected: `FileNotFoundError` on the values file.
 # it describes, and `expectedNote` says when the live side was last read.
 #
 # Read on 2026-11-25 through the read-only MCP ServiceAccount: 73 IngressRoute
-# objects live against 77 rendered (the four are named in
-# docs/reference/routes.md), 9 public hosts, 4 pods with `privileged: true`.
+# objects live against 72 rendered (the one extra is applied by hand and named in
+# docs/reference/routes.md), 9 public hosts, 9 controllers with a Running
+# privileged pod.
 securityExporter:
   expected:
     ingressRoutes: 73
     publicHosts: 9
-    privilegedWorkloads: 4
+    privilegedWorkloads: 9
   expectedNote: "read 2026-11-25 from the live cluster; see docs/reference/routes.md"
   # The same list as `PUBLIC_HOSTS` in hack/check_exposure.py, which owns it.
   # test_security_exporter.py fails the moment the two differ, because a copy in
@@ -2002,9 +2003,9 @@ homelab_security_ungated_routes 0
 # HELP homelab_security_public_hosts Hosts that answer the internet.
 # TYPE homelab_security_public_hosts gauge
 homelab_security_public_hosts 9
-# HELP homelab_security_privileged_workloads Running containers that declare privileged: true.
+# HELP homelab_security_privileged_workloads Controllers with a Running privileged container.
 # TYPE homelab_security_privileged_workloads gauge
-homelab_security_privileged_workloads 4
+homelab_security_privileged_workloads 9
 # HELP homelab_security_exporter_last_success_timestamp_seconds Unix time of the last successful poll.
 # TYPE homelab_security_exporter_last_success_timestamp_seconds gauge
 homelab_security_exporter_last_success_timestamp_seconds 1795000000
@@ -2485,7 +2486,7 @@ curl -s http://security-exporter.security.svc:9105/metrics | grep '^homelab_auth
 
 Every family named in Tasks 9 and 10 appears, with values that match Task 8's measured constants —
 `homelab_security_ingress_routes 73`, `homelab_security_ungated_routes 0`,
-`homelab_security_public_hosts 9`, `homelab_security_privileged_workloads 4`. A `0` for
+`homelab_security_public_hosts 9`, `homelab_security_privileged_workloads 9`. A `0` for
 `homelab_authentik_signins_24h` when someone signed in today is the exporter reading the wrong window,
 not a quiet day.
 
@@ -2563,6 +2564,21 @@ the same week, was `N` steps and the quietest window held `M` requests, so `Secu
 quiet night.
 ```
 
+Measured on 2026-11-25, and the three figures the snippet assumed were all wrong: the family only
+exists since Traefik 3 replaced 2.11 on 2026-11-21 18:39, so the window is 3 d 19 h and not seven
+days; the hourly share runs 0.33 %–81.13 % with 42 of 92 hours above 20 %, so a 20 % threshold sits
+inside the normal band of routine bot bursts and the number is **85 %** (top of band plus a margin);
+and at 5-minute steps no window is ever empty, nor at the 2-minute floor the 1 m scrape interval
+allows, so `N` is 0 and `2N × 5` is 0 — the rule waits **10 minutes** instead, five times the floor,
+with the quietest two-minute window holding 4 requests against a median of 8. Task 13's expression
+therefore writes `85` where the plan prints `20`.
+
+The silence figure above is a floor for the stream the rule actually reads: it was taken on the
+counter, and `SecurityStackBlind`'s tunnel half names `source="accesslog"` (the router's own stdout is
+not the request log and would mask a dead tail). Measured again on that stream over its first hour on
+2026-11-25: 50 lines in the quietest ten-minute window, no empty window at 2, 5 or 10 minutes, and the
+longest gap between two lines 34 s — so ten minutes of nothing is a stopped pipeline, not a quiet one.
+
 Each `X`, `Y`, `Z`, `N`, `M` is replaced with the measured value, and the commands above are quoted
 in the page so the next reader can repeat the measurement rather than trust it.
 
@@ -2597,11 +2613,11 @@ below; the danger state is Step 2's, and it is written once.
 |---|---|---|
 | Danger state | Prometheus | Step 2 |
 | Bans active | Prometheus | `sum(fw_bouncer_banned_ips)` |
-| Requests, public hosts, 24 h | Loki | `sum by (RequestHost) (count_over_time({job="fluent-bit", container="traefik"}[24h]))` |
+| Requests, public hosts, 24 h | Loki | `sum by (RequestHost) (count_over_time({job="fluent-bit", source="accesslog"} \| json [24h]))` |
 | Rejected share | Prometheus | `100 * sum(rate(traefik_router_requests_total{code=~"4.."}[15m])) / sum(rate(traefik_router_requests_total[15m]))` |
 | Top addresses refused | Loki | see below |
 | Sign-in outcomes | Prometheus | `homelab_authentik_signins_15m` and `homelab_authentik_signins_24h` |
-| Requests by public host and status | Loki | `sum by (RequestHost, DownstreamStatus) (count_over_time({job="fluent-bit", container="traefik"} \| json [15m]))` |
+| Requests by public host and status | Loki | `sum by (RequestHost, DownstreamStatus) (count_over_time({job="fluent-bit", source="accesslog"} \| json [15m]))` |
 | Host blocks by host and port | Loki | `topk(5, sum by (unit) (count_over_time({source="journal", unit="kernel"} \|~ "UFW BLOCK" [1h])))` and the raw lines, which carry `_HOSTNAME` |
 | Posture table | Prometheus | `homelab_security_ingress_routes`, `homelab_security_ungated_routes`, `homelab_security_public_hosts`, `homelab_security_privileged_workloads`, `time() - homelab_security_exporter_last_success_timestamp_seconds` |
 
@@ -2609,9 +2625,17 @@ The one per-address view on the screen, and it reads the gated log store rather 
 
 ```
 topk(10, sum by (ClientHost) (count_over_time(
-  {job="fluent-bit", container="traefik"} | json
+  {job="fluent-bit", source="accesslog"} | json
   | DownstreamStatus >= 401 | DownstreamStatus < 500 [24h])))
 ```
+
+Every access-log query above names `source="accesslog"`, and the selector is not cosmetic: measured on
+2026-11-25, `{job="fluent-bit", container="traefik"}` matched **28,883 lines of the router's own
+stdout against 3,148 access-log lines**, and a `| json` over that mix answers `JSONParserErr` and
+buckets the unparsed lines under an empty `ClientHost` — a top-addresses panel whose biggest row is
+"nobody". The access stream itself parses with zero errors. The per-host panel needs `| json` **inside
+the query**: without it `RequestHost` is not a label yet, and the panel answered one total (3,699)
+instead of the 47 hosts Traefik actually served.
 
 - [ ] **Step 2: Write the danger state, once, as one expression**
 
@@ -2620,28 +2644,43 @@ why the rejected share uses Traefik's own counters and not the log: `traefik_rou
 is the same number, one query, no second datasource.
 
 ```promql
-# 2 = alerting, 1 = watch, 0 = calm. The panel's description carries this text,
-# with the measured threshold written in it.
-max(
-    (count(ALERTS{alertname=~"Security.*", alertstate="firing"}) > 0) * 2
-  or (delta(sum(fw_bouncer_banned_ips)[1h:1m]) > 20) * 2
-  or (sum(fw_bouncer_banned_ips) > 0) * 1
-  or (100 * sum(rate(traefik_router_requests_total{code=~"4.."}[15m]))
-      / sum(rate(traefik_router_requests_total[15m])) > 20) * 1
-  or (homelab_authentik_signins_15m{outcome="failure"} > 20) * 1
-  or vector(0)
-)
+# 2 = alerting, 1 = watch, 0 = calm. `bool` on every comparison, each term
+# `or vector(0)` so a missing family counts as false, then clamp_max: a sum.
+clamp_max(
+    2 * (delta(sum(fw_bouncer_banned_ips)[1h:1m]) > bool 20 or vector(0))
+  + 2 * (count(homelab_security_ungated_routes > 0)
+         or count(homelab_security_public_hosts != 9)
+         or count(homelab_security_privileged_workloads != 9) or vector(0))
+  + 2 * (((time() - homelab_security_exporter_last_success_timestamp_seconds > 600)
+          or absent(homelab_security_exporter_last_success_timestamp_seconds)
+          or absent(fw_bouncer_banned_ips) or absent(cs_active_decisions)
+          or absent(cs_parser_hits_ok_total) or vector(0)) > bool 0)
+  + (sum(fw_bouncer_banned_ips) > bool 0 or vector(0))
+  + (100 * sum(rate(traefik_router_requests_total{code=~"4.."}[15m]))
+      / sum(rate(traefik_router_requests_total[15m])) > bool 85 or vector(0))
+  + (sum(homelab_authentik_signins_15m{outcome="failure"} > bool 20) or vector(0)),
+  2)
 ```
 
-Three things about it are deliberate. `delta` on a subquery, not `increase`: the bouncer's family is
-a gauge, and `increase()` assumes a counter, silently resetting on any drop. `max()` over `or`-ed
-terms, not `or` alone, because the terms carry no labels and the first one that matches would win
-otherwise. And `vector(0)` last, so a calm night is the number 0 rather than an empty panel.
+Four of its habits were found by running it, not by reading it. Every comparison is `bool`: without it
+a filtered comparison keeps the sample it matched, so `(sum(fw_bouncer_banned_ips) > 0) * 1` read `3`
+on the screen instead of `1`. The terms are **added**, not `or`-ed: with `bool` a false term still
+returns a `0` sample, and `or` stops at the first *defined* operand rather than the first *true* one,
+so the `or` chain answered `Calm` while three bans were in force. `delta` on a subquery, not
+`increase`, because the bouncer's family is a gauge. And **the top term is not `ALERTS`**: the first
+version counted `ALERTS{alertname=~"Security.*"}`, which is empty in this cluster because Grafana
+evaluates every rule and Prometheus has no rule files — a term that could never fire, discovered while
+Task 14 wrote the rules it was supposed to mirror. It reads the bans, the posture counts and the
+exporter's freshness instead, which are the signals the seven rules themselves watch.
 
-`REJECTED_SHARE_PCT` and its `20` are Task 12's measured value, written into the panel's description
-in the same words — the plan uses 20 as the provisional figure and the measurement replaces it before
-the panel is saved. The thresholds are `0/1/2` on a stat panel with three value mappings — Calm, Watch,
-Alerting — and no score out of ten.
+The panel's text mode is `value`, not `value_and_name`: an expression with no legend renders its own
+text as the series name, and the first version showed the whole query above the word `Calm`.
+
+`REJECTED_SHARE_PCT` is **85**, Task 12's measured value, written into the panel's description in the
+same words — the plan's provisional `20` sat inside the band routine bot bursts already produce (42 of
+92 hours were above it), so it would have painted the screen amber on an ordinary Tuesday. The
+thresholds are `0/1/2` on a stat panel with three value mappings — Calm, Watch, Alerting — and no score
+out of ten.
 
 - [ ] **Step 3: Apply it through the API**
 
@@ -2661,14 +2700,28 @@ curl -s -H "Authorization: Bearer $GRAFANA_TOKEN" \
 
 Expected: nine titles, each expression one that ran in Step 1. Force the danger state to each of its three values once (a fake alert, a rule that matches nothing, then reality) and read the screen at 1080p from where it will be watched.
 
+Three presentation choices were made on that read-back, and each replaces a panel that rendered wrong
+rather than merely plain. *Requests per host* and *Top addresses refused* are **tables**, not bar
+gauges: an instant Loki query returns one frame per series, and a bargauge names its bars from the raw
+label set (`{RequestHost="grafana.kub.local"}`) — the same defect the Media screen hit on
+`Missing per app` (see `docs/reference/dashboards.md`). *Posture* is six **stat tiles**, not a table: a
+table fed by five Prometheus targets shows only the first frame, so four of the five counts were
+invisible. *Sign-in outcomes* joins its two targets `byField: "outcome"` and hides both `Time` columns,
+because two 15-minute and 24-hour counts otherwise appeared as two unrelated tables.
+
 - [ ] **Step 4: Export the copy and describe it**
 
 ```bash
 mkdir -p cluster/helm/monitoring/grafana/export/security
 curl -s -H "Authorization: Bearer $GRAFANA_TOKEN" \
   https://grafana.kub.local/api/dashboards/uid/homelab-security \
-  | jq '.dashboard' > cluster/helm/monitoring/grafana/export/security/dashboard.json
+  | jq '{dashboard: .dashboard, folderUid: .meta.folderUid, overwrite: true}' \
+  > cluster/helm/monitoring/grafana/export/security/dashboard.json
 ```
+
+The file keeps the wrapper the Traefik export uses — `{dashboard, folderUid, overwrite}` — so it is the
+body `POST /api/dashboards/db` takes, not the bare dashboard. `jq '.dashboard'` alone would restore the
+panels into the wrong folder on a wipe.
 
 The `README.md` beside it states what the Traefik export's does: this is a snapshot to read in a pull request and to restore after a wipe, nothing applies it, and the database stays authoritative.
 
@@ -2716,7 +2769,7 @@ nav and the table.
 
 **Interfaces:**
 - Consumes: every family from Tasks 5–11 and the thresholds from Task 12.
-- Produces: `SecurityBanBurst`, `SecurityAttackSustained`, `AuthentikSignInFailures`, `HostSshBruteForce`, `HostFirewallBlockBurst`, `SecurityExposureDrift`, `SecurityStackBlind`, all with `for: 5m` (except drift's `10m`) in `homelab-core-fast`.
+- Produces: `SecurityBanBurst`, `SecurityAttackSustained`, `AuthentikSignInFailures`, `HostSshBruteForce`, `HostFirewallBlockBurst`, `SecurityExposureDrift`, `SecurityStackBlind`, all with `for: 5m` (except drift's `10m`) — six in `homelab-core-fast`, and `SecurityExposureDrift` in `homelab-core` because its `for` is 10 minutes and it is not a "something is down" rule, which is the split the alerting page documents.
 
 - [ ] **Step 1: Write each rule from the family that exists, not the family imagined**
 
@@ -2735,42 +2788,67 @@ delta(sum(fw_bouncer_banned_ips)[10m:1m])
 
 # SecurityAttackSustained — critical, for 5m, Loki. Condition: reduce(sum) > 100.
 topk(1, sum by (ClientHost) (count_over_time(
-  {job="fluent-bit", container="traefik"} | json
+  {job="fluent-bit", source="accesslog"} | json
   | DownstreamStatus = 401 or DownstreamStatus = 403 or DownstreamStatus = 404 [10m])))
 
 # AuthentikSignInFailures — warning, for 5m, Prometheus. Condition: last() > 20.
 homelab_authentik_signins_15m{outcome="failure"}
 
-# HostSshBruteForce — warning, for 5m, Loki. Condition: reduce(sum) > 10.
-sum(count_over_time({source="journal", unit="ssh"} |~ "(?i)failed password|invalid user" [10m]))
+# HostSshBruteForce — warning, for 5m, Loki. Condition: reduce(last) > 10.
+sum by (host) (count_over_time({source="journal", unit="ssh"}
+  |~ "(?i)failed password|invalid user" | json
+  | label_format host=_HOSTNAME [10m]))
 
-# HostFirewallBlockBurst — warning, for 5m, Loki. Condition: reduce(sum) > 200.
-sum(count_over_time({source="journal", unit="kernel"} |~ "UFW BLOCK" [5m]))
+# HostFirewallBlockBurst — warning, for 5m, Loki. Condition: reduce(last) > 200.
+sum by (host) (count_over_time({source="journal", unit="kernel"}
+  |~ "UFW BLOCK" | json | label_format host=_HOSTNAME [5m]))
 
 # SecurityExposureDrift — critical, for 10m, Prometheus. Condition: last() > 0.
-# Two comparisons, `or`-ed: a route that lost its gate, and a count that moved.
-homelab_security_ungated_routes > 0
-  or homelab_security_public_hosts != 9
-  or homelab_security_privileged_workloads != 4
+# A sum of absolute deviations, not an `or` chain: a chain returns nothing when the
+# posture is correct, which reads as NoData, and a broken expression would then be
+# indistinguishable from a healthy cluster.
+sum(abs(homelab_security_ungated_routes))
+  + sum(abs(homelab_security_public_hosts - 9))
+  + sum(abs(homelab_security_privileged_workloads - 9))
 ```
 
-Each rule sets its **no-data behaviour explicitly**, because the two kinds disagree. `SecurityExposureDrift`
-and `SecurityAttackSustained` return nothing when nothing is wrong, so their no-data state is **OK**; a
-rule that alerts on no data would fire on every quiet night and be muted within a week.
-`SecurityStackBlind` is the opposite: its no-data state is **Alerting**, because "the query returned
-nothing" is exactly what a dead exporter looks like.
+Every rule sets its **no-data behaviour explicitly**, because the two kinds disagree.
+`SecurityAttackSustained` and `SecurityExposureDrift` return nothing when nothing is wrong, so their
+no-data state is **OK**; a rule that alerts on no data would fire on every quiet night and be muted
+within a week. `SecurityStackBlind` is the opposite: its no-data state is **Alerting**, because "the
+query returned nothing" is exactly what a dead exporter looks like — and that is also why its two
+queries end in `or vector(0)` below: a healthy cluster must return a `0`, not nothing, or the rule
+reads its own healthy state as blindness.
 
 `SecurityStackBlind` is one rule with two targets and one condition, which is how a Grafana rule
 spans datasources:
 
 ```
-A (Prometheus): time() - homelab_security_exporter_last_success_timestamp_seconds > 300
+A (Prometheus): (time() - homelab_security_exporter_last_success_timestamp_seconds > 600)
                 or absent(homelab_security_exporter_last_success_timestamp_seconds)
                 or absent(fw_bouncer_banned_ips)
                 or absent(cs_active_decisions)
-B (Loki):       sum(count_over_time({job="fluent-bit", container="traefik"}[10m]))
-C (classic):    A > 0  ||  B == 0
+                or absent(cs_parser_hits_ok_total)
+                or vector(0)
+B (Loki):       sum(count_over_time({job="fluent-bit", source="accesslog"}[10m])) or vector(0)
+C (classic):    A > 0  ||  B < 1
 ```
+
+Both halves end in `or vector(0)`, and that is the difference between a rule and a false page. Written
+as above without it, the rule went **Pending (NoData) on a healthy cluster** at its first evaluation:
+`A` returns nothing when everything is fine, a classic condition over an empty query is NoData, and
+this rule's `noDataState` is `Alerting` because a dead exporter looks exactly like NoData. `or
+vector(0)` gives the healthy case a `0` to compare against. `cs_parser_hits_ok_total` is the agent's
+half — the LAPI's gauge stays up when the detector dies, and the agent is the thing that reads the log.
+
+Ten minutes, not five: the plan's `2N × 5` formula lands on 0 because Task 12 found no empty window at
+any usable step, and ten minutes is five times the finest window a 1 m scrape interval allows. The
+traffic never pauses that long — the quietest two-minute window still held 4 requests — so a B that
+reads zero is a pipeline that stopped, not a quiet night. `B` names `source="accesslog"` on purpose:
+the rule is about the file the detector reads, not about Traefik being alive, and the mixed selector
+would stay above zero on the router's own startup dump while the tail of the file was dead. On the
+access stream itself, measured over the first hour on 2026-11-25: 50 lines in the quietest ten-minute
+window, longest gap between two lines 34 s.
 
 A returns one sample when the exporter is stale or a family has vanished, and nothing when everything
 is alive; `C`'s `A > 0` then reads "blind". The three families live on two pods, and both are annotated
@@ -2820,16 +2898,16 @@ curl -s -H "Authorization: Bearer $GRAFANA_TOKEN" \
 
 - [ ] **Step 3: Force each one, and watch it resolve**
 
-For each rule, `POST /api/v1/eval` with `{condition, data}` copied from its own object — the check the Traefik rules used on 2026-11-21. Then, for the two that can be provoked:
+For each rule, `POST /api/v1/eval` with `{condition, data}` copied from its own object — the check the Traefik rules used on 2026-11-21. It answers the query results but not the condition state in this Grafana, so a rule's state is read from `/api/prometheus/grafana/api/v1/rules`. Then, for two of them, the real thing:
 
-- a burst of ten missing paths from the runbook's outside address creates a decision → `SecurityBanBurst` and `SecurityAttackSustained` fire, with the address in the message;
-- **the operator** scales `deploy/crowdsec-agent` to zero (`kubectl -n security scale`, a write this session must not make) → `SecurityStackBlind` fires within five minutes. **This is the one proof that is not an expression**; the rule's whole value is that a dead agent is not a quiet night, and scaling it down is how that is shown. Scale it back and watch the alert resolve.
+- `SecurityAttackSustained` fires with its threshold lowered to `> 0` for one evaluation: the message carries the live address and count, both receivers are notified, and the relay opens a card — that card is the readable proof, since the Discord webhook is a secure field no agent can read.
+- `kubectl -n security scale deploy/crowdsec-agent --replicas=0` takes the detector away → `SecurityStackBlind` fires once the agent's series goes stale plus the rule's own `for` (about seven minutes measured, not fifteen: Prometheus writes a stale marker when a target disappears). **This is the one proof that is not an expression**; the rule's whole value is that a dead agent is not a quiet night, and scaling it down is how that is shown. Scale it back and watch the alert resolve, and the dashboard's danger tile go red and back.
 
 - [ ] **Step 4: Read one Discord message and one card as the operator receives them**
 
 `discord-homelab` for the warning, and the alert relay's card for the critical. Both are quoted into
-`docs/reference/alerts.md`, which gains the seven rules in the table beside the existing 49 **and
-changes the "49 rules" count in its lede to 56** — the same lie-in-the-lede problem the dashboards page
+`docs/reference/alerts.md`, which gains the seven rules in the table beside the existing 51 **and
+changes the "51 rules" count in its lede to 58** — the same lie-in-the-lede problem the dashboards page
 had. It also gains one paragraph on why `SecurityStackBlind` is the rule that makes the others
 believable: every other rule here reports an event, and this one reports that nobody is watching for
 events.
@@ -2837,7 +2915,7 @@ events.
 ```bash
 curl -s -H "Authorization: Bearer $GRAFANA_TOKEN" \
   "https://grafana.kub.local/api/v1/provisioning/folder/homelab/rule-groups/homelab-core-fast" \
-  | jq -r '.[] | select(.title | startswith("Security")) | .title, .uid' > /dev/null
+  | jq -r '.rules[] | select(.title | test("^(Security|Authentik|Host)")) | .title, .uid' > /dev/null
 ```
 
 - [ ] **Step 5: Export the rules and commit**
@@ -2845,12 +2923,23 @@ curl -s -H "Authorization: Bearer $GRAFANA_TOKEN" \
 ```bash
 curl -s -H "Authorization: Bearer $GRAFANA_TOKEN" \
   https://grafana.kub.local/api/v1/provisioning/alert-rules \
-  | jq '[.[] | select(.title | startswith("Security"))]' \
+  | jq '[.[] | select(.title | test("^(Security|Authentik|Host)"))]' \
   > cluster/helm/monitoring/grafana/export/security/rules.json
 hack/check-docs.sh --base origin/develop
 git add cluster/helm/monitoring/grafana/export/security/rules.json docs/reference/alerts.md
 git commit -m "🚀 feature: seven security rules, and the one that says the detector is dead"
 ```
+
+The selector is the three prefixes, not `startswith("Security")`: four of the seven do not start with
+it (`AuthentikSignInFailures`, `HostSshBruteForce`, `HostFirewallBlockBurst`, and the export would
+have shipped three rules and called it seven).
+
+**One correction landed in Task 13's file while this task ran**, and it belongs here because the two
+agree on paper only if the panel can see what the rules see: the danger state's top term read
+`ALERTS{alertname=~"Security.*"}`, and this cluster's Prometheus has no `ALERTS` family at all —
+Grafana evaluates every rule. The term could never fire, and the "alerting" state had been proved with
+a `vector(2)` probe. It now reads the bans, the posture counts, the exporter's freshness and the same
+three families this rule checks, and the red state was then proved by stopping the agent.
 
 ---
 

@@ -16,7 +16,7 @@ A single K3s homelab managed by ArgoCD (GitOps) plus Ansible for host prep.
 - 60 ArgoCD `Application` objects in `cluster/argocd/projects/**/*.yaml`, plus the root application
   at `cluster/argocd/argocd-root.yaml`. The old `calibre` Application and its chart were retired once
   Calibre-Web Automated had the collection.
-- 52 Helm charts under `cluster/helm/`.
+- 55 Helm charts under `cluster/helm/`.
 - No CI. Renovate updates images/chart versions; nothing runs on PR.
 - Secrets are never committed. See §5.
 
@@ -155,7 +155,12 @@ time. Examples:
   catalogue, `rbp2` for nothing but the control plane.
   Observability (Prometheus, Grafana, Loki) is a `nas` workload: ~50 GiB of `local-path` claims, no
   NFS. The NAS's `/mnt/ultrafaststorage` is reserved for the qbittorrent download export; nothing
-  else goes there. DaemonSets (`fluent-bit`, `prometheus-node-exporter`) are not pinned: they must
+  else goes there. `qbittorrent` is a `nas` workload for that reason: it writes the export on the
+  disk that serves it and mounts the export root as a host path, while the *arrs read the same
+  directory over NFS (`docs/runbooks/qbittorrent-to-nas.md`). A `local-path` claim cannot follow a
+  move like that one — it binds to the node that first mounts it, so the claim and its volume are
+  rebuilt on the new node, not moved. DaemonSets (`fluent-bit`, `prometheus-node-exporter`) are not
+  pinned: they must
   run on every node, including `rbp2`. The old `node-type` label is retired; do not reintroduce it.
   Traefik is the exception in the other direction: one `Deployment` replica pinned to `streaming`,
   never a DaemonSet. The certificate store is one file with no lock, so a second router alongside the
@@ -196,7 +201,7 @@ done
 `hack/check-charts.sh` is that loop in bulk plus `helm lint`: requirement 11 of
 [`docs/charts/README.md`](docs/charts/README.md) is both commands, and `helm template` masks a broken
 document separator with the `# Source:` line it injects while lint does not. The script builds each
-dependency chart in a temporary copy, so it lints all 52.
+dependency chart in a temporary copy, so it lints all 55.
 
 Charts that need `helm dependency build`: `monitoring/prometheus`, `monitoring/grafana`,
 `monitoring/loki`, `monitoring/fluent-bit`, `authentik`, `dashy`, `filebrowser`,
@@ -287,8 +292,9 @@ are in `docs/superpowers/plans/`.
    `$values/cluster/helm/nfs/audio/values.yaml`, which never existed. It now reads
    `cluster/helm/nfs/provisioner` with `values/nfs-audio.yaml`.
 7. **Resolved 2026-11-19:** `projects/nfs/nfs-qbittorrent-config.yaml` used `path:` on a directory
-   holding no `Chart.yaml`, so ArgoCD reported **Synced/Healthy while deploying nothing**. It now
-   reads `cluster/helm/nfs/provisioner` with `values/nfs-qbittorrent-config.yaml`.
+   holding no `Chart.yaml`, so ArgoCD reported **Synced/Healthy while deploying nothing**. The
+   Application was retired with its export and its values file on 2026-11-26 (board card 769);
+   `/config` is a `local-path` claim since 2026-11-25 (card 758).
 
 **Chart defects**
 

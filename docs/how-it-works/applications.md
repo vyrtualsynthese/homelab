@@ -13,7 +13,8 @@ This is a snapshot of the repository and of the cluster on 2026-11-22. Pod healt
 daily, and no page keeps up with them: `kubectl get pods -A` and ArgoCD's application list are the
 live answer, and [Every day](../running-it/every-day.md) is the sweep that reads them.
 Two rows were refreshed on 2026-11-20: `koillection` is scheduled again, and `minecraft-server` now
-renders its workload at `0` replicas by decision rather than waiting on a claim.
+renders its workload at `0` replicas by decision rather than waiting on a claim. One more on
+2026-11-25: `qbittorrent` runs on `nas`, where its downloads are a local path.
 
 ## How to read the tables
 
@@ -68,7 +69,7 @@ belong to is [media.md](media.md).
 | `maintainerr` | `media-stack` | streaming | A | removes library items when a rule says so |
 | `plex` | `media-stack` | streaming | A | playback; video conversion on the GPU |
 | `prowlarr` | `media-stack` | streaming | A | the one indexer list the *arr apps share |
-| `qbittorrent` | `media-stack` | streaming | A | the download client, with its VPN sidecar |
+| `qbittorrent` | `media-stack` | nas | A | the download client, with its VPN sidecar |
 | `qbittorrent-exporter` | `media-stack` | streaming | A | Prometheus metrics for qBittorrent |
 | `radarr` | `media-stack` | streaming | A | film library manager |
 | `radarr-anime` | `media-stack` | streaming | A | Radarr for the anime library |
@@ -91,6 +92,7 @@ belong to is [media.md](media.md).
 | `news-freshrss` | `news` | nuc0 | A | RSS reader, on a claim the chart creates |
 | `renovate` | `renovate` | nas | D | nightly pull requests that bump dependencies |
 | `crowdsec` | `security` | nas | D | attack detection: reads the router's access log on `streaming`, keeps the decisions on `nas`; the banning is a host service, see the CrowdSec runbook |
+| `crowdsec-web-ui` | `security` | Pending | A | second view of those decisions and alerts, with the buttons to undo a ban; it reads the LAPI directly, so it works while Grafana is the thing that is broken |
 | `security-exporter` | `security` | nas | A | posture numbers for the security dashboard: live route count, un-gated routes, public hosts, privileged workloads |
 | `syncthing` | `syncthing` | nuc0 | A | file sync between devices |
 | `thelounge` | `thelounge` | nuc0 | A | web IRC client |
@@ -106,7 +108,6 @@ they are what everything above stands on.
 | `local-path` | `default` | nas | B | the default storage class: one directory per claim, on the node's own disk |
 | `books-media` | `media-stack` | nuc0 | D | the `nfs-books` class: the books library |
 | `nfs-audio` | `media-stack` | nuc0 | D | the `nfs-audio` class: music |
-| `nfs-qbittorrent-config` | `media-stack` | streaming | D | the `nfs-qbittorrent-config` class: qBittorrent's configuration on the NAS |
 | `nfs-qbittorrent-download` | `media-stack` | streaming | D | the `qbittorrent-download` class: what is still downloading, on the fast SSD |
 | `plex-media` | `media-stack` | streaming | D | the `plex-media` class: film and television |
 | `stash-nfs` | `media-stack` | nuc0 | D | the `stash-nfs` class: the assets export — koillection's uploads, and FileBrowser's read of the same directory |
@@ -117,10 +118,10 @@ they are what everything above stands on.
 | `traefik` | `kube-system` | streaming | D | the ingress router: the one door the house router forwards to |
 | `traefik-gate` | `kube-system` | — | A | middlewares, TLS options and the `lan-only` gate: no workload of its own |
 
-All eight provisioners are one release each of the wrapper chart at
+All seven provisioners are one release each of the wrapper chart at
 `cluster/helm/nfs/provisioner/`, one values file per export, and every release asks for `streaming`.
 The Node column records where each pod ran at verification; each row moves to `streaming` as its
-Application syncs. None of the eight selects the retired `node-type` label.
+Application syncs. None of the seven selects the retired `node-type` label.
 
 ## No chart selects `node-type`
 

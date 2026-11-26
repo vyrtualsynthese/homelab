@@ -4,11 +4,12 @@
 > selector that reproduces each number — so the next pass can tell a regression from an old event.
 >
 > **Use it when** you are about to reduce log volume, or a week of logs looks larger than the last
-> measurement · **Verified** 2026-11-22 · **Kind:** reference
+> measurement · **Verified** 2026-11-25 · **Kind:** reference
 >
 > **Sources** `cluster/helm/monitoring/fluent-bit/values.yaml` (the inputs, filters and outputs),
 > `cluster/helm/monitoring/loki/values.yaml` (retention and the limits), and
-> `docs/reference/metrics.md` (the reader counts). Read through Loki's own HTTP API on 2026-11-22.
+> `docs/reference/metrics.md` (the reader counts). Read through Loki's own HTTP API on 2026-11-22 for
+> the baseline, and on 2026-11-25 for the host journal the security detection added.
 
 The numbers below were taken from Loki's own HTTP API against the live cluster. Nothing here is
 estimated: every figure has the query that produced it, and a change is only "fixed" if the number
@@ -23,14 +24,15 @@ by its stream labels rather than kept whole.
 About three quarters of the volume is not a signal anyone acts on: health checks logged as requests,
 a log level left at `info`, and three objects applied by hand that nothing in Git owns.
 
-### The host journal, pending
+### The host journal, first numbers
 
 Fluent Bit also ships each node's own journal in the change that adds the security detection (sshd
 auth failures as `unit="ssh"`, the kernel's ufw block lines as `unit="kernel"`, `source="journal"`).
-**Its 24-hour line count has not been measured:** the pipeline has never run, so the query answers
-nothing and no number on this page covers it. Record it **on or after 2026-11-26**, once the sync has
-landed and a day has passed, with both halves — lines and bytes, because the decision below is about
-the store rather than the line count:
+**The stream started on 2026-11-25 at 13:40 UTC**, when the DaemonSet's four pods restarted with the
+new inputs, and the figures below cover its first three hours — the `[24h]` window and a three-hour one
+answer the same number, because nothing is older than that. Read the two commands again **on or after
+2026-11-26** for the day itself; both halves matter, because the decision below is about the store
+rather than the line count:
 
 ```bash
 curl -skG -H "Authorization: Bearer $GRAFANA_TOKEN" \
@@ -41,11 +43,15 @@ curl -skG -H "Authorization: Bearer $GRAFANA_TOKEN" \
   --data-urlencode 'query=sum by (unit) (bytes_over_time({source="journal"}[24h]))'
 ```
 
-Read through the same proxy on 2026-11-25, `{job="fluent-bit"}` answered 176,940 lines over 24 hours
-while `{source="journal"}` and `{source="accesslog"}` both answered nothing — the two streams this
-change adds have never run, so their absence is a measurement rather than a failed query. That
-176,940 is well below the 533,803 of the day above; this page does not yet write up what moved it, so
-the headline stays the baseline and that number is only proof the selector answers.
+Read at 2026-11-25 16:45 UTC, over 3.1 hours: **4,256 kernel lines (1.62 MB) and 65 ssh lines
+(53 KB)**, 1.67 MB together. At that rate the journal adds about **33,700 lines and 13 MB a day** —
+above the 11.7 MB line below rather than below it, and worth watching rather than calling: three hours
+is a quiet Wednesday afternoon, while the `kernel` stream's volume is the four nodes' ufw blocks,
+which move with whatever is probing the public addresses that day.
+
+The three quarters of the volume that is not a signal does not include this stream: every kernel line
+here is either a ufw block or the kernel saying something went wrong, and the `ssh` half is
+authentication only.
 
 The decision rule, in the unit `bytes_over_time` answers in: the day above carried **117.0 MB** of
 lines. The journal may add up to **11.7 MB a day** of lines (10 %, which is about 1.35 MB of the

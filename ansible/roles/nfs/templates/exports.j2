@@ -1,6 +1,6 @@
 # /etc/exports — rendered by ansible/roles/nfs from exports.j2.
 #
-# Eight lines: the eight directories the cluster mounts, and nothing else. The
+# Seven lines: the seven directories the cluster mounts, and nothing else. The
 # bare `/mnt` export is gone, because nothing in this repository mounts it; the
 # parent directories are not exported either, so a client has to name what it
 # wants.
@@ -26,9 +26,17 @@
 # cosmetic reason.
 /mnt/storage/nfs/plexmedia {{ nfs_addresses | map('regex_replace', '$', '(rw,sync,root_squash,no_subtree_check,anonuid=1100,anongid=1100,fsid=2)') | join(' ') }}
 /mnt/storage/nfs/books {{ nfs_addresses | map('regex_replace', '$', '(rw,sync,root_squash,no_subtree_check,anonuid=1100,anongid=1100,fsid=4)') | join(' ') }}
-/mnt/ultrafaststorage/nfs {{ nfs_addresses | map('regex_replace', '$', '(rw,sync,root_squash,no_subtree_check,anonuid=1100,anongid=1100,fsid=5)') | join(' ') }}
+# `async` on this export only, and deliberately: it holds files being downloaded,
+# never a database, and every byte can be fetched again. With `sync`, nfsd fsyncs
+# each write on `/mnt/ultrafaststorage`, and that fsync has been seen to stick in
+# ext4's fast-commit path — which hangs every client write waiting on it, and took
+# qBittorrent's Web UI down with it (docs/qbittorrent-webui-stalls.md).
+/mnt/ultrafaststorage/nfs {{ nfs_addresses | map('regex_replace', '$', '(rw,async,root_squash,no_subtree_check,anonuid=1100,anongid=1100,fsid=5)') | join(' ') }}
 /mnt/storage/nfs/stash {{ nfs_addresses | map('regex_replace', '$', '(rw,sync,root_squash,no_subtree_check,anonuid=1100,anongid=1100,fsid=7)') | join(' ') }}
-/mnt/storage/traefik {{ nfs_addresses | map('regex_replace', '$', '(rw,sync,root_squash,no_subtree_check,anonuid=1100,anongid=1100,fsid=8)') | join(' ') }}
+# This export maps a client's root to 65532, not 1100. Its one file is
+# `acme.json`, which Traefik (uid 65532) keeps at 0600, so the backup — which
+# runs as root — only reads it when it lands on the file's owner. Traefik itself
+# connects as 65532 and is unaffected by the squash.
+/mnt/storage/traefik {{ nfs_addresses | map('regex_replace', '$', '(rw,sync,root_squash,no_subtree_check,anonuid=65532,anongid=65532,fsid=8)') | join(' ') }}
 /mnt/storage/nfs/syncthing {{ nfs_addresses | map('regex_replace', '$', '(rw,sync,root_squash,no_subtree_check,anonuid=1100,anongid=1100,fsid=9)') | join(' ') }}
-/mnt/storage/nfs/qbittorrent-config {{ nfs_addresses | map('regex_replace', '$', '(rw,sync,root_squash,no_subtree_check,anonuid=1100,anongid=1100,fsid=11)') | join(' ') }}
 /mnt/storage/nfs/audio {{ nfs_addresses | map('regex_replace', '$', '(rw,sync,root_squash,no_subtree_check,anonuid=1100,anongid=1100,fsid=12)') | join(' ') }}

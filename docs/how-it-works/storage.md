@@ -5,7 +5,11 @@
 > not.
 >
 > **Use it when** you are adding a claim, a pod will not start because of one, or you want to know what
-> a backup would save · **Verified** 2026-11-20 · **Kind:** living page
+> a backup would save · **Verified** 2026-11-25 · **Kind:** explanation
+>
+> **Sources** `cluster/helm/media-stack/qbittorrent/values.yaml`,
+> `cluster/helm/backup/values.yaml`, `ansible/roles/nfs/templates/exports.j2`, the live
+> `StorageClass` and `PersistentVolume` objects
 
 ## Two storage worlds
 
@@ -21,11 +25,24 @@ hence the pinning rule in [nodes.md](nodes.md). NFS serves one copy to many read
 storage, the same volume on two machines, was Longhorn, gone for the reason in
 [the-shape-and-why.md](the-shape-and-why.md).
 
+There is one third case, and only one: a pod that runs **on the machine exporting the data** can mount
+the export root as a host path, so its writes never go through an NFS client. `qbittorrent` does that
+for `/downloads`, with the 2026-11-25 move — the same directory the *arrs read over NFS, on the same
+disk. The
+rule that keeps it from spreading: a host path is only for a directory the node itself already owns
+and exports, it is pinned to that node, and it names the path with `type: Directory` so a missing
+export fails the pod instead of creating an empty tree. Nothing else in the cluster mounts a host
+path for its data.
+
 ## Claims and names
 
 A configuration claim is `<app>-config`, `128Mi` unless there is a reason: configuration is small, and
-GiB-sized guesses proved wrong. Two exceptions keep book-sized files in their own volume:
-`calibre-web-automated` at `10Gi`, `kavita` at `2Gi`.
+GiB-sized guesses proved wrong. Three claims are larger with a measured reason beside the size:
+`calibre-web-automated` at `10Gi` and `kavita` at `2Gi` for their book-sized files, and
+`qbittorrent`'s config claim at `2Gi` because its resume data alone is 156 MB — one `.fastresume` per
+torrent, which is why it moved off NFS on 2026-11-25 rather than being copied around. It moved again
+that evening, to `nas`, because the claim follows the pod and the pod follows the export; its
+WireGuard claim went with it.
 
 ![Configuration on local-path per node, the media library on NFS classes from nas, and the Longhorn claims that remain](../assets/diagrams/storage.svg)
 
@@ -39,26 +56,25 @@ the classes below are what remains.
 | `plex-media` | Immediate | film and television |
 | `nfs-audio` | Immediate | music |
 | `nfs-books` | Immediate | the books library |
-| `qbittorrent-download` | Immediate | qBittorrent's output |
-| `nfs-qbittorrent-config` | Immediate | qBittorrent's state directory |
+| `qbittorrent-download` | Immediate | the downloads queue: the *arrs, unpackerr and FileBrowser mount it, and with the 2026-11-25 move qBittorrent reads the same directory from `nas` as a host path |
 | `nfs-syncthing` | Immediate | Syncthing's folder |
 | `stash-nfs` | Immediate | assets and documents: koillection's uploads are provisioned into this export, and FileBrowser reads the same directory |
 | `traefik-nfs` | Immediate | Traefik's certificate store |
 
 Every NFS class there is a directory on a `nas` export, declared by its own release of the wrapper
-chart at `cluster/helm/nfs/provisioner/`: one chart, eight releases, one values file each. Two more
+chart at `cluster/helm/nfs/provisioner/`: one chart, seven releases, one values file each. Two more
 classes, `nfs-plex` and `nfs-ssd`, belonged to provisioners that existed only in the cluster — no
 chart, no Application, no claim on either. They were uninstalled on 2026-11-19 with
 `helm uninstall nfs-hdd nfs-ssd -n default`.
 
-**Helm does not deploy the eight.** They were installed by hand in 2023 and 2024, before ArgoCD, so
+**Helm does not deploy them.** They were installed by hand in 2023 and 2024, before ArgoCD, so
 the cluster also carried eight Helm release records — Helm's own note of what it installed, kept as
 Secrets — each claiming the same nine objects the chart renders. All eight were deleted on
 2026-11-20 with `kubectl -n <namespace> delete secret -l owner=helm,name=<release>`, which removes
 the note and leaves the objects to ArgoCD. Running `helm uninstall` there would have deleted the
 live provisioner Deployment, its RBAC and its class, and only a sync would bring them back. The two
 stray provisioners above are the opposite case: nothing in git declared their objects, so
-`helm uninstall` was the right tool for them and is not for these eight.
+`helm uninstall` was the right tool for them and is not for the releases this chart declares.
 
 `local-path` is hostPath-backed: `fsGroup` does nothing, and `runAsUser` on a claim another UID wrote
 makes `/config` unreadable. The safe order is in the chart contract —
@@ -79,6 +95,11 @@ pod**; otherwise the scheduler keeps queueing it against the old claim's identit
 stays as `Released` — delete it and its directory. The habit that avoids it: scale the old Deployment
 to zero before the first sync that creates the claim.
 
+A claim that holds data and has to change node is the same trap with an extra step: the data is copied
+first, then the claim **and** its released volume are deleted, and the new claim is bound on the new
+node by its first consumer. [`runbooks/qbittorrent-to-nas.md`](../runbooks/qbittorrent-to-nas.md) is
+that sequence worked in full, with the rollback.
+
 ## Four volumes that carried a deletion mark
 
 Longhorn is gone: the driver, its classes and custom resources, the namespace, all twenty-six volumes
@@ -94,7 +115,7 @@ every rebuild since:
 | `pv-traefik-nfs` | `kube-system/pvc-traefik-nfs` | the `traefik` DaemonSet | the ACME certificate store, `/mnt/storage/traefik` |
 | `pv-plex-media` | `media-stack/pvc-plex-media` | `plex`, `sonarr`, `sonarr-anime`, `radarr`, `radarr-anime`, `bazarr`, `bazarr-anime` | film and television, `/mnt/storage/nfs/plexmedia` |
 | `pv-stash-nfs-nfs-stash` | `media-stack/pvc-stash-nfs-nfs-stash` | the `stash-nfs` provisioner | assets and documents, `/mnt/storage/nfs/stash`, the export FileBrowser reads |
-| `pv-nfs-qbittorrent-download-nfs-subdir-external-provisioner` | `media-stack/pvc-nfs-qbittorrent-download-nfs-subdir-external-provisioner` | `qbittorrent`, `unpackerr`, `sonarr`, `sonarr-anime`, `radarr`, `radarr-anime`, `lidarr` | the downloads queue, `/mnt/ultrafaststorage/nfs` |
+| `pv-nfs-qbittorrent-download-nfs-subdir-external-provisioner` | `media-stack/pvc-nfs-qbittorrent-download-nfs-subdir-external-provisioner` | `unpackerr`, `sonarr`, `sonarr-anime`, `radarr`, `radarr-anime`, `lidarr` — qBittorrent leaves this list with the 2026-11-25 move and reads the same directory from the host | the downloads queue, `/mnt/ultrafaststorage/nfs` |
 
 ArgoCD reads an object marked for deletion as still going away, so those four Applications —
 `plex-media`, `nfs-qbittorrent-download`, `stash-nfs`, `traefik-nfs` — reported `Progressing` and

@@ -5,10 +5,11 @@
 > nobody watches.
 >
 > **Use it when** an alert fired and you want to know what it means, you are writing or editing a
-> rule, or you are asking whether something is monitored at all · **Verified** 2026-11-25 · **Kind:** reference
+> rule, or you are asking whether something is monitored at all · **Verified** 2026-11-26 · **Kind:** reference
 >
-> **Sources** the live rules, read from Grafana's API on 2026-11-25 ·
-> `cluster/helm/monitoring/grafana/values.yaml`, `docs/observability-conventions.md`
+> **Sources** the live rules, read from Grafana's API on 2026-11-26 ·
+> `cluster/helm/monitoring/grafana/values.yaml`, `docs/observability-conventions.md`, and the two
+> exports under `cluster/helm/monitoring/grafana/export/{traefik,security}/rules.json`
 
 The overview — what runs where, its sizing, and how to query the stack:
 [`observability-conventions.md`](../observability-conventions.md).
@@ -16,23 +17,23 @@ The overview — what runs where, its sizing, and how to query the stack:
 ## Alerting
 
 Grafana unified alerting, folder `Homelab`, **two rule groups split by cadence
-on 2026-11-18**: `homelab-core-fast` at **60 s** (21 rules) and `homelab-core` at
-**300 s** (30 rules). **51 rules**, **two contact points**, and four child routes: two by severity and
+on 2026-11-18**: `homelab-core-fast` at **60 s** (28 rules) and `homelab-core` at
+**300 s** (31 rules). **59 rules**, **two contact points**, and four child routes: two by severity and
 two on `board=card` — one to each contact point.
 
 The split rule is the `for` duration: a rule sits in the fast group when its `for`
 is 5 minutes or less, or when it reports that something is down and its `for` is
-10 minutes (`NodeDown`, `KubeNodeNotReady`, `MonitoringDown`,
-`KubeStateMetricsDown`, `CoreDeploymentDown`, `CoreStatefulSetDown`,
-`CoreDaemonSetDown`, `MediaDeploymentDown`, and since 2026-11-20
-`CloudEndpointDown` and `CloudDnsCheckFailing`) — `ScrapeTargetDown` joins them
-because its whole job is noticing that data stopped arriving. Everything else is
+longer — `CoreDeploymentDown`, `CoreStatefulSetDown`, `CoreDaemonSetDown`,
+`MediaDeploymentDown` and, since 2026-11-20, `CloudDnsCheckFailing` at ten minutes,
+and `ScrapeTargetDown` at fifteen because its whole job is noticing that data
+stopped arriving. Everything else is
 checked every five minutes: `CertificateExpiring`, `CloudTlsCertificateExpiring` and
 `RestoreDrillOverdue` (`for: 1h`), the three disk-fill predictions (`for: 30m`), the temperature and
 SLO-ish checks (`for: 10m` and above). The slowest ratio is the `for: 10m` rules in
 `homelab-core`: half their own `for` between checks, so an alert is delayed by up to five
-minutes and never by more than that. Measured at 35 rules: 35.0 rule evaluations per minute
-before the split, 20.5 after.
+minutes and never by more than that. At 58 rules the load is **33.2 evaluations a minute** —
+27 rules every 60 s plus 31 every 300 s — against 35.0 when the split was made, with all 35 rules
+of that day on the fast cadence.
 
 **Delivery**: contact point `discord-homelab` (type `discord`).
 `group_by [alertname, instance]`, `group_wait 30s`, `group_interval 5m`.
@@ -45,10 +46,20 @@ secure field), so the contact point is never rewritten by automation. The Discor
 webhook exists only in that contact point.
 
 **The second contact point is what writes the card.** `vikunja-alerts` posts to `alert-relay` in
-`monitoring`, which opens one card per incident on the `alerts` board and comments on repeats and on
-resolves, never closing one ([`runbooks/alert-relay.md`](../runbooks/alert-relay.md)). Two child
+`monitoring`, which opens one card per incident on the `alerts` board, writes nothing while that card
+sits in Backlog or Doing, opens a fresh card when the newest one is in Validation or Done, and never
+moves or closes one ([`runbooks/alert-relay.md`](../runbooks/alert-relay.md)). Two child
 routes reach it: `severity="critical"` every **6 h**, and `board=card` every **1 y**. The relay itself
 has no severity filter — the routing tree decides, and the relay writes a card for whatever arrives.
+
+**The lifecycle is enforced by a job, not remembered.** `alert-relay-lifecycle` runs every five
+minutes in the same chart. It reads the `alerts` board and follows each alert card's `blocked` fix
+cards — the relations a session writes when it opens the work: the alert moves to Doing while any fix
+is open, and to Validation once every fix is in Validation or Done. Validation is terminal, nothing is
+moved backwards or closed, and the job writes only the `alerts` board. It reads the repository boards
+to learn each fix's column, so `bot-alertmanager` holds read-only on boards 2, 3, 5, 8 and 12, and
+`bot-opencode` holds read+write on `alerts` to write the relations and the cause. A fix card it cannot
+read fails that alert card loudly rather than closing it early.
 
 **Rule set and live state on 2026-11-13 (the three `Cloud*` rows read back on
 2026-11-20, the counts and `GpuNotAllocatable` on 2026-11-22,
@@ -112,6 +123,14 @@ confirmed by the first read-back):**
 | `CloudEndpointDown` | `1 - probe_success{job="blackbox-http"}` — a public name answered something other than 200 | 5m | critical | inactive |
 | `CloudDnsCheckFailing` | `1 - probe_success{job="blackbox-dns"}` — a zone's check failed at one authoritative server | 10m | critical | inactive |
 | `CloudTlsCertificateExpiring` | days to the earliest public certificate, firing below 21 | 1h | warning | inactive |
+| `SecurityBanBurst` | more than 20 new bans on the `streaming` bouncer in 10 minutes | 5m | warning | inactive |
+| `AuthentikSignInFailures` | more than 20 failed authentik sign-ins in 15 minutes | 5m | warning | inactive |
+| `AuthentikSignInSuccessAfterBurst` | a sign-in that worked, from a source with more than 20 failures in the same 15 minutes | 5m | critical | inactive |
+| `HostSshBruteForce` | more than 10 failed SSH passwords on one host in 10 minutes | 5m | warning | inactive |
+| `HostFirewallBlockBurst` | more than 200 `UFW BLOCK` lines on one host in 5 minutes | 5m | warning | inactive |
+| `SecurityExposureDrift` | an ungated route, or the public-host or privileged-controller count off its expected value | 10m | critical | inactive |
+| `SecurityStackBlind` | the exporter stale or a family gone, or no access-log line in 10 minutes (`noDataState: Alerting`) | 5m | critical | inactive |
+| `SecurityBouncerStalled` | the bouncer's decision-stream requests flat for 10 minutes | 5m | critical | inactive |
 
 **`JobFailed`** is the batch-workload rule. Its expression is
 `((kube_job_status_failed > 0) unless on(namespace, job_name) (kube_job_status_succeeded > 0)) and on(namespace, job_name) ((time() - kube_job_status_start_time) < 7200)`:
@@ -419,6 +438,73 @@ None of the three carries a `TraefikDown` twin, and none needs one: the `Deploym
 `kube-system`, so `CoreDeploymentDown` covers a router that stops running, and `ScrapeTargetDown`
 covers the pod's `:9100` scrape going quiet while the pod still answers.
 
+**The eight security rules** (six on 2026-11-25, `SecurityBouncerStalled` and
+`AuthentikSignInSuccessAfterBurst` on 2026-11-26) are the ones whose job is a person rather than an
+application; only the first five read a log rather than a metric. Seven sit in
+`homelab-core-fast`; `SecurityExposureDrift` sits in `homelab-core` because its `for` is 10 minutes,
+which is the split above, and a posture change is a slow fault that gains nothing from a 60-second
+check.
+
+| Rule | Reads | Why that threshold |
+|---|---|---|
+| `SecurityBanBurst` | `delta(sum(fw_bouncer_banned_ips)[10m:1m])`, Prometheus | one or two bans a day is the normal rate; twenty in ten minutes is a scenario matching a stream |
+| `AuthentikSignInFailures` | `homelab_authentik_signins_15m{outcome="failure"}` | the exporter's own count, so the rule cannot disagree with the dashboard's tile |
+| `AuthentikSignInSuccessAfterBurst` | `homelab_authentik_signins_15m_by_source{outcome="failure"} > 20` joined on `source` to `outcome="success" > 0` | the same twenty failures, plus the one event that turns a nuisance into a compromise; a measured typo burst is three |
+| `HostSshBruteForce` | `{source="journal", unit="ssh"}` filtered to failed passwords | 4 in 24 hours across the whole cluster on the day it was written |
+| `HostFirewallBlockBurst` | `{source="journal", unit="kernel"}` filtered to `UFW BLOCK` | about eight per five minutes per node is the background; 200 is a scan |
+| `SecurityExposureDrift` | the exporter's three posture gauges | expected 0 ungated, 9 public hosts, 9 privileged controllers |
+| `SecurityStackBlind` | the exporter's age, three families, and the access-log count | ten minutes — no ten-minute window has ever held zero lines |
+| `SecurityBouncerStalled` | `rate(cs_lapi_bouncer_requests_total[10m])`, Prometheus | 0.1 req/s is the normal poll, one every 10 s; zero across ten minutes is a dead stream, not a quiet one |
+
+**`SecurityBouncerStalled`** (2026-11-26) is the half `SecurityStackBlind` cannot see. The bouncer's
+listener answers, the exporter is fresh and all three families are present — every green signal —
+while the service has stopped asking the LAPI for decisions. The ban set on `streaming` then freezes:
+new attacks are neither refused nor forgotten, and nothing else notices. The expression is
+`1 - (sum(rate(cs_lapi_bouncer_requests_total[10m])) > bool 0)`, and the `bool` is the reason it
+fires at all: a bare comparison keeps the sample's value, so a flat counter would return `0`, and the
+condition tests "above 0" (the trap under *The rule pattern matters*). `bool` turns it into a clean
+`1`. The rate window is ten minutes and the `for` is five more; a counter that disappears entirely
+returns no sample, which this rule reports as NoData and stays quiet about, because the missing family
+is `SecurityStackBlind`'s case — one fault, one message. The metric carries one series for the cluster,
+so the message cannot name a host; the action is the bouncer's systemd unit on `streaming`.
+
+**`SecurityStackBlind` is the rule that makes the other six believable**: each of them reports an
+event, and this one reports that nobody is watching for events. It is the only rule here with two
+datasources, so it is a classic condition over two queries rather than one expression —
+`A > 0 || B < 1`, where `A` is the Prometheus half (exporter older than 600 s, or a family missing)
+and `B` the Loki half (access-log lines in 10 minutes).
+
+Both halves end in `or vector(0)`, and that is not decoration. On the first evaluation the rule sat
+**Pending (NoData) on a healthy cluster**: `A` returns nothing when everything is fine, a classic
+condition over an empty query is NoData, and this rule's `noDataState` is `Alerting` because a dead
+exporter looks exactly like NoData. `or vector(0)` gives the healthy case a `0` to compare against, so
+NoData now means what it should. `SecurityExposureDrift` had the same shape for a different reason: an
+`or` chain of three comparisons returns nothing when the posture is correct, so it is written as a sum
+of absolute deviations from the expected counts, which is `0` when nothing moved and always a sample.
+
+The node is **not** a label on the journal stream — Fluent Bit ships `unit` and `source`, and
+`_HOSTNAME` stays inside the JSON line. The two host rules therefore read
+`| json | label_format host=_HOSTNAME`, and a rule that forgets it reports all four nodes as one
+number with no way to say which one. The journal input selects `_COMM=sshd` rather than a unit name
+for the same class of reason: Ubuntu socket-activates sshd, and a unit filter would ship nothing on
+exactly the hosts where a guesser is most visible.
+
+**`SecurityAttackSustained` was retired on 2026-11-26, after one day.** It had been proved the way this
+page asks for on 2026-11-25 — threshold temporarily lowered to `> 0`, the message named the live address
+(`45.138.12.215 was refused 2 times in 10 minutes`), both receivers were notified, and the relay opened
+card **768** on the `alerts` board — and the next day's rule history showed why it should not exist:
+seven firings in seven hours, each a different address, each held above the threshold for 7–11 minutes,
+and every one of them already banned at the firewall by CrowdSec. It reported that the internet scans,
+which is not something a person acts on. The per-address record is the dashboard's *Top addresses
+refused* panel, and `SecurityStackBlind` already reports the failure that matters, a detector that
+stopped. The Discord message cannot be read back from here: the webhook is a secure field and no bot
+token exists, so card 768 is the artifact this repository keeps.
+`SecurityStackBlind` was proved by stopping the detector: `kubectl -n security scale
+deploy/crowdsec-agent --replicas=0` removed the agent, `cs_parser_hits_ok_total` went stale five
+minutes later, the rule went `pending` and then fired, and scaling it back resolved it. That is the
+one proof that is not an expression, and it is the one worth doing: it shows that a dead detector
+reaches a person.
+
 **Silences** (each has an expiry and a comment):
 
 - Until 2027-03-01: `host="streaming"`, `severity="warning"`,
@@ -435,12 +521,14 @@ covers the pod's `:9100` scrape going quiet while the pod still answers.
   narrowing the expression.
 - Until 2026-12-09: `alertname="ScrapeTargetDown"` with
   `app_kubernetes_io_instance="qbittorrent-exporter"` — the exporter cannot be scraped while
-  qBittorrent's Web UI is stalled on its NFS `/config` claim. Measured 2026-11-25: 627 failed
-  scrapes in 24 h, the target down 28 % of 48 h, every scrape pinned at the exporter's 5 s timeout,
-  and 106 firing/resolved transitions in four days as the stall crossed the rule's 15-minute gate.
-  The rule is right and the target is the fault
-  ([`docs/qbittorrent-webui-stalls.md`](../qbittorrent-webui-stalls.md), board card 758). Remove it
-  when `/config` moves to `local-path`, or renew it with a new end date.
+  qBittorrent's Web UI is stalled. Measured 2026-11-25: 627 failed scrapes in 24 h, the target down
+  28 % of 48 h, every scrape pinned at the exporter's 5 s timeout, and 106 firing/resolved
+  transitions in four days as the stall crossed the rule's 15-minute gate. The rule is right and the
+  target is the fault. The config claim's move off NFS on 2026-11-25 did not clear it; the app itself
+  moved to `nas` the same evening so its download path is local, and the exporter answered in 0.086 s
+  again from 23:43
+  ([`docs/qbittorrent-webui-stalls.md`](../qbittorrent-webui-stalls.md), board card 777). Remove the
+  silence once that move has passed its 24-hour gate, or renew it with a new end date.
 - **Removed 2026-11-25 — the silence on `DriveNeedsReplacement` went with the rule.** The drive
   `nas /dev/sdf` is still known dead and waiting on a replacement
   ([`docs/audit/ansible-hosts.md`](../audit/ansible-hosts.md)), but it is now a `DriveWorn` warning
@@ -463,12 +551,27 @@ reports `firing` on the Health dashboard.
 
 ## Known gaps
 
-- **No host log line reaches Loki.** Fluent Bit tails `/var/log/containers/*.log` only, with
-  `nodeAccess: false` and no host mount, so systemd, kernel and cron lines stay in each host's own
-  journal: a failed unit, an OOM kill from outside a container, or the snapraid runner's own output is
-  nowhere in the cluster. `SnapraidParityStale` reads a marker file for that reason rather than a log
-  line, and shipping the host journal is a decision of its own — host mounts, volume and retention on
-  the one pipeline that carries every namespace — not a step of that card.
+- **The host journal reaches Loki, and the node is not a label.** Since 2026-11-25 Fluent Bit reads
+  each node's own journal, selected to `sshd` (`unit="ssh"`) and to kernel messages (`unit="kernel"`,
+  which is where ufw logs) — the change that added the security detection, and the two rules that
+  read it are above. Two things are still out: the two edge Pis run compose stacks rather than the
+  DaemonSet, so their journals and their Docker logs are nowhere in the cluster, and the hostname
+  inside each line (`_HOSTNAME`) is not a stream label, so a rule has to extract it. The other units
+  on every node stay unshipped by decision, and the volume is sized in
+  [`log-budget.md`](log-budget.md#the-host-journal-first-numbers).
+- **CrowdSec is watched for silence, not for a dead poll.** `SecurityStackBlind` fires when the
+  firewall bouncer, the LAPI or the agent stops exporting its metrics. A bouncer that keeps exporting
+  while it no longer polls the LAPI — the scrape answers, the decision stream is dead — freezes the ban
+  set with every rule green. `rate(cs_lapi_bouncer_requests_total[10m])` read **0.1 req/s** (one poll
+  every 10 s) on 2026-11-26, so zero for ten minutes would name that case; no rule reads it yet.
+- **The success-after-a-burst rule sees one window and one shape.** `AuthentikSignInSuccessAfterBurst`
+  reads the exporter's per-source family: a source with more than 20 failures in fifteen minutes that
+  also signed in inside the same fifteen minutes. Two cases stay invisible by construction. A slow
+  spray — five attempts an hour against the same account — never reaches twenty in one window, and a
+  success twenty minutes after the burst falls out of it. And the label is a salted pseudonym, so the
+  message cannot print the address: it names the failure count, and the address is read in authentik's
+  Events page or the gated access log. The family carries the twenty busiest repeatedly failing
+  sources; `homelab_authentik_signins_by_source_omitted` says when the cap left one out.
 - **`PVCFillingUp` is blind for `local-path` claims.** The rule is NFS-only by
   construction; why the metric cannot exist for a `local-path` claim is in
   [`metrics.md`](metrics.md#exporter-quirks). The node filesystem rule covers the
@@ -530,11 +633,10 @@ reports `firing` on the Health dashboard.
   or dropping is still seen only when `LokiSilent` fires, ten minutes later.
 - Dashboards and rules are not in git. Their database is no longer unbacked up — the `grafana` claim
   is one row of the nightly `nodes-nas` stream — but a restore brings back a database, not a
-  reviewable change, so a rule is still edited through the API and written down here. The Traefik
-  rules and their dashboard are the single exception, and it is a **copy**: a snapshot in
-  `cluster/helm/monitoring/grafana/export/traefik/` to read in a pull request and to restore after a
-  wipe. Nothing applies it; the database stays the
-  authority.
+  reviewable change, so a rule is still edited through the API and written down here. Two exports are
+  the exception, and they are **copies**: snapshots in
+  `cluster/helm/monitoring/grafana/export/traefik/` and `export/security/` to read in a pull request
+  and to restore after a wipe. Nothing applies them; the database stays the authority.
 
 ## Changing things
 

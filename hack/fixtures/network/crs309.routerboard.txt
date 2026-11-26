@@ -2,4 +2,4 @@
              model: CRS309-1G-8S+
      serial-number: HF509CDE
      firmware-type: arm
-  current-firmware: 6.49.10
+  current-firmware: 6.49.7

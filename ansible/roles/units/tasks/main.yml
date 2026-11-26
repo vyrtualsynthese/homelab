@@ -1,0 +1,196 @@
+---
+# One red unit is a real failure. A `systemctl --failed` that is red for ever is
+# a wall the next real failure hides behind, and on 2026-11-26 the four nodes
+# carried five — none of them restartable: `nas` had a mount unit for a snap
+# revision that was removed, the forced first sync (transient), and a swap line
+# to a file that had been deleted; `nuc0` the same dead swap line; `streaming` an
+# `/etc/rc.local` systemd cannot execute; `rbp2` a wait-online unit that times
+# out at every boot. This role owns the durable half of each.
+- name: Refuse to run anywhere but the Kubernetes nodes
+  ansible.builtin.assert:
+    that:
+      - "'cluster' in group_names"
+    fail_msg: >-
+      The failed units this role owns are the four cluster nodes'. The edge Pis
+      run their own compose stacks and are not in scope.
+
+# No swap, on any of the four. The line goes first, then the live device, then
+# the file: `swapoff` needs the file, and the generated `swap.img.swap` unit only
+# disappears from systemd once the line is gone and the daemon reloads.
+- name: Read the swap devices the kernel has
+  ansible.builtin.command: swapon --show=NAME --noheadings
+  register: units_swap_devices
+  changed_when: false
+  # Read-only, and its answer decides the task below: skipped under `--check`,
+  # it would come back empty and report a node that already holds no swap.
+  check_mode: false
+
+- name: Turn off every swap device
+  ansible.builtin.command: swapoff --all
+  # Only reached when a device is on, so a run that gets here changed something.
+  changed_when: true
+  when: units_swap_devices.stdout_lines | length > 0
+
+- name: Stat the file the old swap line pointed at
+  ansible.builtin.stat:
+    path: "{{ units_swapfile }}"
+  register: units_swapfile_stat
+
+- name: Refuse to delete a path that is a device rather than a file
+  ansible.builtin.assert:
+    that:
+      - not units_swapfile_stat.stat.exists or units_swapfile_stat.stat.isreg
+    fail_msg: >-
+      {{ units_swapfile }} exists and is not a regular file. A swap partition is
+      removed from the table and never touched by a file module.
+
+- name: Remove the swap line that keeps generating the failed unit
+  ansible.builtin.lineinfile:
+    path: /etc/fstab
+    regexp: '^\s*\S+\s+none\s+swap\s'
+    state: absent
+    backup: true
+
+- name: Remove the swap file the line pointed at
+  ansible.builtin.file:
+    path: "{{ units_swapfile }}"
+    state: absent
+
+# Without the reload the generated `swap.img.swap` unit is still known to systemd
+# in `failed`, and the list read below would try to clear a unit that no longer
+# exists on disk — which is exactly the state this role exists to end.
+- name: Reload systemd so a unit whose line is gone stops being known
+  ansible.builtin.systemd:
+    daemon_reload: true
+  changed_when: false
+
+- name: Read the swap devices back
+  ansible.builtin.command: swapon --show=NAME --noheadings
+  register: units_swap_after
+  changed_when: false
+  check_mode: false
+
+- name: Refuse to end a run on a node that still swaps
+  ansible.builtin.assert:
+    that:
+      - units_swap_after.stdout_lines | length == 0
+    fail_msg: >-
+      {{ units_swap_after.stdout_lines | join(', ') }} is still on. The next
+      `systemctl --failed` will say so, and the answer is meant to be one.
+  when: not ansible_check_mode
+
+# The stale failures are cleared at the end, after every file this role removes
+# has had its daemon reload: a unit whose file disappears becomes `not-found`
+# *and* failed, and `reset-failed` is the only thing that clears that pair.
+
+# `streaming`'s `/etc/rc.local` has no shebang, so every boot answers
+# `Exec format error` — while `ipconfig.service` already sets the same transmit
+# queue length and succeeded at the same boot. The file and the unit go; the
+# tuning stays where it works.
+- name: Remove the rc.local that systemd cannot execute
+  ansible.builtin.file:
+    path: /etc/rc.local
+    state: absent
+  when: units_rc_local_absent | bool
+
+- name: Remove the unit file the Ubuntu image installed for it
+  ansible.builtin.file:
+    path: /etc/systemd/system/rc-local.service
+    state: absent
+  when: units_rc_local_absent | bool
+
+# Ubuntu's own `/lib/systemd/system/rc-local.service` stays loaded — the file
+# removed above was the image's copy of it — so the old failure outlives the
+# script until it is cleared by name. Its `ConditionPathExists=/etc/rc.local` is
+# now false, which makes the failure stale rather than real.
+- name: Clear the failure the removed rc.local left behind
+  ansible.builtin.command: systemctl reset-failed rc-local.service  # noqa: command-instead-of-module
+  changed_when: false
+  when: units_rc_local_absent | bool
+
+# `rbp2`'s netplan comes from cloud-init and marks its only interface
+# `optional: true`, which renders `RequiredForOnline=no`. The unit then waits for
+# an interface nothing marks as required and times out at every boot. Naming the
+# interface is enough: the check returns in 0.05 s instead of 120 s.
+- name: Create the drop-in directory for wait-online
+  ansible.builtin.file:
+    path: /etc/systemd/system/systemd-networkd-wait-online.service.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when: units_wait_online_interface | length > 0
+
+- name: Tell wait-online which interface to wait for
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/systemd-networkd-wait-online.service.d/10-wait-for-interface.conf
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      # Written by ansible/roles/units; edits here are reverted on the next run.
+      #
+      # netplan marks this host's interface optional, so the generated network
+      # file carries RequiredForOnline=no. With nothing required, the unit waits
+      # for the full timeout and fails on every boot. Naming the interface gives
+      # it something to wait for.
+      [Service]
+      ExecStart=
+      ExecStart=/lib/systemd/systemd-networkd-wait-online --interface={{ units_wait_online_interface }}
+  when: units_wait_online_interface | length > 0
+
+- name: Reload systemd so a removed unit and the drop-in are what it runs
+  ansible.builtin.systemd:
+    daemon_reload: true
+  changed_when: false
+  when: units_rc_local_absent | bool or units_wait_online_interface | length > 0
+
+- name: Prove the unit now waits for the interface it was told about
+  ansible.builtin.systemd:
+    name: systemd-networkd-wait-online.service
+    state: started
+  when: units_wait_online_interface | length > 0
+
+# `nas` carried `snap-core20-2769.mount` with no unit file anywhere and
+# `snapraid-first-sync.service` as a transient one-shot: neither can be
+# restarted, so `reset-failed` is the only thing that clears them, and neither
+# survives the next boot. A unit whose file still exists is *not* cleared — that
+# one is a real failure and stays visible.
+- name: Read the units that are in a failed state
+  ansible.builtin.command: systemctl --failed --no-legend --plain --quiet  # noqa: command-instead-of-module
+  register: units_failed
+  changed_when: false
+  check_mode: false
+
+- name: Ask systemd where each failed unit comes from
+  ansible.builtin.command: systemctl show --property=LoadState --property=Transient {{ item }}  # noqa: command-instead-of-module
+  register: units_failed_origin
+  changed_when: false
+  check_mode: false
+  loop: "{{ units_failed.stdout_lines | map('regex_replace', '\\s.*$', '') | list }}"
+  loop_control:
+    label: "{{ item }}"
+
+- name: Clear the failed state of a unit that is gone
+  ansible.builtin.command: systemctl reset-failed {{ item.item }}  # noqa: command-instead-of-module
+  # Only reached when the unit has no file left, so the reset always does work.
+  changed_when: true
+  when: >-
+    'LoadState=not-found' in item.stdout_lines
+    or 'Transient=yes' in item.stdout_lines
+  loop: "{{ units_failed_origin.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+
+# What is left is reported, never hidden and never failed on: a unit that still
+# exists and fails is somebody's real failure, and this role does not own it.
+- name: Read the failed units back
+  ansible.builtin.command: systemctl --failed --no-legend --plain --quiet  # noqa: command-instead-of-module
+  register: units_failed_after
+  changed_when: false
+  check_mode: false
+
+- name: Report the units that are still failed
+  ansible.builtin.debug:
+    msg: "{{ units_failed_after.stdout_lines }}"
+  when: units_failed_after.stdout_lines | length > 0

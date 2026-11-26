@@ -8,14 +8,17 @@ does not know. A fresh Image has no Ansible and no key, which is why it is bash.
 
 ```bash
 ./hosts-pi.sh render rbp1          # print every file this script owns; changes nothing
-./hosts-pi.sh setup  rbp1          # install the engine, write them, start the stack, print changed=N
-./hosts-pi.sh verify rbp1          # name every difference; exit 1 if one needs an apply
-./hosts-pi.sh backup /mnt/usb/pi rbp1   # copy the state a reflash destroys
-./hosts-pi.sh restore /mnt/usb/pi rbp1  # copy it back, then verify
+sudo ./hosts-pi.sh setup  rbp1     # install the engine, write them, start the stack, print changed=N
+sudo ./hosts-pi.sh verify rbp1     # name every difference; exit 1 if one needs an apply
+sudo ./hosts-pi.sh backup /mnt/usb/pi rbp1   # copy the state a reflash destroys
+sudo ./hosts-pi.sh restore /mnt/usb/pi rbp1  # copy it back, then verify
 ```
 
 `render` is what to read before a change. `verify` is what to run after one: a host that matches the
 repository prints one line and exits 0.
+
+`setup` and `verify` both need root, and now refuse early without it: they read `/etc/sudoers`, which
+is `0440 root:root`, and they write the SSH policy. `render` needs nothing.
 
 `PI_ROOT` points every verb at another directory instead of `/`, which is how `hack/tests/test_pi_script.py`
 runs them without a Pi:
@@ -35,6 +38,12 @@ PI_ROOT=/tmp/fake-pi ./hosts-pi.sh setup rbp0
 | `/etc/netplan/50-cloud-init.yaml` | yes | the resolvers: both Pi-holes, so a host resolves through its own blocklist. `setup` applies it with `netplan apply` |
 | `/etc/systemd/resolved.conf.d/90-pihole-resolvers.conf` | yes | a drop-in that keeps resolved's stub listener off, so `/etc/resolv.conf` lists the two Pi-holes and a container reads them instead of falling back to Docker's 8.8.8.8 |
 | `/etc/hostname` | yes | the name Pi-hole's DNS and the compose file depend on |
+| `/etc/ssh/sshd_config.d/00-homelab.conf` | yes | the drop-in that closes password logins. It is numbered `00` because sshd takes the first value it reads and cloud-init's `50-cloud-init.conf` says `yes` |
+| `/etc/ssh/sshd_config` | yes | the same two directives, `PasswordAuthentication no` and `X11Forwarding no`, written as a second record. The commented examples are left alone |
+| `/etc/sudoers` | yes, the grant only | removes `%admins ALL=(ALL) NOPASSWD: ALL`; `%sudo` stays as Ubuntu ships it, so the human account keeps a password on sudo. The edit passes `visudo` before it is installed |
+| the `admins` group | yes, its removal | it exists only to carry that grant. Removed after the line, the order `roles/accounts` uses |
+| `/etc/sudoers.d/90-cloud-init-users` | yes, its removal | cloud-init's grant for the `ubuntu` account the image's rename retired: a live passwordless root the moment anything creates that account again |
+| `/home/vronteix/.ssh/authorized_keys` | **no** | the operator's keys: written by the image's `user-data` and, on the cluster nodes, by `roles/accounts`. `setup` reads it and refuses to close password logins when it holds no key |
 | `/etc/hosts` | **no** | cloud-init rewrites it from its own template on every boot (`manage_etc_hosts: true`); its copy already names the host and localhost |
 | Docker's repository and the four packages | yes | a fresh image has no runtime; `setup` installs the pinned set from `download.docker.com` |
 | `pihole.env` | **no** | it holds the Pi-hole panel password and nothing else: `FTLCONF_webserver_api_password`, `0600`, owned by the account that runs compose, gitignored. `setup` requires it and names it when it is missing. The v5 name `WEBPASSWORD` is ignored by this image |
@@ -43,6 +52,33 @@ PI_ROOT=/tmp/fake-pi ./hosts-pi.sh setup rbp0
 
 The stack's own files live inside the stack directory, so `backup` and `restore` carry them with the
 rest of it. `verify` names a difference in any of them, the netplan file included.
+
+### SSH and sudo: the same policy as the cluster nodes
+
+`roles/accounts` owns this on the four cluster nodes. It cannot reach the Pis until they are reflashed
+(card #481), so the same two settings live here, and `setup` is what applies them:
+
+- **Password logins are off.** The 2026-11-24 audit, and a re-measurement on 2026-11-26, both read
+  `passwordauthentication yes` on both Pis. The main `/etc/ssh/sshd_config` already said `no`; what won
+  was cloud-init's own `/etc/ssh/sshd_config.d/50-cloud-init.conf`, which says `yes` and is included
+  near the top of the file. `sshd` (the SSH server) takes the first value it reads, so the drop-in
+  above it decides. `00-homelab.conf` is numbered to sort ahead of it, and cloud-init's file is left
+  as it is: a later boot may rewrite it, and ours wins either way.
+- **`X11Forwarding` is off**, the second directive in the same drop-in. It was `yes` on both Pis.
+- **The `%admins` passwordless grant is gone**, and the `admins` group with it, so `sudo` asks for the
+  account's password — the point of the change. `%sudo` stays as Ubuntu ships it. There is no
+  automation account on a Pi yet, so no unattended run is root there.
+- **`/etc/sudoers.d/90-cloud-init-users` is removed** when it is present: it grants the retired
+  `ubuntu` account root without a password.
+
+**The lockout guard.** Closing password logins is a lockout on a host with no key, and the machine that
+would fix it is the one nobody can log in to. Before writing the drop-in, `setup` reads
+`/home/vronteix/.ssh/authorized_keys` and stops with a message if it holds no public key. It does not
+write that file: the keys are the operator's, and the image's `user-data` is what puts the first one
+there.
+
+The strings match `roles/accounts`, and `hack/tests/test_pi_script.py` compares them, so a change to
+one record alone fails a test rather than leaving half the fleet on the other.
 
 ### The two Pi-holes are one configuration
 

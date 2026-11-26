@@ -1,5 +1,5 @@
 ---
-# The eight exports, owned here and nowhere else.
+# The seven exports, owned here and nowhere else.
 #
 # What decides the procedure:
 #   `showmount -a` on the host before the first apply names every client that
@@ -10,7 +10,9 @@
 #
 #   `sync` replaces `async`: with async a client's write is acknowledged before
 #   it reaches the disk, so a database can survive a reboot in a state nobody
-#   planned for.
+#   planned for. The downloads export is the one exception and the template
+#   says why: nothing on it is a database and everything on it can be fetched
+#   again, while its `sync` fsync is what hung the qBittorrent client.
 - name: Refuse to run anywhere but the node that holds the disks
   ansible.builtin.assert:
     that:
@@ -39,16 +41,17 @@
     backup: true
   notify: Reload the export list
 
-# The only tree this role touches ownership on, and only because the previous
-# table was `no_root_squash`: anything there was written as root and would now be
-# unwritable. A recursive chown anywhere else would walk terabytes that already
-# belong to 1100; the probe after the apply is the check for those.
-- name: Give the certificate store to the identity the squash maps root to
+# The one tree this role touches ownership on. Traefik runs as uid/gid 65532 and
+# keeps `acme.json` at 0600, so that is the identity the file must belong to and
+# the one the export maps a client's root to — the backup reads it as root. The
+# store used to be handed to 1100, back when the router ran as root; that chown
+# would lock the router out of its own store on the next run.
+- name: Give the certificate store to the identity that serves TLS
   ansible.builtin.file:
     path: /mnt/storage/traefik
     state: directory
-    owner: 1100
-    group: 1100
+    owner: 65532
+    group: 65532
     recurse: true
     follow: false
 
@@ -66,7 +69,7 @@
 
 # Read from the running kernel, not from the file just written, and check what
 # the table *says* rather than how many lines it is: `exportfs -v` prints one
-# line per export-and-client pair, so a line count is 8 only while the cluster
+# line per export-and-client pair, so a line count is 7 only while the cluster
 # has one address.
 - name: Read the export table back and refuse a looser one
   ansible.builtin.command: exportfs -v
@@ -77,7 +80,7 @@
   check_mode: false
   failed_when: >-
     (nfs_exported.stdout_lines | select('match', '^/')
-     | map('regex_replace', '\s.*$', '') | unique | list | length) != 8
+     | map('regex_replace', '\s.*$', '') | unique | list | length) != 7
     or 'no_root_squash' in nfs_exported.stdout
     or 'insecure' in nfs_exported.stdout
     or (nfs_exported.stdout_lines | select('match', '^/mnt\s') | list | length) > 0

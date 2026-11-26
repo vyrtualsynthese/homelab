@@ -1,0 +1,17 @@
+---
+# The four cluster nodes hold no swap. On 2026-11-26 they answered the question
+# three ways: `nas` and `nuc0` carried an fstab line to a `/swap.img` that had
+# been deleted, `streaming` a working 8G file, and `rbp2` nothing. That is not a
+# policy, it is drift — and on `nas` and `nuc0` it is a unit in `failed` state
+# for ever. The intent is written here once: a node that swaps answers late, so
+# these nodes do not swap at all.
+#
+# `vm.swappiness` is deliberately not owned here. With no swap device it changes
+# nothing, and `nas` and `streaming` already carry it in their own tuning file.
+units_swapfile: /swap.img
+
+# Set in `inventory/host_vars/<host>.yml` where a leftover unit needs a decision.
+# Empty or absent means the host has nothing to say and the role leaves that unit
+# alone, so the files below are never written on the other three nodes.
+units_rc_local_absent: false
+units_wait_online_interface: ""

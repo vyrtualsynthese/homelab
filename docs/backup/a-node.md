@@ -24,9 +24,9 @@ first row below.
 
 | Node | Claims on its `local-path` |
 |---|---|
-| `nas` | `postgres-dumps`, `grafana` |
-| `nuc0` | `pgadmin-config`, `n8n-config`, `news-freshrss-config`, the two `filebrowser` claims, `koillection-conf`, `syncthing-config`, `thelounge-config`, `vikunja-data`, `recyclarr-config` |
-| `streaming` | the sixteen media-stack configuration claims — `sonarr`, `sonarr-anime`, `radarr`, `radarr-anime`, `lidarr`, `prowlarr`, `bazarr`, `bazarr-anime`, `autobrr`, `cross-seed`, `seerr`, `tautulli`, `maintainerr`, `plex`, `kavita`, `calibre-web-automated` — plus `qbittorrent-vpn-config` and `calibre-web-automated-ingest` |
+| `nas` | `postgres-dumps`, `grafana`, `crowdsec-db-pvc`, `crowdsec-config-pvc`, `qbittorrent-config`, `qbittorrent-vpn-config` |
+| `nuc0` | `pgadmin-config`, `n8n-config`, `news-freshrss-config`, the two `filebrowser` claims, `crowdsec-web-ui-config`, `koillection-conf`, `syncthing-config`, `thelounge-config`, `vikunja-data`, `recyclarr-config` |
+| `streaming` | the sixteen media-stack configuration claims — `sonarr`, `sonarr-anime`, `radarr`, `radarr-anime`, `lidarr`, `prowlarr`, `bazarr`, `bazarr-anime`, `autobrr`, `cross-seed`, `seerr`, `tautulli`, `maintainerr`, `plex`, `kavita`, `calibre-web-automated` — plus `calibre-web-automated-ingest` |
 
 The NFS exports are not on a node's disk: they are on `nas`, and losing `streaming` or `nuc0` leaves
 them serving. Losing `nas` is a different page — [what a loss costs](what-a-loss-costs.md) is the

@@ -1,4 +1,4 @@
-# Shared by all eight exports. A release adds only what differs, in values/<release>.yaml.
+# Shared by all seven exports. A release adds only what differs, in values/<release>.yaml.
 # Everything here is read by the subchart, so it stays under the dependency's name.
 nfs-subdir-external-provisioner:
   replicaCount: 1

@@ -4,7 +4,7 @@
 > query Prometheus, Loki and Grafana without cluster access, and how metrics get in.
 >
 > **Use it when** you want a number out of the stack, or you are adding an exporter · **Verified**
-> 2026-11-25 · **Kind:** reference
+> 2026-11-26, with the Prometheus basic auth live · **Kind:** reference
 >
 > **Sources** `cluster/helm/monitoring/prometheus/values.yaml`,
 > `cluster/helm/monitoring/loki/values.yaml`, `cluster/helm/monitoring/grafana/values.yaml`,
@@ -102,16 +102,34 @@ broken name green.
 
 ## How to query the stack
 
-Agents do not need cluster access for any of this. Prometheus and Grafana answer on their hostnames;
-Loki is behind a sign-in since 2026-11-22, so its recipes carry the Grafana token instead of an open
-port.
+Agents do not need cluster access for any of this. Prometheus, Grafana and Loki answer on their
+hostnames; Prometheus wants a password since 2026-11-26, Grafana has its own sign-in, and Loki sits
+behind the authentik gate since 2026-11-22, so the recipes below carry a credential instead of
+reaching an open port.
 
-**Prometheus** — `http://prometheus.kub.local`, no authentication:
+**Prometheus** — `http://prometheus.kub.local`, basic auth, and the password is the only thing
+standing between a caller and every metric the cluster holds. It is Prometheus's own check
+(`--web.config.file` in `cluster/helm/monitoring/prometheus/values.yaml`), not the route's
+`lan-only` middleware, because that middleware admits the pod network as well as the LAN: a gate on
+the route would leave `/api/v1/*` open to every pod. The host is still on plain HTTP, so the password
+crosses the LAN where anything capturing traffic reads it; on WireGuard it is inside the tunnel.
+Moving the name to TLS needs a second router for the redirect, which the generated routes page
+cannot take until the live object count moves with it.
+
+The user is `ops`, and the password is `PROMETHEUS_AUTH_PASSWORD` in `~/.config/secrets/homelab.env`:
 
 ```bash
-curl -sG http://prometheus.kub.local/api/v1/query \
+source ~/.config/secrets/homelab.env
+curl -sG -u "ops:$PROMETHEUS_AUTH_PASSWORD" http://prometheus.kub.local/api/v1/query \
   --data-urlencode 'query=count(up==1)'
 ```
+
+Two more users live in the same Secret and are not for a human: `grafana` is what the datasource in
+`cluster/helm/monitoring/grafana` signs in with, and `reload` is what the config-reloader uses on
+`/-/reload`, now behind the same check as every other path. The same `reload` user is what
+Prometheus itself scrapes its own `/metrics` with (`scrapeConfigs.prometheus`, `localhost:9090`):
+the web config authenticates that target like any other, so an unauthenticated self-scrape shows
+as `up == 0` and fires `MonitoringDown`.
 
 Useful endpoints: `/api/v1/query`, `/api/v1/query_range`, `/api/v1/targets`,
 `/api/v1/rules`, `/api/v1/status/flags`, `/api/v1/status/config`.
@@ -271,9 +289,11 @@ detector was worth that. Fluent Bit removes `RequestPath`, `request_User-Agent` 
 | `ClientUsername`, `ClientPort` | no | dropped by Traefik |
 
 Two consequences worth knowing before writing a query: `{job="fluent-bit", container="traefik"}`
-still resolves, because the file's output carries that label statically, and **a request the bouncer
-dropped has no line at all** — it never reaches Traefik, so a banned address disappears from the log
-rather than appearing with a 403.
+still resolves, because the file's output carries that label statically — but it also matches the
+router's **own stdout**, which is logfmt and not JSON: measured on 2026-11-25, 28,883 stdout lines
+against 3,148 access lines under that selector. A query about requests names `source="accesslog"`.
+The second consequence: **a request the bouncer dropped has no line at all** — it never reaches
+Traefik, so a banned address disappears from the log rather than appearing with a 403.
 
 **Measured 2026-11-22** over the twelve minutes after that day's last restart (01:20–01:32Z): 153 lines
 and 118 kB, so 769 bytes a line and **about 15 MB/day** at the night-time rate, against a pipeline that
@@ -283,11 +303,11 @@ carries 0.09 GB/day. An evening reads higher; the day's own figure is two querie
 # bytes carried in the trailing 24 h — this is the day's volume
 curl -skG -H "Authorization: Bearer $GRAFANA_TOKEN" \
   "https://grafana.kub.local/api/datasources/proxy/uid/P8E80F9AEF21F6940/loki/api/v1/query" \
-  --data-urlencode 'query=sum(bytes_over_time({job="fluent-bit", container="traefik"}[24h]))'
+  --data-urlencode 'query=sum(bytes_over_time({job="fluent-bit", source="accesslog"}[24h]))'
 # lines in the same window; divide the two for the line size
 curl -skG -H "Authorization: Bearer $GRAFANA_TOKEN" \
   "https://grafana.kub.local/api/datasources/proxy/uid/P8E80F9AEF21F6940/loki/api/v1/query" \
-  --data-urlencode 'query=sum(count_over_time({job="fluent-bit", container="traefik"}[24h]))'
+  --data-urlencode 'query=sum(count_over_time({job="fluent-bit", source="accesslog"}[24h]))'
 ```
 
 Two panels on **Homelab · Traefik**, row *Request record*, read it: *Failed requests (4xx/5xx)* and

@@ -5,7 +5,11 @@
 >
 > **Use it when** the GPU disappears from a pod, Plex stops transcoding, the DCGM GPU panels go
 > empty, the node advertises `nvidia.com/gpu: 0` after a restart, or someone asks why the node still
-> carries `nvidia.com/gpu-driver-upgrade-state` · **Verified** 2026-11-22 · **Kind:** living page
+> carries `nvidia.com/gpu-driver-upgrade-state` · **Verified** 2026-11-22 · **Kind:** how-to
+>
+> **Sources** `cluster/helm/platform/gpu-operator/` (the chart and its values),
+> `cluster/argocd/projects/platform/gpu-operator.yaml`, the live node and pod objects read through the
+> Kubernetes API, and [`audit/ansible-hosts.md`](../audit/ansible-hosts.md) for the host side.
 
 ## The two halves
 
@@ -93,7 +97,8 @@ direct playing. That is the only check that proves the whole chain — driver, r
 The metrics side:
 
 ```bash
-curl -sG http://prometheus.kub.local/api/v1/query \
+set -a; . ~/.config/secrets/homelab.env; set +a
+curl -sG -u "ops:$PROMETHEUS_AUTH_PASSWORD" http://prometheus.kub.local/api/v1/query \
   --data-urlencode 'query=DCGM_FI_DEV_GPU_TEMP'
 ```
 

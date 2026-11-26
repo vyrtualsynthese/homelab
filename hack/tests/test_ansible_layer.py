@@ -399,18 +399,19 @@ def test_exports_drop_mnt_and_squash_root():
     assert "insecure" not in tpl
     assert "root_squash" in tpl
     lines = export_lines()
-    assert len(lines) == 8, f"expected the eight the cluster mounts, got {len(lines)}"
+    assert len(lines) == 7, f"expected the seven the cluster mounts, got {len(lines)}"
     assert not any(line.split()[0] == "/mnt" for line in lines), "/mnt must not be exported"
 
 
-def test_the_certificate_store_belongs_to_the_squashed_identity():
-    """Traefik runs as root and writes acme.json. Squashing root without giving
-    that store to 1100 breaks certificate renewal on a delay nobody watches."""
+def test_the_certificate_store_belongs_to_the_identity_that_serves_tls():
+    """Traefik runs as 65532 and keeps acme.json at 0600. The restic job arrives
+    as root over the export, so the chown and the export must both name 65532;
+    1100 would lock the backup out, and widening the mode would stop the router."""
     text = (ANSIBLE / "roles/nfs/tasks/main.yml").read_text()
     assert "/mnt/storage/traefik" in text
-    assert "1100" in text
+    assert "65532" in text
     tpl = (ANSIBLE / "roles/nfs/templates/exports.j2").read_text()
-    assert "anonuid=1100" in tpl, "fsid 8 maps the squashed root back to the writer"
+    assert "anonuid=65532" in tpl, "fsid 8 must map the squashed root to acme.json's owner"
 
 
 def test_the_nfs_role_runs_only_where_the_export_is():
@@ -537,14 +538,16 @@ def test_every_firewall_rule_names_a_source_set_that_resolves():
 
 def test_every_export_maps_the_squashed_root_to_the_writer():
     """Mapping root to `nobody` turns a container's start-up chown into EACCES on
-    files the app itself owns. 1100 is what every writer here runs as."""
+    files the app itself owns. 1100 is what every writer here runs as, except the
+    certificate store, whose writer is Traefik at 65532."""
     for line in export_lines():
-        assert "anonuid=1100" in line and "anongid=1100" in line, line
+        expected = "65532" if line.startswith("/mnt/storage/traefik") else "1100"
+        assert f"anonuid={expected}" in line and f"anongid={expected}" in line, line
 
 
 def test_the_read_back_checks_the_table_not_its_line_count():
-    """`exportfs -v` prints one line per export and client, so a count of 8 is
-    true only while eight things mount."""
+    """`exportfs -v` prints one line per export and client, so a count of 7 is
+    true only while seven things mount."""
     text = (ANSIBLE / "roles/nfs/tasks/main.yml").read_text()
     assert "stdout_lines | length" not in text
     assert "no_root_squash" in text and "'^/mnt\\s'" in text
@@ -975,3 +978,210 @@ def test_the_parity_read_accepts_a_syncs_lock_and_nothing_else():
     )
     assert fails(1, "", "snapraid: error: cannot open /etc/snapraid.conf") is True
     assert fails(1, "Self test...\n", "") is True, "a run with no report and no lock answer fails"
+
+
+def test_the_disks_role_keeps_a_failed_data_mount_from_holding_the_boot():
+    """A mount that fails under `local-fs.target` starts `emergency.target`,
+    which pulls in no `sshd`: the headless `nas` is then reachable only from a
+    console. Every data line therefore carries `nofail` and a device timeout,
+    while `/` and the ESP stay strict — a host that cannot mount its root is
+    not one to keep booting."""
+    defaults = ANSIBLE / "roles/disks/defaults/main.yml"
+    assert defaults.exists(), "no disks role: the nine data lines are owned by nobody"
+    options = load("roles/disks/defaults/main.yml")["disks_mount_options"]
+    assert "nofail" in options
+    assert any(option.startswith("x-systemd.device-timeout=") for option in options)
+
+    tasks = yaml.safe_load((ANSIBLE / "roles/disks/tasks/main.yml").read_text())
+    writes = [task["ansible.posix.mount"] for task in tasks
+              if isinstance(task, dict) and "ansible.posix.mount" in task]
+    assert writes, "nothing writes the data lines"
+    for write in writes:
+        assert write["state"] == "present", "`mounted` would remount a disk that is live"
+        assert write["backup"] is True, "the previous file is what a rollback restores"
+        assert "disks_mount_options" in str(write["opts"]), (
+            "one option list, or a line drifts from the test above"
+        )
+
+
+def test_every_data_disk_is_declared_once_and_nothing_essential_is_optional():
+    host = load("inventory/host_vars/nas.yml")
+    assert "disks_mounts" in host, "the data lines are not declared for the host that holds them"
+    mounts = host["disks_mounts"]
+    paths = [mount["path"] for mount in mounts]
+    assert set(paths) == {
+        "/mnt/hdd0", "/mnt/hdd1", "/mnt/hdd2", "/mnt/hdd3",
+        "/mnt/hdd4", "/mnt/hdd5", "/mnt/snap", "/mnt/ssd0", "/mnt/ultrafaststorage",
+    }
+    assert len(paths) == len(set(paths)) == 9
+    assert not {"/", "/boot", "/boot/efi"} & set(paths), (
+        "a host that cannot mount these should not come up"
+    )
+    for mount in mounts:
+        assert mount["src"], "a line without a source is not a mount"
+
+
+def test_the_disks_role_refuses_a_source_the_host_does_not_carry():
+    """A declared UUID that no device carries would be written into fstab and
+    fail at the next boot. The run, with a human present, is where it is refused."""
+    path = ANSIBLE / "roles/disks/tasks/main.yml"
+    assert path.exists(), "no disks role to guard the table"
+    text = path.read_text()
+    assert "'storage' in group_names" in text
+    assert "lsblk" in text and "UUID" in text
+    assert "isblk" in text, "the LVM source is a path, and it is checked as one"
+
+
+def test_the_union_cannot_hold_the_boot_either():
+    options = load("roles/union/defaults/main.yml")["union_options"]
+    assert "nofail" in options, (
+        "a mergerfs that fails to mount must not stop the host from reaching sshd"
+    )
+
+
+def test_the_disks_are_owned_before_the_union_is_made_over_them():
+    site = (ANSIBLE / "playbooks/site.yml").read_text()
+    assert "- role: disks" in site
+    assert site.index("- role: disks") < site.index("- role: union")
+
+
+def test_the_units_role_is_wired_for_the_cluster_nodes_only():
+    """The failed units are the four Kubernetes nodes' problem. The two edge Pis
+    run their own compose stacks and are not in scope."""
+    site = (ANSIBLE / "playbooks/site.yml").read_text()
+    assert "- role: units" in site
+    tasks = (ANSIBLE / "roles/units/tasks/main.yml").read_text()
+    assert "'cluster' in group_names" in tasks
+
+
+def test_the_cluster_nodes_hold_no_swap():
+    """`nas` and `nuc0` carried a line to a `/swap.img` that had been deleted,
+    `streaming` a working 8G file, and `rbp2` none: three answers to one question.
+    The role gives it one — the nodes do not swap — and refuses to end a run
+    while a device is still on."""
+    tasks = yaml.safe_load((ANSIBLE / "roles/units/tasks/main.yml").read_text())
+    commands = [task["ansible.builtin.command"] for task in tasks
+                if isinstance(task, dict) and "ansible.builtin.command" in task]
+    assert any("swapoff" in str(command) for command in commands), (
+        "a live swap device is turned off now, not left for the next boot"
+    )
+
+    lines = [task["ansible.builtin.lineinfile"] for task in tasks
+             if isinstance(task, dict) and "ansible.builtin.lineinfile" in task]
+    swap_line = next((line for line in lines if "swap" in str(line.get("regexp"))), None)
+    assert swap_line, "the fstab line that keeps generating the failed unit is not removed"
+    assert swap_line["state"] == "absent"
+    assert swap_line["backup"] is True, "the previous table is what a rollback restores"
+
+    deletes = [task["ansible.builtin.file"] for task in tasks
+               if isinstance(task, dict)
+               and task.get("ansible.builtin.file", {}).get("state") == "absent"]
+    assert any(str(entry["path"]) == "{{ units_swapfile }}" for entry in deletes), (
+        "the file the line pointed at goes too, or 8G sits there for nobody"
+    )
+    assert any("isreg" in str(task) for task in tasks), (
+        "a path that is a block device is refused, never deleted as a file"
+    )
+
+    reads = [task for task in tasks
+             if isinstance(task, dict) and task.get("register") == "units_swap_after"]
+    assert reads and "swapon" in reads[0]["ansible.builtin.command"]
+    asserts = [task["ansible.builtin.assert"]["that"] for task in tasks
+               if isinstance(task, dict) and "ansible.builtin.assert" in task]
+    assert any("units_swap_after" in str(assertion) for assertion in asserts), (
+        "the run proves the node stopped swapping instead of assuming it"
+    )
+
+
+def test_a_failed_unit_with_no_file_left_is_cleared_not_kept_red():
+    """`snap-core20-2769.mount` names a snap revision that is gone and the forced
+    first sync is a transient unit: neither can be restarted, and both sit in
+    `systemctl --failed` for ever. Only those are cleared. A unit whose file
+    still exists and fails is a real failure, and the role leaves it visible."""
+    tasks = yaml.safe_load((ANSIBLE / "roles/units/tasks/main.yml").read_text())
+    read = next(task for task in tasks
+                if isinstance(task, dict) and task.get("register") == "units_failed")
+    assert "--failed" in read["ansible.builtin.command"]
+    assert "--quiet" in read["ansible.builtin.command"], (
+        "`0 loaded units listed` is printed without it, and would be read as a unit name"
+    )
+
+    clear = next(task for task in tasks
+                 if isinstance(task, dict)
+                 and "reset-failed" in str(task.get("ansible.builtin.command", ""))
+                 and "not-found" in str(task.get("when", "")))
+    condition = str(clear["when"])
+    assert "not-found" in condition, "a unit whose file is gone is cleared"
+    assert "Transient=yes" in condition, "a unit that never comes back is cleared"
+    assert "loaded" not in condition.replace("not-found", ""), (
+        "a unit that still exists is never cleared"
+    )
+
+
+def test_the_rc_local_leftover_is_removed_from_the_host_that_has_one():
+    """`streaming`'s `/etc/rc.local` has no shebang, so systemd answers `Exec
+    format error` at every boot — while `ipconfig.service` already sets the same
+    queue length and succeeded at the same boot."""
+    host = load("inventory/host_vars/streaming.yml")
+    assert host["units_rc_local_absent"] is True
+    for other in ("nas", "rbp2"):
+        assert "units_rc_local_absent" not in load(f"inventory/host_vars/{other}.yml"), (
+            f"{other} has no rc.local to remove; a flag there would invent one"
+        )
+
+    tasks = yaml.safe_load((ANSIBLE / "roles/units/tasks/main.yml").read_text())
+    removed = [task["ansible.builtin.file"] for task in tasks
+               if isinstance(task, dict)
+               and task.get("ansible.builtin.file", {}).get("state") == "absent"]
+    paths = {str(entry["path"]) for entry in removed}
+    assert "/etc/rc.local" in paths, "the file systemd cannot execute is left in place"
+    assert "/etc/systemd/system/rc-local.service" in paths, (
+        "the unit file the image installed goes with it"
+    )
+    guarded = [task for task in tasks
+               if isinstance(task, dict)
+               and task.get("ansible.builtin.file", {}).get("path") == "/etc/rc.local"]
+    assert "units_rc_local_absent" in str(guarded[0]["when"]), (
+        "the removal is declared per host, never for every node"
+    )
+
+    resets = [task for task in tasks
+              if isinstance(task, dict)
+              and "reset-failed rc-local.service" in str(task.get("ansible.builtin.command", ""))
+              and "units_rc_local_absent" in str(task.get("when"))]
+    assert resets, (
+        "Ubuntu's own rc-local.service is still loaded from /lib, so removing the "
+        "script leaves the old failure on the list until it is cleared by name"
+    )
+
+
+def test_wait_online_waits_for_the_interface_the_host_has():
+    """cloud-init's netplan marks `rbp2`'s only interface `optional: true`, which
+    renders `RequiredForOnline=no`. The unit then waits for an interface that
+    nothing requires and times out, every boot. Naming the interface is enough:
+    with it, the check returns in 0.05 s."""
+    host = load("inventory/host_vars/rbp2.yml")
+    assert host["units_wait_online_interface"] == "eth0"
+    for other in ("nas", "streaming"):
+        assert "units_wait_online_interface" not in load(f"inventory/host_vars/{other}.yml"), (
+            f"{other} does not carry this failure; the drop-in is per host"
+        )
+
+    tasks = yaml.safe_load((ANSIBLE / "roles/units/tasks/main.yml").read_text())
+    copies = [task["ansible.builtin.copy"] for task in tasks
+              if isinstance(task, dict) and "ansible.builtin.copy" in task]
+    dropin = next(copy for copy in copies
+                  if "systemd-networkd-wait-online.service.d" in str(copy["dest"]))
+    assert "--interface={{ units_wait_online_interface }}" in dropin["content"], (
+        "the unit is told which interface to wait for"
+    )
+    assert "ExecStart=\n" in dropin["content"] or dropin["content"].count("ExecStart=") == 2, (
+        "a drop-in cannot add to the vendor ExecStart; the empty assignment resets it"
+    )
+    started = [task["ansible.builtin.systemd"] for task in tasks
+               if isinstance(task, dict)
+               and task.get("ansible.builtin.systemd", {}).get("name")
+               == "systemd-networkd-wait-online.service"]
+    assert started and started[0]["state"] == "started", (
+        "the unit is started once told what to wait for, so the fix is proved"
+    )

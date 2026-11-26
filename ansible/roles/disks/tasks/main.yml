@@ -1,0 +1,135 @@
+---
+# The nine data lines, owned here and nowhere else.
+#
+# Why every one of them is optional at boot: `local-fs.target` carries
+# `OnFailure=emergency.target` and emergency mode starts no `sshd`, so one disk
+# that does not appear used to mean a console and a monitor on a headless NAS.
+#
+# What is not optional: `/` and `/boot/efi`. The role refuses to name them, and
+# the read-back refuses to widen them.
+#
+# `state: present` is the safe state here: the disks are already mounted, and
+# `mounted` would remount them on every run.
+- name: Refuse to run anywhere but the node that holds the disks
+  ansible.builtin.assert:
+    that:
+      - "'storage' in group_names"
+    fail_msg: >-
+      The data lines belong to the node in the `storage` group. Running this
+      role here would write another host's UUIDs into this host's fstab.
+
+- name: Refuse a table that is empty, repeats a path, or names a line that must stay strict
+  ansible.builtin.assert:
+    that:
+      - disks_mounts is defined
+      - disks_mounts | length > 0
+      - disks_mounts | map(attribute='path') | unique | list | length == disks_mounts | length
+      - "'/' not in (disks_mounts | map(attribute='path') | list)"
+      - "'/boot' not in (disks_mounts | map(attribute='path') | list)"
+      - "'/boot/efi' not in (disks_mounts | map(attribute='path') | list)"
+    fail_msg: >-
+      disks_mounts is empty, repeats a path, or names `/`, `/boot` or
+      `/boot/efi`. Those are the lines a host must not come up without.
+
+- name: Read the UUIDs the kernel sees
+  ansible.builtin.command: lsblk --noheadings --output UUID
+  register: disks_uuids
+  changed_when: false
+  # Read-only, and the guard below decides on its output: skipped under
+  # `--check`, it would come back empty and report every declared UUID as
+  # missing. The guard is the one thing `make check` must be able to prove.
+  check_mode: false
+
+# A UUID copied from the wrong disk is a line that fails at the next boot. The
+# run, with a human present, is where that is refused.
+- name: Refuse to write a UUID that no block device carries
+  ansible.builtin.assert:
+    that:
+      - (item.src | regex_replace('^UUID=', '')) in disks_uuids.stdout_lines
+    fail_msg: >-
+      {{ item.path }} names {{ item.src }}, which no block device answers.
+      Update host_vars/nas.yml from `blkid` before the line is written: written
+      now, it would fail at the next boot.
+  loop: "{{ disks_mounts | selectattr('src', 'match', '^UUID=') | list }}"
+  loop_control:
+    label: "{{ item.path }}"
+
+- name: Stat the sources that are a device path rather than a UUID
+  ansible.builtin.stat:
+    path: "{{ item.src }}"
+    # `/dev/vg1/lvol0` is a symlink to `/dev/dm-0`; without this the answer is
+    # the link, which is never a block device.
+    follow: true
+  register: disks_devices
+  loop: "{{ disks_mounts | rejectattr('src', 'match', '^UUID=') | list }}"
+  loop_control:
+    label: "{{ item.src }}"
+
+- name: Refuse a device source that is not a block device
+  ansible.builtin.assert:
+    that:
+      - item.stat.isblk | default(false)
+    fail_msg: >-
+      {{ item.item.path }} names {{ item.item.src }}, which is not a block
+      device. An LVM volume that did not activate answers this way; activate it
+      before the line is written.
+  loop: "{{ disks_devices.results }}"
+  loop_control:
+    label: "{{ item.item.path }}"
+
+- name: Write the data lines, and only those
+  ansible.posix.mount:
+    path: "{{ item.path }}"
+    src: "{{ item.src }}"
+    fstype: "{{ disks_fstype }}"
+    opts: "{{ disks_mount_options | join(',') }}"
+    dump: 0
+    passno: 2
+    state: present
+    backup: true
+  loop: "{{ disks_mounts }}"
+  loop_control:
+    label: "{{ item.path }}"
+
+- name: Read the fstab this run wrote
+  ansible.builtin.slurp:
+    src: /etc/fstab
+  register: disks_fstab
+
+- name: Keep the active lines for the read-back
+  ansible.builtin.set_fact:
+    disks_fstab_lines: >-
+      {{ (disks_fstab.content | b64decode).splitlines()
+         | reject('match', '^\s*(#|$)') | list }}
+
+# Skipped under `--check`: the write above did not happen, so the file still
+# holds the old lines. `make check` reports the diff and stays green; `apply` is
+# where the two guards below prove what landed.
+- name: Refuse a data line that is missing an option the boot depends on
+  ansible.builtin.assert:
+    that:
+      - >-
+        disks_fstab_lines
+        | select('match', '^\S+\s+' ~ (item.path | regex_escape) ~ '\s+')
+        | select('search', 'nofail') | list | length == 1
+      - >-
+        disks_fstab_lines
+        | select('match', '^\S+\s+' ~ (item.path | regex_escape) ~ '\s+')
+        | select('search', 'x-systemd.device-timeout=30s') | list | length == 1
+    fail_msg: >-
+      {{ item.path }} is in /etc/fstab without `nofail` and the 30 s timeout.
+      The write did not land, and the next boot would still fall to emergency.
+  loop: "{{ disks_mounts }}"
+  loop_control:
+    label: "{{ item.path }}"
+  when: not ansible_check_mode
+
+- name: Refuse to widen the two lines that must fail the boot
+  ansible.builtin.assert:
+    that:
+      - disks_fstab_lines | select('match', '^\S+\s+/\s+') | select('search', 'nofail') | list | length == 0
+      - disks_fstab_lines | select('match', '^\S+\s+/boot/efi\s+') | select('search', 'nofail') | list | length == 0
+    fail_msg: >-
+      `/` or `/boot/efi` carries `nofail`. Those two are the lines a host must
+      not come up without, and this role does not make them optional.
+  when: not ansible_check_mode

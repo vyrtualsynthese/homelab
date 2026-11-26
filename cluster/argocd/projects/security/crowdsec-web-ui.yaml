@@ -1,18 +1,17 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: nfs-qbittorrent-config
+  name: crowdsec-web-ui
   namespace: argocd
 spec:
   project: default
   destination:
     server: 'https://kubernetes.default.svc'
-    namespace: media-stack
+    namespace: security
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=true
   source:
     repoURL: 'https://github.com/vyrtualsynthese/homelab.git'
     targetRevision: develop
-    path: cluster/helm/nfs/provisioner
-    helm:
-      releaseName: nfs-qbittorrent-config
-      valueFiles:
-        - values/nfs-qbittorrent-config.yaml
+    path: cluster/helm/security/crowdsec-web-ui

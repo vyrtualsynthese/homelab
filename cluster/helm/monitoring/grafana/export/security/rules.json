@@ -1,0 +1,741 @@
+[
+  {
+    "id": 69,
+    "uid": "ag5ds0fqz98u8c",
+    "orgID": 1,
+    "folderUID": "homelab",
+    "ruleGroup": "homelab-core-fast",
+    "title": "SecurityBanBurst",
+    "condition": "C",
+    "data": [
+      {
+        "refId": "A",
+        "queryType": "",
+        "relativeTimeRange": {
+          "from": 600,
+          "to": 0
+        },
+        "datasourceUid": "PBFA97CFB590B2093",
+        "model": {
+          "editorMode": "code",
+          "expr": "delta(sum(fw_bouncer_banned_ips)[10m:1m])",
+          "instant": true,
+          "intervalMs": 1000,
+          "maxDataPoints": 43200,
+          "range": false,
+          "refId": "A"
+        }
+      },
+      {
+        "refId": "C",
+        "queryType": "",
+        "relativeTimeRange": {
+          "from": 0,
+          "to": 0
+        },
+        "datasourceUid": "__expr__",
+        "model": {
+          "conditions": [
+            {
+              "evaluator": {
+                "params": [
+                  20
+                ],
+                "type": "gt"
+              },
+              "operator": {
+                "type": "and"
+              },
+              "query": {
+                "params": [
+                  "A"
+                ]
+              },
+              "reducer": {
+                "type": "last"
+              },
+              "type": "query"
+            }
+          ],
+          "datasource": {
+            "type": "__expr__",
+            "uid": "__expr__"
+          },
+          "expression": "A",
+          "intervalMs": 1000,
+          "maxDataPoints": 43200,
+          "refId": "C",
+          "type": "threshold"
+        }
+      }
+    ],
+    "updated": "2026-11-25T16:30:45Z",
+    "noDataState": "OK",
+    "execErrState": "OK",
+    "annotations": {
+      "description": "The nftables bouncer on streaming added {{ $value }} addresses in ten minutes. A few is routine; this many means a CrowdSec scenario matched a lot of traffic. `cscli decisions list` names them, and the dashboard's *Bans active* tile shows the total.",
+      "summary": "{{ $value }} new firewall bans in 10 minutes"
+    },
+    "labels": {
+      "severity": "warning"
+    },
+    "provenance": "api",
+    "isPaused": false,
+    "notification_settings": null,
+    "record": null,
+    "for": "5m",
+    "keep_firing_for": "0s"
+  },
+  {
+    "id": 71,
+    "uid": "cg5ds0fxzgzr4d",
+    "orgID": 1,
+    "folderUID": "homelab",
+    "ruleGroup": "homelab-core-fast",
+    "title": "AuthentikSignInFailures",
+    "condition": "C",
+    "data": [
+      {
+        "refId": "A",
+        "queryType": "",
+        "relativeTimeRange": {
+          "from": 900,
+          "to": 0
+        },
+        "datasourceUid": "PBFA97CFB590B2093",
+        "model": {
+          "editorMode": "code",
+          "expr": "homelab_authentik_signins_15m{outcome=\"failure\"}",
+          "instant": true,
+          "intervalMs": 1000,
+          "maxDataPoints": 43200,
+          "range": false,
+          "refId": "A"
+        }
+      },
+      {
+        "refId": "C",
+        "queryType": "",
+        "relativeTimeRange": {
+          "from": 0,
+          "to": 0
+        },
+        "datasourceUid": "__expr__",
+        "model": {
+          "conditions": [
+            {
+              "evaluator": {
+                "params": [
+                  20
+                ],
+                "type": "gt"
+              },
+              "operator": {
+                "type": "and"
+              },
+              "query": {
+                "params": [
+                  "A"
+                ]
+              },
+              "reducer": {
+                "type": "last"
+              },
+              "type": "query"
+            }
+          ],
+          "datasource": {
+            "type": "__expr__",
+            "uid": "__expr__"
+          },
+          "expression": "A",
+          "intervalMs": 1000,
+          "maxDataPoints": 43200,
+          "refId": "C",
+          "type": "threshold"
+        }
+      }
+    ],
+    "updated": "2026-11-25T16:30:45Z",
+    "noDataState": "OK",
+    "execErrState": "OK",
+    "annotations": {
+      "description": "authentik recorded {{ $value }} failed sign-ins in fifteen minutes, against a handful on a normal evening. The exporter counts outcomes from the event API and carries no address, so the source is in authentik's Events page: *Directory > Events*, filtered to the sign-in stage.",
+      "summary": "{{ $value }} failed sign-ins to authentik in 15 minutes"
+    },
+    "labels": {
+      "severity": "warning"
+    },
+    "provenance": "api",
+    "isPaused": false,
+    "notification_settings": null,
+    "record": null,
+    "for": "5m",
+    "keep_firing_for": "0s"
+  },
+  {
+    "id": 72,
+    "uid": "eg5ds0g18u800f",
+    "orgID": 1,
+    "folderUID": "homelab",
+    "ruleGroup": "homelab-core-fast",
+    "title": "HostSshBruteForce",
+    "condition": "C",
+    "data": [
+      {
+        "refId": "A",
+        "queryType": "instant",
+        "relativeTimeRange": {
+          "from": 600,
+          "to": 0
+        },
+        "datasourceUid": "P8E80F9AEF21F6940",
+        "model": {
+          "editorMode": "code",
+          "expr": "sum by (host) (count_over_time({source=\"journal\", unit=\"ssh\"} |~ \"(?i)failed password|invalid user\" | json | label_format host=_HOSTNAME [10m]))",
+          "instant": true,
+          "intervalMs": 1000,
+          "maxDataPoints": 43200,
+          "queryType": "instant",
+          "range": false,
+          "refId": "A"
+        }
+      },
+      {
+        "refId": "C",
+        "queryType": "",
+        "relativeTimeRange": {
+          "from": 0,
+          "to": 0
+        },
+        "datasourceUid": "__expr__",
+        "model": {
+          "conditions": [
+            {
+              "evaluator": {
+                "params": [
+                  10
+                ],
+                "type": "gt"
+              },
+              "operator": {
+                "type": "and"
+              },
+              "query": {
+                "params": [
+                  "A"
+                ]
+              },
+              "reducer": {
+                "type": "last"
+              },
+              "type": "query"
+            }
+          ],
+          "datasource": {
+            "type": "__expr__",
+            "uid": "__expr__"
+          },
+          "expression": "A",
+          "intervalMs": 1000,
+          "maxDataPoints": 43200,
+          "refId": "C",
+          "type": "threshold"
+        }
+      }
+    ],
+    "updated": "2026-11-25T16:30:45Z",
+    "noDataState": "OK",
+    "execErrState": "OK",
+    "annotations": {
+      "description": "Ten failed password attempts in ten minutes on one host. Password logins are off on every node, so this is a guesser being refused and worth nothing but a ban. The lines are in the journal: `journalctl -u ssh --since -30min`. `cscli decisions add --ip <address>` stops it reaching the port at all.",
+      "summary": "{{ $value }} failed SSH logins on {{ $labels.host }} in 10 minutes"
+    },
+    "labels": {
+      "severity": "warning"
+    },
+    "provenance": "api",
+    "isPaused": false,
+    "notification_settings": null,
+    "record": null,
+    "for": "5m",
+    "keep_firing_for": "0s"
+  },
+  {
+    "id": 73,
+    "uid": "bg5ds0g5r5mgwc",
+    "orgID": 1,
+    "folderUID": "homelab",
+    "ruleGroup": "homelab-core-fast",
+    "title": "HostFirewallBlockBurst",
+    "condition": "C",
+    "data": [
+      {
+        "refId": "A",
+        "queryType": "instant",
+        "relativeTimeRange": {
+          "from": 300,
+          "to": 0
+        },
+        "datasourceUid": "P8E80F9AEF21F6940",
+        "model": {
+          "editorMode": "code",
+          "expr": "sum by (host) (count_over_time({source=\"journal\", unit=\"kernel\"} |~ \"UFW BLOCK\" | json | label_format host=_HOSTNAME [5m]))",
+          "instant": true,
+          "intervalMs": 1000,
+          "maxDataPoints": 43200,
+          "queryType": "instant",
+          "range": false,
+          "refId": "A"
+        }
+      },
+      {
+        "refId": "C",
+        "queryType": "",
+        "relativeTimeRange": {
+          "from": 0,
+          "to": 0
+        },
+        "datasourceUid": "__expr__",
+        "model": {
+          "conditions": [
+            {
+              "evaluator": {
+                "params": [
+                  200
+                ],
+                "type": "gt"
+              },
+              "operator": {
+                "type": "and"
+              },
+              "query": {
+                "params": [
+                  "A"
+                ]
+              },
+              "reducer": {
+                "type": "last"
+              },
+              "type": "query"
+            }
+          ],
+          "datasource": {
+            "type": "__expr__",
+            "uid": "__expr__"
+          },
+          "expression": "A",
+          "intervalMs": 1000,
+          "maxDataPoints": 43200,
+          "refId": "C",
+          "type": "threshold"
+        }
+      }
+    ],
+    "updated": "2026-11-25T16:30:45Z",
+    "noDataState": "OK",
+    "execErrState": "OK",
+    "annotations": {
+      "description": "ufw dropped {{ $value }} packets on {{ $labels.host }} in five minutes. Background is about eight per five minutes on every node, so this is a scan. The raw lines carry the source address: `journalctl -k | grep 'UFW BLOCK' | tail`. A scan is not an intrusion, but it is the half hour before one.",
+      "summary": "{{ $value }} firewall blocks on {{ $labels.host }} in 5 minutes"
+    },
+    "labels": {
+      "severity": "warning"
+    },
+    "provenance": "api",
+    "isPaused": false,
+    "notification_settings": null,
+    "record": null,
+    "for": "5m",
+    "keep_firing_for": "0s"
+  },
+  {
+    "id": 74,
+    "uid": "bg5ds0g8e1rlsa",
+    "orgID": 1,
+    "folderUID": "homelab",
+    "ruleGroup": "homelab-core",
+    "title": "SecurityExposureDrift",
+    "condition": "C",
+    "data": [
+      {
+        "refId": "A",
+        "queryType": "",
+        "relativeTimeRange": {
+          "from": 600,
+          "to": 0
+        },
+        "datasourceUid": "PBFA97CFB590B2093",
+        "model": {
+          "editorMode": "code",
+          "expr": "sum(abs(homelab_security_ungated_routes)) + sum(abs(homelab_security_public_hosts - 9)) + sum(abs(homelab_security_privileged_workloads - 9))",
+          "instant": true,
+          "intervalMs": 1000,
+          "maxDataPoints": 43200,
+          "range": false,
+          "refId": "A"
+        }
+      },
+      {
+        "refId": "C",
+        "queryType": "",
+        "relativeTimeRange": {
+          "from": 0,
+          "to": 0
+        },
+        "datasourceUid": "__expr__",
+        "model": {
+          "conditions": [
+            {
+              "evaluator": {
+                "params": [
+                  0
+                ],
+                "type": "gt"
+              },
+              "operator": {
+                "type": "and"
+              },
+              "query": {
+                "params": [
+                  "A"
+                ]
+              },
+              "reducer": {
+                "type": "last"
+              },
+              "type": "query"
+            }
+          ],
+          "datasource": {
+            "type": "__expr__",
+            "uid": "__expr__"
+          },
+          "expression": "A",
+          "intervalMs": 1000,
+          "maxDataPoints": 43200,
+          "refId": "C",
+          "type": "threshold"
+        }
+      }
+    ],
+    "updated": "2026-11-25T16:35:01Z",
+    "noDataState": "OK",
+    "execErrState": "OK",
+    "annotations": {
+      "description": "The exposure the cluster publishes moved. Expected: 0 routes without a gate, 9 public hosts, 9 privileged controllers. A route without `lan-only` answers the internet whether or not its name resolves publicly, so the first number is the one to check first: `hack/check-exposure.sh` names the route. A new privileged controller is usually a chart that needs `securityContext`.",
+      "summary": "The exposure counts moved by {{ $value }}"
+    },
+    "labels": {
+      "severity": "critical"
+    },
+    "provenance": "api",
+    "isPaused": false,
+    "notification_settings": null,
+    "record": null,
+    "for": "10m",
+    "keep_firing_for": "0s"
+  },
+  {
+    "id": 75,
+    "uid": "eg5ds0gatg7pce",
+    "orgID": 1,
+    "folderUID": "homelab",
+    "ruleGroup": "homelab-core-fast",
+    "title": "SecurityStackBlind",
+    "condition": "C",
+    "data": [
+      {
+        "refId": "A",
+        "queryType": "",
+        "relativeTimeRange": {
+          "from": 900,
+          "to": 0
+        },
+        "datasourceUid": "PBFA97CFB590B2093",
+        "model": {
+          "editorMode": "code",
+          "expr": "(time() - homelab_security_exporter_last_success_timestamp_seconds > 600) or absent(homelab_security_exporter_last_success_timestamp_seconds) or absent(fw_bouncer_banned_ips) or absent(cs_active_decisions) or absent(cs_parser_hits_ok_total) or vector(0)",
+          "instant": true,
+          "intervalMs": 1000,
+          "maxDataPoints": 43200,
+          "range": false,
+          "refId": "A"
+        }
+      },
+      {
+        "refId": "B",
+        "queryType": "instant",
+        "relativeTimeRange": {
+          "from": 600,
+          "to": 0
+        },
+        "datasourceUid": "P8E80F9AEF21F6940",
+        "model": {
+          "editorMode": "code",
+          "expr": "sum(count_over_time({job=\"fluent-bit\", source=\"accesslog\"}[10m])) or vector(0)",
+          "instant": true,
+          "intervalMs": 1000,
+          "maxDataPoints": 43200,
+          "queryType": "instant",
+          "range": false,
+          "refId": "B"
+        }
+      },
+      {
+        "refId": "C",
+        "queryType": "",
+        "relativeTimeRange": {
+          "from": 0,
+          "to": 0
+        },
+        "datasourceUid": "__expr__",
+        "model": {
+          "conditions": [
+            {
+              "evaluator": {
+                "params": [
+                  0
+                ],
+                "type": "gt"
+              },
+              "operator": {
+                "type": "and"
+              },
+              "query": {
+                "params": [
+                  "A"
+                ]
+              },
+              "reducer": {
+                "params": [],
+                "type": "last"
+              },
+              "type": "query"
+            },
+            {
+              "evaluator": {
+                "params": [
+                  1
+                ],
+                "type": "lt"
+              },
+              "operator": {
+                "type": "or"
+              },
+              "query": {
+                "params": [
+                  "B"
+                ]
+              },
+              "reducer": {
+                "params": [],
+                "type": "last"
+              },
+              "type": "query"
+            }
+          ],
+          "datasource": {
+            "type": "__expr__",
+            "uid": "__expr__"
+          },
+          "expression": "",
+          "intervalMs": 1000,
+          "maxDataPoints": 43200,
+          "refId": "C",
+          "type": "classic_conditions"
+        }
+      }
+    ],
+    "updated": "2026-11-25T16:30:45Z",
+    "noDataState": "Alerting",
+    "execErrState": "Alerting",
+    "annotations": {
+      "description": "One of the three inputs stopped: the exporter has not read the API for ten minutes or a family it publishes is gone, or no line reached the access log for ten minutes. The traffic never pauses that long on this cluster \u2014 the quietest ten-minute window held 50 lines \u2014 so silence is a dead tail, not a quiet night. Check `kubectl -n security get pods` and the fluent-bit DaemonSet; the dashboard's *Posture* tile carries the exporter's age.",
+      "summary": "The security pipeline is blind"
+    },
+    "labels": {
+      "severity": "critical"
+    },
+    "provenance": "api",
+    "isPaused": false,
+    "notification_settings": null,
+    "record": null,
+    "for": "5m",
+    "keep_firing_for": "0s"
+  },
+  {
+    "id": 76,
+    "uid": "ag5ez2wihn1fkc",
+    "orgID": 1,
+    "folderUID": "homelab",
+    "ruleGroup": "homelab-core-fast",
+    "title": "SecurityBouncerStalled",
+    "condition": "C",
+    "data": [
+      {
+        "refId": "A",
+        "queryType": "",
+        "relativeTimeRange": {
+          "from": 600,
+          "to": 0
+        },
+        "datasourceUid": "PBFA97CFB590B2093",
+        "model": {
+          "editorMode": "code",
+          "expr": "1 - (sum(rate(cs_lapi_bouncer_requests_total[10m])) > bool 0)",
+          "instant": true,
+          "intervalMs": 1000,
+          "maxDataPoints": 43200,
+          "range": false,
+          "refId": "A"
+        }
+      },
+      {
+        "refId": "C",
+        "queryType": "",
+        "relativeTimeRange": {
+          "from": 0,
+          "to": 0
+        },
+        "datasourceUid": "__expr__",
+        "model": {
+          "conditions": [
+            {
+              "evaluator": {
+                "params": [
+                  0
+                ],
+                "type": "gt"
+              },
+              "operator": {
+                "type": "and"
+              },
+              "query": {
+                "params": [
+                  "A"
+                ]
+              },
+              "reducer": {
+                "params": [],
+                "type": "last"
+              },
+              "type": "query"
+            }
+          ],
+          "datasource": {
+            "type": "__expr__",
+            "uid": "__expr__"
+          },
+          "expression": "A",
+          "intervalMs": 1000,
+          "maxDataPoints": 43200,
+          "refId": "C",
+          "type": "threshold"
+        }
+      }
+    ],
+    "updated": "2026-11-26T00:34:53Z",
+    "noDataState": "OK",
+    "execErrState": "OK",
+    "annotations": {
+      "description": "No request reached the LAPI's decision stream for ten minutes. The bouncer keeps exporting its metrics, so `SecurityStackBlind` stays green while the ban set on `streaming` is frozen. Look at the host service first (`systemctl status crowdsec-firewall-bouncer` on `streaming`, `journalctl -u crowdsec-firewall-bouncer -n 50`), then `cscli bouncers list` from the LAPI pod: a bouncer that runs but never polls has usually lost the LAPI address or been given a stale key. The metric has one series for the whole cluster, so nothing names a host. If the series is gone rather than flat, `SecurityStackBlind` reports that fault instead.",
+      "summary": "The firewall bouncer has not polled the LAPI for 10 minutes"
+    },
+    "labels": {
+      "severity": "critical"
+    },
+    "provenance": "api",
+    "isPaused": false,
+    "notification_settings": null,
+    "record": null,
+    "for": "5m",
+    "keep_firing_for": "0s"
+  },
+  {
+    "id": 77,
+    "uid": "fg5ezjywuji0we",
+    "orgID": 1,
+    "folderUID": "homelab",
+    "ruleGroup": "homelab-core-fast",
+    "title": "AuthentikSignInSuccessAfterBurst",
+    "condition": "C",
+    "data": [
+      {
+        "refId": "A",
+        "queryType": "",
+        "relativeTimeRange": {
+          "from": 900,
+          "to": 0
+        },
+        "datasourceUid": "PBFA97CFB590B2093",
+        "model": {
+          "editorMode": "code",
+          "expr": "(homelab_authentik_signins_15m_by_source{outcome=\"failure\"} > 20) and on(source) (homelab_authentik_signins_15m_by_source{outcome=\"success\"} > 0)",
+          "instant": true,
+          "intervalMs": 1000,
+          "maxDataPoints": 43200,
+          "range": false,
+          "refId": "A"
+        }
+      },
+      {
+        "refId": "C",
+        "queryType": "",
+        "relativeTimeRange": {
+          "from": 0,
+          "to": 0
+        },
+        "datasourceUid": "__expr__",
+        "model": {
+          "conditions": [
+            {
+              "evaluator": {
+                "params": [
+                  0
+                ],
+                "type": "gt"
+              },
+              "operator": {
+                "type": "and"
+              },
+              "query": {
+                "params": [
+                  "A"
+                ]
+              },
+              "reducer": {
+                "type": "last"
+              },
+              "type": "query"
+            }
+          ],
+          "datasource": {
+            "type": "__expr__",
+            "uid": "__expr__"
+          },
+          "expression": "A",
+          "intervalMs": 1000,
+          "maxDataPoints": 43200,
+          "refId": "C",
+          "type": "threshold"
+        }
+      }
+    ],
+    "updated": "2026-11-26T00:35:16Z",
+    "noDataState": "OK",
+    "execErrState": "OK",
+    "annotations": {
+      "description": "The same source that was failing hard got in. A burst alone is noise; a burst that ends in a success is the case the failure count cannot see. `source` is a salted pseudonym, not an address: the address is in authentik's Events page (*Directory > Events*, the sign-in stage) and in the access log in the gated store. If it is the LAN range, read it as a mistyped password that then worked before calling it a compromise.",
+      "summary": "A sign-in succeeded from a source with {{ $value }} failures in 15 minutes"
+    },
+    "labels": {
+      "severity": "critical"
+    },
+    "isPaused": false,
+    "notification_settings": null,
+    "record": null,
+    "for": "5m",
+    "keep_firing_for": "0s"
+  }
+]

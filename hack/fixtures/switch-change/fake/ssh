@@ -12,7 +12,11 @@ FAKE_VERSION        what /system resource print answers, default 7.16.1
 
 State files: config, config-verbose, clock, clock-output, commands, calls, scheduler.json, files/,
 and the flags break, break_after_change, backup_denied, import_error, after_change, after_undo,
-fire_on_arm, stays_down, hide_timer, hide_run_count, hide_run_count_after_change, refuse_upload.
+fire_on_arm, stays_down, hide_timer, hide_run_count, hide_run_count_after_change, refuse_upload,
+stubborn_timer, stubborn_file (a `remove` the device accepts and does not carry out).
+
+`/export` answers the configuration followed by the `/system scheduler` table, because a real switch
+exports its live entries — including the timer a run has just armed.
 """
 
 import json
@@ -95,6 +99,21 @@ def scheduler_block(entry, name):
             f'      on-event="{entry.get("on-event", "")}"\n')
 
 
+def scheduler_export():
+    """The `/system scheduler` section a real `/export` prints, one add line per live entry.
+
+    RouterOS writes the live table into the export, so an export taken while a run's timer is armed
+    carries that timer. Without it the fake could not show the comparison that never comes out equal.
+    """
+    table = json.loads(read("scheduler.json", "{}"))
+    if not table:
+        return ""
+    lines = ["/system scheduler"]
+    for name, entry in table.items():
+        lines.append(f'add name={name} on-event="{entry.get("on-event", "")}"')
+    return "\n".join(lines) + "\n"
+
+
 def answer(command):
     command = command.strip()
 
@@ -115,7 +134,13 @@ def answer(command):
                 f"           time-zone-name: Europe/Paris\n")
 
     if command == "/export":
-        return read("config", "")
+        text = read("config", "")
+        section = scheduler_export()
+        if section:
+            if text and not text.endswith("\n"):
+                text += "\n"
+            text += section
+        return text
 
     if command in ("/export verbose", "/export hide-sensitive verbose"):
         return read("config-verbose", read("config", ""))
@@ -124,15 +149,22 @@ def answer(command):
         name = re.search(r'name="?([^"\s]+)"?', command)
         listed = []
         files = state / "files"
+        detail = command.startswith("/file print detail")
         if files.is_dir():
             for path in sorted(files.iterdir()):
                 if name and path.name != name.group(1):
                     continue
-                listed.append(f' 0 name="{path.name}" type=".rsc" size=120\n')
+                # A plain listing on RouterOS 6 cuts the NAME column to nineteen characters and
+                # "..."; only `print detail` shows the whole name. The script reads detail for that
+                # reason, and this is what makes the difference visible to a test.
+                shown = path.name if detail or len(path.name) <= 19 else path.name[:19] + "..."
+                listed.append(f' 0 name="{shown}" type=".rsc" size=120\n')
         return "".join(listed)
 
     if command.startswith("/file remove"):
         name = re.search(r'name="?([^"\s\]]+)"?', command)
+        if flag("stubborn_file"):
+            return ""
         path = state / "files" / name.group(1)
         path.unlink(missing_ok=True)
         return ""
@@ -146,6 +178,11 @@ def answer(command):
     if command.startswith("/system scheduler add"):
         name = re.search(r"name=([^\s]+)", command).group(1)
         event = re.search(r'on-event="([^"]*)"', command).group(1)
+        # The device dates an entry `mmm/dd/yyyy` and answers `invalid date` to anything else; an ISO
+        # date is the shape a hand-written caller reaches for, so the refusal is modelled here.
+        date = re.search(r"start-date=([^\s]+)", command)
+        if date and not re.fullmatch(r"[A-Za-z]{3}/\d{1,2}/\d{4}", date.group(1)):
+            return "invalid date\n"
         entry = {"on-event": event, "run-count": 0}
         for key in ("start-time", "start-date", "interval", "policy"):
             match = re.search(rf"{key}=([^\s]+)", command)
@@ -159,6 +196,8 @@ def answer(command):
 
     if command.startswith("/system scheduler remove"):
         name = re.search(r'name="?([^"\s\]]+)"?', command).group(1)
+        if flag("stubborn_timer"):
+            return ""
         table = json.loads(read("scheduler.json", "{}"))
         table.pop(name, None)
         write("scheduler.json", json.dumps(table))
@@ -214,6 +253,9 @@ def main(argv):
     _, command = ssh_operands(argv)
     counters()
     write("commands", read("commands", "") + command + "\n")
+    # Every invocation as it arrived, options and all: a test asserts the connection options the
+    # real mode of the device needs are the ones this call would have carried.
+    write("ssh-argv", read("ssh-argv", "") + " ".join(argv) + "\n")
 
     now = datetime.strptime(read("clock").strip(), "%Y-%m-%d %H:%M:%S")
     now += timedelta(seconds=int(os.environ.get("FAKE_STEP", "10")))

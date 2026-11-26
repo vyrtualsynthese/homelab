@@ -3,7 +3,12 @@
 
 Two rules shaped it. Nothing here may put a visitor's address in a Prometheus
 label: Prometheus answers unauthenticated on the LAN, so the per-address views
-live in the gated log store instead. And every number is either read from the
+live in the gated log store instead. One exception, and it is not the address:
+`homelab_authentik_signins_15m_by_source` carries a salted pseudonym, because a
+rule cannot join "twenty failures" to "the sign-in that worked" any other way,
+and a pseudonym is what lets the join happen without printing who was knocking.
+The salt is a Secret key, so the label is not one rainbow table away from the
+address. And every number is either read from the
 cluster under a read-only ServiceAccount or compared against a value this
 repository already states — no second policy, and the one copied list has a test
 that fails the moment it disagrees with `hack/check_exposure.py`.
@@ -24,6 +29,7 @@ Deployed from the chart's ConfigMap; the account reads two lists and nothing
 else, see `templates/rbac.yaml`.
 """
 
+import hashlib
 import json
 import os
 import re
@@ -60,6 +66,18 @@ AUTHENTIK_PAGE_CAP = 20
 # the sign-in page can still exceed. Past it the narrow window keeps counting and
 # the wide one keeps its last value, see `measure()`.
 AUTHENTIK_WIDE_PAGE_CAP = 200
+# The per-source view exists for one rule: a success from a source that was
+# failing hard shortly before. Two numbers shape it.
+#
+# The floor keeps a retyped password out of the family: on 2026-11-14 a browser
+# failed three times in nine seconds and then signed in, which is a person, not a
+# source. A source is published from `SOURCE_FLOOR` failures up.
+#
+# The cap is what a distributed spray cannot grow past. Twenty repeatedly failing
+# sources in one window is already a scenario; the remainder is counted by
+# `homelab_authentik_signins_by_source_omitted` rather than dropped silently.
+SOURCE_FLOOR = 3
+SOURCE_CAP = 20
 
 
 class Posture(NamedTuple):
@@ -68,16 +86,32 @@ class Posture(NamedTuple):
     public: int
 
 
+class Sources(NamedTuple):
+    """Per-source counts, present only when a salt is configured.
+
+    The key is `(source, outcome)` with the source a pseudonym, so one address is
+    one series pair across the whole page. `omitted` is how many repeatedly
+    failing sources the cap left off, because a capped page that looks complete
+    is the same lie as a partial count.
+    """
+
+    counts: dict[tuple[str, str], int]
+    omitted: int
+
+
 class SignIns(NamedTuple):
     """Both windows, bucketed. Present only after a successful authentik read.
 
     `last_24h` is optional on purpose: the narrow window is the one the sign-in
     rule reads, so a wide window too large to walk carries the previous value
     forward (or nothing) instead of taking the narrow count down with it.
+    `sources` is narrower still: it is computed from the fifteen-minute window
+    only, which is the one the burst rule reads, and it is absent without a salt.
     """
 
     last_15m: dict[str, int]
     last_24h: dict[str, int] | None = None
+    sources: Sources | None = None
 
 
 class Snapshot(NamedTuple):
@@ -235,17 +269,68 @@ def count_outcomes(events):
 
     One deliberate omission: no event carries an address into a label. The counts
     are aggregate; the per-address view is a Loki query against the gate's log.
+    `count_sources()` is the one exception, and it publishes a pseudonym.
     """
     counts = {"success": 0, "failure": 0, "other": 0}
     for event in events:
-        action = event.get("action") or ""
-        if action == "login_failed":
-            counts["failure"] += 1
-        elif action in ("login", "login_success"):
-            counts["success"] += 1
-        else:
-            counts["other"] += 1
+        counts[_outcome(event.get("action") or "")] += 1
     return counts
+
+
+def _outcome(action):
+    """One event's outcome, in the three names the families publish."""
+    if action == "login_failed":
+        return "failure"
+    if action in ("login", "login_success"):
+        return "success"
+    return "other"
+
+
+def source_key(address, salt):
+    """A stable pseudonym for one address: sha256(salt + address), sixteen hex.
+
+    Not anonymity, and the code says so rather than pretending: IPv4 is small
+    enough to walk in seconds, so the salt is what stands between this label and
+    the address. It keeps the address off an endpoint that answers unauthenticated
+    on the LAN, and the plain address stays in authentik's event log, where the
+    person acting on the alert reads it.
+    """
+    return hashlib.sha256(f"{salt}\x00{address}".encode()).hexdigest()[:16]
+
+
+def count_sources(events, salt, floor=SOURCE_FLOOR, cap=SOURCE_CAP):
+    """Per-source counts for the sources that failed repeatedly, and the omitted count.
+
+    The floor is the difference between a typo and a source worth naming: measured
+    on 2026-11-14, three failures thirty seconds before the sign-in that worked,
+    from the operator's own browser. A source is published once it has `floor`
+    failures, and every such source is published with both outcomes so the rule
+    can join them on one key. The cap is what a distributed spray cannot grow past;
+    `omitted` says how many sources it left out.
+
+    Sources are ranked by failures, then successes, then the address, so the page
+    is deterministic between polls. An event with no address is skipped: it cannot
+    be attributed, and inventing a bucket for it would make one source out of
+    every unattributed event.
+    """
+    per_address: dict[str, dict[str, int]] = {}
+    for event in events:
+        address = str(event.get("client_ip") or "").strip()
+        outcome = _outcome(event.get("action") or "")
+        if not address or outcome == "other":
+            continue
+        counts = per_address.setdefault(address, {"failure": 0, "success": 0})
+        counts[outcome] += 1
+    repeated = sorted(
+        (item for item in per_address.items() if item[1]["failure"] >= floor),
+        key=lambda item: (-item[1]["failure"], -item[1]["success"], item[0]),
+    )
+    counts: dict[tuple[str, str], int] = {}
+    for address, outcomes in repeated[:cap]:
+        key = source_key(address, salt)
+        for outcome in ("failure", "success"):
+            counts[(key, outcome)] = outcomes[outcome]
+    return counts, len(repeated) - len(repeated[:cap])
 
 
 def events_url(now, minutes, page=None):
@@ -374,7 +459,13 @@ def measure(public: set[str], now: datetime | None = None, previous: Snapshot | 
     signins = None
     stamp = now.timestamp()
     if token:
-        narrow = count_outcomes(fetch_authentik(token, now, 15, opener=opener))
+        narrow_events = fetch_authentik(token, now, 15, opener=opener)
+        narrow = count_outcomes(narrow_events)
+        salt = os.environ.get("AUTHENTIK_ADDRESS_SALT", "").strip()
+        sources = None
+        if salt:
+            counts, omitted = count_sources(narrow_events, salt)
+            sources = Sources(counts, omitted)
         try:
             wide = count_outcomes(
                 fetch_authentik(token, now, 24 * 60, cap=AUTHENTIK_WIDE_PAGE_CAP, opener=opener)
@@ -386,7 +477,7 @@ def measure(public: set[str], now: datetime | None = None, previous: Snapshot | 
                   file=sys.stderr, flush=True)
             wide = previous.signins.last_24h
             stamp = previous.last_success
-        signins = SignIns(narrow, wide)
+        signins = SignIns(narrow, wide, sources)
     return Snapshot(
         counted.routes, counted.ungated, counted.public, privileged(pods), stamp, signins
     )
@@ -399,14 +490,16 @@ FRESHNESS = [
 
 
 def render(state: Snapshot) -> str:
-    """The page, seven families at most, and no labels: Prometheus is open on the LAN.
+    """The page, ten families at most, and one label that names nobody.
 
-    Before the first successful poll only the freshness family is published. A
-    zero for `ungated_routes` or `privileged_workloads` is not "nothing found", it
-    is "nothing read", and a security count must never carry that ambiguity: an
-    operator who sees the numbers absent reaches for the freshness family, while
-    one who sees a zero believes the cluster. Publishing only the timestamp also
-    keeps `up == 1` from meaning anything it does not.
+    Prometheus is open on the LAN, so nothing here names a visitor except
+    `homelab_authentik_signins_15m_by_source`, whose `source` is a salted
+    pseudonym. Before the first successful poll only the freshness family is
+    published. A zero for `ungated_routes` or `privileged_workloads` is not
+    "nothing found", it is "nothing read", and a security count must never carry
+    that ambiguity: an operator who sees the numbers absent reaches for the
+    freshness family, while one who sees a zero believes the cluster. Publishing
+    only the timestamp also keeps `up == 1` from meaning anything it does not.
 
     The sign-in families follow the same rule one step further: they appear only
     when `signins` is set, which is only after a successful authentik read. With
@@ -445,6 +538,27 @@ def render(state: Snapshot) -> str:
             ]
             for outcome in ("failure", "success", "other"):
                 lines.append(f'{name}{{outcome="{outcome}"}} {counts[outcome]}')
+        if state.signins.sources is not None:
+            # One pair per source: the failure count and the success count that
+            # the rule joins on the pseudonym. A source that has not succeeded
+            # publishes `success 0`, which is a measurement and keeps the series
+            # shape stable between polls.
+            lines += [
+                "# HELP homelab_authentik_signins_15m_by_source Sign-in outcomes in the last 15 minutes,"
+                " per source (a salted pseudonym, never an address).",
+                "# TYPE homelab_authentik_signins_15m_by_source gauge",
+            ]
+            for (source, outcome), count in sorted(state.signins.sources.counts.items()):
+                lines.append(
+                    f'homelab_authentik_signins_15m_by_source{{source="{source}",'
+                    f'outcome="{outcome}"}} {count}'
+                )
+            lines += [
+                "# HELP homelab_authentik_signins_by_source_omitted Repeatedly failing sources left off"
+                " the page by the cap.",
+                "# TYPE homelab_authentik_signins_by_source_omitted gauge",
+                f"homelab_authentik_signins_by_source_omitted {state.signins.sources.omitted}",
+            ]
     lines += [
         *FRESHNESS,
         f"homelab_security_exporter_last_success_timestamp_seconds {int(state.last_success)}",
@@ -516,6 +630,12 @@ def main() -> int:
     if not os.environ.get("AUTHENTIK_TOKEN", "").strip():
         print("AUTHENTIK_TOKEN is empty: sign-in counting is off until its Secret exists; "
               "posture only", file=sys.stderr, flush=True)
+    elif not os.environ.get("AUTHENTIK_ADDRESS_SALT", "").strip():
+        # One line, once. The aggregate windows still publish, so this is not an
+        # outage: it is the per-source view — and the burst rule with it — that
+        # stays absent until the key exists.
+        print("AUTHENTIK_ADDRESS_SALT is empty: the per-source sign-in family is off until "
+              "its Secret key exists", file=sys.stderr, flush=True)
     threading.Thread(target=poll_forever, args=(PUBLIC_HOSTS, INTERVAL), daemon=True).start()
     # Threaded so a slow scrape cannot hold the next one; the state is a single
     # immutable tuple behind a lock, so there is nothing else to coordinate.

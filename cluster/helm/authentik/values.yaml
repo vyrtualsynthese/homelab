@@ -23,8 +23,10 @@ authentik:
   global:
     image:
       repository: ghcr.io/goauthentik/server
-      # Pinned with the chart version: both are 2026.8.6.
-      tag: "2026.8.6"
+      # Pinned with the chart version. The image is one patch ahead here
+      # (2026.8.7 against chart 2026.8.6): the tag was published before the
+      # chart that ships it, and the chart follows on its own update.
+      tag: "2026.8.7"
       pullPolicy: IfNotPresent
     envFrom:
       - secretRef:

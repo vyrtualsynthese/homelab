@@ -3,9 +3,9 @@ name: renovate
 description: Renovate - nightly dependency pull requests
 type: application
 version: 0.1.0
-appVersion: "44.261.2"
+appVersion: "44.263.1"
 
 dependencies:
   - name: renovate
-    version: 46.453.1
+    version: 46.454.2
     repository: https://docs.renovatebot.com/helm-charts

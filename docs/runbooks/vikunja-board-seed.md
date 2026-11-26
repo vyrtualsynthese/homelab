@@ -4,7 +4,10 @@
 > git-tracked seed, with the `--verify` run that checks it.
 >
 > **Use it when** the boards must be recreated after a loss, or the seed script changes ·
-> **Kind:** completed record 2026-11-16
+> **Verified** 2026-11-26 · **Kind:** how-to
+>
+> **Sources** `hack/vikunja-seed.sh`, a `--dry-run` against the live board, and
+> `docs/runbooks/vikunja-first-start.md`
 
 Date: 2026-11-16
 
@@ -43,6 +46,9 @@ token below belongs to.
 
 - The first start is done: the owner account exists, and `https://vikunja.kub.local` answers.
 - `curl`, `jq` and `python3` are installed on the workstation.
+- The cluster root `~/.config/secrets/kub-local/local-ca.pem` is installed (see
+  [`internal-ca.md`](internal-ca.md)). The script verifies the board's certificate against it and
+  stops, with exit 2, when the file is missing.
 - The workstation resolves `vikunja.kub.local` to the cluster. Everything here runs from the LAN; the
   board's route carries the `lan-only` gate, so a request from outside the house is refused before it
   reaches the API.
@@ -63,10 +69,12 @@ never printed by the script; do not put it on the command line, where the shell 
 caveat: `curl` receives the token as an argument, so on this machine another local user can see it in
 `ps` while a request is in flight.
 
-One sentence about the certificate, because it applies to every call below: without `-k` curl would
-reject the cluster's internal certificate, so the script passes `-k`, which accepts the certificate
-**without checking it**; setting `VIKUNJA_CACERT=~/.config/secrets/kub-local/local-ca.pem` makes it
-check the chain against the cluster's own authority instead.
+One paragraph about the certificate, because it applies to every call below: the board's certificate
+is signed by the cluster's private CA, not by a public one, so the script verifies the chain against
+that root — `~/.config/secrets/kub-local/local-ca.pem` by default, and `VIKUNJA_CACERT` points it at
+another copy. `-k` is not a fallback: every request carries the token, so accepting the certificate
+**without checking it** would hand that token to whatever answers for `vikunja.kub.local`. A missing
+file stops the run with exit 2 instead.
 
 ## Step 2 — the dry run
 
@@ -183,6 +191,7 @@ What it does not do: it never decides that a task is finished. The mapping says 
 
 | Line | What it means | What to do |
 |---|---|---|
+| `no readable CA file at …` | The cluster root is not where the script looks, so the run stops rather than checking nothing | Install `local-ca.pem` ([`internal-ca.md`](internal-ca.md)) or set `VIKUNJA_CACERT` |
 | `bucket "Ideas" holds 3 cards` | A column with cards cannot be renamed: the rename would relabel live work | Move the cards first, then re-run |
 | `has no kanban view` | The project has no kanban view at all — someone deleted it, or converted it | Add a kanban view in the board UI, then re-run. The script never creates one |
 | `FAIL done column` | The view write dropped `done_bucket_id` | Re-run the seed; it repairs the whole record in one write |

@@ -22,6 +22,13 @@ from. A later measurement supersedes it; this one is not edited afterwards.
 > the two Pis) have a fix in `ansible/` that was written the same day and has not run on a host yet.
 > The grades above stand as what was measured; they change when a collector run shows the state after
 > the apply, not when the code lands.
+>
+> **Superseded in part, 2026-11-26 — the router's rules were read.** Two questions this record left
+> open now have an answer: the Livebox does not forward `5000` or `9902`, so §2's exposure ends at
+> the LAN, and the `/24` holds 30 addressed devices, eight of them the homelab. The LAPI's `30500` is
+> not forwarded either, which keeps the security-detection plan's grade and corrects its stated
+> reason. The measurements are [the Livebox record](../audit/livebox-2026-11-26.md); the grades here
+> stand as what was measured on 2026-11-24.
 
 ## How a claim is graded here
 
@@ -163,10 +170,22 @@ own account needs its password and the sudo log tells the two apart.
 passwordless grant anywhere — was rejected: `make check` would need a password typed at a terminal,
 and that drift report is the layer's whole output.
 
+*Status, 2026-11-26.* Both Pis carry it too. The layer cannot reach them until they are reflashed
+(card #481), so `ansible/pi/hosts-pi.sh` owns the same state there: the grant and the `admins` group
+gone, and `%sudo` left as Ubuntu ships it. Sudo on a Pi now asks for the account's password, and the
+reflashed image's `user-data` already says `PASSWD:ALL`, so the two agree. Measured on both hosts
+before and after:
+[the record](../audit/hosts-2026-11-24.md#the-edge-pis-converged-2026-11-26).
+
 **A finding, low.** Both Pis accept a password on port 22 while the four cluster nodes do not. They
 are the DNS server and the VPN endpoint, so a guessed password does not merely reach a host.
 
 *Smallest fix:* `PasswordAuthentication no` on both, in the same edit that fixes §2.
+
+*Status, 2026-11-26.* Closed on both, and the main sshd config was not what was wrong: cloud-init's
+`50-cloud-init.conf` said `yes` and sorts ahead of it. The Pis now carry the `00-homelab.conf` drop-in
+`roles/accounts` writes on the nodes, and `setup` refuses to close the password while the human
+account has no key.
 
 **A finding, low.** Ubuntu Pro is attached on no host. The five jammy machines are offered
 `24.04.5 LTS`, so ESM is the wrong lever — the release move is — but `streaming` carries 151 pending

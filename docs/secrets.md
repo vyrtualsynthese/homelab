@@ -5,7 +5,7 @@
 > PostgreSQL instance and the per-application database passwords.
 >
 > **Use it when** a pod is stuck in `CreateContainerConfigError`, a rebuild needs to know which Secret
-> to create first, or a credential is being rotated · **Verified** 2026-11-23 · **Kind:** reference
+> to create first, or a credential is being rotated · **Verified** 2026-11-26 · **Kind:** reference
 >
 > **Sources** `docs/runbooks/last-resort.md`, `docs/security/critical-points.md`, `cluster/helm/`
 
@@ -59,6 +59,8 @@ keys at all.
 | `sonarr`, `sonarr-anime`, `radarr`, `radarr-anime`, `lidarr`, `prowlarr` | `media-stack` | `secret` → exportarr APIKEY, and unpackerr's per-instance API key |
 | `bazarr`, `bazarr-anime` | `media-stack` | `secret` → exportarr APIKEY (only when `exportarr.enabled`; off until exportarr v3) |
 | `autobrr-oidc` | `media-stack` | `client-secret` → `AUTOBRR__OIDC_CLIENT_SECRET`, the authentik provider's client secret |
+| `crowdsec-web-ui` | `security` | `lapi-password` → `CONFIG_INSTANCES_0_LAPI_AUTH_PASSWORD`, the watcher credential `cscli machines add` issues in the LAPI; `oidc-client-secret` → `CONFIG_AUTH_OIDC_CLIENT_SECRET`, the authentik provider's client secret (the same value as `CROWDSEC_CLIENT_SECRET` in `authentik-sso`) |
+| `security-exporter-authentik` | `security` | `token` → `AUTHENTIK_TOKEN`, a read-only authentik token for the events endpoint that feeds the sign-in counts; `address-salt` → `AUTHENTIK_ADDRESS_SALT`, the salt that turns an address into the `source` label of `homelab_authentik_signins_15m_by_source` (`openssl rand -hex 32`). Both references are `optional`: no token means posture only, no salt means no per-source family |
 | `freshrss-oidc` | `news` | `client-secret` → `OIDC_CLIENT_SECRET`, the authentik provider's client secret; `client-crypto-key` → `OIDC_CLIENT_CRYPTO_KEY`, the module's own encryption key |
 | `plex` | `media-stack` | `plex_claim` |
 | `qbittorrent-exporter` | `media-stack` | `username`, `password` |
@@ -75,6 +77,7 @@ keys at all.
 | `pihole-exporter` | `monitoring` | `key` |
 | `mktxp-conf` | `monitoring` | mounted as a file |
 | `grafana` | `monitoring` | `admin-user`, `admin-password` — required; the chart reads it via `admin.existingSecret` |
+| `prometheus-basicauth` | `monitoring` | `web-config.yml` → `--web.config.file` (bcrypt users `ops`, `grafana`, `reload`); `grafana-password` → `PROMETHEUS_GRAFANA_PASSWORD` in Grafana's pod; `reload-password` → `PROMETHEUS_RELOAD_PASSWORD` in the config-reloader's |
 | `local-cert` | `kube-system` | Traefik default TLS cert (`TLSStore`) |
 | `traefik-dashboard` | `kube-system` | `users` — the htpasswd line(s) for the dashboard's basic auth |
 | `traefik-ovh` | `kube-system` | `OVH_ENDPOINT`, `OVH_APPLICATION_KEY`, `OVH_APPLICATION_SECRET`, `OVH_CONSUMER_KEY` → `envFrom` on the Traefik pod; the consumer key is scoped to `/domain/zone/{ashudev.com,ashuvidz.com}/{record,record/*,refresh}` |
@@ -96,6 +99,43 @@ htpasswd -nbB vronteix '<password>' \
       --from-file=users=/dev/stdin --dry-run=client -o yaml | kubectl apply -f -
 curl -sk -o /dev/null -w '%{http_code}\n' -u 'vronteix:<password>' \
   --resolve traefik.kub.local:443:192.168.1.46 https://traefik.kub.local/dashboard/   # 200
+```
+
+- **`prometheus-basicauth` is a hash per user plus a plaintext copy for the machine callers.** The
+  file is the contract, as it is for `traefik-dashboard`: Prometheus loads `web-config.yml` as
+  `--web.config.file` and answers `401` to anyone it does not name
+  (`cluster/helm/monitoring/prometheus/values.yaml`). `grafana-password` and `reload-password` exist
+  because those callers cannot sign in with a hash: Grafana provisions a datasource with one, and
+  `reload-password` reaches two readers — the config-reloader, through the environment the kubelet
+  pastes into `--reload-url`, and Prometheus's own self-scrape, through
+  `password_file: /etc/prometheus-web-config/reload-password`. That is why it must stay URL-safe.
+  The Secret must exist **before** a sync mounts it — the volume has no `optional` — and the `ops`
+  password belongs in `~/.config/secrets/homelab.env` as `PROMETHEUS_AUTH_PASSWORD`:
+
+The three passwords are not echoed while typed, so a silent shell is waiting for them, not stuck, and
+`htpasswd` is not assumed: the hash comes from `python3`'s `bcrypt`, which is installed where the
+recipe is run from. A rotation needs both pods restarted afterwards — the mounted file updates in
+place, but Prometheus reads the web config once, at startup, and Grafana reads the environment the
+same way:
+
+```bash
+printf 'ops password: ';     read -rs OPS;     echo
+printf 'grafana password: '; read -rs GRAFANA; echo
+printf 'reload password (letters and digits only): '; read -rs RELOAD; echo
+python3 - "$OPS" "$GRAFANA" "$RELOAD" <<'EOF' | kubectl -n monitoring apply -f -
+import base64, bcrypt, sys
+cfg = "basic_auth_users:\n" + "".join(
+    f"  {u}: {bcrypt.hashpw(p.encode(), bcrypt.gensalt()).decode()}\n"
+    for u, p in zip(["ops", "grafana", "reload"], sys.argv[1:4]))
+print("apiVersion: v1\nkind: Secret\nmetadata:\n  name: prometheus-basicauth\n  namespace: monitoring\ntype: Opaque\ndata:")
+for k, v in {"web-config.yml": cfg,
+             "grafana-password": sys.argv[2],
+             "reload-password": sys.argv[3]}.items():
+    print(f"  {k}: {base64.b64encode(v.encode()).decode()}")
+EOF
+curl -s -o /dev/null -w '%{http_code}\n' http://prometheus.kub.local/-/healthy        # 401
+curl -s -o /dev/null -w '%{http_code}\n' -u "ops:$OPS" \
+  http://prometheus.kub.local/-/healthy                                              # 200
 ```
 
 `traefik-ovh` holds the OVH API credential the DNS-01 resolver uses. The application key is the
@@ -217,7 +257,7 @@ beside the instance that creates the role, once beside the application that cons
 |---|---|---|---|---|
 | `pg-<app>` | `databases` | `password` | Whoever runs `ALTER ROLE` or inspects the database; the role itself already holds a hash of it | Generated by the runbook with `openssl rand -hex 24` and copied into the application's Secret below, so both hold the same value. |
 | `authentik-env` | `authentik` | `AUTHENTIK_SECRET_KEY`, `AUTHENTIK_BOOTSTRAP_PASSWORD`, `AUTHENTIK_POSTGRESQL__PASSWORD`, `AUTHENTIK_POSTGRESQL__HOST`, plus the SMTP password when email is enabled. Every key is exported into the container with `envFrom` | authentik server and worker | Generated by the database runbook and the phase 1 rebuild. The bootstrap password creates `akadmin` on first start only; change it in the UI after the first login. The secret key signs sessions and cookies. |
-| `authentik-sso` | `authentik` | `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`, `PLEX_TOKEN`, `GRAFANA_CLIENT_SECRET`, `PGADMIN_CLIENT_SECRET`, `KAVITA_CLIENT_SECRET`, `ARGOCD_CLIENT_SECRET`, `CALIBRE_CLIENT_SECRET`, `RADARR_CLIENT_SECRET`, `RADARR_ANIME_CLIENT_SECRET`, `FRESHRSS_CLIENT_SECRET`, `FILEBROWSER_CLIENT_SECRET`, `VIKUNJA_CLIENT_SECRET`. Exported into the authentik server and worker with `envFrom`; the blueprint `!Env` tags read it | authentik server and worker | Source and provider client secrets, created by the operator. The same values are copied into each application's own Secret (`grafana-oidc`, `pgadmin-oidc`, `freshrss-oidc`, `filebrowser-oidc`, `vikunja-oidc`) or its UI (`calibre`, pasted into Calibre-Web's OAuth settings because it stores it in `app.db`), because Secrets do not cross namespaces |
+| `authentik-sso` | `authentik` | `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`, `PLEX_TOKEN`, `GRAFANA_CLIENT_SECRET`, `PGADMIN_CLIENT_SECRET`, `KAVITA_CLIENT_SECRET`, `ARGOCD_CLIENT_SECRET`, `CALIBRE_CLIENT_SECRET`, `RADARR_CLIENT_SECRET`, `RADARR_ANIME_CLIENT_SECRET`, `FRESHRSS_CLIENT_SECRET`, `FILEBROWSER_CLIENT_SECRET`, `VIKUNJA_CLIENT_SECRET`, `CROWDSEC_CLIENT_SECRET`. Exported into the authentik server and worker with `envFrom`; the blueprint `!Env` tags read it | authentik server and worker | Source and provider client secrets, created by the operator. The same values are copied into each application's own Secret (`grafana-oidc`, `pgadmin-oidc`, `freshrss-oidc`, `filebrowser-oidc`, `vikunja-oidc`) or its UI (`calibre`, pasted into Calibre-Web's OAuth settings because it stores it in `app.db`), because Secrets do not cross namespaces |
 | `authentik-ldap` | `authentik` | `AUTHENTIK_TOKEN` — the `ashulab-ldap` outpost's token | The LDAP outpost Deployment `authentik-ldap` | Created by the operator from the outpost's generated token; the runbook holds the one-liner |
 | `grafana-oidc` | `monitoring` | `GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET` | Grafana chart `envFromSecret`; `grafana.ini` reads it with `$__env{}` | Copy of `GRAFANA_CLIENT_SECRET` from `authentik-sso` |
 | `pgadmin-oidc` | `databases` | `config_local.py` | Mounted at `/pgadmin4/config_local.py` by the chart | Generated file holding `OAUTH2_CONFIG`, with the client secret copied from `authentik-sso` |

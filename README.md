@@ -74,7 +74,7 @@ Commit to `develop` → the ArgoCD root app (`cluster/argocd/argocd-root.yaml`) 
 | Class | Use |
 |---|---|
 | `local-path` (default) | application configuration, node-bound |
-| `plex-media`, `nfs-audio`, `nfs-books`, `qbittorrent-download`, `nfs-qbittorrent-config`, `nfs-syncthing`, `stash-nfs`, `traefik-nfs` | media and data on the NAS, one class per export |
+| `plex-media`, `nfs-audio`, `nfs-books`, `qbittorrent-download`, `nfs-syncthing`, `stash-nfs`, `traefik-nfs` | media and data on the NAS, one class per export |
 
 `local-path` volumes are tied to one node. Every workload is pinned to a named node and its
 configuration volume lands on that same node; there is no failover, by design.
@@ -84,7 +84,7 @@ configuration volume lands on that same node; there is no failover, by design.
 ```
 ansible/                  host playbooks (see the caveat in ansible/README.MD)
 cluster/argocd/           root Application + per-app Applications (CRLF line endings)
-cluster/helm/             52 charts: local, values-only, and a few still vendored
+cluster/helm/             55 charts: local, values-only, and a few still vendored
 cluster/infrastructure/   Traefik config, storage classes — applied by hand
 kubectl/                  standalone manifests and one-shot helpers
 docs/                     audit, design, plans, runbooks — the authoritative documents

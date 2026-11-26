@@ -1,22 +1,30 @@
 # How traffic reaches an application
 
-> **In one line.** Every request lands at Traefik on the one cluster address the house router forwards
+> **In one line.** Every web request lands at Traefik on the cluster address the house router forwards
 > to, and the route then decides whether it may come in, who has to sign in, and which certificate
 > answers.
 >
 > **Use it when** you are adding a route, an app answers `403` or serves the wrong certificate, or you
-> need to know whether a hostname is reachable from outside · **Verified** 2026-11-22 ·
+> need to know whether a hostname is reachable from outside · **Verified** 2026-11-26 ·
 > **Kind:** explanation
 >
 > **Sources** `cluster/helm/**/templates/*.yaml`, `cluster/argocd/projects/**/*.yaml`,
-> `cluster/infrastructure/traefik/`, `hack/check_exposure.py`
+> `cluster/infrastructure/traefik/`, `hack/check_exposure.py`, and the router's own rules in
+> [the Livebox record](../audit/livebox-2026-11-26.md)
 
 ## How a request arrives
 
-Traefik is the only door. It runs as a Kubernetes `LoadBalancer` Service in `kube-system`, with no
-cloud load balancer behind the name: the house router forwards 80, 443, 25565, 22000 (TCP and UDP)
-and 21027 (UDP) to **one** cluster address, `192.168.1.46` (`streaming`), which is also what the edge
-Pi-hole answers for `*.kub.local`.
+Traefik is the only door for HTTP and HTTPS. It runs as a Kubernetes `LoadBalancer` Service in
+`kube-system`, with no cloud load balancer behind the name: the house router forwards 80 and 443
+(TCP), 25565 (TCP), 22000 (TCP and UDP) and 21027 (UDP) to **one** cluster address, `192.168.1.46`
+(`streaming`), which is also what the edge Pi-hole answers for `*.kub.local`. The 25565 and
+22000/21027 entries are Minecraft and Syncthing, which Traefik owns as entry points; the router also
+forwards 25565 on UDP, where the `Service` publishes nothing.
+
+The router's only other rules are three WireGuard forwards to the two edge Pis: 51820 (TCP and UDP)
+on `rbp1`, and 51821 and 51822 (UDP) on `rbp0` and `rbp1`. Nothing else is forwarded — the four Plex
+and DLNA rules the box still carried on 2026-11-26 are deleted. [The Livebox
+record](../audit/livebox-2026-11-26.md) is the measured table and the removal.
 
 One pod serves all of that, not one per node. K3s's service load balancer still puts a small proxy pod
 on every node, so the other three node addresses answer as well — those packets then cross the LAN to

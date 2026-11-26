@@ -2,7 +2,7 @@
 
 # What is backed up, and where
 
-> **Generated page.** 36 rows over 4 streams, rendered from
+> **Generated page.** 37 rows over 4 streams, rendered from
 > `cluster/helm/backup/values.yaml` by `hack/gen_docs.py`. Do not edit it: the matrix is the
 > values file.
 
@@ -21,6 +21,8 @@ nothing, which is a defect rather than a quiet night: the verifier fails it.
 | `grafana` | `monitoring` | nas | sqlite |
 | `crowdsec-db-pvc` | `security` | nas | sqlite |
 | `crowdsec-config-pvc` | `security` | nas | files |
+| `qbittorrent-vpn-config` | `media-stack` | nas | files |
+| `qbittorrent-config` | `media-stack` | nas | files |
 
 ## `nodes-nuc0` — 0 5 * * *
 
@@ -31,6 +33,7 @@ nothing, which is a defect rather than a quiet night: the verifier fails it.
 | `news-freshrss-config` | `news` | nuc0 | sqlite |
 | `filebrowser-filebrowser-quantum-config` | `filebrowser` | nuc0 | sqlite |
 | `filebrowser-filebrowser-quantum-data` | `filebrowser` | nuc0 | files |
+| `crowdsec-web-ui-config` | `security` | nuc0 | sqlite |
 | `koillection-conf` | `koillection` | nuc0 | files |
 | `syncthing-config` | `syncthing` | nuc0 | files |
 | `thelounge-config` | `thelounge` | nuc0 | files |
@@ -54,7 +57,6 @@ nothing, which is a defect rather than a quiet night: the verifier fails it.
 | `seerr-config` | `media-stack` | streaming | sqlite |
 | `tautulli-config` | `media-stack` | streaming | sqlite |
 | `maintainerr-config` | `media-stack` | streaming | sqlite |
-| `qbittorrent-vpn-config` | `media-stack` | streaming | files |
 | `plex-config` | `media-stack` | streaming | sqlite |
 | `kavita-config` | `media-stack` | streaming | sqlite |
 | `calibre-web-automated-config` | `media-stack` | streaming | sqlite |
@@ -67,7 +69,6 @@ nothing, which is a defect rather than a quiet night: the verifier fails it.
 | `syncthing` | `-` | nfs | files |
 | `koillection` | `-` | nfs | files |
 | `traefik` | `-` | nfs | files |
-| `qbittorrent-config` | `-` | nfs | files |
 
 ## Sources
 

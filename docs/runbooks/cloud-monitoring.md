@@ -7,7 +7,11 @@
 >
 > **Use it when** `CloudEndpointDown`, `CloudDnsCheckFailing` or `CloudTlsCertificateExpiring` fires,
 > a public name or DNS record changes, or `ashuvidz.com`'s delegation moves to OVHcloud · **Verified**
-> 2026-11-20 · **Kind:** living page
+> 2026-11-20 · **Kind:** how-to
+>
+> **Sources** `cluster/helm/monitoring/blackbox-exporter/` (the prober and its modules),
+> `cluster/helm/monitoring/prometheus/values.yaml` (the query API the counts are read from) and
+> `docs/reference/alerts.md`. The three rules themselves live in Grafana's database, not in git.
 
 A **blackbox probe** is a request made from outside-looking-in — a real HTTPS fetch or DNS query, not
 a number read from inside the app — so it answers "does this name answer for anyone?". The probes run
@@ -85,15 +89,17 @@ helm template test cluster/helm/monitoring/blackbox-exporter \
 All three read series Prometheus writes from the prober, all three reuse the `discord-homelab`
 contact point and the existing notification policy, and all three are `noDataState: OK`. That last
 part has one consequence worth knowing before you debug: a rule whose selector matches nothing looks
-identical to a healthy rule. The proof that the selectors still match is two counts. The Grafana
-calls below need the token, so load it first — `-k` is there because `grafana.kub.local` is served
-by the internal CA, so a machine without that CA in its trust store still answers:
+identical to a healthy rule. The proof that the selectors still match is two counts. Every block
+below wants `~/.config/secrets/homelab.env` loaded first — the Grafana token and, since
+2026-11-26, the Prometheus password, which the calls pass as `-u "ops:$PROMETHEUS_AUTH_PASSWORD"`.
+`-k` is there because `grafana.kub.local` is served by the internal CA, so a machine without that CA
+in its trust store still answers:
 
 ```bash
 set -a; . ~/.config/secrets/homelab.env; set +a
-curl -sG http://prometheus.kub.local/api/v1/query \
+curl -sG -u "ops:$PROMETHEUS_AUTH_PASSWORD" http://prometheus.kub.local/api/v1/query \
   --data-urlencode 'query=count(probe_success{job="blackbox-http"})'    # 3
-curl -sG http://prometheus.kub.local/api/v1/query \
+curl -sG -u "ops:$PROMETHEUS_AUTH_PASSWORD" http://prometheus.kub.local/api/v1/query \
   --data-urlencode 'query=count(probe_success{job="blackbox-dns"})'     # 28
 ```
 
@@ -118,11 +124,11 @@ name's route, certificate or DNS.
 **Check:** which `instance` the alert names, then the series and the certificate clock:
 
 ```bash
-curl -sG http://prometheus.kub.local/api/v1/query \
+curl -sG -u "ops:$PROMETHEUS_AUTH_PASSWORD" http://prometheus.kub.local/api/v1/query \
   --data-urlencode 'query=probe_success{job="blackbox-http"}'
-curl -sG http://prometheus.kub.local/api/v1/query \
+curl -sG -u "ops:$PROMETHEUS_AUTH_PASSWORD" http://prometheus.kub.local/api/v1/query \
   --data-urlencode 'query=(probe_ssl_earliest_cert_expiry{job="blackbox-http"} - time()) / 86400'
-curl -sG http://prometheus.kub.local/api/v1/query \
+curl -sG -u "ops:$PROMETHEUS_AUTH_PASSWORD" http://prometheus.kub.local/api/v1/query \
   --data-urlencode 'query=probe_duration_seconds{job="blackbox-http"}'
 ```
 
@@ -145,7 +151,7 @@ answered with a record that does not match the assertion. The alert names three 
 whose `ovhcloud` CLI credentials are set out in [§6](#6-the-money-alerts):
 
 ```bash
-curl -sG http://prometheus.kub.local/api/v1/query \
+curl -sG -u "ops:$PROMETHEUS_AUTH_PASSWORD" http://prometheus.kub.local/api/v1/query \
   --data-urlencode 'query=probe_success{job="blackbox-dns"} == 0'
 ovhcloud domain-zone record list ashudev.com
 dig +short MX ashudev.com @ns13.ovh.net
@@ -178,7 +184,7 @@ cluster's own Traefik certificates; this one watches what a stranger is served f
 **Check:** which `instance`, then the day count per endpoint:
 
 ```bash
-curl -sG http://prometheus.kub.local/api/v1/query \
+curl -sG -u "ops:$PROMETHEUS_AUTH_PASSWORD" http://prometheus.kub.local/api/v1/query \
   --data-urlencode 'query=(probe_ssl_earliest_cert_expiry{job="blackbox-http"} - time()) / 86400'
 ```
 
@@ -214,7 +220,7 @@ Then commit, let ArgoCD sync, and confirm within one interval (a minute for HTTP
 the new series exists at all:
 
 ```bash
-curl -sG http://prometheus.kub.local/api/v1/query \
+curl -sG -u "ops:$PROMETHEUS_AUTH_PASSWORD" http://prometheus.kub.local/api/v1/query \
   --data-urlencode 'query=probe_success{job="blackbox-http",instance="https://example.com"}'
 ```
 

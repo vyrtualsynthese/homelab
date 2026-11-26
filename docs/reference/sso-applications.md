@@ -6,7 +6,10 @@
 > adding a tool.
 >
 > **Use it when** an application's sign-in surprises you, you are choosing how to protect a new one,
-> or a hostname answers 404 from authentik · **Verified** 2026-11-19 · **Kind:** living page
+> or a hostname answers 404 from authentik · **Verified** 2026-11-19 · **Kind:** reference
+>
+> **Sources** `cluster/helm/authentik/files/*.yaml`, `docs/secrets.md`,
+> `cluster/helm/authentik/values.yaml`
 
 What the mechanisms themselves prove — OIDC, proxy auth, the gate, `lan-only` — is
 [how-it-works/identity.md](../how-it-works/identity.md). Hostnames, TLS and whether a name answers
@@ -27,6 +30,7 @@ absent from this table has no single sign-on at all — no provider, no gate —
 | Argo CD | OIDC, through the Dex broker it bundles | configured; `admin.enabled: "false"` | `argocd.kub.local` |
 | autobrr | OIDC | configured | `autobrr.kub.local` |
 | Calibre-Web Automated | OIDC | configured, verified live 2026-11-15; its own password kept as break-glass | `calibre.kub.local` |
+| CrowdSec Web UI | OIDC | blueprint `app-crowdsec-web-ui`; password form off, Admins only, `unmatchedRole: deny`; no gate, so the app is its own sign-in | `crowdsec.kub.local` |
 | FreshRSS | OIDC | configured 2026-11-19 — its own OIDC through the official image; no gate, `/api` keeps its own login | `freshrss.kub.home.ashudev.com` |
 | Grafana | OIDC | configured; every sign-in lands as a **Viewer** | `grafana.kub.local` |
 | Kavita | OIDC | configured 2026-11-15; password login disabled | `kavita.kub.home.ashudev.com` |

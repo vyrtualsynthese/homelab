@@ -1,0 +1,248 @@
+# Values for the CrowdSec web UI. Built from the reference chart that
+# `docs/charts/README.md` names: its templates and helpers are copied unchanged,
+# and the values below are this image's own.
+#
+# What it is for: a second view of the LAPI's decisions and alerts that does not
+# go through Prometheus, Loki or Grafana, so a false positive can be undone from a
+# phone while the monitoring stack is having a bad day.
+
+# -- Override the chart name.
+nameOverride: ""
+# -- Override the generated release name.
+fullnameOverride: ""
+
+replicaCount: 1
+
+# -- Deployment strategy. `Recreate` is required for anything with a config volume:
+# ReadWriteOnce volumes cannot be attached to an old and a new pod at the same time.
+strategy: Recreate
+
+image:
+  repository: ghcr.io/theduffman85/crowdsec-web-ui
+  # -- Pin the tag. Never a rolling tag. Renovate manages this.
+  tag: "2026.11.12"
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
+serviceAccount:
+  # -- Create a dedicated ServiceAccount for the pod.
+  create: true
+  # -- The app never talks to the Kubernetes API, so it gets no token.
+  automount: false
+  # -- Defaults to the fullname.
+  name: ""
+  annotations: {}
+
+# -- Annotations added to the pod. No `prometheus.io/*` keys: the image serves no
+# exporter of its own. It *reads* metrics from the LAPI when an instance carries a
+# metrics URL, and that tab is deliberately not configured here — the LAPI's 6060
+# is scraped on the pod IP by Prometheus and no Service exposes it, so pointing the
+# UI at it would leave the tab permanently empty.
+podAnnotations: {}
+podLabels: {}
+
+# Pod-level security. `fsGroup` is deliberately NOT set: local-path volumes are
+# hostPath-backed, and the kubelet does not apply fsGroup ownership to them, so
+# setting it would look meaningful and do nothing.
+podSecurityContext:
+  seccompProfile:
+    type: RuntimeDefault
+
+# Container-level security. The image runs as the unprivileged `node` user (uid
+# 1000) and keeps all of its state under /app/data, so nothing here needs a
+# privileged path. The volume is new, so no `chown` on the node is required: a
+# fresh local-path claim is created writable by any uid.
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+
+service:
+  type: ClusterIP
+  port: 3000
+
+container:
+  # -- Container port. Defaults to `service.port` when left empty; set it only
+  # when the app listens on a different port than the Service exposes.
+  port: null
+
+ingressRoute:
+  # -- Render a Traefik IngressRoute. This repo never uses a core `Ingress`.
+  enabled: true
+  # -- API group. The cluster runs Traefik 3, which serves `traefik.io/v1alpha1`.
+  apiVersion: traefik.io/v1alpha1
+  # -- Traefik entry points. `web` is plain HTTP on kub.local; `websecure` is TLS.
+  entryPoints:
+    - websecure
+  # -- Internal only: the host is a .kub.local name, served by the cluster's own
+  # certificate, so this UI is never reachable from the internet by name.
+  host: crowdsec.kub.local
+  # -- Path prefix. `/` matches everything.
+  pathPrefix: /
+  # -- Render the plain-HTTP mirror router that redirects to this one.
+  redirectToHttps: true
+  # -- Middlewares, rendered as `<namespace>-<name>@kubernetescrd`.
+  #
+  # `lan-only` and no authentik gate on purpose: the app speaks OIDC natively, so
+  # it is its own gate (AGENTS.md §4: native first). Adding
+  # `authentik-forwardauth` as well would mean a second authentik application for
+  # one tool and a second redirect before the real sign-in.
+  middlewares:
+    - name: lan-only
+      namespace: kube-system
+  labels: {}
+  annotations: {}
+  tls:
+    # -- TLS on `websecure`, from the cluster's default `*.kub.local` certificate
+    # (`kube-system/local-cert`). See docs/runbooks/internal-ca.md.
+    enabled: true
+    # -- Use a pre-existing certificate instead of Traefik's default.
+    secretName: ""
+    # -- No ACME resolver: the name is not publicly resolvable.
+    certResolver: ""
+    # -- TLSOption resource name, from the `traefik-gate` chart.
+    options: internal-tls
+    # -- Namespace of that TLSOption.
+    optionsNamespace: kube-system
+
+storage:
+  # -- Render the config PersistentVolumeClaim. The app keeps its users, its
+  # settings and a mirror of the LAPI's alerts in SQLite here, so it is state.
+  enabled: true
+  # -- Use an existing claim instead of the one this chart creates.
+  existingClaim: ""
+  className: local-path
+  accessModes:
+    - ReadWriteOnce
+  # -- 1Gi rather than the 128Mi house standard: `statistics.db` mirrors a 168h
+  # alert lookback plus long-term aggregates, so this is more than settings.
+  size: 1Gi
+  # -- Where the claim is mounted inside the container.
+  mountPath: /app/data
+
+# -- Environment variables, rendered inline into the container spec. Changing a
+# value changes the pod template, so the Deployment rolls by itself.
+#
+# No log-level knob, and this is the one place to say so: the server has no
+# documented level variable, so container logs stay at its default (which is one
+# line per request at `info`). The record an operator acts on is elsewhere —
+# `audit.enabled` is on, and every decision add, delete and cleanup is written as
+# a `[audit]` JSON line, while the decisions themselves stay in the LAPI's SQLite.
+# If a level variable appears upstream, it goes here and this note goes away.
+env:
+  TZ: "Europe/Paris"
+
+  # One instance: the cluster's own LAPI, over the cluster network. The
+  # NodePort 30500 exists for the host bouncer, which cannot resolve cluster
+  # DNS; nothing in the cluster should use it.
+  #
+  # `crowdsec-service`, not `crowdsec-lapi`: the latter is the Deployment and the
+  # pod name, and it answers on no Services — a URL built from it fails in Node
+  # as `fetch failed`, which the app reports as "Authentication failed", so the
+  # first version of this file looked like a wrong password.
+  CONFIG_INSTANCES_0_ID: "default"
+  CONFIG_INSTANCES_0_NAME: "CrowdSec"
+  CONFIG_INSTANCES_0_LAPI_URL: "http://crowdsec-service:8080"
+  # The machine (watcher) this UI logs in as. The password is in the
+  # `crowdsec-web-ui` Secret, created by hand — see the chart README for the
+  # `cscli machines add` command that issues it.
+  CONFIG_INSTANCES_0_LAPI_AUTH_USERNAME: "crowdsec-web-ui"
+
+  # The app's own OIDC against authentik. The issuer is the public name: the
+  # browser is sent there, and the pod reads its discovery document through the
+  # same DNS. The client id and redirect are fixed public strings.
+  CONFIG_AUTH_OIDC_ISSUER_URL: "https://authentik.kub.home.ashudev.com/application/o/crowdsec-web-ui/"
+  CONFIG_AUTH_OIDC_CLIENT_ID: "crowdsec-web-ui"
+  CONFIG_AUTH_OIDC_SCOPE: "openid profile email"
+  # authentik's profile scope carries `groups`, which is what maps a person to a
+  # role here.
+  CONFIG_AUTH_OIDC_GROUPS_CLAIM: "groups"
+  CONFIG_AUTH_OIDC_ADMIN_GROUPS_0: "authentik Admins"
+  # Anyone authentik lets through but this list does not name gets no account.
+  CONFIG_AUTH_OIDC_UNMATCHED_ROLE: "deny"
+  # Straight to authentik, no button press. `/login?local=1` is the way past it.
+  CONFIG_AUTH_OIDC_AUTO_LOGIN: "true"
+  # One login source. Break-glass: set this to "true" and restart; the password
+  # form comes back and the first sign-in creates a local administrator.
+  CONFIG_AUTH_PASSWORD_LOGIN_ENABLED: "false"
+
+  # The audit line is the operational record the log level note refers to.
+  CONFIG_AUDIT_ENABLED: "true"
+
+# -- Variables sourced from a Secret, as `{ name, valueFrom }`. Kept separate so
+# a secret can never be pasted into the plain map above by accident.
+extraEnv:
+  - name: CONFIG_INSTANCES_0_LAPI_AUTH_PASSWORD
+    valueFrom:
+      secretKeyRef:
+        name: crowdsec-web-ui
+        key: lapi-password
+  - name: CONFIG_AUTH_OIDC_CLIENT_SECRET
+    valueFrom:
+      secretKeyRef:
+        name: crowdsec-web-ui
+        key: oidc-client-secret
+
+# -- Bulk `envFrom` sources, usually `secretRef`. Rarely needed: prefer
+# `extraEnv` so each secret key is explicit in the manifest.
+envFrom: []
+
+# -- Additional volumes, rendered verbatim into the pod spec.
+volumes: []
+
+# -- Additional volume mounts, rendered verbatim into the container.
+volumeMounts: []
+
+# -- General catalogue: the LAPI it reads is on `nas`, but this pod is a viewer
+# with no state of its own beyond its claim, and `nuc0` is where the catalogue's
+# small apps live.
+nodeSelector:
+  kubernetes.io/hostname: nuc0
+
+tolerations: []
+
+affinity: {}
+
+# Unmeasured until the first night on the cluster: there is no history to size
+# from. A Node process with three SQLite files, so the request is the smallest
+# honest reservation and the limit leaves room for the initial alert sync
+# (chunked, 12h per request) and for SQLite's page cache. The chart-sizing page
+# gets the measured figure after that night.
+resources:
+  requests:
+    cpu: 20m
+    memory: 128Mi
+  limits:
+    memory: 512Mi
+
+# The app serves one unauthenticated endpoint, `/api/health`, which answers as
+# soon as the HTTP listener is up. It does not report the LAPI: a LAPI outage
+# must leave the UI running and showing the sync error, not restarting it in a
+# loop. So liveness and readiness share it and the README says why. The startup
+# probe covers the first boot's schema creation.
+probes:
+  startup:
+    enabled: true
+    path: /api/health
+    periodSeconds: 5
+    timeoutSeconds: 5
+    failureThreshold: 24
+  liveness:
+    enabled: true
+    path: /api/health
+    initialDelaySeconds: 20
+    periodSeconds: 30
+    timeoutSeconds: 5
+    failureThreshold: 3
+  readiness:
+    enabled: true
+    path: /api/health
+    initialDelaySeconds: 10
+    periodSeconds: 15
+    timeoutSeconds: 5
+    failureThreshold: 3

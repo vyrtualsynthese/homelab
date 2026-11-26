@@ -149,11 +149,10 @@ nfs:
     # weekly duplicate limit.
     - tag: traefik
       path: /mnt/storage/traefik
-    # 428.7 MB → 181.2. The live qBittorrent mounts this at /config and writes BT_backup here:
-    # the seed list and resume data. Logs, GeoIP data and an old web UI copy are not data.
-    - tag: qbittorrent-config
-      path: /mnt/storage/nfs/qbittorrent-config
-      exclude: ["logs", "log", "geoip", "ui.prev", ".cache", ".npm"]
+# qBittorrent's config left this stream on 2026-11-25, when the claim moved from the
+# `nfs-qbittorrent-config` export to `local-path` (board card 758). Its row is under `nodes`,
+# `nas`, where the pod runs since 2026-11-25; the export itself was retired with its release
+# (card 769) and is backed up by nothing.
 
 nodes:
   nas:
@@ -177,6 +176,18 @@ nodes:
       # The LAPI's copy of `/etc/crowdsec`: the parsers and scenarios its hub update installed, plus
       # the local configuration. Size follows the row above.
       - {claim: crowdsec-config-pvc, namespace: security, kind: files}
+      # 1.1 KB. The VPN client's keys and config.
+      - {claim: qbittorrent-vpn-config, namespace: media-stack, kind: files}
+      # 302.7 MB on the claim, 47.8 of it worth keeping, measured on 2026-11-26. The claim has
+      # moved twice: to this node's `local-path` on 2026-11-25 (card 758), and it follows the
+      # qBittorrent pod from `streaming` to `nas` on 2026-11-25, because a claim is bound to the
+      # node that first mounts it. `BT_backup/` also held a 129.8 MB copy of `/config` dated
+      # 2022, whose 44 `.torrent` files matched no torrent in the client; it was deleted on
+      # 2026-11-26 (card 778), which is where the 435.0 MB this row used to report went.
+      # `qBittorrent/BT_backup/` is one `.torrent` and one `.fastresume` per torrent: the seed
+      # list and the resume data, which no rebuild can recreate. Logs, the GeoIP database, the
+      # VueTorrent archive and the old web UI copy are rebuilt from the image or the internet.
+      - {claim: qbittorrent-config, namespace: media-stack, kind: files, exclude: ["logs", "log", "geoip", "ui.prev", ".cache", ".npm", "vuetorrent-*.zip"]}
 
   nuc0:
     schedule: "0 5 * * *"
@@ -198,6 +209,10 @@ nodes:
       # 20.8 MB when measured on 2026-11-20; the snapshot of 2026-11-22 holds no file from this
       # claim at all, so whatever the application keeps in it is already excluded or gone.
       - {claim: filebrowser-filebrowser-quantum-data, namespace: filebrowser, kind: files, exclude: ["cache/"]}
+      # CrowdSec's web UI: users, settings and a 168h mirror of the LAPI's alerts, so not
+      # just configuration. `cache.db` refills from the LAPI and is left out; `state.db`
+      # and `statistics.db` are the row. Size measured after the first night.
+      - {claim: crowdsec-web-ui-config, namespace: security, kind: sqlite, exclude: ["cache.db*"]}
       - {claim: koillection-conf, namespace: koillection, kind: files}
       # 100 KB. index-v* rebuilds itself by rescan.
       - {claim: syncthing-config, namespace: syncthing, kind: files, exclude: ["index-v*"]}
@@ -239,8 +254,6 @@ nodes:
       - {claim: tautulli-config, namespace: media-stack, kind: sqlite, exclude: ["cache/", "logs/", "backups/"]}
       # 25.7 MB → 0.9: the interface bundle is rebuilt from the image.
       - {claim: maintainerr-config, namespace: media-stack, kind: sqlite, exclude: ["ui/", "logs/"]}
-      # 1.1 KB. The VPN client's keys and config; the seed state is on the NFS export below.
-      - {claim: qbittorrent-vpn-config, namespace: media-stack, kind: files}
       # 7 663.7 MB on disk → 350.7 MB in the snapshot, 350.6 of it the staged databases: the
       # claim itself keeps 26 KB of configuration. What is worth restoring is the library
       # database (collections, playlists, watch state, manual matches) and those files;

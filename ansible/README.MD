@@ -32,6 +32,10 @@ account, so a run that includes them answers `unreachable` for those two hosts a
 Use `--limit cluster` for the drift report until the reflash has put the account on both (card #481),
 and read an `unreachable` there as this state, not as drift.
 
+That silence is not a claim that they match. What `accounts` owns on the nodes — key-only SSH, no
+X11 forwarding, no `%admins` grant, no cloud-init `ubuntu` grant — `pi/hosts-pi.sh` owns on the two
+Pis, and `hack/tests/test_pi_script.py` compares the two records so a change to one alone fails.
+
 ```bash
 ansible-playbook playbooks/site.yml --check --diff --limit nuc0
 ansible-playbook playbooks/site.yml --limit nuc0
@@ -78,12 +82,14 @@ The trade — passwordless root for one named identity instead of a group — is
 | Role | Hosts | What it changes |
 |---|---|---|
 | `baseline` | all | marks the host as managed from here |
-| `accounts` | all | removes the `%admins ALL=(ALL) NOPASSWD: ALL` grant, the group, cloud-init's grant for the retired `ubuntu` account and that orphan home, closes password logins, turns X11 forwarding off |
+| `accounts` | all six; the two Pis through `pi/hosts-pi.sh` until they are reflashed | removes the `%admins ALL=(ALL) NOPASSWD: ALL` grant, the group, cloud-init's grant for the retired `ubuntu` account and that orphan home, closes password logins, turns X11 forwarding off |
 | `packages` | all | removes what `inventory/host_vars/<host>.yml` names, after resolving each pattern against dpkg |
 | `system` | all | one time zone, two kernels kept (the running one and the newest other), `apt autoremove --purge`, the `rc` residue purged |
+| `units` | `cluster` | no swap on the nodes, the failed state of a unit whose file is gone cleared, the leftover `rc.local` removed, `wait-online` pointed at the interface the host has |
 | `firewall` | all | `ufw`, default deny in, the K3s and NFS ports opened to the addresses that use them |
+| `disks` | `storage` | the nine data mounts, `nofail` with a 30 s device timeout, so a missing disk cannot stop the host reaching `sshd`; `/` and `/boot/efi` stay strict |
 | `union` | `storage` | the mergerfs pool's line in `/etc/fstab` and its two runtime options: `moveonenospc`, `minfreespace` |
-| `nfs` | `storage` | the eight exports the cluster mounts, root squashed, `sync` |
+| `nfs` | `storage` | the seven exports the cluster mounts, root squashed, `sync` |
 | `snapraid` | `storage` | a nightly sync from cron, without the Python 2 runner it used to call |
 
 The roles are ordered in `site.yml`: `packages` before `system`, because the removals create orphans
@@ -208,23 +214,37 @@ shows the undo, and — only then — uploads both files and adds a one-shot sch
 undo at the device clock's now plus the window:
 
 ```bash
-cd ansible
-./switches/switch-change.sh --target crs326 --change switches/changes/<your-change>.rsc --dry-run
-./switches/switch-change.sh --target crs326 --change switches/changes/<your-change>.rsc
+install -m 0640 ansible/switches/changes/<your-change>.rsc \
+  /var/lib/switch-change/inbox/<your-change>.rsc
+sudo -u netcfg /usr/local/sbin/switch-apply --target crs326 \
+  --change /var/lib/switch-change/inbox/<your-change>.rsc --dry-run
+sudo -u netcfg /usr/local/sbin/switch-apply --target crs326 \
+  --change /var/lib/switch-change/inbox/<your-change>.rsc
 ```
+
+The gate copies the change out of the inbox and hands the script that copy, so a refusal from the
+script names the staged file rather than the one you wrote. Running `./switches/switch-change.sh`
+directly is the same script with no gate: it is for `netcfg` at this machine, because the key is that
+account's, and not for the agent's shell.
 
 `--dry-run` prints the undo and writes nothing; `--arm-only` arms the undo for a change applied by
 hand from Winbox; `--window` defaults to `10m` with a one-hour ceiling. The change file is refused
 before anything is written when a line cannot be inverted, and any line under `/system scheduler`,
-`/user`, `/system reset`, `/system backup` or a bare `/import` is refused outright: those could
+`/system reset`, `/system reboot`, `/system backup`, `/system upgrade`, `/user`, `/file` or a bare
+`/import` is refused outright: those could
 remove the timer, the undo file or the account that cancels it. What a change file looks like is
 `switches/changes/README.md`; the procedure, the exit codes and what a fired undo means are
 [`docs/runbooks/switch-change.md`](../docs/runbooks/switch-change.md).
 
-It signs in as `deploy` with `~/.ssh/switches-deploy` — the account card #485 creates, holding
-`read`, `write`, `ssh` and `test`. The binary backup needs `policy` on top of that, which #485 does
-not grant: a refused backup prints `no binary fallback for this run` and the run carries on armed,
-because the textual undo does not depend on it.
+It is run through the gate `/usr/local/sbin/switch-apply`, as the `netcfg` account, which holds the
+key at `/home/netcfg/.ssh/switch-deploy`: the agent's shell runs the command and never reads the key.
+The script then signs in on the switch as `deploy` — the account card #485 created, holding `read`,
+`write`, `ssh` and `test`. Installing the gate, the digest it holds the script to and the sudoers rule
+that allows the one command are in
+[`docs/runbooks/switch-access.md`](../docs/runbooks/switch-access.md). The binary backup needs
+`policy` on top of that, which #485 does not grant: a refused backup prints
+`no binary fallback for this run` and the run carries on armed, because the textual undo does not
+depend on it.
 
 Unlike the collector it inherits its shape from, this script writes to a switch: two `.rsc` files, one
 scheduler entry, and the backup when the account may take one. Everything it writes is named after the

@@ -254,7 +254,7 @@ Two things this page teaches by being measured rather than assumed:
   the head can tell the difference:
 
 ```bash
-curl -sG http://prometheus.kub.local/api/v1/query --data-urlencode \
+curl -sG -u "ops:$PROMETHEUS_AUTH_PASSWORD" http://prometheus.kub.local/api/v1/query --data-urlencode \
   'query=count({job="kubernetes-nodes-cadvisor", __name__=~"container_(tasks_state|threads|file_descriptors)"})'
 # no result = the drop is working; a number = the regex matches nothing
 ```
@@ -318,7 +318,7 @@ these numbers are in [`dashboards.md`](dashboards.md).
 Verify rather than trust:
 
 ```bash
-curl -s http://prometheus.kub.local/api/v1/status/flags | grep retention
+curl -s -u "ops:$PROMETHEUS_AUTH_PASSWORD" http://prometheus.kub.local/api/v1/status/flags | grep retention
 curl -sk -H "Authorization: Bearer $GRAFANA_TOKEN" \
   "https://grafana.kub.local/api/datasources/proxy/uid/P8E80F9AEF21F6940/config" | sed -n '/limits_config:/,/^[a-z]/p'
 ```

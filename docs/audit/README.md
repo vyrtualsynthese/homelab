@@ -32,6 +32,7 @@ decision — the audit reads the same in all three cases.
 | [Observability and storage](observability-storage.md) | The Prometheus, Grafana, Loki and exporter inventory as it stood, the abandoned Longhorn layer and what the data loss took, the NFS provisioners, and the backup story |
 | [Media stack (2026-11-18)](media-stack-2026-11-18.md) | The 21 `media-stack` charts against the chart contract: gate coverage per route, probes, sizing, secrets, exporter health, and the stale documents the pass corrected |
 | [Traefik (2026-11-21)](traefik-2026-11-21.md) | The Traefik install the day ownership moved from the K3s addon to the repository: readiness for v3, the dashboard's exposure, metric and alert coverage, and the eighteen orphaned certificates in the store |
+| [The Livebox (2026-11-26)](livebox-2026-11-26.md) | The house router's own port-forward table, WAN address and DHCP device list, read from the box: twelve forwards, four of them stale and removed the same day, and the answers to the exposure questions the network page and the security baseline had to leave open |
 
 ## How to read one
 
