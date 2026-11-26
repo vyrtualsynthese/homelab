@@ -4,3 +4,10 @@
 # running kernel boots with. The system role's kernel retention is what clears
 # them, and that role reads the running kernel before it marks anything.
 packages_absent: []
+
+# `systemd-networkd-wait-online` times out at every boot here. cloud-init's
+# netplan marks `eth0` `optional: true`, which renders `RequiredForOnline=no`, so
+# the unit waits for an interface nothing marks as required. Naming the one
+# interface the host has gives it something to wait for: the same check returns
+# in 0.05 s instead of the 120 s timeout. `roles/units` writes the drop-in.
+units_wait_online_interface: eth0

@@ -20,3 +20,9 @@ packages_absent:
 # Never in this list: nvidia-*, nvidia-srv, nvidia-container-toolkit and
 # cuda-*-13-2. The driver is what the GPU workloads run on; a test fails if an
 # entry here starts with `nvidia`.
+
+# `/etc/rc.local` here has no shebang, so systemd answers `Exec format error` at
+# every boot and the unit sits in `failed` for ever. The file is the leftover:
+# `ipconfig.service` already sets the same 10G interface's transmit queue length
+# and succeeded at the same boot, so `roles/units` removes the duplicate.
+units_rc_local_absent: true

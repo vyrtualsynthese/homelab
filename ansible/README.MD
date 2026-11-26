@@ -81,6 +81,7 @@ The trade — passwordless root for one named identity instead of a group — is
 | `accounts` | all | removes the `%admins ALL=(ALL) NOPASSWD: ALL` grant, the group, cloud-init's grant for the retired `ubuntu` account and that orphan home, closes password logins, turns X11 forwarding off |
 | `packages` | all | removes what `inventory/host_vars/<host>.yml` names, after resolving each pattern against dpkg |
 | `system` | all | one time zone, two kernels kept (the running one and the newest other), `apt autoremove --purge`, the `rc` residue purged |
+| `units` | `cluster` | no swap on the nodes, the failed state of a unit whose file is gone cleared, the leftover `rc.local` removed, `wait-online` pointed at the interface the host has |
 | `firewall` | all | `ufw`, default deny in, the K3s and NFS ports opened to the addresses that use them |
 | `disks` | `storage` | the nine data mounts, `nofail` with a 30 s device timeout, so a missing disk cannot stop the host reaching `sshd`; `/` and `/boot/efi` stay strict |
 | `union` | `storage` | the mergerfs pool's line in `/etc/fstab` and its two runtime options: `moveonenospc`, `minfreespace` |

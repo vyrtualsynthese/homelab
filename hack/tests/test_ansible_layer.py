@@ -1043,3 +1043,145 @@ def test_the_disks_are_owned_before_the_union_is_made_over_them():
     site = (ANSIBLE / "playbooks/site.yml").read_text()
     assert "- role: disks" in site
     assert site.index("- role: disks") < site.index("- role: union")
+
+
+def test_the_units_role_is_wired_for_the_cluster_nodes_only():
+    """The failed units are the four Kubernetes nodes' problem. The two edge Pis
+    run their own compose stacks and are not in scope."""
+    site = (ANSIBLE / "playbooks/site.yml").read_text()
+    assert "- role: units" in site
+    tasks = (ANSIBLE / "roles/units/tasks/main.yml").read_text()
+    assert "'cluster' in group_names" in tasks
+
+
+def test_the_cluster_nodes_hold_no_swap():
+    """`nas` and `nuc0` carried a line to a `/swap.img` that had been deleted,
+    `streaming` a working 8G file, and `rbp2` none: three answers to one question.
+    The role gives it one — the nodes do not swap — and refuses to end a run
+    while a device is still on."""
+    tasks = yaml.safe_load((ANSIBLE / "roles/units/tasks/main.yml").read_text())
+    commands = [task["ansible.builtin.command"] for task in tasks
+                if isinstance(task, dict) and "ansible.builtin.command" in task]
+    assert any("swapoff" in str(command) for command in commands), (
+        "a live swap device is turned off now, not left for the next boot"
+    )
+
+    lines = [task["ansible.builtin.lineinfile"] for task in tasks
+             if isinstance(task, dict) and "ansible.builtin.lineinfile" in task]
+    swap_line = next((line for line in lines if "swap" in str(line.get("regexp"))), None)
+    assert swap_line, "the fstab line that keeps generating the failed unit is not removed"
+    assert swap_line["state"] == "absent"
+    assert swap_line["backup"] is True, "the previous table is what a rollback restores"
+
+    deletes = [task["ansible.builtin.file"] for task in tasks
+               if isinstance(task, dict)
+               and task.get("ansible.builtin.file", {}).get("state") == "absent"]
+    assert any(str(entry["path"]) == "{{ units_swapfile }}" for entry in deletes), (
+        "the file the line pointed at goes too, or 8G sits there for nobody"
+    )
+    assert any("isreg" in str(task) for task in tasks), (
+        "a path that is a block device is refused, never deleted as a file"
+    )
+
+    reads = [task for task in tasks
+             if isinstance(task, dict) and task.get("register") == "units_swap_after"]
+    assert reads and "swapon" in reads[0]["ansible.builtin.command"]
+    asserts = [task["ansible.builtin.assert"]["that"] for task in tasks
+               if isinstance(task, dict) and "ansible.builtin.assert" in task]
+    assert any("units_swap_after" in str(assertion) for assertion in asserts), (
+        "the run proves the node stopped swapping instead of assuming it"
+    )
+
+
+def test_a_failed_unit_with_no_file_left_is_cleared_not_kept_red():
+    """`snap-core20-2769.mount` names a snap revision that is gone and the forced
+    first sync is a transient unit: neither can be restarted, and both sit in
+    `systemctl --failed` for ever. Only those are cleared. A unit whose file
+    still exists and fails is a real failure, and the role leaves it visible."""
+    tasks = yaml.safe_load((ANSIBLE / "roles/units/tasks/main.yml").read_text())
+    read = next(task for task in tasks
+                if isinstance(task, dict) and task.get("register") == "units_failed")
+    assert "--failed" in read["ansible.builtin.command"]
+    assert "--quiet" in read["ansible.builtin.command"], (
+        "`0 loaded units listed` is printed without it, and would be read as a unit name"
+    )
+
+    clear = next(task for task in tasks
+                 if isinstance(task, dict)
+                 and "reset-failed" in str(task.get("ansible.builtin.command", ""))
+                 and "not-found" in str(task.get("when", "")))
+    condition = str(clear["when"])
+    assert "not-found" in condition, "a unit whose file is gone is cleared"
+    assert "Transient=yes" in condition, "a unit that never comes back is cleared"
+    assert "loaded" not in condition.replace("not-found", ""), (
+        "a unit that still exists is never cleared"
+    )
+
+
+def test_the_rc_local_leftover_is_removed_from_the_host_that_has_one():
+    """`streaming`'s `/etc/rc.local` has no shebang, so systemd answers `Exec
+    format error` at every boot — while `ipconfig.service` already sets the same
+    queue length and succeeded at the same boot."""
+    host = load("inventory/host_vars/streaming.yml")
+    assert host["units_rc_local_absent"] is True
+    for other in ("nas", "rbp2"):
+        assert "units_rc_local_absent" not in load(f"inventory/host_vars/{other}.yml"), (
+            f"{other} has no rc.local to remove; a flag there would invent one"
+        )
+
+    tasks = yaml.safe_load((ANSIBLE / "roles/units/tasks/main.yml").read_text())
+    removed = [task["ansible.builtin.file"] for task in tasks
+               if isinstance(task, dict)
+               and task.get("ansible.builtin.file", {}).get("state") == "absent"]
+    paths = {str(entry["path"]) for entry in removed}
+    assert "/etc/rc.local" in paths, "the file systemd cannot execute is left in place"
+    assert "/etc/systemd/system/rc-local.service" in paths, (
+        "the unit file the image installed goes with it"
+    )
+    guarded = [task for task in tasks
+               if isinstance(task, dict)
+               and task.get("ansible.builtin.file", {}).get("path") == "/etc/rc.local"]
+    assert "units_rc_local_absent" in str(guarded[0]["when"]), (
+        "the removal is declared per host, never for every node"
+    )
+
+    resets = [task for task in tasks
+              if isinstance(task, dict)
+              and "reset-failed rc-local.service" in str(task.get("ansible.builtin.command", ""))
+              and "units_rc_local_absent" in str(task.get("when"))]
+    assert resets, (
+        "Ubuntu's own rc-local.service is still loaded from /lib, so removing the "
+        "script leaves the old failure on the list until it is cleared by name"
+    )
+
+
+def test_wait_online_waits_for_the_interface_the_host_has():
+    """cloud-init's netplan marks `rbp2`'s only interface `optional: true`, which
+    renders `RequiredForOnline=no`. The unit then waits for an interface that
+    nothing requires and times out, every boot. Naming the interface is enough:
+    with it, the check returns in 0.05 s."""
+    host = load("inventory/host_vars/rbp2.yml")
+    assert host["units_wait_online_interface"] == "eth0"
+    for other in ("nas", "streaming"):
+        assert "units_wait_online_interface" not in load(f"inventory/host_vars/{other}.yml"), (
+            f"{other} does not carry this failure; the drop-in is per host"
+        )
+
+    tasks = yaml.safe_load((ANSIBLE / "roles/units/tasks/main.yml").read_text())
+    copies = [task["ansible.builtin.copy"] for task in tasks
+              if isinstance(task, dict) and "ansible.builtin.copy" in task]
+    dropin = next(copy for copy in copies
+                  if "systemd-networkd-wait-online.service.d" in str(copy["dest"]))
+    assert "--interface={{ units_wait_online_interface }}" in dropin["content"], (
+        "the unit is told which interface to wait for"
+    )
+    assert "ExecStart=\n" in dropin["content"] or dropin["content"].count("ExecStart=") == 2, (
+        "a drop-in cannot add to the vendor ExecStart; the empty assignment resets it"
+    )
+    started = [task["ansible.builtin.systemd"] for task in tasks
+               if isinstance(task, dict)
+               and task.get("ansible.builtin.systemd", {}).get("name")
+               == "systemd-networkd-wait-online.service"]
+    assert started and started[0]["state"] == "started", (
+        "the unit is started once told what to wait for, so the fix is proved"
+    )
