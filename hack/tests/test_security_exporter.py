@@ -398,7 +398,8 @@ class AuthentikTests(unittest.TestCase):
         for outcome in ("success", "failure", "other"):
             self.assertIn(f'outcome="{outcome}"', after)
         self.assertIn('homelab_authentik_signins_24h{outcome="failure"} 2', after)
-        # An address is never a label: the per-address view is a Loki query.
+        # An address is never a label: the per-address view carries a pseudonym,
+        # and the plain address stays in authentik's event log and the gated store.
         self.assertNotIn("address=", after)
         self.assertNotIn("client_ip=", after)
 
@@ -411,6 +412,116 @@ class AuthentikTests(unittest.TestCase):
             exporter._created({"created": "2026-11-25T11:59:00"}),
             datetime(2026, 11, 25, 11, 59, tzinfo=timezone.utc),
         )
+
+
+class SourceTests(unittest.TestCase):
+    """The per-source view: a pseudonym in the label, the plain address nowhere.
+
+    The sign-in families count outcomes over the whole window, which is exactly
+    what stops a rule from joining "twenty failures from one address" to "the
+    sign-in that worked". Prometheus answers unauthenticated on the LAN, so the
+    address itself cannot be the label; a salted hash is, and the salt is what
+    keeps the label from being a rainbow table away from the address. These tests
+    pin the properties the join depends on: one address is one stable key, a
+    repeated failure is what puts a source on the page, and the page never
+    carries the address.
+    """
+
+    def load(self):
+        import importlib.util
+        path = ROOT / "cluster/helm/security/security-exporter/files/exporter.py"
+        spec = importlib.util.spec_from_file_location("security_exporter", path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+
+    def failed(self, address, times=3, action="login_failed"):
+        return [{"action": action, "client_ip": address} for _ in range(times)]
+
+    def test_one_address_is_one_stable_pseudonym(self):
+        exporter = self.load()
+        key = exporter.source_key("203.0.113.9", "salt")
+        self.assertEqual(key, exporter.source_key("203.0.113.9", "salt"))
+        self.assertNotEqual(key, exporter.source_key("203.0.113.9", "another-salt"))
+        self.assertNotEqual(key, exporter.source_key("203.0.113.10", "salt"))
+        self.assertNotIn("203.0.113.9", key)
+        self.assertRegex(key, r"^[0-9a-f]{16}$")
+
+    def test_a_repeated_failure_publishes_both_outcomes_for_its_source(self):
+        # The join the rule makes: one key, two outcomes, both in the same window.
+        exporter = self.load()
+        events = self.failed("203.0.113.9") + [{"action": "login", "client_ip": "203.0.113.9"}]
+        counts, omitted = exporter.count_sources(events, "salt")
+        key = exporter.source_key("203.0.113.9", "salt")
+        self.assertEqual(counts[(key, "failure")], 3)
+        self.assertEqual(counts[(key, "success")], 1)
+        self.assertEqual(omitted, 0)
+
+    def test_one_or_two_failures_are_a_typo_and_stay_off_the_page(self):
+        # Measured on 2026-11-14: three failures then a success, 30 seconds apart,
+        # all from the operator's own browser. The floor is what keeps a retyped
+        # password out of the family a rule reads.
+        exporter = self.load()
+        counts, omitted = exporter.count_sources(self.failed("203.0.113.9", 2), "salt")
+        self.assertEqual(counts, {})
+        self.assertEqual(omitted, 0)
+        counts, _ = exporter.count_sources(self.failed("203.0.113.9", 3), "salt")
+        self.assertEqual(len(counts), 2)
+
+    def test_the_busiest_sources_are_kept_and_the_rest_are_counted(self):
+        # A distribute-and-pray spray can name hundreds of addresses in one window.
+        # The cap keeps the page small; the omitted count is what stops a capped
+        # page from reading like a complete one.
+        exporter = self.load()
+        events = []
+        for n in range(25):
+            events += self.failed(f"198.51.100.{n}", 3 + n)
+        counts, omitted = exporter.count_sources(events, "salt")
+        self.assertEqual(omitted, 5)
+        self.assertEqual(len({source for source, _ in counts}), 20)
+        busiest = exporter.source_key("198.51.100.24", "salt")
+        self.assertIn((busiest, "failure"), counts)
+        quietest = exporter.source_key("198.51.100.0", "salt")
+        self.assertNotIn((quietest, "failure"), counts)
+
+    def test_an_event_without_an_address_is_skipped(self):
+        exporter = self.load()
+        events = self.failed("203.0.113.9") + [{"action": "login_failed", "client_ip": ""}]
+        counts, _ = exporter.count_sources(events, "salt")
+        self.assertEqual(len({source for source, _ in counts}), 1)
+
+    def test_the_page_carries_the_pseudonyms_and_never_the_address(self):
+        exporter = self.load()
+        events = self.failed("203.0.113.9") + [{"action": "login", "client_ip": "203.0.113.9"}]
+        counts, omitted = exporter.count_sources(events, "salt")
+        page = exporter.render(exporter.Snapshot(
+            73, 0, 9, 9, 1795000000.0,
+            exporter.SignIns(
+                {"success": 1, "failure": 3, "other": 0},
+                {"success": 1, "failure": 3, "other": 0},
+                exporter.Sources(counts, omitted),
+            ),
+        ))
+        key = exporter.source_key("203.0.113.9", "salt")
+        self.assertIn(
+            f'homelab_authentik_signins_15m_by_source{{source="{key}",outcome="failure"}} 3', page
+        )
+        self.assertIn(
+            f'homelab_authentik_signins_15m_by_source{{source="{key}",outcome="success"}} 1', page
+        )
+        self.assertIn("# HELP homelab_authentik_signins_by_source_omitted ", page)
+        self.assertNotIn("203.0.113.9", page)
+
+    def test_a_source_with_no_salt_publishes_nothing(self):
+        # No salt means no join and no pseudonym; a silently weaker hash is worse
+        # than an absent family, which is the same rule the token follows.
+        exporter = self.load()
+        page = exporter.render(exporter.Snapshot(
+            73, 0, 9, 9, 1795000000.0,
+            exporter.SignIns({"success": 1, "failure": 3, "other": 0}, None),
+        ))
+        self.assertIn('homelab_authentik_signins_15m{outcome="failure"} 3', page)
+        self.assertNotIn("homelab_authentik_signins_15m_by_source", page)
 
 
 class WiringTests(unittest.TestCase):
@@ -516,6 +627,34 @@ class WiringTests(unittest.TestCase):
             with self.assertRaises(RuntimeError):
                 exporter.measure(set(), now=self.now(), previous=None, opener=first_narrow_then_fail)
 
+    def test_a_salt_publishes_the_per_source_family_and_its_absence_does_not(self):
+        # The salt is a Secret key read once per poll, like the token. Without it
+        # the two aggregate windows still publish: a missing salt must cost the
+        # per-source view, not the sign-in count the existing rule reads.
+        exporter = self.load()
+
+        def opener(request, timeout=None):
+            return self.Answer({"results": [
+                {"action": "login_failed", "created": "2026-11-25T11:59:00Z",
+                 "client_ip": "203.0.113.9"}],
+                "pagination": {"next": None}})
+
+        environment = {"AUTHENTIK_TOKEN": "token", "AUTHENTIK_ADDRESS_SALT": "salt"}
+        with unittest.mock.patch.dict(os.environ, environment), \
+             unittest.mock.patch.object(exporter, "fetch", return_value={"items": []}):
+            salted = exporter.measure(set(), now=self.now(), opener=opener)
+        self.assertIsNotNone(salted.signins.sources)
+        self.assertIn("homelab_authentik_signins_15m_by_source", exporter.render(salted))
+
+        environment["AUTHENTIK_ADDRESS_SALT"] = ""
+        with unittest.mock.patch.dict(os.environ, environment), \
+             unittest.mock.patch.object(exporter, "fetch", return_value={"items": []}):
+            plain = exporter.measure(set(), now=self.now(), opener=opener)
+        self.assertIsNone(plain.signins.sources)
+        page = exporter.render(plain)
+        self.assertNotIn("homelab_authentik_signins_15m_by_source", page)
+        self.assertIn('homelab_authentik_signins_15m{outcome="failure"} 1', page)
+
     @unittest.skipUnless(shutil.which("helm"), "helm is not installed")
     def test_the_chart_keeps_the_token_optional(self):
         # Losing `optional: true` turns the no-token state from "healthy,
@@ -530,3 +669,25 @@ class WiringTests(unittest.TestCase):
         containers = documents[0]["spec"]["template"]["spec"]["containers"]
         token = next(e for e in containers[0]["env"] if e["name"] == "AUTHENTIK_TOKEN")
         self.assertIs(token["valueFrom"]["secretKeyRef"]["optional"], True)
+
+    @unittest.skipUnless(shutil.which("helm"), "helm is not installed")
+    def test_the_chart_reads_the_salt_from_the_same_secret_and_keeps_it_optional(self):
+        # The salt is a pseudonym secret, so it is a Secret key and never a chart
+        # value: a salt in git is the same as no salt. It is optional for the same
+        # reason the token is — a missing key costs the per-source family, not the
+        # pod.
+        import subprocess
+        chart = ROOT / "cluster/helm/security/security-exporter"
+        rendered = subprocess.run(
+            ["helm", "template", "test", str(chart), "-f", str(chart / "values.yaml")],
+            capture_output=True, text=True, check=True).stdout
+        values = yaml.safe_load((chart / "values.yaml").read_text())["securityExporter"]
+        documents = [d for d in yaml.safe_load_all(rendered) if d and d.get("kind") == "Deployment"]
+        containers = documents[0]["spec"]["template"]["spec"]["containers"]
+        salt = next(e for e in containers[0]["env"] if e["name"] == "AUTHENTIK_ADDRESS_SALT")
+        reference = salt["valueFrom"]["secretKeyRef"]
+        self.assertEqual(reference["name"], values["authentik"]["secretName"])
+        self.assertEqual(reference["key"], values["authentik"]["saltKey"])
+        self.assertIs(reference["optional"], True)
+        self.assertNotIn("value", salt)
+        self.assertNotIn("salt", {k.lower() for k in values if k != "authentik"})

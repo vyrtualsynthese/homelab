@@ -651,5 +651,91 @@
     "record": null,
     "for": "5m",
     "keep_firing_for": "0s"
+  },
+  {
+    "id": 77,
+    "uid": "fg5ezjywuji0we",
+    "orgID": 1,
+    "folderUID": "homelab",
+    "ruleGroup": "homelab-core-fast",
+    "title": "AuthentikSignInSuccessAfterBurst",
+    "condition": "C",
+    "data": [
+      {
+        "refId": "A",
+        "queryType": "",
+        "relativeTimeRange": {
+          "from": 900,
+          "to": 0
+        },
+        "datasourceUid": "PBFA97CFB590B2093",
+        "model": {
+          "editorMode": "code",
+          "expr": "(homelab_authentik_signins_15m_by_source{outcome=\"failure\"} > 20) and on(source) (homelab_authentik_signins_15m_by_source{outcome=\"success\"} > 0)",
+          "instant": true,
+          "intervalMs": 1000,
+          "maxDataPoints": 43200,
+          "range": false,
+          "refId": "A"
+        }
+      },
+      {
+        "refId": "C",
+        "queryType": "",
+        "relativeTimeRange": {
+          "from": 0,
+          "to": 0
+        },
+        "datasourceUid": "__expr__",
+        "model": {
+          "conditions": [
+            {
+              "evaluator": {
+                "params": [
+                  0
+                ],
+                "type": "gt"
+              },
+              "operator": {
+                "type": "and"
+              },
+              "query": {
+                "params": [
+                  "A"
+                ]
+              },
+              "reducer": {
+                "type": "last"
+              },
+              "type": "query"
+            }
+          ],
+          "datasource": {
+            "type": "__expr__",
+            "uid": "__expr__"
+          },
+          "expression": "A",
+          "intervalMs": 1000,
+          "maxDataPoints": 43200,
+          "refId": "C",
+          "type": "threshold"
+        }
+      }
+    ],
+    "updated": "2026-11-26T00:35:16Z",
+    "noDataState": "OK",
+    "execErrState": "OK",
+    "annotations": {
+      "description": "The same source that was failing hard got in. A burst alone is noise; a burst that ends in a success is the case the failure count cannot see. `source` is a salted pseudonym, not an address: the address is in authentik's Events page (*Directory > Events*, the sign-in stage) and in the access log in the gated store. If it is the LAN range, read it as a mistyped password that then worked before calling it a compromise.",
+      "summary": "A sign-in succeeded from a source with {{ $value }} failures in 15 minutes"
+    },
+    "labels": {
+      "severity": "critical"
+    },
+    "isPaused": false,
+    "notification_settings": null,
+    "record": null,
+    "for": "5m",
+    "keep_firing_for": "0s"
   }
 ]

@@ -9,7 +9,7 @@ export beside it states, for the same reason (two sources of truth in one folder
 | File | What it holds |
 |---|---|
 | `dashboard.json` | A direct `POST /api/dashboards/db` body: `{dashboard, folderUid: "homelab", overwrite: true}`. Nine panels, uid `homelab-security`, version 9. |
-| `rules.json` | The six security rules, as `GET /api/v1/provisioning/alert-rules` returns them, in that order. Five are in `homelab-core-fast`, `SecurityExposureDrift` in `homelab-core`. `SecurityAttackSustained` was deleted from the database on 2026-11-26 and is no longer in this copy. |
+| `rules.json` | The eight security rules, as `GET /api/v1/provisioning/alert-rules` returns them, in that order. Seven are in `homelab-core-fast`, `SecurityExposureDrift` in `homelab-core`. `SecurityAttackSustained` was deleted from the database on 2026-11-26 and is no longer in this copy; `AuthentikSignInSuccessAfterBurst` was added the same day. |
 
 ## What the nine panels read
 
@@ -58,7 +58,10 @@ wrong.
   request never reaches Traefik, so it has no line in the access log. The exact ban list is
   `cscli decisions list`, and the count is `Bans active`.
 - **Sign-in outcomes carry no address.** The exporter reads authentik's event API and publishes a
-  count per outcome; it never publishes who.
+  count per outcome; it never publishes who. `homelab_authentik_signins_15m_by_source`, added for the
+  success-after-a-burst rule, is not the exception it looks like: its `source` is a salted hash of the
+  address, the salt is a Secret, and the panel still shows no address — reading one back is a lookup,
+  not a field.
 - **The posture tiles are expected constants, not a judgement.** 73 routes, 0 ungated, 9 public hosts
   and 9 privileged controllers were read from the cluster on 2026-11-25. A tile that moves is a change
   to the cluster, and `SecurityExposureDrift` is the rule that says so.
