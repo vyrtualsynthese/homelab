@@ -32,9 +32,10 @@ account, so a run that includes them answers `unreachable` for those two hosts a
 Use `--limit cluster` for the drift report until the reflash has put the account on both (card #481),
 and read an `unreachable` there as this state, not as drift.
 
-That silence is not a claim that they match. What `accounts` owns on the nodes — key-only SSH, no
-X11 forwarding, no `%admins` grant, no cloud-init `ubuntu` grant — `pi/hosts-pi.sh` owns on the two
-Pis, and `hack/tests/test_pi_script.py` compares the two records so a change to one alone fails.
+That silence is not a claim that they match. What `accounts` and `firewall` own on the nodes — key-only
+SSH, no X11 forwarding, no `%admins` grant, no cloud-init `ubuntu` grant, `ufw` with default deny in —
+`pi/hosts-pi.sh` owns on the two Pis, and `hack/tests/test_pi_script.py` compares the two records so a
+change to one alone fails.
 
 ```bash
 ansible-playbook playbooks/site.yml --check --diff --limit nuc0
@@ -86,7 +87,7 @@ The trade — passwordless root for one named identity instead of a group — is
 | `packages` | all | removes what `inventory/host_vars/<host>.yml` names, after resolving each pattern against dpkg |
 | `system` | all | one time zone, two kernels kept (the running one and the newest other), `apt autoremove --purge`, the `rc` residue purged |
 | `units` | `cluster` | no swap on the nodes, the failed state of a unit whose file is gone cleared, the leftover `rc.local` removed, `wait-online` pointed at the interface the host has |
-| `firewall` | all | `ufw`, default deny in, the K3s and NFS ports opened to the addresses that use them |
+| `firewall` | `cluster`; the two Pis through `pi/hosts-pi.sh` | `ufw`, default deny in, the ports each host runs opened to the addresses that use them |
 | `disks` | `storage` | the nine data mounts, `nofail` with a 30 s device timeout, so a missing disk cannot stop the host reaching `sshd`; `/` and `/boot/efi` stay strict |
 | `union` | `storage` | the mergerfs pool's line in `/etc/fstab` and its two runtime options: `moveonenospc`, `minfreespace` |
 | `nfs` | `storage` | the seven exports the cluster mounts, root squashed, `sync` |

@@ -18,7 +18,7 @@ sudo ./hosts-pi.sh restore /mnt/usb/pi rbp1  # copy it back, then verify
 repository prints one line and exits 0.
 
 `setup` and `verify` both need root, and now refuse early without it: they read `/etc/sudoers`, which
-is `0440 root:root`, and they write the SSH policy. `render` needs nothing.
+is `0440 root:root`, they write the SSH policy, and they read and apply `ufw`. `render` needs nothing.
 
 `PI_ROOT` points every verb at another directory instead of `/`, which is how `hack/tests/test_pi_script.py`
 runs them without a Pi:
@@ -44,6 +44,7 @@ PI_ROOT=/tmp/fake-pi ./hosts-pi.sh setup rbp0
 | `/etc/sudoers` | yes, the grant only | removes `%admins ALL=(ALL) NOPASSWD: ALL`; `%sudo` stays as Ubuntu ships it, so the human account keeps a password on sudo. The edit passes `visudo` before it is installed |
 | the `admins` group | yes, its removal | it exists only to carry that grant. Removed after the line, the order `roles/accounts` uses |
 | `/etc/sudoers.d/90-cloud-init-users` | yes, its removal | cloud-init's grant for the `ubuntu` account the image's rename retired: a live passwordless root the moment anything creates that account again |
+| `ufw` | yes | the edge rule set, the default deny incoming and the allow routed the containers need. Rules first, the defaults second, `enable` last |
 | `/home/vronteix/.ssh/authorized_keys` | **no** | the operator's keys: written by the image's `user-data` and, on the cluster nodes, by `roles/accounts`. `setup` reads it and refuses to close password logins when it holds no key |
 | `/etc/hosts` | **no** | cloud-init rewrites it from its own template on every boot (`manage_etc_hosts: true`); its copy already names the host and localhost |
 | Docker's repository and the four packages | yes | a fresh image has no runtime; `setup` installs the pinned set from `download.docker.com` |
@@ -82,6 +83,29 @@ there.
 
 The strings match `roles/accounts`, and `hack/tests/test_pi_script.py` compares them, so a change to
 one record alone fails a test rather than leaving half the fleet on the other.
+
+### The host firewall
+
+`roles/firewall` owns this on the four cluster nodes. The Pis take the same edge rule set through
+`setup`, because the layer cannot reach them. `ufw` had been installed and inactive on both since
+2023: every LAN device reached 22, 53, 80, 443, 5000, 9100, 9323 and 9902, and nothing filtered.
+
+- **Rules first, then the defaults, then `ufw --force enable`.** The reverse order closes the session
+  that is still adding the rule which allows it. Run it from the LAN or the console: 22 is allowed
+  from the LAN only, and `sudo` drops `SSH_CLIENT`, so no guard inside the script can see where you
+  came from.
+- **What is open:** 22, 80, 443 and 53 from the LAN; 53, 80 and 443 from the WireGuard tunnel
+  `10.8.0.0/24`; 9100 and 9323 from the four cluster nodes. 443 is Pi-hole's own HTTPS panel: it
+  runs with `network_mode: host`, so it reaches `INPUT`, and `hack/check_pihole_parity.py` reads it.
+- **`allow routed`, not deny.** Docker's containers egress through `FORWARD`; a deny there takes
+  every one of them, Pi-hole included, off the network.
+- **What ufw never sees:** the published container ports — `5182x/udp` (wg-easy), `8443/tcp`
+  (Caddy) and `9902/tcp` (smartctl-exporter). Docker's DNAT rewrites in `NAT` and `FORWARD` before
+  `INPUT` is consulted, so a ufw rule for them would filter nothing.
+- **The record.** `roles/firewall/vars/main.yml` holds the rule set; this script carries a copy
+  because it runs on the host, and `test_the_pi_and_the_ansible_layer_allow_the_same_ports` compares
+  the commands they resolve to. `verify` reads `ufw status verbose` and `ufw show added`, and names a
+  missing rule, a default that moved, or a firewall that is off.
 
 ### The two Pi-holes are one configuration
 
