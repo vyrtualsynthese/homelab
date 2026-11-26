@@ -38,7 +38,7 @@ local path: no client, no page waiting on a write nothing performs.
 | `qbittorrent-vpn-config` (128Mi) | `local-path`, PV pinned to `streaming` | copied, claim and PV deleted, rebuilt on `nas` |
 | `/downloads` | NFS claim `pvc-nfs-qbittorrent-download-…` | this pod stops using the claim; nothing is copied, the chart mounts the export root as a host path |
 | `pvc-nfs-qbittorrent-download-…` | `nfs-qbittorrent-download` Application | untouched, and the *arrs, unpackerr and FileBrowser keep mounting it |
-| `nfs-qbittorrent-config` export | on `nas`, nothing mounts it | untouched; it stays the day-old rollback copy, retired by a follow-up card |
+| `nfs-qbittorrent-config` export | on `nas`, nothing mounts it | untouched by this move; card 769 retired it afterwards with its Application and its `fsid=11` export line |
 
 A `local-path` claim is a directory on one machine's disk and its volume carries that machine's name,
 so it cannot follow a pod to another node. That is the whole reason for the copy: **both** claims are
@@ -380,7 +380,7 @@ authority.
   rollback.
 - The `ScrapeTargetDown` silence on the qBittorrent exporter runs to 2026-12-09. It comes off when
   this is observed, not before: see [`../qbittorrent-webui-stalls.md`](../qbittorrent-webui-stalls.md).
-- A follow-up card retires the `nfs-qbittorrent-config` export, its Application and its row in
+- Card 769 retires the `nfs-qbittorrent-config` export, its Application and its row in
   `ansible/roles/nfs/templates/exports.j2`.
 
 ## The first run, 2026-11-25 23:41–23:43

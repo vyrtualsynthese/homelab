@@ -399,7 +399,7 @@ def test_exports_drop_mnt_and_squash_root():
     assert "insecure" not in tpl
     assert "root_squash" in tpl
     lines = export_lines()
-    assert len(lines) == 8, f"expected the eight the cluster mounts, got {len(lines)}"
+    assert len(lines) == 7, f"expected the seven the cluster mounts, got {len(lines)}"
     assert not any(line.split()[0] == "/mnt" for line in lines), "/mnt must not be exported"
 
 

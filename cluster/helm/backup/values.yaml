@@ -151,8 +151,8 @@ nfs:
       path: /mnt/storage/traefik
 # qBittorrent's config left this stream on 2026-11-25, when the claim moved from the
 # `nfs-qbittorrent-config` export to `local-path` (board card 758). Its row is under `nodes`,
-# `nas`, where the pod runs since 2026-11-25; the export itself stays on `nas` as the
-# migration's rollback copy, and is backed up by nothing until the follow-up removes both.
+# `nas`, where the pod runs since 2026-11-25; the export itself was retired with its release
+# (card 769) and is backed up by nothing.
 
 nodes:
   nas:
