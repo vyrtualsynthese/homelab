@@ -34,6 +34,18 @@ pihole:
     - pihole-rbp0.kub.local
     - pihole-rbp1.kub.local
 
+  # What those names stand for, written into the pod's own /etc/hosts instead of
+  # asked of cluster DNS. CoreDNS forwards to the node's /etc/resolv.conf, and
+  # nuc0 — the node this pod is pinned to — listed 1.1.1.1 beside the Pi-hole, so
+  # roughly one `*.kub.local` query in three went to Cloudflare and came back
+  # NXDOMAIN: the exporter warned for a minute, recovered, and warned again. The
+  # name stays because the leaf is verified against it; only the address is
+  # pinned. The addresses are the edge hosts' in ansible/inventory/hosts.yml, and
+  # test_pihole_exporter_chart.py compares the two.
+  addresses:
+    pihole-rbp0.kub.local: 192.168.1.22
+    pihole-rbp1.kub.local: 192.168.1.38
+
   # Pi-hole v6 serves its panel and API over TLS on 443, and each Pi presents
   # its own leaf from the ashulab internal CA — pihole-rbp0.kub.local and
   # pihole-rbp1.kub.local, minted with `hack/internal-cert.sh --host`. The
