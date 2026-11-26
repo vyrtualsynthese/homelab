@@ -10,11 +10,12 @@ REPO = pathlib.Path(__file__).resolve().parents[2]
 SCRIPT = REPO / "ansible/pi/hosts-pi.sh"
 
 
-def run(*args, root=None):
-    env = dict(os.environ)
+def run(*args, root=None, env=None):
+    merged = dict(os.environ)
     if root:
-        env["PI_ROOT"] = str(root)
-    return subprocess.run([str(SCRIPT), *args], capture_output=True, text=True, env=env)
+        merged["PI_ROOT"] = str(root)
+    merged.update(env or {})
+    return subprocess.run([str(SCRIPT), *args], capture_output=True, text=True, env=merged)
 
 
 COMPOSE_HEADER = "--- /home/vronteix/dockers/docker-compose.yml\n"
@@ -1135,3 +1136,56 @@ def test_ensure_firewall_applies_every_rule_and_is_idempotent(tmp_path):
     )
     assert (state / "defaults").read_text().splitlines() == ["deny incoming", "allow routed"]
     assert (state / "active").exists()
+BACKUP_EXCLUDED = ("pihole-FTL.db", "pihole-FTL.db-wal", "listsCache", "gravity_old.db")
+
+
+def fake_restic(tmp_path, exit_code=0):
+    """A restic that records its argv instead of contacting a bucket."""
+    binary = tmp_path / "restic"
+    log = tmp_path / "restic-argv"
+    binary.write_text(f'#!/bin/sh\nprintf "%s\\n" "$*" >> {log}\nexit {exit_code}\n')
+    binary.chmod(0o755)
+    return {"PI_RESTIC": str(binary), "PI_RESTIC_LOG": str(log)}
+
+
+def _stack_with_excludables(root):
+    stack = root / "home/vronteix/dockers"
+    pihole = stack / "etc-pihole"
+    pihole.mkdir(parents=True)
+    (pihole / "gravity.db").write_bytes(b"gravity")
+    (pihole / "gravity_old.db").write_bytes(b"old")
+    for name in ("pihole-FTL.db", "pihole-FTL.db-wal"):
+        (pihole / name).write_bytes(b"x")
+    (pihole / "listsCache").mkdir()
+    (pihole / "listsCache/a.txt").write_text("x")
+    (stack / "config").mkdir()
+    (stack / "config/wg-easy.db").write_bytes(b"wg")
+    return stack
+
+
+def test_stream_stages_the_stack_without_the_three_excluded_paths(tmp_path):
+    root = tmp_path / "pi"
+    _pi_fixture(root)
+    _stack_with_excludables(root)
+
+    out = run("stream", "rbp0", root=root)
+    assert out.returncode == 0, out.stdout + out.stderr
+    tree = root / "var/lib/pi-backup/tree"
+    assert (tree / "dockers/etc-pihole/gravity.db").exists()
+    assert (tree / "dockers/pihole.env").exists()
+    assert (tree / "dockers/config/wg-easy.db").exists()
+    for name in BACKUP_EXCLUDED:
+        assert not (tree / "dockers/etc-pihole" / name).exists(), name
+
+
+def test_the_manual_copy_still_holds_the_query_log(tmp_path):
+    root = tmp_path / "pi"
+    _pi_fixture(root)
+    (root / "home/vronteix/dockers/etc-pihole").mkdir(parents=True)
+    (root / "home/vronteix/dockers/etc-pihole/pihole-FTL.db").write_bytes(b"x")
+    dest = tmp_path / "usb"
+    out = run("backup", str(dest), "rbp0", root=root)
+    assert out.returncode == 0, out.stderr
+    assert (dest / "dockers/etc-pihole/pihole-FTL.db").exists(), (
+        "the exclusions belong to the nightly stream; the pre-reflash USB copy keeps everything"
+    )
