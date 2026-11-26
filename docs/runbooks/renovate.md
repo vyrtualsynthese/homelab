@@ -5,12 +5,15 @@
 > how to change the schedule.
 >
 > **Use it when** Renovate has not opened its usual pull requests, its token has to be rotated, or
-> the nightly slot has to move · **Verified** 2026-11-19, application count re-checked 2026-11-23 ·
+> the nightly slot has to move · **Verified** 2026-11-26 ·
 > **Kind:** how-to · **Sources** `.github/renovate.json`, `cluster/helm/renovate/`,
 > `cluster/argocd/projects/`.
 
 Status: **proved 2026-11-19** — the hand-triggered run described below is its first execution: Job
-`renovate-manual-20261119-0114`, 18 minutes, exit code 0, no error line in 347.
+`renovate-manual-20261119-0114`, 18 minutes, exit code 0, no error line in 347. **Re-proved
+2026-11-26** with the fine-grained token — `renovate-manual-20261126-1848`, 11 minutes, 934 log lines,
+16 repositories, six pull requests opened on `homelab`, no GitHub authentication error. The Docker Hub
+`401`s in that log and in the nightly one are anonymous Hub lookups, not the token.
 
 ## What it updates
 
@@ -141,13 +144,25 @@ without one.
 | Secret | `renovate` in namespace `renovate` |
 | Key | `RENOVATE_TOKEN` — the chart's `existingSecret` exports every key as an environment variable |
 | Account | `vyrtualsynthese`; every pull request Renovate opens is authored by that account, not by a bot |
-| Type | classic personal access token |
-| Scopes | `repo` — the classic scope that covers branches, pull requests and issues. Nothing needs more: this repository has no `.github/workflows`, so the `workflow` scope buys nothing. The cluster cannot show whether extra scopes were also granted |
-| Expiry | **none** — a classic token with no expiry date, confirmed by the operator on 2026-11-19 |
-| Renewal date | none to record. Rotate it if the account is compromised or the operator next rotates their GitHub tokens |
+| Type | fine-grained personal access token, created 2026-11-26 |
+| Repositories | all repositories the account can see — Renovate autodiscovers 15, so a token limited to fewer would stop updating the others |
+| Permissions | `Contents`, `Pull requests`, `Issues` and `Commit statuses`: read and write; `Metadata`: read. `Workflows` is deliberately absent: no workflow file is updated, and the classic token could not edit one either |
+| Expiry | one year, the maximum a fine-grained token allows: `2027-11-25 23:00:00 UTC`, which is midnight on 2027-11-26 in Paris |
+| Renewal date | 2027-10-26, one month before |
 
-The read-only cluster account cannot read Secrets, so the value is only ever seen by the operator.
-[`secrets.md`](../secrets.md) lists the Secret; this table is the record of its type and scopes.
+The classic token it replaced carried the whole `repo` scope — every branch of every visible
+repository — with no expiry. The permissions above are the ones Renovate's own platform page lists,
+minus `Workflows` and `Dependabot alerts`, which this repository does not use.
+
+The value is only ever seen by the operator. GitHub's API reports the expiry on every authenticated
+call, in the `github-authentication-token-expiration` response header — measured on 2026-11-26, it
+answered `2027-11-25 23:00:00 UTC` — and it reports nothing about the granted permissions: the token's
+own page is the only source for those. [`secrets.md`](../secrets.md) lists the Secret; this table is
+the record of its type and permissions.
+
+**`develop` is protected since 2026-11-26**: it requires a pull request, and refuses a direct or
+force push even from an admin. Renovate does not need that access — it writes `renovate/*` branches,
+which no rule protects, and opens the pull request into `develop`.
 
 ## A run, by hand
 
@@ -262,8 +277,11 @@ while it existed.
 The pod reads environment variables at container start, so a patched Secret reaches the next run and
 no running one.
 
-1. On GitHub: Settings → Developer settings → Personal access tokens → the token with `repo` for
-   `vyrtualsynthese`. Regenerate it and copy the value.
+1. On GitHub: Settings → Developer settings → Personal access tokens → **Fine-grained tokens** → the
+   token → **Regenerate**, and copy the value. A permission or repository change is made on the same
+   page; a fine-grained token cannot be created or edited through the API. If a new token replaces
+   this one, give it the four permissions and the repository access in the table above, and set the
+   expiry to one year.
 2. Replace the Secret; `create` fails if it exists, so go through `apply`:
 
    ```bash
@@ -275,9 +293,12 @@ no running one.
    apply proves nothing about the token.
 
 Nothing else holds the value: there is no second copy in another namespace, and the Secret is
-referenced by `existingSecret` only. If the token is a fine-grained one next time, the scopes become
-`Contents: read and write`, `Pull requests: read and write` and `Issues: read and write` on the
-repositories the account can see.
+referenced by `existingSecret` only.
+
+**The expiry is readable, but only with the token.** An authenticated call carries it in the
+`github-authentication-token-expiration` response header, so a check can read it without anybody
+typing the date; nothing else exposes it. Regenerating at the renewal date keeps the same permissions
+and repository access.
 
 ## Changing the schedule
 
