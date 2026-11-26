@@ -1,5 +1,17 @@
 # Reaching the apps without a click
 
+> **In one line.** Nearly every setting an agent needs has an HTTP endpoint, and a call through it
+> leaves a record a click does not; this page is how to find the credential, what a working call
+> leaves behind, and the one sign-in that stays human.
+>
+> **Use it when** you are about to ask the operator to click something in an app's UI, a call answered
+> `401` or `403` and the next move looks like theirs, or you need to know what the agent may read from
+> the cluster · **Verified** 2026-11-26 for the cluster identity, 2026-11-20 for the Argo CD session ·
+> **Kind:** how-to
+>
+> **Sources** `~/.config/secrets/homelab.env`, `kubectl/mcp-readonly-rbac.yaml`,
+> `~/.kube/mcp-readonly.yaml`, `~/.config/argocd/config`, the calls recorded below
+
 An agent that hands the operator a click has usually not looked for a token. Nearly everything the
 protocol asks for — a setting, a provider, a blueprint re-apply, a sync, a board move — has an
 endpoint, and the endpoint leaves a record the UI click does not.
@@ -30,6 +42,39 @@ and the traps around the one that has no key.
   redirect and ask for the click. The Argo CD login below is the shape to copy: the agent runs the
   command, the operator pastes one URL, the agent carries on with the session.
 - **a merge.** The branch and the PR are the agent's; the merge is the operator's.
+
+## The cluster read, and the one identity behind it
+
+Reading the cluster is not a second credential beside the MCP. The tools authenticate as
+`kube-system/opencode-mcp` through `~/.kube/mcp-readonly.yaml`, and a shell reads as that account
+when `KUBECONFIG` names the same file — `kubectl auth whoami` is how to find out which identity you
+have. What the account may read is exactly what `kubectl/mcp-readonly-rbac.yaml` grants: the built-in
+`view` role, the cluster-scoped reads `view` leaves out (nodes, persistent volumes, namespaces,
+storage classes, IngressClasses, ClusterRoles and ClusterRoleBindings), the CRD groups this
+repository uses, the K3s addon objects, and read on upgrade `Plan`s in `system-upgrade`. It reads no
+Secret, and it writes, deletes, `exec`s and `port-forward`s nothing.
+
+The manifest is applied by hand, so live and git drift silently until someone re-applies it. That is
+how a second, older read-only identity survived a year without a record: the `mcp-reader`
+ServiceAccount, a narrower `mcp-read-only` ClusterRole and `mcp-reader-binding`, left behind when the
+account the tools use was replaced. Nothing referenced it and no token for it existed, but it was a
+live cluster-wide read grant that no file described. It was deleted on 2026-11-26, in the same sweep
+as seven `cluster-admin` bindings that dead Helm releases had left on orphaned `helm-*`
+ServiceAccounts in `default` and `kube-system`; the upgrade controller's own `system-upgrade` grant
+stayed, because that controller still runs.
+
+Prove the grant, and prove it again after an edit:
+
+```bash
+kubectl apply -f kubectl/mcp-readonly-rbac.yaml           # admin; this file is not GitOps-managed
+KUBECONFIG=~/.kube/mcp-readonly.yaml kubectl auth whoami                               # the account
+KUBECONFIG=~/.kube/mcp-readonly.yaml kubectl auth can-i list clusterrolebindings       # yes
+KUBECONFIG=~/.kube/mcp-readonly.yaml kubectl auth can-i list secrets -n kube-system    # no
+```
+
+The same read is what lets a session audit the rest: `kubectl get clusterrolebinding -o wide` names
+every cluster-admin on the cluster, and on 2026-11-26 the only two left were the built-in
+`system:masters` one and the upgrade controller's.
 
 ## The Argo CD session, and the traps that surround it
 
