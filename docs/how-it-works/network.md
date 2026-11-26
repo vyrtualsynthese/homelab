@@ -20,13 +20,13 @@ Kubernetes `LoadBalancer` Service in
 `kube-system`, with no cloud load balancer behind the name: the house router forwards 80 and 443
 (TCP), 25565 (TCP), 22000 (TCP and UDP) and 21027 (UDP) to **one** cluster address, `192.168.1.46`
 (`streaming`), which is also what the edge Pi-hole answers for `*.kub.local`. The 25565 and
-22000/21027 entries are Minecraft and Syncthing, which Traefik owns as entry points; the router also
-forwards 25565 on UDP, where the `Service` publishes nothing.
+22000/21027 entries are Minecraft and Syncthing, which Traefik owns as entry points; the 25565 rule
+was narrowed to TCP on 2026-11-26, because the `Service` publishes nothing on UDP.
 
-The router's only other rules are three WireGuard forwards to the two edge Pis: 51820 (TCP and UDP)
-on `rbp1`, and 51821 and 51822 (UDP) on `rbp0` and `rbp1`. Nothing else is forwarded — the four Plex
-and DLNA rules the box still carried on 2026-11-26 are deleted. [The Livebox
-record](../audit/livebox-2026-11-26.md) is the measured table and the removal.
+The router's only other rules are two WireGuard forwards to the two edge Pis: 51821 and 51822 (UDP),
+on `rbp0` and `rbp1`. Nothing else is forwarded: the four Plex and DLNA rules the box still carried
+are deleted, and so is the dead `51820` rule to `rbp1`. [The Livebox
+record](../audit/livebox-2026-11-26.md) is the measured table and the removals.
 
 One pod serves all of that, not one per node. K3s's service load balancer still puts a small proxy pod
 on every node, so the other three node addresses answer as well — those packets then cross the LAN to
