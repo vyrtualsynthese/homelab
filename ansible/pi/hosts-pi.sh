@@ -60,6 +60,18 @@ DOCKER_SOURCES="/etc/apt/sources.list.d/docker.sources"
 # address; test_the_resolver_list_is_the_two_edge_addresses checks it against
 # the inventory, which stays the record.
 PIHOLE_DNS_SERVERS="192.168.1.22, 192.168.1.38"
+
+# The host firewall's sources. The script runs on the host, where the inventory
+# is not, so these are written here and compared with the records by
+# test_the_pi_and_the_ansible_layer_allow_the_same_ports. `LAN_CIDR` is the /24
+# the cluster's first address sits in (`lan_cidr` in group_vars/all.yml); the
+# four node addresses are the cluster group in inventory order, because the
+# exporters are host-network and only those four may read them; the tunnel is
+# the subnet inside each wg-easy container's wg0, measured 10.8.0.1/24 on both
+# on 2026-11-26.
+LAN_CIDR="192.168.1.0/24"
+CLUSTER_ADDRESSES="192.168.1.41 192.168.1.27 192.168.1.46 192.168.1.48"
+VPN_CIDR="10.8.0.0/24"
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TEMPLATES="$(cd "$HERE/../playbooks/templates/runners" && pwd)"
 ROOT="${PI_ROOT:-}"
@@ -544,6 +556,150 @@ ensure_sshd_policy() {
     fi
 }
 
+# The edge rule set, the same one ansible/roles/firewall/vars/main.yml holds for
+# the `edge` group. One line per rule: port|proto|source|comment. The comment is
+# ufw's own, so `ufw show added` and `verify` compare the same text the operator
+# would read in the host's rule list.
+#
+# What is deliberately absent: every port a container publishes. Docker's DNAT
+# and the CNI rewrite in NAT and FORWARD before INPUT is consulted, so 5182x/udp
+# (wg-easy) and 8443/tcp (caddy) are governed by Docker, not by this file, and
+# 9902/tcp (smartctl-exporter) stays reachable whether ufw is on or off. A rule
+# here would filter nothing and read as protection.
+#
+# 443 is here because Pi-hole is the other case: it runs with network_mode: host,
+# so its HTTPS panel reaches INPUT, and `hack/check_pihole_parity.py` dials it.
+# 9100 and 9323 are host-network exporters that Prometheus scrapes from a pod
+# egressing as `nas`; the failure without a rule is silent.
+firewall_rule_table() {
+    cat <<'EOF'
+22|tcp|lan|ssh from the LAN, key-only
+80|tcp|lan|the Pi-hole web interface
+443|tcp|lan|Pi-hole HTTPS web interface
+53|tcp|lan|LAN DNS
+53|udp|lan|LAN DNS
+53|tcp|vpn|DNS for clients on the WireGuard tunnel
+53|udp|vpn|DNS for clients on the WireGuard tunnel
+80|tcp|vpn|the Pi-hole web interface from the tunnel
+443|tcp|vpn|Pi-hole HTTPS web interface from the tunnel
+9100|tcp|nodes|node-exporter, scraped by a pod that egresses as its node
+9323|tcp|nodes|the Docker metrics endpoint daemon.json opens on 0.0.0.0
+EOF
+}
+
+# A named source set, resolved to the addresses it stands for. One rule per
+# address, which is what roles/firewall/tasks/resolve.yml does on the nodes.
+firewall_source_addresses() {
+    case "$1" in
+        lan) printf '%s\n' "$LAN_CIDR" ;;
+        nodes) printf '%s\n' $CLUSTER_ADDRESSES ;;
+        vpn) printf '%s\n' "$VPN_CIDR" ;;
+        *)
+            echo "unknown firewall source '$1'" >&2
+            exit 1
+            ;;
+    esac
+}
+
+# address|port|proto|comment, in the order the rules are declared.
+firewall_entries() {
+    local port proto source comment address
+    while IFS='|' read -r port proto source comment; do
+        while IFS= read -r address; do
+            printf '%s|%s|%s|%s\n' "$address" "$port" "$proto" "$comment"
+        done < <(firewall_source_addresses "$source")
+    done < <(firewall_rule_table)
+}
+
+# The line `ufw show added` and `ufw status` carry, so applying and checking
+# name the same thing.
+ufw_rule_line() {
+    local address="$1" port="$2" proto="$3" comment="$4"
+    printf "ufw allow from %s to any port %s proto %s comment '%s'\n" \
+        "$address" "$port" "$proto" "$comment"
+}
+
+desired_firewall_commands() {
+    local address port proto comment
+    while IFS='|' read -r address port proto comment; do
+        ufw_rule_line "$address" "$port" "$proto" "$comment"
+    done < <(firewall_entries)
+}
+
+# Rules first, then the defaults, then enable: a host that takes the default
+# deny before its SSH rule loses the session that was still adding it. `allow
+# routed` is not decoration — Docker's containers egress through FORWARD, and a
+# deny there takes every one of them off the network. The SSH rule is the LAN's,
+# so run this from the LAN or the console: a run over the tunnel has no rule to
+# lose the session to, and sudo drops SSH_CLIENT, so no check can see it.
+ensure_firewall() {
+    local added status address port proto comment rule
+
+    if [ -n "$ROOT" ]; then
+        echo "firewall: not applied (PI_ROOT is set)"
+        return 0
+    fi
+    if ! command -v ufw >/dev/null 2>&1; then
+        DEBIAN_FRONTEND=noninteractive apt-get update -qq
+        DEBIAN_FRONTEND=noninteractive apt-get install -y ufw >/dev/null
+        CHANGED=$((CHANGED + 1))
+        echo "firewall: installed ufw"
+    fi
+
+    added="$(ufw show added 2>/dev/null || true)"
+    while IFS='|' read -r address port proto comment; do
+        rule="$(ufw_rule_line "$address" "$port" "$proto" "$comment")"
+        if ! grep -qxF "$rule" <<<"$added"; then
+            ufw allow from "$address" to any port "$port" proto "$proto" \
+                comment "$comment" >/dev/null
+            CHANGED=$((CHANGED + 1))
+            echo "firewall: allowed $port/$proto from $address"
+        fi
+    done < <(firewall_entries)
+
+    status="$(ufw status verbose 2>/dev/null || true)"
+    if ! grep -qx 'Default: deny (incoming), allow (outgoing), allow (routed)' <<<"$status"; then
+        ufw default deny incoming >/dev/null
+        ufw default allow routed >/dev/null
+        CHANGED=$((CHANGED + 1))
+        echo "firewall: default deny incoming, allow outgoing and routed"
+    fi
+    if ! grep -qx 'Status: active' <<<"$status"; then
+        ufw --force enable >/dev/null
+        CHANGED=$((CHANGED + 1))
+        echo "firewall: enabled"
+    fi
+}
+
+# What `verify` reads. `ufw show added` is the rule list as declared, comments
+# included, which is the form the script applies and the form the operator reads;
+# `status` is what makes it live.
+firewall_drift() {
+    local status added rule problems=0
+
+    if [ -n "$ROOT" ]; then
+        echo "firewall: not checked (PI_ROOT is set)"
+        return 0
+    fi
+    status="$(ufw status verbose 2>/dev/null || true)"
+    if ! grep -qx 'Status: active' <<<"$status"; then
+        echo "DIFFERS the host firewall is not active"
+        problems=1
+    fi
+    if ! grep -qx 'Default: deny (incoming), allow (outgoing), allow (routed)' <<<"$status"; then
+        echo "DIFFERS the firewall defaults are not deny incoming / allow routed"
+        problems=1
+    fi
+    added="$(ufw show added 2>/dev/null || true)"
+    while IFS= read -r rule; do
+        if ! grep -qxF "$rule" <<<"$added"; then
+            echo "MISSING $rule"
+            problems=1
+        fi
+    done < <(desired_firewall_commands)
+    [ "$problems" -eq 0 ]
+}
+
 cmd_render() {
     local host="$1"
     echo "--- $STACK_DIR/docker-compose.yml"
@@ -580,6 +736,12 @@ cmd_render() {
     echo "then the $ADMINS_GROUP group itself; %sudo stays as Ubuntu ships it"
     echo "--- $CLOUD_INIT_SUDOERS"
     echo "removed: cloud-init's grant for the retired ubuntu account"
+    echo "--- ufw (the host firewall, enabled by setup on a real host)"
+    echo "default: deny incoming, allow outgoing, allow routed (the containers keep egress)"
+    desired_firewall_commands
+    echo "never reaches ufw: $(wg_udp_port "$host")/udp (wg-easy), 8443/tcp (caddy) and"
+    echo "9902/tcp (smartctl-exporter) are published by Docker, which DNATs in NAT"
+    echo "and FORWARD before INPUT; a ufw rule for them would filter nothing"
     echo "--- /home/$HUMAN_USER/.ssh/authorized_keys"
     echo "the operator's, not written here: setup refuses to close password logins"
     echo "while no key is in that file"
@@ -616,7 +778,7 @@ cmd_setup() {
     require_env
 
     if [ -z "$ROOT" ] && [ "$(id -u)" -ne 0 ]; then
-        echo "setup writes $SSHD_DROPIN and $SUDOERS; run it with sudo" >&2
+        echo "setup writes $SSHD_DROPIN, $SUDOERS and the host firewall; run it with sudo" >&2
         exit 1
     fi
     require_login_key
@@ -624,6 +786,7 @@ cmd_setup() {
     ensure_engine
     ensure_sudo_policy
     ensure_sshd_policy
+    ensure_firewall
 
     write_abs "$ROOT$STACK_DIR/docker-compose.yml" "$(desired_compose "$host")"
     # Caddy reads this at start, and it is a bind mount: a file written under a
@@ -722,7 +885,7 @@ cmd_verify() {
     local host="$1" problems=0 file
 
     if [ -z "$ROOT" ] && [ "$(id -u)" -ne 0 ]; then
-        echo "verify reads $SUDOERS and $SSHD_CONFIG; run it with sudo" >&2
+        echo "verify reads $SUDOERS, $SSHD_CONFIG and the firewall; run it with sudo" >&2
         exit 1
     fi
 
@@ -814,6 +977,8 @@ cmd_verify() {
     echo "root device: $(root_device)"
 
     engine_drift || problems=1
+
+    firewall_drift || problems=1
 
     if [ -z "$ROOT" ]; then
         # --all, and the declared service list compared with what is up: `ps`

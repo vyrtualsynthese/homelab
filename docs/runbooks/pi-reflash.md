@@ -172,7 +172,10 @@ files the stack mounts (`docker-compose.yml`, `pihole.settings`, `etc-dnsmasq.d/
 the resolver list in `/etc/netplan/50-cloud-init.yaml`, the resolved drop-in
 (`/etc/systemd/resolved.conf.d/90-pihole-resolvers.conf`), `/etc/hostname`, and the SSH and sudo policy:
 the `00-homelab.conf` drop-in that closes password logins, the two directives in the main sshd config,
-and the `%admins` grant and its group gone. It leaves the boot files alone: the image's copies are right
+and the `%admins` grant and its group gone. It also turns on `ufw`: the edge rule set, default deny
+incoming and allow routed, applied in that order so a run never closes the session that is adding the
+rule for it. `sudo ufw status verbose` after `setup` answers `Status: active`, `Default: deny
+(incoming), allow (outgoing), allow (routed)`, and the rules `ansible/pi/README.md` lists. It leaves the boot files alone: the image's copies are right
 for the disk they were written to, and `restore` puts them back only when the backup's `cmdline.txt` names
 this disk. It never writes `pihole.env`: after a reflash without the backup, the panel has no password
 until one is set again, and the stack will not start without the file. `/etc/hosts` is cloud-init's: the

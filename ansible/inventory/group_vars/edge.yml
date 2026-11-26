@@ -6,11 +6,11 @@
 # `config/`, so there is no WireGuard environment file since version 15.
 stack_dir: /home/vronteix/dockers
 
-# The tunnel subnet WireGuard clients arrive from, or an empty list. Empty means
-# the firewall opens DNS and the Pi-hole UI to the LAN only — correct when the
-# wg-easy panel does not point its default DNS at this host. Read that setting
-# from the panel (`GET /api/admin/userconfig`, at https://vpn-<host>.kub.local:8443
-# since 2026-11-26) before the first ufw apply on a Pi; a client that resolves
-# through Pi-hole arrives on this subnet and is dropped at INPUT until it is
-# listed here.
-vpn_cidrs: []
+# The tunnel subnet WireGuard clients arrive from, or an empty list. Both panels
+# put their clients on 10.8.0.0/24: `ip -4 addr show wg0` inside each wg-easy
+# container answered 10.8.0.1/24 on 2026-11-26. The panel's default DNS is in
+# its own database and not in git; the tunnel rules stand whether a client
+# resolves through this host or not, and an empty list here would drop the name
+# resolution of every remote client that does.
+vpn_cidrs:
+  - 10.8.0.0/24

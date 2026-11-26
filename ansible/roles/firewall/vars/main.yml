@@ -46,8 +46,11 @@ firewall_rules_cluster:
     source: nodes
     comment: node-exporter, scraped by a pod that egresses as its node
 
-# No 443: nothing terminates TLS on these two, and the cluster's router answers
-# every name that resolves here on `streaming` instead.
+# 443 is Pi-hole's own web interface: it serves HTTPS with a certificate it
+# mints itself, and `hack/check_pihole_parity.py` dials it. Pi-hole runs with
+# network_mode: host, so that port reaches ufw's INPUT and a default deny takes
+# both the panel and the check off the LAN. The wg-easy panel is the opposite
+# case: caddy publishes its 8443, so Docker's DNAT keeps it out of INPUT.
 firewall_rules_edge:
   - port: 22
     proto: tcp
@@ -57,6 +60,10 @@ firewall_rules_edge:
     proto: tcp
     source: lan
     comment: the Pi-hole web interface
+  - port: 443
+    proto: tcp
+    source: lan
+    comment: Pi-hole HTTPS web interface
   - port: 53
     proto: tcp
     source: lan
@@ -67,10 +74,9 @@ firewall_rules_edge:
     comment: LAN DNS
   # A VPN client that resolves through this Pi arrives on the tunnel, not on the
   # LAN, and ufw drops it at INPUT unless the tunnel is named. `vpn_cidrs` is
-  # empty until someone reads the wg-easy panel's default DNS: if a client's DNS
-  # names this host's address, put the tunnel subnet (wg-easy's default is
-  # 10.8.0.0/24) there before enabling ufw, or every remote client loses name
-  # resolution.
+  # 10.8.0.0/24 on both Pis, measured inside each wg-easy container's wg0 on
+  # 2026-11-26; the panel's own DNS setting is in its database, not in git, and
+  # these rules stand whether or not a client resolves through this host.
   - port: 53
     proto: tcp
     source: vpn
@@ -83,6 +89,10 @@ firewall_rules_edge:
     proto: tcp
     source: vpn
     comment: the Pi-hole web interface from the tunnel
+  - port: 443
+    proto: tcp
+    source: vpn
+    comment: Pi-hole HTTPS web interface from the tunnel
   # Host-network exporters: not DNAT'd, so they reach INPUT. Prometheus on `nas`
   # scrapes both of these on both Pis (the third target there, 9902, is a
   # published container port and needs nothing), and a missing rule shows up only

@@ -821,3 +821,151 @@ def test_the_pi_and_the_ansible_layer_remove_the_same_grant():
     role = (REPO / "ansible/roles/accounts/tasks/main.yml").read_text()
     assert f"line: '{ADMINS_GRANT}'" in role
     assert ADMINS_GRANT in SCRIPT.read_text()
+
+
+FIREWALL_HEADER = "--- ufw (the host firewall, enabled by setup on a real host)\n"
+
+
+def firewall_commands(host="rbp0"):
+    """The rules `render` prints, in the order `ufw show added` keeps them."""
+    block = rendered_section(host, FIREWALL_HEADER)
+    return [line for line in block.splitlines() if line.startswith("ufw ")]
+
+
+def expected_firewall_commands():
+    """The edge rule set resolved the way `roles/firewall/tasks/resolve.yml`
+    resolves it: one rule per address, in inventory order."""
+    rules = yaml.safe_load(
+        (REPO / "ansible/roles/firewall/vars/main.yml").read_text()
+    )["firewall_rules_edge"]
+    inventory = yaml.safe_load(
+        (REPO / "ansible/inventory/hosts.yml").read_text()
+    )["all"]["children"]
+    cluster = [
+        spec["ansible_host"] for spec in inventory["cluster"]["hosts"].values()
+    ]
+    lan = re.sub(r"\.\d+$", ".0/24", cluster[0])
+    edge = yaml.safe_load(
+        (REPO / "ansible/inventory/group_vars/edge.yml").read_text()
+    )
+    sources = {"lan": [lan], "nodes": cluster, "vpn": edge["vpn_cidrs"]}
+    return [
+        f"ufw allow from {address} to any port {rule['port']} "
+        f"proto {rule['proto']} comment '{rule['comment']}'"
+        for rule in rules
+        for address in sources[rule["source"]]
+    ]
+
+
+def test_the_pi_and_the_ansible_layer_allow_the_same_ports():
+    """The Pis cannot be reached by the layer, so `hosts-pi.sh` carries the rule
+    set and the role keeps the record. A change to one alone leaves half the
+    fleet on the other, which is the state both hosts were in before this."""
+    assert firewall_commands() == expected_firewall_commands()
+
+
+def test_the_edge_rule_set_opens_piholes_https_port():
+    """Pi-hole's panel runs with network_mode: host, so its 443 reaches ufw's
+    INPUT and a default deny takes it off the LAN — and the parity check with it.
+    A published container port (caddy's 8443) would bypass INPUT instead."""
+    rules = yaml.safe_load(
+        (REPO / "ansible/roles/firewall/vars/main.yml").read_text()
+    )["firewall_rules_edge"]
+    https = {(rule["source"], rule["proto"]) for rule in rules if rule["port"] == 443}
+    assert https == {("lan", "tcp"), ("vpn", "tcp")}
+
+
+def test_render_names_the_published_ports_ufw_never_sees():
+    """A rule that filters nothing reads as protection, so the ports Docker
+    DNATs are named next to the ones ufw does filter."""
+    block = rendered_section("rbp0", FIREWALL_HEADER)
+    for port in ("51821/udp", "8443/tcp", "9902/tcp"):
+        assert port in block, port
+
+
+def test_setup_leaves_the_firewall_alone_under_a_fixture(tmp_path):
+    root = tmp_path / "pi"
+    _pi_fixture(root)
+    out = run("setup", "rbp1", root=root)
+    assert out.returncode == 0, out.stderr
+    assert "firewall: not applied (PI_ROOT is set)" in out.stdout
+
+
+def test_verify_says_it_cannot_check_the_firewall_under_a_fixture(tmp_path):
+    (tmp_path / "home/vronteix/dockers").mkdir(parents=True)
+    out = run("verify", "rbp0", root=tmp_path)
+    assert "firewall: not checked (PI_ROOT is set)" in out.stdout
+    assert out.returncode == 1  # the stack is still missing, as before
+
+
+def test_setup_adds_every_rule_before_it_enables_the_firewall():
+    """Enabling first is how a run loses its own SSH session: default deny lands
+    before the rule that allows 22 from the LAN."""
+    text = SCRIPT.read_text()
+    body = text[text.index("ensure_firewall()"):]
+    assert body.index("ufw allow from") < body.index("ufw --force enable")
+    assert body.index("ufw default deny incoming") < body.index("ufw --force enable")
+    assert "ufw default allow routed" in body, (
+        "without allowed routing the containers lose their egress"
+    )
+
+
+UFW_STUB = """#!/bin/bash
+# The three calls ensure_firewall makes, with the state they change.
+case "$1" in
+  show)
+    if [ -s "$UFW_STATE/added" ]; then
+      echo "Added user rules (see 'ufw status' for running firewall):"
+      cat "$UFW_STATE/added"
+    fi
+    ;;
+  status)
+    if [ -f "$UFW_STATE/active" ]; then
+      echo "Status: active"
+      echo "Default: deny (incoming), allow (outgoing), allow (routed)"
+    else
+      echo "Status: inactive"
+    fi
+    ;;
+  allow)
+    printf "ufw allow from %s to any port %s proto %s comment '%s'\\n" \\
+      "$3" "$7" "$9" "${11}" >> "$UFW_STATE/added"
+    ;;
+  default)
+    printf '%s\\n' "$2 $3" >> "$UFW_STATE/defaults"
+    ;;
+  --force)
+    touch "$UFW_STATE/active"
+    ;;
+esac
+"""
+
+
+def test_ensure_firewall_applies_every_rule_and_is_idempotent(tmp_path):
+    """The apply path cannot run in a fixture, so it is driven against a stub:
+    every declared rule reaches ufw once, the defaults and the enable land after
+    them, and a second run changes nothing."""
+    state = tmp_path / "state"
+    state.mkdir()
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    stub = bin_dir / "ufw"
+    stub.write_text(UFW_STUB)
+    stub.chmod(0o755)
+    env = dict(os.environ, PATH=f"{bin_dir}:{os.environ['PATH']}",
+               UFW_STATE=str(state), SSH_CLIENT="")
+    code = (
+        f'source "{SCRIPT}"; ROOT=""; CHANGED=0; '
+        "ensure_firewall >/dev/null; echo first=$CHANGED; "
+        "CHANGED=0; ensure_firewall >/dev/null; echo second=$CHANGED"
+    )
+    out = subprocess.run(["bash", "-c", code], capture_output=True, text=True, env=env)
+
+    assert out.returncode == 0, out.stderr
+    assert "first=19" in out.stdout, out.stdout  # 17 rules, the defaults, the enable
+    assert "second=0" in out.stdout, out.stdout
+    assert sorted((state / "added").read_text().splitlines()) == sorted(
+        firewall_commands()
+    )
+    assert (state / "defaults").read_text().splitlines() == ["deny incoming", "allow routed"]
+    assert (state / "active").exists()
