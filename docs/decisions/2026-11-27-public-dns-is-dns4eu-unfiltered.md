@@ -1,8 +1,8 @@
-# Public DNS is DNS4EU's unfiltered service, and Cloudflare is out
+# Pi-hole answers first; public DNS is DNS4EU unfiltered, and Cloudflare is out
 
-> **In one line.** Every public name this homelab resolves is asked of DNS4EU's unfiltered resolvers,
-> `86.54.11.100` and `86.54.11.200`; Cloudflare is never used, and neither is a filtered DNS4EU
-> variant, because Pi-hole is the filter.
+> **In one line.** Every name in the house is answered by the two edge Pi-holes; where a caller cannot
+> ask them, the public resolver is DNS4EU's unfiltered pair, `86.54.11.100` and `86.54.11.200`.
+> Cloudflare is never used, and neither is a filtered DNS4EU variant, because Pi-hole is the filter.
 >
 > **Use it when** you are about to write a `nameserver`, a `dnsConfig`, an upstream in a template, or a
 > `dig @` in a runbook · **Verified** 2026-11-27: `ansible/playbooks/templates/runners/pihole.settings`,
@@ -25,16 +25,21 @@ Status: active
 
 ## The decision
 
-Every resolver this homelab asks a public question of is DNS4EU's **unfiltered** pair:
+**Pi-hole answers first, wherever it can.** Every client in the house resolves through the two edge
+Pi-holes, `192.168.1.22` then `192.168.1.38`: the LAN's phones and televisions, the four cluster
+nodes, and every pod that resolves through cluster DNS. A public resolver is only for a caller that
+the Pi-holes cannot serve, and then it is DNS4EU's **unfiltered** pair:
 
 - `86.54.11.100`
 - `86.54.11.200`
 
-That covers the three places a public resolver is configured. Pi-hole forwards there, for every
-client on the LAN and every pod that resolves through the cluster. `qbittorrent` carries the pair in
-its own `dnsConfig`, because the torrent client's lookups must not depend on the cluster.
-`blackbox-exporter` carries it too, because its probes must see the public zone rather than Pi-hole's
-LAN override.
+One chart is in that position today. `blackbox-exporter` probes the public zone, and Pi-hole rewrites
+`ashudev.com` to the LAN address, so a probe resolving through it would test Traefik instead of the
+public record — that pod must ask outside. `qbittorrent` carries the pair too, but as a deviation
+rather than a need: its tunnel takes every destination but the pod subnet, so the LAN pair cannot
+answer until `192.168.1.0/24` is routed inside the pod, which is card 892. Two more callers are
+unverified rather than decided: the WireGuard peers wg-easy hands DNS to (card 893) and the DHCP
+option the Livebox gives its clients (card 894).
 
 Cloudflare is never used: not `1.1.1.1`, not `1.0.0.1`, not its DoH or DoT endpoints, and not in a
 runbook example that someone will paste. Google's `8.8.8.8` and Quad9's `9.9.9.9` are out for the same
@@ -52,12 +57,13 @@ every name the house asks for, which is as much of the operator's data as a mail
 rule applies without a carve-out.
 
 **Two charts were the exception, and one of them caused a measured fault.** `qbittorrent` and
-`blackbox-exporter` had `dnsPolicy: None` with `1.1.1.1` beside a second public resolver; both keep
-the setting, on the same reasoning that put it there — neither may depend on cluster DNS — and only the
-addresses change. Separately, `nuc0`'s `/etc/resolv.conf` carried `1.1.1.1` beside the Pi-hole on
-2026-11-26, so CoreDNS sent about one `*.kub.local` query in three to Cloudflare and got NXDOMAIN
-back; `pihole-exporter` warned once a minute until its two names were pinned in the pod's `/etc/hosts`.
-A public resolver in the path of the cluster's own names is the failure this decision rules out.
+`blackbox-exporter` had `dnsPolicy: None` with `1.1.1.1` beside a second public resolver. Both keep the
+setting, because neither may depend on cluster DNS, and only the addresses change; whether either may
+ask the Pi-holes instead is card 892 for the first and settled for the second. Separately, `nuc0`'s
+`/etc/resolv.conf` carried `1.1.1.1` beside the Pi-hole on 2026-11-26, so CoreDNS sent about one
+`*.kub.local` query in three to Cloudflare and got NXDOMAIN back; `pihole-exporter` warned once a
+minute until its two names were pinned in the pod's `/etc/hosts`. A public resolver in the path of the
+cluster's own names is the failure this decision rules out, and the fix for the nodes is card 889.
 
 **The unfiltered variant is the only one that composes with Pi-hole.** Pi-hole holds the blocklist,
 the allowlist and the local records; a filtered upstream answers a second, invisible policy that no

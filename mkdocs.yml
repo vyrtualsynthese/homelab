@@ -160,7 +160,7 @@ nav:
       - Declared host access: decisions/2026-11-25-declared-host-access.md
       - No Ubuntu Pro: decisions/2026-11-25-no-ubuntu-pro.md
       - Edge Pis keep local auth: decisions/2026-11-26-edge-pis-local-auth-only.md
-      - Public DNS is DNS4EU: decisions/2026-11-27-public-dns-is-dns4eu-unfiltered.md
+      - Pi-hole first, DNS4EU for public: decisions/2026-11-27-public-dns-is-dns4eu-unfiltered.md
       - Longhorn leftovers: cleanup/longhorn-disposition.md
       - The board's database: runbooks/vikunja-database.md
       - The board's first start: runbooks/vikunja-first-start.md
