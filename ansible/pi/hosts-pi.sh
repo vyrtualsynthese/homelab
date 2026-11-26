@@ -1355,6 +1355,31 @@ for root, _, names in os.walk(dst):
 PY
 }
 
+# The credential is the operator's file: setup never writes it, and stream refuses
+# rather than contacting the bucket with whatever the environment happens to hold.
+require_backup_env() {
+    local file="$ROOT$BACKUP_ENV"
+
+    if [ ! -f "$file" ]; then
+        echo "$BACKUP_ENV is missing; write it from the password manager (docs/secrets.md)" >&2
+        exit 1
+    fi
+    if [ -z "$ROOT" ] && [ "$(stat -c %a "$file")" != "600" ]; then
+        echo "$BACKUP_ENV must be mode 0600, not $(stat -c %a "$file")" >&2
+        exit 1
+    fi
+    if [ -z "${RESTIC_REPOSITORY:-}" ]; then
+        set -a
+        # shellcheck source=/dev/null
+        . "$file"
+        set +a
+    fi
+    : "${RESTIC_REPOSITORY:?$BACKUP_ENV must set RESTIC_REPOSITORY}"
+    : "${RESTIC_PASSWORD:?$BACKUP_ENV must set RESTIC_PASSWORD}"
+    : "${AWS_ACCESS_KEY_ID:?$BACKUP_ENV must set AWS_ACCESS_KEY_ID}"
+    : "${AWS_SECRET_ACCESS_KEY:?$BACKUP_ENV must set AWS_SECRET_ACCESS_KEY}"
+}
+
 # The nightly run: the same tree, minus the three words in BACKUP_EXCLUDES, under
 # a fixed path so the snapshot's file list is the same every night. Nothing is
 # staged on the disk a reflash would destroy — the tree is transient and the
@@ -1373,9 +1398,21 @@ cmd_stream() {
     # shellcheck disable=SC2086
     copy_state "$ROOT$STAGING_DIR/tree" "$host" $BACKUP_EXCLUDES
     stage_sqlite "$ROOT$STACK_DIR" "$ROOT$STAGING_DIR/tree/dockers"
+    require_backup_env
 
-    # restic follows
-    echo "staged $host in $STAGING_DIR/tree"
+    if "$RESTIC_BIN" backup \
+        --retry-lock 2h \
+        --host "$host" \
+        --tag "stream=edge-$host" \
+        "$ROOT$STAGING_DIR/tree"; then
+        # Only a finished run removes the tree: a failed one leaves it in place so
+        # the next look can see exactly what restic was given.
+        rm -rf "$ROOT$STAGING_DIR/tree"
+    else
+        echo "restic backup failed; leaving $STAGING_DIR/tree for inspection" >&2
+        exit 1
+    fi
+    echo "streamed $host to $RESTIC_REPOSITORY"
 }
 
 cmd_restore() {

@@ -452,6 +452,12 @@ def _pi_fixture(root):
     (root / "etc/sudoers").write_text(SUDOERS_FIXTURE)
     (root / "etc/sudoers.d").mkdir(parents=True)
     (root / "etc/sudoers.d/90-cloud-init-users").write_text("ubuntu ALL=(ALL) NOPASSWD:ALL\n")
+    env_file = root / "etc/restic/edge.env"
+    env_file.parent.mkdir(parents=True, exist_ok=True)
+    env_file.write_text(
+        "RESTIC_REPOSITORY=s3:https://example.invalid/bucket/edge-rbp0\n"
+        "RESTIC_PASSWORD=test\nAWS_ACCESS_KEY_ID=test\nAWS_SECRET_ACCESS_KEY=test\n"
+    )
     return stack
 
 
@@ -1140,11 +1146,21 @@ def test_ensure_firewall_applies_every_rule_and_is_idempotent(tmp_path):
 BACKUP_EXCLUDED = ("pihole-FTL.db", "pihole-FTL.db-wal", "listsCache", "gravity_old.db")
 
 
-def fake_restic(tmp_path, exit_code=0):
-    """A restic that records its argv instead of contacting a bucket."""
+def fake_restic(tmp_path, exit_code=0, keep=None):
+    """A restic that records its argv instead of contacting a bucket.
+
+    `keep` copies the last argument (the staged tree) before exiting, which is how
+    a test reads what the run staged once the run has cleaned up after itself.
+    """
     binary = tmp_path / "restic"
     log = tmp_path / "restic-argv"
-    binary.write_text(f'#!/bin/sh\nprintf "%s\\n" "$*" >> {log}\nexit {exit_code}\n')
+    keep_cmd = (
+        f'for arg in "$@"; do last="$arg"; done; cp -a "$last" {keep}'
+        if keep else ":"
+    )
+    binary.write_text(
+        f'#!/bin/sh\nprintf "%s\\n" "$*" >> {log}\n{keep_cmd}\nexit {exit_code}\n'
+    )
     binary.chmod(0o755)
     return {"PI_RESTIC": str(binary), "PI_RESTIC_LOG": str(log)}
 
@@ -1186,11 +1202,11 @@ def test_stream_copies_a_live_database_through_the_sqlite_api(tmp_path):
     con.commit()
     assert (live.parent / "gravity.db-wal").exists()
 
-    out = run("stream", "rbp0", root=root)
+    out = run("stream", "rbp0", root=root, env=fake_restic(tmp_path, keep=tmp_path / "kept"))
     con.close()
     assert out.returncode == 0, out.stdout + out.stderr
 
-    copy = root / "var/lib/pi-backup/tree/dockers/etc-pihole/gravity.db"
+    copy = tmp_path / "kept/dockers/etc-pihole/gravity.db"
     check = sqlite3.connect(f"file:{copy}?mode=ro", uri=True)
     rows = check.execute("SELECT domain FROM domainlist ORDER BY domain").fetchall()
     check.close()
@@ -1210,14 +1226,59 @@ def test_stream_refuses_a_database_it_cannot_read(tmp_path):
     assert "broken.db" in out.stderr
 
 
+def test_stream_runs_restic_as_the_host_with_its_stream_tag(tmp_path):
+    root = tmp_path / "pi"
+    _pi_fixture(root)
+    _stack_with_excludables(root)
+
+    out = run("stream", "rbp0", root=root, env=fake_restic(tmp_path))
+    assert out.returncode == 0, out.stdout + out.stderr
+    argv = (tmp_path / "restic-argv").read_text()
+    assert "backup" in argv
+    assert "--host rbp0" in argv
+    assert "--tag stream=edge-rbp0" in argv
+    assert "--retry-lock 2h" in argv
+    assert str(root / "var/lib/pi-backup/tree") in argv
+
+
+def test_stream_fails_when_the_restic_run_fails(tmp_path):
+    root = tmp_path / "pi"
+    _pi_fixture(root)
+    _stack_with_excludables(root)
+
+    out = run("stream", "rbp0", root=root, env=fake_restic(tmp_path, exit_code=1))
+    assert out.returncode != 0
+
+
+def test_stream_refuses_without_the_env_file(tmp_path):
+    root = tmp_path / "pi"
+    _pi_fixture(root)
+    _stack_with_excludables(root)
+    (root / "etc/restic/edge.env").unlink()
+
+    out = run("stream", "rbp0", root=root, env=fake_restic(tmp_path))
+    assert out.returncode != 0
+    assert "/etc/restic/edge.env" in out.stderr
+
+
+def test_stream_leaves_no_tree_behind_after_a_successful_run(tmp_path):
+    root = tmp_path / "pi"
+    _pi_fixture(root)
+    _stack_with_excludables(root)
+
+    out = run("stream", "rbp0", root=root, env=fake_restic(tmp_path))
+    assert out.returncode == 0, out.stdout + out.stderr
+    assert not (root / "var/lib/pi-backup/tree").exists()
+
+
 def test_stream_stages_the_stack_without_the_three_excluded_paths(tmp_path):
     root = tmp_path / "pi"
     _pi_fixture(root)
     _stack_with_excludables(root)
 
-    out = run("stream", "rbp0", root=root)
+    out = run("stream", "rbp0", root=root, env=fake_restic(tmp_path, keep=tmp_path / "kept"))
     assert out.returncode == 0, out.stdout + out.stderr
-    tree = root / "var/lib/pi-backup/tree"
+    tree = tmp_path / "kept"
     assert (tree / "dockers/etc-pihole/gravity.db").exists()
     assert (tree / "dockers/pihole.env").exists()
     assert (tree / "dockers/config/wg-easy.db").exists()
