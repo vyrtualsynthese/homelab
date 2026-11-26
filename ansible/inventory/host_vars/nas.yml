@@ -15,3 +15,22 @@ dkms_state_absent:
   - intel-i915-dkms
   - intel-platform-cse-dkms
   - intel-platform-vsec-dkms
+
+# The nine data mounts, by the identifier the kernel answers so a disk that is
+# re-enumerated keeps its line. `roles/disks` writes them with `nofail` and a
+# 30 s timeout; `/` and `/boot/efi` are absent on purpose, because those two are
+# the lines a host must not come up without.
+#
+# The UUIDs were copied from `blkid`, never typed: a wrong one is a line that
+# fails at the next boot, and the role refuses one no block device carries.
+# `/mnt/ultrafaststorage` is the LVM volume, and its path is the stable name.
+disks_mounts:
+  - { path: /mnt/hdd0, src: "UUID=2a74a4c8-0710-4f2a-9b74-78506049b727" }
+  - { path: /mnt/hdd1, src: "UUID=78971035-8fc0-40b0-8e28-19f2603608ba" }
+  - { path: /mnt/hdd2, src: "UUID=e000e963-086c-47e4-863f-b66711360767" }
+  - { path: /mnt/hdd3, src: "UUID=c5d52a72-cf79-489a-bd86-1b9438796294" }
+  - { path: /mnt/hdd4, src: "UUID=06d67020-5236-437f-b853-d39f3fa387bb" }
+  - { path: /mnt/hdd5, src: "UUID=a9e4510e-aefe-40fc-8517-25704fee4cde" }
+  - { path: /mnt/snap, src: "UUID=e5b5bcb7-8f93-4c68-8666-3db595d0d516" }
+  - { path: /mnt/ssd0, src: "UUID=7422e7ba-31f4-48b0-9c4f-7b289481fb51" }
+  - { path: /mnt/ultrafaststorage, src: /dev/vg1/lvol0 }

@@ -32,6 +32,11 @@ union_options:
   - func.getattr=newest
   - moveonenospc=true
   - fsname=mergerfs
+  # `local-fs.target` starts `emergency.target` on a mount that fails, and
+  # emergency mode has no `sshd`. A union that cannot be made must not take the
+  # way in with it: `nfs-server` already refuses to publish a path it cannot
+  # find, so the loud failure stays there.
+  - nofail
 
 # The two options that can be changed on the mount that is already running, in
 # the form mergerfs reports them: the policy name `mfs` rather than the `true`

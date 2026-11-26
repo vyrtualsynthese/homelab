@@ -82,8 +82,9 @@ The trade — passwordless root for one named identity instead of a group — is
 | `packages` | all | removes what `inventory/host_vars/<host>.yml` names, after resolving each pattern against dpkg |
 | `system` | all | one time zone, two kernels kept (the running one and the newest other), `apt autoremove --purge`, the `rc` residue purged |
 | `firewall` | all | `ufw`, default deny in, the K3s and NFS ports opened to the addresses that use them |
+| `disks` | `storage` | the nine data mounts, `nofail` with a 30 s device timeout, so a missing disk cannot stop the host reaching `sshd`; `/` and `/boot/efi` stay strict |
 | `union` | `storage` | the mergerfs pool's line in `/etc/fstab` and its two runtime options: `moveonenospc`, `minfreespace` |
-| `nfs` | `storage` | the eight exports the cluster mounts, root squashed, `sync` |
+| `nfs` | `storage` | the seven exports the cluster mounts, root squashed, `sync` |
 | `snapraid` | `storage` | a nightly sync from cron, without the Python 2 runner it used to call |
 
 The roles are ordered in `site.yml`: `packages` before `system`, because the removals create orphans
