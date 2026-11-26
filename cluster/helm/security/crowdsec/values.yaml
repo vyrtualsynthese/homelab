@@ -60,7 +60,26 @@ crowdsec:
 
     # The chart's default value here holds the auto-registration block that lets
     # the agent register itself with the LAPI. Overriding this key replaces it,
-    # so it is repeated verbatim and the metrics listener is added beside it.
+    # so it is repeated here and the metrics listener is added beside it.
+    #
+    # `allowed_ranges` is the list of addresses that may register a machine, and
+    # a registered machine can push alerts that become decisions — so it names
+    # the agent and nothing else. One agent runs, as one Deployment pinned to
+    # `streaming`, and its registration reaches the LAPI from its pod address
+    # rather than from the node's: the LAPI's log shows `10.42.3.x` on the
+    # `watchers` calls (read 2026-11-26). `10.42.3.0/24` is therefore all of it.
+    #
+    # The first version allowed `192.168.0.0/16` and `10.0.0.0/8` — the whole
+    # LAN, the WireGuard tunnel inside it, and every pod and Service address.
+    # That was the defect (card #570): the registration endpoint answered every
+    # device in the house. Loopback went with them, because nothing registers
+    # from it — the LAPI's own client logs in with the credential it already has.
+    #
+    # This is a snapshot of the node's pod CIDR
+    # (`kubectl get node streaming -o jsonpath='{.spec.podCIDR}'`). It moves only
+    # if the CNI renumbers the node, and that failure is loud rather than quiet:
+    # the agent's `wait-for-lapi-and-register` init container crash-loops, the
+    # pod never becomes Ready, and the security rules report the stack blind.
     config.yaml.local: |
       api:
         server:
@@ -68,10 +87,7 @@ crowdsec:
             enabled: true
             token: "${REGISTRATION_TOKEN}"
             allowed_ranges:
-              - "127.0.0.1/32"
-              - "192.168.0.0/16"
-              - "10.0.0.0/8"
-              - "172.16.0.0/12"
+              - "10.42.3.0/24"
       prometheus:
         # The default binds 127.0.0.1, which the kubelet's scrape cannot reach.
         # Prometheus here scrapes pods by annotation, so the listener has to be

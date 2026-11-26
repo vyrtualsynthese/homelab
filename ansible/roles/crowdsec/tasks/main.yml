@@ -48,6 +48,21 @@
     state: present
     update_cache: true
 
+# The address is the one literal in this role that can be wrong with nothing
+# else noticing, so the play stops here instead of writing a bouncer that polls
+# a dead address and leaves the bans frozen. `/health` is the endpoint the
+# kubelet probes: it needs no credential and proves the ClusterIP and its
+# endpoints, not the key. This runs before the configuration is templated, so a
+# wrong address leaves the previous file and the running service untouched.
+- name: Prove the LAPI answers at the address the bouncer will poll
+  ansible.builtin.uri:
+    url: "{{ crowdsec_lapi_url }}health"
+    status_code: 200
+  register: crowdsec_lapi_health
+  retries: 6
+  delay: 5
+  until: crowdsec_lapi_health.status == 200
+
 - name: Configure it
   ansible.builtin.template:
     src: bouncer.yaml.j2

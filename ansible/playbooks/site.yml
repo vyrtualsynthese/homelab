@@ -38,8 +38,8 @@
     # bouncer's role, which is also streaming-only.
     - role: traefik_logs
       when: "inventory_hostname == 'streaming'"
-    # The ban layer. It needs the LAPI's NodePort, so it is applied after
-    # ArgoCD has synced the chart and `cscli bouncers list` shows `firewall`.
+    # The ban layer. It needs the LAPI's address, so it is applied after ArgoCD
+    # has synced the chart: the ClusterIP the role polls is created by it.
     - role: crowdsec
       when: "inventory_hostname == 'streaming'"
       vars:

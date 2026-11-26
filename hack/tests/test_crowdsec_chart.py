@@ -7,7 +7,9 @@ ranges and the four node addresses before any of this bans the operator's own
 LAN.
 """
 
+import ipaddress
 import pathlib
+import re
 import unittest
 
 import yaml
@@ -17,6 +19,11 @@ CHART = ROOT / "cluster/helm/security/crowdsec"
 APP = ROOT / "cluster/argocd/projects/security/crowdsec.yaml"
 
 WHITELIST_RANGES = ("192.168.1.0/24", "10.8.0.0/24", "10.42.0.0/16", "10.43.0.0/16")
+
+
+def without_comments(text):
+    """A template's comment explains what it must not render; only the rest counts."""
+    return "\n".join(line for line in text.splitlines() if not line.lstrip().startswith("#"))
 
 
 class ChartTests(unittest.TestCase):
@@ -111,10 +118,40 @@ class ChartTests(unittest.TestCase):
         self.assertEqual(app["spec"]["source"]["path"], "cluster/helm/security/crowdsec")
         self.assertNotIn("automated", yaml.safe_dump(app["spec"]["syncPolicy"]))
 
-    def test_the_lan_service_is_the_only_new_port(self):
-        template = (CHART / "templates/lapi-lan-service.yaml").read_text()
-        self.assertIn("type: NodePort", template)
-        self.assertIn("nodePort: 30500", template)
+    def test_the_host_service_is_a_clusterip_and_publishes_nothing(self):
+        # A NodePort answers on every node's LAN address, which puts the LAPI's
+        # management surface in front of every device on the house network. A
+        # ClusterIP answers the node that runs the bouncer and nothing else.
+        spec = without_comments((CHART / "templates/lapi-host-service.yaml").read_text())
+        self.assertIn("type: ClusterIP", spec)
+        self.assertNotIn("NodePort", spec)
+        self.assertNotIn("nodePort", spec)
+        self.assertNotIn("192.168.", spec)
+
+    def test_the_host_service_pins_its_address_inside_the_service_network(self):
+        # The address is written into the bouncer's host configuration, so it
+        # must be fixed in this file rather than allocated at creation.
+        spec = without_comments((CHART / "templates/lapi-host-service.yaml").read_text())
+        address = re.search(r"^  clusterIP: (\S+)$", spec, re.MULTILINE).group(1)
+        self.assertIn(ipaddress.ip_address(address), ipaddress.ip_network("10.43.0.0/16"))
+
+    def test_no_template_publishes_a_port_on_a_node(self):
+        templates = sorted((CHART / "templates").glob("*.yaml"))
+        self.assertTrue(templates)
+        for path in templates:
+            spec = without_comments(path.read_text())
+            self.assertNotIn("NodePort", spec, path.name)
+            self.assertNotIn("nodePort", spec, path.name)
+
+    def test_auto_registration_is_open_to_the_agents_node_subnet_only(self):
+        # A registered machine can push alerts that become decisions, so the
+        # addresses allowed to register are the agent's and no others: not the
+        # LAN, not the tunnel inside it, not the pod network at large.
+        config = yaml.safe_load(self.crowdsec["config"]["config.yaml.local"])
+        ranges = config["api"]["server"]["auto_registration"]["allowed_ranges"]
+        self.assertEqual(ranges, ["10.42.3.0/24"])
+        for wide in ("192.168.0.0/16", "10.0.0.0/8", "172.16.0.0/12", "127.0.0.1/32"):
+            self.assertNotIn(wide, ranges)
 
 
 if __name__ == "__main__":

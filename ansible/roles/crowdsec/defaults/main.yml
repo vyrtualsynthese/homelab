@@ -1,10 +1,14 @@
 ---
-# The LAPI's NodePort on the cluster, reached through `streaming` itself: the
-# bouncer is a host service and does not resolve cluster DNS. The address is read
-# from the inventory rather than written here — `hack/tests/test_ansible_layer.py`
-# fails any host address repeated in a second file — and the NodePort itself is
-# fixed by the CrowdSec chart's Service.
-crowdsec_lapi_url: "http://{{ hostvars['streaming'].ansible_host }}:30500/"
+# The LAPI, from a host service that cannot resolve cluster DNS. This is the
+# ClusterIP pinned by
+# `cluster/helm/security/crowdsec/templates/lapi-host-service.yaml`, not a node
+# address: the NodePort that came first answered on every node's LAN address,
+# which published the API to the whole house for one consumer (card #570). A
+# ClusterIP answers a cluster node's own network namespace — the bouncer's node
+# is `streaming` — and no host on the LAN. The play proves it answers before it
+# writes this address into the bouncer's file, and
+# `hack/tests/test_ansible_streaming_roles.py` fails if the two files disagree.
+crowdsec_lapi_url: "http://10.43.249.250:8080/"
 crowdsec_package: crowdsec-firewall-bouncer-nftables
 crowdsec_keyring: /etc/apt/keyrings/crowdsec.asc
 # The distro-agnostic repository: `suites` below is `[any]`, and that pair must
