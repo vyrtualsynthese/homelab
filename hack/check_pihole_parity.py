@@ -32,16 +32,17 @@ import urllib.request
 
 HOSTS = {"rbp0": "192.168.1.22", "rbp1": "192.168.1.38"}
 
-# Pi-hole mints its own self-signed leaf, and its only name is `pi.hole`, so the
-# address this check dials could never match it. Each host is pinned to its own
-# leaf instead: the PEM beside this file is the only trust anchor its connection
-# accepts, which says more than a name check, because a server without that key
-# cannot complete the handshake. HTTP answers on the same address, and that is
-# how the app password used to cross the LAN readable to any device on it; it
-# is not an option here.
+# Pi-hole serves a leaf from the ashulab internal CA, one per host, whose name
+# (pihole-rbp0.kub.local) is not the address this check dials. Each host is
+# pinned to its own leaf instead: the PEM beside this file is the only trust
+# anchor its connection accepts, which says more than a name check, because a
+# server without that key cannot complete the handshake. HTTP answers on the
+# same address, and that is how the app password used to cross the LAN readable
+# to any device on it; it is not an option here.
 #
-# A reflash mints a new certificate, and the read then fails until the pin is
-# refreshed — deliberately, since an unknown certificate is the one thing this
+# Replacing a leaf changes the pin — a renewal, a reflash, or the change that
+# moved Pi-hole off the pair it minted. The read then fails until the pin is
+# refreshed, deliberately, since an unknown certificate is the one thing this
 # must not accept silently. Re-export the pair and commit them:
 #
 #     for h in 192.168.1.22 192.168.1.38; do
@@ -110,8 +111,9 @@ def _context(host: str) -> ssl.SSLContext:
         context = ssl.create_default_context(cafile=str(CERTIFICATES[host]))
     except OSError as error:
         raise RuntimeError(f"{host}: cannot read its pinned certificate: {error}") from error
-    # A self-signed leaf is a trust anchor only under the partial-chain rule, and
-    # it carries no name for the address: the certificate itself is the pin.
+    # A leaf signed by a root that is not in the store is a trust anchor only
+    # under the partial-chain rule, and it carries a name this check does not
+    # dial: the certificate itself is the pin.
     context.verify_flags |= ssl.VERIFY_X509_PARTIAL_CHAIN
     context.check_hostname = False
     return context

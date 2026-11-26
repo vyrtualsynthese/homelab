@@ -128,12 +128,12 @@ is real. The root, its two backups and the restore drill are
 
 ### The edge Pis are the one exception
 
-The two Pi-holes serve their own admin surfaces from the host, not through this router. Pi-hole's panel
-answers on 443 with a certificate it mints itself; the wg-easy VPN panel answers on 8443 behind a Caddy
-container, on a per-host leaf from the same internal CA — `vpn-rbp0.kub.local` and
-`vpn-rbp1.kub.local`, mapped by Pi-hole's own `02-my-wildcard-dns.conf` above its `*.kub.local`
-wildcard. The leaf is per host on purpose: the shared `*.kub.local` key on an edge host would be a key
-to every internal name.
+The two Pi-holes serve their own admin surfaces from the host, not through this router. Both now
+present per-host leaves from the same internal CA: Pi-hole's panel and API on 443 as
+`pihole-rbp0.kub.local` and `pihole-rbp1.kub.local`, and the wg-easy VPN panel on 8443 behind a Caddy
+container as `vpn-rbp0.kub.local` and `vpn-rbp1.kub.local`. All four names are mapped by Pi-hole's own
+`02-my-wildcard-dns.conf` above its `*.kub.local` wildcard. The leaf is per host on purpose: the shared
+`*.kub.local` key on an edge host would be a key to every internal name.
 
 Neither is a Traefik route, and that is the point: the VPN panel has to open when the cluster is down,
 which is also why its password login stays beside its authentik OIDC client. Its sign-in through

@@ -11,6 +11,8 @@
 >
 > **Sources** `hack/internal-cert.sh`, `ansible/pi/hosts-pi.sh`,
 > `ansible/playbooks/templates/runners/Caddyfile`,
+> `ansible/playbooks/templates/runners/pihole.settings`,
+> `cluster/helm/monitoring/pihole-exporter/values.yaml`,
 > `ansible/playbooks/templates/runners/02-my-wildcard-dns.conf`
 
 Date: 2026-11-15
@@ -126,24 +128,48 @@ the new `local-ca.pem`. Nothing else changes — the host names, the routes and 
 
 ## A leaf for a host that is not the cluster
 
-The two edge Pis terminate TLS for their own admin surfaces, so they need a name the internal root vouches
-for. They get their own leaf, not a copy of the wildcard: the `*.kub.local` key on an edge host would be a
-key to every internal name, and the leaf is disposable by design.
+The two edge Pis terminate TLS for two admin surfaces of their own, so each needs names the internal
+root vouches for: the wg-easy panel behind Caddy on 8443, and Pi-hole's own panel and API on 443. They
+get their own leaves, not a copy of the wildcard: the `*.kub.local` key on an edge host would be a key
+to every internal name, and the leaf is disposable by design.
 
 ```bash
-hack/internal-cert.sh --host vpn-rbp0.kub.local     # writes vpn-rbp0.kub.local.pem and -key.pem
+hack/internal-cert.sh --host vpn-rbp0.kub.local
 hack/internal-cert.sh --host vpn-rbp1.kub.local
+hack/internal-cert.sh --host pihole-rbp0.kub.local
+hack/internal-cert.sh --host pihole-rbp1.kub.local
 ```
 
 The script reuses the CA in `~/.config/secrets/kub-local/` and never touches `kub.local.pem`, so issuing
-one cannot disturb a cluster route. It prints the `scp` pair; the destination is
-`~/dockers/certs/tls.pem` and `tls-key.pem` on that host, which is where `hosts-pi.sh` requires them and
-`backup` carries them off. The leaf lasts two years, like the cluster's: re-issue it with the same command
-before it expires and copy the new pair the same way. A reflash restores the old pair with the rest of the
+one cannot disturb a cluster route. It writes `NAME.pem` and `NAME-key.pem`, prints the `scp` pair, and
+each surface takes them its own way:
+
+- **The VPN panel** reads `certs/tls.pem` and `certs/tls-key.pem`, named by the `Caddyfile`. Copy the
+  `vpn-*` pair under those two names.
+- **Pi-hole** reads one combined PEM from `webserver.tls.cert`; there is no separate key setting. Put
+  the certificate first and its key after it:
+
+  ```bash
+  cat pihole-rbp0.kub.local.pem pihole-rbp0.kub.local-key.pem > pihole.pem
+  ```
+
+  Copy that to `~/dockers/certs/pihole.pem` on `rbp0` (and the `rbp1` pair to `rbp1`). `pihole.settings`
+  names it through `FTLCONF_webserver_tls_cert`, and the compose mounts `./certs` read-only into the
+  Pi-hole container.
+
+`ansible/pi/hosts-pi.sh` requires all three files, writes none of them, and `backup` carries them off
+the host. A leaf lasts two years, like the cluster's: re-issue it with the same command before it
+expires and copy the new file the same way. A reflash restores the old pair with the rest of the
 stack, so a leaf that expired before the reflash comes back expired.
 
-The names are Pi-hole's to answer: `02-my-wildcard-dns.conf` maps `vpn-rbp0.kub.local` and
-`vpn-rbp1.kub.local` to the two Pis, above the `*.kub.local` wildcard.
+The names are Pi-hole's to answer: `02-my-wildcard-dns.conf` maps `vpn-rbp0.kub.local`,
+`vpn-rbp1.kub.local`, `pihole-rbp0.kub.local` and `pihole-rbp1.kub.local` to the two Pis, above the
+`*.kub.local` wildcard that points at the router.
+
+A replaced Pi-hole leaf also changes the pin in `hack/pihole/<host>.pem`: `hack/check_pihole_parity.py`
+trusts each panel's own certificate and nothing else, so re-export both after the change and commit
+them in the same one. The cluster's exporter does not pin: it dials `pihole-<host>.kub.local` and
+points Go's `SSL_CERT_FILE` at this root, which the chart carries in a ConfigMap.
 
 ## Installing the root on a client
 

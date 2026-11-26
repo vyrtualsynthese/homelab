@@ -128,6 +128,18 @@ panel_host() {
     esac
 }
 
+# The name Pi-hole serves its panel and API on. Its own leaf, for the same
+# reason as the VPN panel's: the shared `*.kub.local` key on an edge host would
+# be a key to every internal name. Pi-hole answers it from
+# 02-my-wildcard-dns.conf, and the cluster's exporter is the client that needs
+# the name to verify.
+pihole_host() {
+    case "$1" in
+        rbp0) printf 'pihole-rbp0.kub.local\n' ;;
+        rbp1) printf 'pihole-rbp1.kub.local\n' ;;
+    esac
+}
+
 desired_compose() {
     sed "s/@WG_UDP_PORT@/$(wg_udp_port "$1")/g" "$TEMPLATES/docker-compose.yml"
 }
@@ -184,7 +196,7 @@ EOF
 
 require_env() {
     local missing=0 file
-    for file in pihole.env wg-easy.env certs/tls.pem certs/tls-key.pem; do
+    for file in pihole.env wg-easy.env certs/tls.pem certs/tls-key.pem certs/pihole.pem; do
         if [ ! -f "$ROOT$STACK_DIR/$file" ]; then
             echo "missing $ROOT$STACK_DIR/$file" >&2
             missing=1
@@ -831,6 +843,12 @@ cmd_render() {
     echo "required, never printed and never written: this host's own leaf from"
     echo "the internal CA, 'hack/internal-cert.sh --host $(panel_host "$host")'."
     echo "caddy serves it on 8443 and wg-easy's 5000 stays on the compose network"
+    echo "--- $STACK_DIR/certs/pihole.pem"
+    echo "required, never printed and never written: one combined PEM (certificate"
+    echo "then key) for $(pihole_host "$host"), from the same CA, minted with"
+    echo "'hack/internal-cert.sh --host $(pihole_host "$host")'. Pi-hole reads it"
+    echo "through FTLCONF_webserver_tls_cert; ./certs is mounted read-only into"
+    echo "the pihole container and the cluster's exporter verifies it on 443"
     echo "--- the panel"
     echo "https://$(panel_host "$host"):8443, sign-in through authentik (OIDC) and"
     echo "the panel's own password when the cluster is down"
@@ -965,7 +983,7 @@ cmd_verify() {
         exit 1
     fi
 
-    for file in pihole.env wg-easy.env certs/tls.pem certs/tls-key.pem; do
+    for file in pihole.env wg-easy.env certs/tls.pem certs/tls-key.pem certs/pihole.pem; do
         if [ ! -f "$ROOT$STACK_DIR/$file" ]; then
             echo "MISSING $ROOT$STACK_DIR/$file"
             problems=1

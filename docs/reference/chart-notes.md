@@ -626,10 +626,11 @@ the alert's.
 
 ### pihole-exporter
 
-As of 2026-11-26: one object, the Deployment. The app is stateless and Prometheus
-discovers the pod by annotation, so there is no Service, no claim and no route; the
-three scrape annotations are rendered in the template from `metrics.port`, which is
-also `PORT` and the `containerPort`, because the chart had announced `9902` for a
+As of 2026-11-26: two objects, the Deployment and a ConfigMap carrying the
+internal CA root. The app is stateless and Prometheus discovers the pod by
+annotation, so there is no Service, no claim and no route; the three scrape
+annotations are rendered in the template from `metrics.port`, which is also
+`PORT` and the `containerPort`, because the chart had announced `9902` for a
 listener on `9617`.
 
 One instance reads both edge Pis (`PIHOLE_HOSTNAME` is a list), and the two app
@@ -639,12 +640,14 @@ passwords, so a single `PIHOLE_PASSWORD` could not carry both, and a file keeps 
 secret out of the process environment. `values.yaml` fails to render when the two
 lists differ in length, because the pairing is positional.
 
-The hop to each Pi is HTTPS on 443 — Pi-hole v6 terminates TLS itself — with
-`SKIP_TLS_VERIFICATION=true`. The certificate is the one each Pi mints at first
-start: CN `pi.hole`, self-signed, and the same CN on both hosts, so no client can
-verify it against a name it reached. What that buys is encryption between `nuc0`
-and the Pis, not an authenticated peer; the fix is a leaf per Pi from the internal
-CA (`hack/internal-cert.sh --host`), which is a Pi change and a card of its own.
+The hop to each Pi is HTTPS on 443 — Pi-hole v6 terminates TLS itself — and each
+Pi presents its own leaf from the ashulab internal CA, for `pihole-rbp0.kub.local`
+and `pihole-rbp1.kub.local`. The exporter dials those names and trusts the root
+through `SSL_CERT_FILE`, pointed at a ConfigMap that carries it: the peer is
+authenticated, and `SKIP_TLS_VERIFICATION` is gone. The names are Pi-hole's own
+records in `02-my-wildcard-dns.conf`, above the `*.kub.local` wildcard that points
+at the router; the exporter resolves them through cluster DNS, which forwards off
+the node.
 
 Liveness and readiness share the image's own `-healthcheck`, which asks `/liveness`
 on `PORT`. The only failure that leaves the process up is Pi-hole refusing the

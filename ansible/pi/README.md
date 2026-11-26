@@ -50,7 +50,7 @@ PI_ROOT=/tmp/fake-pi ./hosts-pi.sh setup rbp0
 | Docker's repository and the four packages | yes | a fresh image has no runtime; `setup` installs the pinned set from `download.docker.com` |
 | `pihole.env` | **no** | it holds the Pi-hole panel password and nothing else: `FTLCONF_webserver_api_password`, `0600`, owned by the account that runs compose, gitignored. `setup` requires it and names it when it is missing. The v5 name `WEBPASSWORD` is ignored by this image |
 | `wg-easy.env` | **no** | one key, `OAUTH_OIDC_CLIENT_SECRET`, the VPN panel's own client secret in authentik. Gitignored, `0600`, required by `setup` and never written by it; the same value is `WG_EASY_CLIENT_SECRET` in the cluster's `authentik-sso` Secret, because Secrets do not leave the cluster |
-| `certs/` | **no** | `tls.pem` and `tls-key.pem`, this host's own leaf from the internal CA (`hack/internal-cert.sh --host <name>`) and the key Caddy serves on 8443. Required by `setup`, never written, and carried off the host by `backup` |
+| `certs/` | **no** | three files: `tls.pem` and `tls-key.pem`, this host's own leaf from the internal CA (`hack/internal-cert.sh --host vpn-rbp0.kub.local`) that Caddy serves on 8443, and `pihole.pem`, the same kind of leaf for the Pi-hole panel, combined certificate and key in one file. Required by `setup`, never written, and carried off the host by `backup` |
 | `config/` (wg-easy's database) | **no** | since wg-easy 15 the panel account, host, port, DNS and peers live in `config/wg-easy.db`, not in an environment file. `backup` copies it with the rest of the stack. A fresh container writes it `0644`, so `setup` narrows it to `0600` root-owned once the panel has created it — every peer's private key and the panel's password hash are in that file — and `verify` reads the mode back |
 | `/boot/firmware/config.txt`, `cmdline.txt` | **no** | see below |
 
@@ -143,8 +143,28 @@ prints `changed=0` on a host that already matches.
   reads both `/api/config` and `/api/lists` through `PIHOLE_RBP0_API_KEY` and `PIHOLE_RBP1_API_KEY`
   and exits 1 naming every setting that differs. A list added in one panel is invisible to `verify`
   and visible to it. It dials HTTPS and trusts only each panel's own certificate, kept in
-  `hack/pihole/`, so the app password never crosses the LAN in the clear; a reflash mints a new
-  certificate and the check fails until that pair is re-exported and committed.
+  `hack/pihole/`, so the app password never crosses the LAN in the clear; a changed leaf — a renewal,
+  or a reflash that did not restore `certs/pihole.pem` — fails the check until the new pair is
+  re-exported and committed.
+
+### Pi-hole's panel and API certificate
+
+Pi-hole v6 terminates TLS itself on 443, and the pair it minted at first start was the same on both
+hosts: CN `pi.hole`, self-signed. A client reaching the address could not verify it against any name,
+so the cluster's exporter read both Pis with verification off — encrypted, with an unauthenticated
+peer.
+
+- **One leaf per host**, `pihole-rbp0.kub.local` and `pihole-rbp1.kub.local`, from the same internal
+  CA as the rest. The names are in `02-my-wildcard-dns.conf` above the `*.kub.local` wildcard, because
+  the wildcard points at the router and dnsmasq serves the longest suffix.
+- **One combined PEM per host** at `certs/pihole.pem`: certificate first, then the key. Pi-hole reads
+  both from `webserver.tls.cert` — the key is not a separate setting — and `pihole.settings` names the
+  path through `FTLCONF_webserver_tls_cert`. The compose mounts `./certs` read-only into the pihole
+  container, the same directory Caddy reads.
+- **The exporter trusts the root**, mounts it as a ConfigMap and dials the names. There is no
+  `SKIP_TLS_VERIFICATION` left in its environment.
+- **`hack/check_pihole_parity.py` pins each host's leaf.** Replacing the certificate changes the pin:
+  re-export the two leaves after `setup` and commit them, or the check fails by design.
 
 ### The VPN panel is served by Caddy, on the host itself
 
