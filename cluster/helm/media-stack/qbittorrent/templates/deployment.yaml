@@ -23,8 +23,9 @@ spec:
         {{- toYaml . | nindent 8 }}
         {{- end }}
     spec:
-      # Public resolvers on purpose: the torrent client's DNS must not depend on
-      # the cluster. Cluster names are resolved through the single hostAlias below.
+      # The tunnel's resolver on purpose: the torrent client's names leave from
+      # the same exit as its traffic and must not depend on the cluster. Cluster
+      # names are resolved through the single hostAlias below.
       dnsPolicy: {{ .Values.dns.policy }}
       dnsConfig:
         nameservers:

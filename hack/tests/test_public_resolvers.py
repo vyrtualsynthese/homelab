@@ -3,11 +3,12 @@
 A resolver sees every name the house asks for, so the EU-only provider rule
 covers it, and Pi-hole is the only filter in the path. Two pods carry their own
 resolvers because they must not resolve through the cluster, which makes their
-`values.yaml` the one place a public address is written down.
+`values.yaml` the one place a resolver address is written down: `blackbox-exporter`
+asks DNS4EU, and `qbittorrent` asks the resolver inside its AirVPN tunnel.
 
 The decision is `docs/decisions/2026-11-27-public-dns-is-dns4eu-unfiltered.md`.
-This test holds the chart half of it: the pair is the only one allowed, and it
-is what both of those charts actually carry.
+This test holds the chart half of it: the DNS4EU pair is the only public one
+allowed, and each chart carries the resolver it is meant to.
 """
 
 import pathlib
@@ -19,6 +20,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 HELM = ROOT / "cluster/helm"
 
 DNS4EU = ["86.54.11.100", "86.54.11.200"]
+AIRVPN = ["10.4.0.1"]
 BANNED = {
     "1.1.1.1",
     "1.0.0.1",
@@ -64,10 +66,10 @@ class NoForeignPublicResolver(unittest.TestCase):
         dns = data["blackbox"]["dnsConfig"]
         self.assertEqual(dns["nameservers"], DNS4EU)
 
-    def test_qbittorrent_resolves_through_dns4eu(self):
+    def test_qbittorrent_resolves_through_its_tunnel(self):
         chart = HELM / "media-stack/qbittorrent"
         data = yaml.safe_load((chart / "values.yaml").read_text())
-        self.assertEqual(data["dns"]["nameservers"], DNS4EU)
+        self.assertEqual(data["dns"]["nameservers"], AIRVPN)
 
     def test_pi_hole_forwards_to_dns4eu(self):
         settings = (

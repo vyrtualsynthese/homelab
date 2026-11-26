@@ -806,12 +806,12 @@ concluding the app itself is at fault.
 
 ## A related defect, already fixed
 
-The qBittorrent pod runs `dnsPolicy: None` with public resolvers (DNS4EU's unfiltered
-`86.54.11.100` and `86.54.11.200`; it listed Cloudflare's `1.1.1.1` and `1.0.0.1` until
-2026-11-27), so it cannot
-resolve in-cluster Service names at all. Its "run external program on torrent finished" hook calls
-`curl http://cross-seed:2468`, which failed either immediately (`Could not resolve host`) or after
-134 seconds — the time Linux waits for a TCP SYN to be answered — once per finished torrent.
+The qBittorrent pod runs `dnsPolicy: None` with its tunnel's resolver (AirVPN's `10.4.0.1`;
+DNS4EU's unfiltered `86.54.11.100` and `86.54.11.200` until 2026-11-27, and Cloudflare's
+`1.1.1.1` and `1.0.0.1` before that), so it cannot resolve in-cluster Service names at all. Its
+"run external program on torrent finished" hook calls `curl http://cross-seed:2468`, which failed
+either immediately (`Could not resolve host`) or after 134 seconds — the time Linux waits for a TCP
+SYN to be answered — once per finished torrent.
 
 That was fixed on 2026-11-13 by the commit that adds `hostAliases` to the pod
 (`🐛 fix(qbittorrent): let the completion hook resolve cross-seed`). The alias points at a literal

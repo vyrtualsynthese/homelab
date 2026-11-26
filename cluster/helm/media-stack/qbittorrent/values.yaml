@@ -138,16 +138,22 @@ container:
   # listens on a different port than the Service exposes.
   port: null
 
-# The pod runs with `dnsPolicy: None` and public resolvers on purpose: the
-# torrent client's DNS must not depend on the cluster's. The cost is that cluster
-# names do not resolve, which is why the post-download hook gets one hostAlias
-# below instead of a DNS route. The pair is DNS4EU's unfiltered service, never
-# Cloudflare: see docs/decisions/2026-11-27-public-dns-is-dns4eu-unfiltered.md.
+# The pod runs with `dnsPolicy: None` and the tunnel's own resolver on purpose:
+# the torrent client's traffic and its name lookups both leave from the exit, so
+# neither may depend on the house's resolver or on the cluster's. AirVPN publishes
+# `10.4.0.1` from every virtual subnet and it is reachable only through wg0, which
+# is also the kill switch. One address is enough: it sits behind the same single
+# server as the traffic, so a second would not survive an outage the tunnel does
+# not. `wg-quick`'s `DNS` line cannot do this — it rewrites only the sidecar's own
+# `/etc/resolv.conf`, never this container's.
+# The cost is that cluster names do not resolve, which is why the post-download
+# hook gets one hostAlias below instead of a DNS route. qBittorrent is the
+# recorded exception to Pi-hole first; the rest of the rule is
+# docs/decisions/2026-11-27-public-dns-is-dns4eu-unfiltered.md.
 dns:
   policy: None
   nameservers:
-    - 86.54.11.100
-    - 86.54.11.200
+    - 10.4.0.1
   # The post-download hook calls cross-seed by name. This is the cross-seed
   # Service ClusterIP; update it if that Service is recreated.
   crossSeedServiceIP: "10.43.104.9"
