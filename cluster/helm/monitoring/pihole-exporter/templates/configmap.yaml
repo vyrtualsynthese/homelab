@@ -1,0 +1,14 @@
+# The internal CA root. The exporter's Go TLS client builds its trust store from
+# SSL_CERT_FILE, which the Deployment points at this file, so the only server it
+# accepts is one carrying a leaf this root signed. A ConfigMap and not a Secret:
+# the root certificate is public — its key is not, and never leaves
+# ~/.config/secrets/kub-local/.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "fullname" . }}-ca
+  labels:
+    {{- include "labels" . | nindent 4 }}
+data:
+  {{ .Values.pihole.ca.configMapKey }}: |
+{{ .Values.pihole.ca.certificate | indent 4 }}

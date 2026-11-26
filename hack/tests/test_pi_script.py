@@ -97,6 +97,37 @@ def test_the_panel_is_not_published_and_caddy_is_the_only_way_in():
     )
 
 
+def test_the_pihole_panel_serves_a_leaf_from_the_internal_ca():
+    """Pi-hole minted its own CN=pi.hole leaf, and both hosts presented the same
+    one, so no client could verify it against the address it dialled. Each host
+    now serves one combined PEM from the internal CA, named by
+    `webserver.tls.cert`, and ./certs reaches the container read-only."""
+    compose = yaml.safe_load(
+        (REPO / "ansible/playbooks/templates/runners/docker-compose.yml").read_text()
+    )
+    assert "./certs:/certs:ro" in compose["services"]["pihole"]["volumes"]
+
+    settings = (
+        REPO / "ansible/playbooks/templates/runners/pihole.settings"
+    ).read_text()
+    assert "FTLCONF_webserver_tls_cert=/certs/pihole.pem" in settings
+
+    for host, name in (("rbp0", "pihole-rbp0.kub.local"), ("rbp1", "pihole-rbp1.kub.local")):
+        out = run("render", host)
+        assert out.returncode == 0, out.stderr
+        assert name in out.stdout
+
+
+def test_each_pihole_name_wins_over_the_wildcard():
+    """The cluster's exporter dials the name, so the record has to beat the
+    `*.kub.local` wildcard above it; dnsmasq matches the longest suffix."""
+    dns = (
+        REPO / "ansible/playbooks/templates/runners/02-my-wildcard-dns.conf"
+    ).read_text()
+    assert "address=/pihole-rbp0.kub.local/192.168.1.22" in dns
+    assert "address=/pihole-rbp1.kub.local/192.168.1.38" in dns
+
+
 def test_renovate_may_bump_wg_easy_again():
     """The hold at <15 existed only until the v14 config was migrated. Leaving
     it behind freezes the image on the release that carried the migration."""
@@ -159,7 +190,7 @@ def test_setup_places_the_caddyfile_and_verify_names_a_different_one(tmp_path):
 
 
 def test_setup_refuses_without_the_panel_secret_or_its_certificate(tmp_path):
-    for missing in ("wg-easy.env", "certs/tls.pem", "certs/tls-key.pem"):
+    for missing in ("wg-easy.env", "certs/tls.pem", "certs/tls-key.pem", "certs/pihole.pem"):
         root = tmp_path / missing.replace("/", "-")
         stack = _pi_fixture(root)
         (stack / missing).unlink()
@@ -403,6 +434,7 @@ def _pi_fixture(root):
     (stack / "certs").mkdir()
     (stack / "certs/tls.pem").write_text("-----BEGIN CERTIFICATE-----\n")
     (stack / "certs/tls-key.pem").write_text("-----BEGIN PRIVATE KEY-----\n")
+    (stack / "certs/pihole.pem").write_text("-----BEGIN CERTIFICATE-----\n")
     (root / "home/vronteix/.ssh").mkdir(parents=True)
     (root / "home/vronteix/.ssh/authorized_keys").write_text(
         "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBIltfI3EkKuIHapGzdy1weSV5AiBigks/Pm4zR9Xqd5 valentin@laptop\n"

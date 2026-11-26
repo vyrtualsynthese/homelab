@@ -43,8 +43,10 @@ covered the Secrets deleted the same day are in the vault's trash, not in the fo
   ones.
 - The edge Pis' `wg-easy.env` holds one key, `OAUTH_OIDC_CLIENT_SECRET`: the VPN panel's own client
   secret, copied from `WG_EASY_CLIENT_SECRET` in `authentik-sso`. It is written by hand on each host,
-  gitignored, required by `hosts-pi.sh`, and carried off the host only by `backup`. The panel's TLS
-  leaf and key sit beside it in `certs/`, minted with `hack/internal-cert.sh --host <name>`.
+  gitignored, required by `hosts-pi.sh`, and carried off the host only by `backup`. The two TLS leaves
+  sit beside it in `certs/`, minted with `hack/internal-cert.sh --host <name>`: `tls.pem` and
+  `tls-key.pem` for Caddy on 8443, and `pihole.pem` — certificate and key in one file — for Pi-hole's
+  own panel on 443.
 - `local-ca-key.pem` — the internal CA's private key, so a rebuild can reissue the `*.kub.local`
   leaf. `homelab-k8s-kube-system-local-cert` — the leaf and key Traefik actually serves, which is the
   pair the copies in `~/.config/secrets/kub-local/` are refreshed from, never the other way round.

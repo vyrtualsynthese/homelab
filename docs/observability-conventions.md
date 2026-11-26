@@ -95,6 +95,11 @@ switches; since 2026-11-18 it is scheduled by `nodeSelector` on `nuc0` rather th
 `node-type` label. Its image stays on `latest`: the registry publishes no
 semver or digest-friendly tags.
 
+`pihole-exporter` reads the two edge Pis by name — `pihole-rbp0.kub.local` and `pihole-rbp1.kub.local`
+— and verifies the leaf each one serves against the internal CA root, mounted into the pod and named
+through `SSL_CERT_FILE`. The names come from Pi-hole's own `02-my-wildcard-dns.conf`; cluster DNS
+forwards off the node, so the lookup is the same one the LAN gets.
+
 The blackbox exporter joined the stack on 2026-11-20: one replica on `nas`, probing the
 public names and both DNS zones
 ([`runbooks/cloud-monitoring.md`](runbooks/cloud-monitoring.md)). It is the one pod

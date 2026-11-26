@@ -52,6 +52,12 @@ spec:
               - key: {{ . }}
                 path: {{ . }}
               {{- end }}
+        # The internal root, mounted whole at the directory Go reads when
+        # SSL_CERT_FILE names a file inside it. The image is scratch, so there
+        # is no system store to shadow.
+        - name: pihole-ca
+          configMap:
+            name: {{ include "fullname" . }}-ca
       containers:
         - name: {{ .Chart.Name }}
           securityContext:
@@ -71,8 +77,12 @@ spec:
               value: {{ .Values.pihole.port | quote }}
             - name: PIHOLE_HOSTNAME
               value: {{ join "," .Values.pihole.hostnames | quote }}
-            - name: SKIP_TLS_VERIFICATION
-              value: {{ .Values.pihole.skipTLSVerification | quote }}
+            # Go's TLS client reads its roots from SSL_CERT_FILE, and the
+            # exporter sets no RootCAs of its own, so this file is the whole
+            # trust store. It carries the ashulab internal root and no public
+            # CA: each Pi's name is verified against the leaf it serves.
+            - name: SSL_CERT_FILE
+              value: "/etc/ssl/certs/{{ .Values.pihole.ca.configMapKey }}"
             # One path per host, comma-separated, in the order of hostnames
             # above. The two Pis have different app passwords, which is why this
             # is not a single Secret key.
@@ -88,6 +98,9 @@ spec:
           volumeMounts:
             - name: pihole-auth
               mountPath: {{ .Values.pihole.passwordSecret.mountPath }}
+              readOnly: true
+            - name: pihole-ca
+              mountPath: /etc/ssl/certs
               readOnly: true
           # The image is scratch with no shell and no HTTP client, so the binary
           # is its own check: -healthcheck GETs /liveness on PORT. Liveness and

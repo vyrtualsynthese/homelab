@@ -111,10 +111,9 @@ def test_the_api_key_is_posted_over_https_only(monkeypatch):
 
 
 def test_the_connection_trusts_only_the_panels_pinned_certificate():
-    """Pi-hole mints a self-signed leaf whose only name is `pi.hole`, so the
-    address the check dials can never match it: the committed leaf is the whole
-    trust store instead, and a server without its key cannot complete the
-    handshake."""
+    """The leaf carries pihole-rbp0.kub.local, not the address this check dials,
+    so a name check can never pass: the committed leaf is the whole trust store
+    instead, and a server without its key cannot complete the handshake."""
     context = parity._context("rbp0")
 
     assert context.cert_store_stats()["x509"] == 1

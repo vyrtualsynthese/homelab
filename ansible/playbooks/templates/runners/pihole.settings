@@ -52,3 +52,13 @@ FTLCONF_misc_dnsmasq_lines=
 # How long the query database keeps its detail.
 FTLCONF_MAXNETAGE=30
 FTLCONF_MAXDBDAYS=30
+
+# The panel and API certificate: one combined PEM (certificate then key) per
+# host, from the internal CA. Pi-hole reads both from `webserver.tls.cert`; the
+# default is the self-signed pair it mints at /etc/pihole/tls.pem, whose only
+# name is pi.hole and which no client can verify against the address it dials.
+# The file is /certs/pihole.pem on both hosts, minted with
+# `hack/internal-cert.sh --host pihole-rbp0.kub.local`, and the compose mounts
+# ./certs read-only. hosts-pi.sh requires it, so `setup` refuses to run without
+# it rather than start a panel whose certificate is the one it minted itself.
+FTLCONF_webserver_tls_cert=/certs/pihole.pem

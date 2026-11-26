@@ -25,23 +25,58 @@ serviceAccount:
   name: ""
 
 pihole:
-  # Both edge Pis, in this order: rbp0 (192.168.1.22, the source of truth) then
-  # rbp1 (192.168.1.38). One exporter reads all of them and labels every series
-  # with its hostname, so Prometheus scrapes one target.
+  # Both edge Pis by name, in this order: rbp0 then rbp1. One exporter reads all
+  # of them and labels every series with its hostname, so Prometheus scrapes one
+  # target. The names are Pi-hole's own records in 02-my-wildcard-dns.conf; the
+  # bare addresses would never match a certificate, because a client verifies
+  # the name it dialled.
   hostnames:
-    - 192.168.1.22
-    - 192.168.1.38
+    - pihole-rbp0.kub.local
+    - pihole-rbp1.kub.local
 
-  # Pi-hole v6 serves its panel and API over TLS on 443 with a certificate it
-  # mints at first start: CN pi.hole, self-signed, valid thirty years. The name
-  # is no use to a client reaching two hosts — both Pis present the same one —
-  # and the root is not in the image, so verification cannot pass. The hop from
-  # nuc0 to each Pi is encrypted; the peer is not authenticated. Replacing this
-  # needs a leaf per Pi from the internal CA (hack/internal-cert.sh --host),
-  # which is a Pi change of its own and is not in this chart.
+  # Pi-hole v6 serves its panel and API over TLS on 443, and each Pi presents
+  # its own leaf from the ashulab internal CA — pihole-rbp0.kub.local and
+  # pihole-rbp1.kub.local, minted with `hack/internal-cert.sh --host`. The
+  # exporter trusts that root and nothing else, so the peer is authenticated and
+  # the skip that used to be here is gone. The root is public, which is why it
+  # lives in a ConfigMap: a Secret would imply a key that does not exist.
+  ca:
+    configMapKey: ashulab-internal-ca.pem
+    # The root every internal name chains to, valid until 2036-11-12. Its
+    # fingerprint and its two backups are in docs/runbooks/internal-ca.md; a
+    # `--force-ca` replacement changes this value in the same change that
+    # reinstalls the root on the Pis, and the exporter then dials leaves the old
+    # root cannot vouch for.
+    certificate: |
+      -----BEGIN CERTIFICATE-----
+      MIIEZjCCAs6gAwIBAgIUZNMggRB5hJCCslwipa2VLws9wXwwDQYJKoZIhvcNAQEL
+      BQAwOTEZMBcGA1UECgwQYXNodWxhYiBpbnRlcm5hbDEcMBoGA1UEAwwTYXNodWxh
+      YiBpbnRlcm5hbCBDQTAeFw0yNjExMTUwMjA5NDZaFw0zNjExMTIwMjA5NDZaMDkx
+      GTAXBgNVBAoMEGFzaHVsYWIgaW50ZXJuYWwxHDAaBgNVBAMME2FzaHVsYWIgaW50
+      ZXJuYWwgQ0EwggGiMA0GCSqGSIb3DQEBAQUAA4IBjwAwggGKAoIBgQDRdGY0oDcL
+      YAUfsbOFlzVh9ex8d1sf16HGVpWQu/nzeiq/uPOrx3diw6BUK15sQAVEMz6P632a
+      1VHw2QJDTl4+taFWO+qFsl2EMt457tn0OatfDp8va8Kb14ApTmfe3R+mHHyv0Umc
+      s+Sh4uYcJ0lcpHg1J65fbim84LYxuEfHvNEwWoizKGcrG459ZZlP87UUSzFGK2/Q
+      S0VD8CYgki+Wk+mDWoQ966loWmsNeT1BnufOP6/gJUTQSJAOZg3Zw9dorXm47zCf
+      Z2Ck4C6Sk1qicrjdpERAJaLVhG177RzwzfbsbXNoBWDWUCJLpbQtwMOkaNq8X1Ck
+      PGPv8UFsmH5xouTaXVzvDri4Z32mZW3kNcXDeDESJwkmaX6upsjFDKwxn/2YkTfQ
+      qtXEtp+RWB2gt0rrpTh3Gr4qVess0SrNmdOng2qHupy8aWU09rUZTBFK2iMbObwV
+      2zGejUcga9/jz4BsU8Pk7RAj0iKJ/DGR28Ldxp+xteJmZ/0yuZS0oo0CAwEAAaNm
+      MGQwHwYDVR0jBBgwFoAUvr+LeXqnsbhPJxgSP+NHbihbozwwEgYDVR0TAQH/BAgw
+      BgEB/wIBADAOBgNVHQ8BAf8EBAMCAQYwHQYDVR0OBBYEFL6/i3l6p7G4TycYEj/j
+      R24oW6M8MA0GCSqGSIb3DQEBCwUAA4IBgQBaOsLJngJy1tP/xYINso6Vum6GkD/m
+      89uicqwXGQV3leoCIzNuoG5uXQR6yrJqnrQeaFI8HK1w7oRN6ASbuZPr7esAkuQZ
+      yQwuKEauR64HgfJIYekT7zpXhLtA38HrVnuD/JUW7YbTAv15eConQztWQQy3Zojk
+      CvLn8SOsBO0QGUHlsEK3uNr1WM/biKy5XIIMzCeqsUO2kcYOq4z2q1PHv5onrc7L
+      l2Hr9T09Li/nvTCsroOXVQ3Xcq+pauIXZGKA/DNYgT1QTbnWARZ+/CVQuJL7DHJ1
+      pzKtrFj1U08VAwdmvnU/VHsWjhThR2hr0qv5yeu1CS7jgpR4PKp88T+jMvFyidqV
+      SrTYe+s+yJsbcAmWtDFcIGs5dczYmNTWW6fz20LlAD+2t3QXoqPUqueY7KSV3kE1
+      SUnODaQGtjECRuP0zfUuKLV2IO10ZEg/YFmY5OPyYyU4oiuuM/7/SnwJ/jKhtYWx
+      IUHHgSH6UtnISz56ak+M9R5PFxqopdfvXZM=
+      -----END CERTIFICATE-----
+
   protocol: https
   port: 443
-  skipTLSVerification: true
 
   # Application passwords, one per hostname above and in the same order, because
   # the exporter's PIHOLE_PASSWORD_FILE is a comma-separated list it pairs

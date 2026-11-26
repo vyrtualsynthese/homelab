@@ -116,11 +116,23 @@ if [ -n "$HOST_NAME" ]; then
   openssl x509 -in "$HOST_CRT" -noout -subject -dates -ext subjectAltName | sed 's/^/         /'
   echo "root   : $OUT/$CA_CRT   (the root every client already trusts)"
   echo
-  echo "==> put the pair on the host that serves the name:"
-  printf '    ssh vronteix@<host> mkdir -p ~/dockers/certs\n    scp %s/%s vronteix@<host>:~/dockers/certs/tls.pem\n    scp %s/%s vronteix@<host>:~/dockers/certs/tls-key.pem\n' \
+  echo "==> put the files on the host that serves the name (never in git or chat):"
+  printf '    ssh vronteix@<host> mkdir -p ~/dockers/certs\n    scp %s/%s vronteix@<host>:~/dockers/certs/\n    scp %s/%s vronteix@<host>:~/dockers/certs/\n' \
     "$OUT" "$HOST_CRT" "$OUT" "$HOST_KEY"
-  echo "    (the key never enters git, chat or a ticket; the copy in ~/dockers is"
-  echo "     what 'backup' carries off the host)"
+  case "$HOST_NAME" in
+    vpn-*)
+      echo "    the VPN panel reads certs/tls.pem and certs/tls-key.pem: rename"
+      echo "    the pair above to those two names"
+      ;;
+    pihole-*)
+      echo "    Pi-hole reads one combined PEM from webserver.tls.cert:"
+      printf '      cat certs/%s certs/%s > certs/pihole.pem\n' "$HOST_CRT" "$HOST_KEY"
+      ;;
+    *)
+      echo "    both recipes are in docs/runbooks/internal-ca.md"
+      ;;
+  esac
+  echo "    (the copy in ~/dockers is what 'backup' carries off the host)"
   exit 0
 fi
 
