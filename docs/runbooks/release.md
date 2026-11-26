@@ -92,8 +92,13 @@ git diff origin/develop HEAD              # empty = main added no content
 ```
 
 Commit, push the branch, open the pull request against `develop`, and merge it with **Create a merge
-commit** too — a rebase merge there would replay the release commits a second time. Delete the branch
-afterwards: it is a normal feature branch, unlike the two permanent ones.
+commit** too — a rebase merge there would replay the release commits a second time.
+
+A rebase merge does worse than replay: the sync merge has **no patch of its own**, so rebasing it
+applies nothing. The pull request closes marked merged, `develop` does not move, and `main` stays out
+of its history — which is what #1630 did on 2026-11-26, and how #1634 had to be reopened and merged
+properly minutes later. Delete the branch afterwards: it is a normal feature branch, unlike the two
+permanent ones.
 
 Without this step the next release pull request carries every commit `main` holds that the root of
 `develop` never saw, and reports hundreds of changed files as conflicting. That is the state that
