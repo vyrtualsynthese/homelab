@@ -1,0 +1,8 @@
+# 2026-11-25 09:14:02 by RouterOS 7.24.7
+# software id = ABCD-1234
+#
+/interface bridge add name=bridge
+/interface ethernet set [ find default-name=ether1 ] comment=v7-shape
+/interface wireguard add listen-port=51820 name=wg-nas private-key="fixture-v7-private-key"
+/ip ssh set password-authentication=yes-if-no-key
+/system identity set name=CR326
