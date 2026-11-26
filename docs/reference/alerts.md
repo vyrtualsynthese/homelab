@@ -17,8 +17,8 @@ The overview — what runs where, its sizing, and how to query the stack:
 ## Alerting
 
 Grafana unified alerting, folder `Homelab`, **two rule groups split by cadence
-on 2026-11-18**: `homelab-core-fast` at **60 s** (26 rules) and `homelab-core` at
-**300 s** (31 rules). **57 rules**, **two contact points**, and four child routes: two by severity and
+on 2026-11-18**: `homelab-core-fast` at **60 s** (27 rules) and `homelab-core` at
+**300 s** (31 rules). **58 rules**, **two contact points**, and four child routes: two by severity and
 two on `board=card` — one to each contact point.
 
 The split rule is the `for` duration: a rule sits in the fast group when its `for`
@@ -31,8 +31,8 @@ checked every five minutes: `CertificateExpiring`, `CloudTlsCertificateExpiring`
 `RestoreDrillOverdue` (`for: 1h`), the three disk-fill predictions (`for: 30m`), the temperature and
 SLO-ish checks (`for: 10m` and above). The slowest ratio is the `for: 10m` rules in
 `homelab-core`: half their own `for` between checks, so an alert is delayed by up to five
-minutes and never by more than that. At 57 rules the load is **32.2 evaluations a minute** —
-26 rules every 60 s plus 31 every 300 s — against 35.0 when the split was made, with all 35 rules
+minutes and never by more than that. At 58 rules the load is **33.2 evaluations a minute** —
+27 rules every 60 s plus 31 every 300 s — against 35.0 when the split was made, with all 35 rules
 of that day on the fast cadence.
 
 **Delivery**: contact point `discord-homelab` (type `discord`).
@@ -129,6 +129,7 @@ confirmed by the first read-back):**
 | `HostFirewallBlockBurst` | more than 200 `UFW BLOCK` lines on one host in 5 minutes | 5m | warning | inactive |
 | `SecurityExposureDrift` | an ungated route, or the public-host or privileged-controller count off its expected value | 10m | critical | inactive |
 | `SecurityStackBlind` | the exporter stale or a family gone, or no access-log line in 10 minutes (`noDataState: Alerting`) | 5m | critical | inactive |
+| `SecurityBouncerStalled` | the bouncer's decision-stream requests flat for 10 minutes | 5m | critical | inactive |
 
 **`JobFailed`** is the batch-workload rule. Its expression is
 `((kube_job_status_failed > 0) unless on(namespace, job_name) (kube_job_status_succeeded > 0)) and on(namespace, job_name) ((time() - kube_job_status_start_time) < 7200)`:
@@ -436,11 +437,11 @@ None of the three carries a `TraefikDown` twin, and none needs one: the `Deploym
 `kube-system`, so `CoreDeploymentDown` covers a router that stops running, and `ScrapeTargetDown`
 covers the pod's `:9100` scrape going quiet while the pod still answers.
 
-**The six security rules** (2026-11-25) are the only rules here that read a log rather than a
-metric, and the only ones whose job is a person rather than an application. Five sit in
-`homelab-core-fast`; `SecurityExposureDrift` sits in `homelab-core` because its `for` is 10 minutes,
-which is the split above, and a posture change is a slow fault that gains nothing from a 60-second
-check.
+**The seven security rules** (six on 2026-11-25, `SecurityBouncerStalled` on 2026-11-26) are the
+ones whose job is a person rather than an application; only the first five read a log rather than a
+metric. Six sit in `homelab-core-fast`; `SecurityExposureDrift` sits in `homelab-core` because its
+`for` is 10 minutes, which is the split above, and a posture change is a slow fault that gains
+nothing from a 60-second check.
 
 | Rule | Reads | Why that threshold |
 |---|---|---|
@@ -450,8 +451,21 @@ check.
 | `HostFirewallBlockBurst` | `{source="journal", unit="kernel"}` filtered to `UFW BLOCK` | about eight per five minutes per node is the background; 200 is a scan |
 | `SecurityExposureDrift` | the exporter's three posture gauges | expected 0 ungated, 9 public hosts, 9 privileged controllers |
 | `SecurityStackBlind` | the exporter's age, three families, and the access-log count | ten minutes — no ten-minute window has ever held zero lines |
+| `SecurityBouncerStalled` | `rate(cs_lapi_bouncer_requests_total[10m])`, Prometheus | 0.1 req/s is the normal poll, one every 10 s; zero across ten minutes is a dead stream, not a quiet one |
 
-**`SecurityStackBlind` is the rule that makes the other five believable**: each of them reports an
+**`SecurityBouncerStalled`** (2026-11-26) is the half `SecurityStackBlind` cannot see. The bouncer's
+listener answers, the exporter is fresh and all three families are present — every green signal —
+while the service has stopped asking the LAPI for decisions. The ban set on `streaming` then freezes:
+new attacks are neither refused nor forgotten, and nothing else notices. The expression is
+`1 - (sum(rate(cs_lapi_bouncer_requests_total[10m])) > bool 0)`, and the `bool` is the reason it
+fires at all: a bare comparison keeps the sample's value, so a flat counter would return `0`, and the
+condition tests "above 0" (the trap under *The rule pattern matters*). `bool` turns it into a clean
+`1`. The rate window is ten minutes and the `for` is five more; a counter that disappears entirely
+returns no sample, which this rule reports as NoData and stays quiet about, because the missing family
+is `SecurityStackBlind`'s case — one fault, one message. The metric carries one series for the cluster,
+so the message cannot name a host; the action is the bouncer's systemd unit on `streaming`.
+
+**`SecurityStackBlind` is the rule that makes the other six believable**: each of them reports an
 event, and this one reports that nobody is watching for events. It is the only rule here with two
 datasources, so it is a classic condition over two queries rather than one expression —
 `A > 0 || B < 1`, where `A` is the Prometheus half (exporter older than 600 s, or a family missing)
@@ -542,11 +556,6 @@ reports `firing` on the Health dashboard.
   inside each line (`_HOSTNAME`) is not a stream label, so a rule has to extract it. The other units
   on every node stay unshipped by decision, and the volume is sized in
   [`log-budget.md`](log-budget.md#the-host-journal-first-numbers).
-- **CrowdSec is watched for silence, not for a dead poll.** `SecurityStackBlind` fires when the
-  firewall bouncer, the LAPI or the agent stops exporting its metrics. A bouncer that keeps exporting
-  while it no longer polls the LAPI — the scrape answers, the decision stream is dead — freezes the ban
-  set with every rule green. `rate(cs_lapi_bouncer_requests_total[10m])` read **0.1 req/s** (one poll
-  every 10 s) on 2026-11-26, so zero for ten minutes would name that case; no rule reads it yet.
 - **A successful authentik sign-in after a burst of failures is invisible.** `AuthentikSignInFailures`
   counts failures only. The exporter publishes a count per outcome with no address, and CrowdSec reads
   HTTP status rather than the identity provider's event log, so nothing joins "failures from this
