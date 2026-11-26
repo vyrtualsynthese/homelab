@@ -1,7 +1,7 @@
 # Changing a switch configuration with an armed undo
 
-Date: 2026-11-25 · **Pending** — the renderer and the fake-device runs are green; no switch has run
-this yet
+Date: 2026-11-26 · **Verified** — four runs on the two real switches through the gate; one timer cut
+SSH on `crs326` and put it back
 
 > **In one line.** One command carries a `.rsc` change onto a MikroTik switch, and before the change
 > lands it arms a one-shot timer on the switch that puts the old configuration back if the switch
@@ -10,11 +10,13 @@ this yet
 > **Use it when** a switch's configuration has to change and a mistake would cut the way in — a
 > bridge port's VLAN, an address, a route, a port that must be disabled and enabled again — and you
 > want the way back to be on the device rather than in your session.
-> · **Verified** 2026-11-25: the undo renderer, the refusals and the run loop are green against
+> · **Verified** 2026-11-26: the undo renderer, the refusals and the run loop are green against
 > `hack/fixtures/switch-change/`, a fake switch that answers `ssh` and `scp` from a state directory;
 > the gate and the installer are green against their own stubs, in `hack/tests/test_switch_apply.py`
-> and `hack/tests/test_switch_install.py`. **No timer has fired on a real switch yet** — the runs
-> that will prove it are in "The first live runs" below, and their output is not yet in this page.
+> and `hack/tests/test_switch_install.py`. Four runs then went through the gate onto the two real
+> switches: a dry run, an arm-only rehearsal and a full apply on `crs309`, and a full run on `crs326`
+> whose own timer disabled SSH and put it back with nobody connected — exit 3, the proof that the
+> timer fired. Their measured output is in "The first live runs" below.
 > · **Kind:** how-to
 >
 > **Sources** `ansible/switches/switch-change.sh`, `ansible/switches/switch-apply.sh`,
@@ -234,48 +236,58 @@ what one looks like.
 
 ## The first live runs
 
-These three runs are the proof this page is waiting on, and the runs are where its banner's
-**Verified** line comes from: two rehearsals on `crs309`, then a full run on `crs326` whose own timer
-puts the switch back. Their output is pasted in this section by the runs themselves; the commands and
-the lines to expect are below.
+These four runs are the proof this page is waiting on, and they are where its banner's **Verified**
+line comes from. They were made on 2026-11-26 through the gate, against the installed copy at
+`/usr/local/lib/homelab/switch-change.sh`, whose digest
+`588284b2a9c7002ef131a9b09d13d5a822bd13842a275dea2d22c79f1b99390e` pins it to the merged tree at
+`bc40a2b8`. Three are rehearsals — a dry run, an arm-only run and a full apply on `crs309` — and the
+fourth is the card's acceptance: a full run on `crs326` that cuts SSH and is put back by its own timer
+alone. The measured output is pasted under each command.
 
-The change is deliberately the one that cuts the way in: it disables `ssh`, the service this script
-itself uses to reach the switch. That is the whole point. Once the change lands, the session that made
-it is gone, and nothing on the agent's side can open another — the switch can only come back by
-running the undo its own timer holds, with nobody connected. A change that leaves the way in open
-would prove nothing about the timer.
+Every run prints the clock warning: both device clocks run about three minutes behind this
+workstation (`the device clock reads … this workstation …; the window is measured on the device`). It
+is NTP drift on the switches, not a defect in the run, and it is why the window is computed from the
+device's own clock.
 
-All three need the gate installed first; its install, digest and sudoers rule are
-[`switch-access.md`](switch-access.md). The change file is staged in the inbox the way the command
+Runs 1 and 4 use the change that cuts the way in: it disables `ssh`, the service this script itself
+uses to reach the switch. That is the whole point. Once the change lands, the session that made it is
+gone, and nothing on the agent's side can open another — the switch can only come back by running the
+undo its own timer holds, with nobody connected. A change that leaves the way in open would prove
+nothing about the timer. Runs 2 and 3 use changes that do not touch SSH, so they exercise the timer
+and the apply path while the run can still read the device at the end.
+
+All four need the gate installed first; its install, digest and sudoers rule are
+[`switch-access.md`](switch-access.md). The change files are staged in the inbox the way the command
 section stages one.
 
-**1. The dry run on `crs309`.** Read the switch, render the undo, write nothing:
+**1. The dry run on `crs326`.** Read the switch, render the undo, write nothing:
 
 ```bash
-install -m 0640 /dev/stdin /var/lib/switch-change/inbox/arm-only.rsc <<'EOF'
+install -m 0640 /dev/stdin /var/lib/switch-change/inbox/ssh-off.rsc <<'EOF'
 /ip service
 set [ find name=ssh ] disabled=yes
 EOF
-sudo -u netcfg /usr/local/sbin/switch-apply --target crs309 \
-  --change /var/lib/switch-change/inbox/arm-only.rsc --dry-run
+sudo -u netcfg /usr/local/sbin/switch-apply --target crs326 \
+  --change /var/lib/switch-change/inbox/ssh-off.rsc --dry-run
 ```
 
-Expected, and exit 0:
+Measured, exit 0:
 
 ```
-the undo to arm on crs309, at <hh:mm:ss> device time (window 10m):
+switch-change.sh: the device clock reads 2026-11-26 00:59:49, this workstation 2026-11-26 01:02:40; the window is measured on the device
+the undo to arm on crs326, at 01:09:49 device time (window 10m):
 :if ([:len [/ip service find name="ssh"]] > 0) do={ /ip service set [find name="ssh"] disabled=no }
 nothing was written: this was --dry-run
 ```
 
 The undo is `set [find name="ssh"] disabled=no`, wrapped in the guard that makes it do nothing when
 the service is already back: `/ip service` is the menu, `[find name="ssh"]` picks the one row in it,
-and `no` is what the run read from the verbose export as the value before the change. That value is
-what the dry run below is for: it is the check that the real export carries the row at all.
-`<hh:mm:ss>` is the device's own clock plus the window, never this workstation's. A run that refuses
-instead prints the refusal on stderr — one line per refused line of the change,
-`switch-change.sh: <the staged file> line 2: …` — then `nothing was changed: the change cannot be
-undone`, prints no undo at all, and exits 1.
+and `no` is what the run read from the verbose export as the value before the change. The dry run is
+the check that the real export carries the row at all — `find name="ssh"` has to resolve on the
+device, and the guard makes the undo a no-op if it does not. `01:09:49` is the device's own clock plus
+the window, never this workstation's. A run that refuses instead prints the refusal on stderr — one
+line per refused line of the change, `switch-change.sh: <the staged file> line 2: …` — then `nothing
+was changed: the change cannot be undone`, prints no undo at all, and exits 1.
 
 **2. The arm-only run on `crs309`.** Upload the undo and the change, add the timer, and leave the
 configuration alone:
@@ -288,50 +300,111 @@ sudo -u netcfg /usr/local/sbin/switch-apply --target crs309 \
 Arming is a write, so the run asks once first; `--yes` answers it. The flag is not optional from an
 agent's shell, which has no terminal to ask on: without it the run exits 2 and touches nothing.
 
-Expected, and exit 0:
+Measured, exit 0:
 
 ```
-the undo to arm on crs309, at <hh:mm:ss> device time (window 3m):
+the undo to arm on crs309, at 00:53:01 device time (window 3m):
 :if ([:len [/ip service find name="ssh"]] > 0) do={ /ip service set [find name="ssh"] disabled=no }
-armed revert-crs309-<date>-<time> on crs309 for <hh:mm:ss> device time (window 3m)
-the entry runs /import file=undo-crs309-<date>-<time>.rsc once; the change has not been applied
+no binary fallback for this run: the device did not write pre-crs309-20261126-005050.backup
+armed revert-crs309-20261126-005050 on crs309 for 00:53:01 device time (window 3m)
+the entry runs /import file=undo-crs309-20261126-005050.rsc once; the change has not been applied
 ```
 
-`no binary fallback for this run: …` may sit between the undo and the `armed` line: `deploy` carries
-no `policy` right, so the backup is refused on purpose and the run carries on armed.
+`no binary fallback for this run: …` sits between the undo and the `armed` line: `deploy` carries no
+`policy` right, so the backup is refused on purpose and the run carries on armed. The device log
+shows that refusal as `script error: not enough permissions (9)` at the moment of arming.
 
-Three minutes later the entry has run once, which `/system scheduler print detail` shows as
-`run-count=1`, and `/log print` on the switch shows the `/import file=undo-crs309-<date>-<time>.rsc`.
-The configuration was never changed, so the entry and both files stay until they are removed by hand:
+Three minutes later the entry has run once. `/system scheduler print detail` then shows:
 
 ```
-/system scheduler remove [find name="revert-crs309-<date>-<time>"]
-/file remove [find name="undo-crs309-<date>-<time>.rsc"]
-/file remove [find name="change-crs309-<date>-<time>.rsc"]
+ 0   name="revert-crs309-20261126-005050" start-date=nov/26/2026 
+     start-time=00:53:01 interval=0s 
+     on-event=/import file=undo-crs309-20261126-005050.rsc owner="deploy" 
+     policy=read,write,test run-count=1 
 ```
 
-**3. The full revert on `crs326`.** This is the card's acceptance. The same change file under another
-name, with no `--arm-only`: arm it, apply it, then watch the management address until it answers
+and `/log print` carries `nov/26 00:53:01 system,info ip service changed by deploy` — the undo was
+imported and ran. RouterOS keeps a fired one-shot entry: `interval=0s` and `run-count=1` stay visible
+until something removes them. The configuration was never changed, so the entry and both files stay
+until they are removed by hand:
+
+```
+/system scheduler remove [find name="revert-crs309-20261126-005050"]
+/file remove [find name="undo-crs309-20261126-005050.rsc"]
+/file remove [find name="change-crs309-20261126-005050.rsc"]
+```
+
+**3. The full apply on `crs309`.** The happy path, on a change that leaves SSH up: arm the undo,
+apply the change, read the device's answer, and remove the timer because nothing had to be reverted.
+
+```bash
+install -m 0640 /dev/stdin /var/lib/switch-change/inbox/route-blackhole.rsc <<'EOF'
+/ip route
+add dst-address=192.0.2.0/24 type=blackhole
+EOF
+sudo -u netcfg /usr/local/sbin/switch-apply --target crs309 \
+  --change /var/lib/switch-change/inbox/route-blackhole.rsc --window 3m --yes
+```
+
+Measured, exit 0:
+
+```
+the undo to arm on crs309, at 01:04:22 device time (window 3m):
+:if ([:len [/ip route find dst-address="192.0.2.0/24"]] > 0) do={ /ip route remove [find dst-address="192.0.2.0/24"] }
+no binary fallback for this run: the device did not write pre-crs309-20261126-010210.backup
+armed revert-crs309-20261126-010210 on crs309 for 01:04:22 device time (window 3m)
+verifying: applying change-crs309-20261126-010210.rsc on crs309 and watching 192.168.1.43 until the switch answers
+the difference against the export taken before the change:
+--- before the change
++++ after
+@@ -26,6 +26,8 @@
+ add disabled=no interface=bridge
+ /ip dhcp-relay
+ add dhcp-server=192.168.1.1 disabled=no interface=bridge name=relay1
++/ip route
++add distance=1 dst-address=192.0.2.0/24 type=blackhole
+ /ip service
+ set telnet disabled=yes
+ set ftp disabled=yes
+applied: /var/lib/switch-change/work/staged/stage-1795651329-2622436.rsc landed on crs309, the timer revert-crs309-20261126-010210 was removed, and the switch answers again
+the pre-change binary backup, if the device took one, is pre-crs309-20261126-010210.backup on the device
+```
+
+The undo is built from the device's own export: `/ip route` is the menu the change opens and
+`find dst-address="192.0.2.0/24"` the row it adds, guarded so a row that is already gone is no error.
+The diff names the staged copy under `/var/lib/switch-change/work/staged/`, not the inbox file: that
+is the converted one-line-per-command form the import needs, and `full_path_lines` is why each command
+carries its menu. The export says `distance=1` where the change file does not, because RouterOS fills
+the default into the export. The timer's `run-count` is 0 — nothing needed reverting — so the run
+removes it and exits 0.
+
+The route is the only trace the run leaves, by design: the change landed. Remove it as `admin`, the
+same way the next section's files are removed:
+
+```
+/ip route remove [find dst-address="192.0.2.0/24"]
+```
+
+**4. The full revert on `crs326`.** This is the card's acceptance. It uses the same change file as the
+dry run, with no `--arm-only`: arm it, apply it, then watch the management address until it answers
 again.
 
 ```bash
-install -m 0640 /dev/stdin /var/lib/switch-change/inbox/ssh-off.rsc <<'EOF'
-/ip service
-set [ find name=ssh ] disabled=yes
-EOF
 sudo -u netcfg /usr/local/sbin/switch-apply --target crs326 \
   --change /var/lib/switch-change/inbox/ssh-off.rsc --yes --window 5m
 ```
 
-Expected, in this order, and exit 3:
+Measured, exit 3:
 
 ```
-the undo to arm on crs326, at <hh:mm:ss> device time (window 5m):
+switch-change.sh: the device clock reads 2026-11-26 00:53:01, this workstation 2026-11-26 00:55:52; the window is measured on the device
+the undo to arm on crs326, at 00:58:01 device time (window 5m):
 :if ([:len [/ip service find name="ssh"]] > 0) do={ /ip service set [find name="ssh"] disabled=no }
-armed revert-crs326-<date>-<time> on crs326 for <hh:mm:ss> device time (window 5m)
-verifying: applying change-crs326-<date>-<time>.rsc on crs326 and watching 192.168.1.11 until the switch answers
+no binary fallback for this run: the device did not write pre-crs326-20261126-005552.backup
+armed revert-crs326-20261126-005552 on crs326 for 00:58:01 device time (window 5m)
+verifying: applying change-crs326-20261126-005552.rsc on crs326 and watching 192.168.1.11 until the switch answers
 the difference against the export taken before the change:
-reverted: the timer revert-crs326-<date>-<time> fired and the export is identical to the one taken before the change
+reverted: the timer revert-crs326-20261126-005552 fired and the export is identical to the one taken before the change
 ```
 
 After `verifying`, the import lands and SSH stops answering, so the poll at `192.168.1.11` fails for
@@ -345,8 +418,10 @@ about the timer was proved. Codes 4 and 5 are in the table above: 4 is an export
 different, 5 is a switch that never answered again, and on either one the next step is `/log print` on
 the switch.
 
-When the three runs have happened, their real lines replace the placeholders in these blocks, and this
-section is what the banner's **Verified** line and the **Verified** list below are updated from.
+After the four runs, both switches were read back as `admin` and were clean: no `revert-` entry, no
+`undo-` or `change-` file, no `192.0.2.0/24` route, and `ssh` enabled and answering on both. The runs'
+own exports stay in `/var/lib/switch-change/work/<id>/`, which is `netcfg` `0700` — an agent's
+evidence is the stdout pasted above, and a person can read the directories with `sudo`.
 
 ## Verified
 
@@ -357,6 +432,7 @@ section is what the banner's **Verified** line and the **Verified** list below a
   descriptor, the staged copy, the digest and the work directory.
 - `hack/tests/test_switch_install.py` — 16 tests, the installer against a temporary `--destdir`.
 - `bash hack/check-docs.sh` — this page's banner, links and nav entry.
-- Not verified: a real switch, a real scheduler entry, and a real timer firing. "The first live runs"
-  above is that proof, and its output is pasted there when the runs happen. Card #485 created the
-  `deploy` account and its key; the card this page serves is #486.
+- Four runs on the real switches through the gate on 2026-11-26: a dry run on `crs326`, an arm-only
+  run and a full apply on `crs309`, and a full run on `crs326` that disabled SSH and came back on its
+  own timer — exit 3, `run-count=1`, identical export. Their output is in "The first live runs" above.
+  Card #485 created the `deploy` account and its key; the card this page serves is #486.
