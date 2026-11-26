@@ -66,7 +66,7 @@ Pi-hole answers `ashudev.com` with the LAN address `192.168.1.46`, and since 202
 served by this homelab's Traefik. A pod resolving through cluster DNS would land on Traefik, whose
 certificate does not cover `ashudev.com`, and report a TLS failure that has nothing to do with the
 public site — or, worse, report green for a public zone that is broken. The pod therefore runs with
-`dnsPolicy: None` and its own resolvers, `1.1.1.1` and `9.9.9.9`:
+`dnsPolicy: None` and its own resolvers, DNS4EU's unfiltered `86.54.11.100` and `86.54.11.200`:
 
 ```bash
 grep -A8 'dnsPolicy' cluster/helm/monitoring/blackbox-exporter/values.yaml
@@ -135,7 +135,7 @@ curl -sG -u "ops:$PROMETHEUS_AUTH_PASSWORD" http://prometheus.kub.local/api/v1/q
 
 `probe_success` at `0` is the failure; a duration near the 10 s module timeout means the request hung
 rather than was refused. Confirm from outside the LAN with `curl -sSI https://ashudev.com | head -1`
-and, for a resolution problem, `dig +short ashudev.com @1.1.1.1`. Then follow
+and, for a resolution problem, `dig +short ashudev.com @86.54.11.100`. Then follow
 [`routes.md`](../reference/routes.md) for the Traefik router and
 [`internal-ca.md`](internal-ca.md) only if the failure is a `*.kub.local` name, which this rule does
 not cover.
@@ -239,7 +239,7 @@ probes are `ashuvidz.com` checks run against those four AWS servers.
 
 When the delegation moves:
 
-1. Read the new servers from the answer, not from memory: `dig +short NS ashuvidz.com @1.1.1.1`.
+1. Read the new servers from the answer, not from memory: `dig +short NS ashuvidz.com @86.54.11.100`.
 2. In `cluster/helm/monitoring/prometheus/values.yaml`, replace the four `ashuvidz.com` server blocks
    (12 entries) with the two OVH servers (6 entries), keeping `module`, `check` and `zone` labels
    unchanged. The job goes from 28 targets to **22**.

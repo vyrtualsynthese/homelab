@@ -7,8 +7,10 @@
 # which stays on the host and is never rendered.
 TZ=Europe/Paris
 
-# Upstream resolvers, DNS4EU — an EU member-state resolver, per the providers
-# decision. The old PIHOLE_DNS_ key was a v5 leftover: a throwaway container on
+# Upstream resolvers, DNS4EU's unfiltered pair — an EU member-state resolver,
+# per the providers decision, and unfiltered because Pi-hole is the only filter
+# in the path (docs/decisions/2026-11-27-public-dns-is-dns4eu-unfiltered.md).
+# The old PIHOLE_DNS_ key was a v5 leftover: a throwaway container on
 # 2026-11-25 showed FTL ignores it, so the upstream actually in force was the one
 # written in pihole.toml, and the file said something else.
 FTLCONF_dns_upstreams=86.54.11.100;86.54.11.200

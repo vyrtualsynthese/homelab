@@ -13,11 +13,13 @@ blackbox:
   # Resolve the public names against the public resolvers, not ClusterFirst:
   # Pi-hole rewrites ashudev.com to its LAN address, so a ClusterFirst prober
   # would check the wrong record and report green for a broken public zone.
+  # The pair is DNS4EU's unfiltered service, never Cloudflare: see
+  # docs/decisions/2026-11-27-public-dns-is-dns4eu-unfiltered.md.
   dnsPolicy: None
   dnsConfig:
     nameservers:
-      - 1.1.1.1
-      - 9.9.9.9
+      - 86.54.11.100
+      - 86.54.11.200
     searches: []
     options:
       - name: ndots

@@ -245,7 +245,7 @@ ansible-playbook playbooks/site.yml --limit rbp1 --check   # expected: changed=0
 docker compose -f /home/vronteix/dockers/docker-compose.yml ps   # four services running
 dig @192.168.1.38 <a LAN name> +short                            # Pi-hole answers
 dig @192.168.1.38 example.com +short                             # and resolution works
-resolvectl query example.com                                     # the host asks Pi-hole, not 1.1.1.1
+resolvectl query example.com                                     # the host asks Pi-hole, not a public resolver
 docker exec wg-easy wg show                                      # the peers are back
 curl -s localhost:9902/metrics | head -3                         # the smartctl exporter
 ```

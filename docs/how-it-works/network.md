@@ -5,12 +5,13 @@
 > answers.
 >
 > **Use it when** you are adding a route, an app answers `403` or serves the wrong certificate, or you
-> need to know whether a hostname is reachable from outside · **Verified** 2026-11-26 ·
+> need to know whether a hostname is reachable from outside · **Verified** 2026-11-27 ·
 > **Kind:** explanation
 >
 > **Sources** `cluster/helm/**/templates/*.yaml`, `cluster/argocd/projects/**/*.yaml`,
 > `cluster/infrastructure/traefik/`, `cluster/helm/platform/network-policy/`, `hack/check_exposure.py`,
-> and the router's own rules in [the Livebox record](../audit/livebox-2026-11-26.md)
+> [the DNS4EU record](../decisions/2026-11-27-public-dns-is-dns4eu-unfiltered.md), and the router's own
+> rules in [the Livebox record](../audit/livebox-2026-11-26.md)
 
 ## How a request arrives
 
@@ -63,6 +64,21 @@ The awkward middle is the rest of `*.kub.home.ashudev.com`: a real domain, publi
 the Pi-hole overrides to `192.168.1.46` *on the LAN only*. A name under that suffix therefore answers
 the internet the moment its route exists, so DNS cannot be the fence, hence the next section.
 `kavita.kub.home.ashudev.com` sits right there.
+
+## Who answers for a name
+
+Every client on the LAN asks `192.168.1.22` and then `192.168.1.38`, the two edge Pi-holes. Pi-hole
+holds the local records and the blocklist, and it forwards everything it does not know to DNS4EU's
+**unfiltered** pair, `86.54.11.100` and `86.54.11.200`. Nothing in the house asks Cloudflare, Google
+or Quad9, and no filtered DNS4EU variant is used, because Pi-hole is the only filter in the path.
+Two pods carry the same pair in their own `dnsConfig` rather than resolving through the cluster:
+`qbittorrent`, whose tracker lookups must not depend on cluster DNS, and `blackbox-exporter`, whose
+probes must see the public zone rather than Pi-hole's LAN override. A public resolver beside the
+Pi-hole on a node is a fault, not a fallback: on 2026-11-26 `nuc0`'s `/etc/resolv.conf` named
+`1.1.1.1`, and CoreDNS sent about one `*.kub.local` query in three there instead of to the Pi-hole.
+
+The addresses, the rejections and the cost of being wrong are in
+[`decisions/2026-11-27-public-dns-is-dns4eu-unfiltered.md`](../decisions/2026-11-27-public-dns-is-dns4eu-unfiltered.md).
 
 ## Three layers that look alike
 
