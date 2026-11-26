@@ -452,7 +452,7 @@ check.
 | `AuthentikSignInSuccessAfterBurst` | `homelab_authentik_signins_15m_by_source{outcome="failure"} > 20` joined on `source` to `outcome="success" > 0` | the same twenty failures, plus the one event that turns a nuisance into a compromise; a measured typo burst is three |
 | `HostSshBruteForce` | `{source="journal", unit="ssh"}` filtered to failed passwords | 4 in 24 hours across the whole cluster on the day it was written |
 | `HostFirewallBlockBurst` | `{source="journal", unit="kernel"}` filtered to `UFW BLOCK` | about eight per five minutes per node is the background; 200 is a scan |
-| `SecurityExposureDrift` | the exporter's three posture gauges | expected 0 ungated, 9 public hosts, 9 privileged controllers |
+| `SecurityExposureDrift` | the exporter's three posture gauges | expected 0 ungated, 9 public hosts, 7 privileged controllers |
 | `SecurityStackBlind` | the exporter's age, three families, and the access-log count | ten minutes — no ten-minute window has ever held zero lines |
 | `SecurityBouncerStalled` | `rate(cs_lapi_bouncer_requests_total[10m])`, Prometheus | 0.1 req/s is the normal poll, one every 10 s; zero across ten minutes is a dead stream, not a quiet one |
 

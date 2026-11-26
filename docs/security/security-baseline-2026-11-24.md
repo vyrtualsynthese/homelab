@@ -143,6 +143,12 @@ starts from nothing.
 fails when a fifth appears. That is a `grep` over the rendered charts, the shape `check-exposure.sh`
 already uses.
 
+*Corrected 2026-11-26:* two of the four have left the list. `pihole-exporter` and `mktxp` only call
+an API over TCP — Pi-hole's HTTP API and the RouterOS API — and mount no device, so neither ever
+needed the host; the paragraph above took the flag at face value and was wrong about `mktxp`.
+`qbittorrent` (the WireGuard interface) and `prometheus-smartctl` (the disk devices) genuinely need
+it. The exempt list is two, and the check that fails on a third is still unbuilt.
+
 *Holds today:* the Docker socket is `root:docker 0660` on every host that has one and the `docker`
 group has no human member, so shell access to Docker is not an unprivileged action anywhere.
 
@@ -243,7 +249,7 @@ list the thing that has to be right.
 | Bind wg-easy's admin to `127.0.0.1`; move `9902` into the cluster | §2 the VPN | medium | nothing |
 | Turn `ufw` on with the K3s and Docker rules; install it on `streaming` | §3 LAN → control plane | informational | the export's client list, or the NFS clients break |
 | Drop `%admins ALL=(ALL) NOPASSWD: ALL`; key-only SSH on both Pis | §6 identity | medium, low | nothing |
-| List the four privileged charts and check for a fifth | §5 host → container | medium | nothing |
+| List the two privileged charts and check for a third | §5 host → container | medium | nothing |
 | Schedule etcd snapshots and the S3 upload | §6 the control plane's copy | low | done 2026-11-25, card #506 |
 | Reconcile the four rendered-but-not-live routes | §1 internet → Traefik | — | nothing |
 

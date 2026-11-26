@@ -368,7 +368,7 @@
         "datasourceUid": "PBFA97CFB590B2093",
         "model": {
           "editorMode": "code",
-          "expr": "sum(abs(homelab_security_ungated_routes)) + sum(abs(homelab_security_public_hosts - 9)) + sum(abs(homelab_security_privileged_workloads - 9))",
+          "expr": "sum(abs(homelab_security_ungated_routes)) + sum(abs(homelab_security_public_hosts - 9)) + sum(abs(homelab_security_privileged_workloads - 7))",
           "instant": true,
           "intervalMs": 1000,
           "maxDataPoints": 43200,
@@ -423,7 +423,7 @@
     "noDataState": "OK",
     "execErrState": "OK",
     "annotations": {
-      "description": "The exposure the cluster publishes moved. Expected: 0 routes without a gate, 9 public hosts, 9 privileged controllers. A route without `lan-only` answers the internet whether or not its name resolves publicly, so the first number is the one to check first: `hack/check-exposure.sh` names the route. A new privileged controller is usually a chart that needs `securityContext`.",
+      "description": "The exposure the cluster publishes moved. Expected: 0 routes without a gate, 9 public hosts, 7 privileged controllers. A route without `lan-only` answers the internet whether or not its name resolves publicly, so the first number is the one to check first: `hack/check-exposure.sh` names the route. A new privileged controller is usually a chart that needs `securityContext`.",
       "summary": "The exposure counts moved by {{ $value }}"
     },
     "labels": {
