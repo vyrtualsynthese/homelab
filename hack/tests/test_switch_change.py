@@ -349,6 +349,101 @@ class ServiceRowTests(unittest.TestCase):
             'do={ /ip service enable [find name="ssh"] }')
 
 
+class SelectorKeyTests(unittest.TestCase):
+    """A selector key as RouterOS reads it, not as the line spells it.
+
+    `find !disabled`, `find ?comment` and `find disabled` all match on the property named after the
+    prefix, so a change that writes that property is refused the same way a `pvid=10` selector is.
+    The two-row exports are the point: a renderer that ignores the prefix matches both rows.
+    """
+
+    TWO_ROWS = ("/ip service\n"
+                "set ssh port=22 disabled=no\n"
+                "set www port=80 disabled=yes\n")
+    COMMENTED = ("/ip service\n"
+                 'set ssh port=22 comment="the door"\n'
+                 "set www port=80\n")
+
+    def render(self, change, plain=None, verbose=None, major="7"):
+        with tempfile.TemporaryDirectory(prefix="switch-change-selector-") as tmp:
+            d = pathlib.Path(tmp)
+            (d / "change.rsc").write_text(change)
+            (d / "plain.rsc").write_text(plain if plain is not None else self.TWO_ROWS)
+            (d / "verbose.rsc").write_text(verbose if verbose is not None else
+                                           (plain if plain is not None else self.TWO_ROWS))
+            return run(["--render-undo", "--major", major,
+                        "--change", str(d / "change.rsc"),
+                        "--export", str(d / "plain.rsc"),
+                        "--verbose-export", str(d / "verbose.rsc")])
+
+    def rendered(self, change, plain=None, verbose=None, major="7"):
+        done = self.render(change, plain, verbose, major)
+        self.assertEqual(done.returncode, 0, done.stderr)
+        return done.stdout
+
+    def refused(self, change, plain=None, verbose=None, major="7"):
+        done = self.render(change, plain, verbose, major)
+        self.assertEqual(done.returncode, 1, done.stdout)
+        self.assertEqual(done.stdout, "")
+        return done.stderr
+
+    def test_a_negated_flag_selector_that_the_change_flips_is_refused(self):
+        err = self.refused("/ip service\nset [ find !disabled ] disabled=yes\n")
+        self.assertIn("disabled", err)
+        self.assertIn("its own selector matches on", err)
+
+    def test_a_questioned_selector_that_the_change_flips_is_refused(self):
+        err = self.refused("/ip service\nset [ find ?comment ] comment=gone\n",
+                           plain=self.COMMENTED)
+        self.assertIn("comment", err)
+        self.assertIn("its own selector matches on", err)
+
+    def test_a_bare_flag_selector_that_the_change_flips_is_refused(self):
+        err = self.refused("/ip service\nset [ find disabled ] disabled=no\n")
+        self.assertIn("disabled", err)
+        self.assertIn("its own selector matches on", err)
+
+    def test_an_inequality_selector_that_the_change_flips_is_refused(self):
+        err = self.refused("/ip service\nset [ find port!=22 ] port=2222\n")
+        self.assertIn("port", err)
+        self.assertIn("its own selector matches on", err)
+
+    def test_a_negated_flag_selector_the_change_leaves_alone_still_renders(self):
+        self.assertIn(
+            ':if ([:len [/ip service find !disabled]] > 0) '
+            'do={ /ip service set [find !disabled] port=22 }',
+            self.rendered("/ip service\nset [ find !disabled ] port=2222\n"))
+
+    def test_a_questioned_selector_the_change_leaves_alone_still_renders(self):
+        self.assertIn(
+            ':if ([:len [/ip service find ?comment]] > 0) '
+            'do={ /ip service set [find ?comment] port=22 }',
+            self.rendered("/ip service\nset [ find ?comment ] port=2222\n",
+                          plain=self.COMMENTED))
+
+    def test_a_bare_flag_selector_the_change_leaves_alone_still_renders(self):
+        self.assertIn(
+            ':if ([:len [/ip service find disabled]] > 0) '
+            'do={ /ip service set [find disabled] port=80 }',
+            self.rendered("/ip service\nset [ find disabled ] port=8080\n"))
+
+    def test_an_inequality_selector_the_change_leaves_alone_still_renders(self):
+        self.assertIn(
+            ':if ([:len [/ip service find port!="22"]] > 0) '
+            'do={ /ip service set [find port!="22"] disabled=yes }',
+            self.rendered("/ip service\nset [ find port!=22 ] disabled=no\n"))
+
+    def test_a_default_name_selector_with_a_name_write_is_not_refused(self):
+        # `default-name` is the immutable identity and `name` is what the change writes, so the
+        # selector survives the change: this one renders, and the two are never aliased.
+        out = self.rendered(
+            '/interface ethernet\nset [ find default-name="sfp-sfpplus1" ] name="sfp-sfpplus2"\n',
+            plain=(EXPORTS / "v6-plain.rsc").read_text(),
+            verbose=(EXPORTS / "v6-verbose.rsc").read_text(), major="6")
+        self.assertIn('find default-name="sfp-sfpplus1"', out)
+        self.assertIn("name=sfp-sfpplus1", out)
+
+
 class RefusalTests(unittest.TestCase):
     def refused(self, change, export="v7-plain.rsc", verbose="v7-verbose.rsc"):
         done = run(["--render-undo", "--major", "7",
@@ -399,7 +494,7 @@ class RefusalTests(unittest.TestCase):
         err = self.refused("refuse-selector-rewrite.rsc")
         self.assertIn("line 2", err)
         self.assertIn("address", err)
-        self.assertIn("selector", err)
+        self.assertIn("its own selector matches on", err)
 
     def test_a_set_that_rewrites_one_of_two_selector_attributes_is_refused(self):
         err = self.refused("refuse-selector-partial.rsc")
