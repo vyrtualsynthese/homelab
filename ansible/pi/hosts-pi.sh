@@ -54,6 +54,17 @@ CONTAINERD_PIN="2.4.*"
 COMPOSE_PIN="5:8.*"
 DOCKER_KEYRING="/etc/apt/keyrings/docker.asc"
 DOCKER_SOURCES="/etc/apt/sources.list.d/docker.sources"
+# The VPN panel's database. It holds every peer's private key and the panel
+# account's password hash, and a fresh container writes it 0644 root:root, so
+# any local account that reads it owns the tunnels. `setup` narrows the copy the
+# panel made; `verify` reads the mode back. A reflash, or a `config` directory
+# the stack recreated, is what brings the readable copy back.
+WG_DB="$STACK_DIR/config/wg-easy.db"
+WG_DB_MODE="600"
+# `docker compose up -d` returns when the container has started, and the panel
+# creates its database during its own start. A file that has not appeared yet is
+# waited for this long before the stack is called broken.
+WG_DB_WAIT=30
 # The resolvers both Pis carry, on both hosts: rbp0 first because it is the
 # source of truth, the second address because either one answering is enough.
 # Written here rather than in the netplan template so no ansible YAML repeats an
@@ -700,6 +711,66 @@ firewall_drift() {
     [ "$problems" -eq 0 ]
 }
 
+# The database is the container's own file, so this never writes it: it narrows
+# the mode of the copy the panel made and nothing else. Root owns it on a real
+# host because the container runs as root, so 0600 keeps every local account out
+# and the panel itself in.
+ensure_wg_db_mode() {
+    local file="$ROOT$WG_DB" mode waited=0
+
+    if [ -d "$file" ]; then
+        refuse_directory "$file"
+    fi
+    if [ ! -e "$file" ] && [ -n "$ROOT" ]; then
+        # A fixture holds what it was given. Inventing a database here would let
+        # the mode check pass on a file no container ever wrote.
+        return 0
+    fi
+    while [ ! -e "$file" ] && [ "$waited" -lt "$WG_DB_WAIT" ]; do
+        sleep 1
+        waited=$((waited + 1))
+    done
+    if [ ! -e "$file" ]; then
+        echo "wg-easy: no $file after ${WG_DB_WAIT}s; the panel has not created its database" >&2
+        echo "the VPN has no peer set until it does: read 'docker compose logs wg-easy'" >&2
+        exit 1
+    fi
+
+    mode="$(stat -c %a "$file")"
+    if [ "$mode" = "$WG_DB_MODE" ]; then
+        return 0
+    fi
+    chmod "$WG_DB_MODE" "$file"
+    CHANGED=$((CHANGED + 1))
+    echo "wg-easy: $file mode $mode -> $WG_DB_MODE"
+}
+
+# What `verify` reads: the mode the file carries. A world-readable copy is every
+# peer's private key and the panel's password hash in a single read.
+wg_db_drift() {
+    local file="$ROOT$WG_DB" mode problems=0
+
+    if [ -d "$file" ]; then
+        echo "DIFFERS $file is a directory; the panel cannot use it"
+        return 1
+    fi
+    if [ ! -e "$file" ]; then
+        # A fixture may hold no stack at all. On a real host the panel creates
+        # the database on its first start, and `setup` insists it appeared.
+        if [ -z "$ROOT" ]; then
+            echo "MISSING $file"
+            problems=1
+        fi
+        return "$problems"
+    fi
+    mode="$(stat -c %a "$file")"
+    if [ "$mode" != "$WG_DB_MODE" ]; then
+        echo "DIFFERS $file mode $mode, expected $WG_DB_MODE"
+        problems=1
+    fi
+    return "$problems"
+}
+
 cmd_render() {
     local host="$1"
     echo "--- $STACK_DIR/docker-compose.yml"
@@ -747,7 +818,9 @@ cmd_render() {
     echo "while no key is in that file"
     echo "--- $STACK_DIR/config/wg-easy.db"
     echo "wg-easy 15's own database: panel account, host, port, DNS, peers. Not"
-    echo "written here, and copied by 'backup' with the rest of the stack"
+    echo "written here, and copied by 'backup' with the rest of the stack."
+    echo "setup narrows it to $WG_DB_MODE once the panel has created it, and"
+    echo "'verify' reads the mode back: it holds every peer's private key"
     echo "--- $STACK_DIR/pihole.env"
     echo "required, never printed and never written: the panel password is the"
     echo "only key it holds, and it is gitignored by the *.env rule"
@@ -862,6 +935,9 @@ cmd_setup() {
         echo "stack: not started (PI_ROOT is set)"
     fi
 
+    # After the stack is up, because the panel writes the file on its own start.
+    ensure_wg_db_mode
+
     echo "changed=$CHANGED"
 }
 
@@ -885,7 +961,7 @@ cmd_verify() {
     local host="$1" problems=0 file
 
     if [ -z "$ROOT" ] && [ "$(id -u)" -ne 0 ]; then
-        echo "verify reads $SUDOERS, $SSHD_CONFIG and the firewall; run it with sudo" >&2
+        echo "verify reads $SUDOERS, $SSHD_CONFIG, the firewall and the VPN database; run it with sudo" >&2
         exit 1
     fi
 
@@ -979,6 +1055,8 @@ cmd_verify() {
     engine_drift || problems=1
 
     firewall_drift || problems=1
+
+    wg_db_drift || problems=1
 
     if [ -z "$ROOT" ]; then
         # --all, and the declared service list compared with what is up: `ps`
