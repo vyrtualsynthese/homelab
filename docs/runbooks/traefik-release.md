@@ -369,8 +369,11 @@ for h in plex.kub.home.ashudev.com ashudev.com ashuvidz.com dashy.ashudev.com; d
   curl -s -o /dev/null -w "$h %{http_code}\n" --resolve $h:443:192.168.1.46 https://$h/
 done
 curl -s -o /dev/null -w 'dashboard http %{http_code}\n' --resolve traefik.kub.local:80:192.168.1.46 http://traefik.kub.local/dashboard/
-curl -sk -o /dev/null -w 'dashboard https %{http_code}\n' --resolve traefik.kub.local:443:192.168.1.46 https://traefik.kub.local/dashboard/
-curl -sk -o /dev/null -w 'dashboard with password %{http_code}\n' -u 'vronteix:<password>' --resolve traefik.kub.local:443:192.168.1.46 https://traefik.kub.local/dashboard/
+curl -s --cacert ~/.config/secrets/kub-local/local-ca.pem \
+  -o /dev/null -w 'dashboard https %{http_code}\n' --resolve traefik.kub.local:443:192.168.1.46 https://traefik.kub.local/dashboard/
+curl -s --cacert ~/.config/secrets/kub-local/local-ca.pem \
+  -o /dev/null -w 'dashboard with password %{http_code}\n' \
+  -u 'vronteix:<password>' --resolve traefik.kub.local:443:192.168.1.46 https://traefik.kub.local/dashboard/
 timeout 5 bash -c '</dev/tcp/192.168.1.46/22000' && echo "syncthing tcp open"
 ```
 

@@ -232,7 +232,8 @@ board — without waiting for a rule. It is the check that had never passed:
 
 ```bash
 set -a; . ~/.config/secrets/homelab.env; set +a
-curl -sk -X POST -H "Authorization: Bearer $GRAFANA_TOKEN" -H "Content-Type: application/json" \
+curl -s --cacert ~/.config/secrets/kub-local/local-ca.pem \
+  -X POST -H "Authorization: Bearer $GRAFANA_TOKEN" -H "Content-Type: application/json" \
   -d '{"integration":{"type":"webhook","settings":{"url":"http://alert-relay.monitoring.svc.cluster.local:8080/alert"}}}' \
   "https://grafana.kub.local/apis/notifications.alerting.grafana.app/v0alpha1/namespaces/default/receivers/dmlrdW5qYS1hbGVydHM/test"
 ```
@@ -278,13 +279,19 @@ Expected: `firing: TestDiskFull on nas: opened #<id>`, and one card. Send the sa
 **To prove the lifecycle**, with the shares in place and the probe card from above still in Backlog:
 open a probe fix card on `homelab`, relate it, run the job once, and watch the probe card move.
 
+Every call below passes `--cacert ~/.config/secrets/kub-local/local-ca.pem`, because the board's
+certificate is signed by the cluster's own CA; `-k` would accept whatever answered and hand it the
+token.
+
 ```bash
 set -a; . ~/.config/secrets/homelab.env; set +a
 B=https://vikunja.kub.local/api/v2
-FIX=$(curl -sk -X POST "$B/projects/2/tasks?format=markdown" \
+FIX=$(curl -s --cacert ~/.config/secrets/kub-local/local-ca.pem \
+  -X POST "$B/projects/2/tasks?format=markdown" \
   -H "Authorization: Bearer $VIKUNJA_MCP_TOKEN" -H 'Content-Type: application/json' \
   -d '{"title":"Lifecycle probe fix","description":"probe","bucket_id":13}' | jq -r .id)
-curl -sk -X POST "$B/tasks/<alert>/relations" \
+curl -s --cacert ~/.config/secrets/kub-local/local-ca.pem \
+  -X POST "$B/tasks/<alert>/relations" \
   -H "Authorization: Bearer $VIKUNJA_MCP_TOKEN" -H 'Content-Type: application/json' \
   -d "{\"relation_kind\":\"blocked\",\"other_task_id\":$FIX}"
 kubectl -n monitoring create job --from=cronjob/alert-relay-lifecycle lifecycle-probe
@@ -293,7 +300,8 @@ kubectl -n monitoring logs job/lifecycle-probe
 # → #<alert> TestDiskFull on nas: Backlog -> Doing (1 fixes open)
 
 # close the fix the way a session would, then run once more
-curl -sk -X PUT "$B/projects/2/views/13/buckets/14/tasks" \
+curl -s --cacert ~/.config/secrets/kub-local/local-ca.pem \
+  -X PUT "$B/projects/2/views/13/buckets/14/tasks" \
   -H "Authorization: Bearer $VIKUNJA_MCP_TOKEN" -H 'Content-Type: application/json' \
   -d "{\"task_id\":$FIX}"
 kubectl -n monitoring create job --from=cronjob/alert-relay-lifecycle lifecycle-probe-2
@@ -302,7 +310,8 @@ kubectl -n monitoring logs job/lifecycle-probe-2
 # → #<alert> TestDiskFull on nas: Doing -> Validation (0 fixes open)
 
 # the card is in Validation and is NOT done: entering Validation is not an acceptance
-curl -sk -H "Authorization: Bearer $VIKUNJA_MCP_TOKEN" "$B/tasks/<alert>?expand=buckets" \
+curl -s --cacert ~/.config/secrets/kub-local/local-ca.pem \
+  -H "Authorization: Bearer $VIKUNJA_MCP_TOKEN" "$B/tasks/<alert>?expand=buckets" \
   | jq '{done, buckets: [.buckets[].title]}'
 # → {"done": false, "buckets": ["Validation"]}
 ```
