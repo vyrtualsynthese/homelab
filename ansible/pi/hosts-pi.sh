@@ -1266,7 +1266,7 @@ check_text() {
 }
 
 cmd_verify() {
-    local host="$1" problems=0 file
+    local host="$1" problems=0 file content
 
     if [ -z "$ROOT" ] && [ "$(id -u)" -ne 0 ]; then
         echo "verify reads $SUDOERS, $SSHD_CONFIG, the firewall and the VPN database; run it with sudo" >&2
@@ -1356,6 +1356,57 @@ cmd_verify() {
     if [ ! -s "$ROOT/home/$HUMAN_USER/.ssh/authorized_keys" ]; then
         echo "MISSING a public key for $HUMAN_USER in /home/$HUMAN_USER/.ssh/authorized_keys"
         problems=1
+    fi
+
+    # The backup stream: the four units, the installed copy systemd starts, the
+    # credential file, and the two legacy leftovers setup is supposed to clear.
+    for unit in pi-backup.service pi-backup.timer pi-backup-prune.service pi-backup-prune.timer; do
+        case "$unit" in
+            pi-backup.service) content="$(desired_backup_service "$host")" ;;
+            pi-backup.timer) content="$(desired_backup_timer)" ;;
+            pi-backup-prune.service) content="$(desired_prune_service "$host")" ;;
+            *) content="$(desired_prune_timer)" ;;
+        esac
+        if ! check_text "$ROOT/etc/systemd/system/$unit" "$content"; then
+            problems=1
+        fi
+    done
+    if [ ! -f "$ROOT/usr/local/sbin/hosts-pi.sh" ]; then
+        echo "MISSING $ROOT/usr/local/sbin/hosts-pi.sh"
+        problems=1
+    elif ! cmp -s "$HERE/hosts-pi.sh" "$ROOT/usr/local/sbin/hosts-pi.sh"; then
+        echo "DIFFERS $ROOT/usr/local/sbin/hosts-pi.sh"
+        problems=1
+    fi
+    if [ ! -f "$ROOT$BACKUP_ENV" ]; then
+        echo "MISSING $ROOT$BACKUP_ENV"
+        problems=1
+    elif [ -z "$ROOT" ] && [ "$(stat -c %a "$ROOT$BACKUP_ENV")" != "600" ]; then
+        echo "DIFFERS $ROOT$BACKUP_ENV: mode $(stat -c %a "$ROOT$BACKUP_ENV"), not 600"
+        problems=1
+    fi
+    if ! command -v python3 >/dev/null 2>&1; then
+        echo "MISSING python3: stage_sqlite and prune need it"
+        problems=1
+    fi
+    if [ -f "$ROOT/var/spool/cron/crontabs/root" ] &&
+        grep -qF "$LEGACY_CRON_MATCH" "$ROOT/var/spool/cron/crontabs/root"; then
+        echo "DIFFERS $ROOT/var/spool/cron/crontabs/root still runs $LEGACY_CRON_MATCH"
+        problems=1
+    fi
+    if [ -f "$ROOT/etc/environment" ] && grep -qE "$LEGACY_ENV_PATTERN" "$ROOT/etc/environment"; then
+        echo "DIFFERS $ROOT/etc/environment still carries the dead RESTIC/AWS keys"
+        problems=1
+    fi
+    if [ -z "$ROOT" ]; then
+        for timer in pi-backup.timer pi-backup-prune.timer; do
+            if ! systemctl is-enabled --quiet "$timer"; then
+                echo "DIFFERS $timer is not enabled"
+                problems=1
+            fi
+        done
+    else
+        echo "systemd: the timers are not checked under PI_ROOT"
     fi
 
     echo "root device: $(root_device)"
