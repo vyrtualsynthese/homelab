@@ -674,11 +674,61 @@ class ExternalStreamTests(unittest.TestCase):
             "files stream=edge-rbp0 path=dockers/config/wg-easy.db matched=1",
         ])
 
+    def test_a_directory_never_satisfies_an_external_requirement(self):
+        # A `gravity.db` that is a directory is the bind-mount trap setup refuses; a
+        # snapshot of that tree holds no database, and the lower bound must say so.
+        entries = [{"path": "/var/lib/pi-backup/tree/dockers/etc-pihole/gravity.db",
+                    "type": "dir"}]
+        lines, problems = load().check_external(
+            "edge-rbp0", ["dockers/etc-pihole/gravity.db"], entries)
+        self.assertEqual(problems, ["edge-rbp0 is missing dockers/etc-pihole/gravity.db"])
+
     def test_an_external_stream_missing_one_required_file_is_a_problem(self):
         entries = [{"path": "/var/lib/pi-backup/tree/dockers/etc-pihole/gravity.db"}]
         lines, problems = load().check_external(
             "edge-rbp0", ["dockers/etc-pihole/gravity.db", "dockers/config/wg-easy.db"], entries)
         self.assertEqual(problems, ["edge-rbp0 is missing dockers/config/wg-easy.db"])
+
+
+class ExternalStreamMainTests(unittest.TestCase):
+    """One external stream end to end, so the mustMatch wiring is not only unit-tested."""
+
+    def test_a_fragment_snapshot_fails_the_run(self):
+        stamp = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = pathlib.Path(tmp)
+            config = tmp / "streams.json"
+            config.write_text(json.dumps([{
+                "name": "edge-rbp0", "repository": "s3:x/edge-rbp0", "budgetGiB": 1,
+                "external": True,
+                "mustMatch": ["dockers/etc-pihole/gravity.db", "dockers/config/wg-easy.db"],
+            }]))
+            snapshot = json.dumps([{"id": "a", "time": stamp,
+                                    "tags": ["stream=edge-rbp0"]}])
+            fake = tmp / "restic"
+            fake.write_text(
+                "#!/bin/sh\n"
+                'case "$3" in\n'
+                f"  snapshots) echo '{snapshot}' ;;\n"
+                "  stats) echo '{\"total_size\": 4096}' ;;\n"
+                "  ls) printf '%s\\n' "
+                "'{\"path\": \"/var/lib/pi-backup/tree/dockers/etc-pihole/gravity.db\", "
+                "\"type\": \"file\"}' "
+                "'{\"path\": \"/var/lib/pi-backup/tree/dockers/config\", "
+                "\"type\": \"dir\"}' ;;\n"
+                "  *) exit 9 ;;\n"
+                "esac\n"
+            )
+            fake.chmod(0o755)
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                code = load().main(["--config", str(config), "--restic", str(fake)],
+                                   etcd_s3=etcd_s3_stub("nuc0"))
+        self.assertEqual(code, 1)
+        text = out.getvalue()
+        self.assertIn("path=dockers/etc-pihole/gravity.db matched=1", text)
+        self.assertIn("problem stream=edge-rbp0 "
+                      "edge-rbp0 is missing dockers/config/wg-easy.db", text)
 
 
 if __name__ == "__main__":
