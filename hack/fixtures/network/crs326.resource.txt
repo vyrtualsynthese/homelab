@@ -1,5 +1,5 @@
                    uptime: 3w2d1h
-                  version: 7.16.1 (stable)
+                  version: 6.49.8 (long-term)
               free-memory: 201.3MiB
              total-memory: 256.0MiB
                       cpu: MIPS 98Kc
