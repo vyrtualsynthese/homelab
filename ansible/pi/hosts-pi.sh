@@ -122,16 +122,20 @@ LAN_CIDR="192.168.1.0/24"
 CLUSTER_ADDRESSES="192.168.1.41 192.168.1.27 192.168.1.46 192.168.1.48"
 VPN_CIDR="10.8.0.0/24"
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# Resolved lazily: `setup` installs this script at /usr/local/sbin, which is where
-# the systemd timers run it from, and ../playbooks does not exist there. A hard
-# `cd` here made stream and prune die at load on a real host, before dispatch,
-# so the nightly timer could never have written a snapshot.
-TEMPLATES=""
-if [ -d "$HERE/../playbooks/templates/runners" ]; then
-    TEMPLATES="$(cd "$HERE/../playbooks/templates/runners" && pwd)"
-fi
 ROOT="${PI_ROOT:-}"
 ROOT="${ROOT%/}"
+# Two places, because the script is run from both: the ansible tree, which is the
+# only copy a fresh host has, and /usr/local/sbin, where `setup` installs it as the
+# systemd timers' entry point and where `verify` is run on a host that has no tree.
+# A hard `cd` to the first made every verb die at load on a real host, before
+# dispatch, so the nightly timer could never have written a snapshot.
+TEMPLATES=""
+for candidate in "$HERE/../playbooks/templates/runners" "$ROOT/usr/local/lib/hosts-pi/templates"; do
+    if [ -d "$candidate" ]; then
+        TEMPLATES="$(cd "$candidate" && pwd)"
+        break
+    fi
+done
 CHANGED=0
 CHANGED_THIS_WRITE=0
 
@@ -1205,6 +1209,10 @@ cmd_setup() {
     write_abs "$ROOT/etc/hostname" "$(desired_hostname "$host")"
 
     install_restic
+    # The templates travel beside the script so `verify` works from
+    # /usr/local/sbin, where a host that has no ansible tree runs it.
+    install -d -m 0755 "$ROOT/usr/local/lib/hosts-pi/templates"
+    install -m 0644 "$TEMPLATES"/* "$ROOT/usr/local/lib/hosts-pi/templates/"
     install -D -m 0555 "$HERE/hosts-pi.sh" "$ROOT/usr/local/sbin/hosts-pi.sh"
     write_abs "$ROOT/etc/systemd/system/pi-backup.service" "$(desired_backup_service "$host")"
     write_abs "$ROOT/etc/systemd/system/pi-backup.timer" "$(desired_backup_timer)"

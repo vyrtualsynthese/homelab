@@ -1393,6 +1393,23 @@ def test_a_verb_that_renders_says_which_tree_has_the_templates(tmp_path):
     assert "ansible tree" in out.stderr
 
 
+def test_setup_installs_the_templates_so_verify_needs_no_ansible_tree(tmp_path):
+    """verify renders the same files setup wrote, and a host that has no checkout
+    runs it from /usr/local/sbin. Without this copy it refused there."""
+    root = tmp_path / "pi"
+    _pi_fixture(root)
+
+    assert run("setup", "rbp1", root=root).returncode == 0
+    templates = root / "usr/local/lib/hosts-pi/templates"
+    assert (templates / "docker-compose.yml").stat().st_mode & 0o777 == 0o644
+    source = REPO / "ansible/playbooks/templates/runners"
+    assert sorted(p.name for p in templates.iterdir()) == sorted(p.name for p in source.iterdir())
+
+    out = run("render", "rbp0", root=root, script=root / "usr/local/sbin/hosts-pi.sh")
+    assert out.returncode == 0, out.stderr
+    assert COMPOSE_HEADER in out.stdout
+
+
 def test_setup_retires_the_legacy_cron_and_its_dead_keys(tmp_path):
     root = tmp_path / "pi"
     _pi_fixture(root)
