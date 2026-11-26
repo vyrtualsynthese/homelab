@@ -1,0 +1,91 @@
+---
+# The node's resolver, owned here and nowhere else.
+#
+# What it fixes: none of the four nodes took its nameservers from a repository.
+# `nas` and `nuc0` carry the `resolvconf` package, whose `/etc/resolv.conf` is a
+# symlink to a file this layer did not write, and whose hand-edited `head` held
+# the Pi-hole and `1.1.1.1`; `nas` also named the Livebox in
+# `/etc/systemd/resolved.conf`. `streaming` and `rbp2` resolved through the stub
+# at `127.0.0.53`, whose uplink list came from DHCP. CoreDNS runs on `nuc0` with
+# `dnsPolicy: Default`, so it inherited that file: `1.1.1.1` answers
+# `*.kub.local` with NXDOMAIN, so one query in three failed and `cache 30` kept
+# it (board card 889, measured 2026-11-26).
+#
+# The shape is the edge Pis' (`ansible/pi/hosts-pi.sh`): netplan names the two
+# Pis and refuses DHCP's nameservers, resolved keeps its stub listener off, and
+# `/etc/resolv.conf` is the file that lists the Pis. The `resolvconf` package
+# stays installed on `nas` and `nuc0` on purpose: with the symlink moved it
+# writes a file nothing reads, and removing a package is a host change this card
+# does not need.
+- name: Refuse to run anywhere but the Kubernetes nodes
+  ansible.builtin.assert:
+    that:
+      - "'cluster' in group_names"
+      - "resolver_nameservers | length == 2"
+    fail_msg: >-
+      The resolver list is the two edge Pis, and only those two. A third host
+      in `edge`, or none, means the inventory is not what this role was written
+      for.
+
+- name: Make the resolved drop-in directory
+  ansible.builtin.file:
+    path: /etc/systemd/resolved.conf.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Keep the stub listener off and clear the packaged DNS list
+  ansible.builtin.copy:
+    src: 90-pihole-resolvers.conf
+    dest: /etc/systemd/resolved.conf.d/90-pihole-resolvers.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart systemd-resolved
+
+- name: Give netplan the two Pis, and stop DHCP handing out its own
+  ansible.builtin.template:
+    src: 90-resolvers.yaml.j2
+    dest: /etc/netplan/90-resolvers.yaml
+    owner: root
+    group: root
+    # netplan prints "Permissions ... are too open" and skips a readable file.
+    mode: "0600"
+  notify:
+    - Apply netplan
+    - Restart systemd-resolved
+
+- name: Point /etc/resolv.conf at the file resolved writes
+  ansible.builtin.file:
+    path: /etc/resolv.conf
+    src: /run/systemd/resolve/resolv.conf
+    state: link
+    force: true
+
+# The handlers are what put the two Pis in the file, so the read below has to
+# wait for them. The assert is the role proving its own outcome: a resolv.conf
+# that names a third server is the defect this role exists to remove, and a
+# drift report that ended "changed" without checking would not see it.
+- name: Apply the handlers before reading what they wrote
+  ansible.builtin.meta: flush_handlers
+
+- name: Read the nameservers the host now resolves through
+  ansible.builtin.command:
+    argv:
+      - awk
+      - '$1 == "nameserver" { print $2 }'
+      - /etc/resolv.conf
+  register: resolver_resolv_conf
+  changed_when: false
+  when: not ansible_check_mode
+
+- name: Refuse a file that names anything but the two Pi-holes
+  ansible.builtin.assert:
+    that:
+      - "resolver_resolv_conf.stdout_lines | sort == resolver_nameservers | sort"
+    fail_msg: >-
+      /etc/resolv.conf names
+      {{ resolver_resolv_conf.stdout_lines | default([]) | join(', ') }};
+      it must name exactly {{ resolver_nameservers | join(', ') }}.
+  when: not ansible_check_mode

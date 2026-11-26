@@ -10,8 +10,9 @@
 # start, and there is no setting that drops the two imports.
 #
 # Two comment-only files satisfy the globs and change no resolution. A `.server`
-# file is a server block and a `.override` file replaces a directive from the
-# default block; both are valid when they contain only a comment.
+# file is a server block and a `.override` file is imported into the default
+# block, ahead of the packaged `forward .`; a stanza for a zone more specific
+# than `.` wins there, and a comment on its own satisfies the glob.
 #
 # Applied by hand, like everything else under cluster/infrastructure:
 #
@@ -32,3 +33,17 @@ data:
     # Intentionally empty: this file exists so `import .../*.server` matches.
   empty.override: |
     # Intentionally empty: this file exists so `import .../*.override` matches.
+  kub-local.override: |
+    # The only CoreDNS pod runs on `nuc0` with `dnsPolicy: Default`, so it
+    # inherits that node's `/etc/resolv.conf` and `forward .` treats every
+    # nameserver in it as a peer. That file held `1.1.1.1` beside the Pi-hole on
+    # 2026-11-26; `1.1.1.1` answers `*.kub.local` with NXDOMAIN, so one query in
+    # three failed and `cache 30` kept the answer.
+    #
+    # The wildcard is answered by the two edge Pis and by nothing else. A
+    # `forward` for the zone, imported ahead of the packaged `forward .`, sends
+    # those queries to them and leaves every other name on the node's list.
+    # CoreDNS chains `forward` stanzas in file order, so this one is consulted
+    # before the catch-all — which is why the fix lives here: the Corefile is
+    # K3s's and is rewritten at every start.
+    forward kub.local 192.168.1.22 192.168.1.38

@@ -87,6 +87,7 @@ The trade — passwordless root for one named identity instead of a group — is
 | `packages` | all | removes what `inventory/host_vars/<host>.yml` names, after resolving each pattern against dpkg |
 | `system` | all | one time zone, two kernels kept (the running one and the newest other), `apt autoremove --purge`, the `rc` residue purged |
 | `units` | `cluster` | no swap on the nodes, the failed state of a unit whose file is gone cleared, the leftover `rc.local` removed, `wait-online` pointed at the interface the host has |
+| `resolver` | `cluster` | `/etc/resolv.conf` names the two edge Pi-holes and nothing else: netplan refuses DHCP's nameservers, resolved keeps its stub listener off, and the symlink moves to the file that lists the pair |
 | `firewall` | `cluster`; the two Pis through `pi/hosts-pi.sh` | `ufw`, default deny in, the ports each host runs opened to the addresses that use them |
 | `disks` | `storage` | the nine data mounts, `nofail` with a 30 s device timeout, so a missing disk cannot stop the host reaching `sshd`; `/` and `/boot/efi` stay strict |
 | `union` | `storage` | the mergerfs pool's line in `/etc/fstab` and its two runtime options: `moveonenospc`, `minfreespace` |

@@ -1,0 +1,12 @@
+---
+# `netplan apply` is what makes the nameserver list live. It runs before the
+# resolved restart, so resolved reads the new uplink list when it comes back.
+- name: Apply netplan
+  ansible.builtin.command: netplan apply
+  # It only runs when a file it reads has just changed.
+  changed_when: true
+
+- name: Restart systemd-resolved
+  ansible.builtin.systemd:
+    name: systemd-resolved
+    state: restarted

@@ -1,0 +1,18 @@
+# Written by ansible/roles/resolver; an edit here is reverted on the next run.
+#
+# Netplan merges this file over the one the image wrote (00-installer-config on
+# three nodes, 50-cloud-init on rbp2): the interface keeps its DHCP address, and
+# only the nameservers change. It sorts after both, which is what makes it win.
+network:
+  version: 2
+  ethernets:
+    {{ resolver_interface }}:
+      # DHCP still gives the address; its nameservers are what is refused. The
+      # Livebox was handing out 1.1.1.1 beside the Pi-hole.
+      dhcp4-overrides:
+        use-dns: false
+      # The two Pis, rbp0 first. Never 1.1.1.1: it answered `*.kub.local` with
+      # NXDOMAIN, and a CoreDNS pod that inherited this file treated it as a
+      # peer of the Pi (board card 889).
+      nameservers:
+        addresses: [{{ resolver_nameservers | join(', ') }}]
