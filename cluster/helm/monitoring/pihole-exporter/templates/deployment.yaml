@@ -1,3 +1,10 @@
+{{- if ne (len .Values.pihole.hostnames) (len .Values.pihole.passwordSecret.keys) }}
+{{- fail "pihole.hostnames and pihole.passwordSecret.keys must have the same length: PIHOLE_PASSWORD_FILE is positional" }}
+{{- end }}
+{{- $files := list }}
+{{- range $key := .Values.pihole.passwordSecret.keys }}
+{{- $files = append $files (printf "%s/%s" $.Values.pihole.passwordSecret.mountPath $key) }}
+{{- end }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -13,10 +20,13 @@ spec:
       {{- include "selectorLabels" . | nindent 6 }}
   template:
     metadata:
-      {{- with .Values.podAnnotations }}
       annotations:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
+        # Prometheus discovers this pod by annotation, finds the port here and
+        # asks /metrics. All three come from metrics.port, so the annotation
+        # cannot point at a port the container does not listen on.
+        prometheus.io/scrape: "true"
+        prometheus.io/scheme: "http"
+        prometheus.io/port: {{ .Values.metrics.port | quote }}
       labels:
         {{- include "selectorLabels" . | nindent 8 }}
     spec:
@@ -27,6 +37,21 @@ spec:
       serviceAccountName: {{ include "serviceAccountName" . }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      volumes:
+        # The Secret's keys are the hosts: each key is mounted as a file of the
+        # same name, and PIHOLE_PASSWORD_FILE lists them in hostname order.
+        # 0444 rather than 0400: the image runs as uid 65532 and a Secret volume
+        # is owned by root, so a mode without the other-read bit is unreadable
+        # and the exporter exits at startup.
+        - name: pihole-auth
+          secret:
+            secretName: {{ .Values.pihole.passwordSecret.name }}
+            defaultMode: 0444
+            items:
+              {{- range .Values.pihole.passwordSecret.keys }}
+              - key: {{ . }}
+                path: {{ . }}
+              {{- end }}
       containers:
         - name: {{ .Chart.Name }}
           securityContext:
@@ -34,22 +59,60 @@ spec:
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           env:
+            # PIHOLE_PASSWORD, not PIHOLE_API_TOKEN: the exporter reads the
+            # former (config/configuration.go) and ignores the latter, so the
+            # chart authenticated with an empty password and every poll was a
+            # 401 while the pod stayed Ready. The password is handed over as a
+            # file rather than a variable so it stays out of the process
+            # environment and out of `kubectl describe pod`.
             - name: PIHOLE_PROTOCOL
-              value: "http"
-            - name: PIHOLE_HOSTNAME
-              value: "192.168.1.22"
-            - name: PIHOLE_API_TOKEN
-              valueFrom:
-                secretKeyRef:
-                  name: pihole-exporter
-                  key: key
+              value: {{ .Values.pihole.protocol | quote }}
             - name: PIHOLE_PORT
-              value: "80"
+              value: {{ .Values.pihole.port | quote }}
+            - name: PIHOLE_HOSTNAME
+              value: {{ join "," .Values.pihole.hostnames | quote }}
+            - name: SKIP_TLS_VERIFICATION
+              value: {{ .Values.pihole.skipTLSVerification | quote }}
+            # One path per host, comma-separated, in the order of hostnames
+            # above. The two Pis have different app passwords, which is why this
+            # is not a single Secret key.
+            - name: PIHOLE_PASSWORD_FILE
+              value: {{ join "," $files | quote }}
             - name: PORT
-              value: "9617"
+              value: {{ .Values.metrics.port | quote }}
+            - name: LOG_LEVEL
+              value: {{ .Values.logLevel | quote }}
           ports:
-            - name: exporter
-              containerPort: 9902
+            - name: metrics
+              containerPort: {{ .Values.metrics.port }}
+          volumeMounts:
+            - name: pihole-auth
+              mountPath: {{ .Values.pihole.passwordSecret.mountPath }}
+              readOnly: true
+          # The image is scratch with no shell and no HTTP client, so the binary
+          # is its own check: -healthcheck GETs /liveness on PORT. Liveness and
+          # readiness share it on purpose — the only thing that fails while the
+          # process stays up is Pi-hole's answer, and a restart cannot fix a
+          # credential. A 401 shows in the log and as missing pihole_* series,
+          # not as a crash loop.
+          livenessProbe:
+            exec:
+              command:
+                - /app/pihole-exporter
+                - -healthcheck
+            initialDelaySeconds: 5
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            exec:
+              command:
+                - /app/pihole-exporter
+                - -healthcheck
+            initialDelaySeconds: 5
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
       {{- with .Values.nodeSelector }}

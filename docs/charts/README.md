@@ -4,7 +4,10 @@
 > `autobrr` is the worked example of what meeting it looks like.
 >
 > **Use it when** you are writing a chart, reviewing one against the list it has to satisfy, or
-> looking for the reason a rule exists · **Verified** 2026-11-20 · **Kind:** living page
+> looking for the reason a rule exists · **Verified** 2026-11-20 · **Kind:** reference
+>
+> **Sources** `cluster/helm/media-stack/autobrr` (the reference chart), `hack/check-charts.sh`,
+> `hack/check-app-version.sh`, `hack/config-key-checks.yaml`, `hack/check-docs.sh`
 
 Most charts in `cluster/helm/` are written here rather than vendored. This page is the checklist
 every one of them is expected to satisfy. [`cluster/helm/media-stack/autobrr`](../../cluster/helm/media-stack/autobrr)
@@ -272,6 +275,7 @@ Two habits follow:
 | `thelounge` | liveness only, a TCP connect to the web port — `/` answers the login page with a 200 either way; readiness off, no endpoint reports the IRC connections | capabilities dropped, seccomp, no privilege escalation | **yes — 1000**, the image's own `node` user; the claim is new, so no `chown` |
 | `syncthing` | startup, liveness and readiness, all on `/rest/noauth/health`; readiness shares it because a disconnected folder is a sync state, not a failed dependency | capabilities dropped except `CHOWN`/`SETUID`/`SETGID`, which the LinuxServer init needs; seccomp; no privilege escalation | **no — the image starts as root, then drops to 1100**; config claim `1Gi` on `local-path`, not `128Mi` |
 | `filebrowser` | liveness and readiness on `/health`, shared because the only dependency is the local SQLite database, which fails with the process | capabilities dropped, seccomp, no privilege escalation, no API token | **yes — 1100**, primary gid 1000 for the mergerfs export; the claims it keeps were already owned by 1100 |
+| `pihole-exporter` | liveness and readiness share the image's own `-healthcheck` on `/liveness`; readiness shares it because a lost API session leaves the process healthy and a restart cannot fix a credential | capabilities dropped, seccomp, no privilege escalation, read-only root filesystem, **`privileged: true` dropped**, app passwords mounted as files rather than set in the environment | **yes — 65532**, the image's own `USER` |
 
 ## Checking a chart against this list
 
