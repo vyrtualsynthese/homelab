@@ -605,6 +605,68 @@ def test_the_wildcard_file_carries_every_local_override():
         assert line in block, line
 
 
+def test_setup_makes_the_vpn_database_unreadable_to_other_local_users(tmp_path):
+    """A fresh container writes config/wg-easy.db 0644, and the file holds every
+    peer's private key and the panel's password hash. Both Pis were narrowed by
+    hand on 2026-11-26; a reflash, or a config directory the stack recreated,
+    brings the readable copy back, so setup does it now."""
+    root = tmp_path / "pi"
+    stack = _pi_fixture(root)
+    (stack / "config").mkdir()
+    database = stack / "config/wg-easy.db"
+    database.write_bytes(b"SQLite format 3\x00")
+    database.chmod(0o644)
+
+    out = run("setup", "rbp1", root=root)
+
+    assert out.returncode == 0, out.stderr
+    mode = database.stat().st_mode & 0o777
+    assert mode == 0o600, oct(mode)
+    assert f"wg-easy: {database} mode 644 -> 600" in out.stdout
+
+
+def test_the_vpn_database_mode_is_narrowed_once_then_left_alone(tmp_path):
+    root = tmp_path / "pi"
+    stack = _pi_fixture(root)
+    (stack / "config").mkdir()
+    database = stack / "config/wg-easy.db"
+    database.write_bytes(b"SQLite format 3\x00")
+    database.chmod(0o644)
+    assert run("setup", "rbp1", root=root).returncode == 0
+
+    second = run("setup", "rbp1", root=root)
+
+    assert second.returncode == 0, second.stderr
+    assert "changed=0" in second.stdout
+
+
+def test_verify_names_a_readable_vpn_database(tmp_path):
+    root = tmp_path / "pi"
+    stack = _pi_fixture(root)
+    (stack / "config").mkdir()
+    database = stack / "config/wg-easy.db"
+    database.write_bytes(b"SQLite format 3\x00")
+    assert run("setup", "rbp1", root=root).returncode == 0
+    assert database.stat().st_mode & 0o777 == 0o600
+
+    database.chmod(0o644)
+    out = run("verify", "rbp1", root=root)
+
+    assert out.returncode == 1
+    assert f"DIFFERS {database} mode 644, expected 600" in out.stdout
+
+
+def test_setup_does_not_invent_the_vpn_database_in_a_fixture(tmp_path):
+    """The file is the container's; setup narrows the mode of what the panel
+    wrote, and a host without a database is not one it can finish for it."""
+    root = tmp_path / "pi"
+    stack = _pi_fixture(root)
+
+    assert run("setup", "rbp1", root=root).returncode == 0
+
+    assert not (stack / "config/wg-easy.db").exists()
+
+
 def test_the_netplan_file_is_not_world_readable(tmp_path):
     """netplan prints 'Permissions ... are too open' on every apply, and the file
     describes the host's addresses, so setup narrows it."""

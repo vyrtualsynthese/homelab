@@ -51,7 +51,7 @@ PI_ROOT=/tmp/fake-pi ./hosts-pi.sh setup rbp0
 | `pihole.env` | **no** | it holds the Pi-hole panel password and nothing else: `FTLCONF_webserver_api_password`, `0600`, owned by the account that runs compose, gitignored. `setup` requires it and names it when it is missing. The v5 name `WEBPASSWORD` is ignored by this image |
 | `wg-easy.env` | **no** | one key, `OAUTH_OIDC_CLIENT_SECRET`, the VPN panel's own client secret in authentik. Gitignored, `0600`, required by `setup` and never written by it; the same value is `WG_EASY_CLIENT_SECRET` in the cluster's `authentik-sso` Secret, because Secrets do not leave the cluster |
 | `certs/` | **no** | `tls.pem` and `tls-key.pem`, this host's own leaf from the internal CA (`hack/internal-cert.sh --host <name>`) and the key Caddy serves on 8443. Required by `setup`, never written, and carried off the host by `backup` |
-| `config/` (wg-easy's database) | **no** | since wg-easy 15 the panel account, host, port, DNS and peers live in `config/wg-easy.db`, not in an environment file. `backup` copies it with the rest of the stack |
+| `config/` (wg-easy's database) | **no** | since wg-easy 15 the panel account, host, port, DNS and peers live in `config/wg-easy.db`, not in an environment file. `backup` copies it with the rest of the stack. A fresh container writes it `0644`, so `setup` narrows it to `0600` root-owned once the panel has created it — every peer's private key and the panel's password hash are in that file — and `verify` reads the mode back |
 | `/boot/firmware/config.txt`, `cmdline.txt` | **no** | see below |
 
 The stack's own files live inside the stack directory, so `backup` and `restore` carry them with the

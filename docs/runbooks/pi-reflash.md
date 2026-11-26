@@ -74,7 +74,9 @@ own `user-data` on the boot partition before the first boot — step 4. The imag
 - **Three more files are yours, and the script refuses without them**: `wg-easy.env` (the panel's
   authentik client secret), and `certs/tls.pem` with `certs/tls-key.pem` (its TLS leaf and key, from
   `hack/internal-cert.sh --host`). wg-easy's own settings — account, host, port, DNS and peers — live
-  in `config/wg-easy.db`, which `backup` copies with the rest.
+  in `config/wg-easy.db`, which `backup` copies with the rest. The file holds every peer's private key,
+  so `setup` narrows it to `0600` once the panel has created it: a fresh container writes `0644`, and
+  `verify` names the file when that mode is back.
 - **Record what a reflash must not change**: `rpi-eeprom-update` (26.3 on `rbp0`, 13.12 on `rbp1` on
   2026-11-24) and the USB disk's model and serial. The boot order lives in the EEPROM and survives an
   image write, so a version that moves afterwards is a firmware change nobody would notice for a month.
@@ -248,6 +250,12 @@ Since wg-easy 15 the VPN is configured in a web panel, not in files. The panel k
 `config/wg-easy.db`: the admin account, the address and port clients dial, the DNS servers and allowed
 IPs handed to new clients, and the peer list itself. `backup` copies that file with the rest of the
 stack, so a reflash brings the panel back as it was, peers included.
+
+That file is also the host's biggest secret after `pihole.env`: every peer's private key and the
+panel's password hash are in it, in clear. A fresh container writes it `0644`, which lets any local
+account read every tunnel. `setup` narrows the copy the panel made to `0600` root-owned, and `verify`
+reads the mode back; both Pis were narrowed by hand on 2026-11-26, and the script is what keeps it
+there after a reflash or a `config` directory removed and rebuilt.
 
 It answers at `https://vpn-rbp0.kub.local:8443` on `rbp0` and `https://vpn-rbp1.kub.local:8443` on
 `rbp1`, on the host's own certificate. No other port publishes it. Declared 2026-11-26; the first
