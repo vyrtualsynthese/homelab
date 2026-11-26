@@ -22,6 +22,13 @@ from. A later measurement supersedes it; this one is not edited afterwards.
 > the two Pis) have a fix in `ansible/` that was written the same day and has not run on a host yet.
 > The grades above stand as what was measured; they change when a collector run shows the state after
 > the apply, not when the code lands.
+>
+> **Superseded in part, 2026-11-26 — the router's rules were read.** Two questions this record left
+> open now have an answer: the Livebox does not forward `5000` or `9902`, so §2's exposure ends at
+> the LAN, and the `/24` holds 30 addressed devices, eight of them the homelab. The LAPI's `30500` is
+> not forwarded either, which keeps the security-detection plan's grade and corrects its stated
+> reason. The measurements are [the Livebox record](../audit/livebox-2026-11-26.md); the grades here
+> stand as what was measured on 2026-11-24.
 
 ## How a claim is graded here
 
