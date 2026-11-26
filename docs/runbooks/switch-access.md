@@ -7,13 +7,14 @@
 >
 > **Use it when** you are creating that account, rotating its key, or checking what a switch accepts ·
 > **Verified** 2026-11-25, run end to end on both switches: the group, the disabled-then-enabled user,
-> the RSA 4096 import, the key's own login, `/user add` refused, and the source filter turning another
-> prefix away; both switches moved to RouterOS `7.24.7` on 2026-11-26 with the same accounts and key ·
-> **Kind:** how-to
+> the key's own login, `/user add` refused, and the source filter turning another prefix away; both
+> switches moved to RouterOS `7.24.7` on 2026-11-26, and the **ed25519** pair, its import and a gate
+> dry run on 7.24.7 were measured the same day · **Kind:** how-to
 >
-> **Status:** proved 2026-11-25. One deviation from the card: the key is **RSA 4096**, not ed25519,
-> because RouterOS 6.49 cannot import ed25519. v7 accepts that pair as it stands, and nothing needs
-> the swap, so the pair is unchanged.
+> **Status:** the account and its fences were proved on 2026-11-25 with an **RSA 4096** pair, the only
+> kind RouterOS 6.49 could import. Card #806 replaced it on 2026-11-26 with an ed25519 pair, which
+> `7.24.7` imports; the steps below are written for that pair, and the old RSA one is gone from both
+> switches.
 >
 > **Sources** `ansible/collectors/network-audit.sh`, `ansible/switches/switch-apply.sh`,
 > `ansible/switches/install-switch-change.sh`,
@@ -155,15 +156,16 @@ On the machine the agent's shell runs on:
 sudo useradd --create-home --home-dir /home/netcfg --shell /usr/sbin/nologin netcfg
 sudo chmod 700 /home/netcfg
 sudo install -d -o netcfg -g netcfg -m 700 /home/netcfg/.ssh
-sudo -u netcfg ssh-keygen -t rsa -b 4096 -N '' -C "switch-deploy" \
+sudo -u netcfg ssh-keygen -t ed25519 -N '' -C "switch-deploy" \
   -f /home/netcfg/.ssh/switch-deploy
 ```
 
-**RSA, not ed25519, and the switch decided that.** RouterOS 6.49 rejects an ed25519 key with
-`unable to load key file (wrong format?)` — measured on 2026-11-25 — because ed25519 import arrived
-in 7.x. The card asked for ed25519 and the devices ran 6.49, so the pair is RSA 4096. Both switches
-run `7.24.7` since 2026-11-26 and accept that pair unchanged, so an ed25519 swap is now possible
-rather than blocked; it is a new pair and one import, and nothing needs it.
+**The pair started as RSA 4096, and the switch decided that.** RouterOS 6.49 rejects an ed25519 key
+with `unable to load key file (wrong format?)` — measured on 2026-11-25 — because ed25519 import
+arrived in 7.x. The account was built while the devices ran 6.49, so its first pair was RSA 4096.
+`7.24.7`, on both switches since 2026-11-26, imports ed25519, and card #806 replaced the pair: the
+commands above and below are written for the ed25519 one. An RSA key also works on v7, so an old
+device that still holds one is not broken — it is replaced at its next rotation.
 
 `useradd` leaves the home at `0750` on Ubuntu, where the group may traverse it; the `chmod` is what
 makes the account's home unreadable to anything but `netcfg` itself.
@@ -183,7 +185,7 @@ both of which this switch accepts — then in the admin session:
 /user add name=deploy group=deploy address=192.168.1.0/24 password="<random>" disabled=yes
 /user ssh-keys import public-key-file=switch-deploy.pub user=deploy
 /user enable deploy
-/ip ssh set always-allow-password-login=no
+/ip/ssh/set password-authentication=yes-if-no-key
 /file remove switch-deploy.pub
 ```
 
@@ -209,10 +211,17 @@ enough. It grants file transfer and nothing else: the rest of the list still den
 and `api`.
 
 Expected, from `/user ssh-keys print`: one row, `user` `deploy`, its comment `switch-deploy` as the
-owner, 4096 bits. Measured on both switches on 2026-11-25.
+owner, `key-type` `ed25519` on `7.24.7` since card #806. Measured on both switches on 2026-11-26:
+`ed25519 256` after the swap, `rsa 4096` on the first build on 2026-11-25.
 
-`/ip ssh` already reads `always-allow-password-login: no` on both switches, measured on 2026-11-25;
-the command above declares that state instead of changing it.
+**On `7.24.7` the import consumes the uploaded file**, so the `/file remove` that follows answers
+`no such item (4)` — measured on both switches on 2026-11-26. The line stays: it is what cleans up
+after a v6 device, where the file is left behind.
+
+On `7.24.7` the command above is `password-authentication=yes-if-no-key`, and `/ip/ssh print` already
+reads it; it replaced v6's `always-allow-password-login=no` when the devices moved on 2026-11-26. The
+command declares that state instead of changing it: a user holding a key is refused a password either
+way, and the value is what keeps that true for the next account created before its key is imported.
 
 `address=192.168.1.0/24` is a prefix the switch enforces: the account logs in from a matching source
 address and from nowhere else. Narrowing it to the one address the custodian appears from is tighter
@@ -241,9 +250,9 @@ sudo rule, because only it can type the password sudo asks for:
 K=/home/netcfg/.ssh/switch-deploy
 for h in 192.168.1.11 192.168.1.43; do
   sudo -H -u netcfg ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
-    -o PubkeyAcceptedAlgorithms=+ssh-rsa -i "$K" deploy@$h '/system identity print'
+    -i "$K" deploy@$h '/system identity print'
   sudo -H -u netcfg ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
-    -o PubkeyAcceptedAlgorithms=+ssh-rsa -i "$K" deploy@$h '/user add name=probe group=full'
+    -i "$K" deploy@$h '/user add name=probe group=full'
 done
 ```
 
@@ -253,9 +262,9 @@ never renamed; then `not enough permissions (9)` from each `/user add`, with no 
 
 `BatchMode=yes` is what keeps a refused key from turning into a password prompt, and `accept-new`
 settles the switch's host key on the first contact, in `netcfg`'s `known_hosts` rather than the
-operator's. `PubkeyAcceptedAlgorithms=+ssh-rsa` is in the command because RouterOS 6.49 signs with
-the SHA-1 RSA algorithm, which a current OpenSSH client no longer offers on its own. On `7.24.7` the
-allowance is no longer needed and still costs nothing; it stays with the RSA key.
+operator's. The v6-era RSA pair needed `PubkeyAcceptedAlgorithms=+ssh-rsa`, because RouterOS 6.49
+signs with the SHA-1 algorithm OpenSSH 8.8 dropped; with the ed25519 pair on `7.24.7` there is nothing
+to allow, and card #806 removed the option from the change script with the pair.
 
 **A source outside the prefix is refused.** Moving the client is awkward — the key must not travel —
 so the one variable that moves is the prefix itself, and the client stays put. A throwaway account

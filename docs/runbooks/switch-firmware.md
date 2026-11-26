@@ -120,10 +120,12 @@ conversion:
 | `/system swos print` | identity and `allow-from-ports` kept | n/a in use |
 | `/system routerboard settings print` | `boot-os: router-os` | `boot-os: router-os` |
 
-The `deploy` RSA key is still listed by `/user ssh-keys print` (`key-type=rsa bits=4096
-info="switch-deploy"`), the SSH host key is unchanged — a client that trusted the switch before the
-upgrade trusts it afterwards, so `~/.ssh/known_hosts` needs no edit — and `mktxp` reconnects on its
-own through the `monitoring` account's API login.
+The `deploy` key survived the conversion, still listed by `/user ssh-keys print` (`key-type=rsa
+bits=4096 info="switch-deploy"` at read-back); card #806 replaced it with ed25519 the same day, and
+`/user ssh-keys import` on 7.24.7 removes the uploaded public key itself. The SSH host key is
+unchanged — a client that trusted the switch before the upgrade trusts it afterwards, so
+`~/.ssh/known_hosts` needs no edit — and `mktxp` reconnects on its own through the `monitoring`
+account's API login.
 
 ## What is new in v7, and what to do about it
 
@@ -179,6 +181,7 @@ The `wireless` uninstall and the RouterBOOT write cost one more reboot of about 
 - The neighbor tables still show the SFP+ link between the two switches, and the collection of
   `switch-deploy` still authenticates in the change script's own account model (key listed, group
   unchanged).
-- Not verified: the change script's first live run against a v7 switch. It passes
-  `PubkeyAcceptedAlgorithms=+ssh-rsa` and an RSA key, which v7 accepts, but the installed copy has
-  not been exercised since the upgrade.
+- The change script's first run against a v7 switch is the gate's dry run, `switch-apply --target
+  crs326 --change … --dry-run`: measured 2026-11-26, exit 0, the undo rendered from the device's own
+  exports, "nothing was written". It ran with the v6-era script, then again with the ed25519 key and
+  the RSA one removed.
