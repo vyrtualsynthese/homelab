@@ -92,12 +92,8 @@ def test_each_host_gets_its_own_wireguard_port():
 
 
 def test_the_placed_file_is_what_render_printed(tmp_path):
-    root = tmp_path
-    stack = root / "home/vronteix/dockers"
-    stack.mkdir(parents=True)
-    (stack / "pihole.env").write_text("FTLCONF_webserver_api_password=x\n")
-    (root / "proc").mkdir()
-    (root / "proc/mounts").write_text("LABEL=writable / ext4 rw 0 0\n")
+    root = tmp_path / "pi"
+    stack = _pi_fixture(root)
 
     assert run("setup", "rbp0", root=root).returncode == 0
     assert (stack / "docker-compose.yml").read_text() == rendered_compose("rbp0")
@@ -105,11 +101,8 @@ def test_the_placed_file_is_what_render_printed(tmp_path):
 
 
 def test_setup_is_idempotent(tmp_path):
-    root = tmp_path
-    (root / "home/vronteix/dockers").mkdir(parents=True)
-    (root / "home/vronteix/dockers/pihole.env").write_text("FTLCONF_webserver_api_password=x\n")
-    (root / "proc").mkdir()
-    (root / "proc/mounts").write_text("LABEL=writable / ext4 rw 0 0\n")
+    root = tmp_path / "pi"
+    _pi_fixture(root)
     first = run("setup", "rbp1", root=root)
     assert first.returncode == 0, first.stderr
     second = run("setup", "rbp1", root=root)
@@ -196,11 +189,8 @@ def test_render_prints_the_engine_it_would_install():
 
 
 def test_setup_leaves_the_engine_alone_in_a_fixture(tmp_path):
-    root = tmp_path
-    (root / "home/vronteix/dockers").mkdir(parents=True)
-    (root / "home/vronteix/dockers/pihole.env").write_text("FTLCONF_webserver_api_password=x\n")
-    (root / "proc").mkdir()
-    (root / "proc/mounts").write_text("LABEL=writable / ext4 rw 0 0\n")
+    root = tmp_path / "pi"
+    _pi_fixture(root)
     out = run("setup", "rbp1", root=root)
     assert out.returncode == 0, out.stderr
     assert "engine: not touched (PI_ROOT is set)" in out.stdout
@@ -223,11 +213,7 @@ def test_verify_says_it_cannot_check_the_engine_in_a_fixture(tmp_path):
 
 def test_backup_then_restore_puts_the_stack_back(tmp_path):
     root = tmp_path / "pi"
-    stack = root / "home/vronteix/dockers"
-    stack.mkdir(parents=True)
-    (stack / "pihole.env").write_text("FTLCONF_webserver_api_password=x\n")
-    (root / "proc").mkdir()
-    (root / "proc/mounts").write_text("LABEL=writable / ext4 rw 0 0\n")
+    stack = _pi_fixture(root)
 
     assert run("setup", "rbp1", root=root).returncode == 0
 
@@ -301,15 +287,51 @@ def test_setup_restarts_pihole_when_a_mounted_file_changed():
     assert "PI_ROOT is set" in text, "the docker branch stays behind the PI_ROOT guard"
 
 
+SSHD_DROPIN = "etc/ssh/sshd_config.d/00-homelab.conf"
+
+SSHD_CONFIG_FIXTURE = """\
+# This is the sshd server system-wide configuration file.  See
+# sshd_config(5) for more information.
+
+Include /etc/ssh/sshd_config.d/*.conf
+
+#PasswordAuthentication yes
+PasswordAuthentication no
+X11Forwarding yes
+"""
+
+SUDOERS_FIXTURE = """\
+Defaults	env_reset
+root	ALL=(ALL:ALL) ALL
+%admin ALL=(ALL) ALL
+%sudo	ALL=(ALL:ALL) ALL
+@includedir /etc/sudoers.d
+%admins ALL=(ALL) NOPASSWD: ALL
+"""
+
+
 def _pi_fixture(root):
+    """A Pi as the 2026-11-24 measurement found it: a key in the human account,
+    cloud-init's sshd drop-in ahead of the main file's own `no`, the `%admins`
+    grant, and cloud-init's grant for the retired `ubuntu` account."""
     stack = root / "home/vronteix/dockers"
     stack.mkdir(parents=True)
     (stack / "pihole.env").write_text("FTLCONF_webserver_api_password=x\n")
+    (root / "home/vronteix/.ssh").mkdir(parents=True)
+    (root / "home/vronteix/.ssh/authorized_keys").write_text(
+        "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBIltfI3EkKuIHapGzdy1weSV5AiBigks/Pm4zR9Xqd5 valentin@laptop\n"
+    )
     (root / "proc").mkdir()
     (root / "proc/mounts").write_text("LABEL=writable / ext4 rw 0 0\n")
     (root / "boot/firmware").mkdir(parents=True)
     (root / "boot/firmware/cmdline.txt").write_text("console=serial0 root=PARTUUID=aaaa-01 rootwait\n")
     (root / "boot/firmware/config.txt").write_text("arm_64bit=1\n")
+    (root / "etc/ssh/sshd_config.d").mkdir(parents=True)
+    (root / "etc/ssh/sshd_config.d/50-cloud-init.conf").write_text("PasswordAuthentication yes\n")
+    (root / "etc/ssh/sshd_config").write_text(SSHD_CONFIG_FIXTURE)
+    (root / "etc/sudoers").write_text(SUDOERS_FIXTURE)
+    (root / "etc/sudoers.d").mkdir(parents=True)
+    (root / "etc/sudoers.d/90-cloud-init-users").write_text("ubuntu ALL=(ALL) NOPASSWD:ALL\n")
     return stack
 
 
@@ -538,3 +560,178 @@ def test_the_shared_settings_leave_room_for_api_sessions():
     """16 sessions last 30 minutes and an app password cannot close one, so three
     runs of the parity check in half an hour answered `api_seats_exceeded`."""
     assert "FTLCONF_webserver_api_max_sessions=64" in rendered_section("rbp0", SETTINGS_HEADER)
+
+
+# ---------------------------------------------------------------------------------------------
+# SSH and sudo: the two settings the layer owns on the cluster nodes and the Pis did not have.
+# Measured on 2026-11-24 and again on 2026-11-26: `sshd -T` answered
+# `passwordauthentication yes` on both Pis and /etc/sudoers carried the grant.
+# ---------------------------------------------------------------------------------------------
+
+ADMINS_GRANT = "%admins ALL=(ALL) NOPASSWD: ALL"
+SSHD_HEADER = "--- /etc/ssh/sshd_config.d/00-homelab.conf\n"
+
+
+def test_setup_closes_password_logins_with_a_dropin_that_sorts_first(tmp_path):
+    """The main file already said `no`; cloud-init's own drop-in sorts first and
+    wins, because sshd takes the first value it reads."""
+    root = tmp_path / "pi"
+    _pi_fixture(root)
+
+    assert run("setup", "rbp1", root=root).returncode == 0
+
+    dropin = root / SSHD_DROPIN
+    assert dropin.is_file()
+    assert "PasswordAuthentication no" in dropin.read_text()
+    assert dropin.read_text().startswith("# Written by ansible/pi/hosts-pi.sh")
+    mode = dropin.stat().st_mode & 0o777
+    assert mode == 0o644, oct(mode)
+
+
+def test_setup_leaves_cloud_inits_sshd_dropin_alone(tmp_path):
+    """It is cloud-init's file, and a later boot may rewrite it. Ours sorts ahead
+    of it instead, which is what makes `no` the answer."""
+    root = tmp_path / "pi"
+    _pi_fixture(root)
+
+    assert run("setup", "rbp1", root=root).returncode == 0
+
+    assert (root / "etc/ssh/sshd_config.d/50-cloud-init.conf").read_text() == (
+        "PasswordAuthentication yes\n"
+    )
+
+
+def test_setup_closes_password_logins_and_x11_in_the_main_file(tmp_path):
+    """The drop-in is the one that wins; the main file is written as well so the
+    two records agree and a run that loses the drop-in is not a silent reopening."""
+    root = tmp_path / "pi"
+    _pi_fixture(root)
+
+    assert run("setup", "rbp1", root=root).returncode == 0
+
+    text = (root / "etc/ssh/sshd_config").read_text()
+    assert "\nPasswordAuthentication no\n" in text
+    assert "\nX11Forwarding no\n" in text
+    assert "#PasswordAuthentication yes" in text, "a commented example is not a directive"
+
+
+def test_setup_refuses_to_close_password_logins_without_a_key(tmp_path):
+    """Taking the password away from a host with no key is a lockout, and the
+    machine that would fix it is the one nobody can log in to."""
+    root = tmp_path / "pi"
+    _pi_fixture(root)
+    (root / "home/vronteix/.ssh/authorized_keys").write_text("")
+
+    out = run("setup", "rbp1", root=root)
+
+    assert out.returncode == 1
+    assert "authorized_keys" in out.stderr
+    assert not (root / SSHD_DROPIN).exists(), "the guard runs before the change"
+
+
+def test_verify_names_password_auth_still_on(tmp_path):
+    root = tmp_path / "pi"
+    _pi_fixture(root)
+    assert run("setup", "rbp1", root=root).returncode == 0
+    (root / "etc/ssh/sshd_config.d/50-cloud-init.conf").write_text("PasswordAuthentication yes\n")
+    (root / "etc/ssh/sshd_config").write_text(SSHD_CONFIG_FIXTURE.replace(
+        "PasswordAuthentication no", "PasswordAuthentication yes"))
+
+    out = run("verify", "rbp1", root=root)
+
+    assert out.returncode == 1
+    assert "PasswordAuthentication" in out.stdout
+
+
+def test_setup_removes_the_admins_passwordless_grant(tmp_path):
+    root = tmp_path / "pi"
+    _pi_fixture(root)
+
+    assert run("setup", "rbp1", root=root).returncode == 0
+
+    assert ADMINS_GRANT not in (root / "etc/sudoers").read_text()
+
+
+def test_setup_leaves_the_rest_of_sudoers_alone(tmp_path):
+    """%sudo stays as it ships: the human account keeps a password on sudo."""
+    root = tmp_path / "pi"
+    _pi_fixture(root)
+
+    assert run("setup", "rbp1", root=root).returncode == 0
+
+    text = (root / "etc/sudoers").read_text()
+    assert "%sudo\tALL=(ALL:ALL) ALL" in text
+    assert "root\tALL=(ALL:ALL) ALL" in text
+    assert "@includedir /etc/sudoers.d" in text
+    assert (root / "etc/sudoers").stat().st_mode & 0o777 == 0o440
+
+
+def test_setup_removes_cloud_inits_sudoers_grant(tmp_path):
+    """It names the `ubuntu` account the image's rename retired, so the next
+    account to take that name is root without a password."""
+    root = tmp_path / "pi"
+    _pi_fixture(root)
+
+    assert run("setup", "rbp1", root=root).returncode == 0
+
+    assert not (root / "etc/sudoers.d/90-cloud-init-users").exists()
+
+
+def test_verify_names_the_admins_grant(tmp_path):
+    root = tmp_path / "pi"
+    _pi_fixture(root)
+    assert run("setup", "rbp1", root=root).returncode == 0
+    sudoers = root / "etc/sudoers"
+    sudoers.chmod(0o640)
+    sudoers.write_text(SUDOERS_FIXTURE)
+
+    out = run("verify", "rbp1", root=root)
+
+    assert out.returncode == 1
+    assert "admins" in out.stdout
+
+
+def test_the_sudoers_edit_is_validated_with_visudo():
+    """A broken sudoers takes every account's sudo away at once, including the
+    run that is writing it."""
+    text = SCRIPT.read_text()
+    assert "visudo -cf" in text
+    edit = text.index("visudo -cf")
+    assert text.rindex('-z "$ROOT"', 0, edit) > text.index("ensure_sudo_policy"), (
+        "the validation sits behind the PI_ROOT guard, on a real host"
+    )
+
+
+def test_setup_reloads_sshd_only_on_a_real_host():
+    text = SCRIPT.read_text()
+    assert "systemctl reload ssh" in text
+    reload = text.index("systemctl reload ssh")
+    assert text.rindex('-z "$ROOT"', 0, reload) > text.index("ensure_sshd_policy")
+
+
+def test_render_prints_the_ssh_and_sudo_state():
+    out = run("render", "rbp0")
+    assert out.returncode == 0, out.stderr
+    assert SSHD_HEADER in out.stdout
+    assert "PasswordAuthentication no" in out.stdout
+    assert "X11Forwarding no" in out.stdout
+    assert ADMINS_GRANT in out.stdout, "render names the line setup removes"
+
+
+def test_the_pi_and_the_ansible_layer_write_the_same_ssh_policy():
+    """The two records must not drift: the Pis cannot be reached by the layer, so
+    a change to one alone leaves half the fleet on the other."""
+    role = (REPO / "ansible/roles/accounts/tasks/main.yml").read_text()
+    variables = (REPO / "ansible/inventory/group_vars/all.yml").read_text()
+    rendered = rendered_section("rbp0", SSHD_HEADER)
+    assert "sshd_password_auth: false" in variables
+    assert "PasswordAuthentication {{ sshd_password_auth | ternary('yes', 'no') }}" in role
+    assert "X11Forwarding no" in role
+    for line in ("PasswordAuthentication no", "X11Forwarding no"):
+        assert line in rendered, line
+
+
+def test_the_pi_and_the_ansible_layer_remove_the_same_grant():
+    role = (REPO / "ansible/roles/accounts/tasks/main.yml").read_text()
+    assert f"line: '{ADMINS_GRANT}'" in role
+    assert ADMINS_GRANT in SCRIPT.read_text()

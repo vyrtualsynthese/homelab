@@ -32,6 +32,10 @@ account, so a run that includes them answers `unreachable` for those two hosts a
 Use `--limit cluster` for the drift report until the reflash has put the account on both (card #481),
 and read an `unreachable` there as this state, not as drift.
 
+That silence is not a claim that they match. What `accounts` owns on the nodes — key-only SSH, no
+X11 forwarding, no `%admins` grant, no cloud-init `ubuntu` grant — `pi/hosts-pi.sh` owns on the two
+Pis, and `hack/tests/test_pi_script.py` compares the two records so a change to one alone fails.
+
 ```bash
 ansible-playbook playbooks/site.yml --check --diff --limit nuc0
 ansible-playbook playbooks/site.yml --limit nuc0
@@ -78,7 +82,7 @@ The trade — passwordless root for one named identity instead of a group — is
 | Role | Hosts | What it changes |
 |---|---|---|
 | `baseline` | all | marks the host as managed from here |
-| `accounts` | all | removes the `%admins ALL=(ALL) NOPASSWD: ALL` grant, the group, cloud-init's grant for the retired `ubuntu` account and that orphan home, closes password logins, turns X11 forwarding off |
+| `accounts` | all six; the two Pis through `pi/hosts-pi.sh` until they are reflashed | removes the `%admins ALL=(ALL) NOPASSWD: ALL` grant, the group, cloud-init's grant for the retired `ubuntu` account and that orphan home, closes password logins, turns X11 forwarding off |
 | `packages` | all | removes what `inventory/host_vars/<host>.yml` names, after resolving each pattern against dpkg |
 | `system` | all | one time zone, two kernels kept (the running one and the newest other), `apt autoremove --purge`, the `rc` residue purged |
 | `units` | `cluster` | no swap on the nodes, the failed state of a unit whose file is gone cleared, the leftover `rc.local` removed, `wait-online` pointed at the interface the host has |

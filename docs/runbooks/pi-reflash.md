@@ -167,13 +167,23 @@ file the copy predates or the image does not have yet, and an engine that is not
 `setup`'s job, and the `verify` that follows `setup` is the one whose exit code counts. `setup` writes the
 files the stack mounts (`docker-compose.yml`, `pihole.settings`, `etc-dnsmasq.d/02-my-wildcard-dns.conf`),
 the resolver list in `/etc/netplan/50-cloud-init.yaml`, the resolved drop-in
-(`/etc/systemd/resolved.conf.d/90-pihole-resolvers.conf`), and `/etc/hostname`, and leaves the boot files alone:
-the image's copies are right for the disk they were written to, and `restore` puts them back only when the
-backup's `cmdline.txt` names this disk. It never writes `pihole.env`: after a reflash without the backup,
-the panel has no password until one is set again, and the stack will not start without the file. `/etc/hosts`
-is cloud-init's: the image rewrites it from its own template on every boot, so a script that owned it
-would be overwritten and then report a difference no run could settle. Check the
-tree is readable by `vronteix` after the copy: a `cp -a` from a stick keeps the owner it was written with.
+(`/etc/systemd/resolved.conf.d/90-pihole-resolvers.conf`), `/etc/hostname`, and the SSH and sudo policy:
+the `00-homelab.conf` drop-in that closes password logins, the two directives in the main sshd config,
+and the `%admins` grant and its group gone. It leaves the boot files alone: the image's copies are right
+for the disk they were written to, and `restore` puts them back only when the backup's `cmdline.txt` names
+this disk. It never writes `pihole.env`: after a reflash without the backup, the panel has no password
+until one is set again, and the stack will not start without the file. `/etc/hosts` is cloud-init's: the
+image rewrites it from its own template on every boot, so a script that owned it would be overwritten and
+then report a difference no run could settle. Check the tree is readable by `vronteix` after the copy: a
+`cp -a` from a stick keeps the owner it was written with.
+
+A reflashed image is already close to that state, and the script is what settles it either way: this
+`user-data` sets `ssh_pwauth: false` and `sudo: ALL=(ALL) PASSWD:ALL`, so it has no password login and no
+grant. An image written before this record still carries cloud-init's `50-cloud-init.conf` with
+`PasswordAuthentication yes` and the hand-added `%admins` line, and `setup` is what removes them — `verify`
+names any of it that comes back. **After `setup`, `sudo` on a Pi asks for `vronteix`'s password**: the
+grant is gone, and there is no automation account there until the Pis are reflashed (card #481), so the
+operator is the only one who runs root commands on these hosts.
 
 A fresh image also has no container runtime, and `setup` installs that too: `docker-ce`, `docker-ce-cli`,
 `containerd.io` and `docker-compose-plugin` from Docker's own repository, then `vronteix` into the `docker`

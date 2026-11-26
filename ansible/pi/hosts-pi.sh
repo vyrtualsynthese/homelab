@@ -26,7 +26,21 @@
 set -euo pipefail
 
 HOSTS="rbp0 rbp1"
-STACK_DIR="/home/vronteix/dockers"
+HUMAN_USER="vronteix"
+STACK_DIR="/home/$HUMAN_USER/dockers"
+
+# SSH and sudo: the two settings ansible/roles/accounts owns on the four cluster
+# nodes, written here because the layer cannot reach the Pis until they are
+# reflashed (card #481). Measured on both hosts on 2026-11-26: the main
+# sshd_config said `no`, cloud-init's own drop-in said `yes` and sorts first, and
+# /etc/sudoers carried the group grant. The strings match the role's, and
+# test_the_pi_and_the_ansible_layer_* keep the two records from drifting.
+SSHD_CONFIG="/etc/ssh/sshd_config"
+SSHD_DROPIN="/etc/ssh/sshd_config.d/00-homelab.conf"
+SUDOERS="/etc/sudoers"
+CLOUD_INIT_SUDOERS="/etc/sudoers.d/90-cloud-init-users"
+ADMINS_GROUP="admins"
+ADMINS_GRANT="%admins ALL=(ALL) NOPASSWD: ALL"
 
 # The engine and the compose plugin, from Docker's own repository. Pinned by
 # band, because nothing in this repository bumps an apt pin: an exact version
@@ -38,7 +52,6 @@ CONTAINERD_PIN="2.4.*"
 COMPOSE_PIN="5:8.*"
 DOCKER_KEYRING="/etc/apt/keyrings/docker.asc"
 DOCKER_SOURCES="/etc/apt/sources.list.d/docker.sources"
-DOCKER_GROUP_USER="vronteix"
 # The resolvers both Pis carry, on both hosts: rbp0 first because it is the
 # source of truth, the second address because either one answering is enough.
 # Written here rather than in the netplan template so no ansible YAML repeats an
@@ -108,6 +121,19 @@ desired_hostname() {
     printf '%s\n' "$1"
 }
 
+# The drop-in that closes password logins. It is numbered 00 on purpose: Ubuntu's
+# sshd_config includes sshd_config.d/*.conf near its top and sshd takes the first
+# value it reads, so cloud-init's 50-cloud-init.conf (`PasswordAuthentication
+# yes`, and it is 0600 so nothing notices it) wins over anything lower in the
+# main file. Ours sorts ahead of it, which is what makes `no` the answer.
+desired_sshd_dropin() {
+    cat <<'EOF'
+# Written by ansible/pi/hosts-pi.sh; an edit here is reverted on the next setup.
+PasswordAuthentication no
+X11Forwarding no
+EOF
+}
+
 # /etc/hosts is left to cloud-init, which rewrites it from its own template on
 # every boot (`manage_etc_hosts: true` in these images). A script that owned it
 # would be overwritten by the next boot and would then report a difference
@@ -128,6 +154,25 @@ require_env() {
         echo "by hand." >&2
         exit 1
     fi
+}
+
+# The lockout guard, and the same one roles/accounts makes: by the time the
+# drop-in is written the password is gone, so the question has to be asked first.
+# What is asked here is narrower than the role's, because this script owns no key
+# list — the Pi's keys are the operator's, written by the image's user-data and by
+# `make adopt` on the cluster nodes. It refuses only when there is no key at all,
+# which is the one state in which turning the password off is a lockout.
+require_login_key() {
+    local keys="$ROOT/home/$HUMAN_USER/.ssh/authorized_keys"
+    if [ -s "$keys" ] &&
+       grep -Eq '^(ssh-ed25519|ssh-rsa|ecdsa-sha2-nistp256|sk-ssh-ed25519@openssh\.com) ' "$keys"; then
+        return 0
+    fi
+    echo "refusing to close password logins: $keys holds no public key." >&2
+    echo "This run writes PasswordAuthentication no, and a host with no key and no" >&2
+    echo "password has no way in. Put one of the lines from" >&2
+    echo "ansible/inventory/group_vars/all.yml (trusted_ssh_keys) into that file first." >&2
+    exit 1
 }
 
 # The release's own suite name, read from the running image. A reflash onto the
@@ -194,12 +239,12 @@ engine_repo_present() {
 # between apt and usermod leaves an engine that is already converged, and the
 # next run has to finish the group rather than return early.
 ensure_docker_group() {
-    case " $(id -nG "$DOCKER_GROUP_USER" 2>/dev/null || true) " in
+    case " $(id -nG "$HUMAN_USER" 2>/dev/null || true) " in
         *" docker "*) ;;
         *)
-            usermod -aG docker "$DOCKER_GROUP_USER"
+            usermod -aG docker "$HUMAN_USER"
             CHANGED=$((CHANGED + 1))
-            echo "engine: $DOCKER_GROUP_USER joined the docker group"
+            echo "engine: $HUMAN_USER joined the docker group"
             ;;
     esac
 }
@@ -338,10 +383,10 @@ engine_drift() {
         problems=1
     fi
 
-    case " $(id -nG "$DOCKER_GROUP_USER" 2>/dev/null || true) " in
+    case " $(id -nG "$HUMAN_USER" 2>/dev/null || true) " in
         *" docker "*) ;;
         *)
-            echo "DIFFERS $DOCKER_GROUP_USER is not in the docker group"
+            echo "DIFFERS $HUMAN_USER is not in the docker group"
             problems=1
             ;;
     esac
@@ -385,6 +430,99 @@ write_abs() {
     CHANGED_THIS_WRITE=1
 }
 
+# One active directive in the main sshd_config. A commented example is left alone:
+# sshd ignores it, and rewriting it would edit Ubuntu's documentation rather than
+# the setting — the trap roles/accounts documents for its own patterns. Returns 0
+# when the file moved, 1 when it already said this, so the caller knows whether a
+# reload is owed.
+set_sshd_directive() {
+    local directive="$1" value="$2" file="$ROOT$SSHD_CONFIG" before
+    if [ ! -f "$file" ]; then
+        return 1
+    fi
+    before="$(cat "$file")"
+    if grep -qE "^${directive}[[:space:]]" "$file"; then
+        sed -i -E "s/^${directive}[[:space:]].*/${directive} ${value}/" "$file"
+    else
+        printf '%s %s\n' "$directive" "$value" >> "$file"
+    fi
+    if [ "$before" = "$(cat "$file")" ]; then
+        return 1
+    fi
+    CHANGED=$((CHANGED + 1))
+    echo "sshd: $directive $value in $SSHD_CONFIG"
+    return 0
+}
+
+# The passwordless grant, in the order roles/accounts uses: the line first, the
+# group after. `%sudo` stays as Ubuntu ships it, so the human account keeps a
+# password on sudo — which is the point of removing the grant. The edit is
+# validated before it is installed, because a broken sudoers takes every
+# account's sudo away at once, including the run that is writing it.
+ensure_sudo_policy() {
+    local tmp
+
+    if [ -f "$ROOT$CLOUD_INIT_SUDOERS" ]; then
+        rm -f "$ROOT$CLOUD_INIT_SUDOERS"
+        CHANGED=$((CHANGED + 1))
+        echo "sudo: removed $CLOUD_INIT_SUDOERS, cloud-init's grant for the retired ubuntu account"
+    fi
+
+    if [ -f "$ROOT$SUDOERS" ] && grep -qxF "$ADMINS_GRANT" "$ROOT$SUDOERS"; then
+        tmp="$(mktemp)"
+        grep -vxF "$ADMINS_GRANT" "$ROOT$SUDOERS" > "$tmp" || true
+        if [ ! -s "$tmp" ]; then
+            rm -f "$tmp"
+            echo "refusing: removing the grant would leave $SUDOERS empty; the file is not what this script expects" >&2
+            exit 1
+        fi
+        if [ -z "$ROOT" ]; then
+            if ! visudo -cf "$tmp" >/dev/null; then
+                rm -f "$tmp"
+                echo "refusing: the edited $SUDOERS does not pass visudo; the file is untouched" >&2
+                exit 1
+            fi
+            install -m 0440 -o root -g root "$tmp" "$ROOT$SUDOERS"
+        else
+            cat "$tmp" > "$ROOT$SUDOERS"
+            chmod 0440 "$ROOT$SUDOERS"
+        fi
+        rm -f "$tmp"
+        CHANGED=$((CHANGED + 1))
+        echo "sudo: removed the $ADMINS_GROUP passwordless grant from $SUDOERS"
+    fi
+
+    if [ -n "$ROOT" ]; then
+        echo "sudo: the $ADMINS_GROUP group is not touched (PI_ROOT is set)"
+    elif getent group "$ADMINS_GROUP" >/dev/null 2>&1; then
+        groupdel "$ADMINS_GROUP"
+        CHANGED=$((CHANGED + 1))
+        echo "sudo: removed the $ADMINS_GROUP group"
+    fi
+}
+
+# The SSH half: a drop-in numbered ahead of cloud-init's, the two directives in
+# the main file so the two records agree, and one reload when either moved.
+ensure_sshd_policy() {
+    local changed=0
+
+    write_abs "$ROOT$SSHD_DROPIN" "$(desired_sshd_dropin)"
+    if [ "$CHANGED_THIS_WRITE" -eq 1 ]; then
+        chmod 0644 "$ROOT$SSHD_DROPIN"
+        [ -n "$ROOT" ] || chown root:root "$ROOT$SSHD_DROPIN"
+        changed=1
+        echo "sshd: wrote $SSHD_DROPIN"
+    fi
+
+    if set_sshd_directive PasswordAuthentication no; then changed=1; fi
+    if set_sshd_directive X11Forwarding no; then changed=1; fi
+
+    if [ -z "$ROOT" ] && [ "$changed" -eq 1 ]; then
+        systemctl reload ssh
+        echo "sshd: reloaded"
+    fi
+}
+
 cmd_render() {
     local host="$1"
     echo "--- $STACK_DIR/docker-compose.yml"
@@ -407,6 +545,21 @@ cmd_render() {
     desired_netplan
     echo "--- /etc/systemd/resolved.conf.d/90-pihole-resolvers.conf"
     desired_resolved
+    echo "--- $SSHD_DROPIN"
+    desired_sshd_dropin
+    echo "--- $SSHD_CONFIG"
+    echo "PasswordAuthentication no, X11Forwarding no: the active directives only,"
+    echo "the commented examples left as they are. cloud-init's"
+    echo "50-cloud-init.conf said yes and sorts first, which is why the drop-in"
+    echo "above is numbered 00."
+    echo "--- $SUDOERS"
+    echo "removed: $ADMINS_GRANT"
+    echo "then the $ADMINS_GROUP group itself; %sudo stays as Ubuntu ships it"
+    echo "--- $CLOUD_INIT_SUDOERS"
+    echo "removed: cloud-init's grant for the retired ubuntu account"
+    echo "--- /home/$HUMAN_USER/.ssh/authorized_keys"
+    echo "the operator's, not written here: setup refuses to close password logins"
+    echo "while no key is in that file"
     echo "--- $STACK_DIR/config/wg-easy.db"
     echo "wg-easy 15's own database: panel account, host, port, DNS, peers. Not"
     echo "written here, and copied by 'backup' with the rest of the stack"
@@ -429,7 +582,15 @@ cmd_setup() {
 
     require_env
 
+    if [ -z "$ROOT" ] && [ "$(id -u)" -ne 0 ]; then
+        echo "setup writes $SSHD_DROPIN and $SUDOERS; run it with sudo" >&2
+        exit 1
+    fi
+    require_login_key
+
     ensure_engine
+    ensure_sudo_policy
+    ensure_sshd_policy
 
     write_abs "$ROOT$STACK_DIR/docker-compose.yml" "$(desired_compose "$host")"
     # Both files are bind-mounted by pihole, and a bind mount is resolved when
@@ -518,6 +679,11 @@ check_text() {
 cmd_verify() {
     local host="$1" problems=0 file
 
+    if [ -z "$ROOT" ] && [ "$(id -u)" -ne 0 ]; then
+        echo "verify reads $SUDOERS and $SSHD_CONFIG; run it with sudo" >&2
+        exit 1
+    fi
+
     for file in pihole.env; do
         if [ ! -f "$ROOT$STACK_DIR/$file" ]; then
             echo "MISSING $ROOT$STACK_DIR/$file"
@@ -556,7 +722,46 @@ cmd_verify() {
         echo "MISSING $ROOT/etc/hostname"
         problems=1
     elif [ "$(tr -d '[:space:]' < "$ROOT/etc/hostname")" != "$host" ]; then
-        echo "DIFFERS $ROOT/etc/hostname: $(cat "$ROOT/etc/hostname")"
+        echo "DIFFERS $ROOT/etc/hostname: $(cat $ROOT/etc/hostname)"
+        problems=1
+    fi
+
+    # SSH and sudo: what the 2026-11-24 measurement found on both Pis, and what
+    # setup converges them to. The winning value is the drop-in's; the main file
+    # is checked as a second record, because a run that loses the drop-in would
+    # otherwise reopen password logins with nothing to say so.
+    if ! check_text "$ROOT$SSHD_DROPIN" "$(desired_sshd_dropin)"; then
+        problems=1
+    fi
+    if [ ! -f "$ROOT$SSHD_CONFIG" ]; then
+        echo "MISSING $ROOT$SSHD_CONFIG"
+        problems=1
+    else
+        for directive in PasswordAuthentication X11Forwarding; do
+            if ! grep -qx "$directive no" "$ROOT$SSHD_CONFIG"; then
+                echo "DIFFERS $ROOT$SSHD_CONFIG: $directive is not 'no'"
+                problems=1
+            fi
+        done
+    fi
+    if [ -f "$ROOT$SUDOERS" ] && grep -qxF "$ADMINS_GRANT" "$ROOT$SUDOERS"; then
+        echo "DIFFERS $ROOT$SUDOERS: $ADMINS_GRANT is still there"
+        problems=1
+    fi
+    if [ -e "$ROOT$CLOUD_INIT_SUDOERS" ]; then
+        echo "DIFFERS $ROOT$CLOUD_INIT_SUDOERS is still there"
+        problems=1
+    fi
+    if [ -z "$ROOT" ]; then
+        if getent group "$ADMINS_GROUP" >/dev/null 2>&1; then
+            echo "DIFFERS the $ADMINS_GROUP group still exists"
+            problems=1
+        fi
+    else
+        echo "sudo: the $ADMINS_GROUP group is not checked (PI_ROOT is set)"
+    fi
+    if [ ! -s "$ROOT/home/$HUMAN_USER/.ssh/authorized_keys" ]; then
+        echo "MISSING a public key for $HUMAN_USER in /home/$HUMAN_USER/.ssh/authorized_keys"
         problems=1
     fi
 
