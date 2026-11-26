@@ -31,6 +31,17 @@ HOSTS="rbp0 rbp1"
 HUMAN_USER="vronteix"
 STACK_DIR="/home/$HUMAN_USER/dockers"
 
+# The nightly stream: one repository per host, written by this host and no one
+# else. The credential is a file the operator writes (setup never invents one),
+# and PI_RESTIC lets the tests stand a recorder in for the binary.
+BACKUP_ENV="/etc/restic/edge.env"
+STAGING_DIR="/var/lib/pi-backup"
+# The query log is a log (385 MB on rbp0, rewritten every minute); listsCache is
+# re-downloaded by `pihole -g`; gravity_old.db is the updater's copy of the
+# database the same snapshot already holds. The manual USB copy keeps all three.
+BACKUP_EXCLUDES="pihole-FTL.db* listsCache gravity_old.db"
+RESTIC_BIN="${PI_RESTIC:-/usr/local/bin/restic}"
+
 # SSH and sudo: the two settings ansible/roles/accounts owns on the four cluster
 # nodes, written here because the layer cannot reach the Pis until they are
 # reflashed (card #481). Measured on both hosts on 2026-11-26: the main
@@ -105,7 +116,7 @@ CHANGED_THIS_WRITE=0
 
 usage() {
     cat >&2 <<'USAGE'
-usage: hosts-pi.sh render|setup|verify <host>
+usage: hosts-pi.sh render|setup|verify|stream <host>
        hosts-pi.sh backup|restore <dir> <host>
 hosts: rbp0 rbp1
 USAGE
@@ -1227,6 +1238,62 @@ cmd_verify() {
     echo "ok: $host matches the repository"
 }
 
+# What a backup holds, in one place: `backup` and `stream` differ in where the
+# copy goes and which words they exclude, never in what state matters.
+copy_state() {
+    local dest="$1" host="$2"
+    shift 2
+    local status=0
+
+    mkdir -p "$dest/dockers"
+    if [ "$#" -eq 0 ]; then
+        cp -a "$ROOT$STACK_DIR/." "$dest/dockers/"
+    else
+        local excludes="" arg
+        for arg in "$@"; do
+            excludes="$excludes --exclude=$arg"
+        done
+        # tar returns 1 when a file changed while it was read, which on a live
+        # stack is normal and not a reason to lose the night. Anything above 1
+        # is a real failure. The exclusions are patterns for tar, not the shell.
+        set +e
+        # shellcheck disable=SC2086
+        tar -C "$ROOT$STACK_DIR" -cf - --warning=no-file-changed $excludes . |
+            tar -C "$dest/dockers" -xf -
+        status=$?
+        set -e
+        if [ "$status" -gt 1 ]; then
+            echo "copy_state: tar failed ($status) reading $ROOT$STACK_DIR" >&2
+            exit "$status"
+        fi
+    fi
+
+    mkdir -p "$dest/etc"
+    for file in hostname; do
+        if [ -f "$ROOT/etc/$file" ]; then
+            cp -a "$ROOT/etc/$file" "$dest/etc/$file"
+        fi
+    done
+
+    mkdir -p "$dest/boot"
+    for file in config.txt cmdline.txt; do
+        if [ -f "$ROOT/boot/firmware/$file" ]; then
+            cp -a "$ROOT/boot/firmware/$file" "$dest/boot/$file"
+        fi
+    done
+
+    # The boot order and the EEPROM release live in the board, not on the disk,
+    # but they are the two facts a rebuilt Pi is checked against.
+    if [ -z "$ROOT" ] && command -v rpi-eeprom-config >/dev/null 2>&1; then
+        rpi-eeprom-config > "$dest/bootloader.txt" || true
+    fi
+
+    printf 'host: %s\nroot device: %s\n' "$host" "$(root_device)" > "$dest/host.txt"
+    if [ -z "$ROOT" ]; then
+        ( cd "$STACK_DIR" && docker compose ps > "$dest/docker-ps.txt" 2>&1 ) || true
+    fi
+}
+
 cmd_backup() {
     local dir="$1" host="$2" bytes
 
@@ -1239,37 +1306,33 @@ cmd_backup() {
         exit 1
     fi
 
-    mkdir -p "$dir/dockers"
-    cp -a "$ROOT$STACK_DIR/." "$dir/dockers/"
-
-    mkdir -p "$dir/etc"
-    for file in hostname; do
-        if [ -f "$ROOT/etc/$file" ]; then
-            cp -a "$ROOT/etc/$file" "$dir/etc/$file"
-        fi
-    done
-
-    mkdir -p "$dir/boot"
-    for file in config.txt cmdline.txt; do
-        if [ -f "$ROOT/boot/firmware/$file" ]; then
-            cp -a "$ROOT/boot/firmware/$file" "$dir/boot/$file"
-        fi
-    done
-
-    # The boot order and the EEPROM release live in the board, not on the disk,
-    # but they are the two facts a rebuilt Pi is checked against.
-    if [ -z "$ROOT" ] && command -v rpi-eeprom-config >/dev/null 2>&1; then
-        rpi-eeprom-config > "$dir/bootloader.txt" || true
-    fi
-
-    printf 'host: %s\nroot device: %s\n' "$host" "$(root_device)" > "$dir/host.txt"
-    if [ -z "$ROOT" ]; then
-        ( cd "$STACK_DIR" && docker compose ps > "$dir/docker-ps.txt" 2>&1 ) || true
-    fi
+    copy_state "$dir" "$host"
 
     bytes="$(du -sb "$dir" | cut -f1)"
     echo "backed up $host to $dir ($bytes bytes)"
     echo "check: the Pi-hole database alone is more than 100 MB"
+}
+
+# The nightly run: the same tree, minus the three words in BACKUP_EXCLUDES, under
+# a fixed path so the snapshot's file list is the same every night. Nothing is
+# staged on the disk a reflash would destroy — the tree is transient and the
+# repository is remote — so `backup`'s same-filesystem refusal does not apply.
+cmd_stream() {
+    local host="$1"
+
+    if [ -z "$ROOT" ] && [ "$(id -u)" -ne 0 ]; then
+        echo "stream reads files the containers own; run it with sudo" >&2
+        exit 1
+    fi
+
+    rm -rf "$ROOT$STAGING_DIR/tree"
+    mkdir -p "$ROOT$STAGING_DIR/tree"
+
+    # shellcheck disable=SC2086
+    copy_state "$ROOT$STAGING_DIR/tree" "$host" $BACKUP_EXCLUDES
+
+    # databases and restic follow
+    echo "staged $host in $STAGING_DIR/tree"
 }
 
 cmd_restore() {
@@ -1340,6 +1403,11 @@ main() {
             [ "$#" -eq 1 ] || usage
             check_host "$1"
             cmd_verify "$1"
+            ;;
+        stream)
+            [ "$#" -eq 1 ] || usage
+            check_host "$1"
+            cmd_stream "$1"
             ;;
         backup|restore)
             [ "$#" -eq 2 ] || usage
