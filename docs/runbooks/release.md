@@ -104,6 +104,23 @@ Without this step the next release pull request carries every commit `main` hold
 `develop` never saw, and reports hundreds of changed files as conflicting. That is the state that
 forced #1624: 82 commits, 37 textual conflicts, and a merged tree identical to `develop`'s.
 
+## The canonical checkout follows, it does not build
+
+`~/projets/homelab` keeps `main` and `develop` checked out for review, and neither is a place to work:
+a commit made there cannot be pushed, and a rebase there rewrites the branch into commits that no
+longer match the remote. Keep both current by fast-forward only:
+
+```bash
+git fetch origin
+git switch main && git merge --ff-only origin/main
+git switch develop && git merge --ff-only origin/develop
+```
+
+If `develop` there reports itself ahead of the remote, the extra commits are replays, not work:
+`git cherry origin/develop develop` marks each one `-` because its patch is already upstream, and
+`git reset --hard origin/develop` discards them. On 2026-11-26 two rebases of that checkout left it
+two commits ahead and eight behind while the content was already on the remote.
+
 ## What this depends on
 
 Changing any row below breaks the flow, silently or at the next release.
