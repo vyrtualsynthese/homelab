@@ -89,8 +89,9 @@ prometheus:
     # `prometheus-basicauth` in this namespace (docs/secrets.md). Three users,
     # one per consumer: `ops` for a person or an agent over the route, `grafana`
     # for the datasource in cluster/helm/monitoring/grafana, and `reload` for
-    # the config-reloader below — `/-/reload` is authenticated like every other
-    # path once a web config is loaded.
+    # the config-reloader below and for Prometheus's self-scrape — `/-/reload`
+    # and `localhost:9090` are authenticated like every other path once a web
+    # config is loaded.
     extraArgs:
       web.config.file: /etc/prometheus-web-config/web-config.yml
     extraSecretMounts:
@@ -466,6 +467,17 @@ prometheus:
             - grafana.monitoring.svc:80
     prometheus:
       # The server's own /metrics, not the chart section above.
+      #
+      # This is the one target the web config would otherwise cut off: it scrapes
+      # `localhost:9090`, and an unauthenticated scrape is answered 401, which
+      # fires `MonitoringDown` (`1 - up{job="prometheus"}`). It signs in as
+      # `reload`, the user the config-reloader already holds: both processes are
+      # containers of this pod, and the plaintext is mounted beside the hashes.
+      # Prometheus reads the file on every config load, so a rotation needs the
+      # Secret patched and the pod restarted, like the rest of the web config.
+      basic_auth:
+        username: reload
+        password_file: /etc/prometheus-web-config/reload-password
       metric_relabel_configs:
         - action: drop
           source_labels:

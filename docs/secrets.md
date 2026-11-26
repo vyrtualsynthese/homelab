@@ -101,14 +101,16 @@ curl -sk -o /dev/null -w '%{http_code}\n' -u 'vronteix:<password>' \
   --resolve traefik.kub.local:443:192.168.1.46 https://traefik.kub.local/dashboard/   # 200
 ```
 
-- **`prometheus-basicauth` is a hash per user plus a plaintext copy for the two machine users.** The
+- **`prometheus-basicauth` is a hash per user plus a plaintext copy for the machine callers.** The
   file is the contract, as it is for `traefik-dashboard`: Prometheus loads `web-config.yml` as
   `--web.config.file` and answers `401` to anyone it does not name
   (`cluster/helm/monitoring/prometheus/values.yaml`). `grafana-password` and `reload-password` exist
-  because neither consumer can sign in with a hash, and the reloader's password must stay URL-safe:
-  the kubelet pastes it into `--reload-url` from the environment. The Secret must exist **before** a
-  sync mounts it — the volume has no `optional` — and the `ops` password belongs in
-  `~/.config/secrets/homelab.env` as `PROMETHEUS_AUTH_PASSWORD`:
+  because those callers cannot sign in with a hash: Grafana provisions a datasource with one, and
+  `reload-password` reaches two readers — the config-reloader, through the environment the kubelet
+  pastes into `--reload-url`, and Prometheus's own self-scrape, through
+  `password_file: /etc/prometheus-web-config/reload-password`. That is why it must stay URL-safe.
+  The Secret must exist **before** a sync mounts it — the volume has no `optional` — and the `ops`
+  password belongs in `~/.config/secrets/homelab.env` as `PROMETHEUS_AUTH_PASSWORD`:
 
 The three passwords are not echoed while typed, so a silent shell is waiting for them, not stuck, and
 `htpasswd` is not assumed: the hash comes from `python3`'s `bcrypt`, which is installed where the
