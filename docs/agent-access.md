@@ -6,8 +6,8 @@
 >
 > **Use it when** you are about to ask the operator to click something in an app's UI, a call answered
 > `401` or `403` and the next move looks like theirs, or you need to know what the agent may read from
-> the cluster · **Verified** 2026-11-26 for the cluster identity, 2026-11-20 for the Argo CD session ·
-> **Kind:** how-to
+> the cluster · **Verified** 2026-11-26 for the cluster identity, 2026-11-20 for the Argo CD session,
+> 2026-11-27 for the router · **Kind:** how-to
 >
 > **Sources** `~/.config/secrets/homelab.env`, `kubectl/mcp-readonly-rbac.yaml`,
 > `~/.kube/mcp-readonly.yaml`, `~/.config/argocd/config`, the calls recorded below
@@ -118,6 +118,29 @@ Then the caveat that makes a finished sync look broken:
   same refusal. Replace syncs are allowed on this cluster: `server.sync.replace.allowed` is unset
   in `argocd-cmd-params-cm`, and Argo CD's default is to allow them, so the refusal comes from the
   claim and not from the server.
+
+## The router, and the login it takes
+
+The Livebox answers its own JSON API at `http://192.168.1.1/ws`, and `LIVEBOX_ADMIN_PASSWORD` in
+`~/.config/secrets/homelab.env` is the admin login. It is worth spelling out because the forward
+table was treated as "the operator's step" for a while on the strength of a credential nobody had
+looked for.
+
+1. `POST /ws` with header `Authorization: X-Sah-Login` and body
+   `{"service":"sah.Device.Information","method":"createContext","parameters":{"applicationName":"webui","username":"admin","password":"<admin>"}}`.
+   The answer's `data.contextID` is the session.
+2. Every later call sends `Authorization: X-Sah <contextID>`, `X-Context: <contextID>` and
+   `Content-Type: application/x-sah-ws-4-call+json`, with a body of
+   `{"service":"…","method":"…","parameters":{…}}` or `{"object":"DHCPv4.Server.Pool.1.","method":"get"}`.
+
+What answers `status 0`, measured 2026-11-27: `Firewall/getPortForwarding`, `setPortForwarding` (a
+throwaway rule, then deleted) and `deletePortForwarding`, which needs `id` and `origin`.
+`Devices/get` lists every device with its address and MAC. What does not: the DHCP pool objects
+(`DHCPv4.Server.Pool.*`) answer a 504 Gateway Timeout on this firmware, so the pool's bounds and its
+reservations cannot be read back — say so instead of guessing them.
+
+A rule is written by posting the whole object back with one field changed, and read back afterwards;
+that read is the proof, not the `status 0`.
 
 When no token exists, name the endpoint that would have done the work and file the gap as a card.
 The Argo CD login above is what closing such a gap leaves behind: a command in a card, so the next

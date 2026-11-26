@@ -1,11 +1,11 @@
 # Edge VPN failover: one config, either Pi — design
 
 **Status:** proposed 2026-11-26 · **Date:** 2026-11-26 · **Board:** homelab, card #888
-**Live basis (measured 2026-11-26):** both Pis over SSH — `docker ps`, `wg show`, and the two
-`wg-easy.db` files read out of the containers; the router table in
-[`docs/audit/livebox-2026-11-26.md`](../../audit/livebox-2026-11-26.md); `ansible/pi/hosts-pi.sh`,
-`ansible/playbooks/templates/runners/`; commit `d3066172` for the static WAN address. Every number
-below was read from the host it names, not inferred.
+**Live basis (measured 2026-11-26, router 2026-11-27):** both Pis over SSH — `docker ps`, `wg show`,
+and the two `wg-easy.db` files read out of the containers; the router's forward table and device list
+over its own sysbus, plus [`docs/audit/livebox-2026-11-26.md`](../../audit/livebox-2026-11-26.md);
+`ansible/pi/hosts-pi.sh`, `ansible/playbooks/templates/runners/`; commit `d3066172` for the static
+WAN address. Every number below was read from the host it names, not inferred.
 
 ## Intent
 
@@ -68,8 +68,8 @@ that is the only privileged channel the pair already has.
 - DNS failover. The two Pi-holes already serve both addresses, and nothing here touches DNS.
 - Any overlay or mesh (Tailscale, Netbird, Netmaker, Nebula) and any UDP load balancer — see
   Approaches for why they were dropped.
-- Router automation. The Livebox's credential is not stored anywhere an agent can reach, so the
-  forward change is the operator's step; the design says exactly what it is.
+- A reconciliation loop over the router. The forward table is edited once, by this card's rollout
+  (D14); nothing re-applies it afterwards, and a hand edit stays until someone reads it back.
 - Reworking the blocklists, the Pi-hole parity, or the TLS setup.
 
 ## Constraints
@@ -131,12 +131,15 @@ compose template (`@WG_UDP_PORT@`) becomes a literal, because both hosts now ans
 The router's `51822` forward is deleted with the change; a config that dials it is one of the configs
 reissued in D8.
 
-**D3 — keepalived moves one LAN address for the pair.** `192.168.1.9/24` is the provisional value
-(the operator confirms it, or names another; it must be free and outside the DHCP pool, which starts
-at `.10` in the measured lease list). `rbp0` is `MASTER` at priority 150, `rbp1` is `BACKUP` at 100,
+**D3 — keepalived moves one LAN address for the pair.** `192.168.1.9/24`, measured on 2026-11-27:
+nothing answers there, no entry in the box's 30-device list holds it, and the lowest address the box
+serves is `.10`. The box's pool object (`DHCPv4.Server.Pool.1.`) answers `504` on this firmware, so
+the configured bounds cannot be read back; `verify` therefore treats the address appearing in the
+lease list as a finding, which is the check that matters if the pool is ever widened. `rbp0` is
+`MASTER` at priority 150, `rbp1` is `BACKUP` at 100,
 `advert_int 1`, **unicast** peers (each host names the other; no multicast on the house LAN), and
 `preempt_delay 300` so a returning `rbp0` does not take the address back in the middle of its boot.
-The router forward changes from `192.168.1.22` to this address.
+The router forward changes from `192.168.1.22` to this address (D14).
 
 **D4 — the address follows a running tunnel, not just a live host.** A `vrrp_script` checks that the
 `wg-easy` container is running; a host whose VPN has crashed releases the address even though
@@ -241,6 +244,21 @@ standby is stale while it is the backup; a backup that has taken over is allowed
 as the failure, the same pattern the restore-drill rules use. `docs/reference/alerts.md` gains the
 four rows. No dashboard: these numbers are for the rules.
 
+**D14 — the router is changed from here, through its own API.** `LIVEBOX_ADMIN_PASSWORD` in
+`~/.config/secrets/homelab.env` opens the box's sysbus at `http://192.168.1.1/ws`. The sequence,
+measured on 2026-11-27: a `POST` of `{"service":"sah.Device.Information","method":"createContext"}`
+with header `Authorization: X-Sah-Login` and the admin credentials returns a `contextID`; every later
+call carries `Authorization: X-Sah <ctx>`, `X-Context: <ctx>` and
+`Content-Type: application/x-sah-ws-4-call+json`. `Firewall/getPortForwarding` lists the pair as
+`webui_wireguard0` (51821 → `192.168.1.22`) and `webui_wireguard1` (51822 → `192.168.1.38`);
+`Firewall/setPortForwarding` created a throwaway rule and `Firewall/deletePortForwarding` — which
+needs `id` **and** `origin` — removed it, both answering `status 0`. The write path is therefore
+rehearsed, not inferred. The rollout ends with two calls: `setPortForwarding` on
+`webui_wireguard0` with `destinationIPAddress: 192.168.1.9`, then `deletePortForwarding` on
+`webui_wireguard1`; `getPortForwarding` read back afterwards is the proof. They run **after**
+keepalived holds the address, never before: applied early they point the public port at an address
+that no host answers, which is exactly the outage this card removes.
+
 ## How it works
 
 ```mermaid
@@ -283,19 +301,21 @@ on the way back.
 | `docs/reference/metrics.md` | the three textfile families and the collector on the Pis |
 | wg-easy panel (live) | the default keepalive 25 s → 10 s, before the one-time reissue |
 | Grafana (live) | the four rules, created through the API with `GRAFANA_TOKEN`, not in git |
+| Livebox (live) | `webui_wireguard0` repointed to `192.168.1.9`, `webui_wireguard1` deleted — two sysbus calls, never in git (D14) |
 | `hack/tests/test_pi_script.py` | the render, the units, the port, the divergence path, the port-less rule shape |
 
 ## Rollout order
 
-1. Confirm the address and the DHCP pool; mint the sync key and put each half in place; add
-   `elevensky2` to `rbp0`'s panel; reissue one config per device from `rbp0` and import it.
+1. Mint the sync key and put each half in place; add `elevensky2` to `rbp0`'s panel; set the panel's
+   default keepalive to 10 s; reissue one config per device from `rbp0` and import it.
 2. Merge the change, then run `setup` and `verify` on `rbp0`, then on `rbp1`. `rbp0` takes the
    address first; `rbp1` joins as backup.
 3. Run the forced first copy on `rbp1` (`vpn-sync --force`), then `verify`: it moves the container
    from its restored port to `51821` and records the fingerprint.
 4. Confirm the two panels show the same peers and the same endpoint.
-5. On the router: point the `51821` forward at the new address and delete the `51822` rule. This is
-   the operator's step.
+5. Change the router (D14): `setPortForwarding` on `webui_wireguard0` to `192.168.1.9`, then
+   `deletePortForwarding` on `webui_wireguard1`, then read the table back. This is last on purpose —
+   until `rbp0` holds the new address, the public port has nowhere to land.
 6. Create the four alert rules through Grafana's API and confirm they evaluate against the new series
    (no data before the timers have run reads as Alerting, which is the intended failure state).
 7. Run the acceptance test from a client that dials `80.14.57.209:51821` through the box (hairpin
@@ -303,9 +323,9 @@ on the way back.
 
 ## Risks, and what the builder decides
 
-- **The router step is the only one that cannot be checked from a Pi.** Until it is applied, the
-  address moves but the public port still lands on `rbp0`. The runbook states the expected table and
-  the test that proves it.
+- **The router change is the last step, and it is reversible in two calls.** Until it is applied the
+  address moves but the public port still lands on `rbp0`; applied before keepalived runs, it lands
+  nowhere. The runbook states the expected table, the read-back and the two calls that undo it.
 - **A split brain is not possible on one switch**: a host that cannot hear its peer cannot reach the
   router either. If the LAN is ever segmented, this assumption has to be re-examined.
 - **The same server key on two hosts** means a LAN client that dials a Pi's own address bypasses the
