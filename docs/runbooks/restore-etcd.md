@@ -1,12 +1,13 @@
 # Restore the cluster's object state from an etcd snapshot
 
 > **In one line.** Put an etcd snapshot — the cluster's database of every object — back into a K3s
-> server, with the token it was taken under, and read the objects out of it.
+> server, with the token it was taken under, read the objects out of it, then close the access the
+> restore reopened.
 >
 > **Use it when** the control plane is unquorate, one server will not start, or the drill that proves
-> an etcd snapshot restores is due · **Verified** 2026-11-22: a production snapshot restored into a
-> throwaway single-node K3s on the workstation and its objects read back, 16 seconds end to end ·
-> **Kind:** how-to
+> an etcd snapshot restores is due · **Verified** 2026-11-26: the newest production snapshot restored
+> twice into a throwaway `v1.36.6+k3s1` on the workstation, 6 seconds per reset, and the access
+> re-check proved against deliberate drift · **Kind:** how-to
 >
 > **Sources** `docs/how-it-works/backups.md`, `cluster/helm/backup/values.yaml`,
 > [`restore.md`](restore.md) section 4, [`../secrets.md`](../secrets.md)
@@ -21,6 +22,11 @@ Deployment, Secret, ArgoCD Application and PVC object — and none of the bytes 
 at: no claim's contents, no NFS export, not the certificate store. A rebuilt cluster has its objects
 back and its applications still empty; the claims come back from the restic streams, by
 [`restore.md`](restore.md), and the two halves are independent.
+
+A snapshot is also an authorisation state from the past. A ServiceAccount, RoleBinding,
+ClusterRoleBinding or Secret deleted after it was taken comes back with the restore, and a Secret
+rotated since comes back holding the value it had then. Steps 3 and 6 are the pair that finds and
+closes what the restore reopened.
 
 ## Preconditions
 
@@ -95,7 +101,38 @@ export K3S_TOKEN
 `K3S_TOKEN` in the environment is the same value as `--token`, without putting it in `ps` output or
 a shell history.
 
-## Step 3 — the reset and the restore
+## Step 3 — record the access surface before the restore
+
+A restore puts back the snapshot's authorisation state, not today's. So the state it is about to
+replace is written down first, while the API still answers:
+
+```sh
+mkdir -p /out/auth
+kubectl get sa,rolebinding,clusterrolebinding -A -o json \
+  | jq -r '.items[] | [.kind, (.metadata.namespace // "-"), .metadata.name,
+      (.roleRef.kind // "-"), (.roleRef.name // "-"),
+      ([.subjects[]? | "\(.kind)/\(.namespace // "-")/\(.name)"] | join(","))] | @tsv' \
+  | sort > /out/auth/rbac-before.tsv
+
+kubectl get secret -A -o json \
+  | jq -r '.items[] | "\(.metadata.namespace)/\(.metadata.name)\t\(.data // {} | to_entries
+      | sort_by(.key) | map("\(.key)=\(.value)") | join(","))"' \
+  | while IFS="$(printf '\t')" read -r name data; do
+      printf '%s\t%s\n' "$(printf '%s' "$data" | sha256sum | cut -d' ' -f1)" "$name"
+    done | sort -k2 > /out/auth/secrets-before.tsv
+```
+
+Success: two files of one line per object. The first carries each object's kind, namespace, name and
+`roleRef` — a dash where it has none — then its subjects as `kind/namespace/name`. The second hashes
+each Secret's data map, key by key; the values stay base64 and only a digest is written, so the file
+can go in the drill record.
+
+If the control plane no longer answers — the usual reason a restore is needed — the capture cannot be
+taken. The before side is then the last read of it that exists: the Secret inventory in
+[`../secrets.md`](../secrets.md), the ArgoCD tree in git, a copy of these files from an earlier drill.
+Say in the record which side came from where; a remembered before side makes the diff a guess.
+
+## Step 4 — the reset and the restore
 
 Two shapes, depending on what the target server already holds. Both end with a single-member etcd
 holding the snapshot's objects.
@@ -134,7 +171,12 @@ That last line is the normal ending, not a failure: an exit code of 0 with a del
 message, because the reset is only half the job. Start the server normally — without
 `--cluster-reset`, with the same token — and it comes up on the restored data.
 
-## Step 4 — read the objects back
+The `Removed member` lines are not a fixed part of the output: `v1.31.14` printed five on 2026-11-22,
+and `v1.36.6` printed none on either reset of the 2026-11-26 drill, where the start cleared the
+member-removal annotations from the restored node objects instead. Judge the reset by
+`restored snapshot` and `kvstore restored`, not by the removals.
+
+## Step 5 — read the objects back
 
 Wait for the API, then check that what came back is the snapshot's state and not a fresh cluster:
 
@@ -176,9 +218,41 @@ Two checks are worth more than the counts:
 On a fresh server, write a ConfigMap before the restore and look for it after: it is gone, which
 proves the restore replaced the datastore rather than merging into it.
 
-## Step 5 — the single-member caveat
+## Step 6 — close what the restore reopened
 
-After a reset the etcd has **one member**, this server. The removal lines in Step 3 are the other
+Take the same two reads from the restored cluster, with `after` in place of `before` in the file
+names, then compare:
+
+```sh
+diff -u /out/auth/rbac-before.tsv /out/auth/rbac-after.tsv
+diff -u /out/auth/secrets-before.tsv /out/auth/secrets-after.tsv
+```
+
+Read each line from the restore's side:
+
+| Diff | What happened | What to do |
+|---|---|---|
+| only in `after` | The snapshot had it and today's cluster did not: the restore **re-created** a path that was closed on purpose | Close it again. When a chart owns it the deletion goes in git — ArgoCD puts back anything still declared, so a deletion made only on the cluster is undone by the next sync |
+| in both, Secret hash differs | The Secret was rotated after the snapshot, and the restore **rolled it back** to the old value | Rotate it again from wherever the current value lives. The hash says which Secret came back old; it never holds the value |
+| only in `before` | It was created after the snapshot, and the restore **removed** it | Recreate it if a workload needs it. That is ordinary post-restore work, not a revocation |
+| no output | Nothing was closed after the snapshot was taken | The clean answer, and the one worth recording |
+
+Close the reopened paths before Step 7 brings the other control-plane servers back and workloads
+resume: an access path is usable from the moment the API answers, and a ServiceAccount token signed
+by the restored cluster is accepted by it.
+
+The diff compares the cluster with its own recent past, which is all it can see — a path that was
+already open when the snapshot was taken stays open and produces no line. It is not a review of the
+snapshot's security, only a list of what changed between the snapshot and the restore.
+
+The restoring node re-issues its own credentials when it starts on the restored datastore, so
+`kube-system/k3s-serving` and `kube-system/<hostname>.node-password.k3s` differ on every restore.
+They are not a revocation: the node's values moved because the node came up, not because anything was
+rotated.
+
+## Step 7 — the single-member caveat
+
+After a reset the etcd has **one member**, this server. The removal lines in Step 4 are the other
 servers being taken out of the membership; their node objects stay in the restored state, `Ready`
 with an old heartbeat, until they rejoin.
 
