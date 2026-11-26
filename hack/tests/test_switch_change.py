@@ -688,19 +688,18 @@ class RunTests(unittest.TestCase):
         self.assertEqual(f.ros("/system scheduler print detail"), "")
         self.assertEqual([n for n in f.files() if n.startswith(("undo-", "change-"))], [])
 
-    def test_every_call_carries_the_routeros_6_signature_allowance(self):
-        # Both switches run RouterOS 6.49, which signs a key login with the SHA-1 `ssh-rsa` algorithm
-        # that OpenSSH 8.8 and later dropped from the default list. A call without the allowance ends
-        # at "Permission denied (publickey,password)" on a key the device already trusts, which is
-        # what the first live run hit.
-        with fake("ssh-rsa", after_change=CHANGED) as f:
+    def test_no_call_carries_a_signature_allowance(self):
+        # The switches run RouterOS 7.24.7 and the gate's key is ed25519, which needs no signature
+        # allowance. The `PubkeyAcceptedAlgorithms=+ssh-rsa` line existed for the v6 pair alone, and
+        # card #806 removed it with the key.
+        with fake("ssh-ed25519", after_change=CHANGED) as f:
             done = f.script(["--target", "crs326", "--change", str(CHANGES / "set-pvid.rsc"), "--yes"])
             calls = {tool: f.argv(tool) for tool in ("ssh", "scp")}
         self.assertEqual(done.returncode, 0, done.stderr)
         for tool in ("ssh", "scp"):
             self.assertTrue(calls[tool], f"the fake {tool} was never called")
             for line in calls[tool]:
-                self.assertIn("PubkeyAcceptedAlgorithms=+ssh-rsa", line, (tool, line))
+                self.assertNotIn("PubkeyAcceptedAlgorithms", line, (tool, line))
 
     def test_a_file_that_survives_its_removal_is_named_instead_of_ignored(self):
         # The device is asked after the removal, and the answer is read from `print detail`: a plain

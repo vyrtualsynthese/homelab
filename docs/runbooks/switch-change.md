@@ -43,10 +43,10 @@ and its refusal is why that one step is allowed to fail.
 
 Both switches ran RouterOS 6.49 until 2026-11-26, when card #696 moved them to `7.24.7`
 ([`switch-firmware.md`](switch-firmware.md)). Version 6 signs a key login with the SHA-1 `ssh-rsa`
-algorithm that OpenSSH 8.8 and later dropped from the default list, so every `ssh` and `scp` call the
-script makes carries `PubkeyAcceptedAlgorithms=+ssh-rsa`; without it the login ends at `Permission
-denied (publickey,password)` on a key the device already trusts. On v7 the allowance is unnecessary
-and harmless, and the key in place is still RSA 4096, so it stays until that key is swapped.
+algorithm that OpenSSH 8.8 and later dropped from the default list, so the script carried
+`PubkeyAcceptedAlgorithms=+ssh-rsa` while the switches and the key were v6-era; a key login without it
+ended at `Permission denied (publickey,password)` on a key the device already trusted. Card #806
+replaced the pair with ed25519 on `7.24.7`, which needs no allowance, and dropped the option with it.
 
 `SWITCH_CHANGE_TARGETS`, `SWITCH_CHANGE_USER` and `SWITCH_CHANGE_KEY` override the three for a direct
 run, and `./switches/switch-change.sh --list-targets` prints the pairs. Through the gate none of them
