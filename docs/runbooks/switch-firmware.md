@@ -169,6 +169,30 @@ Four installs, each from the `install` call to the first answer from the switch 
 
 The `wireless` uninstall and the RouterBOOT write cost one more reboot of about a minute each.
 
+## What the cluster sees
+
+Every install reboots one switch, and a reboot drops every port on it. Prometheus lives on `nas`, so the
+view from its seat is a cluster-wide scrape failure that looks nothing like one node going bad. Measured
+across the six reboots of 2026-11-26 — four installs and one firmware reboot per device:
+
+- **Pod targets on the other nodes read `up = 0`.** 19 of them at the peak, 03:26–03:47. The pod
+  targets on `nas` kept answering because their addresses are local; its node exporter and cAdvisor did
+  not, because those are scraped on the LAN address.
+- **The hosts say it in their own journals.** `nas`'s `enp1s0` and `streaming`'s `enp4s0` lost carrier in
+  the same second and regained it together, and `nuc0`'s `enp86s0` with `rbp2`'s `eth0` did the same in
+  the earlier window. Those are the two devices each switch carries: 10G on `crs309`, 1G on `crs326`.
+- **`mktxp_system_uptime` restarts from zero on each switch.** That is the one query that tells this
+  apart from a fault: `mktxp_system_uptime{routerboard_address="192.168.1.11"}` for `crs326` and
+  `…="192.168.1.43"` for `crs309`, with the version moving `6.49.x` → `7.24.7`.
+- **`kube-state-metrics` does not ride it out.** Pinned to `nas` and pointed at the `kubernetes`
+  Service's ClusterIP, it exits at startup with
+  `dial tcp 10.43.0.1:443: connect: network is unreachable` and is restarted with the kubelet's backoff
+  until the API answers again: 5 restarts in the first window and 10 in the second, which keeps
+  `KubeStateMetricsDown` firing after the last link is back.
+
+So an update looks like a cluster-wide scrape outage and a critical monitoring alert. Neither is a fault
+and neither is a `nas` networking problem: read `mktxp_system_uptime` before investigating one.
+
 ## Verified
 
 - 2026-11-26, both devices end to end: the four installs above, the RouterBOOT write on both
