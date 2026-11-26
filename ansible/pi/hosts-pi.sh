@@ -125,6 +125,10 @@ LAN_CIDR="192.168.1.0/24"
 CLUSTER_ADDRESSES="192.168.1.41 192.168.1.27 192.168.1.46 192.168.1.48"
 VPN_CIDR="10.8.0.0/24"
 PANEL_CIDR="172.30.0.0/24"
+# The WireGuard listener, one number for both hosts: they share one panel
+# database, so a config minted on either names this port and a client keeps
+# dialling it whichever Pi answers.
+WG_UDP_PORT="51821"
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="${PI_ROOT:-}"
 ROOT="${ROOT%/}"
@@ -171,13 +175,6 @@ check_host() {
     exit 2
 }
 
-wg_udp_port() {
-    case "$1" in
-        rbp0) printf '51821\n' ;;
-        rbp1) printf '51822\n' ;;
-    esac
-}
-
 # The name the VPN panel answers on. One label under the internal wildcard, so
 # Pi-hole's existing record sends it here (02-my-wildcard-dns.conf carries the
 # two specific addresses) and the certificate is a per-host leaf, not the shared
@@ -201,8 +198,10 @@ pihole_host() {
     esac
 }
 
+# The stack, the same file on both hosts: the port is a literal and every other
+# value is shared, so 'verify' compares the same bytes on either Pi.
 desired_compose() {
-    sed "s/@WG_UDP_PORT@/$(wg_udp_port "$1")/g" "$TEMPLATES/docker-compose.yml"
+    cat "$TEMPLATES/docker-compose.yml"
 }
 
 # The panel's TLS endpoint, rendered per host because the name differs and the
@@ -711,7 +710,7 @@ ensure_sshd_policy() {
 # would read in the host's rule list.
 #
 # What is deliberately absent: every port a container publishes. Docker's DNAT
-# and the CNI rewrite in NAT and FORWARD before INPUT is consulted, so 5182x/udp
+# and the CNI rewrite in NAT and FORWARD before INPUT is consulted, so 51821/udp
 # (wg-easy) and 8443/tcp (caddy) are governed by Docker, not by this file, and
 # 9902/tcp (smartctl-exporter) stays reachable whether ufw is on or off. A rule
 # here would filter nothing and read as protection.
@@ -1023,7 +1022,7 @@ cmd_render() {
 
     require_templates
     echo "--- $STACK_DIR/docker-compose.yml"
-    desired_compose "$host"
+    desired_compose
     echo "--- $STACK_DIR/Caddyfile"
     desired_caddyfile "$host"
     echo "--- $STACK_DIR/etc-pihole-updatelists/pihole-updatelists.conf"
@@ -1059,7 +1058,7 @@ cmd_render() {
     echo "--- ufw (the host firewall, enabled by setup on a real host)"
     echo "default: deny incoming, allow outgoing, allow routed (the containers keep egress)"
     desired_firewall_commands
-    echo "never reaches ufw: $(wg_udp_port "$host")/udp (wg-easy), 8443/tcp (caddy) and"
+    echo "never reaches ufw: $WG_UDP_PORT/udp (wg-easy), 8443/tcp (caddy) and"
     echo "9902/tcp (smartctl-exporter) are published by Docker, which DNATs in NAT"
     echo "and FORWARD before INPUT; a ufw rule for them would filter nothing"
     echo "--- /home/$HUMAN_USER/.ssh/authorized_keys"
@@ -1189,7 +1188,7 @@ cmd_setup() {
     ensure_sshd_policy
     ensure_firewall
 
-    write_abs "$ROOT$STACK_DIR/docker-compose.yml" "$(desired_compose "$host")"
+    write_abs "$ROOT$STACK_DIR/docker-compose.yml" "$(desired_compose)"
     # Caddy reads this at start, and it is a bind mount: a file written under a
     # running caddy is invisible until the container restarts. Hence the flag and
     # the recreate at the bottom, the same rule pihole's files follow.
@@ -1330,9 +1329,9 @@ cmd_verify() {
     if [ ! -f "$ROOT$STACK_DIR/docker-compose.yml" ]; then
         echo "MISSING $ROOT$STACK_DIR/docker-compose.yml"
         problems=1
-    elif ! cmp -s <(desired_compose "$host") "$ROOT$STACK_DIR/docker-compose.yml"; then
+    elif ! cmp -s <(desired_compose) "$ROOT$STACK_DIR/docker-compose.yml"; then
         echo "DIFFERS $ROOT$STACK_DIR/docker-compose.yml"
-        diff -u "$ROOT$STACK_DIR/docker-compose.yml" <(desired_compose "$host") || true
+        diff -u "$ROOT$STACK_DIR/docker-compose.yml" <(desired_compose) || true
         problems=1
     fi
 
