@@ -68,8 +68,18 @@ human. The body is the release's only record — there is no `CHANGELOG.md`, by 
 
 ## 3. The sync back
 
+Start with the local `main` current, or the comparison runs against the wrong base:
+
 ```bash
 git fetch origin
+git switch main && git merge --ff-only origin/main && git switch develop
+```
+
+That trap is not theoretical: on 2026-11-26 a checkout whose `main` still pointed at `7d21efa9` —
+the `v1.0.0` tip, one release behind — replayed 190 commits instead of two, then stopped on five
+Pi-hole conflicts that do not exist between the real branches.
+
+```bash
 git switch -c fix/release-sync origin/develop
 git merge --no-ff origin/main
 ```
