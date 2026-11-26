@@ -96,7 +96,8 @@ firewall_rules_edge:
     comment: the Docker metrics endpoint daemon.json opens on 0.0.0.0
 
 # The exports the cluster mounts. NFSv4 puts everything on 2049; 111 and 20048
-# are the v3 path the provisioner does not use, kept for a human's mount.
+# are the v3 path the provisioner does not use. They stay for the nodes, the
+# only hosts that mount these exports — never for a person's laptop.
 firewall_rules_nas:
   - port: 111
     proto: tcp
