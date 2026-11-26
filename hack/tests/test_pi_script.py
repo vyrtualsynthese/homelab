@@ -1402,3 +1402,29 @@ def test_render_prints_the_units_it_would_write():
     assert "--- /etc/systemd/system/pi-backup.service" in out.stdout
     assert "stream rbp0" in out.stdout
     assert "0.19.1" in out.stdout
+
+
+def test_verify_names_each_new_file_that_differs(tmp_path):
+    root = tmp_path / "pi"
+    _pi_fixture(root)
+    assert run("setup", "rbp0", root=root).returncode == 0
+    (root / "etc/systemd/system/pi-backup.timer").write_text("[Timer]\nOnCalendar=daily\n")
+
+    out = run("verify", "rbp0", root=root)
+    assert out.returncode == 1
+    assert "pi-backup.timer" in out.stdout
+
+
+def test_verify_names_a_missing_env_file_and_a_legacy_cron(tmp_path):
+    root = tmp_path / "pi"
+    _pi_fixture(root)
+    assert run("setup", "rbp1", root=root).returncode == 0
+    (root / "etc/restic/edge.env").unlink()
+    cron = root / "var/spool/cron/crontabs/root"
+    cron.parent.mkdir(parents=True, exist_ok=True)
+    cron.write_text("0 4 * * * /home/vronteix/scripts/backup.sh\n")
+
+    out = run("verify", "rbp1", root=root)
+    assert out.returncode == 1
+    assert "/etc/restic/edge.env" in out.stdout
+    assert "scripts/backup.sh" in out.stdout
