@@ -43,6 +43,12 @@ restoreDrills:
   - stream: nodes-streaming
     drill: etcd-snapshot-restore
     at: 1795651200
+  - stream: edge-rbp0
+    drill: edge-state
+    at: 1795651200
+  - stream: edge-rbp1
+    drill: edge-state
+    at: 1795651200
 
 prometheus:
   fullnameOverride: prometheus

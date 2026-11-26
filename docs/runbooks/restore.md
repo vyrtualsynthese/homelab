@@ -373,8 +373,10 @@ design:
 3. `dockers/pihole.env` is present: the panel password is in it;
 4. `boot/` holds both `config.txt` and `cmdline.txt`.
 
-**Verified 2026-11-26:** not yet restored — the first run of this section is the drill that makes it
-`proved`.
+**Verified 2026-11-26**, on both hosts, from their own snapshot and with no cluster consulted:
+`dockers/etc-pihole/gravity.db` `pragma integrity_check` → `ok` with 205 `domainlist` rows, the same
+for `dockers/config/wg-easy.db`, `dockers/pihole.env` present (286 B), and `boot/` holding both
+`config.txt` and `cmdline.txt`. This is the fifth drill in the monthly rotation.
 
 ## Teardown
 
@@ -399,10 +401,13 @@ of the table is that the next person can see what has been tried recently, not w
 | 2026-11-22 | Outside the cluster — all four repositories ([`last-resort.md`](last-resort.md) Step 1) | ~2 min | No cluster consulted: `restic` 0.18 on a laptop listed `nodes-nas` `44e80ca9` / 108.2 MiB, `nodes-nuc0` `80f5025f` / 811.2 MiB, `nodes-streaming` `d434572d` / 652.0 MiB, `nfs` `c517d884` / 91.0 MiB, and decrypted a tree from `nfs` (`qbittorrent-config`). The password and the S3 pair came from the Bitwarden item `homelab-backup-last-resort` with the on-disk copies moved aside. That item was written from this machine the same morning, so the run proves the credentials and the procedure, not yet a second machine. The `restore` in that run left a lock behind (PID 1222890 on `Val-Gaming`, written 02:20:56Z) that nobody released: `backup-prune` failed on it at noon the same day, and it took a scratch pod and an `unlock` to clear | opencode (agent) |
 | 2026-11-22 | Section 4 — etcd snapshot into a throwaway K3s ([`restore-etcd.md`](restore-etcd.md)) | ~4 min, 16 s of it the restore itself | Snapshot `etcd-snapshot-streaming-1795348801` (49 401 888 B, taken 12:00:01Z) restored from `nodes-streaming` snapshot `57c1df7d` into `v1.31.14+k3s1` in a privileged container on the workstation under WSL2. `--cluster-reset` 7 s, start → API 9 s; a marker ConfigMap from before the restore was gone; 25 namespaces, 66 Deployments, 3 StatefulSets, 47 PVCs, 115 pods, 376 Secrets, 60 ArgoCD Applications came back; `streaming`'s Ready heartbeat read `2026-11-22T11:55:25Z`; `backup-restic`'s `RESTIC_PASSWORD` byte-identical to the local copy. Without the vault token the restore stops at `bootstrap data already found and encrypted with different token` | opencode (agent) |
 | 2026-11-26 | Section 4 — the snapshot restored twice, to prove the access re-check ([`restore-etcd.md`](restore-etcd.md) Steps 3 and 6) | ~2 min, 6 s per reset | Snapshot `etcd-snapshot-streaming-1795712405.zip` (8 615 061 B, taken 17:00:05Z) restored into `v1.36.6+k3s1` in a privileged container, host network, `--disable traefik,servicelb`. That restored state was then drifted — a `drill-revoked` namespace with a ServiceAccount, RoleBinding and Secret, `opencode-mcp-view` deleted, a key added to `argocd-initial-admin-secret` — and the same snapshot restored again. The two diffs, 283 RBAC lines and 363 Secret hashes, named all three cases: `opencode-mcp-view` in the restored state only, the three `drill-revoked` objects in the pre-restore read only, the admin Secret's hash rolled back. `k3s-serving` and `k3s-drill.node-password.k3s` also differed, the restoring node re-issuing its own credentials at start | opencode (agent) |
+| 2026-11-26 | Section 5 — an edge Pi's own state (`edge-rbp0`) | ~1 min | Snapshot `da386656` restored to `/tmp/pi-restore` on the host itself: `dockers/etc-pihole/gravity.db` `pragma integrity_check` → `ok`, 205 `domainlist` rows; `dockers/config/wg-easy.db` → `ok`; `dockers/pihole.env` present (286 B); `boot/config.txt` and `boot/cmdline.txt` both there. No cluster consulted | operator |
+| 2026-11-26 | Section 5 — the same on `edge-rbp1` | ~1 min | Snapshot `17748451`: the same four checks, `pragma integrity_check` → `ok` on both databases, 205 `domainlist` rows, `pihole.env` 286 B | operator |
 
 **Recorded 2026-11-22.** Sections 1–3 have each been restored and read back, section 2 has now been put
 back onto the live claim and served from it, section 4 has been restored into a throwaway K3s with its
-objects read back, and the bucket opens from a laptop with no cluster at all.
+objects read back, section 5 has been restored on both edge Pis from their own repositories
+(2026-11-26), and the bucket opens from a laptop with no cluster at all.
 
 The table above is the human record; the alert reads a machine-readable copy. `restoreDrills` in
 `cluster/helm/monitoring/prometheus/values.yaml` holds one entry per row (Unix seconds;
