@@ -1,3 +1,16 @@
+{{- /*
+`lan-only` stays as the outer gate on the whole host: the router forwards 80/443
+to one cluster address and routes on the Host header, so without it this name
+answers the internet. It is no longer the access control. Prometheus loads a web
+config of its own (`values.yaml`) and answers `401` to a caller with no
+credential, whatever the source address — the gate admits the pod network too,
+which is why the check lives in the process.
+
+The route is still on `web`, so the credential is base64 on the LAN; moving it to
+`websecure` means a second router for the redirect, which the generated
+`docs/reference/routes.md` cannot take until the live object count moves with it.
+That move is its own card.
+*/ -}}
 apiVersion: {{ .Values.traefik.apiVersion }}
 kind: IngressRoute
 metadata:
@@ -12,8 +25,6 @@ spec:
   routes:
     - match: Host(`{{ .Values.ingress.host }}`)
       kind: Rule
-      # These routes serve metrics and logs with no application login, so the LAN gate
-      # is the only access control.
       middlewares:
         - name: kube-system-lan-only@kubernetescrd
       services:

@@ -76,7 +76,42 @@ prometheus:
     image:
       repository: quay.io/prometheus/prometheus
       tag: v3.16.0
+    # The query API authenticates callers itself, through Prometheus's own
+    # `--web.config.file`. A Traefik gate would not do: `lan-only` admits the
+    # pod network, so a credential on the route leaves `/api/v1/*` open to every
+    # pod — and Grafana, the stack's main reader, reaches the Service directly
+    # and would sail past such a gate anyway.
+    #
+    # The file holds bcrypt hashes and nothing else; it lives in the Secret
+    # `prometheus-basicauth` in this namespace (docs/secrets.md). Three users,
+    # one per consumer: `ops` for a person or an agent over the route, `grafana`
+    # for the datasource in cluster/helm/monitoring/grafana, and `reload` for
+    # the config-reloader below — `/-/reload` is authenticated like every other
+    # path once a web config is loaded.
+    extraArgs:
+      web.config.file: /etc/prometheus-web-config/web-config.yml
+    extraSecretMounts:
+      - name: prometheus-web-config
+        mountPath: /etc/prometheus-web-config
+        secretName: prometheus-basicauth
+        readOnly: true
+    # TCP, not HTTP: the kubelet's probe carries no credential, and Prometheus
+    # answers 401 on `/-/healthy` as well. The chart's `probeHeaders` exists for
+    # this and is unusable here — it takes the value literally, so the password
+    # would land in this file. The probe proves the listener is up, not that the
+    # TSDB answers; the alert rules read the latter.
+    tcpSocketProbeEnabled: true
   configmapReload:
+    # The credential in the URL is expanded by the kubelet from the environment
+    # below, so it is not in git. `reload` is the user the web config carries
+    # for it, and its password has to stay URL-safe: it is pasted into a URL.
+    reloadUrl: "http://reload:$(PROMETHEUS_RELOAD_PASSWORD)@127.0.0.1:9090/-/reload"
+    env:
+      - name: PROMETHEUS_RELOAD_PASSWORD
+        valueFrom:
+          secretKeyRef:
+            name: prometheus-basicauth
+            key: reload-password
     prometheus:
       image:
         repository: quay.io/prometheus-operator/prometheus-config-reloader

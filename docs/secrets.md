@@ -77,6 +77,7 @@ keys at all.
 | `pihole-exporter` | `monitoring` | `key` |
 | `mktxp-conf` | `monitoring` | mounted as a file |
 | `grafana` | `monitoring` | `admin-user`, `admin-password` — required; the chart reads it via `admin.existingSecret` |
+| `prometheus-basicauth` | `monitoring` | `web-config.yml` → `--web.config.file` (bcrypt users `ops`, `grafana`, `reload`); `grafana-password` → `PROMETHEUS_GRAFANA_PASSWORD` in Grafana's pod; `reload-password` → `PROMETHEUS_RELOAD_PASSWORD` in the config-reloader's |
 | `local-cert` | `kube-system` | Traefik default TLS cert (`TLSStore`) |
 | `traefik-dashboard` | `kube-system` | `users` — the htpasswd line(s) for the dashboard's basic auth |
 | `traefik-ovh` | `kube-system` | `OVH_ENDPOINT`, `OVH_APPLICATION_KEY`, `OVH_APPLICATION_SECRET`, `OVH_CONSUMER_KEY` → `envFrom` on the Traefik pod; the consumer key is scoped to `/domain/zone/{ashudev.com,ashuvidz.com}/{record,record/*,refresh}` |
@@ -98,6 +99,31 @@ htpasswd -nbB vronteix '<password>' \
       --from-file=users=/dev/stdin --dry-run=client -o yaml | kubectl apply -f -
 curl -sk -o /dev/null -w '%{http_code}\n' -u 'vronteix:<password>' \
   --resolve traefik.kub.local:443:192.168.1.46 https://traefik.kub.local/dashboard/   # 200
+```
+
+- **`prometheus-basicauth` is a hash per user plus a plaintext copy for the two machine users.** The
+  file is the contract, as it is for `traefik-dashboard`: Prometheus loads `web-config.yml` as
+  `--web.config.file` and answers `401` to anyone it does not name
+  (`cluster/helm/monitoring/prometheus/values.yaml`). `grafana-password` and `reload-password` exist
+  because neither consumer can sign in with a hash, and the reloader's password must stay URL-safe:
+  the kubelet pastes it into `--reload-url` from the environment. The Secret must exist **before** a
+  sync mounts it — the volume has no `optional` — and the `ops` password belongs in
+  `~/.config/secrets/homelab.env` as `PROMETHEUS_AUTH_PASSWORD`:
+
+```bash
+read -rs OPS; read -rs GRAFANA; read -rs RELOAD
+{ printf 'basic_auth_users:\n'
+  printf '  ops: %s\n'     "$(htpasswd -nbB ops "$OPS" | cut -d: -f2)"
+  printf '  grafana: %s\n' "$(htpasswd -nbB grafana "$GRAFANA" | cut -d: -f2)"
+  printf '  reload: %s\n'  "$(htpasswd -nbB reload "$RELOAD" | cut -d: -f2)"
+} | kubectl -n monitoring create secret generic prometheus-basicauth \
+      --from-file=web-config.yml=/dev/stdin \
+      --from-literal=grafana-password="$GRAFANA" \
+      --from-literal=reload-password="$RELOAD" \
+      --dry-run=client -o yaml | kubectl apply -f -
+curl -s -o /dev/null -w '%{http_code}\n' http://prometheus.kub.local/-/healthy        # 401
+curl -s -o /dev/null -w '%{http_code}\n' -u "ops:$OPS" \
+  http://prometheus.kub.local/-/healthy                                              # 200
 ```
 
 `traefik-ovh` holds the OVH API credential the DNS-01 resolver uses. The application key is the
