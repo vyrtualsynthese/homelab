@@ -120,6 +120,7 @@ they are what everything above stands on.
 | `network-policy-databases` | `databases` | — | A | the ingress floor of `databases`, and the allows PostgreSQL and pgAdmin need |
 | `network-policy-filebrowser` | `filebrowser` | — | A | the ingress floor of `filebrowser`, and the one allow FileBrowser needs |
 | `network-policy-vikunja` | `vikunja` | — | A | the ingress floor of `vikunja`, and the two allows the board needs |
+| `network-policy-media-stack` | `media-stack` | — | A | the ingress floor of `media-stack`, and one allow per caller measured from the running apps |
 
 All seven provisioners are one release each of the wrapper chart at
 `cluster/helm/nfs/provisioner/`, one values file per export, and every release asks for `streaming`.

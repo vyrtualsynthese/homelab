@@ -1,0 +1,422 @@
+# media-stack — twenty-one applications that call each other on Service names.
+#
+# This is the matrix card 829 left out, and it was measured rather than read:
+# every pair below comes from the running application's own configuration or
+# API on 2026-11-26, because the addresses live in each app's database and not
+# in its chart.
+#
+#   *arrs (Radarr, Radarr-anime, Sonarr, Sonarr-anime, Lidarr)
+#       /api/v3/downloadclient  → qbittorrent:8080
+#       /api/v3/indexer         → prowlarr:9696 (every Torznab base URL)
+#   Prowlarr  /api/v1/applications → the five *arrs; /api/v1/indexerproxy →
+#       flaresolverr:8191; /api/v1/downloadclient → qbittorrent:8080
+#   Bazarr /config/config/config.yaml → radarr:7878, sonarr:8989;
+#       bazarr-anime the same file → radarr-anime:7878, sonarr-anime:8989
+#   Seerr /api/v1/settings/{radarr,sonarr,plex} → the four *arrs and plex:32400
+#   Maintainerr /api/settings → plex:32400, seerr:5055, tautulli:8181;
+#       /api/settings/{radarr,sonarr} → the four *arrs
+#   Tautulli /api/v2?cmd=get_settings → plex.media-stack.svc:32400
+#   Autobrr: its log names radarr:7878, radarr-anime:7878, sonarr:8989,
+#       sonarr-anime:8989 and qbittorrent:8080; filters carry the four arr
+#       actions and one qBittorrent action
+#   cross-seed /config/config.js → prowlarr:9696, the four *arrs and
+#       qbittorrent:8080
+#   qBittorrent's post-download hook → cross-seed:2468 (values.yaml, the
+#       hostAlias at dns.crossSeedServiceIP)
+#   Unpackerr values.yaml → the four *arrs; qbittorrent-exporter values.yaml →
+#       qbittorrent:8080; recyclarr's mounted recyclarr.yml → the four *arrs
+#
+# Infrastructure callers:
+#   Traefik     every IngressRoute in the namespace, one web port each
+#   Prometheus  the prometheus.io/* annotations on ten pods (active targets read
+#               from the API: autobrr 9074, flaresolverr 8192, five *arrs and
+#               prowlarr 9707, plex 9594, qbittorrent-exporter 8090)
+#
+# Not in the matrix because nothing calls them: Kavita and
+# Calibre-Web-Automated (external metadata only), Unpackerr (no listener), and
+# the five NFS provisioner pods. Egress is out of this chart's scope, so every
+# app above still opens PostgreSQL, authentik and the internet on its own.
+defaultDeny: true
+accept:
+  - name: autobrr
+    podSelector:
+      app.kubernetes.io/name: autobrr
+    from:
+      - namespace: kube-system
+        podSelector:
+          app.kubernetes.io/name: traefik
+        ports: [7474]
+      - namespace: monitoring
+        podSelector:
+          app.kubernetes.io/name: prometheus
+          app.kubernetes.io/component: server
+        ports: [9074]
+
+  - name: bazarr
+    podSelector:
+      app.kubernetes.io/name: bazarr
+    from:
+      - namespace: kube-system
+        podSelector:
+          app.kubernetes.io/name: traefik
+        ports: [6767]
+
+  - name: bazarr-anime
+    podSelector:
+      app.kubernetes.io/name: bazarr-anime
+    from:
+      - namespace: kube-system
+        podSelector:
+          app.kubernetes.io/name: traefik
+        ports: [6767]
+
+  - name: calibre-web-automated
+    podSelector:
+      app.kubernetes.io/name: calibre-web-automated
+    from:
+      - namespace: kube-system
+        podSelector:
+          app.kubernetes.io/name: traefik
+        ports: [8083]
+
+  - name: cross-seed
+    podSelector:
+      app.kubernetes.io/name: cross-seed
+    from:
+      # qBittorrent's post-download hook, the only caller: it connects to the
+      # Service through the hostAlias in the qbittorrent chart, so the source
+      # is still the qbittorrent pod.
+      - podSelector:
+          app.kubernetes.io/name: qbittorrent
+        ports: [2468]
+
+  - name: flaresolverr
+    podSelector:
+      app.kubernetes.io/name: flaresolverr
+    from:
+      - podSelector:
+          app.kubernetes.io/name: prowlarr
+        ports: [8191]
+      - namespace: monitoring
+        podSelector:
+          app.kubernetes.io/name: prometheus
+          app.kubernetes.io/component: server
+        ports: [8192]
+
+  - name: kavita
+    podSelector:
+      app.kubernetes.io/name: kavita
+    from:
+      - namespace: kube-system
+        podSelector:
+          app.kubernetes.io/name: traefik
+        ports: [5000]
+
+  - name: lidarr
+    podSelector:
+      app.kubernetes.io/name: lidarr
+    from:
+      - namespace: kube-system
+        podSelector:
+          app.kubernetes.io/name: traefik
+        ports: [8686]
+      - namespace: monitoring
+        podSelector:
+          app.kubernetes.io/name: prometheus
+          app.kubernetes.io/component: server
+        ports: [9707]
+      - podSelector:
+          app.kubernetes.io/name: prowlarr
+        ports: [8686]
+      - podSelector:
+          app.kubernetes.io/name: recyclarr
+        ports: [8686]
+
+  - name: maintainerr
+    podSelector:
+      app.kubernetes.io/name: maintainerr
+    from:
+      - namespace: kube-system
+        podSelector:
+          app.kubernetes.io/name: traefik
+        ports: [6246]
+
+  - name: plex
+    podSelector:
+      app.kubernetes.io/name: plex
+    from:
+      - namespace: kube-system
+        podSelector:
+          app.kubernetes.io/name: traefik
+        ports: [32400]
+      - namespace: monitoring
+        podSelector:
+          app.kubernetes.io/name: prometheus
+          app.kubernetes.io/component: server
+        ports: [9594]
+      - podSelector:
+          app.kubernetes.io/name: seerr
+        ports: [32400]
+      - podSelector:
+          app.kubernetes.io/name: tautulli
+        ports: [32400]
+      - podSelector:
+          app.kubernetes.io/name: maintainerr
+        ports: [32400]
+
+  - name: prowlarr
+    podSelector:
+      app.kubernetes.io/name: prowlarr
+    from:
+      - namespace: kube-system
+        podSelector:
+          app.kubernetes.io/name: traefik
+        ports: [9696]
+      - namespace: monitoring
+        podSelector:
+          app.kubernetes.io/name: prometheus
+          app.kubernetes.io/component: server
+        ports: [9707]
+      # The five *arrs query Prowlarr's Torznab endpoints; Prowlarr pushes
+      # indexer changes and download grabs back to the same five.
+      - podSelector:
+          app.kubernetes.io/name: radarr
+        ports: [9696]
+      - podSelector:
+          app.kubernetes.io/name: radarr-anime
+        ports: [9696]
+      - podSelector:
+          app.kubernetes.io/name: sonarr
+        ports: [9696]
+      - podSelector:
+          app.kubernetes.io/name: sonarr-anime
+        ports: [9696]
+      - podSelector:
+          app.kubernetes.io/name: lidarr
+        ports: [9696]
+      # cross-seed's torznab list is eleven Prowlarr feeds.
+      - podSelector:
+          app.kubernetes.io/name: cross-seed
+        ports: [9696]
+
+  - name: qbittorrent
+    podSelector:
+      app.kubernetes.io/name: qbittorrent
+    from:
+      - namespace: kube-system
+        podSelector:
+          app.kubernetes.io/name: traefik
+        ports: [8080]
+      - podSelector:
+          app.kubernetes.io/name: autobrr
+        ports: [8080]
+      - podSelector:
+          app.kubernetes.io/name: cross-seed
+        ports: [8080]
+      - podSelector:
+          app.kubernetes.io/name: prowlarr
+        ports: [8080]
+      - podSelector:
+          app.kubernetes.io/name: qbittorrent-exporter
+        ports: [8080]
+      - podSelector:
+          app.kubernetes.io/name: radarr
+        ports: [8080]
+      - podSelector:
+          app.kubernetes.io/name: radarr-anime
+        ports: [8080]
+      - podSelector:
+          app.kubernetes.io/name: sonarr
+        ports: [8080]
+      - podSelector:
+          app.kubernetes.io/name: sonarr-anime
+        ports: [8080]
+      - podSelector:
+          app.kubernetes.io/name: lidarr
+        ports: [8080]
+
+  - name: qbittorrent-exporter
+    podSelector:
+      app.kubernetes.io/name: qbittorrent-exporter
+    from:
+      - namespace: monitoring
+        podSelector:
+          app.kubernetes.io/name: prometheus
+          app.kubernetes.io/component: server
+        ports: [8090]
+
+  - name: radarr
+    podSelector:
+      app.kubernetes.io/name: radarr
+    from:
+      - namespace: kube-system
+        podSelector:
+          app.kubernetes.io/name: traefik
+        ports: [7878]
+      - namespace: monitoring
+        podSelector:
+          app.kubernetes.io/name: prometheus
+          app.kubernetes.io/component: server
+        ports: [9707]
+      - podSelector:
+          app.kubernetes.io/name: autobrr
+        ports: [7878]
+      - podSelector:
+          app.kubernetes.io/name: bazarr
+        ports: [7878]
+      - podSelector:
+          app.kubernetes.io/name: cross-seed
+        ports: [7878]
+      - podSelector:
+          app.kubernetes.io/name: maintainerr
+        ports: [7878]
+      - podSelector:
+          app.kubernetes.io/name: prowlarr
+        ports: [7878]
+      - podSelector:
+          app.kubernetes.io/name: recyclarr
+        ports: [7878]
+      - podSelector:
+          app.kubernetes.io/name: seerr
+        ports: [7878]
+      - podSelector:
+          app.kubernetes.io/name: unpackerr
+        ports: [7878]
+
+  - name: radarr-anime
+    podSelector:
+      app.kubernetes.io/name: radarr-anime
+    from:
+      - namespace: kube-system
+        podSelector:
+          app.kubernetes.io/name: traefik
+        ports: [7878]
+      - namespace: monitoring
+        podSelector:
+          app.kubernetes.io/name: prometheus
+          app.kubernetes.io/component: server
+        ports: [9707]
+      - podSelector:
+          app.kubernetes.io/name: autobrr
+        ports: [7878]
+      - podSelector:
+          app.kubernetes.io/name: bazarr-anime
+        ports: [7878]
+      - podSelector:
+          app.kubernetes.io/name: cross-seed
+        ports: [7878]
+      - podSelector:
+          app.kubernetes.io/name: maintainerr
+        ports: [7878]
+      - podSelector:
+          app.kubernetes.io/name: prowlarr
+        ports: [7878]
+      - podSelector:
+          app.kubernetes.io/name: recyclarr
+        ports: [7878]
+      - podSelector:
+          app.kubernetes.io/name: seerr
+        ports: [7878]
+      - podSelector:
+          app.kubernetes.io/name: unpackerr
+        ports: [7878]
+
+  - name: seerr
+    podSelector:
+      app.kubernetes.io/name: seerr
+    from:
+      - namespace: kube-system
+        podSelector:
+          app.kubernetes.io/name: traefik
+        ports: [5055]
+      - podSelector:
+          app.kubernetes.io/name: maintainerr
+        ports: [5055]
+
+  - name: sonarr
+    podSelector:
+      app.kubernetes.io/name: sonarr
+    from:
+      - namespace: kube-system
+        podSelector:
+          app.kubernetes.io/name: traefik
+        ports: [8989]
+      - namespace: monitoring
+        podSelector:
+          app.kubernetes.io/name: prometheus
+          app.kubernetes.io/component: server
+        ports: [9707]
+      - podSelector:
+          app.kubernetes.io/name: autobrr
+        ports: [8989]
+      - podSelector:
+          app.kubernetes.io/name: bazarr
+        ports: [8989]
+      - podSelector:
+          app.kubernetes.io/name: cross-seed
+        ports: [8989]
+      - podSelector:
+          app.kubernetes.io/name: maintainerr
+        ports: [8989]
+      - podSelector:
+          app.kubernetes.io/name: prowlarr
+        ports: [8989]
+      - podSelector:
+          app.kubernetes.io/name: recyclarr
+        ports: [8989]
+      - podSelector:
+          app.kubernetes.io/name: seerr
+        ports: [8989]
+      - podSelector:
+          app.kubernetes.io/name: unpackerr
+        ports: [8989]
+
+  - name: sonarr-anime
+    podSelector:
+      app.kubernetes.io/name: sonarr-anime
+    from:
+      - namespace: kube-system
+        podSelector:
+          app.kubernetes.io/name: traefik
+        ports: [8989]
+      - namespace: monitoring
+        podSelector:
+          app.kubernetes.io/name: prometheus
+          app.kubernetes.io/component: server
+        ports: [9707]
+      - podSelector:
+          app.kubernetes.io/name: autobrr
+        ports: [8989]
+      - podSelector:
+          app.kubernetes.io/name: bazarr-anime
+        ports: [8989]
+      - podSelector:
+          app.kubernetes.io/name: cross-seed
+        ports: [8989]
+      - podSelector:
+          app.kubernetes.io/name: maintainerr
+        ports: [8989]
+      - podSelector:
+          app.kubernetes.io/name: prowlarr
+        ports: [8989]
+      - podSelector:
+          app.kubernetes.io/name: recyclarr
+        ports: [8989]
+      - podSelector:
+          app.kubernetes.io/name: seerr
+        ports: [8989]
+      - podSelector:
+          app.kubernetes.io/name: unpackerr
+        ports: [8989]
+
+  - name: tautulli
+    podSelector:
+      app.kubernetes.io/name: tautulli
+    from:
+      - namespace: kube-system
+        podSelector:
+          app.kubernetes.io/name: traefik
+        ports: [8181]
+      - podSelector:
+          app.kubernetes.io/name: maintainerr
+        ports: [8181]

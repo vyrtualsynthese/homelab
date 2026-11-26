@@ -95,9 +95,10 @@ Prometheus, and only each service's own login stands in the way.
 `cluster/helm/platform/network-policy` holds the fence: a `default-deny-ingress` that selects every pod
 of a namespace, and one `allow-<consumer>` per caller that opens exactly the port it uses. It is applied
 once per namespace by its own Application, so a rollout and a rollback are one namespace wide —
-`vikunja`, `filebrowser` and `databases` today. `media-stack` is not there yet: its twenty-six pods call
-each other on addresses stored in the applications' own databases rather than in git, so that matrix has
-to be measured before it is written.
+`vikunja`, `filebrowser`, `databases` and `media-stack` today. The first three were read from their
+charts; `media-stack` was measured from the running applications on 2026-11-26, because its
+twenty-one pods call each other on addresses stored in the applications' own databases rather than in
+git, and `values/media-stack.yaml` names the source of each pair.
 
 **Egress is not covered.** The chart denies inbound connections only, so a pod in one of those
 namespaces still opens whatever it likes on its own. And whether this K3s enforces a `NetworkPolicy`
