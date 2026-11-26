@@ -1297,3 +1297,25 @@ def test_the_manual_copy_still_holds_the_query_log(tmp_path):
     assert (dest / "dockers/etc-pihole/pihole-FTL.db").exists(), (
         "the exclusions belong to the nightly stream; the pre-reflash USB copy keeps everything"
     )
+
+
+def test_prune_forgets_with_the_charts_retention(tmp_path):
+    root = tmp_path / "pi"
+    _pi_fixture(root)
+
+    out = run("prune", "rbp0", root=root, env=fake_restic(tmp_path))
+    assert out.returncode == 0, out.stdout + out.stderr
+    argv = (tmp_path / "restic-argv").read_text()
+    for flag in ("forget", "--keep-daily 7", "--keep-weekly 4", "--keep-monthly 12", "--prune",
+                 "--retry-lock 2h"):
+        assert flag in argv, flag
+
+
+def test_the_pi_retention_matches_the_chart():
+    values = yaml.safe_load((REPO / "cluster/helm/backup/values.yaml").read_text())["retention"]
+    out = subprocess.run(
+        ["bash", "-c", f'. "{SCRIPT}"; echo "$RETENTION_DAILY $RETENTION_WEEKLY $RETENTION_MONTHLY"'],
+        capture_output=True, text=True,
+    )
+    assert out.stdout.split() == [str(values["keepDaily"]), str(values["keepWeekly"]),
+                                  str(values["keepMonthly"])]

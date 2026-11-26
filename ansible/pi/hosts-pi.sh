@@ -41,6 +41,11 @@ STAGING_DIR="/var/lib/pi-backup"
 # database the same snapshot already holds. The manual USB copy keeps all three.
 BACKUP_EXCLUDES="pihole-FTL.db* listsCache gravity_old.db"
 RESTIC_BIN="${PI_RESTIC:-/usr/local/bin/restic}"
+# The chart's retention, copied because a host outside the cluster cannot read
+# cluster/helm/backup/values.yaml at prune time. A test fails when the two drift.
+RETENTION_DAILY=7
+RETENTION_WEEKLY=4
+RETENTION_MONTHLY=12
 
 # SSH and sudo: the two settings ansible/roles/accounts owns on the four cluster
 # nodes, written here because the layer cannot reach the Pis until they are
@@ -116,7 +121,7 @@ CHANGED_THIS_WRITE=0
 
 usage() {
     cat >&2 <<'USAGE'
-usage: hosts-pi.sh render|setup|verify|stream <host>
+usage: hosts-pi.sh render|setup|verify|stream|prune <host>
        hosts-pi.sh backup|restore <dir> <host>
 hosts: rbp0 rbp1
 USAGE
@@ -1380,6 +1385,26 @@ require_backup_env() {
     : "${AWS_SECRET_ACCESS_KEY:?$BACKUP_ENV must set AWS_SECRET_ACCESS_KEY}"
 }
 
+# Each host prunes its own repository: the verifier reads the snapshots but never
+# rewrites them, so this is the one place the edge retention is applied.
+cmd_prune() {
+    local host="$1"
+
+    if [ -z "$ROOT" ] && [ "$(id -u)" -ne 0 ]; then
+        echo "prune rewrites the repository; run it with sudo" >&2
+        exit 1
+    fi
+    require_backup_env
+
+    "$RESTIC_BIN" forget \
+        --retry-lock 2h \
+        --keep-daily "$RETENTION_DAILY" \
+        --keep-weekly "$RETENTION_WEEKLY" \
+        --keep-monthly "$RETENTION_MONTHLY" \
+        --prune
+    echo "pruned $host to $RETENTION_DAILY daily, $RETENTION_WEEKLY weekly, $RETENTION_MONTHLY monthly"
+}
+
 # The nightly run: the same tree, minus the three words in BACKUP_EXCLUDES, under
 # a fixed path so the snapshot's file list is the same every night. Nothing is
 # staged on the disk a reflash would destroy — the tree is transient and the
@@ -1484,10 +1509,10 @@ main() {
             check_host "$1"
             cmd_verify "$1"
             ;;
-        stream)
+        stream|prune)
             [ "$#" -eq 1 ] || usage
             check_host "$1"
-            cmd_stream "$1"
+            "cmd_$verb" "$1"
             ;;
         backup|restore)
             [ "$#" -eq 2 ] || usage
