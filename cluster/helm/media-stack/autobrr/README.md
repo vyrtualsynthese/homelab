@@ -49,9 +49,10 @@ there so the scheduler knows the pod exists.
 To re-measure before changing these numbers (Prometheus is on `nas`):
 
 ```bash
-curl -sG http://prometheus.kub.local/api/v1/query --data-urlencode \
+set -a; . ~/.config/secrets/homelab.env; set +a
+curl -sG -u "ops:$PROMETHEUS_AUTH_PASSWORD" http://prometheus.kub.local/api/v1/query --data-urlencode \
   'query=max_over_time(container_memory_working_set_bytes{namespace="media-stack",pod=~"autobrr-.*",container="autobrr"}[1h])/2^20'
-curl -sG http://prometheus.kub.local/api/v1/query --data-urlencode \
+curl -sG -u "ops:$PROMETHEUS_AUTH_PASSWORD" http://prometheus.kub.local/api/v1/query --data-urlencode \
   'query=rate(container_cpu_usage_seconds_total{namespace="media-stack",pod=~"autobrr-.*",container="autobrr"}[5m])'
 ```
 
@@ -124,7 +125,8 @@ Secret in the Prometheus chart instead.
 To check it after a deploy:
 
 ```bash
-curl -sG http://prometheus.kub.local/api/v1/query --data-urlencode \
+set -a; . ~/.config/secrets/homelab.env; set +a
+curl -sG -u "ops:$PROMETHEUS_AUTH_PASSWORD" http://prometheus.kub.local/api/v1/query --data-urlencode \
   'query=up{job="kubernetes-pods",pod=~"autobrr-.*"}'
 ```
 

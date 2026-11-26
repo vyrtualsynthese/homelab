@@ -126,7 +126,10 @@ curl -sG -u "ops:$PROMETHEUS_AUTH_PASSWORD" http://prometheus.kub.local/api/v1/q
 
 Two more users live in the same Secret and are not for a human: `grafana` is what the datasource in
 `cluster/helm/monitoring/grafana` signs in with, and `reload` is what the config-reloader uses on
-`/-/reload`, now behind the same check as every other path.
+`/-/reload`, now behind the same check as every other path. The same `reload` user is what
+Prometheus itself scrapes its own `/metrics` with (`scrapeConfigs.prometheus`, `localhost:9090`):
+the web config authenticates that target like any other, so an unauthenticated self-scrape shows
+as `up == 0` and fires `MonitoringDown`.
 
 Useful endpoints: `/api/v1/query`, `/api/v1/query_range`, `/api/v1/targets`,
 `/api/v1/rules`, `/api/v1/status/flags`, `/api/v1/status/config`.
