@@ -656,5 +656,30 @@ class MainTests(unittest.TestCase):
                 load().main(["--config", str(config), "--restic", str(fake)])
 
 
+class ExternalStreamTests(unittest.TestCase):
+    """A stream written by a host the cluster does not drive.
+
+    The chart cannot prove the Pi's copy is complete, so a `mustMatch` pattern that matches
+    nothing is how a night that copied a fragment shows up.
+    """
+
+    def test_an_external_stream_must_hold_its_required_files(self):
+        entries = [{"path": "/var/lib/pi-backup/tree/dockers/etc-pihole/gravity.db"},
+                   {"path": "/var/lib/pi-backup/tree/dockers/config/wg-easy.db"}]
+        lines, problems = load().check_external(
+            "edge-rbp0", ["dockers/etc-pihole/gravity.db", "dockers/config/wg-easy.db"], entries)
+        self.assertEqual(problems, [])
+        self.assertEqual(lines, [
+            "files stream=edge-rbp0 path=dockers/etc-pihole/gravity.db matched=1",
+            "files stream=edge-rbp0 path=dockers/config/wg-easy.db matched=1",
+        ])
+
+    def test_an_external_stream_missing_one_required_file_is_a_problem(self):
+        entries = [{"path": "/var/lib/pi-backup/tree/dockers/etc-pihole/gravity.db"}]
+        lines, problems = load().check_external(
+            "edge-rbp0", ["dockers/etc-pihole/gravity.db", "dockers/config/wg-easy.db"], entries)
+        self.assertEqual(problems, ["edge-rbp0 is missing dockers/config/wg-easy.db"])
+
+
 if __name__ == "__main__":
     unittest.main()

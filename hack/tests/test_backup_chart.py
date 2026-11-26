@@ -232,14 +232,24 @@ class PruneTests(unittest.TestCase):
         script = scripts()["prune.sh"]
         self.assertNotIn("set -eu", script)
         self.assertIn("failed=0", script)
-        self.assertEqual(script.count("|| failed=1"), len(values()["streams"]))
+        self.assertEqual(script.count("|| failed=1"),
+                         len([s for s in values()["streams"] if not s.get("external")]))
         self.assertIn('[ "$failed" -eq 0 ]', script)
 
     def test_prune_runs_one_repository_at_a_time(self):
         # Two restic processes on one repository would fight over the lock; the loop is a
         # sequence, not a fan-out.
         script = scripts()["prune.sh"]
-        self.assertEqual(script.count("restic -r"), len(values()["streams"]))
+        self.assertEqual(script.count("restic -r"),
+                         len([s for s in values()["streams"] if not s.get("external")]))
+
+    def test_the_prune_leaves_the_pi_streams_to_their_hosts(self):
+        # A Pi writes and prunes its own repository; a prune from the cluster would race the
+        # host's own `forget` over the lock.
+        script = scripts()["prune.sh"]
+        self.assertNotIn("edge-rbp0", script)
+        self.assertNotIn("edge-rbp1", script)
+        self.assertEqual(len([s for s in values()["streams"] if s.get("external")]), 2)
 
 
 class VerifyTests(unittest.TestCase):
@@ -251,7 +261,13 @@ class VerifyTests(unittest.TestCase):
     def test_every_repository_is_checked(self):
         cms = {d["metadata"]["name"]: d["data"] for d in render() if d["kind"] == "ConfigMap"}
         streams = json.loads(cms["backup-streams"]["streams.json"])
-        self.assertEqual({s["name"] for s in streams}, {"nodes-nas", "nodes-nuc0", "nodes-streaming", "nfs"})
+        self.assertEqual({s["name"] for s in streams},
+                         {"nodes-nas", "nodes-nuc0", "nodes-streaming", "nfs",
+                          "edge-rbp0", "edge-rbp1"})
+        edge = next(s for s in streams if s["name"] == "edge-rbp0")
+        self.assertTrue(edge["external"])
+        self.assertEqual(edge["mustMatch"], ["dockers/etc-pihole/gravity.db",
+                                             "dockers/config/wg-easy.db"])
 
     def test_the_verifier_asks_the_api_with_its_own_identity(self):
         # The only job in the chart with a token: it asks which servers exist and what etcd

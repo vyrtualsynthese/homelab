@@ -10,14 +10,17 @@ in a line Loki can index:
     etcd-s3 server=<name> file=<basename> age_h=<h>
     staged stream=<name> row=<namespace>/<claim> files=<n>
     files stream=<name> row=<namespace>/<claim> matched=<n>
+    files stream=<name> path=<pattern> matched=<n>
     exclude-unused stream=<name> row=<namespace>/<claim> pattern=<entry>
 
 Exits non-zero when a stream is empty, older than 26 hours, or larger than its budget, when a
 control-plane server has no etcd snapshot in the bucket or one older than the same window,
 when a `sqlite` row has staged no database into the stream's newest snapshot, which is what a
 `db:` pattern that went stale looks like from outside: the job stays green and the copy the row
-exists for is gone, and when a `files` row that declares `mustMatch` holds nothing matching it,
-which is a dump CronJob that stopped while its claim directory stayed.
+exists for is gone, when a `files` row that declares `mustMatch` holds nothing matching it,
+which is a dump CronJob that stopped while its claim directory stayed, and when an `external`
+stream's newest snapshot holds nothing matching one of its `mustMatch` paths, which is a night
+that staged a fragment.
 
 The etcd half is not read from a restic snapshot. Each server uploads its own snapshots to the
 bucket's `etcd/` prefix, and K3s's reconcile publishes one `ETCDSnapshotFile` per object, naming
@@ -264,6 +267,23 @@ def check_files(name: str, rows: list[dict], entries: list[dict]) -> tuple[list[
     return lines, problems
 
 
+def check_external(name: str, must_match: list[str], entries: list[dict])         -> tuple[list[str], list[str]]:
+    """A stream written by a host the cluster does not drive.
+
+    Freshness and budget are all `check_stream` can see, and both pass a night that copied
+    a fragment into the staging directory. The paths here are the lower bound the host
+    promises every night; a pattern that matches nothing is that night's symptom.
+    """
+    lines, problems = [], []
+    paths = [entry["path"] for entry in entries]
+    for pattern in must_match:
+        matched = [path for path in paths if path.endswith("/" + pattern)]
+        lines.append(f"files stream={name} path={pattern} matched={len(matched)}")
+        if not matched:
+            problems.append(f"{name} is missing {pattern}")
+    return lines, problems
+
+
 def read_exclude_report(
     repository: str, snapshot_id: str, entries: list[dict], restic: str = "restic"
 ) -> list[dict]:
@@ -331,10 +351,11 @@ def main(argv: list[str] | None = None, etcd_s3=None) -> int:
         problems = check_stream(name, snapshots, used, budget, now)
         rows = stream.get("staged") or []
         files_rows = stream.get("files") or []
+        must_match = stream.get("mustMatch") or []
         # The stream's own snapshot, not `latest`: a copy taken by hand in between is newer
         # and holds none of the claims.
         snapshot = stream_snapshot(snapshots, name) or newest_snapshot(snapshots)
-        if (rows or files_rows or stream.get("claims")) and snapshot:
+        if (rows or files_rows or must_match or stream.get("claims")) and snapshot:
             # `restic ls` exits 1 when the repository holds no snapshot at all, and a
             # repository with no snapshot is what check_stream just reported; asking for the
             # file list would abort the run instead of naming the stream.
@@ -349,6 +370,11 @@ def main(argv: list[str] | None = None, etcd_s3=None) -> int:
                 for line in lines:
                     print(line, flush=True)
                 problems.extend(files_problems)
+            if must_match:
+                lines, external_problems = check_external(name, must_match, entries)
+                for line in lines:
+                    print(line, flush=True)
+                problems.extend(external_problems)
             if stream.get("claims"):
                 # Warned, never failed: see the module docstring. The line is the point; a
                 # warning that changes the exit code would page for a working night.
@@ -363,6 +389,8 @@ def main(argv: list[str] | None = None, etcd_s3=None) -> int:
             for row in files_rows:
                 print(f"files stream={name} row={row['namespace']}/{row['claim']} matched=-",
                       flush=True)
+            for pattern in must_match:
+                print(f"files stream={name} path={pattern} matched=-", flush=True)
 
         for problem in problems:
             print(f"problem stream={name} {problem}", flush=True)

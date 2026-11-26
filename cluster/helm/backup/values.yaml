@@ -106,6 +106,26 @@ streams:
     retention:
       keepMonthly: 24
       keepYearly: 10
+  # The two edge Pis back themselves up: a host that saves its state only when the
+  # cluster is reachable is not saved. Each runs `hosts-pi.sh stream` on its own
+  # timer straight to one of these repositories, and this chart only reads them —
+  # the prune job skips an `external` stream, because the host's own weekly
+  # `forget` is the one writer and two would race the lock. The `mustMatch` paths
+  # are the lower bound the verifier enforces: freshness alone passes a night that
+  # staged a fragment. Measured on rbp0 on 2026-11-26: 56 MB of gravity.db, 97 KB
+  # of wg-easy.db, and a 385 MB query log left out on purpose.
+  - name: edge-rbp0
+    budgetGiB: 1
+    external: true
+    mustMatch:
+      - dockers/etc-pihole/gravity.db
+      - dockers/config/wg-easy.db
+  - name: edge-rbp1
+    budgetGiB: 1
+    external: true
+    mustMatch:
+      - dockers/etc-pihole/gravity.db
+      - dockers/config/wg-easy.db
 
 # The one place the retention policy is written. The prune job renders its flags from these
 # numbers, so the schedule and the flags cannot disagree. A stream may override any key under

@@ -26,14 +26,18 @@ data:
     # Runs on Sunday at noon, after every night's backup has finished. One repository at a
     # time: two restic processes on one repository would fight over the lock instead of
     # pruning it.
-    # Not `set -e`: one repository that fails must not leave the other three unpruned for the
+    # Not `set -e`: one repository that fails must not leave the others unpruned for the
     # week. Each failure is remembered, the loop finishes, and the last test fails the job.
     # `forget` carries no --host because each repository holds exactly one host.
+    # An `external` stream is written by its own host, which prunes it on its own timer:
+    # a prune from here would race that host's `forget` over the lock.
     set -u
     : "${RESTIC_PASSWORD:?}"
     failed=0
-    echo "prune {{ .Values.streams | len }} repositories"
-    {{- range .Values.streams }}
+    {{- $pruned := list }}
+    {{- range .Values.streams }}{{ if not .external }}{{ $pruned = append $pruned . }}{{ end }}{{ end }}
+    echo "prune {{ $pruned | len }} repositories"
+    {{- range $pruned }}
     {{- $ret := include "backup.retention" (dict "root" $ "stream" .) | fromJson }}
     echo "prune {{ .name }}: daily {{ $ret.daily }}, weekly {{ $ret.weekly }}, monthly {{ $ret.monthly }}{{ if $ret.yearly }}, yearly {{ $ret.yearly }}{{ end }}"
     restic -r "{{ include "backup.repository" (dict "root" $ "name" .name) }}" forget \

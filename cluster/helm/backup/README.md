@@ -1,8 +1,8 @@
 # `backup`
 
 Nightly copies of everything on the cluster that a rebuild cannot reconstruct, into one OVH Object
-Storage bucket. Four restic repositories, one per stream: `nodes-nas`, `nodes-nuc0`,
-`nodes-streaming` and `nfs`.
+Storage bucket. Six restic repositories, one per stream: `nodes-nas`, `nodes-nuc0`,
+`nodes-streaming`, `nfs` and the two edge streams `edge-rbp0` and `edge-rbp1`.
 
 ## The contract
 
@@ -29,7 +29,11 @@ Storage bucket. Four restic repositories, one per stream: `nodes-nas`, `nodes-nu
    A `kind: files` row may also declare `mustMatch`, and then the verifier fails the run when the
    stream's newest snapshot holds no file matching it under that claim. It is for a directory whose
    producer can stop while the directory stays: `postgres-dumps` declares `["*.dump"]`, because a
-   stopped dump CronJob leaves every stream green on a claim that holds nothing.
+   stopped dump CronJob leaves every stream green on a claim that holds nothing. A stream marked
+   `external` is the same check one level up: its writer is a host outside the cluster (an edge Pi
+   running `ansible/pi/hosts-pi.sh stream`), so the chart reads and verifies it and never prunes it —
+   the host's own timer does. Its `mustMatch` paths are the lower bound, checked against the newest
+   snapshot of that stream.
 5. **A row's `exclude` means "not backed up".** It is applied to the claim copy *and* to staging, so an
    excluded database is not quietly staged back in. It is reserved for what is large and rebuilt from
    something else: poster art, logs, caches, an application's own rotating database copies. An entry

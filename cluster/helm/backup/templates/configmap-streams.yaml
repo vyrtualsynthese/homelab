@@ -27,6 +27,6 @@ data:
     {{- end }}
     {{- end }}
     {{- end }}
-      {"name": "{{ $stream.name }}", "repository": "{{ include "backup.repository" (dict "root" $ "name" $stream.name) }}", "budgetGiB": {{ $stream.budgetGiB }}, "claims": {{ $claims }}, "staged": [{{- range $j, $row := $rows }}{{ if $j }}, {{ end }}{"namespace": "{{ $row.namespace }}", "claim": "{{ $row.claim }}"}{{- end }}], "files": [{{- range $j, $row := $files }}{{ if $j }}, {{ end }}{"namespace": "{{ $row.namespace }}", "claim": "{{ $row.claim }}", "mustMatch": {{ $row.mustMatch | toJson }}}{{- end }}]}
+      {"name": "{{ $stream.name }}", "repository": "{{ include "backup.repository" (dict "root" $ "name" $stream.name) }}", "budgetGiB": {{ $stream.budgetGiB }}, "external": {{ $stream.external | default false }}, "mustMatch": {{ $stream.mustMatch | default list | toJson }}, "claims": {{ $claims }}, "staged": [{{- range $j, $row := $rows }}{{ if $j }}, {{ end }}{"namespace": "{{ $row.namespace }}", "claim": "{{ $row.claim }}"}{{- end }}], "files": [{{- range $j, $row := $files }}{{ if $j }}, {{ end }}{"namespace": "{{ $row.namespace }}", "claim": "{{ $row.claim }}", "mustMatch": {{ $row.mustMatch | toJson }}}{{- end }}]}
     {{- end }}
     ]
