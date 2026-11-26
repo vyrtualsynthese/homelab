@@ -232,6 +232,14 @@ The renderer refuses, before anything is written, and names the line:
   A `default-name` selector with a `name` write is **not** refused: `default-name` is the fixed name
   the port shipped with and stays put through a rename, so the undo still finds the port after the
   change. The renderer never treats the two as the same property.
+- a `disable` or `enable` whose selector tests `disabled`, when the selector stops matching once the
+  verb has run. The undo's guard is evaluated after the change, so `disable [ find !disabled ]`
+  matches the port before the change and nothing after it, and the timer would fire into nothing.
+  The renderer writes the flag at the value the verb leaves and reads the selector again against it
+  (there is no attribute to check a flag against, the way `set` checks its arguments), so only a
+  selector that really stops matching is refused: `disable [ find disabled ]` and
+  `enable [ find !disabled ]` still render, because the object keeps the state that selector asks
+  for.
 - a value or old value holding a `}`, which would close the guard the undo is written in;
 - anything but `add`, `set`, `remove`, `enable` and `disable` — `move` included, whether it is
   written under a section header or on a line of its own;
@@ -435,7 +443,7 @@ evidence is the stdout pasted above, and a person can read the directories with 
 ## Verified
 
 - `uv run --with-requirements hack/tests/requirements.txt python -m pytest -q hack/tests/test_switch_change.py`
-  — 71 tests, the undo renderer on RouterOS 6 and 7, every refusal, and every exit path driven
+  — 84 tests, the undo renderer on RouterOS 6 and 7, every refusal, and every exit path driven
   through the fake switch, whose `/export` carries its scheduler table as a real one does.
 - `hack/tests/test_switch_apply.py` — 21 tests, the gate's target list, its argument set, the pinned
   descriptor, the staged copy, the digest and the work directory.

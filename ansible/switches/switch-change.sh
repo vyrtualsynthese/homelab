@@ -555,6 +555,17 @@ render_undo() {
     }
   }
 
+  # The properties of one object after a flag verb ran: the flag it writes gets the value the verb
+  # gives it, and any earlier spelling of that flag is dropped so it is read once.
+  function flag_set(args, v,   at, an, j, o) {
+    an = tokens(args, at); o = ""
+    for (j = 1; j <= an; j++) {
+      if (keyname(at[j]) == "disabled") continue
+      o = o (o == "" ? "" : " ") at[j]
+    }
+    return o (o == "" ? "" : " ") "disabled=" v
+  }
+
   function undo_flag(path, verb, args, lineno,   sel, selsel, idx, want, found) {
     if (!split_sel(args)) { do_refuse(lineno, "a " verb " this renderer cannot read (no [find ...] selector)"); return }
     selsel = render_sel(SEL)
@@ -563,6 +574,13 @@ render_undo() {
     # port that was already enabled has to stay enabled, not be disabled by its own revert.
     found = (FOUND_MODE == "verbose") ? vargs[path, FOUND_IDX] : oargs[path, FOUND_IDX]
     want = (obj_value(found, "disabled") == "yes") ? "disable" : "enable"
+    # The guard runs after the verb, so a selector that tests the flag the verb writes is read
+    # against the state the verb leaves: `disable [find !disabled]` matches before the change and
+    # nothing after it, and such an undo would find no object to put back.
+    if (!obj_matches(flag_set(found, (verb == "disable") ? "yes" : "no"), SEL)) {
+      do_refuse(lineno, "the change writes disabled, which its own selector matches on, so the undo would find nothing to put back; select the object by an attribute the change leaves alone")
+      return
+    }
     emit(":if ([:len [" path " find " selsel "]] > 0) do={ " path " " want " [find " selsel "] }")
   }
 

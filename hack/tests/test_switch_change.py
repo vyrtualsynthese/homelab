@@ -443,6 +443,32 @@ class SelectorKeyTests(unittest.TestCase):
         self.assertIn('find default-name="sfp-sfpplus1"', out)
         self.assertIn("name=sfp-sfpplus1", out)
 
+    # A flag verb writes `disabled` itself, and its guard is evaluated after that write: a selector
+    # testing the flag can stop matching the object the verb just changed. Whether it does depends
+    # on the direction, so the flag is simulated at the value the verb gives it and only a selector
+    # that really stops matching is refused. ssh is enabled in TWO_ROWS, www disabled.
+    def test_a_disable_whose_selector_flips_with_the_verb_is_refused(self):
+        err = self.refused("/ip service\ndisable [ find !disabled ]\n")
+        self.assertIn("disabled", err)
+        self.assertIn("its own selector matches on", err)
+
+    def test_an_enable_whose_selector_flips_with_the_verb_is_refused(self):
+        err = self.refused("/ip service\nenable [ find disabled ]\n")
+        self.assertIn("disabled", err)
+        self.assertIn("its own selector matches on", err)
+
+    def test_a_disable_whose_selector_survives_the_verb_still_renders(self):
+        self.assertEqual(
+            self.rendered("/ip service\ndisable [ find disabled ]\n").strip(),
+            ':if ([:len [/ip service find disabled]] > 0) '
+            'do={ /ip service disable [find disabled] }')
+
+    def test_an_enable_whose_selector_survives_the_verb_still_renders(self):
+        self.assertEqual(
+            self.rendered("/ip service\nenable [ find !disabled ]\n").strip(),
+            ':if ([:len [/ip service find !disabled]] > 0) '
+            'do={ /ip service enable [find !disabled] }')
+
 
 class RefusalTests(unittest.TestCase):
     def refused(self, change, export="v7-plain.rsc", verbose="v7-verbose.rsc"):
