@@ -18,9 +18,10 @@
 
 ## What this touches
 
-Two Raspberry Pi 4 boards outside the cluster. Each runs four containers from `/home/vronteix/dockers`:
-Pi-hole, which is the LAN's DNS; wg-easy, which is the VPN; and two exporters. What each machine is for
-is in [the machines](../how-it-works/nodes.md); what it runs today is in the record.
+Two Raspberry Pi 4 boards outside the cluster. Each runs five containers from `/home/vronteix/dockers`:
+Pi-hole, which is the LAN's DNS; wg-easy, which is the VPN, behind Caddy for its TLS; and two
+exporters. What each machine is for is in [the machines](../how-it-works/nodes.md); what it runs today
+is in the record.
 
 | Host | Today | After | Hops |
 |---|---|---|---|
@@ -69,9 +70,11 @@ own `user-data` on the boot partition before the first boot — step 4. The imag
 - **A copy of the stack off the Pi**, taken in step 1, before the disk is overwritten.
 - **`pihole.env` is yours.** It holds the Pi-hole panel password, it is gitignored, and `hosts-pi.sh`
   refuses to run without it rather than inventing one. Every other Pi-hole setting lives in
-  `pihole.settings`, which the script renders from one template, so the two hosts cannot drift. wg-easy
-  has no environment file since 15: its panel account, host, port, DNS and peers live in
-  `config/wg-easy.db`, which `backup` copies.
+  `pihole.settings`, which the script renders from one template, so the two hosts cannot drift.
+- **Three more files are yours, and the script refuses without them**: `wg-easy.env` (the panel's
+  authentik client secret), and `certs/tls.pem` with `certs/tls-key.pem` (its TLS leaf and key, from
+  `hack/internal-cert.sh --host`). wg-easy's own settings — account, host, port, DNS and peers — live
+  in `config/wg-easy.db`, which `backup` copies with the rest.
 - **Record what a reflash must not change**: `rpi-eeprom-update` (26.3 on `rbp0`, 13.12 on `rbp1` on
   2026-11-24) and the USB disk's model and serial. The boot order lives in the EEPROM and survives an
   image write, so a version that moves afterwards is a firmware change nobody would notice for a month.
@@ -238,21 +241,38 @@ certificate being the one thing this check must not accept silently.
 
 ## The wg-easy panel
 
-Since wg-easy 15 the VPN is configured in a web panel on `http://<host>:5000`, not in files. The panel
-keeps everything in `config/wg-easy.db`: the admin account, the address and port clients dial, the DNS
-servers and allowed IPs handed to new clients, and the peer list itself. `backup` copies that file with
-the rest of the stack, so a reflash brings the panel back as it was, peers included.
+Since wg-easy 15 the VPN is configured in a web panel, not in files. The panel keeps everything in
+`config/wg-easy.db`: the admin account, the address and port clients dial, the DNS servers and allowed
+IPs handed to new clients, and the peer list itself. `backup` copies that file with the rest of the
+stack, so a reflash brings the panel back as it was, peers included.
 
-- **The panel is plain HTTP, and the compose says so.** `INSECURE=true` is what makes it accept its own
-  login cookie over HTTP; drop the variable and the panel answers on HTTPS and refuses to log in. Port
-  5000 is not forwarded from the router, so the panel is reachable from the LAN only.
+It answers at `https://vpn-rbp0.kub.local:8443` on `rbp0` and `https://vpn-rbp1.kub.local:8443` on
+`rbp1`, on the host's own certificate. No other port publishes it. Declared 2026-11-26; the first
+`setup` on a Pi is what applies it.
+
+- **Caddy terminates the TLS.** The `Caddyfile` is rendered per host and proxies to `wg-easy:5000` over
+  the compose network, where the panel listens and is not published. `INSECURE=false` is what makes the
+  session cookie `Secure`; the hop from Caddy to the panel is plain HTTP on that private network alone,
+  which is why `TRUSTED_PROXIES` names it.
+- **The certificate is this host's own leaf.** `hack/internal-cert.sh --host vpn-rbp0.kub.local` signs
+  it with the same root every client already trusts, and the pair is copied to `~/dockers/certs/tls.pem`
+  and `tls-key.pem`. It is not the shared `*.kub.local` leaf: that key on an edge host would be a key to
+  every internal name. The leaf lasts two years; re-issue it before it expires, or a reflash restores an
+  expired pair with the rest of the stack.
+- **The gate is OIDC, and the panel's password is the fallback.** `wg-easy.env` holds one key,
+  `OAUTH_OIDC_CLIENT_SECRET`, the panel's client secret from `authentik-sso`'s
+  `WG_EASY_CLIENT_SECRET`. Sign-in goes through authentik, Administrators only. Keep the panel's own
+  password: authentik lives on the cluster, and the panel must still open when the cluster is down.
+  The two identities link by email: wg-easy's auto-register is off, so a sign-in whose email matches
+  the panel's account is linked to it, and any other address is refused rather than made a second
+  admin. Set the panel account's address to the authentik one before the first OIDC sign-in.
 - **The published UDP port must equal the panel's port.** The interface listens inside the container on
   the port the panel names, and the stack maps the same number to the host (`51821` on `rbp0`, `51822` on
   `rbp1`). Changing one without the other leaves clients dialling a closed port: the tunnel is up in the
   panel and nothing connects.
 - **A v14 environment file in front of this container stops it.** v15 exits on startup when `PASSWORD`
-  or `PASSWORD_HASH` is in its environment, naming the migration page. That is why the service takes
-  `environment:` and no `env_file:`; the `wg-easy.env` the Pis used to hold was deleted when they moved.
+  or `PASSWORD_HASH` is in its environment, naming the migration page. The one `env_file` is
+  `wg-easy.env`, and it carries the OAuth client secret and nothing else.
 - **The admin password is reset from the host**, not by editing a file:
   `docker compose exec wg-easy cli db:admin:reset` (or `--password <new>`).
 

@@ -30,6 +30,18 @@ def rendered_compose(host):
     return block.split("\n--- ", 1)[0] + "\n"
 
 
+CADDYFILE_HEADER = "--- /home/vronteix/dockers/Caddyfile\n"
+
+
+def rendered_caddyfile(host):
+    """The Caddyfile block, shaped the same way."""
+    out = run("render", host)
+    assert out.returncode == 0, out.stderr
+    assert CADDYFILE_HEADER in out.stdout, out.stdout
+    block = out.stdout.split(CADDYFILE_HEADER, 1)[1]
+    return block.split("\n--- ", 1)[0] + "\n"
+
+
 def test_render_prints_the_pinned_images_for_each_pi():
     for host, port in (("rbp0", "51821"), ("rbp1", "51822")):
         out = run("render", host)
@@ -42,23 +54,47 @@ def test_render_prints_the_pinned_images_for_each_pi():
 def test_wg_easy_15_gets_its_settings_from_the_panel_not_the_environment():
     """v15 keeps its configuration in its own database and refuses to start
     when PASSWORD or PASSWORD_HASH is in the environment — which is what a v14
-    env_file passed in. The three variables it does read are the ones that make
-    the panel answer where the stack says it does."""
+    env_file passed in. What it does read is the panel's port, the proxy it sits
+    behind, and the provider it signs in with."""
     compose = yaml.safe_load(
         (REPO / "ansible/playbooks/templates/runners/docker-compose.yml").read_text()
     )
     service = compose["services"]["wg-easy"]
     assert service["image"] == "ghcr.io/wg-easy/wg-easy:15.5.0"
-    assert "env_file" not in service, (
-        "wg-easy.env held PASSWORD_HASH, and v15 crash-loops on that variable"
-    )
     environment = dict(item.split("=", 1) for item in service["environment"])
-    assert environment == {
-        "PORT": "5000",
-        "INSECURE": "true",
-        "DISABLE_IPV6": "true",
-    }
-    assert "5000:5000/tcp" in service["ports"]
+    assert environment["PORT"] == "5000"
+    assert environment["INSECURE"] == "false", "caddy terminates TLS in front of it"
+    assert environment["TRUSTED_PROXIES"] == "172.30.0.0/24"
+    assert environment["OAUTH_PROVIDERS"] == "oidc"
+    assert environment["OAUTH_OIDC_CLIENT_ID"] == "wg-easy"
+    assert "PASSWORD" not in environment
+    assert "PASSWORD_HASH" not in environment
+    assert service["env_file"] == ["./wg-easy.env"], (
+        "the OIDC client secret is the secret, and it does not live in the template"
+    )
+
+
+def test_the_panel_is_not_published_and_caddy_is_the_only_way_in():
+    """The finding this closes: 5000 answered plain HTTP on every interface.
+    It is now reachable on the compose network alone, and caddy holds the only
+    socket the LAN can open."""
+    compose = yaml.safe_load(
+        (REPO / "ansible/playbooks/templates/runners/docker-compose.yml").read_text()
+    )
+    assert compose["services"]["wg-easy"]["ports"] == [
+        "@WG_UDP_PORT@:@WG_UDP_PORT@/udp"
+    ], "only the WireGuard UDP port is published; the panel's 5000 is not"
+
+    caddy = compose["services"]["caddy"]
+    assert caddy["image"] == "caddy:2.11.9"
+    assert caddy["ports"] == ["8443:8443"]
+    assert "./Caddyfile:/etc/caddy/Caddyfile:ro" in caddy["volumes"]
+    assert "./certs:/certs:ro" in caddy["volumes"]
+    assert caddy["networks"] == ["panel"]
+    assert compose["services"]["wg-easy"]["networks"] == ["panel"]
+    assert compose["networks"]["panel"]["ipam"]["config"][0]["subnet"] == (
+        "172.30.0.0/24"
+    )
 
 
 def test_renovate_may_bump_wg_easy_again():
@@ -89,6 +125,49 @@ def test_each_host_gets_its_own_wireguard_port():
     assert "51822" not in rendered_compose("rbp0")
     assert "51821" not in rendered_compose("rbp1")
     assert "@WG_UDP_PORT@" not in rendered_compose("rbp0")
+
+
+def test_each_host_serves_the_panel_on_its_own_name():
+    """One label under the internal wildcard, one leaf, one port. The Caddyfile
+    is the only rendered file that carries the name, so the compose stays
+    byte-identical across the two hosts."""
+    rbp0 = rendered_caddyfile("rbp0")
+    rbp1 = rendered_caddyfile("rbp1")
+    assert "https://vpn-rbp0.kub.local:8443 {" in rbp0
+    assert "vpn-rbp1.kub.local" not in rbp0
+    assert "https://vpn-rbp1.kub.local:8443 {" in rbp1
+    for block in (rbp0, rbp1):
+        assert "@PANEL_HOST@" not in block
+        assert "tls /certs/tls.pem /certs/tls-key.pem" in block
+        assert "reverse_proxy wg-easy:5000" in block
+        assert "admin off" in block
+        assert "auto_https off" in block
+
+
+def test_setup_places_the_caddyfile_and_verify_names_a_different_one(tmp_path):
+    root = tmp_path / "pi"
+    stack = _pi_fixture(root)
+    assert run("setup", "rbp1", root=root).returncode == 0
+    placed = stack / "Caddyfile"
+    assert placed.read_text() == rendered_caddyfile("rbp1")
+
+    placed.write_text("https://wrong:8443 {\n}\n")
+    out = run("verify", "rbp1", root=root)
+
+    assert out.returncode == 1
+    assert f"DIFFERS {placed}" in out.stdout
+
+
+def test_setup_refuses_without_the_panel_secret_or_its_certificate(tmp_path):
+    for missing in ("wg-easy.env", "certs/tls.pem", "certs/tls-key.pem"):
+        root = tmp_path / missing.replace("/", "-")
+        stack = _pi_fixture(root)
+        (stack / missing).unlink()
+
+        out = run("setup", "rbp0", root=root)
+
+        assert out.returncode == 1, missing
+        assert missing in out.stderr, out.stderr
 
 
 def test_the_placed_file_is_what_render_printed(tmp_path):
@@ -221,6 +300,9 @@ def test_backup_then_restore_puts_the_stack_back(tmp_path):
     out = run("backup", str(backup), "rbp1", root=root)
     assert out.returncode == 0, out.stderr
     assert (backup / "dockers/pihole.env").exists()
+    assert (backup / "dockers/certs/tls-key.pem").exists(), (
+        "the panel's TLS key leaves the host only inside the backup"
+    )
     assert (backup / "etc/hostname").exists()
 
     (stack / "docker-compose.yml").unlink()
@@ -317,6 +399,10 @@ def _pi_fixture(root):
     stack = root / "home/vronteix/dockers"
     stack.mkdir(parents=True)
     (stack / "pihole.env").write_text("FTLCONF_webserver_api_password=x\n")
+    (stack / "wg-easy.env").write_text("OAUTH_OIDC_CLIENT_SECRET=x\n")
+    (stack / "certs").mkdir()
+    (stack / "certs/tls.pem").write_text("-----BEGIN CERTIFICATE-----\n")
+    (stack / "certs/tls-key.pem").write_text("-----BEGIN PRIVATE KEY-----\n")
     (root / "home/vronteix/.ssh").mkdir(parents=True)
     (root / "home/vronteix/.ssh/authorized_keys").write_text(
         "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBIltfI3EkKuIHapGzdy1weSV5AiBigks/Pm4zR9Xqd5 valentin@laptop\n"
@@ -543,7 +629,7 @@ def test_every_setup_flag_is_initialised():
     used = {word.strip('"$') for word in text.split() if word.strip('"$').endswith("_changed")}
     for flag in sorted(used):
         assert f"{flag}=0" in local, flag
-    assert "--force-recreate wg-easy smartctl-exporter" in text
+    assert "--force-recreate wg-easy caddy smartctl-exporter" in text
 
 
 def test_the_shared_settings_turn_on_the_dnsmasq_include():

@@ -4,11 +4,12 @@
 # is one rule per address, not one rule per subnet of four.
 #
 # What is deliberately absent: every port a container publishes. Docker and the
-# CNI put those in NAT and FORWARD, where ufw's INPUT rules never look — 5000
-# (the wg-easy admin) and 9902 (the exporter) on both Pis are reachable today and
-# stay reachable after ufw is on. Binding them to loopback, or putting them
-# behind the cluster's router, is a later task; filtering them is a DOCKER-USER
-# rule. A ufw rule for either would filter nothing and read as if it filtered.
+# CNI put those in NAT and FORWARD, where ufw's INPUT rules never look — 9902
+# (the exporter) on both Pis is reachable today and stays reachable after ufw is
+# on. Filtering it is a DOCKER-USER rule; a ufw rule would filter nothing and
+# read as if it filtered. The wg-easy panel's 5000 used to be the other one: it
+# is no longer published at all, and the only port the LAN can open there is
+# caddy's 8443 (2026-11-26).
 #
 # The other half of that split is easy to get wrong in the opposite direction: an
 # exporter with `network_mode: host` is not DNAT'd, so it *does* hit INPUT and a

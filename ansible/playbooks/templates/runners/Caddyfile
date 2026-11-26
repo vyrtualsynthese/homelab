@@ -1,0 +1,29 @@
+# Rendered by ansible/pi/hosts-pi.sh, which writes this host's own name under
+# the internal wildcard into the site address below. An edit made on the Pi is
+# reverted on the next setup, and 'verify' names it until then.
+#
+# This is the wg-easy panel's TLS endpoint, and it lives on the Pi rather than on
+# the cluster's Traefik on purpose: the VPN panel has to answer when the cluster
+# is down. Port 8443 because Pi-hole already owns 80 and 443 on these hosts, and
+# the certificate is this host's own leaf from the internal CA, not the shared
+# wildcard.
+#
+# No ACME and no admin API: one name, one certificate, one upstream.
+{
+	admin off
+	auto_https off
+}
+
+https://@PANEL_HOST@:8443 {
+	tls /certs/tls.pem /certs/tls-key.pem
+
+	# The panel builds its OAuth redirect URI from the host and scheme the
+	# browser used. It trusts them only from the compose network
+	# (TRUSTED_PROXIES), and Caddy replaces both headers rather than appending
+	# to a client-supplied value. Host is set explicitly so the panel sees the
+	# name and port the browser asked for, not the container's.
+	reverse_proxy wg-easy:5000 {
+		header_up Host {http.request.hostport}
+		header_up X-Forwarded-Proto https
+	}
+}

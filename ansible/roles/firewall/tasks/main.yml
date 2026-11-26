@@ -3,9 +3,10 @@
 # a rule that filters nothing is worse than no rule: it reads as protection.
 #
 # 1. **Published container ports.** Docker's DNAT and the CNI's portmap rewrite
-#    in NAT and FORWARD before INPUT is consulted. On the Pis that is 5000 and
-#    9902; on the nodes, every NodePort. What governs them is DOCKER-USER and
-#    the cluster's own policy, not this file.
+#    in NAT and FORWARD before INPUT is consulted. On the Pis that is 8443
+#    (caddy, the wg-easy panel's only door) and 9902; on the nodes, every
+#    NodePort. What governs them is DOCKER-USER and the cluster's own policy,
+#    not this file.
 # 2. **Traffic between pods, and pod egress.** `routed` stays ALLOW below for
 #    exactly that reason: a deny there takes every pod off the network.
 - name: Install ufw where it is absent

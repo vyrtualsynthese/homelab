@@ -1,5 +1,18 @@
 # The internal CA behind `*.kub.local`
 
+> **In one line.** One private root vouches for every internal name: Traefik serves its `*.kub.local`
+> leaf, and a host that is not the cluster gets a leaf of its own — while the root key is the one file
+> that has to be backed up twice, because nothing regenerates it.
+>
+> **Use it when** a certificate expires or has to be reissued, a client must trust the root, or a host
+> outside the cluster needs a name it can prove. **Verified** 2026-11-26: the generator run end to end
+> into a scratch directory for both the cluster leaf and a host leaf, each chain verified against the
+> root, and the host leaf served by Caddy on 8443. **Kind:** reference
+>
+> **Sources** `hack/internal-cert.sh`, `ansible/pi/hosts-pi.sh`,
+> `ansible/playbooks/templates/runners/Caddyfile`,
+> `ansible/playbooks/templates/runners/02-my-wildcard-dns.conf`
+
 Date: 2026-11-15
 
 ## What it is
@@ -110,6 +123,27 @@ hack/internal-cert.sh --force-ca
 
 That mints a new root; the leaf is signed by it and the Secret replaced as above. Every client then imports
 the new `local-ca.pem`. Nothing else changes — the host names, the routes and the apps are unaffected.
+
+## A leaf for a host that is not the cluster
+
+The two edge Pis terminate TLS for their own admin surfaces, so they need a name the internal root vouches
+for. They get their own leaf, not a copy of the wildcard: the `*.kub.local` key on an edge host would be a
+key to every internal name, and the leaf is disposable by design.
+
+```bash
+hack/internal-cert.sh --host vpn-rbp0.kub.local     # writes vpn-rbp0.kub.local.pem and -key.pem
+hack/internal-cert.sh --host vpn-rbp1.kub.local
+```
+
+The script reuses the CA in `~/.config/secrets/kub-local/` and never touches `kub.local.pem`, so issuing
+one cannot disturb a cluster route. It prints the `scp` pair; the destination is
+`~/dockers/certs/tls.pem` and `tls-key.pem` on that host, which is where `hosts-pi.sh` requires them and
+`backup` carries them off. The leaf lasts two years, like the cluster's: re-issue it with the same command
+before it expires and copy the new pair the same way. A reflash restores the old pair with the rest of the
+stack, so a leaf that expired before the reflash comes back expired.
+
+The names are Pi-hole's to answer: `02-my-wildcard-dns.conf` maps `vpn-rbp0.kub.local` and
+`vpn-rbp1.kub.local` to the two Pis, above the `*.kub.local` wildcard.
 
 ## Installing the root on a client
 

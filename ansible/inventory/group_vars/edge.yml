@@ -9,7 +9,8 @@ stack_dir: /home/vronteix/dockers
 # The tunnel subnet WireGuard clients arrive from, or an empty list. Empty means
 # the firewall opens DNS and the Pi-hole UI to the LAN only — correct when the
 # wg-easy panel does not point its default DNS at this host. Read that setting
-# (`GET /api/admin/userconfig` on port 5000) before the first ufw apply on a Pi;
-# a client that resolves through Pi-hole arrives on this subnet and is dropped
-# at INPUT until it is listed here.
+# from the panel (`GET /api/admin/userconfig`, at https://vpn-<host>.kub.local:8443
+# since 2026-11-26) before the first ufw apply on a Pi; a client that resolves
+# through Pi-hole arrives on this subnet and is dropped at INPUT until it is
+# listed here.
 vpn_cidrs: []
