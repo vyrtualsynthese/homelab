@@ -178,14 +178,15 @@ nodes:
       - {claim: crowdsec-config-pvc, namespace: security, kind: files}
       # 1.1 KB. The VPN client's keys and config.
       - {claim: qbittorrent-vpn-config, namespace: media-stack, kind: files}
-      # 435.0 MB on the claim, 181.2 of it worth keeping: the 2026-11-22 snapshot of the same
-      # tree measured that, when it still lived on the `nfs` export. The claim has moved twice:
-      # to this node's `local-path` on 2026-11-25 (card 758), and it follows the qBittorrent pod
-      # from `streaming` to `nas` on 2026-11-25, because a claim is bound to the node that first
-      # mounts it. `qBittorrent/BT_backup/` is one `.torrent` and one `.fastresume` per torrent:
-      # the seed list and the resume data, which no rebuild can recreate. Logs, the GeoIP
-      # database, the VueTorrent archive and the old web UI copy are rebuilt from the image or
-      # the internet.
+      # 302.7 MB on the claim, 47.8 of it worth keeping, measured on 2026-11-26. The claim has
+      # moved twice: to this node's `local-path` on 2026-11-25 (card 758), and it follows the
+      # qBittorrent pod from `streaming` to `nas` on 2026-11-25, because a claim is bound to the
+      # node that first mounts it. `BT_backup/` also held a 129.8 MB copy of `/config` dated
+      # 2022, whose 44 `.torrent` files matched no torrent in the client; it was deleted on
+      # 2026-11-26 (card 778), which is where the 435.0 MB this row used to report went.
+      # `qBittorrent/BT_backup/` is one `.torrent` and one `.fastresume` per torrent: the seed
+      # list and the resume data, which no rebuild can recreate. Logs, the GeoIP database, the VueTorrent archive and the old web UI copy are
+      # rebuilt from the image or the internet.
       - {claim: qbittorrent-config, namespace: media-stack, kind: files, exclude: ["logs", "log", "geoip", "ui.prev", ".cache", ".npm", "vuetorrent-*.zip"]}
 
   nuc0:
