@@ -563,5 +563,93 @@
     "record": null,
     "for": "5m",
     "keep_firing_for": "0s"
+  },
+  {
+    "id": 76,
+    "uid": "ag5ez2wihn1fkc",
+    "orgID": 1,
+    "folderUID": "homelab",
+    "ruleGroup": "homelab-core-fast",
+    "title": "SecurityBouncerStalled",
+    "condition": "C",
+    "data": [
+      {
+        "refId": "A",
+        "queryType": "",
+        "relativeTimeRange": {
+          "from": 600,
+          "to": 0
+        },
+        "datasourceUid": "PBFA97CFB590B2093",
+        "model": {
+          "editorMode": "code",
+          "expr": "1 - (sum(rate(cs_lapi_bouncer_requests_total[10m])) > bool 0)",
+          "instant": true,
+          "intervalMs": 1000,
+          "maxDataPoints": 43200,
+          "range": false,
+          "refId": "A"
+        }
+      },
+      {
+        "refId": "C",
+        "queryType": "",
+        "relativeTimeRange": {
+          "from": 0,
+          "to": 0
+        },
+        "datasourceUid": "__expr__",
+        "model": {
+          "conditions": [
+            {
+              "evaluator": {
+                "params": [
+                  0
+                ],
+                "type": "gt"
+              },
+              "operator": {
+                "type": "and"
+              },
+              "query": {
+                "params": [
+                  "A"
+                ]
+              },
+              "reducer": {
+                "params": [],
+                "type": "last"
+              },
+              "type": "query"
+            }
+          ],
+          "datasource": {
+            "type": "__expr__",
+            "uid": "__expr__"
+          },
+          "expression": "A",
+          "intervalMs": 1000,
+          "maxDataPoints": 43200,
+          "refId": "C",
+          "type": "threshold"
+        }
+      }
+    ],
+    "updated": "2026-11-26T00:34:53Z",
+    "noDataState": "OK",
+    "execErrState": "OK",
+    "annotations": {
+      "description": "No request reached the LAPI's decision stream for ten minutes. The bouncer keeps exporting its metrics, so `SecurityStackBlind` stays green while the ban set on `streaming` is frozen. Look at the host service first (`systemctl status crowdsec-firewall-bouncer` on `streaming`, `journalctl -u crowdsec-firewall-bouncer -n 50`), then `cscli bouncers list` from the LAPI pod: a bouncer that runs but never polls has usually lost the LAPI address or been given a stale key. The metric has one series for the whole cluster, so nothing names a host. If the series is gone rather than flat, `SecurityStackBlind` reports that fault instead.",
+      "summary": "The firewall bouncer has not polled the LAPI for 10 minutes"
+    },
+    "labels": {
+      "severity": "critical"
+    },
+    "provenance": "api",
+    "isPaused": false,
+    "notification_settings": null,
+    "record": null,
+    "for": "5m",
+    "keep_firing_for": "0s"
   }
 ]
