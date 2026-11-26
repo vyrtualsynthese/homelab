@@ -2,6 +2,7 @@ import json
 import os
 import pathlib
 import re
+import sqlite3
 import subprocess
 
 import yaml
@@ -1148,19 +1149,65 @@ def fake_restic(tmp_path, exit_code=0):
     return {"PI_RESTIC": str(binary), "PI_RESTIC_LOG": str(log)}
 
 
+def _sqlite(path, table="domainlist", column="domain", value="ads.example"):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    con = sqlite3.connect(path)
+    con.execute(f"CREATE TABLE {table} (id INTEGER PRIMARY KEY, {column} TEXT)")
+    con.execute(f"INSERT INTO {table} ({column}) VALUES (?)", (value,))
+    con.commit()
+    con.close()
+
+
 def _stack_with_excludables(root):
     stack = root / "home/vronteix/dockers"
     pihole = stack / "etc-pihole"
     pihole.mkdir(parents=True)
-    (pihole / "gravity.db").write_bytes(b"gravity")
+    _sqlite(pihole / "gravity.db")
     (pihole / "gravity_old.db").write_bytes(b"old")
     for name in ("pihole-FTL.db", "pihole-FTL.db-wal"):
         (pihole / name).write_bytes(b"x")
     (pihole / "listsCache").mkdir()
     (pihole / "listsCache/a.txt").write_text("x")
     (stack / "config").mkdir()
-    (stack / "config/wg-easy.db").write_bytes(b"wg")
+    _sqlite(stack / "config/wg-easy.db", table="client", column="name", value="phone")
     return stack
+
+
+def test_stream_copies_a_live_database_through_the_sqlite_api(tmp_path):
+    root = tmp_path / "pi"
+    _pi_fixture(root)
+    stack = _stack_with_excludables(root)
+    live = stack / "etc-pihole/gravity.db"
+    # The writer is still attached: the committed row sits in the -wal, not in
+    # the main file, which is exactly why a byte copy is not a backup.
+    con = sqlite3.connect(live)
+    con.execute("PRAGMA journal_mode=WAL")
+    con.execute("INSERT INTO domainlist (domain) VALUES ('live.example')")
+    con.commit()
+    assert (live.parent / "gravity.db-wal").exists()
+
+    out = run("stream", "rbp0", root=root)
+    con.close()
+    assert out.returncode == 0, out.stdout + out.stderr
+
+    copy = root / "var/lib/pi-backup/tree/dockers/etc-pihole/gravity.db"
+    check = sqlite3.connect(f"file:{copy}?mode=ro", uri=True)
+    rows = check.execute("SELECT domain FROM domainlist ORDER BY domain").fetchall()
+    check.close()
+    assert rows == [("ads.example",), ("live.example",)]
+    assert not (copy.parent / "gravity.db-wal").exists()
+    assert not (copy.parent / "gravity.db-shm").exists()
+
+
+def test_stream_refuses_a_database_it_cannot_read(tmp_path):
+    root = tmp_path / "pi"
+    _pi_fixture(root)
+    _stack_with_excludables(root)
+    (root / "home/vronteix/dockers/etc-pihole/broken.db").write_text("not a database")
+
+    out = run("stream", "rbp0", root=root)
+    assert out.returncode != 0
+    assert "broken.db" in out.stderr
 
 
 def test_stream_stages_the_stack_without_the_three_excluded_paths(tmp_path):
