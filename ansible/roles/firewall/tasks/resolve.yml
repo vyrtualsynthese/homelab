@@ -19,12 +19,15 @@
       {%- set servers = groups['servers'] | map('extract', hostvars, 'ansible_host') | list -%}
       {%- set vpn = vpn_cidrs | default([]) -%}
       {%- set panel = panel_cidrs | default([]) -%}
+      {%- set peer = groups['edge'] | map('extract', hostvars, 'ansible_host')
+                        | reject('equalto', ansible_host) | list -%}
       {%- set sources = {'lan': lan, 'nodes': nodes, 'servers': servers,
-                         'vpn': vpn, 'panel': panel} -%}
+                         'vpn': vpn, 'panel': panel, 'peer': peer} -%}
       {%- set out = [] -%}
       {%- for rule in firewall_rules -%}
       {%-   for address in sources[rule.source] -%}
-      {%-     set _ = out.append({'port': rule.port, 'proto': rule.proto,
+      {%-     set _ = out.append({'port': rule.port | default(none),
+                                  'proto': rule.proto,
                                   'from': address, 'comment': rule.comment}) -%}
       {%-   endfor -%}
       {%- endfor -%}
