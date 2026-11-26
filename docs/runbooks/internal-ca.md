@@ -155,7 +155,10 @@ each surface takes them its own way:
 
   Copy that to `~/dockers/certs/pihole.pem` on `rbp0` (and the `rbp1` pair to `rbp1`). `pihole.settings`
   names it through `FTLCONF_webserver_tls_cert`, and the compose mounts `./certs` read-only into the
-  Pi-hole container.
+  Pi-hole container. The panel reads the file as the image's `pihole` user, uid 1000, which is
+  `vronteix` on these hosts: `hosts-pi.sh setup` hands `certs/` and the PEM to that account and keeps
+  the Caddy pair root-only. A copy left `0600 root:root` is unreadable to Pi-hole, and it then refuses
+  to start its web server at all rather than serve a self-signed pair, so 80 and 443 go dark.
 
 `ansible/pi/hosts-pi.sh` requires all three files, writes none of them, and `backup` carries them off
 the host. A leaf lasts two years, like the cluster's: re-issue it with the same command before it

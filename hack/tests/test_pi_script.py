@@ -699,6 +699,78 @@ def test_setup_does_not_invent_the_vpn_database_in_a_fixture(tmp_path):
     assert not (stack / "config/wg-easy.db").exists()
 
 
+def test_setup_hands_the_pihole_leaf_to_the_panel_account(tmp_path):
+    """Pi-hole's web server drops to the image's `pihole` user and reads the
+    certificate as that account. Copied as the runbook says — 0600 root:root in
+    a 0700 directory — it is unreadable, and FTL then refuses to start its web
+    server at all rather than fall back to a self-signed pair: both panels went
+    dark on 2026-11-26. setup hands the directory and the leaf to the account the
+    stack runs as, and says so."""
+    root = tmp_path / "pi"
+    stack = _pi_fixture(root)
+    certs = stack / "certs"
+    pem = certs / "pihole.pem"
+    owner = (root / "home/vronteix").stat()
+
+    out = run("setup", "rbp1", root=root)
+
+    assert out.returncode == 0, out.stderr
+    assert certs.stat().st_mode & 0o777 == 0o700
+    assert certs.stat().st_uid == owner.st_uid
+    assert pem.stat().st_mode & 0o777 == 0o600
+    assert pem.stat().st_uid == owner.st_uid
+    assert f"certs: {certs}" in out.stdout
+    assert f"certs: {pem}" in out.stdout
+
+
+def test_setup_leaves_the_vpn_key_root_only_beside_the_leaf(tmp_path):
+    """The Caddy key shares the directory, so widening the directory for the
+    panel must not widen the file: the VPN panel's private key stays for the
+    account that runs Caddy and nobody else."""
+    root = tmp_path / "pi"
+    stack = _pi_fixture(root)
+    key = stack / "certs/tls-key.pem"
+
+    assert run("setup", "rbp1", root=root).returncode == 0
+
+    assert key.stat().st_mode & 0o777 == 0o600
+    second = run("setup", "rbp1", root=root)
+
+    assert second.returncode == 0, second.stderr
+    assert "certs:" not in second.stdout
+    assert "changed=0" in second.stdout
+
+
+def test_verify_names_a_leaf_the_panel_cannot_read(tmp_path):
+    """An unreadable leaf is a panel that will not answer on 443, and nothing in
+    the rendered files shows it."""
+    root = tmp_path / "pi"
+    stack = _pi_fixture(root)
+    pem = stack / "certs/pihole.pem"
+    assert run("setup", "rbp1", root=root).returncode == 0
+
+    pem.chmod(0o640)
+    out = run("verify", "rbp1", root=root)
+
+    assert out.returncode == 1
+    assert f"DIFFERS {pem} mode 640, expected 600" in out.stdout
+
+
+def test_verify_names_a_vpn_key_another_account_can_read(tmp_path):
+    """The mode is the whole protection on that file: the directory is 0700 and
+    owned by the stack account, so a wider file mode hands the key to it."""
+    root = tmp_path / "pi"
+    stack = _pi_fixture(root)
+    key = stack / "certs/tls-key.pem"
+    assert run("setup", "rbp1", root=root).returncode == 0
+
+    key.chmod(0o640)
+    out = run("verify", "rbp1", root=root)
+
+    assert out.returncode == 1
+    assert f"DIFFERS {key} mode 640 lets another account read the VPN key" in out.stdout
+
+
 def test_the_netplan_file_is_not_world_readable(tmp_path):
     """netplan prints 'Permissions ... are too open' on every apply, and the file
     describes the host's addresses, so setup narrows it."""

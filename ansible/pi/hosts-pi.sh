@@ -65,6 +65,19 @@ WG_DB_MODE="600"
 # creates its database during its own start. A file that has not appeared yet is
 # waited for this long before the stack is called broken.
 WG_DB_WAIT=30
+# Pi-hole's leaf. Its web server drops to the image's `pihole` account, which
+# is uid 1000 — the same number as HUMAN_USER on a fresh image — and it reads
+# the certificate as that account. A leaf installed 0600 root:root in a 0700
+# directory is unreadable to it, and FTL does not fall back: it fails to load
+# the certificate, refuses to listen on 80 and 443, and the panel goes dark.
+# `setup` therefore hands this one file to the account the stack runs as, and
+# leaves the Caddy pair in the same directory root-only.
+CERT_DIR="$STACK_DIR/certs"
+PIHOLE_PEM="$CERT_DIR/pihole.pem"
+CADDY_KEY="$CERT_DIR/tls-key.pem"
+CERT_DIR_MODE="700"
+PIHOLE_PEM_MODE="600"
+CADDY_PEM_MODE="600"
 # The resolvers both Pis carry, on both hosts: rbp0 first because it is the
 # source of truth, the second address because either one answering is enough.
 # Written here rather than in the netplan template so no ansible YAML repeats an
@@ -783,6 +796,108 @@ wg_db_drift() {
     return "$problems"
 }
 
+# The account the leaf must belong to: the human account that owns the stack
+# directory, read from its home rather than from `id`, so the same answer comes
+# out of a fixture tree as out of a Pi. Pi-hole's web server runs as the image's
+# `pihole` user, uid 1000 by default — the same number as this account on these
+# hosts — and it reads the certificate as that account. A leaf installed
+# 0600 root:root in a 0700 directory is unreadable to it, and FTL does not fall
+# back: it fails to load the certificate, refuses to listen on 80 and 443, and
+# the panel goes dark. If PIHOLE_UID ever moves off 1000, this ownership has to
+# move with it.
+stack_account_ids() {
+    stat -c '%u %g' "$ROOT/home/$HUMAN_USER"
+}
+
+# Hands the panel's leaf to the account the panel runs as, and nothing else. The
+# directory becomes the stack account's so Pi-hole can traverse it; the leaf
+# becomes readable to it; the Caddy key beside them stays root-only, because
+# nothing but root has business holding the VPN panel's private key.
+ensure_cert_modes() {
+    local dir="$ROOT$CERT_DIR" pem="$ROOT$PIHOLE_PEM" ids uid gid before
+
+    if [ ! -d "$dir" ]; then
+        return 0
+    fi
+    ids="$(stack_account_ids)"
+    uid="${ids% *}"
+    gid="${ids#* }"
+
+    before="$(stat -c '%u:%g %a' "$dir")"
+    if [ "$before" != "$uid:$gid $CERT_DIR_MODE" ]; then
+        chown "$uid:$gid" "$dir"
+        chmod "0$CERT_DIR_MODE" "$dir"
+        CHANGED=$((CHANGED + 1))
+        echo "certs: $dir $before -> $uid:$gid $CERT_DIR_MODE"
+    fi
+    if [ -f "$pem" ]; then
+        before="$(stat -c '%u:%g %a' "$pem")"
+        if [ "$before" != "$uid:$gid $PIHOLE_PEM_MODE" ]; then
+            chown "$uid:$gid" "$pem"
+            chmod "0$PIHOLE_PEM_MODE" "$pem"
+            CHANGED=$((CHANGED + 1))
+            echo "certs: $pem $before -> $uid:$gid $PIHOLE_PEM_MODE"
+        fi
+    fi
+    # Caddy runs as root, so its pair needs no owner set here; it only ever needs
+    # to stay unreadable to every other account, and a copy `restore` brought
+    # back from a USB disk may not be.
+    for file in "$ROOT$CADDY_KEY" "$ROOT$CERT_DIR/tls.pem"; do
+        [ -f "$file" ] || continue
+        before="$(stat -c %a "$file")"
+        if [ "$before" != "$CADDY_PEM_MODE" ]; then
+            chmod "0$CADDY_PEM_MODE" "$file"
+            CHANGED=$((CHANGED + 1))
+            echo "certs: $file mode $before -> $CADDY_PEM_MODE"
+        fi
+    done
+}
+
+# What `verify` reads: an unreadable leaf is a panel that will not start, and a
+# readable VPN key is the tunnels. Both are named, because neither shows up as
+# a difference in a file this script renders.
+cert_mode_drift() {
+    local dir="$ROOT$CERT_DIR" pem="$ROOT$PIHOLE_PEM" key="$ROOT$CADDY_KEY" ids uid gid problems=0 mode bits
+
+    if [ ! -d "$dir" ]; then
+        return 0
+    fi
+    ids="$(stack_account_ids)"
+    uid="${ids% *}"
+    gid="${ids#* }"
+
+    mode="$(stat -c '%u:%g' "$dir")"
+    if [ "$mode" != "$uid:$gid" ]; then
+        echo "DIFFERS $dir is owned by $mode, expected $uid:$gid ($HUMAN_USER)"
+        problems=1
+    fi
+    mode="$(stat -c %a "$dir")"
+    if [ "$mode" != "$CERT_DIR_MODE" ]; then
+        echo "DIFFERS $dir mode $mode, expected $CERT_DIR_MODE"
+        problems=1
+    fi
+    if [ -f "$pem" ]; then
+        mode="$(stat -c '%u:%g' "$pem")"
+        if [ "$mode" != "$uid:$gid" ]; then
+            echo "DIFFERS $pem is owned by $mode, so the panel cannot read it"
+            problems=1
+        fi
+        mode="$(stat -c %a "$pem")"
+        if [ "$mode" != "$PIHOLE_PEM_MODE" ]; then
+            echo "DIFFERS $pem mode $mode, expected $PIHOLE_PEM_MODE"
+            problems=1
+        fi
+    fi
+    if [ -f "$key" ]; then
+        bits="$(stat -c %a "$key")"
+        if [ "$((0$bits & 077))" -ne 0 ]; then
+            echo "DIFFERS $key mode $bits lets another account read the VPN key"
+            problems=1
+        fi
+    fi
+    return "$problems"
+}
+
 cmd_render() {
     local host="$1"
     echo "--- $STACK_DIR/docker-compose.yml"
@@ -922,6 +1037,12 @@ cmd_setup() {
             echo "resolved: restarted"
         fi
     fi
+
+    # Before the stack, because a bind mount is fixed when the container is
+    # created: a leaf the panel cannot read has to be handed over first. It runs
+    # under PI_ROOT too, so a fixture proves the ownership rather than skipping
+    # the only step that makes it.
+    ensure_cert_modes
 
     if [ -z "$ROOT" ]; then
         # --remove-orphans is what takes a service off a host when this template
@@ -1075,6 +1196,8 @@ cmd_verify() {
     firewall_drift || problems=1
 
     wg_db_drift || problems=1
+
+    cert_mode_drift || problems=1
 
     if [ -z "$ROOT" ]; then
         # --all, and the declared service list compared with what is up: `ps`
