@@ -92,8 +92,9 @@ part has one consequence worth knowing before you debug: a rule whose selector m
 identical to a healthy rule. The proof that the selectors still match is two counts. Every block
 below wants `~/.config/secrets/homelab.env` loaded first — the Grafana token and, since
 2026-11-26, the Prometheus password, which the calls pass as `-u "ops:$PROMETHEUS_AUTH_PASSWORD"`.
-`-k` is there because `grafana.kub.local` is served by the internal CA, so a machine without that CA
-in its trust store still answers:
+Every Grafana call below passes `--cacert ~/.config/secrets/kub-local/local-ca.pem`, because
+`grafana.kub.local` is served by the cluster's internal CA; `-k` would accept whatever answered and
+hand it the token:
 
 ```bash
 set -a; . ~/.config/secrets/homelab.env; set +a
@@ -195,7 +196,8 @@ therefore means the issuer is failing, not the site: check `CertificateExpiring`
 certificate store. The read-only rule object:
 
 ```bash
-curl -sk -H "Authorization: Bearer $GRAFANA_TOKEN" \
+curl -s --cacert ~/.config/secrets/kub-local/local-ca.pem \
+  -H "Authorization: Bearer $GRAFANA_TOKEN" \
   https://grafana.kub.local/api/v1/provisioning/alert-rules/b8e24b82-fbe6-4dbb-a2da-897c61673cbb
 ```
 
@@ -326,7 +328,8 @@ leave a rule that can no longer fire behind:
    for uid in ad5e038b-89d5-45e6-b90f-67445151890c \
               161a17b1-d862-4d0d-9410-7c102d1c15de \
               b8e24b82-fbe6-4dbb-a2da-897c61673cbb; do
-     curl -sk -o /dev/null -w '%{http_code}\n' -X DELETE \
+     curl -s --cacert ~/.config/secrets/kub-local/local-ca.pem \
+       -o /dev/null -w '%{http_code}\n' -X DELETE \
        -H "Authorization: Bearer $GRAFANA_TOKEN" \
        "https://grafana.kub.local/api/v1/provisioning/alert-rules/$uid"
    done
