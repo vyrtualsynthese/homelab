@@ -1185,3 +1185,89 @@ def test_wait_online_waits_for_the_interface_the_host_has():
     assert started and started[0]["state"] == "started", (
         "the unit is started once told what to wait for, so the fix is proved"
     )
+
+
+def resolver_tasks():
+    return yaml.safe_load((ANSIBLE / "roles/resolver/tasks/main.yml").read_text())
+
+
+def test_the_resolver_role_owns_the_nodes_resolv_conf():
+    """None of the four nodes took its nameservers from the repository: `nas` and
+    `nuc0` read a hand-edited `resolvconf` head (Pi + 1.1.1.1), `streaming` and
+    `rbp2` read the stub, and DHCP supplied the uplink list. Card 889: CoreDNS
+    inherited nuc0's file with `dnsPolicy: Default` and answered one
+    `*.kub.local` query in three with NXDOMAIN. The role has to own all three
+    places, or the next DHCP lease puts a public resolver back."""
+    tasks = resolver_tasks()
+    texts = [task.get("ansible.builtin.file") or task.get("ansible.builtin.copy")
+             or task.get("ansible.builtin.template") for task in tasks]
+    links = [t for t in texts if t and t.get("state") == "link"]
+    assert links and links[0]["path"] == "/etc/resolv.conf", (
+        "the symlink is the file every process reads"
+    )
+    assert links[0]["src"] == "/run/systemd/resolve/resolv.conf", (
+        "the stub at 127.0.0.53 is the one thing a container cannot follow"
+    )
+    dests = {t.get("dest") for t in texts if t and t.get("dest")}
+    assert "/etc/netplan/90-resolvers.yaml" in dests, (
+        "netplan is what refuses DHCP's nameservers"
+    )
+    assert "/etc/systemd/resolved.conf.d/90-pihole-resolvers.conf" in dests, (
+        "the drop-in keeps the stub listener off and clears the packaged list"
+    )
+
+
+def test_the_resolver_list_is_the_two_edge_addresses_and_nothing_else():
+    defaults = load("roles/resolver/defaults/main.yml")
+    assert "groups['edge']" in defaults["resolver_nameservers"]
+    assert "hostvars" in defaults["resolver_nameservers"]
+    assert "ansible_host" in defaults["resolver_nameservers"], (
+        "the inventory stays the one place an address is written"
+    )
+
+    netplan = (ANSIBLE / "roles/resolver/templates/90-resolvers.yaml.j2").read_text()
+    assert "use-dns: false" in netplan, "DHCP's nameservers are the ones that must go"
+    assert "nameservers:" in netplan and "{{ resolver_nameservers | join(', ') }}" in netplan
+    assert "dhcp4: false" not in netplan, "the address still comes from DHCP"
+
+    tasks = resolver_tasks()
+    guards = [task["ansible.builtin.assert"] for task in tasks
+              if isinstance(task, dict) and "ansible.builtin.assert" in task]
+    assert any("resolver_nameservers | length == 2" in str(guard.get("that")) for guard in guards), (
+        "a third host in `edge` would silently become a resolver"
+    )
+
+
+def test_the_resolver_drop_in_matches_the_edge_pis():
+    """The Pis already carry the same drop-in, written by hosts-pi.sh. Two copies
+    are two chances to drift, so the directives have to agree even though the
+    comments differ (one names the script, the other the role)."""
+    role = (ANSIBLE / "roles/resolver/files/90-pihole-resolvers.conf").read_text()
+    pi = (ANSIBLE / "playbooks/templates/runners/90-pihole-resolvers.conf").read_text()
+
+    def directives(text):
+        return [
+            line.strip() for line in text.splitlines()
+            if line.strip() and not line.strip().startswith(("#", "["))
+        ]
+
+    assert directives(role) == directives(pi) == ["DNS=", "DNSStubListener=no"], (
+        "an empty global DNS leaves netplan in charge, and the stub must be off"
+    )
+
+
+def test_the_resolver_role_proves_its_own_outcome():
+    tasks = resolver_tasks()
+    reads = [task for task in tasks if isinstance(task, dict)
+             and task.get("register") == "resolver_resolv_conf"]
+    assert reads, "the role reads back what it wrote"
+    assert reads[0]["changed_when"] is False
+    assert any(isinstance(task, dict) and "ansible.builtin.meta" in task
+               and task["ansible.builtin.meta"] == "flush_handlers" for task in tasks), (
+        "the handlers write the file, so the read cannot come before them"
+    )
+    asserts = [task for task in tasks if isinstance(task, dict)
+               and "ansible.builtin.assert" in task
+               and "sort == resolver_nameservers | sort" in str(task["ansible.builtin.assert"].get("that"))]
+    assert asserts, "a file naming a third server must fail the run, not pass it"
+

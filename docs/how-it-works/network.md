@@ -9,7 +9,8 @@
 > **Kind:** explanation
 >
 > **Sources** `cluster/helm/**/templates/*.yaml`, `cluster/argocd/projects/**/*.yaml`,
-> `cluster/infrastructure/traefik/`, `cluster/helm/platform/network-policy/`, `hack/check_exposure.py`,
+> `cluster/infrastructure/traefik/`, `cluster/infrastructure/coredns/`,
+> `cluster/helm/platform/network-policy/`, `ansible/roles/resolver/`, `hack/check_exposure.py`,
 > [the DNS4EU record](../decisions/2026-11-27-public-dns-is-dns4eu-unfiltered.md), and the router's own
 > rules in [the Livebox record](../audit/livebox-2026-11-26.md)
 
@@ -79,6 +80,12 @@ Pi-hole on a node is a fault, not a fallback: on 2026-11-26 `nuc0`'s `/etc/resol
 
 The addresses, the rejections and the cost of being wrong are in
 [`decisions/2026-11-27-public-dns-is-dns4eu-unfiltered.md`](../decisions/2026-11-27-public-dns-is-dns4eu-unfiltered.md).
+
+The node's resolver is owned by `ansible/roles/resolver`: netplan names the two Pis and refuses DHCP's
+nameservers, systemd-resolved keeps its stub listener off, and `/etc/resolv.conf` is the list that
+results. For the pods that inherit a node's file — CoreDNS among them —
+`cluster/infrastructure/coredns/custom.yaml` forwards `*.kub.local` to the same pair, so the wildcard
+never reaches a resolver that would answer NXDOMAIN.
 
 ## Three layers that look alike
 

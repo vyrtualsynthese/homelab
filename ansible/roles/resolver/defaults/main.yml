@@ -1,0 +1,11 @@
+---
+# The two Pi-holes, read from the inventory: `edge` is the group they sit in,
+# and an address lives in `inventory/hosts.yml` and nowhere else
+# (test_an_address_is_written_once). rbp0 comes first because it is the source
+# of truth, and the second address because either one answering is enough.
+resolver_nameservers: "{{ groups['edge'] | map('extract', hostvars, 'ansible_host') | list }}"  # noqa: yaml[line-length]
+
+# The interface whose DHCP lease gives this host its address. Discovered rather
+# than repeated in host_vars: the default route is on the LAN interface on all
+# four nodes, and a per-host copy is one more thing to keep in step.
+resolver_interface: "{{ ansible_facts['default_ipv4']['interface'] }}"
