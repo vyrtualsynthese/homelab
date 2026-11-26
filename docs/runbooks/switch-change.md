@@ -41,11 +41,12 @@ key belongs to. The account is `deploy`, holding `read`, `write`, `ssh`, `test` 
 proved in [`switch-access.md`](switch-access.md). The binary backup needs `policy` on top of those,
 and its refusal is why that one step is allowed to fail.
 
-Both switches run RouterOS 6.49, which signs a key login with the SHA-1 `ssh-rsa` algorithm that
-OpenSSH 8.8 and later dropped from the default list. Every `ssh` and `scp` call the script makes
-therefore carries `PubkeyAcceptedAlgorithms=+ssh-rsa`, or the login ends at `Permission denied
-(publickey,password)` on a key the device already trusts. Card #696 moves the switches to RouterOS 7,
-whose ed25519 key needs no allowance, and the line goes with that move.
+Both switches ran RouterOS 6.49 until 2026-11-26, when card #696 moved them to `7.24.7`
+([`switch-firmware.md`](switch-firmware.md)). Version 6 signs a key login with the SHA-1 `ssh-rsa`
+algorithm that OpenSSH 8.8 and later dropped from the default list, so every `ssh` and `scp` call the
+script makes carries `PubkeyAcceptedAlgorithms=+ssh-rsa`; without it the login ends at `Permission
+denied (publickey,password)` on a key the device already trusts. On v7 the allowance is unnecessary
+and harmless, and the key in place is still RSA 4096, so it stays until that key is swapped.
 
 `SWITCH_CHANGE_TARGETS`, `SWITCH_CHANGE_USER` and `SWITCH_CHANGE_KEY` override the three for a direct
 run, and `./switches/switch-change.sh --list-targets` prints the pairs. Through the gate none of them

@@ -97,6 +97,7 @@ nav:
       - Moving K3s to a new minor: runbooks/k3s-upgrade.md
       - Moving Ubuntu to a new LTS: runbooks/ubuntu-upgrade.md
       - Changing a switch: runbooks/switch-change.md
+      - Moving a switch to RouterOS 7: runbooks/switch-firmware.md
       - Adopting a laptop for Ansible: runbooks/ansible-laptop-onboarding.md
       - An account on the switches: runbooks/switch-access.md
       - Reflashing an edge Pi: runbooks/pi-reflash.md

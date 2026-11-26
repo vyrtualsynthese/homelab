@@ -8,11 +8,12 @@
 > **Use it when** you are creating that account, rotating its key, or checking what a switch accepts ·
 > **Verified** 2026-11-25, run end to end on both switches: the group, the disabled-then-enabled user,
 > the RSA 4096 import, the key's own login, `/user add` refused, and the source filter turning another
-> prefix away · **Kind:** how-to
+> prefix away; both switches moved to RouterOS `7.24.7` on 2026-11-26 with the same accounts and key ·
+> **Kind:** how-to
 >
 > **Status:** proved 2026-11-25. One deviation from the card: the key is **RSA 4096**, not ed25519,
-> because RouterOS 6.49 cannot import ed25519. Card 696 moves the switches to version 7, and the swap
-> back is a new pair and one import.
+> because RouterOS 6.49 cannot import ed25519. v7 accepts that pair as it stands, and nothing needs
+> the swap, so the pair is unchanged.
 >
 > **Sources** `ansible/collectors/network-audit.sh`, `ansible/switches/switch-apply.sh`,
 > `ansible/switches/install-switch-change.sh`,
@@ -139,11 +140,11 @@ This section has not been run yet: installing the gate is the step before the li
 
 - **An admin session on the switch** — `admin`, or any account in `full`. The commands below run in
   that session, not in the agent's shell.
-- **The measured versions:** `192.168.1.11` runs RouterOS `6.49.8` (long-term) and `192.168.1.43`
-  `6.49.7` (stable). Both are version 6, where the setting is `always-allow-password-login`; on 7.21
-  and later it is `password-authentication`, and its default, `yes-if-no-key`, already refuses a
-  password to any user holding a key. Card 696 is what moves them there, and it has to correct this
-  page on the way.
+- **The measured versions:** both switches run RouterOS `7.24.7` (long-term) since 2026-11-26 — card
+  #696, [`switch-firmware.md`](switch-firmware.md) — and before that `192.168.1.11` was on `6.49.8`
+  and `192.168.1.43` on `6.49.7`. On v6 the setting is `always-allow-password-login`; from 7.21 it is
+  `password-authentication`, whose default, `yes-if-no-key`, already refuses a password to any user
+  holding a key. `/ip ssh print` shows it.
 - **The key's public half** on the switch, so the import can read it.
 
 ## 1. Make the key where the agent cannot read it
@@ -158,10 +159,11 @@ sudo -u netcfg ssh-keygen -t rsa -b 4096 -N '' -C "switch-deploy" \
   -f /home/netcfg/.ssh/switch-deploy
 ```
 
-**RSA, not ed25519, and the switch decides that.** RouterOS 6.49 rejects an ed25519 key with
+**RSA, not ed25519, and the switch decided that.** RouterOS 6.49 rejects an ed25519 key with
 `unable to load key file (wrong format?)` — measured on 2026-11-25 — because ed25519 import arrived
-in 7.x. The card asks for ed25519; the device runs 6.49, so the pair is RSA 4096 until card 696 moves
-them to version 7, and the swap is then a new pair and one import.
+in 7.x. The card asked for ed25519 and the devices ran 6.49, so the pair is RSA 4096. Both switches
+run `7.24.7` since 2026-11-26 and accept that pair unchanged, so an ed25519 swap is now possible
+rather than blocked; it is a new pair and one import, and nothing needs it.
 
 `useradd` leaves the home at `0750` on Ubuntu, where the group may traverse it; the `chmod` is what
 makes the account's home unreadable to anything but `netcfg` itself.
@@ -252,8 +254,8 @@ never renamed; then `not enough permissions (9)` from each `/user add`, with no 
 `BatchMode=yes` is what keeps a refused key from turning into a password prompt, and `accept-new`
 settles the switch's host key on the first contact, in `netcfg`'s `known_hosts` rather than the
 operator's. `PubkeyAcceptedAlgorithms=+ssh-rsa` is in the command because RouterOS 6.49 signs with
-the SHA-1 RSA algorithm, which a current OpenSSH client no longer offers on its own; it costs nothing
-when the server also offers the newer signature. Card 696 removes the need for it.
+the SHA-1 RSA algorithm, which a current OpenSSH client no longer offers on its own. On `7.24.7` the
+allowance is no longer needed and still costs nothing; it stays with the RSA key.
 
 **A source outside the prefix is refused.** Moving the client is awkward — the key must not travel —
 so the one variable that moves is the prefix itself, and the client stays put. A throwaway account
@@ -310,13 +312,15 @@ Expected after the reconnect, and measured on both switches: `/user print detail
 `192.168.1.27`, `group=mktxp`; and the switch metrics keep advancing — with the pod up,
 `time()-timestamp(mktxp_system_cpu_load{routerboard_address="192.168.1.11"})` stays under a minute.
 
-**The `sensitive` check is not an export on these devices.** RouterOS 6.49 rejects
-`/export show-sensitive` — that flag is version 7's, and version 6 exports with `hide-sensitive` —
-and neither switch holds a secret-valued attribute in its configuration: there is no wireless
-package, and the SNMP community's authentication and encryption passwords are empty. An export from
-an account without `sensitive` therefore masks nothing that a `full` account would print, and the
-policy string is what proves the restriction. A throwaway account in a group identical apart from
-`ssh` printed configuration and exported fine, and was refused `/user add` with
+**The `sensitive` check is not an export on these devices.** This paragraph is the v6 measurement it
+was written from; both switches run `7.24.7` since 2026-11-26, where `/export` hides sensitive values
+by default, and the `wireless` package the converter installed has been removed. On v6,
+`/export show-sensitive` is refused — that flag is version 7's, and version 6 exports with
+`hide-sensitive` — and neither switch holds a secret-valued attribute in its configuration: there was
+no wireless hardware, and the SNMP community's authentication and encryption passwords are empty. An
+export from an account without `sensitive` therefore masked nothing that a `full` account would
+print, and the policy string is what proves the restriction. A throwaway account in a group identical
+apart from `ssh` printed configuration and exported fine, and was refused `/user add` with
 `not enough permissions (9)`.
 
 If the address moves, `/user set monitoring address=<new>` on each switch. The pin follows `nuc0`,
