@@ -14,7 +14,7 @@ n8n:
     # ones. Renovate's docker lookup for this image is switched off in
     # .github/renovate.json.
     # renovate: datasource=github-releases depName=n8n-io/n8n
-    tag: 2.49.6
+    tag: 2.49.7
 
   imagePullSecrets: []
   nameOverride: "n8n"
