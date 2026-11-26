@@ -185,8 +185,8 @@ nodes:
       # 2022, whose 44 `.torrent` files matched no torrent in the client; it was deleted on
       # 2026-11-26 (card 778), which is where the 435.0 MB this row used to report went.
       # `qBittorrent/BT_backup/` is one `.torrent` and one `.fastresume` per torrent: the seed
-      # list and the resume data, which no rebuild can recreate. Logs, the GeoIP database, the VueTorrent archive and the old web UI copy are
-      # rebuilt from the image or the internet.
+      # list and the resume data, which no rebuild can recreate. Logs, the GeoIP database, the
+      # VueTorrent archive and the old web UI copy are rebuilt from the image or the internet.
       - {claim: qbittorrent-config, namespace: media-stack, kind: files, exclude: ["logs", "log", "geoip", "ui.prev", ".cache", ".npm", "vuetorrent-*.zip"]}
 
   nuc0:
