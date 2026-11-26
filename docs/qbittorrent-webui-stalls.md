@@ -730,10 +730,20 @@ The torrent count is the WebUI's own: `curl` from a pod on the pod network again
 `http://qbittorrent.media-stack.svc:8080/api/v2/torrents/info` (the login bypass in
 `qBittorrent.conf` covers `10.42.0.0/16`), or the exporter's own metric page.
 
-If the local claim turns out wrong — a torrent count short, a resume file missing — the way back is
-the export that is still on `nas`: stop the pod, point the chart's `storage.config` at the old claim
-again (a `files` copy back is the same Job in reverse), and start it. Nothing on the export has been
-deleted or modified by the move.
+Those two queries cannot tell this app stalling from `nas` losing the pod network, and on 2026-11-26
+it was the second. Between 02:04 and 03:44 every `kubernetes-pods` target on a node other than `nas`
+went `up = 0` — 19 of them in the 03:39 sample — while every `nas` pod target and every hostNetwork
+target stayed up, `nas` retransmitted 11–20 segments a second, and the app's own state never moved:
+322 torrents, `connection_status` 1, no download load. A failed scrape inside a window like that is
+a different defect (board card 807). Check `count(up{job=~"kubernetes-pods.*"}==0)` beside this
+exporter's `up` before reading a zero as the stall coming back.
+
+If the local claim turns out wrong — a torrent count short, a resume file missing — the rollback copy is
+gone: card 769 retired `nfs-qbittorrent-config`, its Application and its export line on 2026-11-26.
+What is left is the nightly snapshot. `qbittorrent-config` is a `nodes` row of the `nas` repository,
+so the way back is to stop the pod, restore that claim's directory into a fresh `local-path` claim
+([`runbooks/restore.md`](runbooks/restore.md)), point the chart's `storage.config` at it, and start
+it.
 
 The in-flight downloads have the same way back, and it is one preference pair rather than a copy. They
 are back where they started — `Session\TempPath=/downloads/incomplete`, `Session\TempPathEnabled=true`

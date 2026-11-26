@@ -292,8 +292,9 @@ are in `docs/superpowers/plans/`.
    `$values/cluster/helm/nfs/audio/values.yaml`, which never existed. It now reads
    `cluster/helm/nfs/provisioner` with `values/nfs-audio.yaml`.
 7. **Resolved 2026-11-19:** `projects/nfs/nfs-qbittorrent-config.yaml` used `path:` on a directory
-   holding no `Chart.yaml`, so ArgoCD reported **Synced/Healthy while deploying nothing**. It now
-   reads `cluster/helm/nfs/provisioner` with `values/nfs-qbittorrent-config.yaml`.
+   holding no `Chart.yaml`, so ArgoCD reported **Synced/Healthy while deploying nothing**. The
+   Application was retired with its export and its values file on 2026-11-26 (board card 769);
+   `/config` is a `local-path` claim since 2026-11-25 (card 758).
 
 **Chart defects**
 
