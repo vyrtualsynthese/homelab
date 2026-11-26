@@ -1,5 +1,5 @@
 ---
-# The eight exports, owned here and nowhere else.
+# The seven exports, owned here and nowhere else.
 #
 # What decides the procedure:
 #   `showmount -a` on the host before the first apply names every client that
@@ -69,7 +69,7 @@
 
 # Read from the running kernel, not from the file just written, and check what
 # the table *says* rather than how many lines it is: `exportfs -v` prints one
-# line per export-and-client pair, so a line count is 8 only while the cluster
+# line per export-and-client pair, so a line count is 7 only while the cluster
 # has one address.
 - name: Read the export table back and refuse a looser one
   ansible.builtin.command: exportfs -v
@@ -80,7 +80,7 @@
   check_mode: false
   failed_when: >-
     (nfs_exported.stdout_lines | select('match', '^/')
-     | map('regex_replace', '\s.*$', '') | unique | list | length) != 8
+     | map('regex_replace', '\s.*$', '') | unique | list | length) != 7
     or 'no_root_squash' in nfs_exported.stdout
     or 'insecure' in nfs_exported.stdout
     or (nfs_exported.stdout_lines | select('match', '^/mnt\s') | list | length) > 0

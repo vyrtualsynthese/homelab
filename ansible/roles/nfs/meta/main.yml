@@ -2,7 +2,7 @@
 galaxy_info:
   role_name: nfs
   author: operator
-  description: Exports the eight directories the cluster mounts, with root squashed
+  description: Exports the seven directories the cluster mounts, with root squashed
   license: MIT
   min_ansible_version: "2.18"
   platforms:

@@ -546,8 +546,8 @@ def test_every_export_maps_the_squashed_root_to_the_writer():
 
 
 def test_the_read_back_checks_the_table_not_its_line_count():
-    """`exportfs -v` prints one line per export and client, so a count of 8 is
-    true only while eight things mount."""
+    """`exportfs -v` prints one line per export and client, so a count of 7 is
+    true only while seven things mount."""
     text = (ANSIBLE / "roles/nfs/tasks/main.yml").read_text()
     assert "stdout_lines | length" not in text
     assert "no_root_squash" in text and "'^/mnt\\s'" in text
