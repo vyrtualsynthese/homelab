@@ -4,25 +4,24 @@ A Kubernetes-first homelab: six hand-built machines, one K3s cluster, GitOps thr
 Ansible for host preparation. It runs day-to-day services and doubles as a platform-engineering
 portfolio.
 
-> **This cluster is mid-rebuild.** The storage layer was lost to a disk failure in 2026 and is being
-> rebuilt. Expect around 20 pods to be `Pending` and a handful of applications to be down. The plan
-> that fixes it, and the reason for every deviation from what this file used to claim, live in
-> [`docs/`](docs/README.md). Start with the programme index.
+> **The rebuild is over.** The storage layer lost to a disk failure in 2026 has been rebuilt on
+> `local-path` and the NFS classes, and every workload is running. What changed, and why it deviates
+> from what this file used to claim, is recorded in [`docs/`](docs/README.md).
 
 ## Current state
 
-| Thing | Reality on the cluster, 2026-11-12; the K3s and Ingress rows re-checked 2026-11-22 |
+| Thing | Reality on the cluster, 2026-11-26 |
 |---|---|
-| K3s | `v1.31.14+k3s1` on all four nodes, containerd, embedded etcd |
-| Ingress | Traefik `3.7.19`, chart `42.4.1`, owned by this repository since 2026-11-21; it was the K3s addon until then |
-| Storage | `local-path` for configuration, NFS provisioner classes for media. **No replicated storage.** |
-| Replicated storage | Longhorn was abandoned after the disk failure. Its volumes are gone. |
-| Applications | 58 ArgoCD Applications; about 20 are unhealthy |
+| K3s | `v1.36.6+k3s1` on all four nodes, containerd `2.3.7-k3s1.36`, embedded etcd |
+| Ingress | Traefik `3.8.0`, chart `43.0.0`, owned by this repository since 2026-11-21; it was the K3s addon until then |
+| Storage | `local-path` for configuration, the NFS classes for media and data. **No replicated storage:** Longhorn was abandoned after the disk failure and its volumes are gone |
+| Applications | 67 ArgoCD Applications; no pod is `Pending` |
 | GitOps coverage | Auto-sync is enabled per Application from the ArgoCD UI; no manifest in git records it |
-| Backups | Four restic repositories in one OVH bucket, one job per node plus the NFS exports. Awaiting its first run: the Application syncs, the Secret and the bucket are the last two gates |
-| Observability | Prometheus with alerting disabled, Grafana down, no log pipeline |
+| Backups | Four restic repositories in one OVH bucket, six nightly jobs. Every run completes, and `backup-verify` proves each stream is still advancing |
+| Observability | Prometheus, Grafana and Loki on `nas`, Fluent Bit on all four nodes; Grafana evaluates the alert rules, and a relay writes a card on the `alerts` board |
 
-The full evidence is in [`docs/audit/`](docs/audit/), captured 2026-11-10.
+The pages under [`docs/`](docs/README.md) are the authority on every row;
+[`docs/how-it-works/`](docs/how-it-works/README.md) is the place to start.
 
 ## Architecture
 
@@ -74,7 +73,8 @@ Commit to `develop` → the ArgoCD root app (`cluster/argocd/argocd-root.yaml`) 
 | Class | Use |
 |---|---|
 | `local-path` (default) | application configuration, node-bound |
-| `plex-media`, `nfs-audio`, `nfs-books`, `qbittorrent-download`, `nfs-syncthing`, `stash-nfs`, `traefik-nfs` | media and data on the NAS, one class per export |
+| `plex-media`, `nfs-audio`, `nfs-books`, `qbittorrent-download`, `nfs-syncthing`, `stash-nfs` | media and data on the NAS, one class per export |
+| `traefik-nfs` | Traefik's ACME certificate store, on the NAS |
 
 `local-path` volumes are tied to one node. Every workload is pinned to a named node and its
 configuration volume lands on that same node; there is no failover, by design.
@@ -84,8 +84,8 @@ configuration volume lands on that same node; there is no failover, by design.
 ```
 ansible/                  host playbooks (see the caveat in ansible/README.MD)
 cluster/argocd/           root Application + per-app Applications (CRLF line endings)
-cluster/helm/             55 charts: local, values-only, and a few still vendored
-cluster/infrastructure/   Traefik config, storage classes — applied by hand
+cluster/helm/             57 charts: local charts and wrapper charts around upstream ones
+cluster/infrastructure/   CoreDNS overrides, the system-upgrade controller, Traefik middlewares and TLS — applied by hand
 kubectl/                  standalone manifests and one-shot helpers
 docs/                     audit, design, plans, runbooks — the authoritative documents
 ```
@@ -99,19 +99,20 @@ README) were deleted on 2026-11-11 because they disagreed with each other and wi
 ## Validating before a commit
 
 ```bash
-# render every self-contained chart
-for c in $(find cluster/helm -name Chart.yaml | xargs -n1 dirname); do
-  helm template test "$c" --namespace test-ns >/dev/null || echo "FAIL $c"
-done
+# every chart: helm lint and helm template, each dependency chart built in a temporary copy
+hack/check-charts.sh
+
+# documentation: generated pages, relative links, cited paths, nav and banners
+hack/check-docs.sh
 
 # check that ArgoCD references resolve (CRLF-safe)
 while read -r p; do [ -d "$p" ] || echo "BROKEN PATH $p"; done < <(
   grep -rh '^    path:' cluster/argocd/projects | sed 's/^    path: *//' | tr -d "\"' \r")
 ```
 
-Charts that need `helm dependency build` first: `monitoring/prometheus`, `monitoring/grafana`,
-`monitoring/loki`, `monitoring/fluent-bit`, `authentik`, `dashy`, `ashuvidz-website`,
-`databases/pgadmin`.
+A chart that pins an upstream dependency commits no `charts/` directory: `hack/check-charts.sh` runs
+`helm dependency build` for it in a temporary copy and renders every chart with its own
+`values.yaml`, so a fresh clone needs no manual build and no hand-kept list of exceptions.
 
 ## Conventions
 
