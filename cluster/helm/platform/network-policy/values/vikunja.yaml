@@ -1,4 +1,4 @@
-# vikunja — the board. One pod, two callers.
+# vikunja — the board. One pod, four callers.
 #
 # Measured 2026-11-26 against the live cluster: the pod carries
 # app.kubernetes.io/name: vikunja, listens on 3456, and IngressRoute/vikunja
@@ -27,4 +27,20 @@ accept:
         podSelector:
           app.kubernetes.io/name: prometheus
           app.kubernetes.io/component: server
+        ports: [3456]
+      # The alert relay and its lifecycle job, which are the only callers that
+      # reach the board on an event rather than on a request, and the only ones
+      # that talk to the Service directly instead of through Traefik: a card is
+      # opened from a Grafana alert, not from a browser. Both were cut off by the
+      # floor for the seven minutes between the first sync and this line, and the
+      # lifecycle job's error was `Connection refused` — which is what proved
+      # the floor works at all. Two entries because the CronJob runs its own pod
+      # per night with its own label; they are not the same pod as the relay.
+      - namespace: monitoring
+        podSelector:
+          app.kubernetes.io/name: alert-relay
+        ports: [3456]
+      - namespace: monitoring
+        podSelector:
+          app.kubernetes.io/name: alert-relay-lifecycle
         ports: [3456]
