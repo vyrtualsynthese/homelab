@@ -3,7 +3,10 @@
 > **In one line.** The one-time creation of the board's role, database and Secret; it remains the
 > reference when the board's database is rebuilt.
 >
-> **Use it when** the board's database is rebuilt · **Kind:** completed record 2026-11-16
+> **Use it when** the board's database is rebuilt · **Verified** 2026-11-16 · **Kind:** record
+>
+> **Sources** `cluster/helm/vikunja/values.yaml`, `cluster/helm/databases/postgres/`,
+> `cluster/helm/platform/network-policy/values/databases.yaml`
 
 Date: 2026-11-15
 
@@ -50,10 +53,11 @@ host `postgres.databases.svc.cluster.local`, port `5432`, database `vikunja`, us
 - `openssl` on the workstation.
 - The board's Application has **not** synced yet, or is scaled to zero. A pod that starts before
   this procedure finishes will crashloop on the missing database.
-- Nothing needs adding to `networkPolicy.consumerNamespaces` in
-  `cluster/helm/databases/postgres/values.yaml`: that policy is switched off (`enabled: false`,
-  see the comment in the file), so every namespace in the cluster can reach the instance. When it
-  is switched on, `vikunja` must be in the list before this procedure is run.
+- `vikunja` is in the `databases` matrix before this procedure runs:
+  `cluster/helm/platform/network-policy/values/databases.yaml` lists it as a consumer of `postgres` on
+  5432, and `Application/network-policy-databases` is synced. While that Application is not synced the
+  namespace floor is absent and every namespace reaches the instance; once it is synced, a namespace
+  missing from that file gets a connection timeout, not a refusal.
 - Avoid 03:30, when the nightly dump runs. A database created mid-run is simply dumped from the
   following night.
 

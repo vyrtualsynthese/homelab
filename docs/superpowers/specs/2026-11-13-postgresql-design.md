@@ -350,6 +350,12 @@ only the hostname and, where the value was a leftover, the password.
   not in the list. The database is still unreachable from outside the cluster without it: ClusterIP
   only, no ingress for 5432, `CONNECT` revoked from `PUBLIC` everywhere, `scram-sha-256` in
   `pg_hba.conf`.
+
+  *Moved 2026-11-26, card 829.* The policy is no longer in this chart. A namespace floor has to cover
+  pgadmin too, and one application's chart cannot own it, so both live in
+  `cluster/helm/platform/network-policy` with a `values/databases.yaml` that carries the same consumer
+  list plus `vikunja`, which the list here was missing. The 2026-11-13 measurement above is what that
+  chart's README has to settle before the floor is applied.
 - No TLS on 5432. **Accepted risk, stated plainly:** between `nas` (database) and `nuc0` (most
   applications), credentials and query traffic cross the physical LAN in clear text. The
   mitigations are the network policy, the LAN being a switched home network, and no exposure

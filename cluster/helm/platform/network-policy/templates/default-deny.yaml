@@ -1,0 +1,34 @@
+{{- /*
+A values file that lists consumers and no floor is the defect this chart exists
+to remove: the allows would be the only policies, and everything they do not
+name would stay open. Rendering it is an error, not a quiet no-op.
+*/}}
+{{- if and .Values.accept (not .Values.defaultDeny) }}
+{{- fail "defaultDeny must be true when accept is not empty" }}
+{{- end }}
+{{- if .Values.defaultDeny }}
+{{- /*
+The floor. `podSelector: {}` selects every pod in the namespace, and an
+`Ingress` policy with no ingress rule denies every inbound connection to them.
+The allows live one object each, in allow.yaml; NetworkPolicies are additive, so
+they open their ports on top of this and nothing else gets in.
+
+Egress is deliberately not in policyTypes. A namespace-wide egress deny would
+have to name DNS, NFS on 192.168.1.41, object storage and the internet for every
+workload, and one missing entry cuts an app off silently — the failure this
+chart exists to avoid. Ingress is the boundary that stops an arbitrary pod from
+reaching a service it has no business reaching; egress is its own change, with
+its own card.
+*/}}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+  labels:
+    app.kubernetes.io/name: network-policy
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+{{- end }}

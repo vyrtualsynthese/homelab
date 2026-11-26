@@ -1,5 +1,14 @@
 # Add a database to PostgreSQL
 
+> **In one line.** One application, one database: a role, a database and two Secrets, created by hand
+> as the `postgres` superuser, and recorded in the log at the end of this page.
+>
+> **Use it when** an application is rebuilt and needs its own database on the shared instance ·
+> **Verified** 2026-11-14, the last run logged below · **Kind:** how-to
+>
+> **Sources** `cluster/helm/databases/postgres/`,
+> `cluster/helm/platform/network-policy/values/databases.yaml`, `docs/runbooks/vikunja-database.md`
+
 **Changes the cluster:** creates a role, a database and two Secrets. Reversible only while the
 database is empty — see [Rollback](#rollback).
 
@@ -18,9 +27,9 @@ advance, so this procedure is the record of what exists and why. It is run by ha
 - The superuser password is to hand: it is `postgres-password` in the `databases/postgres-superuser`
   Secret, kept in the operator's password manager. The psql path below does not need it (local
   socket, peer authentication); pgAdmin does.
-- The application's namespace **already exists and is listed in `networkPolicy.consumerNamespaces`**
-  in `cluster/helm/databases/postgres/values.yaml`. The database's NetworkPolicy denies every
-  namespace not on that list, so a missing entry shows up as a connection timeout in step 4, long
+- The application's namespace **already exists and is listed as a consumer of `postgres`** in
+  `cluster/helm/platform/network-policy/values/databases.yaml`. The database's NetworkPolicy denies
+  every namespace not on that list, so a missing entry shows up as a connection timeout in step 4, long
   after the cause. Add it in a commit and let ArgoCD sync before starting.
 - `openssl` on the workstation.
 - Avoid 03:30, when the nightly dump runs: a database created mid-run is simply dumped from the
@@ -199,7 +208,7 @@ failure means:
 
 | Output | Cause |
 |---|---|
-| `wait` times out, logs show `connection timed out` | The namespace is not in `networkPolicy.consumerNamespaces`. Fix the values file and let ArgoCD sync; the policy is the gate, not DNS. |
+| `wait` times out, logs show `connection timed out` | The namespace is not a consumer of `postgres` in `cluster/helm/platform/network-policy/values/databases.yaml`. Fix the values file and let ArgoCD sync; the policy is the gate, not DNS. |
 | `password authentication failed for user "<app>"` | The two Secrets do not hold the same value, or the role was created with a different one. Recreate both from one value and `ALTER ROLE`. |
 | `permission denied for database "<app>"` | The `REVOKE`/`GRANT` block was not applied, or was applied to another database name. Re-run step 3's last three statements. |
 | `FATAL: database "<app>" does not exist` | Step 3 stopped after the role. The database name is case-sensitive and must match exactly. |
