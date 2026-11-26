@@ -83,6 +83,9 @@ and let the pull request be the record.
   merge.
 - Open the pull request against `develop`.
 
+A release of `main` is a different pair of merges — `develop` into `main` and then `main` back into
+`develop` — and [Cutting a release](../runbooks/release.md) is that procedure.
+
 The long form — worktrees, handover, review — is [`AGENTS.md`](../../AGENTS.md), §Git workflow.
 
 ## Merge and sync

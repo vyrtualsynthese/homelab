@@ -91,6 +91,7 @@ nav:
       - Use the board: running-it/use-the-board.md
       - Rebuild the docs site: running-it/rebuild-the-docs-site.md
       - Every procedure: runbooks/README.md
+      - Cutting a release: runbooks/release.md
       - The GitOps controller: runbooks/argocd.md
       - Moving the Traefik release: runbooks/traefik-release.md
       - Banning an attacking address: runbooks/crowdsec.md

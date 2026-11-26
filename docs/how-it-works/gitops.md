@@ -5,7 +5,7 @@
 > auto-sync switch — leave that path.
 >
 > **Use it when** you are changing an application, adding one, or wondering why a sync did not happen
-> · **Verified** 2026-11-17, paths re-checked 2026-11-23, branch gates 2026-11-26 · **Kind:** explanation · **Sources**
+> · **Verified** 2026-11-17, paths re-checked 2026-11-23, branch gates and release method 2026-11-26 · **Kind:** explanation · **Sources**
 > `cluster/argocd/`, `cluster/helm/`, `cluster/infrastructure/`, `docs/charts/README.md`.
 
 ## A commit's journey
@@ -17,8 +17,11 @@ Both permanent branches are protected on GitHub. Since 2026-11-26 a change reach
 through a pull request: a direct push, a force push and a deletion are refused even for an
 administrator. `main` already refused a force push and a deletion. The post-release sync is therefore
 a pull request from `main` into `develop`, merged with a merge commit; a rebase merge would replay the
-release commits a second time. The release itself stays `develop` into `main`, merged by rebase, so
-`main` remains a straight line.
+release commits a second time. The release itself is `develop` into `main`, merged with a merge commit
+as well: GitHub's rebase merge refuses a branch that has merge commits in it, and `develop` now holds
+the sync ones, so the release uses the same method — settled on 2026-11-26 when `v1.1.0` went out. One
+merge commit per release on `main` is the accepted cost. [Cutting a release](../runbooks/release.md) is
+the procedure.
 
 ```mermaid
 flowchart LR
