@@ -1313,6 +1313,48 @@ cmd_backup() {
     echo "check: the Pi-hole database alone is more than 100 MB"
 }
 
+# A live SQLite file copied byte for byte is not a backup: the committed rows can
+# sit in the -wal beside it. So every database the copy brought over is replaced
+# by one taken through SQLite's own backup API, and the -wal/-shm/-journal the
+# copy carried are dropped with it. An excluded database never reaches this step:
+# copy_state never wrote it.
+stage_sqlite() {
+    local src="$1" dst="$2"
+
+    python3 - "$src" "$dst" <<'PY'
+import os
+import sqlite3
+import sys
+
+src, dst = sys.argv[1], sys.argv[2]
+for root, _, names in os.walk(dst):
+    for name in sorted(names):
+        if not name.endswith((".db", ".sqlite", ".sqlite3")):
+            continue
+        target = os.path.join(root, name)
+        rel = os.path.relpath(target, dst)
+        source = os.path.join(src, rel)
+        for suffix in ("", "-wal", "-shm", "-journal"):
+            path = target + suffix
+            if os.path.exists(path):
+                os.unlink(path)
+        try:
+            live = sqlite3.connect(f"file:{source}?mode=ro", uri=True)
+            copy = sqlite3.connect(target)
+            with copy:
+                live.backup(copy)
+            # The backup carries the source's journal mode in the header, so the
+            # copy would come back as a WAL database with an empty -wal beside it.
+            # Convert it once, here, so the snapshot holds one file per database.
+            copy.execute("PRAGMA journal_mode=DELETE")
+            live.close()
+            copy.close()
+        except Exception as exc:
+            print(f"database {rel} cannot be staged: {exc}", file=sys.stderr)
+            sys.exit(1)
+PY
+}
+
 # The nightly run: the same tree, minus the three words in BACKUP_EXCLUDES, under
 # a fixed path so the snapshot's file list is the same every night. Nothing is
 # staged on the disk a reflash would destroy — the tree is transient and the
@@ -1330,8 +1372,9 @@ cmd_stream() {
 
     # shellcheck disable=SC2086
     copy_state "$ROOT$STAGING_DIR/tree" "$host" $BACKUP_EXCLUDES
+    stage_sqlite "$ROOT$STACK_DIR" "$ROOT$STAGING_DIR/tree/dockers"
 
-    # databases and restic follow
+    # restic follows
     echo "staged $host in $STAGING_DIR/tree"
 }
 
