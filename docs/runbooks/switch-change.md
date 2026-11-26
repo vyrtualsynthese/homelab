@@ -236,13 +236,13 @@ what one looks like.
 
 ## The first live runs
 
-These four runs are the proof this page is waiting on, and they are where its banner's **Verified**
-line comes from. They were made on 2026-11-26 through the gate, against the installed copy at
+These four runs were the proof this page waited on, and they are where its banner's **Verified** line
+comes from. They were made on 2026-11-26 through the gate, against the installed copy at
 `/usr/local/lib/homelab/switch-change.sh`, whose digest
 `588284b2a9c7002ef131a9b09d13d5a822bd13842a275dea2d22c79f1b99390e` pins it to the merged tree at
-`bc40a2b8`. Three are rehearsals — a dry run, an arm-only run and a full apply on `crs309` — and the
-fourth is the card's acceptance: a full run on `crs326` that cuts SSH and is put back by its own timer
-alone. The measured output is pasted under each command.
+`bc40a2b8`. Three are rehearsals — a dry run on `crs326`, then an arm-only run and a full apply on
+`crs309` — and the fourth is the card's acceptance: a full run on `crs326` that cuts SSH and is put
+back by its own timer alone. The measured output is pasted under each command.
 
 Every run prints the clock warning: both device clocks run about three minutes behind this
 workstation (`the device clock reads … this workstation …; the window is measured on the device`). It
