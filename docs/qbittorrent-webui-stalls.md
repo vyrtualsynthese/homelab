@@ -141,10 +141,9 @@ Measured before it started: 379 torrents, so 379 `.torrent` files and 379 `.fast
    and a matching listing afterwards.
 3. The chart now points `/config` at the claim it owns, so the sync that followed started the pod on
    the local disk. Automation was switched back on, with the same `prune`/`selfHeal` it had before.
-4. The `nfs-qbittorrent-config` export is still on `nas`, and nothing mounts it. It is the rollback
-   copy: a re-copy is a two-minute Job, while the restic snapshots of it are days old. The follow-up
-   card retires it, and the eight-line export list in `ansible/roles/nfs/templates/exports.j2` with
-   it.
+4. The `nfs-qbittorrent-config` export stayed on `nas`, mounted by nothing, as the rollback copy: a
+   re-copy is a two-minute Job, while the restic snapshots of it are days old. Card 769 retired it,
+   and the export list in `ansible/roles/nfs/templates/exports.j2` lost its line with it.
 
 The backup row moved with the claim: `qbittorrent-config` is a `nodes` row rather than an `nfs` row,
 so the snapshot still holds the seed list and the resume data. It moved once more with the pod that

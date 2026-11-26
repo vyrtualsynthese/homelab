@@ -108,7 +108,6 @@ they are what everything above stands on.
 | `local-path` | `default` | nas | B | the default storage class: one directory per claim, on the node's own disk |
 | `books-media` | `media-stack` | nuc0 | D | the `nfs-books` class: the books library |
 | `nfs-audio` | `media-stack` | nuc0 | D | the `nfs-audio` class: music |
-| `nfs-qbittorrent-config` | `media-stack` | streaming | D | the `nfs-qbittorrent-config` class: the export that held qBittorrent's configuration until 2026-11-25, kept as that migration's rollback copy and mounted by nothing |
 | `nfs-qbittorrent-download` | `media-stack` | streaming | D | the `qbittorrent-download` class: what is still downloading, on the fast SSD |
 | `plex-media` | `media-stack` | streaming | D | the `plex-media` class: film and television |
 | `stash-nfs` | `media-stack` | nuc0 | D | the `stash-nfs` class: the assets export — koillection's uploads, and FileBrowser's read of the same directory |
@@ -119,10 +118,10 @@ they are what everything above stands on.
 | `traefik` | `kube-system` | streaming | D | the ingress router: the one door the house router forwards to |
 | `traefik-gate` | `kube-system` | — | A | middlewares, TLS options and the `lan-only` gate: no workload of its own |
 
-All eight provisioners are one release each of the wrapper chart at
+All seven provisioners are one release each of the wrapper chart at
 `cluster/helm/nfs/provisioner/`, one values file per export, and every release asks for `streaming`.
 The Node column records where each pod ran at verification; each row moves to `streaming` as its
-Application syncs. None of the eight selects the retired `node-type` label.
+Application syncs. None of the seven selects the retired `node-type` label.
 
 ## No chart selects `node-type`
 

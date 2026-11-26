@@ -57,25 +57,24 @@ the classes below are what remains.
 | `nfs-audio` | Immediate | music |
 | `nfs-books` | Immediate | the books library |
 | `qbittorrent-download` | Immediate | the downloads queue: the *arrs, unpackerr and FileBrowser mount it, and with the 2026-11-25 move qBittorrent reads the same directory from `nas` as a host path |
-| `nfs-qbittorrent-config` | Immediate | nothing since 2026-11-25: qBittorrent's state directory moved to `local-path` (card 758), and the export is kept on `nas` as the migration's rollback copy until the follow-up card retires it |
 | `nfs-syncthing` | Immediate | Syncthing's folder |
 | `stash-nfs` | Immediate | assets and documents: koillection's uploads are provisioned into this export, and FileBrowser reads the same directory |
 | `traefik-nfs` | Immediate | Traefik's certificate store |
 
 Every NFS class there is a directory on a `nas` export, declared by its own release of the wrapper
-chart at `cluster/helm/nfs/provisioner/`: one chart, eight releases, one values file each. Two more
+chart at `cluster/helm/nfs/provisioner/`: one chart, seven releases, one values file each. Two more
 classes, `nfs-plex` and `nfs-ssd`, belonged to provisioners that existed only in the cluster — no
 chart, no Application, no claim on either. They were uninstalled on 2026-11-19 with
 `helm uninstall nfs-hdd nfs-ssd -n default`.
 
-**Helm does not deploy the eight.** They were installed by hand in 2023 and 2024, before ArgoCD, so
+**Helm does not deploy them.** They were installed by hand in 2023 and 2024, before ArgoCD, so
 the cluster also carried eight Helm release records — Helm's own note of what it installed, kept as
 Secrets — each claiming the same nine objects the chart renders. All eight were deleted on
 2026-11-20 with `kubectl -n <namespace> delete secret -l owner=helm,name=<release>`, which removes
 the note and leaves the objects to ArgoCD. Running `helm uninstall` there would have deleted the
 live provisioner Deployment, its RBAC and its class, and only a sync would bring them back. The two
 stray provisioners above are the opposite case: nothing in git declared their objects, so
-`helm uninstall` was the right tool for them and is not for these eight.
+`helm uninstall` was the right tool for them and is not for the releases this chart declares.
 
 `local-path` is hostPath-backed: `fsGroup` does nothing, and `runAsUser` on a claim another UID wrote
 makes `/config` unreadable. The safe order is in the chart contract —

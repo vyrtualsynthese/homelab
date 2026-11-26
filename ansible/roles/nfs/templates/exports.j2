@@ -1,6 +1,6 @@
 # /etc/exports — rendered by ansible/roles/nfs from exports.j2.
 #
-# Eight lines: the eight directories the cluster mounts, and nothing else. The
+# Seven lines: the seven directories the cluster mounts, and nothing else. The
 # bare `/mnt` export is gone, because nothing in this repository mounts it; the
 # parent directories are not exported either, so a client has to name what it
 # wants.
@@ -39,5 +39,4 @@
 # connects as 65532 and is unaffected by the squash.
 /mnt/storage/traefik {{ nfs_addresses | map('regex_replace', '$', '(rw,sync,root_squash,no_subtree_check,anonuid=65532,anongid=65532,fsid=8)') | join(' ') }}
 /mnt/storage/nfs/syncthing {{ nfs_addresses | map('regex_replace', '$', '(rw,sync,root_squash,no_subtree_check,anonuid=1100,anongid=1100,fsid=9)') | join(' ') }}
-/mnt/storage/nfs/qbittorrent-config {{ nfs_addresses | map('regex_replace', '$', '(rw,sync,root_squash,no_subtree_check,anonuid=1100,anongid=1100,fsid=11)') | join(' ') }}
 /mnt/storage/nfs/audio {{ nfs_addresses | map('regex_replace', '$', '(rw,sync,root_squash,no_subtree_check,anonuid=1100,anongid=1100,fsid=12)') | join(' ') }}
