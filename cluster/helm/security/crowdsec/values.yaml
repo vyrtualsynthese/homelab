@@ -95,6 +95,30 @@ crowdsec:
         listen_addr: 0.0.0.0
         listen_port: 6060
 
+  # The two values the chart would otherwise mint — the LAPI's own secret
+  # (`csLapiSecret`) and the registration token the agent registers with — come
+  # from a Secret made by hand, `security/crowdsec-lapi-secrets`.
+  #
+  # Left to itself the chart generates both at render time (`randAscii 64`,
+  # `randAlphaNum 48`) and keeps the live values through `lookup`, a Helm
+  # function that asks the cluster for the object it may already have. ArgoCD
+  # renders with no connection to the cluster, so `lookup` always answered
+  # nothing: every refresh rendered new values, the Application never settled —
+  # `OutOfSync` on the Secret and on the LAPI Deployment, whose
+  # `checksum/lapi-secret` annotation followed it — and every sync rewrote both
+  # secrets. The agent and the web UI then answered `401` until they signed in
+  # again (card #875).
+  #
+  # With this set the chart renders no Secret of its own (it would only do so for
+  # `lapi.extraSecrets`, which this chart does not set), so the keys in the
+  # cluster are nobody's but the operator's. The two key names stay the chart's
+  # defaults, `csLapiSecret` and `registrationToken`, which is why
+  # `csLapiSecretKey` and `registrationTokenKey` are left unset. A rebuild
+  # creates the Secret before the first sync: docs/secrets.md.
+  secrets:
+    externalSecret:
+      name: crowdsec-lapi-secrets
+
   lapi:
     replicas: 1
     nodeSelector:

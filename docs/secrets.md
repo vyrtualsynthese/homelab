@@ -67,6 +67,8 @@ keys at all.
 | `bazarr`, `bazarr-anime` | `media-stack` | `secret` → exportarr APIKEY (only when `exportarr.enabled`; off until exportarr v3) |
 | `autobrr-oidc` | `media-stack` | `client-secret` → `AUTOBRR__OIDC_CLIENT_SECRET`, the authentik provider's client secret |
 | `crowdsec-web-ui` | `security` | `lapi-password` → `CONFIG_INSTANCES_0_LAPI_AUTH_PASSWORD`, the watcher credential `cscli machines add` issues in the LAPI; `oidc-client-secret` → `CONFIG_AUTH_OIDC_CLIENT_SECRET`, the authentik provider's client secret (the same value as `CROWDSEC_CLIENT_SECRET` in `authentik-sso`) |
+| `crowdsec-bouncer-key` | `security` | `api-key` → `BOUNCER_KEY_firewall` on the LAPI, which registers the host bouncer's key at start-up; the same value is `CROWDSEC_BOUNCER_KEY` for `ansible/playbooks/site.yml` and reaches `/etc/crowdsec/bouncers/crowdsec-firewall-bouncer.yaml` on `streaming` |
+| `crowdsec-lapi-secrets` | `security` | `csLapiSecret` → `CS_LAPI_SECRET` and `registrationToken` → `REGISTRATION_TOKEN`, on both the LAPI and the agent. Made by hand and read through the chart's `secrets.externalSecret.name`: the chart mints neither, because it can only mint them with `lookup`, which ArgoCD cannot answer |
 | `security-exporter-authentik` | `security` | `token` → `AUTHENTIK_TOKEN`, a read-only authentik token for the events endpoint that feeds the sign-in counts; `address-salt` → `AUTHENTIK_ADDRESS_SALT`, the salt that turns an address into the `source` label of `homelab_authentik_signins_15m_by_source` (`openssl rand -hex 32`). Both references are `optional`: no token means posture only, no salt means no per-source family |
 | `freshrss-oidc` | `news` | `client-secret` → `OIDC_CLIENT_SECRET`, the authentik provider's client secret; `client-crypto-key` → `OIDC_CLIENT_CRYPTO_KEY`, the module's own encryption key |
 | `plex` | `media-stack` | `plex_claim` |
@@ -155,10 +157,35 @@ cannot change delegation, storage, mail or another domain. It is validated once 
 and the four values are kept in `~/.config/secrets/homelab.env` outside git. Rotating it is a Secret
 update and a pod restart.
 
-`n8n` is the one application Secret that must exist **before** its first sync: the deployment reads
+`n8n` is an application Secret that must exist **before** its first sync: the deployment reads
 `encryption-key` without `optional`, so a missing Secret is `CreateContainerConfigError`, not a pod
 that regenerates the key and silently makes every stored credential unreadable. Generate it once with
 `openssl rand -hex 32` and keep it in the password manager; changing it later costs the credentials.
+
+`crowdsec-lapi-secrets` has to exist before the first sync too, and for a different reason: the chart
+used to mint it, and the way it did that cannot work under ArgoCD. It generates the two values with
+Helm's random functions and keeps the live ones through `lookup`, which asks the cluster what is
+already there — and ArgoCD renders the chart without a cluster connection, so `lookup` answered
+nothing on every refresh. Each comparison produced new values, the Application stayed `OutOfSync` on
+the Secret and on the LAPI Deployment, and each sync rewrote both secrets; the agent and the web UI
+answered `401` until they signed in again (card #875). The chart now renders no Secret at all and
+reads `csLapiSecret` and `registrationToken` from this one, so a rebuild creates it before the sync
+that needs it:
+
+```bash
+kubectl -n security create secret generic crowdsec-lapi-secrets \
+  --from-literal=csLapiSecret="$(openssl rand -base64 48)" \
+  --from-literal=registrationToken="$(openssl rand -hex 24)"
+```
+
+The Secret already in the cluster was created by the chart, so it carries ArgoCD's tracking
+annotation and would be reported as a resource to prune once git stops describing it. Detach it once;
+its data is untouched, and from then on it is the operator's like `crowdsec-bouncer-key`:
+
+```bash
+# the trailing dash is what removes the key
+kubectl -n security annotate secret crowdsec-lapi-secrets argocd.argoproj.io/tracking-id-
+```
 
 ## The restic repositories (`backup` namespace)
 

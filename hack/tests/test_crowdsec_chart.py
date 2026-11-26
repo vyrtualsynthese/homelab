@@ -77,6 +77,22 @@ class ChartTests(unittest.TestCase):
         ref = env["BOUNCER_KEY_firewall"]["valueFrom"]["secretKeyRef"]
         self.assertEqual((ref["name"], ref["key"]), ("crowdsec-bouncer-key", "api-key"))
 
+    def test_the_lapi_secrets_come_from_one_made_by_hand(self):
+        # The chart mints `csLapiSecret` and `registrationToken` at render time
+        # and keeps the live values through `lookup`, which ArgoCD cannot do: it
+        # renders without a cluster connection, so every refresh produced new
+        # values and the Application never settled. Pointing it at a Secret made
+        # by hand is what stops the churn.
+        external = self.crowdsec["secrets"]["externalSecret"]
+        self.assertEqual(external["name"], "crowdsec-lapi-secrets")
+        # Unset, so the keys are the chart's defaults and the Secret in the
+        # cluster holds exactly what its templates read.
+        self.assertFalse(external.get("csLapiSecretKey"))
+        self.assertFalse(external.get("registrationTokenKey"))
+        # The values themselves are not in git, and neither is a stand-in for
+        # them: the chart's own minting path stays off.
+        self.assertFalse(self.crowdsec["lapi"].get("secrets"))
+
     def test_the_central_api_is_off(self):
         # Without this the LAPI registers with CrowdSec's central API on first
         # start and subscribes to the shared blocklist — a decision to take after
