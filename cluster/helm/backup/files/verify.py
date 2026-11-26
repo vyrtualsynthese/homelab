@@ -275,7 +275,8 @@ def check_external(name: str, must_match: list[str], entries: list[dict])       
     promises every night; a pattern that matches nothing is that night's symptom.
     """
     lines, problems = [], []
-    paths = [entry["path"] for entry in entries]
+    paths = [entry["path"] for entry in entries
+             if entry.get("type", "file") != "dir"]
     for pattern in must_match:
         matched = [path for path in paths if path.endswith("/" + pattern)]
         lines.append(f"files stream={name} path={pattern} matched={len(matched)}")

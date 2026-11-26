@@ -458,6 +458,7 @@ def _pi_fixture(root):
         "RESTIC_REPOSITORY=s3:https://example.invalid/bucket/edge-rbp0\n"
         "RESTIC_PASSWORD=test\nAWS_ACCESS_KEY_ID=test\nAWS_SECRET_ACCESS_KEY=test\n"
     )
+    env_file.chmod(0o600)
     return stack
 
 
@@ -1259,6 +1260,17 @@ def test_stream_refuses_without_the_env_file(tmp_path):
     out = run("stream", "rbp0", root=root, env=fake_restic(tmp_path))
     assert out.returncode != 0
     assert "/etc/restic/edge.env" in out.stderr
+
+
+def test_stream_refuses_a_world_readable_credential(tmp_path):
+    root = tmp_path / "pi"
+    _pi_fixture(root)
+    _stack_with_excludables(root)
+    (root / "etc/restic/edge.env").chmod(0o644)
+
+    out = run("stream", "rbp0", root=root, env=fake_restic(tmp_path))
+    assert out.returncode != 0
+    assert "0600" in out.stderr
 
 
 def test_stream_leaves_no_tree_behind_after_a_successful_run(tmp_path):

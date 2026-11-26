@@ -1078,7 +1078,8 @@ install_restic() {
         echo "restic: not installed under PI_ROOT"
         return 0
     fi
-    if command -v restic >/dev/null 2>&1 && restic version | grep -q "restic $RESTIC_VERSION "; then
+    if [ -x /usr/local/bin/restic ] &&
+        /usr/local/bin/restic version | grep -q "restic $RESTIC_VERSION "; then
         echo "restic: already $RESTIC_VERSION"
         return 0
     fi
@@ -1088,8 +1089,14 @@ install_restic() {
     # A RETURN trap would stay installed after this function and fire on every
     # later function return, so cleanup is pinned to the script's own exit.
     trap 'rm -rf "$tmp"' EXIT
-    curl -fsSL "$RESTIC_URL" -o "$tmp/restic.bz2"
-    printf '%s  %s\n' "$RESTIC_SHA256" "$tmp/restic.bz2" | sha256sum -c - >/dev/null
+    if ! curl -fsSL --max-time 300 "$RESTIC_URL" -o "$tmp/restic.bz2"; then
+        echo "restic: download failed from $RESTIC_URL" >&2
+        exit 1
+    fi
+    if ! printf '%s  %s\n' "$RESTIC_SHA256" "$tmp/restic.bz2" | sha256sum -c - >/dev/null; then
+        echo "restic: checksum mismatch on the downloaded $RESTIC_VERSION release" >&2
+        exit 1
+    fi
     bunzip2 -c "$tmp/restic.bz2" > "$tmp/restic"
     chmod 0555 "$tmp/restic"
     mv "$tmp/restic" /usr/local/bin/restic.tmp
@@ -1107,7 +1114,7 @@ retire_legacy_backup() {
 
     if [ -f "$cron" ] && grep -qF "$LEGACY_CRON_MATCH" "$cron"; then
         tmp="$cron.retired"
-        grep -vF "$LEGACY_CRON_MATCH" "$cron" > "$tmp" || true
+        ( umask 077; grep -vF "$LEGACY_CRON_MATCH" "$cron" > "$tmp" ) || true
         cat "$tmp" > "$cron"
         rm -f "$tmp"
         echo "retired: $LEGACY_CRON_MATCH from $cron"
@@ -1115,7 +1122,7 @@ retire_legacy_backup() {
     fi
     if [ -f "$envfile" ] && grep -qE "$LEGACY_ENV_PATTERN" "$envfile"; then
         tmp="$envfile.retired"
-        grep -vE "$LEGACY_ENV_PATTERN" "$envfile" > "$tmp" || true
+        ( umask 077; grep -vE "$LEGACY_ENV_PATTERN" "$envfile" > "$tmp" ) || true
         cat "$tmp" > "$envfile"
         rm -f "$tmp"
         echo "retired: the dead RESTIC/AWS keys from $envfile"
@@ -1381,7 +1388,7 @@ cmd_verify() {
     if [ ! -f "$ROOT$BACKUP_ENV" ]; then
         echo "MISSING $ROOT$BACKUP_ENV"
         problems=1
-    elif [ -z "$ROOT" ] && [ "$(stat -c %a "$ROOT$BACKUP_ENV")" != "600" ]; then
+    elif [ "$(stat -c %a "$ROOT$BACKUP_ENV")" != "600" ]; then
         echo "DIFFERS $ROOT$BACKUP_ENV: mode $(stat -c %a "$ROOT$BACKUP_ENV"), not 600"
         problems=1
     fi
@@ -1573,7 +1580,7 @@ require_backup_env() {
         echo "$BACKUP_ENV is missing; write it from the password manager (docs/secrets.md)" >&2
         exit 1
     fi
-    if [ -z "$ROOT" ] && [ "$(stat -c %a "$file")" != "600" ]; then
+    if [ "$(stat -c %a "$file")" != "600" ]; then
         echo "$BACKUP_ENV must be mode 0600, not $(stat -c %a "$file")" >&2
         exit 1
     fi
@@ -1621,13 +1628,14 @@ cmd_stream() {
         exit 1
     fi
 
+    require_backup_env
+
     rm -rf "$ROOT$STAGING_DIR/tree"
     mkdir -p "$ROOT$STAGING_DIR/tree"
 
     # shellcheck disable=SC2086
     copy_state "$ROOT$STAGING_DIR/tree" "$host" $BACKUP_EXCLUDES
     stage_sqlite "$ROOT$STACK_DIR" "$ROOT$STAGING_DIR/tree/dockers"
-    require_backup_env
 
     if "$RESTIC_BIN" backup \
         --retry-lock 2h \
