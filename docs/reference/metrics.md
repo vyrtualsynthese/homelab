@@ -315,11 +315,14 @@ ingestion limits are not the constraint either. What the line looked like before
 and why: the [Fluent Bit note above](#exporter-quirks). The panels that show
 these numbers are in [`dashboards.md`](dashboards.md).
 
-Verify rather than trust:
+Verify rather than trust. The Grafana call passes
+`--cacert ~/.config/secrets/kub-local/local-ca.pem`, because `grafana.kub.local` is served by the
+cluster's internal CA; `-k` would accept whatever answered and hand it the token:
 
 ```bash
 curl -s -u "ops:$PROMETHEUS_AUTH_PASSWORD" http://prometheus.kub.local/api/v1/status/flags | grep retention
-curl -sk -H "Authorization: Bearer $GRAFANA_TOKEN" \
+curl -s --cacert ~/.config/secrets/kub-local/local-ca.pem \
+  -H "Authorization: Bearer $GRAFANA_TOKEN" \
   "https://grafana.kub.local/api/datasources/proxy/uid/P8E80F9AEF21F6940/config" | sed -n '/limits_config:/,/^[a-z]/p'
 ```
 
