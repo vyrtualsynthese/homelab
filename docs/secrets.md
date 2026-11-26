@@ -15,9 +15,10 @@ not be added to it.
 
 State: read from the charts on 2026-11-17; the custody of the three rebuild credentials below was
 confirmed with the operator on 2026-11-22 (card #461), and every credential the cluster holds was
-read out of it and read back from the vault on 2026-11-23 (cards #474, #477). This file is the whole
-inventory: every Secret a chart expects, the Secrets no chart declares, then the PostgreSQL instance
-and the per-application database passwords.
+read out of it and read back from the vault on 2026-11-23 (cards #474, #477), then again on
+2026-11-26 — 52 filed notes against 52 Secrets, 109 key values, every one matched. This file is the
+whole inventory: every Secret a chart expects, the Secrets no chart declares, then the PostgreSQL
+instance and the per-application database passwords.
 
 ## Where the values are held
 
@@ -25,9 +26,10 @@ The cluster holds them; the vault is the copy that outlives it. One Bitwarden se
 Kubernetes Secret, in the `Homelab` folder, named `homelab-k8s-<namespace>-<name>`: the fields are
 the Secret's keys verbatim, and a value too long for one field (the server caps an encrypted field
 at 5,000 characters) is split into `<key>.partNN` fields to concatenate in order. Read them back and
-compare by hash, never by eye. The notes were taken from the live cluster on 2026-11-23 with the
-admin kubeconfig — 46 Secrets, 89 key values, every one matched on read-back. The eight notes that
-covered the Secrets deleted the same day are in the vault's trash, not in the folder.
+compare by hash, never by eye. The notes were taken from the live cluster with the admin kubeconfig
+and re-read on 2026-11-26 — 52 Secrets, 109 key values, every one matched on read-back. The eight
+notes that covered the Secrets deleted on 2026-11-23 were purged from the vault's trash on
+2026-11-26.
 
 - `homelab-backup-last-resort` — the restic password, the backup bucket's S3 pair and the K3s server
   token. Losing these loses the backups, not just their configuration.
@@ -41,12 +43,13 @@ covered the Secrets deleted the same day are in the vault's trash, not in the fo
   the `pihole-exporter` Secret in `monitoring` carries, under the keys `rbp0` and `rbp1`: the exporter
   reads both panels as well, and it needs one password per host because the two Pis mint different
   ones.
-- The edge Pis' `wg-easy.env` holds one key, `OAUTH_OIDC_CLIENT_SECRET`: the VPN panel's own client
-  secret, copied from `WG_EASY_CLIENT_SECRET` in `authentik-sso`. It is written by hand on each host,
-  gitignored, required by `hosts-pi.sh`, and carried off the host only by `backup`. The two TLS leaves
-  sit beside it in `certs/`, minted with `hack/internal-cert.sh --host <name>`: `tls.pem` and
-  `tls-key.pem` for Caddy on 8443, and `pihole.pem` — certificate and key in one file — for Pi-hole's
-  own panel on 443.
+- The edge Pis' `wg-easy.env` holds one key, `OAUTH_OIDC_CLIENT_SECRET`, and it opens nothing: no
+  `wg-easy` provider exists in authentik and none is created, because nothing on those hosts goes
+  through SSO ([the record](decisions/2026-11-26-edge-pis-local-auth-only.md)). The file is still
+  written by hand on each host, gitignored and required by `hosts-pi.sh`; the panel signs in with its
+  own account, held in `config/wg-easy.db`. The two TLS leaves sit beside it in `certs/`, minted with
+  `hack/internal-cert.sh --host <name>`: `tls.pem` and `tls-key.pem` for Caddy on 8443, and
+  `pihole.pem` — certificate and key in one file — for Pi-hole's own panel on 443.
 - `local-ca-key.pem` — the internal CA's private key, so a rebuild can reissue the `*.kub.local`
   leaf. `homelab-k8s-kube-system-local-cert` — the leaf and key Traefik actually serves, which is the
   pair the copies in `~/.config/secrets/kub-local/` are refreshed from, never the other way round.
@@ -215,13 +218,14 @@ one Secret K3s reads from outside a chart.
 | the restic repository password | every repository is ciphertext under it; without it the bucket is noise, not a backup | Bitwarden, item `homelab-backup-last-resort` (Homelab folder, master-password re-prompt on), written 2026-11-22 | cloud vault |
 | the OVH S3 pair for the bucket | the bucket cannot be opened, though its contents are intact. The cluster's copy is the `backup-restic` Secret, which dies with the cluster | the same vault item, and derivable: `tofu output -raw access_key_id` in `infra-main/infra-main/ovh` reprints it from the OVH API key | cloud vault, and re-derivable |
 | the K3s server join token (`/var/lib/rancher/k3s/server/token`) | an etcd snapshot is encrypted with a key derived from it, so restoring onto a rebuilt host with a different token produces an unreadable snapshot | the same vault item, field `K3S_SERVER_TOKEN` | cloud vault |
-| the `k3s-etcd-snapshot-s3-config` Secret's keys | the servers stop uploading their etcd snapshots; they keep running and keep taking local ones, so nothing looks broken until a restore is needed | the same vault item — the pair is the bucket's own, no second grant | cloud vault |
+| the `k3s-etcd-snapshot-s3-config` Secret's keys | the servers stop uploading their etcd snapshots; they keep running and keep taking local ones, so nothing looks broken until a restore is needed | its own note, `homelab-k8s-kube-system-k3s-etcd-snapshot-s3-config`, with all eight keys — the pair is the bucket's own, no second grant | cloud vault |
 
 ### The etcd upload's Secret (`kube-system`)
 
 K3s reads the S3 settings from a Secret of its own type, so the access key never lands on a node's
 filesystem. The keys are the flag names, because that is how K3s parses them; a Secret keyed
-`access-key` or `secret-key` is ignored and the upload never starts.
+`access-key` or `secret-key` is ignored and the upload never starts. All eight keys are filed as
+`homelab-k8s-kube-system-k3s-etcd-snapshot-s3-config` in the `Homelab` folder.
 
 ```bash
 kubectl -n kube-system create secret generic k3s-etcd-snapshot-s3-config \
@@ -296,7 +300,7 @@ beside the instance that creates the role, once beside the application that cons
 |---|---|---|---|---|
 | `pg-<app>` | `databases` | `password` | Whoever runs `ALTER ROLE` or inspects the database; the role itself already holds a hash of it | Generated by the runbook with `openssl rand -hex 24` and copied into the application's Secret below, so both hold the same value. |
 | `authentik-env` | `authentik` | `AUTHENTIK_SECRET_KEY`, `AUTHENTIK_BOOTSTRAP_PASSWORD`, `AUTHENTIK_POSTGRESQL__PASSWORD`, `AUTHENTIK_POSTGRESQL__HOST`, plus the SMTP password when email is enabled. Every key is exported into the container with `envFrom` | authentik server and worker | Generated by the database runbook and the phase 1 rebuild. The bootstrap password creates `akadmin` on first start only; change it in the UI after the first login. The secret key signs sessions and cookies. |
-| `authentik-sso` | `authentik` | `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`, `PLEX_TOKEN`, `GRAFANA_CLIENT_SECRET`, `PGADMIN_CLIENT_SECRET`, `KAVITA_CLIENT_SECRET`, `ARGOCD_CLIENT_SECRET`, `CALIBRE_CLIENT_SECRET`, `RADARR_CLIENT_SECRET`, `RADARR_ANIME_CLIENT_SECRET`, `FRESHRSS_CLIENT_SECRET`, `FILEBROWSER_CLIENT_SECRET`, `VIKUNJA_CLIENT_SECRET`, `CROWDSEC_CLIENT_SECRET`, `WG_EASY_CLIENT_SECRET`. Exported into the authentik server and worker with `envFrom`; the blueprint `!Env` tags read it | authentik server and worker | Source and provider client secrets, created by the operator. The same values are copied into each application's own Secret (`grafana-oidc`, `pgadmin-oidc`, `freshrss-oidc`, `filebrowser-oidc`, `vikunja-oidc`), its UI (`calibre`, pasted into Calibre-Web's OAuth settings because it stores it in `app.db`), or each Pi's `wg-easy.env` (`WG_EASY_CLIENT_SECRET`), because Secrets do not cross namespaces |
+| `authentik-sso` | `authentik` | `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`, `PLEX_TOKEN`, `GRAFANA_CLIENT_SECRET`, `PGADMIN_CLIENT_SECRET`, `KAVITA_CLIENT_SECRET`, `ARGOCD_CLIENT_SECRET`, `CALIBRE_CLIENT_SECRET`, `RADARR_CLIENT_SECRET`, `RADARR_ANIME_CLIENT_SECRET`, `FRESHRSS_CLIENT_SECRET`, `FILEBROWSER_CLIENT_SECRET`, `VIKUNJA_CLIENT_SECRET`, `AUTOBRR_CLIENT_SECRET`, `CROWDSEC_CLIENT_SECRET`. Exported into the authentik server and worker with `envFrom`; the blueprint `!Env` tags read it | authentik server and worker | Source and provider client secrets, created by the operator. The same values are copied into each application's own Secret (`grafana-oidc`, `pgadmin-oidc`, `freshrss-oidc`, `filebrowser-oidc`, `vikunja-oidc`, `autobrr-oidc`, `crowdsec-web-ui`), or its UI (`calibre`, pasted into Calibre-Web's OAuth settings because it stores it in `app.db`), because Secrets do not cross namespaces. There is no `WG_EASY_CLIENT_SECRET`: no `wg-easy` provider exists, and each Pi's `wg-easy.env` holds the secret it would use. |
 | `authentik-ldap` | `authentik` | `AUTHENTIK_TOKEN` — the `ashulab-ldap` outpost's token | The LDAP outpost Deployment `authentik-ldap` | Created by the operator from the outpost's generated token; the runbook holds the one-liner |
 | `grafana-oidc` | `monitoring` | `GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET` | Grafana chart `envFromSecret`; `grafana.ini` reads it with `$__env{}` | Copy of `GRAFANA_CLIENT_SECRET` from `authentik-sso` |
 | `pgadmin-oidc` | `databases` | `config_local.py` | Mounted at `/pgadmin4/config_local.py` by the chart | Generated file holding `OAUTH2_CONFIG`, with the client secret copied from `authentik-sso` |
