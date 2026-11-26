@@ -247,8 +247,9 @@ gigabytes over it is a directory that should not be in a row.
    `*.dump`, so a newest snapshot with no dump under that claim fails the morning run and names the
    row.
 5. **The bucket is unreachable or the password is lost.** The jobs fail loudly; the password and the
-   bucket's key pair are in Bitwarden (`homelab-backup-last-resort`) and, for the password, nowhere
-   else, and without it the bucket is ciphertext. That is the one loss no monitoring can repair, and
+   bucket's key pair are in Bitwarden (`homelab-backup-last-resort`), the password is copied into the
+   two edge hosts' notes in that same vault so a reflashed Pi needs no cluster, and there is no copy
+   outside it. Without it the bucket is ciphertext. That is the one loss no monitoring can repair, and
    it is why one vault holds the whole chain: [`runbooks/last-resort.md`](../runbooks/last-resort.md)
    is the page for the morning it happens.
 6. **Nobody drills a restore.** The drill log is the only proof the bytes come back, and a year
