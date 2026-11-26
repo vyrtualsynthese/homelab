@@ -21,9 +21,10 @@ Traefik is the only door for HTTP and HTTPS. It runs as a Kubernetes `LoadBalanc
 22000/21027 entries are Minecraft and Syncthing, which Traefik owns as entry points; the router also
 forwards 25565 on UDP, where the `Service` publishes nothing.
 
-The router has rules that never reach the cluster: 51820, 51821 and 51822 (UDP) go to the two edge
-Pis for WireGuard, and four stale Plex and DLNA rules point at `streaming` on ports nothing in the
-cluster listens on. [The Livebox record](../audit/livebox-2026-11-26.md) is the measured table.
+The router's only other rules are three WireGuard forwards to the two edge Pis: 51820 (TCP and UDP)
+on `rbp1`, and 51821 and 51822 (UDP) on `rbp0` and `rbp1`. Nothing else is forwarded — the four Plex
+and DLNA rules the box still carried on 2026-11-26 are deleted. [The Livebox
+record](../audit/livebox-2026-11-26.md) is the measured table and the removal.
 
 One pod serves all of that, not one per node. K3s's service load balancer still puts a small proxy pod
 on every node, so the other three node addresses answer as well — those packets then cross the LAN to
