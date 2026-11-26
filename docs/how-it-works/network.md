@@ -90,9 +90,10 @@ gate, then `lan-only` alone with the reason written next to it. Per-app detail i
 ## Pod to pod, inside the cluster
 
 Nothing above applies between two pods: Traefik is not involved, no middleware runs, and any Service is
-reachable by name from any namespace. The fence there is a `NetworkPolicy`, and it is the one this
-cluster is short of — a compromised Plex or Seerr reaches PostgreSQL, authentik, the CrowdSec LAPI and
-Prometheus, and only each service's own login stands in the way.
+reachable by name from any namespace unless a `NetworkPolicy` says otherwise. The fence exists in four
+namespaces — `vikunja`, `filebrowser`, `databases` and `media-stack`, all since 2026-11-26 — and the rest
+of the cluster is still flat: a pod anywhere else reaches authentik, the CrowdSec LAPI, Prometheus and
+every other Service, and only each service's own login stands in the way.
 
 `cluster/helm/platform/network-policy` holds the fence: a `default-deny-ingress` that selects every pod
 of a namespace, and one `allow-<consumer>` per caller that opens exactly the port it uses. It is applied
@@ -105,12 +106,13 @@ git, and `values/media-stack.yaml` names the source of each pair.
 **Egress is not covered.** The chart denies inbound connections only, so a pod in one of those
 namespaces still opens whatever it likes on its own.
 
-**The fence is real, and it was proven the hard way.** The three Applications were synced on
-2026-11-26 and it is a `NetworkPolicy` engine that enforces, not a tally in git: one caller nobody had
-listed — the `monitoring` alert relay, which opens a board card by calling `vikunja:3456` directly
-rather than through Traefik — was refused with `Connection refused` the minute the floor landed, and
-its allow was added. That is also why the callers that act on an event are the ones to grep for before
-calling a values file complete; the chart's README has the checks and the story.
+**The fence is real, and it was proven the hard way.** The four Applications were synced on
+2026-11-26, `media-stack` last, and it is a `NetworkPolicy` engine that enforces, not a tally in git:
+one caller nobody had listed — the `monitoring` alert relay, which opens a board card by calling
+`vikunja:3456` directly rather than through Traefik — was refused with `Connection refused` the minute
+the floor landed, and its allow was added. `media-stack` is where a missing pair would hide longest, so
+every one of its 51 pairs was probed from the calling pod and the download path was tested through the
+apps' own APIs afterwards; the chart's README holds the checks, the numbers and the story.
 
 ## TLS on `kub.local`
 
