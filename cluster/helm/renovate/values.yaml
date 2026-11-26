@@ -14,7 +14,7 @@ renovate:
     # -- Pinned, and kept equal to `appVersion` in Chart.yaml. Renovate's own
     # docker manager updates this tag; bump `appVersion` with it so the two
     # numbers never disagree.
-    tag: "44.263.1"
+    tag: "45.1.0"
     # -- The tag is pinned, so pulling on every run buys nothing.
     pullPolicy: IfNotPresent
 
