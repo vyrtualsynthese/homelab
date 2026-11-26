@@ -430,6 +430,7 @@ the operator wastes their turn and leaves no record of what changed.
 | n8n | `https://n8n.kub.home.ashudev.com/api/v1` — workflows, executions, credentials, tags; the key goes in the `X-N8N-API-KEY` header, not a bearer token | `N8N_API_KEY` |
 | Traefik, Grafana, anything the MCP exposes | the Kubernetes API or the app's API, read-only | the MCP ServiceAccount |
 | Vikunja | `https://vikunja.kub.local/api/v2` | `$VIKUNJA_MCP_TOKEN` (the bot `bot-opencode`), never `VIKUNJA_API_TOKEN`; the calls are in the `vikunja-board` skill |
+| Livebox (router) | `http://192.168.1.1/ws`, the `sah` JSON API — port forwards, device list | `LIVEBOX_ADMIN_PASSWORD`; the login and the calls are in [`docs/agent-access.md`](docs/agent-access.md#the-router-and-the-login-it-takes) |
 
 - **State the call in the report**, with the endpoint and the result code, so the next agent can
   repeat it instead of re-deriving it.
