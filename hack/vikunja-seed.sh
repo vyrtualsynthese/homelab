@@ -34,10 +34,13 @@
 #   VIKUNJA_API_TOKEN  required. An operator API token, made in the board under
 #                      Settings -> API Tokens. Never echoed by this script.
 #   VIKUNJA_URL        default https://vikunja.kub.local
-#   VIKUNJA_CACERT     optional. Verify the TLS chain against this CA file
-#                      instead of accepting the certificate with -k.
+#   VIKUNJA_CACERT     the CA the board's certificate is checked against.
+#                      Default: ~/.config/secrets/kub-local/local-ca.pem, the
+#                      cluster's own root. The script refuses to run when that
+#                      file is missing; it never accepts the certificate unchecked.
 #
-# Exit: 0 success, 1 an HTTP call failed or a verification did not hold, 2 usage.
+# Exit: 0 success, 1 an HTTP call failed or a verification did not hold, 2 usage
+#       or a missing precondition (the token, the CA file).
 #
 # The procedure, the token's scope and what to do when a line fails are in
 # docs/runbooks/vikunja-board-seed.md.
@@ -98,7 +101,7 @@ FILTER_DOING_TITLE="Agent work in flight"
 VIKUNJA_URL="${VIKUNJA_URL:-https://vikunja.kub.local}"
 VIKUNJA_URL="${VIKUNJA_URL%/}"
 VIKUNJA_API_TOKEN="${VIKUNJA_API_TOKEN:-}"
-VIKUNJA_CACERT="${VIKUNJA_CACERT:-}"
+VIKUNJA_CACERT="${VIKUNJA_CACERT:-$HOME/.config/secrets/kub-local/local-ca.pem}"
 API_PATH="/api/v1"
 # The bucketed-task view lives under v2 on this instance. The v1 bucket listing
 # always answers a count of 0, which would make every rename guard pass; this one
@@ -866,14 +869,17 @@ command -v curl >/dev/null 2>&1 || die "curl is not installed"
 command -v jq >/dev/null 2>&1 || die "jq is not installed"
 
 # The board's certificate is signed by the cluster's own CA, which is not in the
-# system store on every machine. -k accepts it without checking it; setting
-# VIKUNJA_CACERT checks the chain against that CA instead. The runbook says which
-# to use and what each proves.
-if [ -n "$VIKUNJA_CACERT" ]; then
-  TLS_ARGS=(--cacert "$VIKUNJA_CACERT")
-else
-  TLS_ARGS=(-k)
+# system store on every machine, so curl is pointed at that root explicitly. -k is
+# not a fallback: every request carries the operator token, and accepting the
+# certificate unchecked hands the token to whatever answers for the name. A
+# missing file is a precondition that stops the run, not a reason to go insecure.
+if [ ! -r "$VIKUNJA_CACERT" ]; then
+  printf 'vikunja-seed: no readable CA file at %s\n' "$VIKUNJA_CACERT" >&2
+  printf 'Install the cluster root there (docs/runbooks/internal-ca.md), or point\n' >&2
+  printf 'VIKUNJA_CACERT at it; see docs/runbooks/vikunja-board-seed.md Step 1.\n' >&2
+  exit 2
 fi
+TLS_ARGS=(--cacert "$VIKUNJA_CACERT")
 
 if [ "$VERIFY" = 1 ]; then
   verify
