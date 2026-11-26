@@ -342,6 +342,40 @@ as the bridge until this upload landed. Those copies are still in the snapshots 
 keeps and can still be restored, but no night adds one, and `backup-verify` now reports the upload
 as `etcd-s3 server=<name> file=… age_h=…` instead of reading a copy out of the stream.
 
+## Section 5 — an edge Pi's own state
+
+The two Pis write their own repositories, so this is the one restore that needs no cluster at all: a
+machine with restic and the bucket password is enough ([`last-resort.md`](last-resort.md)).
+
+```sh
+export RESTIC_REPOSITORY=s3:https://s3.gra.io.cloud.ovh.net/ashudev-homelab-backup/edge-rbp0
+export RESTIC_PASSWORD=…            # the homelab-backup-last-resort item
+restic snapshots --tag stream=edge-rbp0 --latest 1
+restic restore latest --target /tmp/pi-restore
+```
+
+The target keeps the path the snapshot stored, so the tree lands at
+`/tmp/pi-restore/var/lib/pi-backup/tree`. Hand that directory to `restore` on the host — the
+directory holding `dockers/`:
+
+```sh
+sudo /usr/local/sbin/hosts-pi.sh restore /tmp/pi-restore/var/lib/pi-backup/tree <host>
+sudo /usr/local/sbin/hosts-pi.sh verify <host>
+```
+
+The restore passes when the four things a rebuild needs are there, not when the tree matches the live
+one byte for byte — `docker-ps.txt`, `host.txt` and the three exclusions make the two differ by
+design:
+
+1. `dockers/etc-pihole/gravity.db` opens and `pragma integrity_check` answers `ok` (with a non-zero
+   `select count(*) from domainlist`, so an empty database does not pass);
+2. `dockers/config/wg-easy.db` opens and `pragma integrity_check` answers `ok`;
+3. `dockers/pihole.env` is present: the panel password is in it;
+4. `boot/` holds both `config.txt` and `cmdline.txt`.
+
+**Verified 2026-11-26:** not yet restored — the first run of this section is the drill that makes it
+`proved`.
+
 ## Teardown
 
 ```bash
@@ -353,7 +387,7 @@ before the pod is deleted. The bucket is untouched by every command above.
 
 ## The drill log
 
-One drill a month, rotating through sections 1–4. A drill counts once its row is written: the point
+One drill a month, rotating through sections 1–5. A drill counts once its row is written: the point
 of the table is that the next person can see what has been tried recently, not what is believed.
 
 | Date (UTC) | Drill | Duration | Result | By |

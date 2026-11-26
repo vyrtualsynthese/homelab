@@ -210,6 +210,25 @@ access_key_id` and `-raw secret_access_key` in that stack. They are not the stat
 must never be: that one reaches the OpenTofu state. The restic password is not an S3 credential at
 all — it encrypts the repository, and losing it loses the backups.
 
+### The edge Pis' credential
+
+Each Pi holds `/etc/restic/edge.env`, root-owned and mode 0600, with four lines:
+`RESTIC_REPOSITORY` (its own `edge-rbp0` or `edge-rbp1` prefix), `RESTIC_PASSWORD` (the bucket's, the
+same value as `backup-restic`), and `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY`. It is not a
+Kubernetes Secret, because the host writes to the bucket when the cluster is unreachable — the case
+the backup exists for.
+
+The S3 pair is a **second OVH user**, declared in `infra-main/ovh/backup.tf` beside the cluster's and
+scoped to `ashudev-homelab-backup/edge-rbp0/*` and `.../edge-rbp1/*`. A compromised Pi cannot read or
+delete the cluster's streams, and the cluster's own user keeps read on the two prefixes, which is how
+`backup-verify` checks them. `hosts-pi.sh setup` never writes this file, and it retires the revoked
+`RESTIC_*`/`AWS_*` lines the old 04:00 cron left in `/etc/environment`; see
+[`how-it-works/backups.md`](how-it-works/backups.md).
+
+Each file is stored verbatim as a Bitwarden secure note (`edge-rbp0.env`, `edge-rbp1.env`), because
+what a reflashed Pi needs before its first timer run is exactly those four lines. The password inside
+is the `homelab-backup-last-resort` item's.
+
 Three credentials are **not** Kubernetes Secrets, and a rebuild needs all three; the fourth row is the
 one Secret K3s reads from outside a chart.
 

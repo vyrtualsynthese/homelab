@@ -86,9 +86,19 @@ own `user-data` on the boot partition before the first boot — step 4. The imag
 
 ## Steps
 
-**1. Back up on the Pi.** The script reads the compose templates from beside itself, so the `ansible/`
-tree travels with it. `backup` refuses a directory on the same filesystem as the stack, and the Pi has
-only the FAT beside its root, so use a USB stick:
+**1. Confirm last night's snapshot.** The Pi writes its own repository at 04:30, so the reflash
+restores from the bucket rather than depending on a stick. Check the newest snapshot is from the last
+26 hours — [`restore.md`](restore.md) Section 5 has the whole procedure:
+
+```bash
+export RESTIC_REPOSITORY=s3:https://s3.gra.io.cloud.ovh.net/ashudev-homelab-backup/edge-<host>
+restic snapshots --tag stream=edge-<host> --latest 1
+```
+
+If it is older, run `sudo /usr/local/sbin/hosts-pi.sh stream <host>` on the Pi before going further. A
+USB copy is still worth taking as a second copy: the script reads the compose templates from beside
+itself, so the `ansible/` tree travels with it, and `backup` refuses a directory on the stack's own
+filesystem, so use a stick:
 
 ```bash
 scp -r ansible vronteix@<host>:~/hosts
@@ -167,6 +177,20 @@ sudo ~/hosts/pi/hosts-pi.sh restore /mnt/dockers <host>
 sudo ~/hosts/pi/hosts-pi.sh setup <host>
 sudo ~/hosts/pi/hosts-pi.sh verify <host>
 ```
+
+After `setup`, write `/etc/restic/edge.env` from the password manager before the first timer run:
+four lines (`RESTIC_REPOSITORY`, `RESTIC_PASSWORD`, and the scoped S3 pair), root-owned and mode 0600,
+with the item named in [`../secrets.md`](../secrets.md). `stream` refuses without it, and `verify` names
+it when it is missing. If the stick is gone, the tree comes from the repository instead: on any machine
+with restic and that file,
+
+```bash
+restic restore latest --target /tmp/pi-restore
+scp -r /tmp/pi-restore/var/lib/pi-backup/tree vronteix@<host>:~
+```
+
+then point `restore` at `~/tree` — the snapshot stores `/var/lib/pi-backup/tree/…`, so the directory
+handed to `restore` is the one holding `dockers/`.
 
 `restore` copies the tree and then verifies, so on a fresh image it exits 1 for more than one reason: a
 file the copy predates or the image does not have yet, and an engine that is not installed. Both are
@@ -289,7 +313,7 @@ It answers at `https://vpn-rbp0.kub.local:8443` on `rbp0` and `https://vpn-rbp1.
 ## Rolling back
 
 There is no downgrade here either: the way back is the outgoing release's image on the same disk, then
-`restore` from the copy taken in step 1. Keep that image file until the new host has answered DNS and
+`restore` from the copy taken in step 1 — the USB stick, or the Pi's own repository when there is none. Keep that image file until the new host has answered DNS and
 served its stack for a day — `pihole.env` and the state come back from the backup, and nothing on the Pi
 writes outside `dockers` except the boot files, which `backup` copies, and the netplan file, which `setup`
 rewrites from the template.
