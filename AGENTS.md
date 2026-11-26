@@ -393,9 +393,10 @@ A `kubernetes` MCP server (containers/kubernetes-mcp-server) is configured globa
 as the **read-only** ServiceAccount `kube-system/opencode-mcp`, using `~/.kube/mcp-readonly.yaml`.
 
 - RBAC lives in `kubectl/mcp-readonly-rbac.yaml` (applied by hand): built-in `view` plus read on
-  nodes/PVs/namespaces/StorageClasses, `apiextensions.k8s.io` `CustomResourceDefinition`, the CRDs
-  this repo uses, and the K3s addon objects (`helm.cattle.io` `HelmChart`/`HelmChartConfig`,
-  `k3s.cattle.io` `Addon`) so addon drift is visible. `view` excludes Secrets by design.
+  nodes/PVs/namespaces/StorageClasses, IngressClasses, ClusterRoles and ClusterRoleBindings,
+  `apiextensions.k8s.io` `CustomResourceDefinition`, the CRDs this repo uses, and the K3s addon
+  objects (`helm.cattle.io` `HelmChart`/`HelmChartConfig`, `k3s.cattle.io` `Addon`) so addon drift is
+  visible. `view` excludes Secrets by design.
 - The upgrade plans are the one namespaced grant: a `Role` in `system-upgrade` reads
   `upgrade.cattle.io` `Plan`, which is where the pinned version and the target node of a K3s upgrade
   live. It is read-only: pointing a plan at a node stays the operator's step.

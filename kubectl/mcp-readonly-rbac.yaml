@@ -1,5 +1,14 @@
-# Read-only identity for the OpenCode kubernetes MCP server.
+# Read-only identity for the OpenCode kubernetes MCP server and for every shell it starts.
+# This file is the whole record of who may read the cluster as an agent: one ServiceAccount,
+# kube-system/opencode-mcp, its token Secret, two ClusterRoleBindings, and one Role in
+# system-upgrade for the upgrade plans. Nothing else is granted to it, and nothing else should be.
+# A second read-only account, kube-system/mcp-reader with its mcp-read-only ClusterRole and
+# mcp-reader-binding, lived unrecorded until 2026-11-26, when it was deleted with the seven
+# cluster-admin bindings that dead Helm releases had left on orphaned helm-* ServiceAccounts.
 # Applied by hand (not GitOps-managed): kubectl apply -f kubectl/mcp-readonly-rbac.yaml
+# Prove it as the identity itself:
+#   KUBECONFIG=~/.kube/mcp-readonly.yaml kubectl auth can-i list clusterrolebindings    # yes
+#   KUBECONFIG=~/.kube/mcp-readonly.yaml kubectl auth can-i list secrets -n kube-system # no
 # The built-in `view` ClusterRole grants read on most resources and deliberately excludes Secrets.
 apiVersion: v1
 kind: ServiceAccount
