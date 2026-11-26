@@ -139,15 +139,18 @@ rather than bypassed quietly.
 - `python3` is assumed, not installed: 3.12 on `rbp0`, 3.10 on `rbp1`, and the consistent copy uses
   nothing newer than 3.10.
 - The script installed as `/usr/local/sbin/hosts-pi.sh`, root-owned, mode 0555. A root timer must not
-  execute a file the human account can rewrite. `setup` keeps rendering from `~/hosts/pi`, and
-  `verify` fails when the installed copy and the repo copy differ. (This is hygiene, not a new
+  execute a file the human account can rewrite. A host with no checkout runs `verify` from there, so
+  `setup` also installs the render templates it needs at `/usr/local/lib/hosts-pi/templates`
+  (root-owned, 0644), and the script looks beside itself and then there. `setup` keeps rendering from
+  `~/hosts/pi`, and `verify` fails when the installed copy and the repo copy differ. (This is hygiene, not a new
   boundary: `vronteix` is in the `docker` group, which is already root-equivalent.)
 - `/etc/systemd/system/pi-backup.service` — oneshot, `EnvironmentFile=/etc/restic/edge.env`,
   `ExecStart=/usr/local/sbin/hosts-pi.sh stream <host>`, rendered from a template with the host
   substituted, like the compose template.
-- `/etc/systemd/system/pi-backup.timer` — `OnCalendar=*-*-* 04:30:00`, `RandomizedDelaySec=15min`,
-  `Persistent=true`, enabled and started. Both Pis run at the same hour; the delay spreads the two
-  uploads without a second table of times to maintain.
+- `/etc/systemd/system/pi-backup.timer` — `OnCalendar=*-*-* 04:30:00 Europe/Paris`,
+  `RandomizedDelaySec=15min`, `Persistent=true`, enabled and started. Both Pis run at the same
+  instant whatever their own clock says; the delay spreads the two uploads without a second table of
+  times to maintain.
 - **The retirement of the legacy job**: the `04:00` line pointing at `/home/vronteix/scripts/backup.sh`
   is removed from root's crontab, and `RESTIC_REPOSITORY`, `RESTIC_PASSWORD`, `AWS_ACCESS_KEY_ID` and
   `AWS_SECRET_ACCESS_KEY` are removed from `/etc/environment` (the dead keys). Everything else in that
