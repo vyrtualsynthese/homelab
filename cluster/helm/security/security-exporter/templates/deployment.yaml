@@ -58,6 +58,15 @@ spec:
                   name: {{ .Values.securityExporter.authentik.secretName }}
                   key: {{ .Values.securityExporter.authentik.secretKey }}
                   optional: true
+            # The salt that turns an address into the `source` label. Optional for
+            # the same reason as the token: a missing key costs the per-source
+            # family, never the pod.
+            - name: AUTHENTIK_ADDRESS_SALT
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.securityExporter.authentik.secretName }}
+                  key: {{ .Values.securityExporter.authentik.saltKey }}
+                  optional: true
           ports:
             - name: http
               containerPort: {{ .Values.securityExporter.service.port }}

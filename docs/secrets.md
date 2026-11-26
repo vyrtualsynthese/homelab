@@ -5,7 +5,7 @@
 > PostgreSQL instance and the per-application database passwords.
 >
 > **Use it when** a pod is stuck in `CreateContainerConfigError`, a rebuild needs to know which Secret
-> to create first, or a credential is being rotated · **Verified** 2026-11-23 · **Kind:** reference
+> to create first, or a credential is being rotated · **Verified** 2026-11-26 · **Kind:** reference
 >
 > **Sources** `docs/runbooks/last-resort.md`, `docs/security/critical-points.md`, `cluster/helm/`
 
@@ -60,6 +60,7 @@ keys at all.
 | `bazarr`, `bazarr-anime` | `media-stack` | `secret` → exportarr APIKEY (only when `exportarr.enabled`; off until exportarr v3) |
 | `autobrr-oidc` | `media-stack` | `client-secret` → `AUTOBRR__OIDC_CLIENT_SECRET`, the authentik provider's client secret |
 | `crowdsec-web-ui` | `security` | `lapi-password` → `CONFIG_INSTANCES_0_LAPI_AUTH_PASSWORD`, the watcher credential `cscli machines add` issues in the LAPI; `oidc-client-secret` → `CONFIG_AUTH_OIDC_CLIENT_SECRET`, the authentik provider's client secret (the same value as `CROWDSEC_CLIENT_SECRET` in `authentik-sso`) |
+| `security-exporter-authentik` | `security` | `token` → `AUTHENTIK_TOKEN`, a read-only authentik token for the events endpoint that feeds the sign-in counts; `address-salt` → `AUTHENTIK_ADDRESS_SALT`, the salt that turns an address into the `source` label of `homelab_authentik_signins_15m_by_source` (`openssl rand -hex 32`). Both references are `optional`: no token means posture only, no salt means no per-source family |
 | `freshrss-oidc` | `news` | `client-secret` → `OIDC_CLIENT_SECRET`, the authentik provider's client secret; `client-crypto-key` → `OIDC_CLIENT_CRYPTO_KEY`, the module's own encryption key |
 | `plex` | `media-stack` | `plex_claim` |
 | `qbittorrent-exporter` | `media-stack` | `username`, `password` |

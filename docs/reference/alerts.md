@@ -17,8 +17,8 @@ The overview — what runs where, its sizing, and how to query the stack:
 ## Alerting
 
 Grafana unified alerting, folder `Homelab`, **two rule groups split by cadence
-on 2026-11-18**: `homelab-core-fast` at **60 s** (27 rules) and `homelab-core` at
-**300 s** (31 rules). **58 rules**, **two contact points**, and four child routes: two by severity and
+on 2026-11-18**: `homelab-core-fast` at **60 s** (28 rules) and `homelab-core` at
+**300 s** (31 rules). **59 rules**, **two contact points**, and four child routes: two by severity and
 two on `board=card` — one to each contact point.
 
 The split rule is the `for` duration: a rule sits in the fast group when its `for`
@@ -125,6 +125,7 @@ confirmed by the first read-back):**
 | `CloudTlsCertificateExpiring` | days to the earliest public certificate, firing below 21 | 1h | warning | inactive |
 | `SecurityBanBurst` | more than 20 new bans on the `streaming` bouncer in 10 minutes | 5m | warning | inactive |
 | `AuthentikSignInFailures` | more than 20 failed authentik sign-ins in 15 minutes | 5m | warning | inactive |
+| `AuthentikSignInSuccessAfterBurst` | a sign-in that worked, from a source with more than 20 failures in the same 15 minutes | 5m | critical | inactive |
 | `HostSshBruteForce` | more than 10 failed SSH passwords on one host in 10 minutes | 5m | warning | inactive |
 | `HostFirewallBlockBurst` | more than 200 `UFW BLOCK` lines on one host in 5 minutes | 5m | warning | inactive |
 | `SecurityExposureDrift` | an ungated route, or the public-host or privileged-controller count off its expected value | 10m | critical | inactive |
@@ -437,16 +438,18 @@ None of the three carries a `TraefikDown` twin, and none needs one: the `Deploym
 `kube-system`, so `CoreDeploymentDown` covers a router that stops running, and `ScrapeTargetDown`
 covers the pod's `:9100` scrape going quiet while the pod still answers.
 
-**The seven security rules** (six on 2026-11-25, `SecurityBouncerStalled` on 2026-11-26) are the
-ones whose job is a person rather than an application; only the first five read a log rather than a
-metric. Six sit in `homelab-core-fast`; `SecurityExposureDrift` sits in `homelab-core` because its
-`for` is 10 minutes, which is the split above, and a posture change is a slow fault that gains
-nothing from a 60-second check.
+**The eight security rules** (six on 2026-11-25, `SecurityBouncerStalled` and
+`AuthentikSignInSuccessAfterBurst` on 2026-11-26) are the ones whose job is a person rather than an
+application; only the first five read a log rather than a metric. Seven sit in
+`homelab-core-fast`; `SecurityExposureDrift` sits in `homelab-core` because its `for` is 10 minutes,
+which is the split above, and a posture change is a slow fault that gains nothing from a 60-second
+check.
 
 | Rule | Reads | Why that threshold |
 |---|---|---|
 | `SecurityBanBurst` | `delta(sum(fw_bouncer_banned_ips)[10m:1m])`, Prometheus | one or two bans a day is the normal rate; twenty in ten minutes is a scenario matching a stream |
 | `AuthentikSignInFailures` | `homelab_authentik_signins_15m{outcome="failure"}` | the exporter's own count, so the rule cannot disagree with the dashboard's tile |
+| `AuthentikSignInSuccessAfterBurst` | `homelab_authentik_signins_15m_by_source{outcome="failure"} > 20` joined on `source` to `outcome="success" > 0` | the same twenty failures, plus the one event that turns a nuisance into a compromise; a measured typo burst is three |
 | `HostSshBruteForce` | `{source="journal", unit="ssh"}` filtered to failed passwords | 4 in 24 hours across the whole cluster on the day it was written |
 | `HostFirewallBlockBurst` | `{source="journal", unit="kernel"}` filtered to `UFW BLOCK` | about eight per five minutes per node is the background; 200 is a scan |
 | `SecurityExposureDrift` | the exporter's three posture gauges | expected 0 ungated, 9 public hosts, 9 privileged controllers |
@@ -556,10 +559,19 @@ reports `firing` on the Health dashboard.
   inside each line (`_HOSTNAME`) is not a stream label, so a rule has to extract it. The other units
   on every node stay unshipped by decision, and the volume is sized in
   [`log-budget.md`](log-budget.md#the-host-journal-first-numbers).
-- **A successful authentik sign-in after a burst of failures is invisible.** `AuthentikSignInFailures`
-  counts failures only. The exporter publishes a count per outcome with no address, and CrowdSec reads
-  HTTP status rather than the identity provider's event log, so nothing joins "failures from this
-  address" to "the sign-in that worked". A per-address count from the exporter is the prerequisite.
+- **CrowdSec is watched for silence, not for a dead poll.** `SecurityStackBlind` fires when the
+  firewall bouncer, the LAPI or the agent stops exporting its metrics. A bouncer that keeps exporting
+  while it no longer polls the LAPI — the scrape answers, the decision stream is dead — freezes the ban
+  set with every rule green. `rate(cs_lapi_bouncer_requests_total[10m])` read **0.1 req/s** (one poll
+  every 10 s) on 2026-11-26, so zero for ten minutes would name that case; no rule reads it yet.
+- **The success-after-a-burst rule sees one window and one shape.** `AuthentikSignInSuccessAfterBurst`
+  reads the exporter's per-source family: a source with more than 20 failures in fifteen minutes that
+  also signed in inside the same fifteen minutes. Two cases stay invisible by construction. A slow
+  spray — five attempts an hour against the same account — never reaches twenty in one window, and a
+  success twenty minutes after the burst falls out of it. And the label is a salted pseudonym, so the
+  message cannot print the address: it names the failure count, and the address is read in authentik's
+  Events page or the gated access log. The family carries the twenty busiest repeatedly failing
+  sources; `homelab_authentik_signins_by_source_omitted` says when the cap left one out.
 - **`PVCFillingUp` is blind for `local-path` claims.** The rule is NFS-only by
   construction; why the metric cannot exist for a `local-path` claim is in
   [`metrics.md`](metrics.md#exporter-quirks). The node filesystem rule covers the

@@ -70,12 +70,21 @@ securityExporter:
   # hand in this Secret and is never in git:
   #
   #   kubectl -n security create secret generic security-exporter-authentik \
-  #     --from-literal=token="$AUTHENTIK_TOKEN"
+  #     --from-literal=token="$AUTHENTIK_TOKEN" \
+  #     --from-literal=address-salt="$(openssl rand -hex 32)"
   #
   # No token is a healthy state, not an error: the Deployment marks the reference
   # `optional`, the exporter runs posture-only, and it publishes no sign-in family
   # at all rather than three zeros that would read as a quiet day. Counting starts
   # on the next pod start after the Secret exists.
+  #
+  # The salt is the second key of the same Secret, and it is what turns an address
+  # into the `source` label of `homelab_authentik_signins_15m_by_source`. It is a
+  # Secret because IPv4 has only four billion values: an unsalted hash is a
+  # spreadsheet lookup, so a salt in git would be no salt. Without the key the
+  # aggregate windows still publish and only the per-source family is absent, so
+  # the burst rule has nothing to read until it exists — a missing Secret key is a
+  # deploy step, and the exporter says so once at start-up.
   #
   # The freshness family covers every configured source: with a token, one poll
   # succeeds only when the cluster read *and* the authentik read succeed, so
@@ -86,6 +95,7 @@ securityExporter:
     url: https://authentik.kub.home.ashudev.com
     secretName: security-exporter-authentik
     secretKey: token
+    saltKey: address-salt
 
   # 30 MiB was the design's estimate; the request is the relay's, and the limit
   # leaves room for one large route list.

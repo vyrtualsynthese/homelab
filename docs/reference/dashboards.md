@@ -178,9 +178,10 @@ the bouncer's family is a gauge.
 request never reaches Traefik and has no line in the access log, so an address that is banned and an
 address that is merely being refused look the same in the log and not the same here. The exact ban
 list is `cscli decisions list`, and the count is the *Bans active* tile. **Sign-in outcomes is a count
-with no address attached**: the exporter reads authentik's event API and publishes a total per result,
-never who signed in — [the design](../superpowers/specs/2026-11-25-security-detection-design.md) §6.5
-says why.
+per result, never the address**: the exporter reads authentik's event API and publishes a total per
+result, plus a per-source family whose `source` is a salted pseudonym — [the design](../superpowers/specs/2026-11-25-security-detection-design.md)
+§6.5 says why the address itself stays out, and the salt is the difference between a pseudonym and a
+spreadsheet lookup.
 
 Both thresholds were measured on 2026-11-25, before either was set. The screen's nine panels and the
 danger-state expression that reads these two numbers are described above; nothing here is a round
