@@ -4,14 +4,16 @@
 # it describes, and `expectedNote` says when the live side was last read.
 #
 # Read on 2026-11-25 through the read-only MCP ServiceAccount: 73 IngressRoute
-# objects live, 9 public hosts, and 9 privileged workloads. This pair reads 75
-# because the change that adds them also adds `crowdsec-web-ui`, whose two routes
-# are live from its first sync; the date stays the last live read, not the last
-# claim. `ingressRoutes` is the
-# object count, the unit `kubectl get ingressroute | wc -l` prints; the number the
-# charts render is counted by hack/gen_docs.py, not typed in, and the one route
-# that explains the gap is named in docs/reference/routes.md, which
-# test_security_exporter.py ties to `LIVE_INGRESS_ROUTES`.
+# objects live, 9 public hosts, and 9 privileged workloads. The privileged count
+# was read again on 2026-11-26 at 8 — pihole-exporter's pod was not Running after
+# its chart dropped the flag — and mktxp's flag went the same day, which leaves 7
+# once it syncs. `ingressRoutes` reads 75 because the change that adds this pair
+# also adds `crowdsec-web-ui`, whose two routes are live from its first sync; the
+# date stays the last live read, not the last claim. It is the object count, the
+# unit `kubectl get ingressroute | wc -l` prints; the number the charts render is
+# counted by hack/gen_docs.py, not typed in, and the one route that explains the
+# gap is named in docs/reference/routes.md, which test_security_exporter.py ties
+# to `LIVE_INGRESS_ROUTES`.
 #
 # `privilegedWorkloads` counts distinct controllers with at least one Running pod
 # that declares a privileged container, in `containers` or `initContainers`. The
@@ -21,21 +23,23 @@
 # (k3s's own jobs), and a pod whose phase is not Running is over, so completed
 # and failed jobs never enter the count.
 #
-# That is nine today: the five gpu-operator DaemonSets (gpu-feature-discovery,
+# That is seven today: the five gpu-operator DaemonSets (gpu-feature-discovery,
 # nvidia-container-toolkit-daemonset, nvidia-dcgm-exporter,
-# nvidia-device-plugin-daemonset, nvidia-operator-validator), qbittorrent, mktxp,
-# pihole-exporter and prometheus-smartctl. The per-pod count is 21 and must not
-# be used: prometheus-smartctl alone runs one pod per node, and the k3s job pods
-# come and go. The GPU operator's pods are this repository's the moment their
-# chart is in it; they enter the number by ownership and phase, not by being
-# someone else's decision. A count of the charts in the repository (4) cannot be
-# computed from what the exporter can see, which is pods.
+# nvidia-device-plugin-daemonset, nvidia-operator-validator), qbittorrent and
+# prometheus-smartctl. mktxp and pihole-exporter left the list on 2026-11-26:
+# both only call an API over TCP, so neither ever needed the host. The per-pod
+# count is higher and must not be used: prometheus-smartctl alone runs one pod
+# per node, and the k3s job pods come and go. The GPU operator's pods are this
+# repository's the moment their chart is in it; they enter the number by
+# ownership and phase, not by being someone else's decision. A count of the
+# charts in the repository (2) cannot be computed from what the exporter can see,
+# which is pods.
 securityExporter:
   expected:
     ingressRoutes: 75
     publicHosts: 9
-    privilegedWorkloads: 9
-  expectedNote: "73 read 2026-11-25; 75 with the two crowdsec-web-ui routes, live at its first sync; see docs/reference/routes.md"
+    privilegedWorkloads: 7
+  expectedNote: "73 routes and 9 privileged controllers read 2026-11-25; 75 routes with the two crowdsec-web-ui routes, live at its first sync; 8 privileged controllers read 2026-11-26, 7 with mktxp's flag dropped; see docs/reference/routes.md"
   # The same list as `PUBLIC_HOSTS` in hack/check_exposure.py, which owns it.
   # test_security_exporter.py fails the moment the two differ, because a copy in
   # a chart is how a posture panel starts lying.

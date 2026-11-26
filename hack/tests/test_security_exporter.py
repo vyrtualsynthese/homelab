@@ -37,7 +37,7 @@ class ReconciledConstantsTests(unittest.TestCase):
         expected = self.values["expected"]
         self.assertEqual(expected["ingressRoutes"], 75)
         self.assertEqual(expected["publicHosts"], 9)
-        self.assertEqual(expected["privilegedWorkloads"], 9)
+        self.assertEqual(expected["privilegedWorkloads"], 7)
         # Every number is a claim about the cluster today; the note says when it
         # was read, so a stale constant is visible rather than plausible.
         self.assertIn("2026-11-25", self.values["expectedNote"])

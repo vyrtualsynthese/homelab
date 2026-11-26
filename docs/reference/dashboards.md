@@ -141,7 +141,7 @@ clamp_max(
     2 * (delta(sum(fw_bouncer_banned_ips)[1h:1m]) > bool 20 or vector(0))
   + 2 * (count(homelab_security_ungated_routes > 0)
          or count(homelab_security_public_hosts != 9)
-         or count(homelab_security_privileged_workloads != 9) or vector(0))
+         or count(homelab_security_privileged_workloads != 7) or vector(0))
   + 2 * (((time() - homelab_security_exporter_last_success_timestamp_seconds > 600)
           or absent(homelab_security_exporter_last_success_timestamp_seconds)
           or absent(fw_bouncer_banned_ips) or absent(cs_active_decisions)

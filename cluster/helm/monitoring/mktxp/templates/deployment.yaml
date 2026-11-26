@@ -34,9 +34,16 @@ spec:
         - name : conf-volume
           emptyDir: {}
       initContainers:
-        - name: init-nextcloud-nginx-config
+        # Copies the Secret into a writable emptyDir, because mktxp rewrites its
+        # config file in place. `cp` needs no capability to do it.
+        - name: init-config
           image: busybox:1.38
           command: [ 'sh', '-c', "cp /secret/* /mktxp" ]
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
           volumeMounts:
             - name: secret-volume
               mountPath: /secret

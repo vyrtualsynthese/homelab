@@ -63,7 +63,8 @@ wrong.
   address, the salt is a Secret, and the panel still shows no address — reading one back is a lookup,
   not a field.
 - **The posture tiles are expected constants, not a judgement.** 73 routes, 0 ungated, 9 public hosts
-  and 9 privileged controllers were read from the cluster on 2026-11-25. A tile that moves is a change
+  and 9 privileged controllers were read from the cluster on 2026-11-25; the privileged count was read
+  again on 2026-11-26 at 8, and 7 once mktxp's flag is dropped. A tile that moves is a change
   to the cluster, and `SecurityExposureDrift` is the rule that says so.
 
 ## Restoring after a wipe

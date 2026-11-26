@@ -36,16 +36,16 @@ podAnnotations:
 
 podSecurityContext: {}
 
-  # fsGroup: 2000
-
+# mktxp speaks the RouterOS API over TCP and mounts only a Secret and an
+# emptyDir: it reads no device, touches no host path and binds no port below
+# 1024. `privileged: true` was a `helm create` leftover from another chart, so
+# it is gone and the capabilities go with it. The image still starts as root;
+# this narrows what that root can reach rather than changing the user.
 securityContext:
-  privileged: true
-  # capabilities:
-  #   drop:
-  #   - ALL
-  # readOnlyRootFilesystem: true
-  # runAsNonRoot: true
-  # runAsUser: 1000
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
 
 ingress:
   enabled: false
