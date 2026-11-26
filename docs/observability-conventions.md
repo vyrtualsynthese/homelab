@@ -102,16 +102,31 @@ broken name green.
 
 ## How to query the stack
 
-Agents do not need cluster access for any of this. Prometheus and Grafana answer on their hostnames;
-Loki is behind a sign-in since 2026-11-22, so its recipes carry the Grafana token instead of an open
-port.
+Agents do not need cluster access for any of this. Prometheus, Grafana and Loki answer on their
+hostnames; Prometheus wants a password since 2026-11-26, Grafana has its own sign-in, and Loki sits
+behind the authentik gate since 2026-11-22, so the recipes below carry a credential instead of
+reaching an open port.
 
-**Prometheus** — `http://prometheus.kub.local`, no authentication:
+**Prometheus** — `http://prometheus.kub.local`, basic auth, and the password is the only thing
+standing between a caller and every metric the cluster holds. It is Prometheus's own check
+(`--web.config.file` in `cluster/helm/monitoring/prometheus/values.yaml`), not the route's
+`lan-only` middleware, because that middleware admits the pod network as well as the LAN: a gate on
+the route would leave `/api/v1/*` open to every pod. The host is still on plain HTTP, so the password
+crosses the LAN where anything capturing traffic reads it; on WireGuard it is inside the tunnel.
+Moving the name to TLS needs a second router for the redirect, which the generated routes page
+cannot take until the live object count moves with it.
+
+The user is `ops`, and the password is `PROMETHEUS_AUTH_PASSWORD` in `~/.config/secrets/homelab.env`:
 
 ```bash
-curl -sG http://prometheus.kub.local/api/v1/query \
+source ~/.config/secrets/homelab.env
+curl -sG -u "ops:$PROMETHEUS_AUTH_PASSWORD" http://prometheus.kub.local/api/v1/query \
   --data-urlencode 'query=count(up==1)'
 ```
+
+Two more users live in the same Secret and are not for a human: `grafana` is what the datasource in
+`cluster/helm/monitoring/grafana` signs in with, and `reload` is what the config-reloader uses on
+`/-/reload`, now behind the same check as every other path.
 
 Useful endpoints: `/api/v1/query`, `/api/v1/query_range`, `/api/v1/targets`,
 `/api/v1/rules`, `/api/v1/status/flags`, `/api/v1/status/config`.

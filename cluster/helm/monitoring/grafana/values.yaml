@@ -11,6 +11,16 @@ grafana:
   # Client secret from a Secret in this namespace; the chart exports its keys as
   # environment variables. The ini reads it with $__env{} so no secret is in git.
   envFromSecret: grafana-oidc
+  # The Prometheus query API answers 401 without a credential since 2026-11-26
+  # (cluster/helm/monitoring/prometheus/values.yaml), so the datasource below
+  # carries one. Grafana's provisioning replaces ${...} in the datasource file
+  # with the environment at startup, so the password itself is not in git; this
+  # is the `grafana` user of `prometheus-basicauth`, not the operator's `ops` one.
+  envValueFrom:
+    PROMETHEUS_GRAFANA_PASSWORD:
+      secretKeyRef:
+        name: prometheus-basicauth
+        key: grafana-password
   grafana.ini:
     server:
       # Must carry the scheme the browser uses. Grafana builds the Source and
@@ -113,6 +123,11 @@ grafana:
           url: http://prometheus-server.monitoring.svc.cluster.local
           access: proxy
           isDefault: true
+          # The query API requires it; the password comes from the Secret above.
+          basicAuth: true
+          basicAuthUser: grafana
+          secureJsonData:
+            basicAuthPassword: ${PROMETHEUS_GRAFANA_PASSWORD}
         - name: Loki
           type: loki
           url: http://loki.monitoring.svc.cluster.local:3100

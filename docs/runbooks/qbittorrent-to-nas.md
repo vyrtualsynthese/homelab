@@ -342,14 +342,15 @@ finished.
 Then the four checks that say the app is back, and the same ones the 24-hour gate uses:
 
 ```bash
+set -a; . ~/.config/secrets/homelab.env; set +a
 # the torrent list the app reports: 317 at the first run, and the same before and after
 kubectl -n media-stack exec deploy/qbittorrent -c qbittorrent -- \
   sh -c 'curl -s --max-time 10 "http://$(hostname -i):8080/api/v2/torrents/info" | grep -o "\"hash\"" | wc -l'
 
 # the exporter is scraping again: 1, and the scrape well under a second (0.086 s on the first run)
-curl -sG http://prometheus.kub.local/api/v1/query --data-urlencode \
+curl -sG -u "ops:$PROMETHEUS_AUTH_PASSWORD" http://prometheus.kub.local/api/v1/query --data-urlencode \
   'query=up{app_kubernetes_io_instance="qbittorrent-exporter"}'
-curl -sG http://prometheus.kub.local/api/v1/query --data-urlencode \
+curl -sG -u "ops:$PROMETHEUS_AUTH_PASSWORD" http://prometheus.kub.local/api/v1/query --data-urlencode \
   'query=max(scrape_duration_seconds{app_kubernetes_io_instance="qbittorrent-exporter"})'
 
 # the tunnel is up: a handshake, and bytes moving

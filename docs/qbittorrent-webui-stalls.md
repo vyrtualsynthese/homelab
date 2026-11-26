@@ -717,12 +717,13 @@ not the 379 the claim listed. The app has always held fewer torrents than `BT_ba
 would fail a healthy move. Both queries:
 
 ```bash
+set -a; . ~/.config/secrets/homelab.env; set +a
 # the ceiling over the last day
-curl -sG http://prometheus.kub.local/api/v1/query --data-urlencode \
+curl -sG -u "ops:$PROMETHEUS_AUTH_PASSWORD" http://prometheus.kub.local/api/v1/query --data-urlencode \
   'query=max_over_time(scrape_duration_seconds{app_kubernetes_io_instance="qbittorrent-exporter"}[24h])'
 
 # failed scrapes in the same window
-curl -sG http://prometheus.kub.local/api/v1/query --data-urlencode \
+curl -sG -u "ops:$PROMETHEUS_AUTH_PASSWORD" http://prometheus.kub.local/api/v1/query --data-urlencode \
   'query=count_over_time(up{app_kubernetes_io_instance="qbittorrent-exporter"}==0[24h])'
 ```
 
@@ -777,8 +778,9 @@ migration. Remove the silence when the card closes, or renew it with a new end d
 ## How to confirm it is happening again
 
 ```bash
+set -a; . ~/.config/secrets/homelab.env; set +a
 # is the API slow right now? (value > 4 means at least one call crossed 5s)
-curl -sG http://prometheus.kub.local/api/v1/query \
+curl -sG -u "ops:$PROMETHEUS_AUTH_PASSWORD" http://prometheus.kub.local/api/v1/query \
   --data-urlencode 'query=max(scrape_duration_seconds{app_kubernetes_io_instance="qbittorrent-exporter"})'
 
 # how many timeouts in the last 30 minutes (Loki is gated; ask through Grafana's datasource proxy)
