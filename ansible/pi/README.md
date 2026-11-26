@@ -161,6 +161,13 @@ peer.
   both from `webserver.tls.cert` — the key is not a separate setting — and `pihole.settings` names the
   path through `FTLCONF_webserver_tls_cert`. The compose mounts `./certs` read-only into the pihole
   container, the same directory Caddy reads.
+- **The leaf belongs to the panel's own account.** Pi-hole's web server drops to the image's `pihole`
+  user, uid 1000 — the same number as `vronteix` on a fresh image — and reads the certificate as that
+  account. `setup` therefore hands `certs/` and `certs/pihole.pem` to it, and leaves the Caddy pair
+  beside them root-only, because nothing but root needs the VPN key. A leaf installed `0600 root:root`,
+  which is how the runbook copies one, is unreadable to the panel: FTL does not fall back to a
+  self-signed pair, it refuses to start its web server, and 80 and 443 stop answering on that host.
+  That was measured on both Pis on 2026-11-26, after the leaves went in.
 - **The exporter trusts the root**, mounts it as a ConfigMap and dials the names. There is no
   `SKIP_TLS_VERIFICATION` left in its environment.
 - **`hack/check_pihole_parity.py` pins each host's leaf.** Replacing the certificate changes the pin:
