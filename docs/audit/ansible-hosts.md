@@ -87,8 +87,18 @@ Net: the only working offsite path is runner config from two Pis, into an AWS S3
 `backup-scripts/` are deleted. Nothing writes a credential to `/etc/environment` any more, no
 inventory group carries a restic cron, and the repo has no AWS endpoint left to point at. Coverage
 is `cluster/helm/backup` in the homelab repository: one OVH bucket in `GRA`, four restic
-repositories, one job per node and one for the NFS exports. The two Pis stay uncovered by decision;
-their compose stacks are in `playbooks/templates/runners/`, so they are in git.
+repositories, one job per node and one for the NFS exports. The two Pis' compose stacks are in
+`playbooks/templates/runners/`, so they are in git.
+
+**Corrected 2026-11-26.** This section also said the two Pis stayed uncovered and that nothing wrote
+a restic cron to them. Both were wrong: each host ran a root cron at 04:00 calling
+`/home/vronteix/scripts/backup.sh` against an AWS bucket whose keys had been revoked, so it failed
+every night with `The AWS Access Key Id you provided does not exist in our records` and saved
+nothing, while the revoked `RESTIC_*`/`AWS_*` values sat in a world-readable `/etc/environment`.
+`ansible/pi/hosts-pi.sh setup` retires the cron line and those keys; each host now writes its own
+repository (`edge-rbp0`, `edge-rbp1`) with `hosts-pi.sh stream`, and the cluster verifies them and
+never prunes. The numbers and the procedure are in
+[`../how-it-works/backups.md`](../how-it-works/backups.md).
 
 ## 5. Runner templates
 

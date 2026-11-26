@@ -32,13 +32,19 @@ own restic repository inside it, so a broken stream cannot damage another's hist
 | `nodes-nuc0` | `backup-node-nuc0` | 05:00 | ten claims from nine applications, the node's `/etc` |
 | `nodes-streaming` | `backup-node-streaming` | 05:30 | the media stack's configuration, the node's `/etc` |
 | `nfs` | `backup-nfs` | 06:00 | syncthing, koillection's uploads, the ACME store, the qBittorrent config |
+| `edge-rbp0` | `hosts-pi.sh stream` on `rbp0` | 04:30 UTC | Pi-hole's `gravity.db` and its blocklist config, wg-easy's database (panel account and peers), the host's boot files |
+| `edge-rbp1` | the same on `rbp1` | 04:30 UTC | the same |
+
+The two edge rows run on the hosts' own clocks, which are UTC; every other row is local time in
+Paris, where the cluster's nodes are. The Pis are described below.
 
 The syncthing application's own chart carried a restic CronJob until 2026-11-20. It pointed at an
 AWS bucket that never existed, so it had never written a snapshot; the `nfs` row above is what
 covers that folder now.
 
 `backup-prune` runs Sunday at noon and keeps one snapshot a day for a week, one a week for a month,
-one a month for a year. The `nfs` repository reaches further, because it is the one holding data no
+one a month for a year. It skips the two `edge-*` streams, which each host prunes itself at 05:30
+on Sunday with the same 7/4/12 tail. The `nfs` repository reaches further, because it is the one holding data no
 source can re-supply: two years of monthly snapshots and ten years of yearly ones. `backup-verify`
 runs at 08:30 and is the one that says whether a stream is still advancing.
 
@@ -100,6 +106,40 @@ their restic streams, as the bridge until this upload landed. Those copies are s
 snapshots the monthly tail keeps, and are still restorable; no night adds one any more, and
 `backup-verify` reads the uploads rather than the copies.
 
+## The two edge Pis
+
+The Pis are the one part of the fleet that backs itself up. A Pi that waits for the cluster to pull
+its state is not backed up when the cluster is what is being rebuilt, so each host runs its own
+timer and writes its own repository — `edge-rbp0` and `edge-rbp1` in the same bucket — with
+`ansible/pi/hosts-pi.sh stream`. The cluster only reads them: `backup-verify` fails a stream whose
+newest snapshot is over 26 hours old, over its 1 GiB budget, or missing either database named below.
+It never prunes them; each host prunes its own at 05:30 on Sunday with the chart's 7/4/12 retention,
+so two `forget` runs never race over the lock.
+
+The nightly run is at 04:30 on both hosts, whose clocks are UTC. It stages the stack under
+`/var/lib/pi-backup/tree`, copies every SQLite database through SQLite's own backup API — a live
+`gravity.db` keeps its committed rows in the `-wal` file beside it, so a byte copy is not a backup —
+and hands the tree to restic `0.19.1`. That version is installed as a checksum-verified static
+release because the two images carry 0.16.4 and 0.12.1, and one repository wants one writer.
+
+Three paths are left out on purpose, measured on `rbp0` on 2026-11-26:
+
+| Left out | Size | What losing it costs |
+|---|---|---|
+| `pihole-FTL.db*` | 385 MB | the query log, which is a log; Pi-hole starts a fresh one |
+| `etc-pihole/listsCache/` | 26 MB | blocklist downloads that `pihole -g` fetches again |
+| `gravity_old.db` | 57 MB | nothing: the updater's copy of the database the same snapshot holds |
+
+What remains is about 60 MB per host: 56 MB of `gravity.db` and 97 KB of wg-easy's own database.
+`hosts-pi.sh backup` — the manual copy taken before a reflash — keeps all three, because a USB stick
+has room and a reflash does not need a second reason to fail.
+
+Both hosts also ran a root cron at 04:00 until 2026-11-26, calling
+`/home/vronteix/scripts/backup.sh` against an AWS bucket whose keys had been revoked: every night
+printed an authentication error and saved nothing. `setup` retires that cron line and the dead
+`RESTIC_*`/`AWS_*` keys in `/etc/environment`. Its `docker system prune -af` is not replaced, since
+the nightly stream does not need the disk back.
+
 ## What is deliberately not backed up
 
 | Not backed up | Why |
@@ -107,7 +147,6 @@ snapshots the monthly tail keeps, and are still restorable; no night adds one an
 | music, the media library, the stash library, downloads | by the operator's decision: bulk data that a source can re-supply, and far larger than the rest combined |
 | the books library (22 GB on `nas`) | by the operator's decision on 2026-11-20: re-acquiring a book is possible, and it was the single largest thing in scope — dropping it took the bill from €0.24 to €0.09 for the first snapshot |
 | Loki logs, Prometheus metrics | reconstructed by what writes them; the history is not worth €7.10 per TB here |
-| the edge Pis' own state | deferred; they are outside the cluster and their restic path is documented in the Ansible audit |
 | poster art, thumbnails, caches, application log directories | rebuilt from the metadata providers on the next refresh |
 
 ## What the numbers are
