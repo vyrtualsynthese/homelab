@@ -261,11 +261,29 @@ render_undo() {
   function keyname(tok,   i) { i = index(tok, "="); return i ? substr(tok, 1, i - 1) : "" }
   function keyval(tok,   i)  { i = index(tok, "="); return i ? substr(tok, i + 1) : "" }
 
+  # The property a selector token matches on, whichever way RouterOS spells it: `pvid=10` and the
+  # bare flag `disabled` name their property plainly, `!disabled` and `?comment` carry a prefix, and
+  # `pvid!=10` carries the `!=` operator. The prefix is read as RouterOS reads it, so the key is the
+  # property and never the token: a comparison on the whole token misses every prefixed one.
+  function selkey(tok,   k, i) {
+    k = tok
+    if (substr(k, 1, 1) == "!" || substr(k, 1, 1) == "?") k = substr(k, 2)
+    i = index(k, "=")
+    if (i) {
+      k = substr(k, 1, i - 1)
+      if (substr(k, length(k), 1) == "!") k = substr(k, 1, length(k) - 1)
+    }
+    return k
+  }
+
+  # A row value as a flag reads it: anything but an absent value, `no` or `false` is on.
+  function truthy(v) { return v != "" && v != "no" && v != "false" }
+
   # A selector the change itself rewrites can never match when the undo runs: the attribute it finds
   # the object by is the one the change replaced.
   function sel_uses(sel, k,   st, sn, i) {
     sn = tokens(sel, st)
-    for (i = 1; i <= sn; i++) if (keyname(st[i]) == k) return 1
+    for (i = 1; i <= sn; i++) if (selkey(st[i]) == k) return 1
     return 0
   }
 
@@ -334,13 +352,23 @@ render_undo() {
   }
 
   # ---------------------------------------------------------------- matching
-  function obj_matches(args, sel,   st, sn, at, an, i, j, ok) {
+  # A selector token matches the way RouterOS reads it: `key=value` compares the value, `key!=value`
+  # excludes it, the bare flag `key` wants it on, `!key` wants it off and `?key` wants it set. A
+  # skipped token is not "no condition": it makes the guard select something else than the object
+  # the change rewrote.
+  function obj_matches(args, sel,   st, sn, at, an, i, j, tok, k, v, ok) {
     sn = tokens(sel, st); an = tokens(args, at)
     for (i = 1; i <= sn; i++) {
-      if (index(st[i], "=") == 0) continue
+      tok = st[i]; k = selkey(tok)
+      if (k == "") continue
+      v = unq(obj_value(args, k))
+      if (substr(tok, 1, 1) == "!") { if (truthy(v)) return 0; continue }
+      if (substr(tok, 1, 1) == "?") { if (v == "") return 0; continue }
+      if (index(tok, "=") == 0) { if (!truthy(v)) return 0; continue }
+      if (substr(tok, index(tok, "=") - 1, 1) == "!") { if (v == unq(keyval(tok))) return 0; continue }
       ok = 0
       for (j = 1; j <= an; j++)
-        if (keyname(at[j]) == keyname(st[i]) && unq(keyval(at[j])) == unq(keyval(st[i]))) { ok = 1; break }
+        if (keyname(at[j]) == k && unq(keyval(at[j])) == unq(keyval(tok))) { ok = 1; break }
       if (!ok) return 0
     }
     return 1

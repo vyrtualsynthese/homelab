@@ -223,6 +223,15 @@ The renderer refuses, before anything is written, and names the line:
   of two selector attributes is refused for the same reason. So a management address cannot be moved
   through this script: the way back to it is a card of its own, not a change that slips past this
   check.
+
+  The check reads a selector by the property behind it, however the line spells it: `find disabled`
+  (a bare flag), `find !disabled` (its negation) and `find ?comment` (a property that holds a value)
+  all test that property, and `find pvid!=10` tests `pvid`. A change that writes any of them is
+  refused the same way.
+
+  A `default-name` selector with a `name` write is **not** refused: `default-name` is the fixed name
+  the port shipped with and stays put through a rename, so the undo still finds the port after the
+  change. The renderer never treats the two as the same property.
 - a value or old value holding a `}`, which would close the guard the undo is written in;
 - anything but `add`, `set`, `remove`, `enable` and `disable` — `move` included, whether it is
   written under a section header or on a line of its own;
