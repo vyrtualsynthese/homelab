@@ -47,6 +47,7 @@ would cost — but the four above are what every record has.
 | [Host access is a declared list](2026-11-25-declared-host-access.md) | `trusted_ssh_keys` in `group_vars` is the whole list of keys that may log in, written as the whole file to both accounts: adopting a laptop adds a line, retiring one deletes it, and an undeclared key is removed by the next run | 2026-11-25 |
 | [No host is attached to Ubuntu Pro](2026-11-25-no-ubuntu-pro.md) | The six hosts stay un-attached: the security cover is the release they land on, 26.04 LTS to May 2031, and Canonical is a UK company, which the EU-only provider rule puts out | 2026-11-25 |
 | [Nothing on the edge Pis goes through authentik](2026-11-26-edge-pis-local-auth-only.md) | `rbp0` and `rbp1` carry DNS and the VPN, so their panels sign in with local accounts only: a cluster that is down must not lock the operator out of the way back in | 2026-11-26 |
+| [Public DNS is DNS4EU's unfiltered service, and Cloudflare is out](2026-11-27-public-dns-is-dns4eu-unfiltered.md) | Pi-hole, `qbittorrent` and `blackbox-exporter` all forward to `86.54.11.100` and `86.54.11.200`: Cloudflare, Google and Quad9 are out by the EU-only provider rule, and the filtered DNS4EU variants are out because Pi-hole is the filter | 2026-11-27 |
 
 Below 80 °C on a one-hour soak at 50 % CPU is how the `streaming` record ends; a replacement
 node is how the `nuc0` one does. Until then both are facts about the hardware, not open tickets.

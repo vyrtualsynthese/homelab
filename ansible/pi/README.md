@@ -129,8 +129,10 @@ prints `changed=0` on a host that already matches.
   to false, so `/etc/dnsmasq.d` was ignored on both hosts and the overrides survived only through the
   env duplicate. Measured on 2026-11-25: with the key on, all six answer from `127.0.0.1`.
 - **The resolvers point at both Pis**, `192.168.1.22` then `192.168.1.38`, on both hosts. Never
-  `127.0.0.1`: a container cannot reach the host's loopback. Never `1.1.1.1`: it answers around the
-  blocklist.
+  `127.0.0.1`: a container cannot reach the host's loopback. Never `1.1.1.1`, and never any other
+  public resolver beside the Pi-holes: it answers around the blocklist. The two Pis forward to
+  DNS4EU's unfiltered pair and to nothing else, per
+  `docs/decisions/2026-11-27-public-dns-is-dns4eu-unfiltered.md`.
 - **A resolver change is live.** `setup` runs `netplan apply` and restarts `systemd-resolved` when the
   bytes moved, and recreates the bridge services (`wg-easy`, `caddy`, `smartctl-exporter`), because a
   container's `/etc/resolv.conf` is a copy taken when it is created. If both Pi-holes are down, a host

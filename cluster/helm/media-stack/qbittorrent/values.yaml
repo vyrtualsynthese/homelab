@@ -141,12 +141,13 @@ container:
 # The pod runs with `dnsPolicy: None` and public resolvers on purpose: the
 # torrent client's DNS must not depend on the cluster's. The cost is that cluster
 # names do not resolve, which is why the post-download hook gets one hostAlias
-# below instead of a DNS route.
+# below instead of a DNS route. The pair is DNS4EU's unfiltered service, never
+# Cloudflare: see docs/decisions/2026-11-27-public-dns-is-dns4eu-unfiltered.md.
 dns:
   policy: None
   nameservers:
-    - 1.1.1.1
-    - 1.0.0.1
+    - 86.54.11.100
+    - 86.54.11.200
   # The post-download hook calls cross-seed by name. This is the cross-seed
   # Service ClusterIP; update it if that Service is recreated.
   crossSeedServiceIP: "10.43.104.9"

@@ -103,7 +103,8 @@ forwards off the node, so the lookup is the same one the LAN gets.
 The blackbox exporter joined the stack on 2026-11-20: one replica on `nas`, probing the
 public names and both DNS zones
 ([`runbooks/cloud-monitoring.md`](runbooks/cloud-monitoring.md)). It is the one pod
-here that does not use cluster DNS — `dnsPolicy: None` with `1.1.1.1` and `9.9.9.9` —
+here that does not use cluster DNS — `dnsPolicy: None` with DNS4EU's unfiltered pair,
+`86.54.11.100` and `86.54.11.200` —
 because Pi-hole rewrites `ashudev.com` to the LAN address `192.168.1.46`, and a
 probe resolving through it would test Traefik instead of the public zone and call a
 broken name green.
