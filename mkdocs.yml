@@ -159,6 +159,7 @@ nav:
       - Automation sudo account: decisions/2026-11-24-automation-sudo-account.md
       - Declared host access: decisions/2026-11-25-declared-host-access.md
       - No Ubuntu Pro: decisions/2026-11-25-no-ubuntu-pro.md
+      - Edge Pis keep local auth: decisions/2026-11-26-edge-pis-local-auth-only.md
       - Longhorn leftovers: cleanup/longhorn-disposition.md
       - The board's database: runbooks/vikunja-database.md
       - The board's first start: runbooks/vikunja-first-start.md
