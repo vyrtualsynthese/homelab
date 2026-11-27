@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
-# Issue the cluster's default TLS certificate: the private `*.kub.local` one —
-# and, with `--host`, a leaf for a machine that is not the cluster.
+# Issue the cluster's default TLS certificate: one private leaf for both zones,
+# `*.kub.internal` — the zone every route serves — and `*.kub.local`, which stays
+# in the SAN until the wildcard redirect leaves its soak. With `--host`, a leaf
+# for a machine that is not the cluster.
 #
 # Traefik serves `kube-system/local-cert` (through the default TLSStore) to any
 # `websecure` router that sets neither `secretName` nor `certResolver`. A `.local`
@@ -42,15 +44,17 @@ FORCE_CA=0
 HOST_NAME=""
 CA_DAYS=3650
 LEAF_DAYS=730
-# One label only: `*.kub.local` covers calibre.kub.local, not a.b.kub.local.
-SAN="DNS:*.kub.local,DNS:*.app.local,DNS:localhost,IP:127.0.0.1"
+# One label only: `*.kub.internal` covers calibre.kub.internal, not
+# a.b.kub.internal — and the same holds for the `*.kub.local` name the redirect
+# still answers.
+SAN="DNS:*.kub.internal,DNS:*.kub.local,DNS:*.app.local,DNS:localhost,IP:127.0.0.1"
 
 while [ $# -gt 0 ]; do
   case "$1" in
     --out) OUT="${2:?--out needs a directory}"; shift 2 ;;
     --force-ca) FORCE_CA=1; shift ;;
     --host) HOST_NAME="${2:?--host needs a name}"; shift 2 ;;
-    -h|--help) sed -n '2,37p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) sed -n '2,39p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "unknown argument: $1" >&2; exit 2 ;;
   esac
 done
