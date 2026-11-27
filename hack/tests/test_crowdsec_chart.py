@@ -120,6 +120,20 @@ class ChartTests(unittest.TestCase):
             {"192.168.1.41", "192.168.1.27", "192.168.1.46", "192.168.1.48"},
         )
 
+    def test_the_blocklist_filter_is_set_where_the_engine_reads_it(self):
+        # The chart's switch is the `CAPI_WHITELISTS_PATH` environment variable,
+        # and chart 0.24.3's LAPI start script never turns it into the config key:
+        # the file was mounted, the first pull was inserted unfiltered, and the
+        # LAPI logged no `loaded capi whitelist` line. `config.yaml.local` is
+        # merged next to `config.yaml` at startup and is covered by the pod
+        # template's `checksum/lapi-configmap`, so the key is set here and a sync
+        # rolls the LAPI when it changes.
+        config = yaml.safe_load(self.crowdsec["config"]["config.yaml.local"])
+        self.assertEqual(
+            config["api"]["server"]["capi_whitelists_path"],
+            "/etc/crowdsec_data/capi_whitelists.yaml",
+        )
+
     def test_the_two_whitelists_name_the_same_addresses(self):
         post = yaml.safe_load(
             self.crowdsec["config"]["postoverflows"]["s01-whitelist"]["whitelist-lan.yaml"]

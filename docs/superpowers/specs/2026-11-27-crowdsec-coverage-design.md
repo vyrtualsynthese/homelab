@@ -134,10 +134,13 @@ decision is created from a local alert, and a CAPI ban is inserted into the data
 operator's rule therefore needs the control designed for it —
 `api.server.capi_whitelists_path`, which filters addresses **before the blocklist is inserted**.
 
-The chart already wires it: `config.capi_whitelists.yaml` renders a ConfigMap, mounts it at
-`/etc/crowdsec_data/capi_whitelists.yaml` and exports `CAPI_WHITELISTS_PATH` pointing at it. So the
-change is the same list as the postoverflow, in a second file, with the same comment that says why
-there are two.
+The chart mounts `config.capi_whitelists.yaml` at
+`/etc/crowdsec_data/capi_whitelists.yaml` and exports `CAPI_WHITELISTS_PATH`, but chart 0.24.3's LAPI
+start script never turns that variable into the key: the file was mounted and ignored, the first pull
+inserted 15,000 entries unfiltered, and the LAPI logged no `loaded capi whitelist` line. The key is
+therefore set in `config.yaml.local`, which the engine merges at startup and which the pod template's
+`checksum/lapi-configmap` covers, so a sync rolls the LAPI when it changes. The list is the same list
+as the postoverflow, in a second file, with the same comment that says why there are two.
 
 ```yaml
 config:
