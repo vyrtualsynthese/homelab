@@ -135,6 +135,18 @@ FIREWALL_HOST="${FIREWALL_HOST:-}"
 # database, so a config minted on either names this port and a client keeps
 # dialling it whichever Pi answers.
 WG_UDP_PORT="51821"
+# The address a client keeps using whichever Pi answers. keepalived moves it:
+# rbp0 holds it while it is up, rbp1 takes it after rbp0 misses its
+# advertisements. One instance per host, unicast to the other's address, so the
+# two never need multicast on the LAN.
+VIP_ADDRESS="192.168.1.9"
+KEEPALIVED_CONF="/etc/keepalived/keepalived.conf"
+# The notify script keepalived runs on every transition, and the two paths it
+# writes: the state file the failover path reads, and the textfile directory
+# node-exporter serves to Prometheus.
+WG_LIB="/usr/local/lib/wg-vpn"
+VRRP_STATE_FILE="/run/wg-vpn/vrrp.state"
+TEXTFILE_DIR="/var/lib/node-exporter/textfile"
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="${PI_ROOT:-}"
 ROOT="${ROOT%/}"
@@ -270,6 +282,47 @@ desired_resolved() {
 
 desired_hostname() {
     printf '%s\n' "$1"
+}
+
+# rbp0 is the source of truth and keeps the address while it is up; rbp1 is the
+# backup. A host this script does not know is refused by `check_host`.
+vrrp_state() {
+    case "$1" in
+        rbp0) printf 'MASTER\n' ;;
+        rbp1) printf 'BACKUP\n' ;;
+        *) check_host "$1" ;;
+    esac
+}
+
+vrrp_priority() {
+    case "$1" in
+        rbp0) printf '150\n' ;;
+        rbp1) printf '100\n' ;;
+        *) check_host "$1" ;;
+    esac
+}
+
+# The VRRP instance, rendered per host: the state, the priority, and the two
+# addresses differ; everything else is shared, so the two files differ only in
+# what they must. preempt_delay keeps a rebooted rbp0 from taking the address
+# back from a healthy rbp1 the moment it starts advertising.
+desired_keepalived() {
+    local host="$1"
+    sed -e "s/@HOST@/$host/g" \
+        -e "s/@VRRP_STATE@/$(vrrp_state "$host")/g" \
+        -e "s/@VRRP_PRIORITY@/$(vrrp_priority "$host")/g" \
+        -e "s/@OWN_ADDRESS@/$(host_address "$host")/g" \
+        -e "s/@PEER_ADDRESS@/$(peer_address "$host")/g" \
+        -e "s|@WG_LIB@|$WG_LIB|g" \
+        "$TEMPLATES/keepalived.conf"
+}
+
+# The notify script, the same bytes on both hosts: its two paths are the only
+# values, and they are shared, so `verify` compares the same file either way.
+desired_vrrp_notify() {
+    sed -e "s|@VRRP_STATE_FILE@|$VRRP_STATE_FILE|g" \
+        -e "s|@TEXTFILE_DIR@|$TEXTFILE_DIR|g" \
+        "$TEMPLATES/wg-vrrp-notify.sh"
 }
 
 # The drop-in that closes password logins. It is numbered 00 on purpose: Ubuntu's
@@ -909,6 +962,80 @@ firewall_drift() {
     [ "$problems" -eq 0 ]
 }
 
+# keepalived moves the shared address and sqlite3 is how a run reads the panel's
+# database without the panel. Both are Ubuntu's own packages: the base image
+# carries neither, and a missing binary would otherwise fail the first state
+# transition silently.
+ensure_sync_packages() {
+    local packages="" package
+
+    if [ -n "$ROOT" ]; then
+        echo "keepalived: packages not installed (PI_ROOT is set)"
+        return 0
+    fi
+    for package in keepalived sqlite3; do
+        command -v "$package" >/dev/null 2>&1 || packages="$packages $package"
+    done
+    if [ -z "$packages" ]; then
+        return 0
+    fi
+    DEBIAN_FRONTEND=noninteractive apt-get update -qq
+    DEBIAN_FRONTEND=noninteractive apt-get install -y $packages >/dev/null
+    CHANGED=$((CHANGED + 1))
+    echo "keepalived: installed$packages"
+}
+
+# The instance and the script it calls, written only when their bytes differ, so
+# a run over a host that already matches restarts nothing. keepalived reads its
+# configuration once at start: a rewritten file is invisible until the unit is
+# restarted, which is why the flag matters — a restart drops the address for a
+# second on the Pi that holds it.
+ensure_keepalived() {
+    local host="$1" changed=0 notify="$WG_LIB/wg-vrrp-notify.sh"
+
+    write_abs "$ROOT$KEEPALIVED_CONF" "$(desired_keepalived "$host")"
+    if [ "$CHANGED_THIS_WRITE" -eq 1 ]; then
+        chmod 0644 "$ROOT$KEEPALIVED_CONF"
+        [ -n "$ROOT" ] || chown root:root "$ROOT$KEEPALIVED_CONF"
+        changed=1
+        echo "keepalived: wrote $KEEPALIVED_CONF"
+    fi
+
+    write_abs "$ROOT$notify" "$(desired_vrrp_notify)"
+    if [ "$CHANGED_THIS_WRITE" -eq 1 ]; then
+        chmod 0755 "$ROOT$notify"
+        [ -n "$ROOT" ] || chown root:root "$ROOT$notify"
+        changed=1
+        echo "keepalived: wrote $notify"
+    fi
+
+    if [ -z "$ROOT" ] && [ "$changed" -eq 1 ]; then
+        systemctl daemon-reload
+        systemctl enable --now keepalived
+        systemctl restart keepalived
+        echo "keepalived: enabled and restarted"
+    fi
+}
+
+# What `verify` reads: both files byte for byte, and on a real host the unit that
+# runs them. A unit that is not enabled is the failure a file comparison cannot
+# see: the instance is correct and nothing starts it after a reboot.
+keepalived_drift() {
+    local host="$1" notify="$WG_LIB/wg-vrrp-notify.sh" problems=0
+
+    if ! check_text "$ROOT$KEEPALIVED_CONF" "$(desired_keepalived "$host")"; then
+        problems=1
+    fi
+    if ! check_text "$ROOT$notify" "$(desired_vrrp_notify)"; then
+        problems=1
+    fi
+    if [ -z "$ROOT" ] && ! systemctl is-enabled --quiet keepalived; then
+        echo "DIFFERS the keepalived unit is not enabled"
+        problems=1
+    fi
+    return "$problems"
+}
+
 # The database is the container's own file, so this never writes it: it narrows
 # the mode of the copy the panel made and nothing else. Root owns it on a real
 # host because the container runs as root, so 0600 keeps every local account out
@@ -1115,6 +1242,12 @@ cmd_render() {
     echo "never reaches ufw: $WG_UDP_PORT/udp (wg-easy), 8443/tcp (caddy) and"
     echo "9902/tcp (smartctl-exporter) are published by Docker, which DNATs in NAT"
     echo "and FORWARD before INPUT; a ufw rule for them would filter nothing"
+    echo "--- $KEEPALIVED_CONF"
+    desired_keepalived "$host"
+    echo "--- $WG_LIB/wg-vrrp-notify.sh"
+    desired_vrrp_notify
+    echo "--- the shared address"
+    echo "$VIP_ADDRESS/24: held by rbp0, taken by rbp1 when rbp0 stops answering."
     echo "--- /home/$HUMAN_USER/.ssh/authorized_keys"
     echo "the operator's, not written here: setup refuses to close password logins"
     echo "while no key is in that file"
@@ -1239,6 +1372,8 @@ cmd_setup() {
     ensure_sudo_policy
     ensure_sshd_policy
     ensure_firewall
+    ensure_sync_packages
+    ensure_keepalived "$host"
 
     write_abs "$ROOT$STACK_DIR/docker-compose.yml" "$(desired_compose)"
     # Caddy reads this at start, and it is a bind mount: a file written under a
@@ -1514,6 +1649,8 @@ cmd_verify() {
     engine_drift || problems=1
 
     firewall_drift || problems=1
+
+    keepalived_drift "$host" || problems=1
 
     wg_db_drift || problems=1
 
