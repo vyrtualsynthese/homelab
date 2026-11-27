@@ -102,11 +102,11 @@ firewall_rules_edge:
   - port: 53
     proto: tcp
     source: panel
-    comment: DNS from the wg-easy container, the tunnel's source after masquerade
+    comment: DNS for peers, from the wg-easy container after masquerade
   - port: 53
     proto: udp
     source: panel
-    comment: DNS from the wg-easy container, the tunnel's source after masquerade
+    comment: DNS for peers, from the wg-easy container after masquerade
   # Host-network exporters: not DNAT'd, so they reach INPUT. Prometheus on `nas`
   # scrapes both of these on both Pis (the third target there, 9902, is a
   # published container port and needs nothing), and a missing rule shows up only

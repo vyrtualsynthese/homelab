@@ -524,6 +524,21 @@ def test_the_edge_firewall_keeps_the_host_exporters_reachable():
     assert edge[(9323, "tcp")] == "nodes"
 
 
+def test_no_firewall_comment_carries_a_quote_ufw_would_read():
+    """ufw parses the whole rule as one command line, so a quote inside the
+    comment closes the one around it and the rule is refused as "Invalid
+    syntax". `hosts-pi.sh` then exits on that failure before applying anything:
+    a comment containing "the tunnel's source" cost a run on `rbp1` on
+    2026-11-27, with both DNS rules still missing afterwards."""
+    rules = yaml.safe_load((ANSIBLE / "roles/firewall/vars/main.yml").read_text())
+    for key, entries in rules.items():
+        if not key.startswith("firewall_rules"):
+            continue
+        for rule in entries:
+            assert "'" not in rule["comment"], f"{key}: a quote in {rule['comment']!r}"
+            assert '"' not in rule["comment"], f"{key}: a quote in {rule['comment']!r}"
+
+
 def test_every_firewall_rule_names_a_source_set_that_resolves():
     rules = yaml.safe_load((ANSIBLE / "roles/firewall/vars/main.yml").read_text())
     defined = set()
