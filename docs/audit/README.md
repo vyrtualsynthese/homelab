@@ -33,6 +33,7 @@ decision — the audit reads the same in all three cases.
 | [Media stack (2026-11-18)](media-stack-2026-11-18.md) | The 21 `media-stack` charts against the chart contract: gate coverage per route, probes, sizing, secrets, exporter health, and the stale documents the pass corrected |
 | [Traefik (2026-11-21)](traefik-2026-11-21.md) | The Traefik install the day ownership moved from the K3s addon to the repository: readiness for v3, the dashboard's exposure, metric and alert coverage, and the eighteen orphaned certificates in the store |
 | [The Livebox (2026-11-26)](livebox-2026-11-26.md) | The house router's own port-forward table, WAN address and DHCP device list, read from the box: twelve forwards, four of them stale and removed the same day, and the answers to the exposure questions the network page and the security baseline had to leave open |
+| [Internal zone pre-flight (2026-11-27)](internal-zone-preflight-2026-11-27.md) | Which resolvers answer `*.kub.local` — both Pi-holes answer, the Livebox does not — what `kub.internal` returns before the rename, the phone rows the operator still has to fill, and why the four nodes' `/etc/resolv.conf` lines are unmeasured |
 
 ## How to read one
 
