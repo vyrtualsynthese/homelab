@@ -225,7 +225,13 @@ if [ "$installed" -ne 0 ]; then
     "${COMPOSE[@]}" start wg-easy || true
     fail 0 "could not stage the fetched database over $DB"
 fi
-mv -f "$DB.tmp" "$DB"
+# The rename is the last step that can leave the panel stopped, and `set -e`
+# would end the run before publishing anything: the metric would freeze at the
+# last healthy timestamp while the host serves nothing.
+if ! mv -f "$DB.tmp" "$DB"; then
+    "${COMPOSE[@]}" start wg-easy || true
+    fail 0 "could not rename $DB.tmp over $DB"
+fi
 
 # The stamp is the fingerprint of the fetched file, taken before the swap, not a
 # re-read of the database afterwards: `install` copies the bytes that were just

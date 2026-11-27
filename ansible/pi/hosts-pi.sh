@@ -341,6 +341,14 @@ desired_keepalived() {
         "$TEMPLATES/keepalived.conf"
 }
 
+# The command keepalived's track_script runs. It is a file because keepalived
+# hands `script` straight to execve: a pipeline written in the conf is arguments
+# to `docker inspect`, not a shell, and the check would fail on every run — both
+# hosts FAULT, and nobody holds the address.
+desired_wg_easy_running() {
+    cat "$TEMPLATES/wg-easy-running.sh"
+}
+
 # The notify script, the same bytes on both hosts: its two paths are the only
 # values, and they are shared, so `verify` compares the same file either way.
 desired_vrrp_notify() {
@@ -1048,7 +1056,8 @@ ensure_sync_packages() {
 # restarted, which is why the flag matters — a restart drops the address for a
 # second on the Pi that holds it.
 ensure_keepalived() {
-    local host="$1" changed=0 notify="$WG_LIB/wg-vrrp-notify.sh"
+    local host="$1" changed=0 notify="$WG_LIB/wg-vrrp-notify.sh" \
+        running="$WG_LIB/wg-easy-running.sh"
 
     write_abs "$ROOT$KEEPALIVED_CONF" "$(desired_keepalived "$host")"
     if [ "$CHANGED_THIS_WRITE" -eq 1 ]; then
@@ -1064,6 +1073,14 @@ ensure_keepalived() {
         [ -n "$ROOT" ] || chown root:root "$ROOT$notify"
         changed=1
         echo "keepalived: wrote $notify"
+    fi
+
+    write_abs "$ROOT$running" "$(desired_wg_easy_running)"
+    if [ "$CHANGED_THIS_WRITE" -eq 1 ]; then
+        chmod 0755 "$ROOT$running"
+        [ -n "$ROOT" ] || chown root:root "$ROOT$running"
+        changed=1
+        echo "keepalived: wrote $running"
     fi
 
     if [ -z "$ROOT" ] && [ "$changed" -eq 1 ]; then
@@ -1250,12 +1267,16 @@ ensure_sync() {
 # runs them. A unit that is not enabled is the failure a file comparison cannot
 # see: the instance is correct and nothing starts it after a reboot.
 keepalived_drift() {
-    local host="$1" notify="$WG_LIB/wg-vrrp-notify.sh" problems=0
+    local host="$1" notify="$WG_LIB/wg-vrrp-notify.sh" \
+        running="$WG_LIB/wg-easy-running.sh" problems=0
 
     if ! check_text "$ROOT$KEEPALIVED_CONF" "$(desired_keepalived "$host")"; then
         problems=1
     fi
     if ! check_text "$ROOT$notify" "$(desired_vrrp_notify)"; then
+        problems=1
+    fi
+    if ! check_text "$ROOT$running" "$(desired_wg_easy_running)"; then
         problems=1
     fi
     if [ -z "$ROOT" ] && ! systemctl is-enabled --quiet keepalived; then
@@ -1284,6 +1305,19 @@ snapshot_drift() {
     if [ -z "$ROOT" ] && ! systemctl is-enabled --quiet wg-vpn-snapshot.timer; then
         echo "DIFFERS the snapshot timer is not enabled"
         problems=1
+    fi
+    # The timer being enabled is not the timer running: the design's point is that
+    # a copy which stopped advancing has to be a finding, not a silence. An hour
+    # is far past the minute the timer promises and well short of the staleness
+    # rule's own 10 minutes plus a host that was asleep — it catches a stopped
+    # unit, and the Grafana rule catches the rest.
+    if [ -z "$ROOT" ] && [ -e "$ROOT$WG_SYNC_DIR/wg-easy.db" ]; then
+        local age
+        age=$(( $(date +%s) - $(stat -c %Y "$ROOT$WG_SYNC_DIR/wg-easy.db") ))
+        if [ "$age" -gt 3600 ]; then
+            echo "DIFFERS the snapshot under $WG_SYNC_DIR is ${age}s old"
+            problems=1
+        fi
     fi
     return "$problems"
 }
@@ -1557,6 +1591,8 @@ cmd_render() {
     desired_keepalived "$host"
     echo "--- $WG_LIB/wg-vrrp-notify.sh"
     desired_vrrp_notify
+    echo "--- $WG_LIB/wg-easy-running.sh"
+    desired_wg_easy_running
     echo "--- $WG_SNAPSHOT_SCRIPT"
     desired_snapshot
     echo "--- $WG_SNAPSHOT_SERVICE"
@@ -1707,6 +1743,11 @@ cmd_setup() {
         exit 1
     fi
     require_login_key
+
+    # D10: the pair is minted by hand and this script never invents a secret, so a
+    # host missing its half would be configured into a state where the standby
+    # cannot pull and the authority accepts nothing. Stop and name the file.
+    sync_key_drift "$host" || exit 1
 
     ensure_engine
     ensure_sudo_policy

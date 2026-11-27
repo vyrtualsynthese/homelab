@@ -223,6 +223,10 @@ this host's own certificate, and no ACME.
   `BACKUP` at `100`, unicast to each other's address, with `preempt_delay 300` so a returning `rbp0`
   does not take the address back mid-boot. The router's `51821` forward points at this address, not at
   a host.
+- **The address also follows the panel.** keepalived runs `/usr/local/lib/wg-vpn/wg-easy-running.sh`
+  every two seconds and drops to `FAULT` after three failures. The check is a file because keepalived
+  hands `script` straight to `execve`: a pipeline written in `keepalived.conf` is arguments to
+  `docker inspect`, fails every run, and leaves both hosts without the address.
 - **The authority snapshots every minute.** `wg-vpn-snapshot.timer` runs
   `/usr/local/lib/wg-vpn/wg-snapshot.sh`, which uses `sqlite3 .backup` and an integrity check, and
   leaves `/var/lib/wg-easy-sync/wg-easy.db` (`0640 root:wg-sync`). A timer that stops writes
@@ -233,8 +237,8 @@ this host's own certificate, and no ACME.
   `vpn-sync --force` is the operator accepting the loss.
 - **The key is two files, both operator-supplied.** `/etc/wg-sync/id_ed25519` (`0600 root:root`) on
   `rbp1`; one line in `/var/lib/wg-sync/.ssh/authorized_keys` on `rbp0`, restricted with `from=` and a
-  forced `cat` of the snapshot. `backup` and `restore` carry both halves; `setup` fixes their modes and
-  names the one that is missing rather than minting it.
+  forced `cat` of the snapshot. `backup` and `restore` carry both halves; `setup` fixes their modes,
+  refuses to configure a host whose own half is missing, and never mints one.
 - **The test and the recovery are written down** in
   [`docs/runbooks/edge-vpn-failover.md`](../../docs/runbooks/edge-vpn-failover.md): who holds the
   address, the timed failover, a divergence, and the router's two calls.

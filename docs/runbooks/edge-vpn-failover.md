@@ -11,6 +11,7 @@
 > **Sources** `ansible/pi/hosts-pi.sh`,
 > `ansible/playbooks/templates/runners/keepalived.conf`,
 > `ansible/playbooks/templates/runners/wg-vrrp-notify.sh`,
+> `ansible/playbooks/templates/runners/wg-easy-running.sh`,
 > `ansible/playbooks/templates/runners/wg-snapshot.sh`,
 > `ansible/playbooks/templates/runners/wg-sync.sh`,
 > `ansible/playbooks/templates/runners/docker-compose.yml`,
@@ -142,6 +143,11 @@ A host that has never installed a copy — a freshly restored one, with no stamp
 way. The reflash procedure puts `restore` → `setup` → `vpn-sync --force` → `verify` in that order for
 exactly this reason.
 
+A run killed between the swap and its stamp — the unit's 30 s `TimeoutStartSec`, a Ctrl-C, a reboot —
+leaves the same refusal with nothing edited here: the database is the authority's, the stamp is the
+old one. `--force` is the answer for that case too, once you have checked that the database on this
+host is the copy and not an edit.
+
 ## Before the first `setup` on a Pi
 
 The firewall rule for VRRP has no port. VRRP is IP protocol `112`, and `ufw` takes the protocol by
@@ -159,6 +165,36 @@ sudo ufw --dry-run allow from 192.168.1.22 proto vrrp
 The dry run prints the rule it would add and changes nothing. `setup` then writes one rule per peer
 address in each direction, so an advertisement from a host's own address can never be accepted as a
 second master.
+
+Two more checks belong to that first run:
+
+- **The address has to be free.** Before keepalived starts, `192.168.1.9` must belong to nothing: ask
+  the box for its device list and look for the address in it, because a lease handed to another device
+  gives you two claimants and no way to tell which one the router believes. The pool's bounds cannot
+  be read back on this firmware (`DHCPv4.Server.Pool.1.` answers `504`), so the list is the check.
+- **Both halves of the sync key must be in place.** `setup` refuses without its host's half and names
+  the file: `/etc/wg-sync/id_ed25519` on `rbp1`, `/var/lib/wg-sync/.ssh/authorized_keys` on `rbp0`.
+  It never mints one. On a rebuilt host the reflash procedure's `restore` puts them back from the
+  backup; on a new pair they are exchanged by hand.
+
+## Proving the address follows the tunnel
+
+keepalived moves the address for two different reasons: the peer stopped advertising, and this host's
+own `vrrp_script` says its panel is gone. The acceptance test above exercises the first. Exercise the
+second once, because it is a different code path and a check that silently fails is invisible until
+the day it matters:
+
+```bash
+# on the holder, with the peer healthy
+sudo docker compose -f ~/dockers/docker-compose.yml stop wg-easy
+sleep 10
+cat /run/wg-vpn/vrrp.state        # backup: the peer took over
+sudo docker compose -f ~/dockers/docker-compose.yml start wg-easy
+```
+
+Restarting the panel makes this host eligible again, and `preempt_delay 300` keeps it in `backup` for
+up to five minutes. A host that keeps `master` with its panel stopped is a broken track script, and
+the failure is the worst kind: it holds `192.168.1.9` while serving nothing.
 
 ## The router
 
