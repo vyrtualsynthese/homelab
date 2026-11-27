@@ -35,22 +35,37 @@ VRRP_STATE="$WG_ROOT@VRRP_STATE_FILE@"
 AUTHORITY="@WG_SYNC_AUTHORITY@"
 WG_SYNC_FORCE="${WG_SYNC_FORCE:-0}"
 
+# The fetched copy and the half-built database both hold every peer's key, so
+# everything this script creates is owner-only from the first byte, and both are
+# removed however the run ends — including a kill or a failure inside `publish`,
+# which the per-path removals could not cover.
+umask 077
+trap 'rm -f "$DL" "$DB.tmp"' EXIT
+
 # The tables the Panel writes and the column each is ordered by. They are one
 # list on purpose: a line added here is a line in the stamp, and the five cannot
 # drift apart. A peer added, a key rotated or an interface renamed moves exactly
 # one line, and that table's name is what the operator reads when the two hosts
 # disagree.
-TABLES="clients_table:id hooks_table:id interfaces_table:name user_configs_table:id users_table:id"
+#
+# `users_table` names its columns instead of asking for `*`: `updated_at` is the
+# one field a panel login can rewrite, so including it would make a login on
+# either host look like an edit — a refusal on the standby, a pointless restart
+# when it arrives in a snapshot. Everything that describes the account stays.
+USERS_COLUMNS="id,username,password,email,name,role,totp_key,totp_verified,enabled,oauth_provider,oauth_id,created_at"
+TABLES="clients_table:id:* hooks_table:id:* interfaces_table:name:* user_configs_table:id:* users_table:id:$USERS_COLUMNS"
 
 # `<table> <sha256>` per line, over the rows in a fixed order: the same bytes on
 # both hosts for the same content, which is what makes a stamp portable.
 fingerprint() {
-    local db="$1" pair table key line
+    local db="$1" entry table rest key columns line
 
-    for pair in $TABLES; do
-        table="${pair%%:*}"
-        key="${pair##*:}"
-        if ! line="$(sqlite3 -readonly "$db" "select * from $table order by $key;" |
+    for entry in $TABLES; do
+        table="${entry%%:*}"
+        rest="${entry#*:}"
+        key="${rest%%:*}"
+        columns="${rest#*:}"
+        if ! line="$(sqlite3 -readonly "$db" "select $columns from $table order by $key;" |
             sha256sum)"; then
             return 1
         fi
@@ -131,6 +146,7 @@ fi
 # authorized_keys runs `cat` on the snapshot and nothing else, so a range of
 # addresses and a command are the whole of what this connection can do.
 if ! ssh -i "$KEY" -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
+    -o ConnectTimeout=5 -o ServerAliveInterval=5 -o ServerAliveCountMax=3 \
     "wg-sync@$AUTHORITY" > "$DL"; then
     fail 0 "could not fetch the database from wg-sync@$AUTHORITY"
 fi
@@ -194,33 +210,39 @@ if ! "${COMPOSE[@]}" stop wg-easy; then
 fi
 
 # 0600 root: a fixture runs as a normal account with no root to give the file to,
-# and WG_ROOT is set under that seam alone.
+# and WG_ROOT is set under that seam alone. The copy lands beside the live file
+# and is renamed over it, so a run that dies mid-write leaves the old database
+# whole: `install` writes in place, and half a database is not a database.
 if [ -n "$WG_ROOT" ]; then
     installed=0
-    install -m 0600 "$DL" "$DB" || installed=1
+    install -m 0600 "$DL" "$DB.tmp" || installed=1
 else
     installed=0
-    install -m 0600 -o root -g root "$DL" "$DB" || installed=1
+    install -m 0600 -o root -g root "$DL" "$DB.tmp" || installed=1
 fi
 if [ "$installed" -ne 0 ]; then
+    rm -f "$DB.tmp"
     "${COMPOSE[@]}" start wg-easy || true
-    fail 0 "could not install the fetched database over $DB"
+    fail 0 "could not stage the fetched database over $DB"
 fi
+mv -f "$DB.tmp" "$DB"
+
+# The stamp is the fingerprint of the fetched file, taken before the swap, not a
+# re-read of the database afterwards: `install` copies the bytes that were just
+# checked and fingerprinted, and its exit code says whether that landed, so a
+# second read could only prove what the first already did. It is written before
+# the start, because it describes what is on disk now: a panel that fails to
+# start must not leave the next run refusing its own install as a local edit.
+# Temp-then-mv: a half-written stamp would refuse every run.
+printf '%s\n' "$snapshot_fp" > "$STAMP.tmp"
+chmod 0644 "$STAMP.tmp"
+mv -f "$STAMP.tmp" "$STAMP"
 
 # A Panel that does not come back is the one failure the operator has to see now:
 # the file is in place and the tunnels are down until somebody starts it.
 if ! "${COMPOSE[@]}" start wg-easy; then
     fail 0 "installed the database but wg-easy did not start; the Panel is down"
 fi
-
-# The stamp is the fingerprint of the fetched file, taken before the swap, not a
-# re-read of the database afterwards: `install` copies the bytes that were just
-# checked and fingerprinted, and its exit code says whether that landed, so a
-# second read could only prove what the first already did. Temp-then-mv: a
-# half-written stamp would refuse every run.
-printf '%s\n' "$snapshot_fp" > "$STAMP.tmp"
-chmod 0644 "$STAMP.tmp"
-mv -f "$STAMP.tmp" "$STAMP"
 
 rm -f "$DL"
 publish 1 0

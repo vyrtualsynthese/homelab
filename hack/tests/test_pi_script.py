@@ -1,3 +1,4 @@
+import hashlib
 import json
 import os
 import pathlib
@@ -246,6 +247,7 @@ def test_verify_accepts_the_hosts_file_cloud_init_writes(tmp_path):
     which is what rbp1 did after its unattended-upgrades reboot."""
     root = tmp_path / "pi"
     _pi_fixture(root)
+    _plant_sync_keys(root)
     assert run("setup", "rbp1", root=root).returncode == 0
     (root / "etc/hosts").write_text(
         "# Your system has configured 'manage_etc_hosts' as True.\n"
@@ -336,6 +338,7 @@ def test_verify_says_it_cannot_check_the_engine_in_a_fixture(tmp_path):
 def test_backup_then_restore_puts_the_stack_back(tmp_path):
     root = tmp_path / "pi"
     stack = _pi_fixture(root)
+    _plant_sync_keys(root)
 
     assert run("setup", "rbp1", root=root).returncode == 0
 
@@ -393,6 +396,7 @@ def test_setup_rewrites_a_file_that_verify_would_flag(tmp_path):
     Otherwise verify flags it forever and setup's only answer is changed=0."""
     root = tmp_path / "pi"
     stack = _pi_fixture(root)
+    _plant_sync_keys(root)
     assert run("setup", "rbp1", root=root).returncode == 0
     placed = stack / "etc-dnsmasq.d/02-my-wildcard-dns.conf"
     placed.write_bytes(placed.read_bytes().rstrip(b"\n"))
@@ -471,6 +475,19 @@ def _pi_fixture(root):
     return stack
 
 
+def _plant_sync_keys(root):
+    """Both halves of the pair, where the operator puts them: the private key the
+    standby dials with, and the authorized_keys line the authority accepts. `setup`
+    never writes either, and `verify` names the one its host is missing, so a
+    fixture that wants `verify` to pass has to plant them first."""
+    key = root / "etc/wg-sync/id_ed25519"
+    key.parent.mkdir(parents=True, exist_ok=True)
+    key.write_text("-----BEGIN OPENSSH PRIVATE KEY-----\n")
+    keys = root / "var/lib/wg-sync/.ssh/authorized_keys"
+    keys.parent.mkdir(parents=True, exist_ok=True)
+    keys.write_text("restrict ssh-ed25519 AAAAC3NzaC1lZDI1NTE5 wg-sync@rbp1\n")
+
+
 CONFIG_FILES = (
     ("etc-pihole-updatelists/pihole-updatelists.conf", "pihole-updatelists.conf"),
     ("etc-dnsmasq.d/02-my-wildcard-dns.conf", "02-my-wildcard-dns.conf"),
@@ -522,6 +539,7 @@ def test_restore_keeps_a_boot_line_it_cannot_check(tmp_path):
     would fix it is the one that will not start."""
     root = tmp_path / "pi"
     _pi_fixture(root)
+    _plant_sync_keys(root)
     assert run("setup", "rbp1", root=root).returncode == 0
     backup = tmp_path / "backup"
     assert run("backup", str(backup), "rbp1", root=root).returncode == 0
@@ -589,6 +607,7 @@ def test_both_pis_resolve_through_pihole():
 def test_setup_places_the_shared_settings_and_the_resolvers(tmp_path):
     root = tmp_path / "pi"
     stack = _pi_fixture(root)
+    _plant_sync_keys(root)
     assert run("setup", "rbp1", root=root).returncode == 0
     assert (stack / "pihole.settings").read_text() == (
         REPO / "ansible/playbooks/templates/runners/pihole.settings"
@@ -1803,3 +1822,301 @@ def test_setup_places_the_snapshot_script_its_units_and_its_directory(tmp_path):
     timer = root / "etc/systemd/system/wg-vpn-snapshot.timer"
     assert "OnCalendar=*:0/1" in timer.read_text()
     assert "Persistent=true" in timer.read_text()
+
+
+SYNC_HEADER = "--- /usr/local/lib/wg-vpn/wg-sync.sh\n"
+SYNC_DB = "home/vronteix/dockers/config/wg-easy.db"
+SYNC_STAMP = "var/lib/wg-easy-sync/last-installed"
+SYNC_PROM = "var/lib/node-exporter/textfile/wg-vpn-sync.prom"
+SYNC_STATE = "run/wg-vpn/vrrp.state"
+SYNC_TABLES = (
+    "clients_table",
+    "hooks_table",
+    "interfaces_table",
+    "user_configs_table",
+    "users_table",
+)
+
+
+def sync_script(tmp_path):
+    block = rendered_section("rbp1", SYNC_HEADER)
+    path = tmp_path / "wg-sync.sh"
+    path.write_text(block)
+    path.chmod(0o755)
+    return path
+
+
+# The fingerprint is `select <columns> from <table> order by <key>` piped to
+# sha256sum, so the stub answers each query from a row file beside the database
+# and lets the real sha256sum do the hashing. Two databases with the same rows
+# then hash the same, which is what a stamp is. The query itself is logged, so a
+# test can read the column list and the ordering key the script actually sent.
+SQLITE_SYNC_STUB = """#!/bin/bash
+printf '%s\\n' "$*" >> "$SQLITE_LOG"
+case "$*" in
+  *integrity_check*) echo ok ;;
+  *)
+    db="$2"; query="$3"
+    table="$(printf '%s' "$query" | sed -n 's/.* from \\([a-z_]*\\) order by.*/\\1/p')"
+    if [ -f "$db.rows.$table" ]; then cat "$db.rows.$table"; fi
+    ;;
+esac
+"""
+
+SSH_SYNC_STUB = """#!/bin/bash
+printf '%s\\n' "$*" >> "$SSH_LOG"
+if [ -n "${SSH_FAIL:-}" ]; then exit 1; fi
+cat "$SSH_SNAPSHOT"
+# The fake sqlite3 answers from row files beside a database, so the fetched copy
+# needs its own: `cat` alone would land a database whose every table reads empty.
+for t in $SYNC_TABLES; do
+  [ -f "$SSH_SNAPSHOT.rows.$t" ] && cp "$SSH_SNAPSHOT.rows.$t" "$DL.rows.$t"
+done
+"""
+
+DOCKER_SYNC_STUB = """#!/bin/bash
+printf '%s\\n' "$*" >> "$DOCKER_LOG"
+exit 0
+"""
+
+
+def _sync_rows(base, marker):
+    """Write one row file per table. `marker` is a string for all five, or a dict
+    of table to marker so a test can move exactly one table."""
+    for table in SYNC_TABLES:
+        value = marker[table] if isinstance(marker, dict) else marker
+        pathlib.Path(f"{base}.rows.{table}").write_text(f"1|{value}\n")
+
+
+def _sync_fingerprint(marker):
+    """The stamp the script must write for a database whose rows say `marker`."""
+    lines = []
+    for table in SYNC_TABLES:
+        value = marker[table] if isinstance(marker, dict) else marker
+        digest = hashlib.sha256(f"1|{value}\n".encode()).hexdigest()
+        lines.append(f"{table} {digest}\n")
+    return "".join(lines)
+
+
+def _sync_fixture(
+    tmp_path, *, local="a", snapshot="a", stamp="a", vrrp="backup", force=False
+):
+    """A WG_ROOT with the Panel's database, the authority's copy of it, and three
+    stubs first on PATH: sqlite3 reads row files beside each database, ssh hands
+    over the authority's copy, docker only records that it was called. No
+    network and no container, which is what makes the refusal and the swap
+    testable at all."""
+    script = sync_script(tmp_path)
+    root = tmp_path / "pi"
+    db = root / SYNC_DB
+    db.parent.mkdir(parents=True)
+    db.write_bytes(b"SQLite format 3\x00the local database")
+    _sync_rows(db, local)
+    authority = tmp_path / "authority.db"
+    authority.write_bytes(b"SQLite format 3\x00the authority database")
+    _sync_rows(authority, snapshot)
+    if stamp is not None:
+        stamp_path = root / SYNC_STAMP
+        stamp_path.parent.mkdir(parents=True, exist_ok=True)
+        stamp_path.write_text(_sync_fingerprint(stamp))
+    state = root / SYNC_STATE
+    state.parent.mkdir(parents=True)
+    state.write_text(vrrp + "\n")
+
+    bindir = tmp_path / "bin"
+    bindir.mkdir()
+    for name, body in (
+        ("sqlite3", SQLITE_SYNC_STUB),
+        ("ssh", SSH_SYNC_STUB),
+        ("docker", DOCKER_SYNC_STUB),
+    ):
+        stub = bindir / name
+        stub.write_text(body)
+        stub.chmod(0o755)
+    logs = {
+        "sqlite": tmp_path / "sqlite.log",
+        "ssh": tmp_path / "ssh.log",
+        "docker": tmp_path / "docker.log",
+    }
+    for log in logs.values():
+        log.write_text("")
+    env = dict(
+        os.environ,
+        PATH=f"{bindir}:{os.environ['PATH']}",
+        WG_ROOT=str(root),
+        SQLITE_LOG=str(logs["sqlite"]),
+        SSH_LOG=str(logs["ssh"]),
+        SSH_SNAPSHOT=str(authority),
+        SYNC_TABLES=" ".join(SYNC_TABLES),
+        DL=str(root / "var/lib/wg-easy-sync/incoming.db"),
+        DOCKER_LOG=str(logs["docker"]),
+    )
+    if force:
+        env["WG_SYNC_FORCE"] = "1"
+    return script, root, logs, env
+
+
+def test_the_sync_refuses_when_the_standby_was_edited(tmp_path):
+    """A change made on the standby is named, not erased: the operator decides.
+    Only the table that moved is named — a message listing all five would send
+    the operator looking at four tables that agree."""
+    moved = {table: "a" for table in SYNC_TABLES}
+    moved["clients_table"] = "edited"
+    script, root, logs, env = _sync_fixture(
+        tmp_path, local=moved, snapshot="a", stamp="a"
+    )
+    out = subprocess.run([str(script)], capture_output=True, text=True, env=env)
+    assert out.returncode == 1
+    assert "wg_vpn_sync_diverged 1" in (root / SYNC_PROM).read_text()
+    assert "docker" not in logs["docker"].read_text()
+    assert "clients_table" in out.stderr  # the table that moved
+    for table in SYNC_TABLES:
+        if table != "clients_table":
+            assert table not in out.stderr, table
+
+
+def test_the_fingerprint_asks_for_the_columns_the_design_names(tmp_path):
+    """`updated_at` is the one column a panel login can rewrite, so it is out of
+    the users' line: a login on either host would otherwise read as divergence and
+    either refuse forever or restart the panel for nothing."""
+    script, root, logs, env = _sync_fixture(tmp_path)
+    subprocess.run([str(script)], capture_output=True, text=True, env=env)
+    queries = logs["sqlite"].read_text()
+    for table, key in (
+        ("clients_table", "id"),
+        ("hooks_table", "id"),
+        ("interfaces_table", "name"),
+        ("user_configs_table", "id"),
+        ("users_table", "id"),
+    ):
+        assert f" from {table} order by {key};" in queries, table
+    users = [
+        line for line in queries.splitlines() if " from users_table " in line
+    ]
+    assert users, "users_table was never queried"
+    assert "updated_at" not in users[0]
+    assert "username" in users[0]  # the columns still describe the account
+
+
+def test_the_sync_installs_a_changed_snapshot_and_records_it(tmp_path):
+    """The stamp is how the next run knows what this host last agreed with."""
+    script, root, logs, env = _sync_fixture(
+        tmp_path, local="a", snapshot="b", stamp="a"
+    )
+    out = subprocess.run([str(script)], capture_output=True, text=True, env=env)
+    assert out.returncode == 0, out.stderr
+    assert "docker" in logs["docker"].read_text()  # stop/start around the swap
+    assert "stop wg-easy" in logs["docker"].read_text()
+    assert "start wg-easy" in logs["docker"].read_text()
+    stamp = root / SYNC_STAMP
+    assert stamp.read_text().split()[0] == "clients_table"
+    assert stamp.read_text() == _sync_fingerprint("b")
+    assert "wg_vpn_sync_ok 1" in (root / SYNC_PROM).read_text()
+    assert (root / SYNC_DB).read_bytes() == (tmp_path / "authority.db").read_bytes()
+
+
+def test_the_sync_does_nothing_when_nothing_changed(tmp_path):
+    """Restarting the Panel on a host every minute is how a tunnel drops."""
+    script, root, logs, env = _sync_fixture(tmp_path)
+    out = subprocess.run([str(script)], capture_output=True, text=True, env=env)
+    assert out.returncode == 0, out.stderr
+    assert "docker" not in logs["docker"].read_text()
+    assert "wg_vpn_sync_ok 1" in (root / SYNC_PROM).read_text()
+    assert "wg_vpn_sync_diverged 0" in (root / SYNC_PROM).read_text()
+
+
+def test_the_sync_defers_while_this_host_holds_the_address(tmp_path):
+    """A master stops its own Panel to install a copy: that drops the tunnel."""
+    script, root, logs, env = _sync_fixture(tmp_path, vrrp="master", snapshot="b")
+    out = subprocess.run([str(script)], capture_output=True, text=True, env=env)
+    assert out.returncode == 0, out.stderr
+    assert "docker" not in logs["docker"].read_text()
+    assert logs["ssh"].read_text() == "", "the address holder fetches nothing"
+
+
+def test_the_forced_copy_overwrites_a_diverged_standby(tmp_path):
+    """WG_SYNC_FORCE=1 is the operator accepting the local edit is lost."""
+    script, root, logs, env = _sync_fixture(
+        tmp_path, local="edited", snapshot="a", stamp="a", force=True
+    )
+    out = subprocess.run([str(script)], capture_output=True, text=True, env=env)
+    assert out.returncode == 0, out.stderr
+    assert "docker" in logs["docker"].read_text()
+    assert (root / SYNC_DB).read_bytes() == (tmp_path / "authority.db").read_bytes()
+
+
+def test_the_vpn_sync_verb_refuses_the_authority(tmp_path):
+    """The verb runs where the pull belongs. On rbp0 it would dial the host
+    itself through a key rbp0 does not hold, and stopping that panel is the one
+    thing the design never does while it carries the address."""
+    root = tmp_path / "rbp0"
+    _pi_fixture(root)
+    assert run("setup", "rbp0", root=root).returncode == 0
+    # The script is absent on the authority, so the refusal has to be the host
+    # check and not a missing file.
+    out = run("vpn-sync", "rbp0", root=root)
+    assert out.returncode == 1
+    assert "rbp0 is the authority" in out.stderr
+    assert "run 'hosts-pi.sh setup" not in out.stderr
+
+
+def test_the_key_drift_names_the_half_each_host_needs(tmp_path):
+    """Neither half is written here. The private key belongs on the standby, the
+    authorized_keys line on the authority, and verify names the one that is
+    missing rather than both."""
+    for host, missing, present in (
+        ("rbp0", "var/lib/wg-sync/.ssh/authorized_keys", "etc/wg-sync/id_ed25519"),
+        ("rbp1", "etc/wg-sync/id_ed25519", "var/lib/wg-sync/.ssh/authorized_keys"),
+    ):
+        root = tmp_path / host
+        _pi_fixture(root)
+        assert run("setup", host, root=root).returncode == 0
+
+        if host == "rbp1":  # only the standby carries the pull
+            script = root / "usr/local/lib/wg-vpn/wg-sync.sh"
+            assert script.stat().st_mode & 0o777 == 0o755
+            timer = root / "etc/systemd/system/wg-vpn-sync.timer"
+            assert "OnCalendar=*:0/1" in timer.read_text()
+        assert (root / "etc/wg-sync").stat().st_mode & 0o777 == 0o700
+
+        out = run("verify", host, root=root)
+        assert out.returncode == 1
+        assert f"MISSING {root / missing}" in out.stdout, out.stdout
+        assert str(root / present) not in out.stdout
+
+
+def test_the_authority_carries_no_sync_timer(tmp_path):
+    """Only the standby pulls. On the authority the account the script dials is
+    the host itself and its key is not there, so every minute would publish a
+    failed run and raise the staleness alert against the host that is working."""
+    root = tmp_path / "rbp0"
+    _pi_fixture(root)
+    units = (
+        "usr/local/lib/wg-vpn/wg-sync.sh",
+        "etc/systemd/system/wg-vpn-sync.service",
+        "etc/systemd/system/wg-vpn-sync.timer",
+    )
+
+    rendered = run("render", "rbp0")
+    assert rendered.returncode == 0, rendered.stderr
+    assert "--- /usr/local/lib/wg-vpn/wg-sync.sh\n" not in rendered.stdout, "rendered"
+    assert "the authority, and only the standby pulls" in rendered.stdout
+
+    assert run("setup", "rbp0", root=root).returncode == 0
+    for unit in units:
+        assert not (root / unit).exists(), unit
+
+    for unit in units:  # what an older run left behind is the drift
+        (root / unit).parent.mkdir(parents=True, exist_ok=True)
+        (root / unit).write_text("planted\n")
+    out = run("verify", "rbp0", root=root)
+    assert out.returncode == 1
+    assert "DIFFERS rbp0 is the authority and carries a sync unit" in out.stdout
+
+    # Drift that only a hand could clear is worse than none: setup removes what
+    # the authority must not carry, and the host converges.
+    assert run("setup", "rbp0", root=root).returncode == 0
+    for unit in units:
+        assert not (root / unit).exists(), f"setup left {unit}"
+    _plant_sync_keys(root)  # the authority's half is the authorized_keys line
+    assert run("verify", "rbp0", root=root).returncode == 0

@@ -4,7 +4,16 @@ Description=Install the authority's wg-easy database on the standby
 # after but Docker itself. What protects the swap is the script: it stops the
 # Panel before the file is replaced and starts it again after, and a start that
 # fails is reported rather than left silent.
+# Wants= is what makes docker.service present at boot; After= alone only orders
+# the two when something else has already pulled Docker in.
+Wants=docker.service
+After=docker.service
 
 [Service]
 Type=oneshot
+# A oneshot runs a minute at a time and systemd starts no second copy while it
+# is active, so a fetch to a host that stopped answering would wedge the sync
+# until TCP gave up. The script's ssh timeouts bound the fetch; this bounds the
+# whole run, and a killed run publishes nothing, which the staleness rule reads.
+TimeoutStartSec=30s
 ExecStart=@WG_LIB@/wg-sync.sh
