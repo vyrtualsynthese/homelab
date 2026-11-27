@@ -1,8 +1,13 @@
 # traefik-gate
 
-One Traefik `Middleware`, `kube-system/lan-only`, that rejects a request with `403` when the
-connecting address is outside the LAN or the WireGuard tunnel. It is the single gate every
-non-public route in the cluster references.
+The cluster's shared Traefik objects for internal names. `lan-only` rejects a request with `403` when
+the connecting address is outside the LAN or the WireGuard tunnel, and it is the single gate every
+non-public route in the cluster references. `redirect-to-https` and the `internal-tls` policy are the
+scheme redirect and the TLS settings each serving chart points at. `legacy-internal-redirect` and
+`legacy-internal-redirect-tls` are the two routers that keep an old `*.kub.local` name alive: they
+send it to its `*.kub.internal` replacement, through `redirect-to-internal-tls` for a name that serves
+TLS and through `redirect-to-internal-plain` for `pgadmin` and `prometheus`, which have no
+`websecure` router.
 
 ## Why it exists
 

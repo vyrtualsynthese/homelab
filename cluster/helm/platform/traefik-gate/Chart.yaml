@@ -2,7 +2,7 @@ apiVersion: v2
 name: traefik-gate
 description: Shared Traefik middlewares that keep non-public routes on the LAN.
 type: application
-version: 0.2.0
+version: 0.3.0
 # appVersion-check: exempt — names the Traefik release these middlewares target;
 # the chart runs no image of its own.
 appVersion: "2.9.4"
