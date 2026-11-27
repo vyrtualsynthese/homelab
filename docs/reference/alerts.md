@@ -5,9 +5,10 @@
 > nobody watches.
 >
 > **Use it when** an alert fired and you want to know what it means, you are writing or editing a
-> rule, or you are asking whether something is monitored at all · **Verified** 2026-11-26 · **Kind:** reference
+> rule, or you are asking whether something is monitored at all · **Verified** 2026-11-27 · **Kind:** reference
 >
-> **Sources** the live rules, read from Grafana's API on 2026-11-26 ·
+> **Sources** the live rules and the two contact points, read from Grafana's API on 2026-11-26 and
+> 2026-11-27 ·
 > `cluster/helm/monitoring/grafana/values.yaml`, `docs/observability-conventions.md`, and the two
 > exports under `cluster/helm/monitoring/grafana/export/{traefik,security}/rules.json`
 
@@ -41,9 +42,26 @@ Warnings repeat every **12 h**; a child route matching `severity="critical"`
 repeats every **1 h**. A third child matches `board=card` and repeats every **8760 h** — Grafana
 stores it as `1y`. A rule carrying that label is one a person wants told once: the notice lands in
 Discord and as a card on the `alerts` board, and nothing follows while the condition holds. The
-webhook URL is not readable through the API (it is a
-secure field), so the contact point is never rewritten by automation. The Discord
-webhook exists only in that contact point.
+Discord webhook exists only in that contact point, and its URL is unreadable through the API — a
+secure field, returned as `[REDACTED]`.
+
+**The Discord message is a template this repository owns, not Grafana's default** (2026-11-27).
+The default renders every label and every annotation of every alert in the group: one failed Job
+became twenty lines, half of them kube-state-metrics labels. The contact point now carries a
+five-line message — status with the rule's severity, the rule's own `summary`, its `description` in
+italics, and a link to that rule — so a person reads what fired, on what, and what to do, without
+opening Grafana to find out which of the eleven labels mattered. `summary` and `description` are
+what the template reads, which is why a new rule without them sends a near-empty message.
+
+Grafana 13 removed the receivers config API that used to edit this (`410`, pointing at the app
+platform), so the contact point is read and written through
+`/apis/notifications.alerting.grafana.app/v1beta1/namespaces/default/receivers`: the resource is
+named by its base64 title (`ZGlzY29yZC1ob21lbGFi` for `discord-homelab`), and its `secureFields`
+map — `{"url": true}` — is what preserves the webhook across a write. The write is therefore no
+longer forbidden to automation, but a test send is what proves it did not drop the URL:
+`POST …/receivers/<name>/test` with `{"integration": {…}}` answers `{"status":"success"}` only when
+Discord accepted the post. That test is also the only way to see the template render, since the
+message itself cannot be read back.
 
 **The second contact point is what writes the card.** `vikunja-alerts` posts to `alert-relay` in
 `monitoring`, which opens one card per incident on the `alerts` board, writes nothing while that card
