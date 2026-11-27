@@ -294,7 +294,7 @@ git commit -m "🐛 fix(grafana): count local decisions in the ban burst, not th
 ### Task 3: The two pages that would otherwise lie
 
 **Files:**
-- Modify: `docs/reference/alerts.md` (the `## Known gaps` section)
+- Modify: `docs/reference/alerts.md` (the `## Known gaps` bullet, and the two tables that name `SecurityBanBurst`)
 - Modify: `docs/runbooks/crowdsec.md` (`## What is where`, and a fifth proof)
 
 **Interfaces:**
@@ -314,7 +314,26 @@ In `docs/reference/alerts.md`, the bullet that begins `- **CrowdSec is watched f
   is what names that case; no rule reads it.
 ```
 
-- [ ] **Step 2: Add the CAPI rows to the runbook's table**
+- [ ] **Step 2: Correct the two table rows that name the old trigger**
+
+The same page carries `SecurityBanBurst` twice more, in the summary table and in the
+"what reads what" table. Both still describe the kernel set:
+
+```markdown
+| `SecurityBanBurst` | more than 20 new decisions created here in 10 minutes | 5m | warning | inactive |
+```
+
+for the summary row (it currently reads `more than 20 new bans on the \`streaming\` bouncer in 10
+minutes`), and
+
+```markdown
+| `SecurityBanBurst` | `delta(sum(cs_active_decisions{origin="crowdsec"})[10m:1m])`, Prometheus | one or two bans a day is the normal rate; twenty decisions in ten minutes is a scenario matching a stream. The kernel set is not read: the first blocklist pull raises it by thousands in one step |
+```
+
+for the detail row (it currently reads `delta(sum(fw_bouncer_banned_ips)[10m:1m])` and `twenty in ten
+minutes is a scenario matching a stream`).
+
+- [ ] **Step 3: Add the CAPI rows to the runbook's table**
 
 In `docs/runbooks/crowdsec.md`, in `## What is where`, after the `Decisions` row:
 
@@ -323,7 +342,7 @@ In `docs/runbooks/crowdsec.md`, in `## What is where`, after the `Decisions` row
 | What the blocklist may never insert | `capi_whitelists.yaml` on the config claim | `kubectl -n security exec deploy/crowdsec-lapi -- cat /etc/crowdsec_data/capi_whitelists.yaml` |
 ```
 
-- [ ] **Step 3: Add proof 5**
+- [ ] **Step 4: Add proof 5**
 
 After proof 4 in `## The four proofs, run once when this was built`, add — and change that heading to
 `## The five proofs, run once when each piece was built`, and in the banner at the top of the page
@@ -338,7 +357,7 @@ change `the four proofs below have not been run` to `the five proofs below have 
    *not* retroactively removed, which is why the check reads the list and not a count.
 ```
 
-- [ ] **Step 4: Run the two branch gates**
+- [ ] **Step 5: Run the two branch gates**
 
 ```bash
 hack/check-docs.sh --base origin/develop
@@ -349,7 +368,7 @@ Expected: both exit 0. The runbook is in the nav already; a page touched on this
 its banner, which it does. No route changes on this branch, so the exposure gate is a regression
 check rather than a proof of this work — it is here because the repository requires it before a PR.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
 git add docs/reference/alerts.md docs/runbooks/crowdsec.md
