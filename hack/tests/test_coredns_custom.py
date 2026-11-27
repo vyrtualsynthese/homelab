@@ -1,7 +1,7 @@
 """`cluster/infrastructure/coredns/custom.yaml` is applied by hand, so nothing
-else in the repository reads it. These checks pin the one thing it must keep
-true: `*.kub.local` goes to the two edge Pi-holes, and the catch-all stays the
-node's own list."""
+else in the repository reads it. These checks pin what it must keep true: both
+internal zones go to the two edge Pi-holes, and the catch-all stays the node's
+own list."""
 import pathlib
 
 import yaml
@@ -23,15 +23,18 @@ def edge_addresses():
 def test_the_internal_wildcard_is_forwarded_to_the_two_pis():
     """The three comment-only files are not enough: on 2026-11-26 nuc0's
     resolv.conf held 1.1.1.1 beside the Pi-hole, `1.1.1.1` answers `*.kub.local`
-    with NXDOMAIN, and CoreDNS treated both as peers (card 889)."""
+    with NXDOMAIN, and CoreDNS treated both as peers (card 889). A public
+    resolver answers `kub.internal` with NXDOMAIN exactly as it does
+    `kub.local`."""
     data = custom_data()
     override = data["kub-local.override"]
     forward = [
         line.strip() for line in override.splitlines() if line.strip().startswith("forward")
     ]
-    assert forward == [f"forward kub.local {' '.join(edge_addresses())}"], (
-        "one zone forward, to the two Pis in inventory order and nothing else"
-    )
+    assert forward == [
+        f"forward kub.local {' '.join(edge_addresses())}",
+        f"forward kub.internal {' '.join(edge_addresses())}",
+    ], "both internal zones go to the two Pis in inventory order and nothing else"
 
 
 def test_the_override_does_not_replace_the_catch_all():
