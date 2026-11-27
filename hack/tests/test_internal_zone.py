@@ -43,6 +43,23 @@ def test_the_edge_pi_names_stay_on_the_old_zone():
         assert name in exporter
 
 
+EXTRA = [
+    REPO / "cluster/helm/dashy/files/conf.yml",
+    REPO / "cluster/infrastructure/traefik/dashboard/redirect.yaml",
+    REPO / "cluster/helm/monitoring/grafana/export/traefik/dashboard.json",
+]
+
+
+def test_the_hand_maintained_copies_agree():
+    offenders = [
+        f"{path.relative_to(REPO)}:{number}: {line.strip()}"
+        for path in EXTRA
+        for number, line in active_lines(path)
+        if ".kub.local" in line
+    ]
+    assert offenders == [], "\n".join(offenders)
+
+
 def test_the_start_page_keeps_one_internal_name():
     """Dashy's own host is typed in a template rather than a value: two rules, one entry point
     each, both redirecting to the public page."""

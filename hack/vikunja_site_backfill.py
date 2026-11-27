@@ -220,7 +220,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--project", type=int, default=2)
     parser.add_argument("--view", type=int, default=13)
     parser.add_argument("--base-url",
-                        default=os.environ.get("VIKUNJA_URL", "https://vikunja.kub.local"))
+                        default=os.environ.get("VIKUNJA_URL", "https://vikunja.kub.internal"))
     parser.add_argument("--ref", default=DEVELOP,
                         help="the ref the docs site builds (default: origin/develop)")
     parser.add_argument("--dry-run", action="store_true",

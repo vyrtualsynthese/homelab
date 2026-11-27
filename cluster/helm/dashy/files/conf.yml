@@ -2,7 +2,7 @@
 #
 # Rendered into the `dashy-conf` Secret by templates/secret-config.yaml and
 # mounted at /app/user-data/conf.yml. Hosts are the ones in
-# docs/reference/routes.md: the `.kub.local` names use the cluster's internal
+# docs/reference/routes.md: the `.kub.internal` names use the cluster's internal
 # certificate, the `.kub.home.ashudev.com` names a Let's Encrypt one.
 #
 # Icons come from each project's own repository, served by
@@ -45,51 +45,51 @@ sections:
         icon: https://raw.githubusercontent.com/seerr-team/seerr/develop/public/logo_full.svg
       - title: Sonarr
         description: television
-        url: https://sonarr.kub.local
+        url: https://sonarr.kub.internal
         icon: https://raw.githubusercontent.com/Sonarr/Sonarr/develop/frontend/src/Content/Images/logo.svg
       - title: Sonarr (anime)
         description: anime television
-        url: https://sonarr-anime.kub.local
+        url: https://sonarr-anime.kub.internal
         icon: https://raw.githubusercontent.com/Sonarr/Sonarr/develop/frontend/src/Content/Images/logo.svg
       - title: Radarr
         description: films
-        url: https://radarr.kub.local
+        url: https://radarr.kub.internal
         icon: https://raw.githubusercontent.com/Radarr/Radarr/develop/frontend/src/Content/Images/logo.svg
       - title: Radarr (anime)
         description: anime films
-        url: https://radarr-anime.kub.local
+        url: https://radarr-anime.kub.internal
         icon: https://raw.githubusercontent.com/Radarr/Radarr/develop/frontend/src/Content/Images/logo.svg
       - title: Lidarr
         description: music
-        url: https://lidarr.kub.local
+        url: https://lidarr.kub.internal
         icon: https://raw.githubusercontent.com/Lidarr/Lidarr/develop/frontend/src/Content/Images/logo.svg
       - title: Prowlarr
         description: indexers
-        url: https://prowlarr.kub.local
+        url: https://prowlarr.kub.internal
         icon: https://raw.githubusercontent.com/Prowlarr/Prowlarr/develop/frontend/src/Content/Images/logo.svg
       - title: Bazarr
         description: subtitles
-        url: https://bazarr.kub.local
+        url: https://bazarr.kub.internal
         icon: https://raw.githubusercontent.com/morpheus65535/bazarr/master/frontend/public/images/logo128.png
       - title: Bazarr (anime)
         description: anime subtitles
-        url: https://bazarr-anime.kub.local
+        url: https://bazarr-anime.kub.internal
         icon: https://raw.githubusercontent.com/morpheus65535/bazarr/master/frontend/public/images/logo128.png
       - title: qBittorrent
         description: downloads
-        url: https://qbittorrent.kub.local
+        url: https://qbittorrent.kub.internal
         icon: https://raw.githubusercontent.com/qbittorrent/qBittorrent/master/dist/unix/menuicons/128x128/apps/qbittorrent.png
       - title: autobrr
         description: releases from IRC
-        url: https://autobrr.kub.local
+        url: https://autobrr.kub.internal
         icon: https://raw.githubusercontent.com/autobrr/autobrr/develop/web/public/logo192.png
       - title: Maintainerr
         description: library clean-up
-        url: https://maintainerr.kub.local
+        url: https://maintainerr.kub.internal
         icon: https://raw.githubusercontent.com/Maintainerr/Maintainerr/development/apps/ui/public/logo_icon.svg
       - title: Tautulli
         description: viewing statistics
-        url: https://tautulli.kub.local
+        url: https://tautulli.kub.internal
         icon: https://raw.githubusercontent.com/Tautulli/Tautulli/nightly/data/interfaces/default/images/logo-circle.svg
 
   - name: Books and reading
@@ -97,7 +97,7 @@ sections:
     items:
       - title: Calibre-Web Automated
         description: the books library
-        url: https://calibre.kub.local
+        url: https://calibre.kub.internal
         icon: https://raw.githubusercontent.com/crocodilestick/Calibre-Web-Automated/main/cps/static/img/cwa-logo-round.svg
       - title: Kavita
         description: reading
@@ -133,11 +133,11 @@ sections:
         icon: https://raw.githubusercontent.com/n8n-io/n8n/master/packages/frontend/@n8n/design-system/src/components/N8nLogo/logo-icon.svg
       - title: Vikunja
         description: the task board
-        url: https://vikunja.kub.local
+        url: https://vikunja.kub.internal
         icon: https://raw.githubusercontent.com/go-vikunja/vikunja/main/frontend/src/assets/logo.svg
       - title: Docs
         description: the lab documentation
-        url: https://docs.kub.local
+        url: https://docs.kub.internal
         icon: https://raw.githubusercontent.com/squidfunk/mkdocs-material/master/.github/assets/logo.svg
 
   - name: Infrastructure
@@ -149,7 +149,7 @@ sections:
         icon: https://raw.githubusercontent.com/Lissy93/dashy/master/public/web-icons/dashy-pwa_192x192.png
       - title: Argo CD
         description: what runs where
-        url: https://argocd.kub.local
+        url: https://argocd.kub.internal
         icon: https://raw.githubusercontent.com/argoproj/argo-cd/master/ui/src/assets/images/argologo.svg
       - title: Authentik
         description: sign-in
@@ -157,23 +157,23 @@ sections:
         icon: hl-authentik
       - title: Grafana
         description: dashboards
-        url: https://grafana.kub.local
+        url: https://grafana.kub.internal
         icon: https://raw.githubusercontent.com/grafana/grafana/main/public/img/grafana_icon.svg
       - title: Prometheus
         description: metrics
-        url: http://prometheus.kub.local
+        url: http://prometheus.kub.internal
         icon: https://raw.githubusercontent.com/prometheus/prometheus/main/documentation/images/prometheus-logo.svg
       - title: Loki
         description: logs
-        url: https://loki.kub.local
+        url: https://loki.kub.internal
         icon: https://raw.githubusercontent.com/grafana/loki/main/docs/sources/logo.png
       - title: pgAdmin
         description: PostgreSQL
-        url: http://pgadmin.kub.local
+        url: http://pgadmin.kub.internal
         icon: https://raw.githubusercontent.com/pgadmin-org/pgadmin4/master/docs/en_US/images/logo-128.png
       - title: Traefik
         description: routes
-        url: https://traefik.kub.local/dashboard/
+        url: https://traefik.kub.internal/dashboard/
         icon: https://raw.githubusercontent.com/traefik/traefik/master/docs/content/assets/img/traefikproxy-icon-color.png
 
   - name: Elsewhere

@@ -11,7 +11,7 @@
         "title": "Traefik native dashboard",
         "tooltip": "basic auth + LAN only",
         "type": "link",
-        "url": "https://traefik.kub.local/dashboard/"
+        "url": "https://traefik.kub.internal/dashboard/"
       },
       {
         "asDropdown": false,
@@ -21,7 +21,7 @@
         "title": "Alerts: what is monitored",
         "tooltip": "",
         "type": "link",
-        "url": "https://docs.kub.local/homelab/develop/reference/alerts/"
+        "url": "https://docs.kub.internal/homelab/develop/reference/alerts/"
       }
     ],
     "panels": [

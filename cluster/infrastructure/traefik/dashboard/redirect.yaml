@@ -13,7 +13,7 @@ metadata:
 spec:
   entryPoints: ["web"]
   routes:
-    - match: Host(`traefik.kub.local`)
+    - match: Host(`traefik.kub.internal`)
       kind: Rule
       middlewares:
         - name: lan-only

@@ -30,7 +30,7 @@ from typing import Any
 
 REPO = "vyrtualsynthese/homelab"
 DOCS_BASE = f"https://github.com/{REPO}/blob/develop/"
-SITE_BASE = "https://docs.kub.local/homelab/develop/"
+SITE_BASE = "https://docs.kub.internal/homelab/develop/"
 KINDS = ("feature", "story", "task")
 COLUMNS = ("Idea", "Shaping", "Backlog", "Doing", "Validation", "Done")
 CONTAINER_COLUMNS = ("Idea", "Shaping", "Backlog", "Done")
@@ -388,7 +388,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--map", default=DEFAULT_MAP)
     parser.add_argument("--project", type=int, default=2)
     parser.add_argument("--view", type=int, default=13)
-    parser.add_argument("--base-url", default=os.environ.get("VIKUNJA_URL", "https://vikunja.kub.local"))
+    parser.add_argument("--base-url", default=os.environ.get("VIKUNJA_URL", "https://vikunja.kub.internal"))
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--apply", action="store_true")
     parser.add_argument("--description-ok", action="store_true",
