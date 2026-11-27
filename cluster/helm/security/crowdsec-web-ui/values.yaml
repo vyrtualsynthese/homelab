@@ -35,10 +35,9 @@ serviceAccount:
   annotations: {}
 
 # -- Annotations added to the pod. No `prometheus.io/*` keys: the image serves no
-# exporter of its own. It *reads* metrics from the LAPI when an instance carries a
-# metrics URL, and that tab is deliberately not configured here — the LAPI's 6060
-# is scraped on the pod IP by Prometheus and no Service exposes it, so pointing the
-# UI at it would leave the tab permanently empty.
+# exporter of its own. It *reads* the LAPI's metrics, over the cluster network, at
+# the `metrics` port of the same Service that answers the API — Prometheus still
+# scrapes that port on the pod IP, by annotation, and needs nothing here.
 podAnnotations: {}
 podLabels: {}
 
@@ -153,6 +152,17 @@ env:
   # `crowdsec-web-ui` Secret, created by hand — see the chart README for the
   # `cscli machines add` command that issues it.
   CONFIG_INSTANCES_0_LAPI_AUTH_USERNAME: "crowdsec-web-ui"
+
+  # The LAPI's own Prometheus listener, for the Metrics tab. It is the `metrics`
+  # port of the same Service, rendered because `lapi.metrics.enabled` is true in
+  # the crowdsec chart: one Service for the API and the numbers, no NodePort, and
+  # nothing outside the pod network can read it. Prometheus keeps scraping the
+  # pod IP by annotation; this entry changes nothing about that.
+  #
+  # The listener carries no access control of its own, so it stays on the pod
+  # network: no route names it and no NodePort publishes it.
+  CONFIG_INSTANCES_0_METRICS_0_NAME: "CrowdSec LAPI"
+  CONFIG_INSTANCES_0_METRICS_0_URL: "http://crowdsec-service:6060/metrics"
 
   # The app's own OIDC against authentik. The issuer is the public name: the
   # browser is sent there, and the pod reads its discovery document through the

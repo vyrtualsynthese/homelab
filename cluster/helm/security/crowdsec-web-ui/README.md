@@ -68,6 +68,15 @@ read-only role, for a group added to `CONFIG_AUTH_OIDC_READ_ONLY_GROUPS_0` when 
 **Break-glass.** Password login is off. Set `CONFIG_AUTH_PASSWORD_LOGIN_ENABLED: "true"`, restart the
 Deployment, and the password form returns; the first sign-in creates a local administrator.
 
+## Metrics
+
+The sidebar's **Metrics** tab reads the LAPI's own Prometheus listener at
+`http://crowdsec-service:6060/metrics`, not Prometheus. The upstream crowdsec chart renders that port
+on `crowdsec-service` because `lapi.metrics.enabled` is true, so the tab keeps working while the
+monitoring stack is down — the reason this UI exists. Prometheus is unchanged: it still scrapes the
+pod IP by annotation. The listener has no access control of its own, so it stays on the pod network
+and no route names it.
+
 ## Probes
 
 Liveness and readiness share `/api/health`, and that is deliberate: the endpoint says the HTTP
