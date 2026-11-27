@@ -25,6 +25,11 @@ metadata:
     app: {{ include "postgres.name" . }}-dump
 spec:
   schedule: {{ .Values.dumps.schedule | quote }}
+  # Pinned, because leaving it out made the Kubernetes controller manager's local
+  # time decide: the chart says 03:30, and the Job that failed on 2026-11-27 carried
+  # 02:30Z in its name — the controller read the cron in Paris time. Every other
+  # backup CronJob in this repository pins Europe/Paris; this one was the exception.
+  timeZone: Europe/Paris
   # A sync or a node reboot at 03:30 must not silently drop the night's dump,
   # but an hour late is still the same night; past that, wait for tomorrow.
   startingDeadlineSeconds: 3600

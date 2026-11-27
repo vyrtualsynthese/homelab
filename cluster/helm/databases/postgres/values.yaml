@@ -19,6 +19,8 @@ data:
 dumps:
   size: 20Gi
   storageClassName: local-path
+  # Read as Europe/Paris, which the CronJob template pins: 03:30 there is 02:30Z in
+  # winter and 01:30Z in summer. The wall clock stays put across the two clocks.
   schedule: "30 3 * * *"
   retentionDays: 14
 
