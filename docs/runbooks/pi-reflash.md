@@ -71,9 +71,9 @@ own `user-data` on the boot partition before the first boot — step 4. The imag
 - **`pihole.env` is yours.** It holds the Pi-hole panel password, it is gitignored, and `hosts-pi.sh`
   refuses to run without it rather than inventing one. Every other Pi-hole setting lives in
   `pihole.settings`, which the script renders from one template, so the two hosts cannot drift.
-- **Three more files are yours, and the script refuses without them**: `wg-easy.env` (one key,
-  `OAUTH_OIDC_CLIENT_SECRET`, which opens nothing today), and `certs/tls.pem` with
-  `certs/tls-key.pem` (its TLS leaf and key, from `hack/internal-cert.sh --host`). wg-easy's own
+- **Three more files are yours, and the script refuses without them**: `certs/tls.pem` with
+  `certs/tls-key.pem` (its TLS leaf and key, from `hack/internal-cert.sh --host`) and
+  `certs/pihole.pem` (certificate and key in one file, for Pi-hole's own panel on 443). wg-easy's own
   settings — account, host, port, DNS and peers — live in `config/wg-easy.db`, which `backup` copies
   with the rest. The file holds every peer's private key, so `setup` narrows it to `0600` once the
   panel has created it: a fresh container writes `0644`, and `verify` names the file when that mode is
@@ -175,8 +175,16 @@ sudo mkdir -p /home/vronteix/dockers
 sudo mount /dev/sdb1 /mnt
 sudo ~/hosts/pi/hosts-pi.sh restore /mnt/dockers <host>
 sudo ~/hosts/pi/hosts-pi.sh setup <host>
+sudo ~/hosts/pi/hosts-pi.sh vpn-sync <host> --force     # rbp1 only
 sudo ~/hosts/pi/hosts-pi.sh verify <host>
 ```
+
+The order matters on `rbp1`. `restore` brings back both halves of the sync key with the rest of the
+backup (`wg/` in the copy: `/etc/wg-sync/id_ed25519` and the account's `.ssh`), `setup` installs the
+snapshot and sync units, and `vpn-sync --force` is what makes the standby agree with the authority
+again: the stamp the backup restored describes the database as it stood then, so the first ordinary
+run would otherwise refuse as a local edit. `--force` is for exactly this case — a host that was
+rebuilt, not one that was edited. On `rbp0` the verb refuses: the authority carries no sync timer.
 
 After `setup`, write `/etc/restic/edge.env` from the password manager before the first timer run:
 four lines (`RESTIC_REPOSITORY`, `RESTIC_PASSWORD`, and the scoped S3 pair), root-owned and mode 0600,
@@ -297,13 +305,13 @@ It answers at `https://vpn-rbp0.kub.local:8443` on `rbp0` and `https://vpn-rbp1.
   expired pair with the rest of the stack.
 - **The panel has no gate, by decision.** It signs in with its own account and password, and nothing on
   an edge host goes through authentik: the VPN is the way back into the LAN, so it must open when the
-  cluster is down ([the record](../decisions/2026-11-26-edge-pis-local-auth-only.md)). `wg-easy.env`
-  still carries `OAUTH_OIDC_CLIENT_SECRET` from the earlier attempt; no `wg-easy` provider exists, so
-  the value opens nothing, and it goes when `hosts-pi.sh` stops requiring the file.
-- **The published UDP port must equal the panel's port.** The interface listens inside the container on
-  the port the panel names, and the stack maps the same number to the host (`51821` on `rbp0`, `51822` on
-  `rbp1`). Changing one without the other leaves clients dialling a closed port: the tunnel is up in the
-  panel and nothing connects.
+  cluster is down ([the record](../decisions/2026-11-26-edge-pis-local-auth-only.md)).
+  `wg-easy.env` and its unused OIDC secret were removed with the failover change on 2026-11-27.
+- **The published UDP port is the same on both, and the router points at the shared address.** The
+  interface listens inside the container on the port the panel names, and the stack maps the same
+  number to the host on both hosts (`51821`), because keepalived moves `192.168.1.9` between them and
+  the router's `51821/udp` forward names that address, not a host. Changing one without the other
+  leaves clients dialling a closed port: the tunnel is up in the panel and nothing connects.
 - **The DNS handed to peers is `192.168.1.22` then `192.168.1.38`**, the two Pi-holes in that order, in
   both panels (set 2026-11-27). It is the panel's default, and every existing peer carries the same
   pair: a peer's own DNS entry overrides the default, and that entry is what its downloaded profile is
@@ -311,8 +319,8 @@ It answers at `https://vpn-rbp0.kub.local:8443` on `rbp0` and `https://vpn-rbp1.
   The value lives in `config/wg-easy.db` and in no file here, which is why it is written down; `backup`
   carries it with the rest of the stack.
 - **A v14 environment file in front of this container stops it.** v15 exits on startup when `PASSWORD`
-  or `PASSWORD_HASH` is in its environment, naming the migration page. The one `env_file` is
-  `wg-easy.env`, and it carries the OAuth client secret and nothing else.
+  or `PASSWORD_HASH` is in its environment, naming the migration page. The stack passes no `env_file`
+  at all since 2026-11-27.
 - **The admin password is reset from the host**, not by editing a file:
   `docker compose exec wg-easy cli db:admin:reset` (or `--password <new>`).
 

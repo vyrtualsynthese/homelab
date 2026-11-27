@@ -10,6 +10,7 @@ does not know. A fresh Image has no Ansible and no key, which is why it is bash.
 ./hosts-pi.sh render rbp1          # print every file this script owns; changes nothing
 sudo ./hosts-pi.sh setup  rbp1     # install the engine, write them, start the stack, print changed=N
 sudo ./hosts-pi.sh verify rbp1     # name every difference; exit 1 if one needs an apply
+sudo ./hosts-pi.sh vpn-sync rbp1 [--force]   # the standby's pull, run by hand
 sudo ./hosts-pi.sh backup /mnt/usb/pi rbp1   # copy the state a reflash destroys
 sudo ./hosts-pi.sh restore /mnt/usb/pi rbp1  # copy it back, then verify
 ```
@@ -31,7 +32,7 @@ PI_ROOT=/tmp/fake-pi ./hosts-pi.sh setup rbp0
 
 | Path | Owned | Why |
 |---|---|---|
-| `/home/vronteix/dockers/docker-compose.yml` | yes | one template in `playbooks/templates/runners/`, rendered per host; the WireGuard port is the only per-host value |
+| `/home/vronteix/dockers/docker-compose.yml` | yes | one template in `playbooks/templates/runners/`, the same bytes on both hosts: the tunnel port is the literal `51821`, because the pair shares one panel database and one client config |
 | `Caddyfile` | yes | the VPN panel's TLS endpoint, rendered per host from `playbooks/templates/runners/Caddyfile`: the panel's name is the only per-host value. `setup` force-recreates `caddy` when it writes it, because a bind mount is resolved at container start |
 | `etc-pihole-updatelists/pihole-updatelists.conf` | yes | the file Pi-hole's list updater reads; without it Docker makes the source a directory |
 | `etc-dnsmasq.d/02-my-wildcard-dns.conf` | yes | the wildcard names the LAN resolves through this Pi-hole |
@@ -49,9 +50,13 @@ PI_ROOT=/tmp/fake-pi ./hosts-pi.sh setup rbp0
 | `/etc/hosts` | **no** | cloud-init rewrites it from its own template on every boot (`manage_etc_hosts: true`); its copy already names the host and localhost |
 | Docker's repository and the four packages | yes | a fresh image has no runtime; `setup` installs the pinned set from `download.docker.com` |
 | `pihole.env` | **no** | it holds the Pi-hole panel password and nothing else: `FTLCONF_webserver_api_password`, `0600`, owned by the account that runs compose, gitignored. `setup` requires it and names it when it is missing. The v5 name `WEBPASSWORD` is ignored by this image |
-| `wg-easy.env` | **no** | one key, `OAUTH_OIDC_CLIENT_SECRET`, the VPN panel's own client secret in authentik. Gitignored, `0600`, required by `setup` and never written by it; the same value is `WG_EASY_CLIENT_SECRET` in the cluster's `authentik-sso` Secret, because Secrets do not leave the cluster |
 | `certs/` | **no** | three files: `tls.pem` and `tls-key.pem`, this host's own leaf from the internal CA (`hack/internal-cert.sh --host vpn-rbp0.kub.local`) that Caddy serves on 8443, and `pihole.pem`, the same kind of leaf for the Pi-hole panel, combined certificate and key in one file. Required by `setup`, never written, and carried off the host by `backup` |
 | `config/` (wg-easy's database) | **no** | since wg-easy 15 the panel account, host, port, DNS and peers live in `config/wg-easy.db`, not in an environment file. `backup` copies it with the rest of the stack. A fresh container writes it `0644`, so `setup` narrows it to `0600` root-owned once the panel has created it — every peer's private key and the panel's password hash are in that file — and `verify` reads the mode back |
+| `/etc/keepalived/keepalived.conf`, `/usr/local/lib/wg-vpn/` | yes | the VRRP instance, the notify script, and the snapshot and sync scripts. `setup` writes them, keeps the timers armed and restarts keepalived only when the instance changed |
+| `/etc/systemd/system/wg-vpn-{snapshot,sync}.{service,timer}` | yes | the snapshot timer on `rbp0` and the pull timer on `rbp1`. The authority carries no sync unit: `verify` names one left there as drift |
+| `/var/lib/wg-easy-sync/` | **no** | the authority's snapshot `wg-easy.db` (`0640 root:wg-sync`), the standby's `last-installed` stamp and its transient `incoming.db`. `setup` makes the directory and the `wg-sync` group; the scripts write inside it |
+| `/etc/wg-sync/id_ed25519` | **no** | the private half of the pair's sync key, on `rbp1` only, `0600 root:root`. The operator mints it; `setup` fixes its mode and names it when it is missing, and `verify` reads it back |
+| `/var/lib/wg-sync/.ssh/authorized_keys` | **no** | the public half, on `rbp0` only: one line restricted to `from="192.168.1.38"` and a forced `cat` of `/var/lib/wg-easy-sync/wg-easy.db`. Operator-supplied; `backup` and `restore` carry both halves |
 | `/boot/firmware/config.txt`, `cmdline.txt` | **no** | see below |
 
 The stack's own files live inside the stack directory, so `backup` and `restore` carry them with the
@@ -105,9 +110,12 @@ one record alone fails a test rather than leaving half the fleet on the other.
   the tunnel pair is what a packet carrying the tunnel's own address would need.
 - **`allow routed`, not deny.** Docker's containers egress through `FORWARD`; a deny there takes
   every one of them, Pi-hole included, off the network.
-- **What ufw never sees:** the published container ports — `5182x/udp` (wg-easy), `8443/tcp`
+- **What ufw never sees:** the published container ports — `51821/udp` (wg-easy), `8443/tcp`
   (Caddy) and `9902/tcp` (smartctl-exporter). Docker's DNAT rewrites in `NAT` and `FORWARD` before
   `INPUT` is consulted, so a ufw rule for them would filter nothing.
+- **VRRP is a protocol, not a port.** keepalived's advertisements are IP protocol `112`, so the rule
+  reads `proto vrrp` with no port, one rule per peer address and one in each direction. A `112/udp`
+  rule would match nothing; `setup` applies the rule and `verify` reads it back.
 - **The record.** `roles/firewall/vars/main.yml` holds the rule set; this script carries a copy
   because it runs on the host, and `test_the_pi_and_the_ansible_layer_allow_the_same_ports` compares
   the commands they resolve to. `verify` reads `ufw status verbose` and `ufw show added`, and names a
@@ -196,10 +204,40 @@ this host's own certificate, and no ACME.
 - **The leaf is issued on the workstation**, with `hack/internal-cert.sh --host <name>`, and the pair
   is copied to `certs/tls.pem` and `certs/tls-key.pem` on the host. `setup` refuses to run without
   both and writes neither; `backup` is what carries them off the host.
-- **The gate is the panel's own OIDC client in authentik**, Administrators only. The panel's password
-  stays next to it because a cluster that is down cannot answer an OIDC challenge, and the reason this
-  arrangement exists is that the VPN panel must work when the cluster does not.
+- **The gate is the panel's own account**, not authentik: nothing on an edge host asks the cluster
+  whether a person may enter, because the VPN is the way back in when the cluster is down
+  ([the record](../../docs/decisions/2026-11-26-edge-pis-local-auth-only.md)). There is no `wg-easy.env` and no
+  OAuth block: the compose file carries no `env_file` for this service, and the account lives in
+  `config/wg-easy.db`.
 - **Port 8443, not 443**: Pi-hole owns 80 and 443 on these hosts.
+
+### The VPN is one pair
+
+`rbp0` and `rbp1` are one VPN, not two that look alike.
+
+- **`rbp0` is the authority, `rbp1` the standby.** The same rule as the Pi-holes: when the two panels
+  disagree, the standby is the one that moves.
+- **Both publish `51821/udp`.** One panel database is behind both, so a config minted on either host
+  names the same port and a client keeps dialling it whichever Pi answers.
+- **keepalived moves `192.168.1.9/24`.** `rbp0` advertises as `MASTER` at priority `150`, `rbp1` as
+  `BACKUP` at `100`, unicast to each other's address, with `preempt_delay 300` so a returning `rbp0`
+  does not take the address back mid-boot. The router's `51821` forward points at this address, not at
+  a host.
+- **The authority snapshots every minute.** `wg-vpn-snapshot.timer` runs
+  `/usr/local/lib/wg-vpn/wg-snapshot.sh`, which uses `sqlite3 .backup` and an integrity check, and
+  leaves `/var/lib/wg-easy-sync/wg-easy.db` (`0640 root:wg-sync`). A timer that stops writes
+  `wg_vpn_snapshot_ok 0` rather than freezing a fresh timestamp.
+- **The standby pulls every minute.** `wg-vpn-sync.timer` runs `/usr/local/lib/wg-vpn/wg-sync.sh` as
+  root, over SSH as the `wg-sync` account. It stops without touching anything while this host holds
+  the address, and it refuses to overwrite a copy edited here: the differing tables are named and
+  `vpn-sync --force` is the operator accepting the loss.
+- **The key is two files, both operator-supplied.** `/etc/wg-sync/id_ed25519` (`0600 root:root`) on
+  `rbp1`; one line in `/var/lib/wg-sync/.ssh/authorized_keys` on `rbp0`, restricted with `from=` and a
+  forced `cat` of the snapshot. `backup` and `restore` carry both halves; `setup` fixes their modes and
+  names the one that is missing rather than minting it.
+- **The test and the recovery are written down** in
+  [`docs/runbooks/edge-vpn-failover.md`](../../docs/runbooks/edge-vpn-failover.md): who holds the
+  address, the timed failover, a divergence, and the router's two calls.
 
 ### The engine, which `setup` installs
 

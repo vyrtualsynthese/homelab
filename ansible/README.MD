@@ -113,9 +113,11 @@ and the system role is the one that collects them after it has named the running
 - **No backups.** Those are `cluster/helm/backup`, one OVH bucket in `GRA`, four restic repositories
   and a nightly job per node. [`docs/how-it-works/backups.md`](../docs/how-it-works/backups.md) is the
   page.
-- **No secrets.** The Pis' `pihole.env` and `wg-easy.env` are gitignored and the script requires them
-  rather than writing them; every other secret is a Kubernetes Secret, listed in `docs/secrets.md`. The
-  one exception is the CrowdSec bouncer key, which the `crowdsec` role reads from
+- **No secrets.** The Pis' `pihole.env` is gitignored and the script requires it rather than writing it,
+  as it requires `certs/tls.pem`, `certs/tls-key.pem` and `certs/pihole.pem`; the two halves of the
+  sync key (`/etc/wg-sync/id_ed25519` here, `/var/lib/wg-sync/.ssh/authorized_keys` on the authority)
+  are exchanged by hand and never written either. Every other secret is a Kubernetes Secret, listed in
+  `docs/secrets.md`. The one exception is the CrowdSec bouncer key, which the `crowdsec` role reads from
   `~/.config/secrets/homelab.env` and hands to `streaming` without ever being written here: the host
   file it lands in is mode 600 and is the Secret's `api-key` value. The
   keys in `trusted_ssh_keys` are public halves: they name a laptop and cannot log in without the private

@@ -25,10 +25,17 @@ Kubernetes `LoadBalancer` Service in
 22000/21027 entries are Minecraft and Syncthing, which Traefik owns as entry points; the 25565 rule
 was narrowed to TCP on 2026-11-26, because the `Service` publishes nothing on UDP.
 
-The router's only other rules are two WireGuard forwards to the two edge Pis: 51821 and 51822 (UDP),
-on `rbp0` and `rbp1`. Nothing else is forwarded: the four Plex and DLNA rules the box still carried
-are deleted, and so is the dead `51820` rule to `rbp1`. [The Livebox
-record](../audit/livebox-2026-11-26.md) is the measured table and the removals.
+The router's only other rule is one WireGuard forward: `51821/udp` to `192.168.1.9`, the address
+keepalived moves between the two Pis, so a client's config keeps working when the first host dies.
+The second rule, `51822`, is deleted with the change that made the pair answer as one, and so is the
+dead `51820` rule to `rbp1`. Nothing else is forwarded: the four Plex and DLNA rules the box still
+carried are deleted. [The Livebox record](../audit/livebox-2026-11-26.md) is the measured table and
+the removals; [`docs/runbooks/edge-vpn-failover.md`](../runbooks/edge-vpn-failover.md) is the pair.
+
+The two hosts agree on who holds that address by VRRP, which is IP protocol 112 and carries no port,
+so the firewall rule that lets it through names `proto vrrp` and a source of the other Pi alone.
+`ufw allow … port 112 proto udp` matches nothing, and the default deny would leave both hosts
+claiming the address.
 
 One pod serves all of that, not one per node. K3s's service load balancer still puts a small proxy pod
 on every node, so the other three node addresses answer as well — those packets then cross the LAN to
@@ -160,8 +167,9 @@ container as `vpn-rbp0.kub.local` and `vpn-rbp1.kub.local`. All four names are m
 `*.kub.local` key on an edge host would be a key to every internal name.
 
 Neither is a Traefik route, and that is the point: the VPN panel has to open when the cluster is down,
-which is also why its password login stays beside its authentik OIDC client. Its sign-in through
-authentik is a cluster dependency; the password is not. Both panels were plain HTTP on `0.0.0.0:5000`
+which is also why it signs in with its own account. Nothing on an edge host goes through authentik
+since 2026-11-26 ([the record](../decisions/2026-11-26-edge-pis-local-auth-only.md)): the OIDC client
+it once pointed at a provider that never existed. Both panels were plain HTTP on `0.0.0.0:5000`
 until 2026-11-26.
 
 `8443` is not among the ports the router forwards — only the list at the top of this page is — so the

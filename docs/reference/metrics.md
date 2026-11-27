@@ -48,6 +48,15 @@ That last one answering `0` means
 node-exporter rejected the file — a corrupt body, not a healthy sync — and the rule's no-data state
 reports the metric's absence separately.
 
+**The edge Pis write three families**, each from a script in `/usr/local/lib/wg-vpn/`:
+`wg_vpn_vrrp_master` (1 on the host holding `192.168.1.9`, written by keepalived's notify script on
+every transition), `wg_vpn_snapshot_timestamp_seconds` with `wg_vpn_snapshot_ok` (the authority's
+minute copy), and `wg_vpn_sync_timestamp_seconds`, `wg_vpn_sync_ok` and `wg_vpn_sync_diverged` (the
+standby's pull). They live in `/var/lib/node-exporter/textfile`, which the Pis' own node-exporter
+reads through `--collector.textfile.directory=/host/var/lib/node-exporter/textfile`. The timestamps
+are the last run that ended current, not the clock: a failing run rewrites `ok` and leaves the
+timestamp where it was, so `time() - <series>` measures how long since it last worked.
+
 **Fluent Bit** writes the message and nothing else. Since 2026-11-18 the Loki
 output carries `Remove_Keys kubernetes,stream,time,_p` and `Drop_Single_Key raw`,
 so a text log arrives as the app's own message, unquoted, and a pod that logs
