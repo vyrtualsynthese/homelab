@@ -35,7 +35,7 @@ PI_ROOT=/tmp/fake-pi ./hosts-pi.sh setup rbp0
 | `/home/vronteix/dockers/docker-compose.yml` | yes | one template in `playbooks/templates/runners/`, the same bytes on both hosts: the tunnel port is the literal `51821`, because the pair shares one panel database and one client config |
 | `Caddyfile` | yes | the VPN panel's TLS endpoint, rendered per host from `playbooks/templates/runners/Caddyfile`: the panel's name is the only per-host value. `setup` force-recreates `caddy` when it writes it, because a bind mount is resolved at container start |
 | `etc-pihole-updatelists/pihole-updatelists.conf` | yes | the file Pi-hole's list updater reads; without it Docker makes the source a directory |
-| `etc-dnsmasq.d/02-my-wildcard-dns.conf` | yes | the wildcard names the LAN resolves through this Pi-hole |
+| `etc-dnsmasq.d/02-my-wildcard-dns.conf` | yes | the wildcard names the LAN resolves through this Pi-hole: `*.kub.internal`, and `*.kub.local` for as long as the soak lasts |
 | `pihole.settings` | yes | every Pi-hole setting, rendered from one template so the two hosts are byte-identical. The name avoids `.gitignore`'s `*.env` |
 | `/etc/netplan/50-cloud-init.yaml` | yes | the resolvers: both Pi-holes, so a host resolves through its own blocklist. `setup` applies it with `netplan apply` |
 | `/etc/systemd/resolved.conf.d/90-pihole-resolvers.conf` | yes | a drop-in that keeps resolved's stub listener off, so `/etc/resolv.conf` lists the two Pi-holes and a container reads them instead of falling back to Docker's 8.8.8.8 |
@@ -132,10 +132,13 @@ prints `changed=0` on a host that already matches.
   `pihole.env` after it, so on a collision the secret wins. Every other `FTLCONF_*` key belongs in the
   settings file: a key set in the panel rather than in git is drift the next `setup` cannot see.
 - **The `address=` overrides live in `etc-dnsmasq.d/02-my-wildcard-dns.conf`**, rendered and compared
-  like the settings. Six of them were also in each host's `FTLCONF_misc_dnsmasq_lines`, which the
-  settings file now clears: the duplicate is gone and this file carries all six, `ashudev.com`
-  included. `ADLISTS_URL` went with them, since no timer or entrypoint runs `pihole-updatelists` on
-  these hosts — the blocklists in `gravity.db` are edited through the panel.
+  like the settings. Two internal wildcards point at the cluster: `*.kub.internal`, which every route
+  serves from 2026-11-27, and `*.kub.local`, which stays until the soak ends because the edge Pi names
+  and the wildcard redirect still need it. Six of the file's entries were also in each host's
+  `FTLCONF_misc_dnsmasq_lines`, which the settings file now clears: the duplicate is gone and this file
+  carries all six, `ashudev.com` included. `ADLISTS_URL` went with them, since no timer or entrypoint
+  runs `pihole-updatelists` on these hosts — the blocklists in `gravity.db` are edited through the
+  panel.
 - **`FTLCONF_webserver_api_max_sessions=64`** is there because 16 is the default, a session lasts 30
   minutes, and an app password cannot close one — only the panel's own password can. The parity check
   takes a session per host, and the third run in half an hour answered `api_seats_exceeded`.

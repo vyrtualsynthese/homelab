@@ -139,6 +139,18 @@ def test_each_pihole_name_wins_over_the_wildcard():
     assert "address=/pihole-rbp1.kub.local/192.168.1.38" in dns
 
 
+def test_the_new_internal_zone_answers_with_the_cluster_address():
+    """The Android phone resolves `*.kub.local` as mDNS and never asks a DNS server on Wi-Fi.
+    `.kub.internal` is an ordinary unicast name, so the wildcard has to exist before any chart is
+    renamed; without it the new hosts are NXDOMAIN on every LAN client."""
+    dns = (
+        REPO / "ansible/playbooks/templates/runners/02-my-wildcard-dns.conf"
+    ).read_text()
+    assert "address=/kub.internal/192.168.1.46" in dns
+    # The old zone keeps answering through the soak: the edge Pi names and the redirect need it.
+    assert "address=/kub.local/192.168.1.46" in dns
+
+
 def test_renovate_may_bump_wg_easy_again():
     """The hold at <15 existed only until the v14 config was migrated. Leaving
     it behind freezes the image on the release that carried the migration."""
