@@ -58,6 +58,28 @@ class RenderTests(unittest.TestCase):
         p["alerts"][0]["labels"].update({"host": "nas", "instance": "10.42.1.198:9902"})
         self.assertEqual(relay.render_title(p), "DiskFull on nas")
 
+    def test_a_batch_alert_is_titled_after_its_job(self):
+        """JobFailed's instance is kube-state-metrics, so the Job's name is the only useful one."""
+        p = payload(severity="warning", alerts=[{
+            "status": "firing",
+            "fingerprint": "def456",
+            "startsAt": "2026-11-27T02:36:30Z",
+            "labels": {"alertname": "JobFailed", "severity": "warning", "namespace": "databases",
+                       "job_name": "postgres-dump-29929110", "instance": "10.42.1.226:8080",
+                       "job": "kubernetes-service-endpoints"},
+            "annotations": {"summary": "Job databases/postgres-dump-29929110 failed"},
+        }])
+        self.assertEqual(relay.render_title(p), "JobFailed on databases/postgres-dump-29929110")
+
+    def test_a_batch_alert_without_a_namespace_still_names_the_job(self):
+        p = payload(alerts=[{
+            "status": "firing",
+            "labels": {"alertname": "JobFailed", "job_name": "backup-prune-29922420",
+                       "instance": "10.42.1.226:8080"},
+            "annotations": {},
+        }])
+        self.assertEqual(relay.render_title(p), "JobFailed on backup-prune-29922420")
+
     def test_body_opens_with_the_protocol_block(self):
         body = relay.render_body(payload(), "g1")
         self.assertTrue(body.startswith("repo: vyrtualsynthese/homelab\n"))

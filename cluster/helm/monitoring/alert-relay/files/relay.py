@@ -75,7 +75,15 @@ def render_title(payload: dict) -> str:
     rule = labels.get("alertname") or payload.get("title") or "Grafana alert"
     # host first: a real alert carries instance=10.42.1.198:9902 (the scrape target)
     # and host=nas. The pod IP tells a reader nothing and changes when the pod does.
-    where = labels.get("host") or labels.get("instance") or labels.get("job") or ""
+    where = labels.get("host")
+    # A batch alert is the exception the other way round: JobFailed reads
+    # kube_job_status_failed, whose instance is kube-state-metrics' own address and
+    # whose job label is the scrape job, so the only useful name is the Job's. The
+    # namespace comes with it because a Job name alone does not say which board.
+    if not where and labels.get("job_name"):
+        namespace = labels.get("namespace")
+        where = f"{namespace}/{labels['job_name']}" if namespace else labels["job_name"]
+    where = where or labels.get("instance") or labels.get("job") or ""
     return f"{rule} on {where}" if where else rule
 
 
