@@ -1,0 +1,11 @@
+[Unit]
+Description=Install the authority's wg-easy database every minute
+
+[Timer]
+# A minute is what makes the copy useful the moment the authority goes away: a
+# peer added in the last minute is the only one a copy a minute old could lose.
+OnCalendar=*:0/1
+Persistent=true
+
+[Install]
+WantedBy=timers.target
