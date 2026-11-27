@@ -1290,7 +1290,9 @@ hit from a real client. A host still appearing is migrated, or the soak is exten
 
 Then remove, in this order: the wildcard redirect template in `traefik-gate` (bump the chart), the
 `address=/kub.local/192.168.1.46` wildcard from the Pi-hole file, and `DNS:*.kub.local` from the leaf
-SAN — then reissue and replace the Secret.
+SAN — then reissue and replace the Secret. Rewrite the stored `site:` lines in the same change: every
+card description that still carries `https://docs.kub.local/...` gets `.kub.internal`, because
+`hack/vikunja_site_backfill.py` deliberately leaves an existing line alone.
 
 Keep, because they are the PIs' own names and not the cluster's: the per-host
 `address=/pihole-rbp*.kub.local/...` and `address=/vpn-rbp*.kub.local/...` records, the
