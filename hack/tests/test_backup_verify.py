@@ -656,6 +656,30 @@ class MainTests(unittest.TestCase):
                 load().main(["--config", str(config), "--restic", str(fake)])
 
 
+class SnapshotFilesTests(unittest.TestCase):
+    """`restic ls --json` opens with the snapshot object, which is not a file."""
+
+    def test_the_snapshot_header_is_not_read_as_an_entry(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp = pathlib.Path(tmp_dir)
+            fake = tmp / "restic"
+            fake.write_text(
+                "#!/bin/sh\n"
+                "printf '%s\\n' "
+                "'{\"struct_type\": \"snapshot\", \"id\": \"a\", \"tree\": \"b\", "
+                "\"paths\": [\"/var/lib/pi-backup/tree\"], \"hostname\": \"rbp0\"}' "
+                "'{\"path\": \"/var/lib/pi-backup/tree/dockers/etc-pihole/gravity.db\", "
+                "\"type\": \"file\"}'\n"
+            )
+            fake.chmod(0o755)
+            entries = load().read_snapshot_files("s3:x/edge-rbp0", "a", restic=str(fake))
+        self.assertEqual(
+            entries,
+            [{"path": "/var/lib/pi-backup/tree/dockers/etc-pihole/gravity.db",
+              "type": "file"}],
+        )
+
+
 class ExternalStreamTests(unittest.TestCase):
     """A stream written by a host the cluster does not drive.
 
@@ -729,6 +753,46 @@ class ExternalStreamMainTests(unittest.TestCase):
         self.assertIn("path=dockers/etc-pihole/gravity.db matched=1", text)
         self.assertIn("problem stream=edge-rbp0 "
                       "edge-rbp0 is missing dockers/config/wg-easy.db", text)
+
+    def test_the_ls_snapshot_line_does_not_crash_a_healthy_run(self):
+        # The real `restic ls --json` opens with the snapshot object, which has no `path`.
+        # Reading it as a file stopped the verifier on the first external stream and left
+        # every later stream unchecked (alert cards 939 and 941, 2026-11-27).
+        stamp = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = pathlib.Path(tmp)
+            config = tmp / "streams.json"
+            config.write_text(json.dumps([{
+                "name": "edge-rbp0", "repository": "s3:x/edge-rbp0", "budgetGiB": 1,
+                "external": True,
+                "mustMatch": ["dockers/etc-pihole/gravity.db", "dockers/config/wg-easy.db"],
+            }]))
+            snapshot = json.dumps([{"id": "a", "time": stamp,
+                                    "tags": ["stream=edge-rbp0"]}])
+            fake = tmp / "restic"
+            fake.write_text(
+                "#!/bin/sh\n"
+                'case "$3" in\n'
+                f"  snapshots) echo '{snapshot}' ;;\n"
+                "  stats) echo '{\"total_size\": 4096}' ;;\n"
+                "  ls) printf '%s\\n' "
+                "'{\"struct_type\": \"snapshot\", \"id\": \"a\", \"tree\": \"b\", "
+                "\"paths\": [\"/var/lib/pi-backup/tree\"], \"hostname\": \"rbp0\"}' "
+                "'{\"path\": \"/var/lib/pi-backup/tree/dockers/etc-pihole/gravity.db\", "
+                "\"type\": \"file\"}' "
+                "'{\"path\": \"/var/lib/pi-backup/tree/dockers/config/wg-easy.db\", "
+                "\"type\": \"file\"}' ;;\n"
+                "  *) exit 9 ;;\n"
+                "esac\n"
+            )
+            fake.chmod(0o755)
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                code = load().main(["--config", str(config), "--restic", str(fake)],
+                                   etcd_s3=etcd_s3_stub("nuc0"))
+        self.assertEqual(code, 0, out.getvalue())
+        self.assertIn("path=dockers/etc-pihole/gravity.db matched=1", out.getvalue())
+        self.assertIn("path=dockers/config/wg-easy.db matched=1", out.getvalue())
 
 
 if __name__ == "__main__":

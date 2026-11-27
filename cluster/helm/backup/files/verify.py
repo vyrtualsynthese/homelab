@@ -328,9 +328,17 @@ def read_repository(repository: str, restic: str = "restic") -> tuple[list[dict]
 
 
 def read_snapshot_files(repository: str, snapshot_id: str, restic: str = "restic") -> list[dict]:
-    """Every entry of one snapshot, as `restic ls --json` reports it."""
+    """Every entry of one snapshot, as `restic ls --json` reports it.
+
+    The first line is the snapshot itself, not an entry: it names the tree, the host and the
+    paths, and carries no `path`. Dropped here rather than at each caller, because a caller
+    that read it as a file crashed the whole run, and a verifier that crashes verifies no
+    stream at all. Filtering on the missing `path` rather than on `struct_type` is what holds
+    across restic versions: the field is deprecated, the node shape is not.
+    """
     text = run_restic(repository, "ls", "--json", snapshot_id, "--no-lock", restic=restic)
-    return [json.loads(line) for line in text.splitlines() if line.strip()]
+    entries = [json.loads(line) for line in text.splitlines() if line.strip()]
+    return [entry for entry in entries if "path" in entry]
 
 
 def main(argv: list[str] | None = None, etcd_s3=None) -> int:
