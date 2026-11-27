@@ -85,9 +85,17 @@ crowdsec:
     # Signals from scenarios that are not the official, unmodified hub set count
     # for nothing upstream, so they are not sent. The official set still leaves;
     # that is the price of the list, and §4.3 of the design says so.
+    #
+    # `share_custom` and `share_tainted` are the two upstream defaults to `true`
+    # and they are switched off here. `share_manual_decisions` and `share_context`
+    # default to `false` upstream and are set explicitly anyway, so a later
+    # upstream default cannot turn them on silently; when `console.yaml` exists
+    # but a key is absent, CrowdSec applies its own default for that key.
     console.yaml: |
       share_custom: false
       share_tainted: false
+      share_manual_decisions: false
+      share_context: false
 
     # The chart's default value here holds the auto-registration block that lets
     # the agent register itself with the LAPI. Overriding this key replaces it,
@@ -177,8 +185,10 @@ crowdsec:
       #
       # What leaves, per alert: the scenario's name and hash, the timestamp, the
       # machine id, the offending address and its geolocation; at sign-in, the
-      # list of scenarios this engine runs. Nothing else — no URL, no header, no
-      # user name. The design states the trade in §4.3.
+      # list of scenarios this engine runs, and periodically the names and
+      # versions of the bouncers and engines registered to the LAPI. Nothing
+      # else — no URL, no header, no user name. The design states the trade in
+      # §4.3.
     persistentVolume:
       data:
         enabled: true
