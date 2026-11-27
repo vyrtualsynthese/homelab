@@ -50,9 +50,8 @@ column.
 
 Each DNS module is asked of **every authoritative server that zone publishes** — an authoritative
 server being the one that holds the zone's real records. Today that is `dns13.ovh.net` and
-`ns13.ovh.net` for `ashudev.com` (8 checks × 2 servers = 16 probes) and the four Route 53 servers
-`ns-1029.awsdns-00.org`, `ns-1714.awsdns-22.co.uk`, `ns-339.awsdns-42.com` and
-`ns-901.awsdns-48.net` for `ashuvidz.com` (3 × 4 = 12), so **28 DNS probes every five minutes**, plus
+`ns13.ovh.net` for `ashudev.com` (8 checks × 2 servers = 16 probes) and `ns17.ovh.net` and
+`dns17.ovh.net` for `ashuvidz.com` (3 × 2 = 6), so **22 DNS probes every five minutes**, plus
 3 HTTP probes every minute. Asking all of them is the point: a dead secondary is invisible to a probe
 that only asks the primary.
 
@@ -159,14 +158,12 @@ dig +short MX ashudev.com @ns13.ovh.net
 ```
 
 One server failing and its sibling passing is a provider problem on that server. Both failing for
-one check is a record problem. `ashuvidz.com` is still delegated to Route 53, so `ovhcloud domain-zone`
-will not answer for it until the zone moves: read it through `dig` at one of the four AWS servers, or
-in the Route 53 console.
+one check is a record problem. Both zones are now on OVHcloud, so `ovhcloud domain-zone` answers for
+`ashuvidz.com` too.
 
-`dns_ns_ashuvidz` asserts liveness only, on purpose: the zone is mid-transfer, so asserting AWS would
-be throwaway work and asserting OVH would fail until the flip. It catches a delegation that stops
-answering, not one that answers from the wrong provider — the flip in [§5](#5-the-ashuvidzcom-delegation-flip)
-is what changes that, if you decide it should.
+`dns_ns_ashuvidz` asserts liveness only, on purpose: it catches a delegation that stops answering,
+not one that answers from the wrong provider. Asserting the provider is a separate decision, taken
+deliberately rather than as a side effect of [§5](#5-the-ashuvidzcom-delegation-flip).
 
 A missing `MX`, `SPF`, `DKIM` or `DMARC` record breaks mail silently — `MX` says where a domain's
 mail goes, and `SPF`, `DKIM` and `DMARC` say what is allowed to send as that domain. That is the
@@ -215,7 +212,7 @@ way: the rules select by job, so a new target is covered the moment its first sa
    per authoritative server in `blackbox-dns`, each with `labels: {module: <module>, check: <short
    name>, zone: <zone>}`. Keep the DNS job free of `params:`.
 3. **Two numbers in Grafana**, which are literals in panel titles, not queries: `Endpoints answering
-   (of 3)` and `DNS checks passing (of 28)` on the `Cloud` dashboard. Edit the titles through
+   (of 3)` and `DNS checks passing (of 22)` on the `Cloud` dashboard. Edit the titles through
    `POST /api/dashboards/db`, or the panel will claim the wrong denominator.
 
 Then commit, let ArgoCD sync, and confirm within one interval (a minute for HTTP, five for DNS) that
@@ -233,21 +230,23 @@ check` table on the `Cloud` dashboard shows what Prometheus actually holds, fail
 ## 5. The `ashuvidz.com` delegation flip
 
 **Delegation** is which servers the registry points the domain at, published as the zone's `NS`
-records. `ashuvidz.com` is delegated to four AWS Route 53 servers and is moving to OVHcloud
-(`ashudev.com`'s zone is already there, on `dns13.ovh.net` and `ns13.ovh.net`). Twelve of the 28 DNS
-probes are `ashuvidz.com` checks run against those four AWS servers.
+records. `ashuvidz.com` was delegated to four AWS Route 53 servers; on 2026-11-21 it moved to
+OVHcloud (`ns17.ovh.net` and `dns17.ovh.net`), and on 2026-11-27 the probes followed (board card
+917). `ashudev.com`'s zone was already on OVHcloud, on `dns13.ovh.net` and `ns13.ovh.net`. Six of
+the 22 DNS probes are `ashuvidz.com` checks run against its two OVH servers.
 
-When the delegation moves:
+When a delegation moves:
 
 1. Read the new servers from the answer, not from memory: `dig +short NS ashuvidz.com @86.54.11.100`.
-2. In `cluster/helm/monitoring/prometheus/values.yaml`, replace the four `ashuvidz.com` server blocks
-   (12 entries) with the two OVH servers (6 entries), keeping `module`, `check` and `zone` labels
-   unchanged. The job goes from 28 targets to **22**.
-3. Edit the `DNS checks passing (of 28)` title to `(of 22)`.
-4. The same count appears in three other pages, edit them: the `28` in the "How metrics get in"
-   section of [`observability-conventions.md`](../observability-conventions.md#how-metrics-get-in),
-   the `count(probe_success{job="blackbox-dns"})` = 28 in
-   [`reference/alerts.md`](../reference/alerts.md#alerting), and the "DNS checks passing of 28" in
+2. In `cluster/helm/monitoring/prometheus/values.yaml`, replace the zone's old server blocks with the
+   new servers, one block per check per server, keeping `module`, `check` and `zone` labels
+   unchanged. The `ashuvidz.com` move took the job from 28 targets to **22**.
+3. Move the denominator in the `DNS checks passing` title on the `Cloud` dashboard — it reads
+   `(of 22)` after the 2026 move.
+4. The same count appears in three other pages, edit them: the target count in the "How metrics get
+   in" section of [`observability-conventions.md`](../observability-conventions.md#how-metrics-get-in),
+   the `count(probe_success{job="blackbox-dns"})` value in
+   [`reference/alerts.md`](../reference/alerts.md#alerting), and the "DNS checks passing" number in
    [`reference/dashboards.md`](../reference/dashboards.md).
 5. Nothing beyond that: no module changes, no rule changes, no dashboard query changes, because the
    rules select `job="blackbox-dns"` and name the target from its labels.
@@ -257,7 +256,7 @@ it", which is what makes the flip a target-list edit rather than a module edit. 
 provider afterwards is a separate decision, taken deliberately, not as a side effect of the move.
 
 Expect one page if the steps are not close together: between the delegation change and the target
-commit, the twelve AWS probes fail **if the old servers stop answering the zone**, and
+commit, the old probes fail **if the old servers stop answering the zone**, and
 `CloudDnsCheckFailing` fires after ten minutes. Check that the new servers answer the zone *before*
 committing (`dig +short SOA ashuvidz.com @<new server>`), then commit — the remaining window is the
 commit-to-sync delay, inside one scrape interval if the sync is quick.

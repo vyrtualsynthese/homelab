@@ -100,7 +100,7 @@ Health.
   ([Backups](backups.md), [`runbooks/restore.md`](../runbooks/restore.md)).
 - **No vulnerability scanning**: nothing reports which flaws the running images carry.
 - **The public names are probed, narrowly**: a blackbox prober on `nas` checks three HTTPS endpoints
-  and 28 DNS records ([runbooks/cloud-monitoring.md](../runbooks/cloud-monitoring.md)); mail delivery,
+  and 22 DNS records ([runbooks/cloud-monitoring.md](../runbooks/cloud-monitoring.md)); mail delivery,
   spend history and zone-versus-git drift are not checked.
 - **No GPU XID or ECC alert**; the NVIDIA exporter publishes temperature, utilisation and framebuffer
   only.

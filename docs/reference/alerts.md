@@ -390,7 +390,7 @@ invalid PromQL and never evaluated.
 
 **Three rules added on 2026-11-20 watch the internet-facing side** — the three public names,
 both DNS zones and the certificates a stranger is served. They read a `blackbox_exporter` on
-`nas`, whose two static jobs, 3 + 28 targets and public-resolver choice are in
+`nas`, whose two static jobs, 3 + 22 targets and public-resolver choice are in
 [`observability-conventions.md`](../observability-conventions.md#how-metrics-get-in). Their
 procedure, including how to add a target: [`runbooks/cloud-monitoring.md`](../runbooks/cloud-monitoring.md).
 
@@ -403,13 +403,13 @@ certificate is not an outage.
 `CloudDnsCheckFailing` asserts the records mail needs (MX, SPF, DKIM, DMARC) at **every**
 authoritative server the zone publishes, because a dead secondary is invisible to a probe that only
 asks the primary. `dns_ns_ashuvidz` is the exception: it asserts only that `ashuvidz.com`'s
-delegation answers, not which provider answers it, because the zone is mid-transfer from AWS Route 53
-to OVHcloud — asserting either provider today would be throwaway work or a guaranteed false page.
-The runbook owns the target-list edit for the day of the flip.
+delegation answers, not which provider answers it. The zone moved to OVHcloud on 2026-11-21 and the
+probes followed on 2026-11-27; asserting the provider stays a separate decision, and the runbook
+owns the target-list edit for a future move.
 
 Because all three are `noDataState: OK`, a selector that stops matching looks exactly like a healthy
 rule: the proof they still look at something is `count(probe_success{job="blackbox-http"})` = 3 and
-`count(probe_success{job="blackbox-dns"})` = 28. A dead prober is the one case where that silence is
+`count(probe_success{job="blackbox-dns"})` = 22. A dead prober is the one case where that silence is
 intended, and [`runbooks/cloud-monitoring.md` §8](../runbooks/cloud-monitoring.md#8-known-limits)
 explains why.
 
