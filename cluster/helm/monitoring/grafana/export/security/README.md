@@ -1,7 +1,7 @@
 # Security dashboard: an export, not a source
 
 Grafana's database is the authority for `Homelab · Security`. This file is a **snapshot taken on
-2026-11-25 and corrected on 2026-11-26**, committed so the panels and their expressions can be read in a pull request and restored
+2026-11-25 and corrected on 2026-11-27**, committed so the panels and their expressions can be read in a pull request and restored
 by hand if the database is lost. Nothing in this repository applies it: there is no configmap, no
 sidecar and no provisioning entry, and Grafana never reads this directory — the same rule the Traefik
 export beside it states, for the same reason (two sources of truth in one folder).

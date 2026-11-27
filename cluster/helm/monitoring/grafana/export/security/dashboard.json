@@ -822,7 +822,7 @@
     "timezone": "browser",
     "title": "Homelab \u00b7 Security",
     "uid": "homelab-security",
-    "version": 9
+    "version": 11
   },
   "folderUid": "homelab",
   "overwrite": true
