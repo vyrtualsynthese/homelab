@@ -304,11 +304,25 @@ It answers at `https://vpn-rbp0.kub.local:8443` on `rbp0` and `https://vpn-rbp1.
   the port the panel names, and the stack maps the same number to the host (`51821` on `rbp0`, `51822` on
   `rbp1`). Changing one without the other leaves clients dialling a closed port: the tunnel is up in the
   panel and nothing connects.
+- **The DNS handed to peers is `192.168.1.22` then `192.168.1.38`**, the two Pi-holes in that order, in
+  both panels (set 2026-11-27). It is the panel's default, and every existing peer carries the same
+  pair: a peer's own DNS entry overrides the default, and that entry is what its downloaded profile is
+  built from, so a peer whose profile predates a change keeps the old list until it imports a fresh one.
+  The value lives in `config/wg-easy.db` and in no file here, which is why it is written down; `backup`
+  carries it with the rest of the stack.
 - **A v14 environment file in front of this container stops it.** v15 exits on startup when `PASSWORD`
   or `PASSWORD_HASH` is in its environment, naming the migration page. The one `env_file` is
   `wg-easy.env`, and it carries the OAuth client secret and nothing else.
 - **The admin password is reset from the host**, not by editing a file:
   `docker compose exec wg-easy cli db:admin:reset` (or `--password <new>`).
+
+**A peer's query does not reach Pi-hole yet.** wg-easy masquerades the tunnel's traffic to its compose
+address, `172.30.0.2`, and `ufw` admits 53 from the LAN and from `10.8.0.0/24` only, so the query is
+dropped on the panel network before Pi-hole sees it: `/var/log/ufw.log` names a blocked packet with
+`SRC=172.30.0.2` and `DPT=53`, and the container reaches neither 53 nor 8443 on its own host. A peer
+whose profile carries that pair therefore resolves outside Pi-hole, or not at all. Making the tunnel
+resolve through the Pi-holes, with each query carrying the address of the peer that sent it, is
+card #629.
 
 ## Rolling back
 
