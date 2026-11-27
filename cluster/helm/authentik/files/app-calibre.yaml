@@ -52,7 +52,7 @@ entries:
           # browser drops on a plain-HTTP host, and the callback then arrives
           # without the state it started with. The chart serves this route on
           # `websecure` for the same reason.
-          url: https://calibre.kub.local/login/generic/authorized
+          url: https://calibre.kub.internal/login/generic/authorized
       property_mappings:
         - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-openid]]
         - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-email]]
@@ -69,7 +69,7 @@ entries:
       name: Calibre-Web
       slug: calibre
       provider: !KeyOf calibre-provider
-      meta_launch_url: https://calibre.kub.local/
+      meta_launch_url: https://calibre.kub.internal/
       # Official logo, served from the dashboard-icons set. The browser
       # loads it, so the grid needs internet; swap to `fa://fa-<name>`
       # if it ever has to work offline.

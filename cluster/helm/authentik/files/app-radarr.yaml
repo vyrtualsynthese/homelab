@@ -39,7 +39,7 @@ entries:
           redirect_uri_type: authorization
           # ASP.NET's default OIDC callback path. Radarr does not override
           # CallbackPath, so this is what `ChallengeAsync` sends.
-          url: https://radarr.kub.local/signin-oidc
+          url: https://radarr.kub.internal/signin-oidc
       property_mappings:
         - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-openid]]
         - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-email]]
@@ -53,7 +53,7 @@ entries:
       name: Radarr
       slug: radarr
       provider: !KeyOf radarr-oidc-provider
-      meta_launch_url: https://radarr.kub.local/
+      meta_launch_url: https://radarr.kub.internal/
       # Official logo, served from the dashboard-icons set. The browser
       # loads it, so the grid needs internet; swap to `fa://fa-<name>`
       # if it ever has to work offline.

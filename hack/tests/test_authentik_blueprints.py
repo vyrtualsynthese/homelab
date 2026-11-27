@@ -102,3 +102,18 @@ def test_every_declared_proxy_provider_is_on_the_outpost():
         f"proxy providers missing from outpost-embedded.yaml: {unlisted}. "
         "The outpost sets its provider list whole, so an unlisted provider serves nothing."
     )
+
+
+OLD_ZONE = ".kub.local"
+
+
+def test_no_blueprint_names_the_old_zone():
+    """Every `external_host`, `meta_launch_url` and `redirect_uris` entry is what the outpost and
+    the provider compare against the browser. A leftover `.kub.local` value is a login loop, not a
+    broken link, so it cannot wait for the redirect."""
+    offenders = []
+    for path in sorted(FILES.glob("*.yaml")):
+        for number, line in enumerate(path.read_text().splitlines(), start=1):
+            if OLD_ZONE in line and not line.strip().startswith("#"):
+                offenders.append(f"{path.name}:{number}: {line.strip()}")
+    assert offenders == [], "\n".join(offenders)
