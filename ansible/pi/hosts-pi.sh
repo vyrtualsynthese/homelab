@@ -154,6 +154,22 @@ WG_SYNC_DIR="/var/lib/wg-easy-sync"
 WG_SNAPSHOT_SCRIPT="$WG_LIB/wg-snapshot.sh"
 WG_SNAPSHOT_SERVICE="/etc/systemd/system/wg-vpn-snapshot.service"
 WG_SNAPSHOT_TIMER="/etc/systemd/system/wg-vpn-snapshot.timer"
+# The other half of the sync: the standby pulls the authority's copy every
+# minute and installs it when it moved. WG_SYNC_KEY is the private half of the
+# one key the pair uses, WG_SYNC_AUTH_KEYS is the authorized_keys line that
+# restricts that key to `cat` on the snapshot and one source address. Neither is
+# written here: this script cannot mint a key, and one it invented would be a key
+# in git or a key nobody has. It fixes their mode when they exist and names the
+# missing half.
+WG_SYNC_SCRIPT="$WG_LIB/wg-sync.sh"
+WG_SYNC_SERVICE="/etc/systemd/system/wg-vpn-sync.service"
+WG_SYNC_TIMER="/etc/systemd/system/wg-vpn-sync.timer"
+WG_SYNC_KEY="/etc/wg-sync/id_ed25519"
+WG_SYNC_AUTH_KEYS="/var/lib/wg-sync/.ssh/authorized_keys"
+WG_SYNC_STAMP="$WG_SYNC_DIR/last-installed"
+WG_SYNC_ACCOUNT_HOME="/var/lib/wg-sync"
+WG_SYNC_AUTHORITY="192.168.1.22"
+WG_SYNC_STANDBY="192.168.1.38"
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="${PI_ROOT:-}"
 ROOT="${ROOT%/}"
@@ -175,6 +191,7 @@ CHANGED_THIS_WRITE=0
 usage() {
     cat >&2 <<'USAGE'
 usage: hosts-pi.sh render|setup|verify|stream|prune <host>
+       hosts-pi.sh vpn-sync <host> [--force]
        hosts-pi.sh backup|restore <dir> <host>
 hosts: rbp0 rbp1
 USAGE
@@ -345,6 +362,24 @@ desired_snapshot() {
 desired_snapshot_service() {
     sed -e "s|@WG_LIB@|$WG_LIB|g" \
         "$TEMPLATES/systemd/wg-vpn-snapshot.service"
+}
+
+# The pull's script, the same bytes on both hosts. Its paths and the authority's
+# address are the only values; both are shared, so `verify` compares the same file
+# either way and a host that swapped roles needs no new render.
+desired_sync() {
+    sed -e "s|@WG_SYNC_DIR@|$WG_SYNC_DIR|g" \
+        -e "s|@VRRP_STATE_FILE@|$VRRP_STATE_FILE|g" \
+        -e "s|@TEXTFILE_DIR@|$TEXTFILE_DIR|g" \
+        -e "s|@WG_SYNC_AUTHORITY@|$WG_SYNC_AUTHORITY|g" \
+        "$TEMPLATES/wg-sync.sh"
+}
+
+# The oneshot's unit names the script, so it carries the library path rather than
+# a second copy of it that a move of WG_LIB would leave behind.
+desired_sync_service() {
+    sed -e "s|@WG_LIB@|$WG_LIB|g" \
+        "$TEMPLATES/systemd/wg-vpn-sync.service"
 }
 
 # The drop-in that closes password logins. It is numbered 00 on purpose: Ubuntu's
@@ -1094,6 +1129,123 @@ ensure_snapshot() {
     fi
 }
 
+# The account the pull runs as, and the four directories it needs. The account is
+# --system with its own group, which is the group the snapshot's 0640 and its
+# directory's 0750 already name: the sync reads the copy and reaches nothing else
+# on this host. Under PI_ROOT there is no account to create, so the directories
+# are made and the modes are what a fixture can prove.
+#
+# What is never written here: the key and the authorized_keys. A private key
+# cannot be invented and the public half has to match it, so the operator copies
+# both once. A file that exists is put back to its mode, because a key another
+# local account can read is the same as no key at all.
+ensure_sync_account() {
+    local host="$1" entry path mode user group
+
+    if [ -z "$ROOT" ] && ! getent passwd wg-sync >/dev/null 2>&1; then
+        useradd --system --create-home --home-dir "$WG_SYNC_ACCOUNT_HOME" \
+            --shell /bin/sh wg-sync
+        CHANGED=$((CHANGED + 1))
+        echo "sync: created the wg-sync account on $host"
+    fi
+
+    for entry in \
+        "$WG_SYNC_ACCOUNT_HOME/.ssh:0700:wg-sync:wg-sync" \
+        "/etc/wg-sync:0700:root:root" \
+        "$WG_SYNC_DIR:0750:root:wg-sync" \
+        "$TEXTFILE_DIR:0755:root:root"; do
+        IFS=: read -r path mode user group <<<"$entry"
+        if [ ! -d "$ROOT$path" ]; then
+            install -d -m "$mode" "$ROOT$path"
+            CHANGED=$((CHANGED + 1))
+            echo "sync: created $path"
+        fi
+        if [ -z "$ROOT" ]; then
+            chown "$user:$group" "$ROOT$path"
+        fi
+        chmod "$mode" "$ROOT$path"
+    done
+
+    for entry in "$WG_SYNC_KEY:0600:root:root" \
+        "$WG_SYNC_AUTH_KEYS:0600:wg-sync:wg-sync"; do
+        IFS=: read -r path mode user group <<<"$entry"
+        if [ ! -f "$ROOT$path" ]; then
+            continue
+        fi
+        chmod "$mode" "$ROOT$path"
+        if [ -z "$ROOT" ]; then
+            chown "$user:$group" "$ROOT$path"
+        fi
+    done
+}
+
+# The pull's script and the timer that runs it every minute, written only when
+# their bytes differ so a run over a matching host restarts nothing. The timer is
+# enabled rather than started: `enable --now` on a timer arms it, and the first
+# tick is a minute away, which is the schedule the unit declares.
+#
+# Only the standby pulls. The authority is the host every client is reading, so a
+# pull there would stop its own Panel for nothing; and the account it would dial
+# is itself, where the key it needs does not exist, so each minute would publish
+# `ok 0` and raise the staleness alert against the host that is working. A host
+# that is not the standby therefore gets no unit, and one a previous run left
+# behind is switched off.
+ensure_sync() {
+    local host="$1" changed=0
+
+    if [ "$(host_address "$host")" != "$WG_SYNC_STANDBY" ]; then
+        if [ -z "$ROOT" ] && [ -f "$ROOT$WG_SYNC_TIMER" ]; then
+            systemctl disable --now wg-vpn-sync.timer
+            CHANGED=$((CHANGED + 1))
+        fi
+        # Removing the three files is what lets the host converge: `sync_drift`
+        # fails on their existence, so a disabled timer left in place would be
+        # drift only a hand could clear.
+        for path in "$WG_SYNC_SCRIPT" "$WG_SYNC_SERVICE" "$WG_SYNC_TIMER"; do
+            if [ -e "$ROOT$path" ]; then
+                rm -f "$ROOT$path"
+                CHANGED=$((CHANGED + 1))
+                echo "sync: removed $path from the authority"
+            fi
+        done
+        if [ -z "$ROOT" ]; then
+            systemctl daemon-reload
+        fi
+        echo "sync: $host is the authority, no sync timer here"
+        return 0
+    fi
+
+    write_abs "$ROOT$WG_SYNC_SCRIPT" "$(desired_sync)"
+    if [ "$CHANGED_THIS_WRITE" -eq 1 ]; then
+        chmod 0755 "$ROOT$WG_SYNC_SCRIPT"
+        [ -n "$ROOT" ] || chown root:root "$ROOT$WG_SYNC_SCRIPT"
+        changed=1
+        echo "sync: wrote $WG_SYNC_SCRIPT"
+    fi
+
+    write_abs "$ROOT$WG_SYNC_SERVICE" "$(desired_sync_service)"
+    if [ "$CHANGED_THIS_WRITE" -eq 1 ]; then
+        chmod 0644 "$ROOT$WG_SYNC_SERVICE"
+        [ -n "$ROOT" ] || chown root:root "$ROOT$WG_SYNC_SERVICE"
+        changed=1
+        echo "sync: wrote $WG_SYNC_SERVICE"
+    fi
+
+    write_abs "$ROOT$WG_SYNC_TIMER" "$(cat "$TEMPLATES/systemd/wg-vpn-sync.timer")"
+    if [ "$CHANGED_THIS_WRITE" -eq 1 ]; then
+        chmod 0644 "$ROOT$WG_SYNC_TIMER"
+        [ -n "$ROOT" ] || chown root:root "$ROOT$WG_SYNC_TIMER"
+        changed=1
+        echo "sync: wrote $WG_SYNC_TIMER"
+    fi
+
+    if [ -z "$ROOT" ] && [ "$changed" -eq 1 ]; then
+        systemctl daemon-reload
+        systemctl enable --now wg-vpn-sync.timer
+        echo "sync: enabled the timer"
+    fi
+}
+
 # What `verify` reads: both files byte for byte, and on a real host the unit that
 # runs them. A unit that is not enabled is the failure a file comparison cannot
 # see: the instance is correct and nothing starts it after a reboot.
@@ -1131,6 +1283,65 @@ snapshot_drift() {
     fi
     if [ -z "$ROOT" ] && ! systemctl is-enabled --quiet wg-vpn-snapshot.timer; then
         echo "DIFFERS the snapshot timer is not enabled"
+        problems=1
+    fi
+    return "$problems"
+}
+
+# What `verify` reads for the pull: the three files byte for byte, and on a real
+# host the timer. The timer is the half a file comparison cannot see — the files
+# are right and nothing starts the pull after a reboot. On the authority the
+# check is inverted: it should carry none of them, and a unit left there by an
+# older run is the drift, because it pulls from the host it is on.
+sync_drift() {
+    local host="$1" problems=0
+
+    if [ "$(host_address "$host")" != "$WG_SYNC_STANDBY" ]; then
+        if [ -e "$ROOT$WG_SYNC_SCRIPT" ] || [ -e "$ROOT$WG_SYNC_SERVICE" ] ||
+            [ -e "$ROOT$WG_SYNC_TIMER" ]; then
+            echo "DIFFERS $host is the authority and carries a sync unit"
+            problems=1
+        fi
+        return "$problems"
+    fi
+
+    if ! check_text "$ROOT$WG_SYNC_SCRIPT" "$(desired_sync)"; then
+        problems=1
+    fi
+    if ! check_text "$ROOT$WG_SYNC_SERVICE" "$(desired_sync_service)"; then
+        problems=1
+    fi
+    if ! check_text "$ROOT$WG_SYNC_TIMER" \
+        "$(cat "$TEMPLATES/systemd/wg-vpn-sync.timer")"; then
+        problems=1
+    fi
+    if [ -z "$ROOT" ] && ! systemctl is-enabled --quiet wg-vpn-sync.timer; then
+        echo "DIFFERS the sync timer is not enabled"
+        problems=1
+    fi
+    return "$problems"
+}
+
+# One key pair, two halves, and each host needs one of them: only the standby
+# dials the authority, so only it holds the private key; only the authority
+# accepts that connection, so only it holds the authorized_keys line. Asking a
+# host about the half it does not need would send the operator to the wrong
+# machine, so each is asked about its own.
+sync_key_drift() {
+    local host="$1" address file what problems=0
+
+    address="$(host_address "$host")"
+    if [ "$address" = "$WG_SYNC_STANDBY" ]; then
+        file="$WG_SYNC_KEY"
+        what="the private key the standby at $WG_SYNC_STANDBY dials the authority with"
+    elif [ "$address" = "$WG_SYNC_AUTHORITY" ]; then
+        file="$WG_SYNC_AUTH_KEYS"
+        what="the authorized_keys line the authority at $WG_SYNC_AUTHORITY accepts"
+    else
+        return 0
+    fi
+    if [ ! -s "$ROOT$file" ]; then
+        echo "MISSING $ROOT$file: $what"
         problems=1
     fi
     return "$problems"
@@ -1352,6 +1563,29 @@ cmd_render() {
     desired_snapshot_service
     echo "--- $WG_SNAPSHOT_TIMER"
     cat "$TEMPLATES/systemd/wg-vpn-snapshot.timer"
+    if [ "$(host_address "$host")" = "$WG_SYNC_STANDBY" ]; then
+        echo "--- $WG_SYNC_SCRIPT"
+        desired_sync
+        echo "--- $WG_SYNC_SERVICE"
+        desired_sync_service
+        echo "--- $WG_SYNC_TIMER"
+        cat "$TEMPLATES/systemd/wg-vpn-sync.timer"
+        echo "--- $WG_SYNC_STAMP"
+        echo "<table> <sha256> per line: the five tables as they stood after the last"
+        echo "install this host made. 'vpn-sync' writes it, and a line that moved on"
+        echo "this host is a local edit it refuses to overwrite without --force."
+    else
+        echo "--- $WG_SYNC_SCRIPT, $WG_SYNC_SERVICE and $WG_SYNC_TIMER"
+        echo "none: $host is the authority, and only the standby pulls. A pull here"
+        echo "would stop the Panel clients are using and dial the host it is on."
+    fi
+    echo "--- $WG_SYNC_KEY ($WG_SYNC_STANDBY)"
+    echo "required, never written here: the private half the standby dials the"
+    echo "authority with. 0600 root:root; a fixture cannot prove the ownership."
+    echo "--- $WG_SYNC_AUTH_KEYS ($WG_SYNC_AUTHORITY)"
+    echo "required, never written here: one line, restricting that key to reading"
+    echo "the snapshot from $WG_SYNC_STANDBY and nothing else:"
+    echo "restrict,command=\"/bin/cat $WG_SYNC_DIR/wg-easy.db\",from=\"$WG_SYNC_STANDBY\" ssh-ed25519 ... wg-sync@rbp1"
     echo "--- the shared address"
     echo "$VIP_ADDRESS/24: held by rbp0, taken by rbp1 when rbp0 stops answering."
     echo "--- /home/$HUMAN_USER/.ssh/authorized_keys"
@@ -1481,6 +1715,8 @@ cmd_setup() {
     ensure_sync_packages
     ensure_keepalived "$host"
     ensure_snapshot
+    ensure_sync_account "$host"
+    ensure_sync "$host"
 
     write_abs "$ROOT$STACK_DIR/docker-compose.yml" "$(desired_compose)"
     # Caddy reads this at start, and it is a bind mount: a file written under a
@@ -1516,7 +1752,10 @@ cmd_setup() {
     # The templates travel beside the script so `verify` works from
     # /usr/local/sbin, where a host that has no ansible tree runs it.
     install -d -m 0755 "$ROOT/usr/local/lib/hosts-pi/templates"
-    install -m 0644 "$TEMPLATES"/* "$ROOT/usr/local/lib/hosts-pi/templates/"
+    # `runners/` carries the systemd units in a subdirectory of its own, so the
+    # tree is copied rather than a flat glob that stops at the first directory.
+    cp -a "$TEMPLATES/." "$ROOT/usr/local/lib/hosts-pi/templates/"
+    find "$ROOT/usr/local/lib/hosts-pi/templates" -type f -exec chmod 0644 {} +
     install -D -m 0555 "$HERE/hosts-pi.sh" "$ROOT/usr/local/sbin/hosts-pi.sh"
     write_abs "$ROOT/etc/systemd/system/pi-backup.service" "$(desired_backup_service "$host")"
     write_abs "$ROOT/etc/systemd/system/pi-backup.timer" "$(desired_backup_timer)"
@@ -1761,6 +2000,10 @@ cmd_verify() {
 
     snapshot_drift || problems=1
 
+    sync_drift "$host" || problems=1
+
+    sync_key_drift "$host" || problems=1
+
     wg_db_drift || problems=1
 
     cert_mode_drift || problems=1
@@ -1847,6 +2090,29 @@ copy_state() {
     if [ -z "$ROOT" ]; then
         ( cd "$STACK_DIR" && docker compose ps > "$dest/docker-ps.txt" 2>&1 ) || true
     fi
+}
+
+# The verb that runs the pull by hand, with the same script the timer runs. It is
+# root's work — it stops the Panel, replaces the database and writes the stamp —
+# so it is asked for an installed script rather than rendering one on the spot:
+# what runs here is what the timer will run a minute later. --force is the
+# operator accepting that a local edit on this host is lost.
+cmd_vpn_sync() {
+    local host="$1" force="${2:-0}"
+
+    check_host "$host"
+    # The verb runs on the standby. On the authority it would fetch from itself
+    # through a key that host does not hold, and stopping its own panel is the
+    # one thing this design never does while it carries the address.
+    if [ "$(host_address "$host")" != "$WG_SYNC_STANDBY" ]; then
+        echo "$host is the authority; the sync runs on the standby ($WG_SYNC_STANDBY)" >&2
+        exit 1
+    fi
+    if [ ! -f "$ROOT$WG_SYNC_SCRIPT" ]; then
+        echo "no $ROOT$WG_SYNC_SCRIPT; run 'hosts-pi.sh setup $host' first" >&2
+        exit 1
+    fi
+    WG_ROOT="$ROOT" WG_SYNC_FORCE="$force" bash "$ROOT$WG_SYNC_SCRIPT"
 }
 
 cmd_backup() {
@@ -2062,7 +2328,7 @@ cmdline_matches_this_disk() {
 }
 
 main() {
-    local verb="${1:-}"
+    local verb="${1:-}" force=0
     [ -n "$verb" ] || usage
     shift
 
@@ -2077,6 +2343,19 @@ main() {
             [ "$#" -eq 1 ] || usage
             check_host "$1"
             "cmd_$verb" "$1"
+            ;;
+        vpn-sync)
+            case "$#" in
+                1) force=0 ;;
+                2)
+                    [ "$2" = "--force" ] || usage
+                    force=1
+                    ;;
+                *) usage ;;
+            esac
+            check_host "$1"
+            FIREWALL_HOST="$1"
+            cmd_vpn_sync "$1" "$force"
             ;;
         backup|restore)
             [ "$#" -eq 2 ] || usage
