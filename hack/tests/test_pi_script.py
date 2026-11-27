@@ -1595,3 +1595,52 @@ def test_verify_names_a_missing_env_file_and_a_legacy_cron(tmp_path):
     assert out.returncode == 1
     assert "/etc/restic/edge.env" in out.stdout
     assert "scripts/backup.sh" in out.stdout
+
+
+KEEPALIVED_HEADER = "--- /etc/keepalived/keepalived.conf\n"
+NOTIFY_HEADER = "--- /usr/local/lib/wg-vpn/wg-vrrp-notify.sh\n"
+
+
+def test_the_master_and_the_backup_differ_only_in_state_and_priority():
+    rbp0 = rendered_section("rbp0", KEEPALIVED_HEADER)
+    rbp1 = rendered_section("rbp1", KEEPALIVED_HEADER)
+    for line, block in (("state MASTER", rbp0), ("priority 150", rbp0),
+                        ("unicast_src_ip 192.168.1.22", rbp0),
+                        ("state BACKUP", rbp1), ("priority 100", rbp1),
+                        ("unicast_src_ip 192.168.1.38", rbp1)):
+        assert line in block, (line, block)
+    assert "192.168.1.38" in rbp0 and "192.168.1.22" in rbp1  # the unicast peer
+    for block in (rbp0, rbp1):
+        assert "192.168.1.9/24" in block
+        assert "virtual_router_id 51" in block
+        assert "advert_int 1" in block
+        assert "preempt_delay 300" in block
+        assert "wg_easy_running" in block
+        assert "@VRRP_STATE@" not in block
+
+
+def test_the_notify_script_records_the_state_and_the_series(tmp_path):
+    """keepalived calls it with one word; the file it writes is what the next
+    task's failover and the alert read, so the mapping is asserted both ways."""
+    script = tmp_path / "wg-vrrp-notify.sh"
+    script.write_text(rendered_section("rbp0", NOTIFY_HEADER))
+    script.chmod(0o755)
+    env = dict(os.environ, WG_ROOT=str(tmp_path))
+    series = tmp_path / "var/lib/node-exporter/textfile/wg-vpn-vrrp.prom"
+    state = tmp_path / "run/wg-vpn/vrrp.state"
+    for word, value in (("master", "1"), ("backup", "0")):
+        out = subprocess.run([str(script), word], capture_output=True, text=True, env=env)
+        assert out.returncode == 0, out.stderr
+        assert state.read_text().strip() == word
+        assert series.read_text() == f"wg_vpn_vrrp_master {value}\n"
+    assert series.stat().st_mode & 0o777 == 0o644
+
+
+def test_setup_places_keepalived_and_refuses_to_guess_its_values(tmp_path):
+    root = tmp_path / "pi"
+    _pi_fixture(root)
+    out = run("setup", "rbp0", root=root)
+    assert out.returncode == 0, out.stderr
+    conf = root / "etc/keepalived/keepalived.conf"
+    assert "state MASTER" in conf.read_text()
+    assert (root / "usr/local/lib/wg-vpn/wg-vrrp-notify.sh").exists()
