@@ -10,21 +10,21 @@ Regenerate: `python3 hack/gen_docs.py --write --only routes`
 Hostnames, middlewares and TLS options are rendered from the `IngressRoute` objects each chart
 declares. A host with a `web` and a `websecure` router is one row, and its gate names both.
 The dashboard is the one host whose `web` router is applied by hand rather than rendered:
-`traefik.kub.local` on port 80 is redirected by
+`traefik.kub.internal` on port 80 is redirected by
 `cluster/infrastructure/traefik/dashboard/redirect.yaml`, and that twin merges into the row
 the chart-rendered `websecure` router gives the host. That twin is also the whole difference
-between what the cluster holds and what these charts render: 75 `IngressRoute`
-objects live against the 74 rendered here, and `kube-system/traefik-dashboard-redirect`
+between what the cluster holds and what these charts render: 77 `IngressRoute`
+objects live against the 76 rendered here, and `kube-system/traefik-dashboard-redirect`
 is the only name on one side and not the other. `cluster/infrastructure/**` is applied by hand,
 so no Application can ever render it, and the gap is a shape of this repository rather than
 drift. The other three ways a router goes missing are empty here: every Application's `path`
 holds a chart, no Application is a leftover of a retired app, and every router a chart renders
 is live. Both counts, with the day the live one was read, are in
 `cluster/helm/security/security-exporter/values.yaml`. One internal route is an API rather
-than a page: `loki.kub.local` serves Loki's query API and its query frontend, and the logs are
+than a page: `loki.kub.internal` serves Loki's query API and its query frontend, and the logs are
 read in Grafana. The `IngressRouteTCP` and `IngressRouteUDP` entries Syncthing and Minecraft
 declare match on `HostSNI(*)`, carry no hostname, and are therefore not rows here — which is
-why `hack/check-exposure.sh` prints `checked: 79 routes`: its grep takes
+why `hack/check-exposure.sh` prints `checked: 81 routes`: its grep takes
 `IngressClass` and the TCP/UDP objects as well, and none of them is an `IngressRoute`.
 How a request arrives, what the gate does and which certificate answers the handshake are
 [how it works](../how-it-works/network.md); who signs in where is
@@ -50,41 +50,41 @@ On the allowlist, meant to answer the internet.
 
 | Host | Application | Namespace | Gate | TLS | Public? |
 |---|---|---|---|---|---|
-| `argocd.kub.local` | argocd | `argocd` | `lan-only`, `redirect-to-https` | internal CA | no |
-| `autobrr.kub.local` | autobrr | `media-stack` | `lan-only`, `redirect-to-https` | internal CA | no |
-| `bazarr-anime.kub.local` | bazarr-anime | `media-stack` | `lan-only`, `authentik-forwardauth`, `redirect-to-https` | internal CA | no |
-| `bazarr.kub.local` | bazarr | `media-stack` | `lan-only`, `authentik-forwardauth`, `redirect-to-https` | internal CA | no |
-| `calibre.kub.local` | calibre-web-automated | `media-stack` | `lan-only`, `redirect-to-https` | internal CA | no |
-| `crowdsec.kub.local` | crowdsec-web-ui | `security` | `lan-only`, `redirect-to-https` | internal CA | no |
-| `dashy.kub.local` | dashy | `dashy` | `lan-only`, `redirect-to-dashy` | internal CA | no |
-| `docs.kub.local` | docs-site | `docs` | `lan-only`, `authentik-forwardauth`, `redirect-to-https` | internal CA | no |
+| `argocd.kub.internal` | argocd | `argocd` | `lan-only`, `redirect-to-https` | internal CA | no |
+| `autobrr.kub.internal` | autobrr | `media-stack` | `lan-only`, `redirect-to-https` | internal CA | no |
+| `bazarr-anime.kub.internal` | bazarr-anime | `media-stack` | `lan-only`, `authentik-forwardauth`, `redirect-to-https` | internal CA | no |
+| `bazarr.kub.internal` | bazarr | `media-stack` | `lan-only`, `authentik-forwardauth`, `redirect-to-https` | internal CA | no |
+| `calibre.kub.internal` | calibre-web-automated | `media-stack` | `lan-only`, `redirect-to-https` | internal CA | no |
+| `crowdsec.kub.internal` | crowdsec-web-ui | `security` | `lan-only`, `redirect-to-https` | internal CA | no |
+| `dashy.kub.internal` | dashy | `dashy` | `lan-only`, `redirect-to-dashy` | internal CA | no |
+| `docs.kub.internal` | docs-site | `docs` | `lan-only`, `authentik-forwardauth`, `redirect-to-https` | internal CA | no |
 | `freshrss.kub.home.ashudev.com` | news-freshrss | `news` | `lan-only`, `doc-freshrss-redirect-https` | Let's Encrypt | no |
-| `grafana.kub.local` | grafana | `monitoring` | `lan-only`, `redirect-to-https` | internal CA | no |
+| `grafana.kub.internal` | grafana | `monitoring` | `lan-only`, `redirect-to-https` | internal CA | no |
 | `kavita.kub.home.ashudev.com` | kavita | `media-stack` | `lan-only`, `doc-kavita-redirect-https` | Let's Encrypt | no |
 | `koillection.kub.home.ashudev.com` | koillection | `koillection` | `lan-only`, `koillection-app-redirect-https` | Let's Encrypt | no |
 | `kub.home.ashudev.com` | dashy | `dashy` | `lan-only`, `redirect-to-dashy` | Let's Encrypt | no |
-| `lidarr.kub.local` | lidarr | `media-stack` | `lan-only`, `authentik-forwardauth`, `redirect-to-https` | internal CA | no |
-| `loki.kub.local` | loki | `monitoring` | `lan-only`, `authentik-forwardauth`, `redirect-to-https` | internal CA | no |
-| `maintainerr.kub.local` | maintainerr | `media-stack` | `lan-only`, `authentik-forwardauth`, `redirect-to-https` | internal CA | no |
+| `lidarr.kub.internal` | lidarr | `media-stack` | `lan-only`, `authentik-forwardauth`, `redirect-to-https` | internal CA | no |
+| `loki.kub.internal` | loki | `monitoring` | `lan-only`, `authentik-forwardauth`, `redirect-to-https` | internal CA | no |
+| `maintainerr.kub.internal` | maintainerr | `media-stack` | `lan-only`, `authentik-forwardauth`, `redirect-to-https` | internal CA | no |
 | `n8n.kub.home.ashudev.com` | n8n | `n8n` | `lan-only`, `n8n-redirect-https` | Let's Encrypt | no |
-| `prowlarr.kub.local` | prowlarr | `media-stack` | `lan-only`, `authentik-forwardauth`, `redirect-to-https` | internal CA | no |
-| `qbittorrent.kub.local` | qbittorrent | `media-stack` | `lan-only`, `authentik-forwardauth`, `redirect-to-https` | internal CA | no |
-| `radarr-anime.kub.local` | radarr-anime | `media-stack` | `lan-only`, `redirect-to-https` | internal CA | no |
-| `radarr.kub.local` | radarr | `media-stack` | `lan-only`, `redirect-to-https` | internal CA | no |
-| `sonarr-anime.kub.local` | sonarr-anime | `media-stack` | `lan-only`, `authentik-forwardauth`, `redirect-to-https` | internal CA | no |
-| `sonarr.kub.local` | sonarr | `media-stack` | `lan-only`, `authentik-forwardauth`, `redirect-to-https` | internal CA | no |
+| `prowlarr.kub.internal` | prowlarr | `media-stack` | `lan-only`, `authentik-forwardauth`, `redirect-to-https` | internal CA | no |
+| `qbittorrent.kub.internal` | qbittorrent | `media-stack` | `lan-only`, `authentik-forwardauth`, `redirect-to-https` | internal CA | no |
+| `radarr-anime.kub.internal` | radarr-anime | `media-stack` | `lan-only`, `redirect-to-https` | internal CA | no |
+| `radarr.kub.internal` | radarr | `media-stack` | `lan-only`, `redirect-to-https` | internal CA | no |
+| `sonarr-anime.kub.internal` | sonarr-anime | `media-stack` | `lan-only`, `authentik-forwardauth`, `redirect-to-https` | internal CA | no |
+| `sonarr.kub.internal` | sonarr | `media-stack` | `lan-only`, `authentik-forwardauth`, `redirect-to-https` | internal CA | no |
 | `syncthing.kub.home.ashudev.com` | syncthing | `syncthing` | `lan-only`, `authentik-forwardauth`, `syncthing-redirect-https` | Let's Encrypt | no |
-| `tautulli.kub.local` | tautulli | `media-stack` | `lan-only`, `redirect-to-https` | internal CA | no |
+| `tautulli.kub.internal` | tautulli | `media-stack` | `lan-only`, `redirect-to-https` | internal CA | no |
 | `thelounge.kub.home.ashudev.com` | thelounge | `thelounge` | `lan-only`, `security`, `redirect-to-https` | Let's Encrypt | no |
-| `traefik.kub.local` | traefik | `kube-system` | `lan-only`, `traefik-dashboard` | internal CA | no |
-| `vikunja.kub.local` | vikunja | `vikunja` | `lan-only`, `redirect-to-https` | internal CA | no |
+| `traefik.kub.internal` | traefik | `kube-system` | `lan-only`, `traefik-dashboard` | internal CA | no |
+| `vikunja.kub.internal` | vikunja | `vikunja` | `lan-only`, `redirect-to-https` | internal CA | no |
 
 ## Internal without TLS (2)
 
 | Host | Application | Namespace | Gate | TLS | Public? |
 |---|---|---|---|---|---|
-| `pgadmin.kub.local` | pgadmin | `databases` | `lan-only` | none | no |
-| `prometheus.kub.local` | prometheus | `monitoring` | `lan-only` | none | no |
+| `pgadmin.kub.internal` | pgadmin | `databases` | `lan-only` | none | no |
+| `prometheus.kub.internal` | prometheus | `monitoring` | `lan-only` | none | no |
 
 ## Sources
 

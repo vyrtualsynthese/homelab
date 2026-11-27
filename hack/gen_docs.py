@@ -35,7 +35,7 @@ REDIRECT = "redirect-to-https"
 # ServiceAccount and written down with that date in cluster/helm/security/security-exporter/
 # values.yaml. The rendered side is counted, not typed in; this side cannot be, and the page
 # carries no date of its own, so the date lives in the values file.
-LIVE_INGRESS_ROUTES = 75
+LIVE_INGRESS_ROUTES = 77
 
 
 class GenError(Exception):
@@ -65,7 +65,7 @@ def _tls_label(spec: dict, host: str, entrypoints: tuple[str, ...]) -> str:
     tls = spec.get("tls") or {}
     if tls.get("secretName") or tls.get("certResolver"):
         return "Let's Encrypt"
-    if host.endswith(".kub.local"):
+    if host.endswith(".kub.internal") or host.endswith(".kub.local"):
         return "internal CA"
     if host.endswith(".ashudev.com") or host.endswith(".ashuvidz.com"):
         return "Let's Encrypt"
@@ -356,7 +356,7 @@ def render_routes(root: pathlib.Path, live_ingress_routes: int = LIVE_INGRESS_RO
         "Hostnames, middlewares and TLS options are rendered from the `IngressRoute` objects each chart",
         "declares. A host with a `web` and a `websecure` router is one row, and its gate names both.",
         "The dashboard is the one host whose `web` router is applied by hand rather than rendered:",
-        "`traefik.kub.local` on port 80 is redirected by",
+        "`traefik.kub.internal` on port 80 is redirected by",
         "`cluster/infrastructure/traefik/dashboard/redirect.yaml`, and that twin merges into the row",
         "the chart-rendered `websecure` router gives the host. That twin is also the whole difference",
         f"between what the cluster holds and what these charts render: {live_ingress_routes} `IngressRoute`",
@@ -367,7 +367,7 @@ def render_routes(root: pathlib.Path, live_ingress_routes: int = LIVE_INGRESS_RO
         "holds a chart, no Application is a leftover of a retired app, and every router a chart renders",
         "is live. Both counts, with the day the live one was read, are in",
         "`cluster/helm/security/security-exporter/values.yaml`. One internal route is an API rather",
-        "than a page: `loki.kub.local` serves Loki's query API and its query frontend, and the logs are",
+        "than a page: `loki.kub.internal` serves Loki's query API and its query frontend, and the logs are",
         "read in Grafana. The `IngressRouteTCP` and `IngressRouteUDP` entries Syncthing and Minecraft",
         "declare match on `HostSNI(*)`, carry no hostname, and are therefore not rows here — which is",
         f"why `hack/check-exposure.sh` prints `checked: {ingress_objects} routes`: its grep takes",
