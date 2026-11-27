@@ -20,13 +20,16 @@
 - name: Allow what this host runs, from the addresses that use it
   community.general.ufw:
     rule: allow
-    port: "{{ item.port | default(omit) }}"
+    # `resolve.yml` writes `port: None` for a rule declared without one, and
+    # `default` replaces only *undefined*: the `true` is what turns that None
+    # into `omit`, so a protocol rule reaches ufw with no port at all.
+    port: "{{ item.port | default(omit, true) }}"
     proto: "{{ item.proto }}"
     from_ip: "{{ item.from }}"
     comment: "{{ item.comment }}"
   loop: "{{ firewall_entries }}"
   loop_control:
-    label: "{{ item.port | default('proto') }}/{{ item.proto }} from {{ item.from }}"
+    label: "{{ item.port | default('proto', true) }}/{{ item.proto }} from {{ item.from }}"
 
 - name: Refuse everything else on the way in
   community.general.ufw:

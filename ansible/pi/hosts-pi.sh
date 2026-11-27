@@ -125,6 +125,12 @@ LAN_CIDR="192.168.1.0/24"
 CLUSTER_ADDRESSES="192.168.1.41 192.168.1.27 192.168.1.46 192.168.1.48"
 VPN_CIDR="10.8.0.0/24"
 PANEL_CIDR="172.30.0.0/24"
+# The two edge hosts' addresses, in the same order as `HOSTS`, so the VRRP rule
+# can name the *other* Pi: an advertisement from a host's own address would be a
+# second master on the same link. `FIREWALL_HOST` is the verb's host argument,
+# set by `main()`; the tests set it in the environment of the sourced script.
+EDGE_ADDRESSES="192.168.1.22 192.168.1.38"
+FIREWALL_HOST="${FIREWALL_HOST:-}"
 # The WireGuard listener, one number for both hosts: they share one panel
 # database, so a config minted on either names this port and a client keeps
 # dialling it whichever Pi answers.
@@ -173,6 +179,37 @@ check_host() {
     done
     echo "unknown host '$candidate'; this script knows: $HOSTS" >&2
     exit 2
+}
+
+# `HOSTS` and `EDGE_ADDRESSES` are index-aligned; both walk the pair of lists
+# once and print the address at the host's index. An unknown host is refused by
+# `check_host`, the same way every verb refuses one.
+host_address() {
+    local host="$1" known
+
+    check_host "$host"
+    set -- $EDGE_ADDRESSES
+    for known in $HOSTS; do
+        if [ "$known" = "$host" ]; then
+            printf '%s\n' "$1"
+            return 0
+        fi
+        shift
+    done
+}
+
+peer_address() {
+    local host="$1" known
+
+    check_host "$host"
+    set -- $EDGE_ADDRESSES
+    for known in $HOSTS; do
+        if [ "$known" != "$host" ]; then
+            printf '%s\n' "$1"
+            return 0
+        fi
+        shift
+    done
 }
 
 # The name the VPN panel answers on. One label under the internal wildcard, so
@@ -723,6 +760,10 @@ ensure_sshd_policy() {
 # without them the remote client has no resolver at all.
 # 9100 and 9323 are host-network exporters that Prometheus scrapes from a pod
 # egressing as `nas`; the failure without a rule is silent.
+#
+# VRRP is a protocol, not a port: the port field is empty for that row, and
+# `ufw_rule_line` drops `to any port` when it is. The source is the other edge
+# host's address, never this one's.
 firewall_rule_table() {
     cat <<'EOF'
 22|tcp|lan|ssh from the LAN, key-only
@@ -738,6 +779,7 @@ firewall_rule_table() {
 53|udp|panel|DNS for peers, from the wg-easy container after masquerade
 9100|tcp|nodes|node-exporter, scraped by a pod that egresses as its node
 9323|tcp|nodes|the Docker metrics endpoint daemon.json opens on 0.0.0.0
+|vrrp|peer|VRRP advertisements from the other edge host
 EOF
 }
 
@@ -749,6 +791,7 @@ firewall_source_addresses() {
         nodes) printf '%s\n' $CLUSTER_ADDRESSES ;;
         vpn) printf '%s\n' "$VPN_CIDR" ;;
         panel) printf '%s\n' "$PANEL_CIDR" ;;
+        peer) printf '%s\n' "$(peer_address "$FIREWALL_HOST")" ;;
         *)
             echo "unknown firewall source '$1'" >&2
             exit 1
@@ -770,6 +813,11 @@ firewall_entries() {
 # name the same thing.
 ufw_rule_line() {
     local address="$1" port="$2" proto="$3" comment="$4"
+    if [ -z "$port" ]; then
+        printf "ufw allow from %s proto %s comment '%s'\n" \
+            "$address" "$proto" "$comment"
+        return 0
+    fi
     printf "ufw allow from %s to any port %s proto %s comment '%s'\n" \
         "$address" "$port" "$proto" "$comment"
 }
@@ -805,10 +853,16 @@ ensure_firewall() {
     while IFS='|' read -r address port proto comment; do
         rule="$(ufw_rule_line "$address" "$port" "$proto" "$comment")"
         if ! grep -qxF "$rule" <<<"$added"; then
-            ufw allow from "$address" to any port "$port" proto "$proto" \
-                comment "$comment" >/dev/null
-            CHANGED=$((CHANGED + 1))
-            echo "firewall: allowed $port/$proto from $address"
+            if [ -z "$port" ]; then
+                ufw allow from "$address" proto "$proto" comment "$comment" >/dev/null
+                CHANGED=$((CHANGED + 1))
+                echo "firewall: allowed proto $proto from $address"
+            else
+                ufw allow from "$address" to any port "$port" proto "$proto" \
+                    comment "$comment" >/dev/null
+                CHANGED=$((CHANGED + 1))
+                echo "firewall: allowed $port/$proto from $address"
+            fi
         fi
     done < <(firewall_entries)
 
@@ -1767,20 +1821,11 @@ main() {
     shift
 
     case "$verb" in
-        render)
+        render|setup|verify)
             [ "$#" -eq 1 ] || usage
             check_host "$1"
-            cmd_render "$1"
-            ;;
-        setup)
-            [ "$#" -eq 1 ] || usage
-            check_host "$1"
-            cmd_setup "$1"
-            ;;
-        verify)
-            [ "$#" -eq 1 ] || usage
-            check_host "$1"
-            cmd_verify "$1"
+            FIREWALL_HOST="$1"
+            "cmd_$verb" "$1"
             ;;
         stream|prune)
             [ "$#" -eq 1 ] || usage
@@ -1790,6 +1835,7 @@ main() {
         backup|restore)
             [ "$#" -eq 2 ] || usage
             check_host "$2"
+            FIREWALL_HOST="$2"
             "cmd_$verb" "$1" "$2"
             ;;
         *)
