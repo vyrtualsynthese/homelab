@@ -27,7 +27,7 @@ its SQLite is state, and `nas` is where state is backed up.
 | Agent | Deployment `crowdsec-agent`, node `streaming` | `kubectl -n security logs deploy/crowdsec-agent` |
 | LAPI | Deployment `crowdsec-lapi`, node `nas` | `kubectl -n security logs deploy/crowdsec-lapi` |
 | Decisions | LAPI's SQLite, `local-path` claim on `nas` | `kubectl -n security exec deploy/crowdsec-lapi -- cscli decisions list` |
-| Whether CAPI is registered, and when it last pulled | the LAPI | `kubectl -n security exec deploy/crowdsec-lapi -- cscli capi status` |
+| Whether CAPI is registered, and when it last pulled | the LAPI | `kubectl -n security exec deploy/crowdsec-lapi -- cscli capi status` for the registration; `cs_capi_last_pull_timestamp` in Prometheus for the pull, which reads `0` on a new pod until its first pull — a restart does not cost the identity, only that reading |
 | What the blocklist may never insert | `capi_whitelists.yaml`, mounted at `/etc/crowdsec_data/capi_whitelists.yaml` | `kubectl -n security exec deploy/crowdsec-lapi -- cat /etc/crowdsec_data/capi_whitelists.yaml`; the LAPI log's `loaded capi whitelist from …` line says whether the engine read it |
 | Bans, as the kernel has them | `nftables` on `streaming`, table `crowdsec` | `nft list set ip crowdsec crowdsec-blacklists` |
 | Bouncer | host service on `streaming` | `systemctl status crowdsec-firewall-bouncer` |
