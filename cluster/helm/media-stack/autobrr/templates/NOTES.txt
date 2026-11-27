@@ -7,7 +7,7 @@ URL:
 {{- if not .Values.ingressRoute.tls.enabled }}
 
 The router uses the `web` entry point, so the host must resolve internally.
-That is the Pi-hole wildcard record for `kub.local`, not public DNS.
+That is the Pi-hole wildcard record for `kub.internal`, not public DNS.
 {{- end }}
 {{- else }}
 
