@@ -316,13 +316,12 @@ It answers at `https://vpn-rbp0.kub.local:8443` on `rbp0` and `https://vpn-rbp1.
 - **The admin password is reset from the host**, not by editing a file:
   `docker compose exec wg-easy cli db:admin:reset` (or `--password <new>`).
 
-**A peer's query does not reach Pi-hole yet.** wg-easy masquerades the tunnel's traffic to its compose
-address, `172.30.0.2`, and `ufw` admits 53 from the LAN and from `10.8.0.0/24` only, so the query is
-dropped on the panel network before Pi-hole sees it: `/var/log/ufw.log` names a blocked packet with
-`SRC=172.30.0.2` and `DPT=53`, and the container reaches neither 53 nor 8443 on its own host. A peer
-whose profile carries that pair therefore resolves outside Pi-hole, or not at all. Making the tunnel
-resolve through the Pi-holes, with each query carrying the address of the peer that sent it, is
-card #629.
+**A peer's query arrives as the panel network, not as its tunnel address.** wg-easy masquerades the
+tunnel's traffic to its own compose address, `172.30.0.2`, so `ufw` admits 53 from `172.30.0.0/24`
+beside the LAN and `10.8.0.0/24`, and a peer resolves through this host's Pi-hole. What the query log
+cannot say is which peer asked: every tunnel query is `172.30.0.2`. Until that rule was added on
+2026-11-27 nothing admitted the source, and `/var/log/ufw.log` named the block for each query a peer
+sent.
 
 ## Rolling back
 

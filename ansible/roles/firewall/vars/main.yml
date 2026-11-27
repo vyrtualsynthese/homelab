@@ -93,6 +93,20 @@ firewall_rules_edge:
     proto: tcp
     source: vpn
     comment: Pi-hole HTTPS web interface from the tunnel
+  # The tunnel does not arrive as `vpn_cidrs`. wg-easy's PostUp masquerades a
+  # peer's traffic to its own address on the compose network before it leaves,
+  # so ufw sees `172.30.0.2` and the four rules above match nothing. Measured on
+  # rbp0 on 2026-11-27: a peer's query was dropped with `SRC=172.30.0.2 DPT=53`
+  # in `/var/log/ufw.log`. DNS is what the peer needs, so the panel network is
+  # admitted for it; without these two rules a remote client has no resolver.
+  - port: 53
+    proto: tcp
+    source: panel
+    comment: DNS from the wg-easy container, the tunnel's source after masquerade
+  - port: 53
+    proto: udp
+    source: panel
+    comment: DNS from the wg-easy container, the tunnel's source after masquerade
   # Host-network exporters: not DNAT'd, so they reach INPUT. Prometheus on `nas`
   # scrapes both of these on both Pis (the third target there, 9902, is a
   # published container port and needs nothing), and a missing rule shows up only

@@ -14,3 +14,11 @@ stack_dir: /home/vronteix/dockers
 # resolution of every remote client that does.
 vpn_cidrs:
   - 10.8.0.0/24
+
+# The compose network the VPN container joins, fixed in the stack's
+# docker-compose.yml. wg-easy masquerades a peer's traffic to its own address on
+# this network before it leaves the container, so this is the source ufw sees
+# for a query from a peer — `vpn_cidrs` is what the client carries, not what the
+# host receives. 53 from it is what gives the VPN a resolver.
+panel_cidrs:
+  - 172.30.0.0/24
