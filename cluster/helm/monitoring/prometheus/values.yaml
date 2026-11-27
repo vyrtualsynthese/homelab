@@ -506,7 +506,7 @@ prometheus:
     #
     # blackbox-dns carries no params block on purpose: it copies each target's
     # module label into __param_module, and a params block in the same job would
-    # take precedence, asking all 28 servers one question.
+    # take precedence, asking all 22 servers one question.
     blackbox-http:
       enabled: true
       metrics_path: /probe
@@ -530,10 +530,10 @@ prometheus:
           target_label: instance
         - target_label: __address__
           replacement: blackbox-exporter.monitoring.svc:9115
-    # Every authoritative server of both zones: OVH holds ashudev.com and Route
-    # 53 holds ashuvidz.com, and a zone that answers from one server only hides
-    # a broken secondary until the primary drops. One target per question, since
-    # the module label is what differs.
+    # Every authoritative server of both zones: OVH holds ashudev.com and
+    # ashuvidz.com, and a zone that answers from one server only hides a broken
+    # secondary until the primary drops. One target per question, since the
+    # module label is what differs.
     blackbox-dns:
       enabled: true
       metrics_path: /probe
@@ -588,40 +588,22 @@ prometheus:
             - ns13.ovh.net:53
           labels: {module: dns_ns_ashudev, check: ns, zone: ashudev.com}
         - targets:
-            - ns-1029.awsdns-00.org:53
+            - ns17.ovh.net:53
           labels: {module: dns_soa_ashuvidz, check: soa, zone: ashuvidz.com}
         - targets:
-            - ns-1029.awsdns-00.org:53
+            - ns17.ovh.net:53
           labels: {module: dns_a_ashuvidz, check: a, zone: ashuvidz.com}
         - targets:
-            - ns-1029.awsdns-00.org:53
+            - ns17.ovh.net:53
           labels: {module: dns_ns_ashuvidz, check: ns, zone: ashuvidz.com}
         - targets:
-            - ns-1714.awsdns-22.co.uk:53
+            - dns17.ovh.net:53
           labels: {module: dns_soa_ashuvidz, check: soa, zone: ashuvidz.com}
         - targets:
-            - ns-1714.awsdns-22.co.uk:53
+            - dns17.ovh.net:53
           labels: {module: dns_a_ashuvidz, check: a, zone: ashuvidz.com}
         - targets:
-            - ns-1714.awsdns-22.co.uk:53
-          labels: {module: dns_ns_ashuvidz, check: ns, zone: ashuvidz.com}
-        - targets:
-            - ns-339.awsdns-42.com:53
-          labels: {module: dns_soa_ashuvidz, check: soa, zone: ashuvidz.com}
-        - targets:
-            - ns-339.awsdns-42.com:53
-          labels: {module: dns_a_ashuvidz, check: a, zone: ashuvidz.com}
-        - targets:
-            - ns-339.awsdns-42.com:53
-          labels: {module: dns_ns_ashuvidz, check: ns, zone: ashuvidz.com}
-        - targets:
-            - ns-901.awsdns-48.net:53
-          labels: {module: dns_soa_ashuvidz, check: soa, zone: ashuvidz.com}
-        - targets:
-            - ns-901.awsdns-48.net:53
-          labels: {module: dns_a_ashuvidz, check: a, zone: ashuvidz.com}
-        - targets:
-            - ns-901.awsdns-48.net:53
+            - dns17.ovh.net:53
           labels: {module: dns_ns_ashuvidz, check: ns, zone: ashuvidz.com}
       relabel_configs:
         - source_labels: [__address__]

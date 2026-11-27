@@ -62,7 +62,7 @@ whether the 20 GiB claim will hold the 30-day retention (it will, with room:
 **Cloud** was added on 2026-11-20, when the public names got a prober
 ([`runbooks/cloud-monitoring.md`](../runbooks/cloud-monitoring.md)). Six panels answer "is the
 internet-facing side healthy, and what needs attention?": three numbers on top — endpoints answering
-of 3, DNS checks passing of 28, days to the earliest certificate — then `probe_success` and
+of 3, DNS checks passing of 22, days to the earliest certificate — then `probe_success` and
 `probe_duration_seconds` per endpoint over 24 h, and an `Every check` table listing one row per probe
 with failures first. That table is the panel to read when a `CloudDnsCheckFailing` message names a
 zone, a check and a server. The two denominators in the top-row titles are written into those titles

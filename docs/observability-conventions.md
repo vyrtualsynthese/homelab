@@ -227,8 +227,8 @@ Grafana's own data: where they live, and what that costs, is in
   which nothing scraped before. Scrape the **Service** port: Grafana listens on
   3000 in the container but its Service exposes only 80, so `:3000` times out.
 - **The cloud probes are two static jobs too**, `blackbox-http` every minute against 3 endpoints and
-  `blackbox-dns` every five minutes against 28 — 8 `ashudev.com` checks on its 2 authoritative
-  servers, 3 `ashuvidz.com` checks on its 4. A multi-target exporter cannot be found by pod
+  `blackbox-dns` every five minutes against 22 — 8 `ashudev.com` checks on its 2 authoritative
+  servers, 3 `ashuvidz.com` checks on its 2. A multi-target exporter cannot be found by pod
   annotation — Prometheus has to rewrite each target's address into `__param_target` and name the
   module — so the targets are static, while the prober's own pod carries `prometheus.io/scrape` like
   any exporter. What that means for the `Cloud*` rules when the prober dies is in
