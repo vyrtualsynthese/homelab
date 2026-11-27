@@ -394,16 +394,21 @@ set -a; . "$HOME/.config/secrets/homelab.env"; set +a
 export KUBECONFIG="$HOME/.kube/mcp-readonly.yaml"
 kubectl -n security get pods -l k8s-app=crowdsec
 
-for q in 'cs_features{feature="capi",type="lapi"}' 'cs_capi_last_pull_timestamp{type="lapi"}'; do
+for q in 'cs_features{feature="capi",type="lapi"}' 'cs_capi_last_pull_timestamp{type="lapi"}' 'sum by (origin) (cs_active_decisions)'; do
   printf '%s -> ' "$q"
   curl -sG -u "ops:$PROMETHEUS_AUTH_PASSWORD" http://prometheus.kub.local/api/v1/query \
-    --data-urlencode "query=$q" | jq -r '.data.result[] | "\(.metric.type // "-") \(.value[1])"'
+    --data-urlencode "query=$q" | jq -r '.data.result[] | "\(.metric.type // .metric.origin // "-") \(.value[1])"'
 done
 ```
 
-Expected: the LAPI and the agent each Ready (a new LAPI pod, because the values changed). `cs_features{capi}` is `1` on the `lapi` series, and `cs_capi_last_pull_timestamp` is a Unix timestamp from the last few minutes — not `0`. A `0` after five minutes means registration failed: read `kubectl -n security logs deploy/crowdsec-lapi | grep -i capi`.
+Expected: the LAPI and the agent each Ready (a new LAPI pod, because the values changed). `cs_features{capi}` is `1` on the `lapi` series, and `cs_capi_last_pull_timestamp` is a Unix timestamp from the last few minutes — not `0`. A `0` after five minutes means registration failed: read `kubectl -n security logs deploy/crowdsec-lapi | grep -i capi`. The third query lists one series per `origin`, and **both `crowdsec` and `CAPI` must be there**: `absent()` guards a metric family, not an empty label value, so a rule selecting an origin that never appears would be silently dead while `SecurityStackBlind` stayed green.
 
 - [ ] **Step 2: Read the blocklist decisions, and prove the LAN is absent**
+
+This runs in the **first minutes** after the sync, not after the stack settles:
+`api.server.capi_whitelists_path` is deprecated upstream, and this is the only check that the
+running engine still honours it. A LAN address in the list is a rollback of the values change, not a
+note.
 
 `kubectl exec` answers `403` on the read-only kubeconfig that Step 1 exported, so this step and the
 next two run in a shell with the admin one. The operator runs them, as the runbook says:
@@ -428,7 +433,7 @@ sudo nft -j list set ip crowdsec crowdsec-blacklists \
   | jq '[.nftables[] | select(.set) | .set.elem // []] | add | length'
 sudo nft -j list set ip crowdsec crowdsec-blacklists \
   | jq -r '.nftables[] | select(.set) | .set.elem // [] | .[]' \
-  | grep -cE '^(192\.168\.1|10\.8\.0)\.' || true
+  | grep -cE '^(192\.168\.1|10\.8\.0|10\.42|10\.43)\.' || true
 ```
 
 Expected: a number in the hundreds or thousands, then `0`. A non-zero second line is the LAN being banned: stop and read Task 3's proof 5. Then read the rule's expression:
