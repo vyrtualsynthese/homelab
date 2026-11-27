@@ -5,13 +5,13 @@
 > covers every forwarded port.
 >
 > **Use it when** a chatty address is being refused, a legitimate visitor was banned, or the
-> `SecurityStackBlind` alert says the stack has stopped seeing anything · **Verified** not yet: the
-> five proofs below have not been run · **Kind:** how-to
+> `SecurityStackBlind` alert says the stack has stopped seeing anything · **Verified** partly: proof 5
+> ran on 2026-11-27, proofs 1–4 have not · **Kind:** how-to
 >
 > **Sources** `cluster/helm/security/crowdsec/values.yaml`, `ansible/roles/crowdsec/tasks/main.yml`,
 > `ansible/roles/crowdsec/templates/bouncer.yaml.j2`, `cluster/helm/monitoring/prometheus/values.yaml`
 
-**Status: pending — the five proofs below have not been run.**
+**Status: pending — proof 5 was run on 2026-11-27; proofs 1–4 have not been run.**
 
 Three pieces do the work. The **agent** reads one file and turns a pattern it recognises into a
 **decision** (CrowdSec's instruction to refuse one address for a while). The **LAPI** (CrowdSec's
@@ -80,15 +80,24 @@ the burst in proof 3 come from a LAN machine.
    addresses and no local one. A decision already in the table is *not* retroactively removed, which
    is why the check reads the list and not a count.
 
+   **2026-11-27 — proved.** `kubectl -n security logs deploy/crowdsec-lapi | grep 'loaded capi
+   whitelist'` printed `loaded capi whitelist from /etc/crowdsec_data/capi_whitelists.yaml: 4 IPs,
+   4 CIDRs`, with the deprecation warning beside it. The same grep before the config was corrected
+   printed nothing, while the first pull had already inserted 15,000 entries unfiltered — which is
+   why this line, and not the list, is the check that the file is read at all. The list then answered
+   `no guarded address` for all four ranges, and `fw_bouncer_banned_ips{origin="CAPI"}` stood at
+   14,653.
+
 ## When these were last run
 
-Not yet. The page ships with the layer, so nothing above has been observed on this cluster: it is
-what the code is meant to do, not a record of a ban. After the stack converges the operator runs the
-five proofs, writes one dated line per proof under the list above with the command and the output it
-gave, and the shelf row's status becomes `proved <date>`; in the same commit this opening sentence
-becomes the dated result, and the banner's **Verified** and this page's **Status:** line are replaced
-by that date, so a `proved` shelf row never sits above a body that still says the proofs were never
-run. One proof that fails is a fix to the chart or the role, not a note here.
+Proof 5 was run on 2026-11-27, with its command and its output under it. Proofs 1–4 have not been
+run, so apart from proof 5 nothing above has been observed on this cluster: it is what the code is
+meant to do, not a record of a ban. When the other four are run, the operator writes one dated line
+per proof under the list above with the command and the output it gave, and the shelf row's status
+becomes `proved <date>`; in the same commit this opening sentence becomes the dated result, and the
+banner's **Verified** and this page's **Status:** line are replaced by that date, so a `proved` shelf
+row never sits above a body that still says the proofs were never run. One proof that fails is a fix
+to the chart or the role, not a note here.
 
 ## Undo a ban
 
