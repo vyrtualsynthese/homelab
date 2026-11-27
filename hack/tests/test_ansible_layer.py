@@ -363,7 +363,7 @@ def test_firewall_covers_every_port_k3s_needs():
 
 def test_firewall_leaves_the_container_ports_alone():
     rules = yaml.safe_load((ANSIBLE / "roles/firewall/vars/main.yml").read_text())
-    edge = {(r["port"], r["proto"]) for r in rules["firewall_rules_edge"]}
+    edge = {(r.get("port"), r["proto"]) for r in rules["firewall_rules_edge"]}
     assert (22, "tcp") in edge and (53, "udp") in edge
     assert (5000, "tcp") not in edge, "5000 is DNAT, not INPUT: a rule for it filters nothing"
     assert (51821, "udp") not in edge, "the tunnel is a published container port, so ufw never sees it"
@@ -519,7 +519,7 @@ def test_the_edge_firewall_keeps_the_host_exporters_reachable():
     port they reach INPUT. Prometheus scrapes both on both Pis; default deny
     without a rule takes them off the monitoring silently."""
     rules = yaml.safe_load((ANSIBLE / "roles/firewall/vars/main.yml").read_text())
-    edge = {(r["port"], r["proto"]): r["source"] for r in rules["firewall_rules_edge"]}
+    edge = {(r.get("port"), r["proto"]): r["source"] for r in rules["firewall_rules_edge"]}
     assert edge[(9100, "tcp")] == "nodes"
     assert edge[(9323, "tcp")] == "nodes"
 
@@ -543,12 +543,93 @@ def test_every_firewall_rule_names_a_source_set_that_resolves():
     rules = yaml.safe_load((ANSIBLE / "roles/firewall/vars/main.yml").read_text())
     defined = set()
     resolve = (ANSIBLE / "roles/firewall/tasks/resolve.yml").read_text()
-    for name in ("lan", "nodes", "servers", "vpn", "panel"):
+    for name in ("lan", "nodes", "servers", "vpn", "panel", "peer"):
         assert f"'{name}':" in resolve, f"resolve.yml defines no source set {name!r}"
         defined.add(name)
     for key in ("firewall_rules_cluster", "firewall_rules_edge", "firewall_rules_nas"):
         for rule in rules[key]:
             assert rule["source"] in defined, f"{key}: unknown source {rule['source']!r}"
+
+
+def ansible_extract(key, container, *morekeys):
+    """`ansible.builtin.extract`, which `map('extract', hostvars, 'ansible_host')`
+    calls. Jinja does not ship it, so an expression read out of a task file needs
+    it registered before it will evaluate outside Ansible."""
+    value = container[key]
+    for morekey in morekeys:
+        value = value[morekey]
+    return value
+
+
+def test_the_peer_source_set_is_the_other_pi():
+    """`peer` is what makes the VRRP rule one host's advertisement reaching the
+    other and not itself. Compiling the expression instead of restating it is
+    the point: a Python re-implementation of the resolution agrees with a broken
+    `resolve.yml`, and the rule then either admits nothing or admits both hosts
+    as masters of one address."""
+    tasks = load("roles/firewall/tasks/resolve.yml")
+    resolve = next(t for t in tasks if t.get("name", "").startswith("Resolve every named source set"))
+    template = resolve["ansible.builtin.set_fact"]["firewall_entries"]
+    peer = re.search(r"\{%-\s*set peer = (?P<expression>.*?)-\%\}", template, re.S)
+    assert peer, "resolve.yml no longer spells `peer` as a `set` of its own"
+    assert re.search(r"'peer':\s*peer\b", template), (
+        "the source set table no longer reads the `peer` set it resolves"
+    )
+
+    inventory = load("inventory/hosts.yml")["all"]["children"]
+    hostvars = {
+        name: {"ansible_host": spec["ansible_host"]}
+        for group in inventory.values()
+        for name, spec in group["hosts"].items()
+    }
+    groups = {name: list(group["hosts"]) for name, group in inventory.items()}
+    groups["all"] = sorted(hostvars)
+
+    environment = jinja2.Environment()
+    environment.filters["extract"] = ansible_extract
+    other_pi = environment.compile_expression(peer["expression"])
+    for host, expected in (("rbp0", "rbp1"), ("rbp1", "rbp0")):
+        assert other_pi(
+            groups=groups, hostvars=hostvars, ansible_host=hostvars[host]["ansible_host"]
+        ) == [hostvars[expected]["ansible_host"]], (
+            f"the peer set of {host} is not the other Pi alone"
+        )
+
+
+def test_the_portless_rule_hands_ufw_a_protocol_and_no_port():
+    """`resolve.yml` writes `port: None` for a rule declared without one, and
+    Jinja's `default` only replaces *undefined*: `default(omit)` passes None on,
+    ufw reads it as a port, and the VRRP rule filters nothing while its label
+    prints `None/vrrp`."""
+    tasks = yaml.safe_load((ANSIBLE / "roles/firewall/tasks/main.yml").read_text())
+    apply = next(
+        task for task in tasks
+        if isinstance(task, dict) and "loop" in task and "community.general.ufw" in task
+    )
+
+    def expression(value):
+        """The task files write `"{{ expression }}"`; the expression is what is
+        evaluated, the braces are not."""
+        text = value.strip()
+        assert text.startswith("{{") and text.endswith("}}"), text
+        return jinja2.Environment().compile_expression(text[2:-2].strip())
+
+    omit = object()
+    port = expression(apply["community.general.ufw"]["port"])
+    label = jinja2.Template(apply["loop_control"]["label"])
+
+    vrrp = {
+        "port": None,
+        "proto": "vrrp",
+        "from": "192.168.1.38",
+        "comment": "VRRP advertisements from the other edge host",
+    }
+    assert port(item=vrrp, omit=omit) is omit, "None reached ufw as a port"
+    assert label.render(item=vrrp) == "proto/vrrp from 192.168.1.38"
+
+    https = {"port": 443, "proto": "tcp", "from": "10.8.0.0/24", "comment": "x"}
+    assert port(item=https, omit=omit) == 443, "a real port must survive"
+    assert label.render(item=https) == "443/tcp from 10.8.0.0/24"
 
 
 def test_every_export_maps_the_squashed_root_to_the_writer():

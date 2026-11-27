@@ -1012,7 +1012,7 @@ def firewall_commands(host="rbp0"):
     return [line for line in block.splitlines() if line.startswith("ufw ")]
 
 
-def expected_firewall_commands():
+def expected_firewall_commands(host="rbp0"):
     """The edge rule set resolved the way `roles/firewall/tasks/resolve.yml`
     resolves it: one rule per address, in inventory order."""
     rules = yaml.safe_load(
@@ -1028,14 +1028,22 @@ def expected_firewall_commands():
     edge = yaml.safe_load(
         (REPO / "ansible/inventory/group_vars/edge.yml").read_text()
     )
+    hosts = {
+        name: spec["ansible_host"] for name, spec in inventory["edge"]["hosts"].items()
+    }
+    peer = [address for name, address in hosts.items() if name != host]
     sources = {
         "lan": [lan],
         "nodes": cluster,
         "vpn": edge["vpn_cidrs"],
         "panel": edge["panel_cidrs"],
+        "peer": peer,
     }
     return [
         f"ufw allow from {address} to any port {rule['port']} "
+        f"proto {rule['proto']} comment '{rule['comment']}'"
+        if "port" in rule
+        else f"ufw allow from {address} "
         f"proto {rule['proto']} comment '{rule['comment']}'"
         for rule in rules
         for address in sources[rule["source"]]
@@ -1046,7 +1054,31 @@ def test_the_pi_and_the_ansible_layer_allow_the_same_ports():
     """The Pis cannot be reached by the layer, so `hosts-pi.sh` carries the rule
     set and the role keeps the record. A change to one alone leaves half the
     fleet on the other, which is the state both hosts were in before this."""
-    assert firewall_commands() == expected_firewall_commands()
+    for host in ("rbp0", "rbp1"):
+        assert firewall_commands(host) == expected_firewall_commands(host), host
+
+
+VRRP_LINE = "ufw allow from %s proto vrrp comment 'VRRP advertisements from the other edge host'"
+
+
+def test_the_vrrp_rule_names_a_protocol_not_a_port():
+    """VRRP is IP protocol 112. `port 112 proto udp` matches nothing, the default
+    deny drops every advertisement, and both hosts claim the address."""
+    block = rendered_section("rbp0", FIREWALL_HEADER)
+    assert VRRP_LINE % "192.168.1.38" in block, block
+    assert "192.168.1.22 proto vrrp" not in block, block
+    assert "112/udp" not in block, block
+    assert VRRP_LINE % "192.168.1.22" in rendered_section("rbp1", FIREWALL_HEADER)
+
+
+def test_the_vrrp_rule_is_declared_without_a_port():
+    rules = yaml.safe_load(
+        (REPO / "ansible/roles/firewall/vars/main.yml").read_text()
+    )["firewall_rules_edge"]
+    vrrp = [rule for rule in rules if rule["proto"] == "vrrp"]
+    assert len(vrrp) == 1
+    assert "port" not in vrrp[0]
+    assert vrrp[0]["source"] == "peer"
 
 
 def test_the_edge_rule_set_opens_piholes_https_port():
@@ -1056,7 +1088,9 @@ def test_the_edge_rule_set_opens_piholes_https_port():
     rules = yaml.safe_load(
         (REPO / "ansible/roles/firewall/vars/main.yml").read_text()
     )["firewall_rules_edge"]
-    https = {(rule["source"], rule["proto"]) for rule in rules if rule["port"] == 443}
+    https = {
+        (rule["source"], rule["proto"]) for rule in rules if rule.get("port") == 443
+    }
     assert https == {("lan", "tcp"), ("vpn", "tcp")}
 
 
@@ -1068,7 +1102,7 @@ def test_the_edge_rule_set_admits_dns_from_the_panel_network():
     rules = yaml.safe_load(
         (REPO / "ansible/roles/firewall/vars/main.yml").read_text()
     )["firewall_rules_edge"]
-    dns = {(rule["source"], rule["proto"]) for rule in rules if rule["port"] == 53}
+    dns = {(rule["source"], rule["proto"]) for rule in rules if rule.get("port") == 53}
     assert dns == {
         ("lan", "tcp"),
         ("lan", "udp"),
@@ -1132,8 +1166,13 @@ case "$1" in
     fi
     ;;
   allow)
-    printf "ufw allow from %s to any port %s proto %s comment '%s'\\n" \\
-      "$3" "$7" "$9" "${11}" >> "$UFW_STATE/added"
+    if [ "$4" = "to" ]; then
+      printf "ufw allow from %s to any port %s proto %s comment '%s'\\n" \\
+        "$3" "$7" "$9" "${11}" >> "$UFW_STATE/added"
+    else
+      printf "ufw allow from %s proto %s comment '%s'\\n" \\
+        "$3" "$5" "$7" >> "$UFW_STATE/added"
+    fi
     ;;
   default)
     printf '%s\\n' "$2 $3" >> "$UFW_STATE/defaults"
@@ -1157,7 +1196,7 @@ def test_ensure_firewall_applies_every_rule_and_is_idempotent(tmp_path):
     stub.write_text(UFW_STUB)
     stub.chmod(0o755)
     env = dict(os.environ, PATH=f"{bin_dir}:{os.environ['PATH']}",
-               UFW_STATE=str(state), SSH_CLIENT="")
+               UFW_STATE=str(state), SSH_CLIENT="", FIREWALL_HOST="rbp0")
     code = (
         f'source "{SCRIPT}"; ROOT=""; CHANGED=0; '
         "ensure_firewall >/dev/null; echo first=$CHANGED; "
@@ -1166,7 +1205,7 @@ def test_ensure_firewall_applies_every_rule_and_is_idempotent(tmp_path):
     out = subprocess.run(["bash", "-c", code], capture_output=True, text=True, env=env)
 
     assert out.returncode == 0, out.stderr
-    assert "first=21" in out.stdout, out.stdout  # 19 rules, the defaults, the enable
+    assert "first=22" in out.stdout, out.stdout  # 20 rules, the defaults, the enable
     assert "second=0" in out.stdout, out.stdout
     assert sorted((state / "added").read_text().splitlines()) == sorted(
         firewall_commands()

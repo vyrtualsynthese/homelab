@@ -197,7 +197,9 @@ In `vars/main.yml`, append to `firewall_rules_edge` the one entry with `proto: v
 `source: peer` and that comment, preceded by a comment explaining 112 is a protocol.
 In `resolve.yml`, add `'peer': groups['edge'] | map('extract', hostvars, 'ansible_host') | reject('equalto', ansible_host) | list`
 to `sources` and `'port': rule.port | default(none)` to the appended dict; in `tasks/main.yml`, use
-`port: "{{ item.port | default(omit) }}"` and label `"{{ item.port | default('proto') }}/{{ item.proto }}"`.
+`port: "{{ item.port | default(omit, true) }}"` and label
+`"{{ item.port | default('proto', true) }}/{{ item.proto }} from {{ item.from }}"` — the `true` is what
+makes a rule's `port: None` (from `resolve.yml`) reach ufw as omitted rather than as a port.
 In `hosts-pi.sh`: add `EDGE_ADDRESSES="192.168.1.22 192.168.1.38"`, `FIREWALL_HOST=""`,
 `host_address()` and `peer_address()`; add the table row `|vrrp|peer|VRRP advertisements from the other edge host`
 (empty port field); teach `firewall_source_addresses` the `peer` case; and branch `ufw_rule_line` on an
