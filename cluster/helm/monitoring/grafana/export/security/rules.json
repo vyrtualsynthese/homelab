@@ -18,7 +18,7 @@
         "datasourceUid": "PBFA97CFB590B2093",
         "model": {
           "editorMode": "code",
-          "expr": "delta(sum(fw_bouncer_banned_ips)[10m:1m])",
+          "expr": "delta(sum(cs_active_decisions{origin=\"crowdsec\"})[10m:1m])",
           "instant": true,
           "intervalMs": 1000,
           "maxDataPoints": 43200,
