@@ -75,10 +75,10 @@ ingressRoute:
   enabled: true
   # -- API group. The cluster runs Traefik 3, which serves `traefik.io/v1alpha1`.
   apiVersion: traefik.io/v1alpha1
-  # -- Traefik entry points. `web` is plain HTTP on kub.local; `websecure` is TLS.
+  # -- Traefik entry points. `web` is plain HTTP on kub.internal; `websecure` is TLS.
   entryPoints:
     - websecure
-  # -- Internal only: the host is a .kub.local name, served by the cluster's own
+  # -- Internal only: the host is a .kub.internal name, served by the cluster's own
   # certificate, so this UI is never reachable from the internet by name.
   host: crowdsec.kub.internal
   # -- Path prefix. `/` matches everything.
@@ -97,7 +97,7 @@ ingressRoute:
   labels: {}
   annotations: {}
   tls:
-    # -- TLS on `websecure`, from the cluster's default `*.kub.local` certificate
+    # -- TLS on `websecure`, from the cluster's default `*.kub.internal` certificate
     # (`kube-system/local-cert`). See docs/runbooks/internal-ca.md.
     enabled: true
     # -- Use a pre-existing certificate instead of Traefik's default.

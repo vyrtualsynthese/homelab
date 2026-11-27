@@ -28,9 +28,9 @@ Then the dashboards, from anything on fire, to whose logs are noisy, to the hard
 
 | Order | Dashboard | What you are looking for |
 |---|---|---|
-| 1 | [Homelab · Health](https://grafana.kub.local/d/homelab-health) | the four counts, then the firing list: only the accepted faults below, and nothing to do |
-| 2 | [Homelab · Logs](https://grafana.kub.local/d/homelab-logs) | errors and warnings by container — an unfamiliar container name is the day's clue |
-| 3 | [Homelab · Disks](https://grafana.kub.local/d/homelab-disks) | life and temperature per drive; one is at its end, and a second going is the day's news |
+| 1 | [Homelab · Health](https://grafana.kub.internal/d/homelab-health) | the four counts, then the firing list: only the accepted faults below, and nothing to do |
+| 2 | [Homelab · Logs](https://grafana.kub.internal/d/homelab-logs) | errors and warnings by container — an unfamiliar container name is the day's clue |
+| 3 | [Homelab · Disks](https://grafana.kub.internal/d/homelab-disks) | life and temperature per drive; one is at its end, and a second going is the day's news |
 
 What the commands print is the whole truth of the moment; there is no written page between you and
 the cluster, and nothing to distrust but your memory of the last look.
@@ -76,7 +76,7 @@ Three steps, in this order:
 1. **The alert.** It arrives in Discord; a critical also opens a card in the board's `alerts`
    project. The rule name and labels name the object, not the cause.
 2. **The dashboard.** Health confirms the state,
-   [Applications](https://grafana.kub.local/d/homelab-applications) narrows to one namespace, Logs
+   [Applications](https://grafana.kub.internal/d/homelab-applications) narrows to one namespace, Logs
    carries the container's own words. A rule is coarser than its fault: `PodPending` covers a claim
    that cannot bind and a container that cannot start.
 3. **The board.** One card for the fault, in the project the work belongs to, in `Backlog`: what the

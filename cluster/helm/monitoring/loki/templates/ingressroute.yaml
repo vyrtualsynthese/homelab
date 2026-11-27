@@ -2,7 +2,7 @@
 Two routers for one host: the TLS one serves Loki, the plain-HTTP one only
 redirects to it. Neither sets `secretName` nor `certResolver`, so Traefik falls
 back to the cluster default certificate `kube-system/local-cert` — the
-`*.kub.local` leaf signed by the ashulab internal CA. See
+`*.kub.internal` leaf signed by the ashulab internal CA. See
 docs/runbooks/internal-ca.md.
 
 `authentik-forwardauth` is the gate: the store holds every namespace's logs for

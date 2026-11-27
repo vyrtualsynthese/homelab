@@ -146,7 +146,7 @@ argo-cd:
   # Traefik IngressRoutes for the server, replacing the chart's core Ingress. The
   # TLS router sets neither `secretName` nor `certResolver` on purpose: Traefik then
   # serves it the cluster default certificate `kube-system/local-cert`, the
-  # `*.kub.local` leaf signed by the ashulab internal CA. See
+  # `*.kub.internal` leaf signed by the ashulab internal CA. See
   # docs/runbooks/internal-ca.md.
   extraObjects:
     - apiVersion: traefik.io/v1alpha1

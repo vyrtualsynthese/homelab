@@ -71,7 +71,7 @@ wrong.
 
 ```bash
 set -a; . ~/.config/secrets/homelab.env; set +a
-B=https://grafana.kub.local
+B=https://grafana.kub.internal
 CA=~/.config/secrets/kub-local/local-ca.pem
 
 curl -s --cacert "$CA" -X POST -H "Authorization: Bearer $GRAFANA_TOKEN" \

@@ -1,13 +1,15 @@
-# The internal CA behind `*.kub.local`
+# The internal CA behind `*.kub.internal`
 
-> **In one line.** One private root vouches for every internal name: Traefik serves its `*.kub.local`
-> leaf, and a host that is not the cluster gets a leaf of its own — while the root key is the one file
-> that has to be backed up twice, because nothing regenerates it.
+> **In one line.** One private root vouches for every internal name: Traefik serves its `*.kub.internal`
+> leaf (with `*.kub.local` beside it in the SAN until the soak ends), and a host that is not the cluster
+> gets a leaf of its own — while the root key is the one file that has to be backed up twice, because
+> nothing regenerates it.
 >
 > **Use it when** a certificate expires or has to be reissued, a client must trust the root, or a host
-> outside the cluster needs a name it can prove. **Verified** 2026-11-26: the generator run end to end
-> into a scratch directory for both the cluster leaf and a host leaf, each chain verified against the
-> root, and the host leaf served by Caddy on 8443. **Kind:** reference
+> outside the cluster needs a name it can prove. **Verified** 2026-11-27: the SAN line and the leaf's
+> file names read in `hack/internal-cert.sh`, and both zone wildcards in `02-my-wildcard-dns.conf`; the
+> generator itself was run end to end on 2026-11-26 for the cluster leaf and a host leaf, each chain
+> verified against the root, and the host leaf served by Caddy on 8443. **Kind:** reference
 >
 > **Sources** `hack/internal-cert.sh`, `ansible/pi/hosts-pi.sh`,
 > `ansible/playbooks/templates/runners/Caddyfile`,
@@ -20,29 +22,33 @@ Date: 2026-11-15
 ## What it is
 
 `kube-system/local-cert` is the cluster's **default** certificate. Traefik serves it on the `websecure`
-entry point to any TLS router that sets neither `secretName` nor `certResolver`. Since 2026-11-15 that is
-every `kub.local` route in the `media-stack` namespace — sonarr, radarr, lidarr, prowlarr, bazarr,
+entry point to any TLS router that sets neither `secretName` nor `certResolver`. Since 2026-11-15 every
+route in the `media-stack` namespace has fallen through to it — sonarr, radarr, lidarr, prowlarr, bazarr,
 bazarr-anime, sonarr-anime, radarr-anime, tautulli, maintainerr, autobrr, qbittorrent and calibre — with
 each `web` router redirecting to its `websecure` twin. Argo CD joined them on 2026-11-16: its server
-router serves no certificate of its own either, and its `argocd.kub.local` address must be the TLS one,
+router serves no certificate of its own either, and its `argocd.kub.internal` address must be the TLS one,
 because the server compares the SSO return URL against it scheme included. Grafana followed on
 2026-11-17 for the same reason: its `root_url` and the authentik redirect URI must carry the scheme the
 browser uses, and the plain-HTTP router now only redirects.
 
 It is a **private** certificate, and it has to be: public certificate authorities have been barred from
-issuing for internal names (`.local`, `.internal`, `.localhost`) since 2015, so a `.local` name can never
-be trusted by a fresh client without giving that client a root first. That root is what this document is
-about.
+issuing for internal names (`.internal`, `.local`, `.localhost`) since 2015, so an internal name can
+never be trusted by a fresh client without giving that client a root first. That root is what this
+document is about.
 
 | | |
 |---|---|
 | Root | `CN = ashulab internal CA` (`O = ashulab internal`), valid 2026-11-15 → 2036-11-12 |
 | Root SHA-256 | `F6:B5:71:D0:CD:0B:B9:BF:5C:CD:93:38:04:1E:69:6B:1A:51:FD:3D:C3:72:71:83:38:2E:EF:B9:EB:50:7B:F7` |
-| Leaf | `CN = kub.local`, SAN `*.kub.local`, `*.app.local`, `localhost`, `127.0.0.1`, valid 2026-11-15 → 2028-11-14 |
-| Leaf SHA-256 | `5E:37:B6:F4:01:17:16:C6:D3:AD:E4:E8:C7:0C:17:89:C0:51:CE:F4:CD:72:86:2C:EA:4B:3B:68:C5:0F:45:C8` |
+| Leaf | `CN = kub.local`, SAN `*.kub.internal`, `*.kub.local`, `*.app.local`, `localhost`, `127.0.0.1`, valid 2026-11-15 → 2028-11-14 |
 | Files | `~/.config/secrets/kub-local/` — `local-ca.pem`, `local-ca-key.pem`, `kub.local.pem`, `kub.local-key.pem` |
 | Generator | `hack/internal-cert.sh` (OpenSSL, no third-party tool) |
 | Clients trust | the **root**, `local-ca.pem`, installed once per client |
+
+The common name and the file names still say `kub.local`; the names the leaf answers are in the SAN.
+`*.kub.local` stays there, and the old zone's wildcard redirect stays in `traefik-gate`, until the soak
+ends. The script prints the leaf's fingerprint when it signs one, and that value changes with every
+renewal, so only the root's fingerprint above is a constant to compare against.
 
 ## Why this document exists
 
@@ -84,10 +90,10 @@ openssl x509 -in local-ca.pem -noout -fingerprint -sha256
 # must print the root fingerprint from the table above
 
 # sign a throwaway leaf with the restored key and prove the chain
-openssl req -new -newkey rsa:2048 -nodes -keyout drill.key -out drill.csr -subj "/CN=drill.kub.local" >/dev/null 2>&1
+openssl req -new -newkey rsa:2048 -nodes -keyout drill.key -out drill.csr -subj "/CN=drill.kub.internal" >/dev/null 2>&1
 openssl x509 -req -in drill.csr -CA local-ca.pem -CAkey local-ca-key.pem -CAcreateserial \
   -days 1 -sha256 -out drill.crt \
-  -extfile <(printf 'subjectAltName=DNS:drill.kub.local\nbasicConstraints=critical,CA:FALSE\n') >/dev/null 2>&1
+  -extfile <(printf 'subjectAltName=DNS:drill.kub.internal\nbasicConstraints=critical,CA:FALSE\n') >/dev/null 2>&1
 openssl verify -CAfile local-ca.pem drill.crt        # expect: drill.crt: OK
 rm -rf /tmp/ca-drill
 ```
@@ -113,7 +119,7 @@ is rejected with `field is immutable`. `--save-config` records the last-applied 
 Traefik picks the new Secret up without a restart. Confirm:
 
 ```bash
-openssl s_client -connect 192.168.1.46:443 -servername calibre.kub.local </dev/null 2>/dev/null \
+openssl s_client -connect 192.168.1.46:443 -servername calibre.kub.internal </dev/null 2>/dev/null \
   | openssl x509 -noout -issuer -dates
 ```
 
@@ -130,7 +136,7 @@ the new `local-ca.pem`. Nothing else changes — the host names, the routes and 
 
 The two edge Pis terminate TLS for two admin surfaces of their own, so each needs names the internal
 root vouches for: the wg-easy panel behind Caddy on 8443, and Pi-hole's own panel and API on 443. They
-get their own leaves, not a copy of the wildcard: the `*.kub.local` key on an edge host would be a key
+get their own leaves, not a copy of the wildcard: the `*.kub.internal` key on an edge host would be a key
 to every internal name, and the leaf is disposable by design.
 
 ```bash
@@ -167,7 +173,7 @@ stack, so a leaf that expired before the reflash comes back expired.
 
 The names are Pi-hole's to answer: `02-my-wildcard-dns.conf` maps `vpn-rbp0.kub.local`,
 `vpn-rbp1.kub.local`, `pihole-rbp0.kub.local` and `pihole-rbp1.kub.local` to the two Pis, above the
-`*.kub.local` wildcard that points at the router.
+`kub.internal` and `kub.local` wildcards that point at the router.
 
 A replaced Pi-hole leaf also changes the pin in `hack/pihole/<host>.pem`: `hack/check_pihole_parity.py`
 trusts each panel's own certificate and nothing else, so re-export both after the change and commit

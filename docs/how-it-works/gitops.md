@@ -109,4 +109,4 @@ Then `hack/check-exposure.sh`, which fails if a non-public route lost the LAN ga
 
 The branch, pull request and merge steps are in the workstation contract
 (`~/.config/opencode/AGENTS.md`) §Git workflow; the board steps are in its §Task board, with the long
-form on [The board and worktrees](https://docs.kub.local/config/develop/agent/board-and-worktrees/).
+form on [The board and worktrees](https://docs.kub.internal/config/develop/agent/board-and-worktrees/).

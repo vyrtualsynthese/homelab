@@ -36,7 +36,7 @@ chart sets is an environment variable rendered inline in the pod template.
 
 ## Routing: gated, and no `/api` exemption
 
-`https://qbittorrent.kub.local`, TLS from the cluster default certificate, with `web` only
+`https://qbittorrent.kub.internal`, TLS from the cluster default certificate, with `web` only
 redirecting. Two middlewares, in this order:
 
 1. `kube-system-lan-only@kubernetescrd` — the network floor. An off-LAN request is refused with
@@ -218,9 +218,9 @@ To re-measure (Prometheus is on `nas`):
 
 ```bash
 set -a; . ~/.config/secrets/homelab.env; set +a
-curl -sG -u "ops:$PROMETHEUS_AUTH_PASSWORD" http://prometheus.kub.local/api/v1/query --data-urlencode \
+curl -sG -u "ops:$PROMETHEUS_AUTH_PASSWORD" http://prometheus.kub.internal/api/v1/query --data-urlencode \
   'query=max_over_time(container_memory_working_set_bytes{namespace="media-stack",pod=~"qbittorrent-.*",container="qbittorrent"}[5d])/2^20'
-curl -sG -u "ops:$PROMETHEUS_AUTH_PASSWORD" http://prometheus.kub.local/api/v1/query --data-urlencode \
+curl -sG -u "ops:$PROMETHEUS_AUTH_PASSWORD" http://prometheus.kub.internal/api/v1/query --data-urlencode \
   'query=rate(container_cpu_usage_seconds_total{namespace="media-stack",pod=~"qbittorrent-.*",container="qbittorrent"}[5m])'
 ```
 

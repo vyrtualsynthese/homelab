@@ -4,7 +4,10 @@
 > rendering its chart from git and applying it by hand — the controller cannot restore itself.
 >
 > **Use it when** the controller is down, its Application is gone, or a sync cannot repair it ·
-> **Status:** pending — the rebuild has not been run · **Verified:** never
+> **Status:** pending — the rebuild has not been run · **Verified:** never · **Kind:** how-to
+>
+> **Sources** `cluster/argocd/projects/platform/argocd.yaml`, `cluster/helm/argocd/`,
+> [`how-it-works/gitops.md`](../how-it-works/gitops.md)
 
 ## What owns what
 
@@ -74,7 +77,7 @@ The chart carries its CRDs in `templates/`, so the apply creates them too; no `-
 separate `kubectl apply -k` are needed. Expected: `argocd-server`, `argocd-repo-server`,
 `argocd-redis`, `argocd-dex-server`, `argocd-notifications-controller` and
 `argocd-applicationset-controller` as Deployments, `argocd-application-controller` as a StatefulSet,
-all `1/1` once the rollout finishes. Sign in at `https://argocd.kub.local`.
+all `1/1` once the rollout finishes. Sign in at `https://argocd.kub.internal`.
 
 ### The values file only works through the wrapper
 

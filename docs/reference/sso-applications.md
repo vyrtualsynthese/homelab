@@ -27,33 +27,33 @@ absent from this table has no single sign-on at all — no provider, no gate —
 
 | Application | Mechanism | State | Route |
 |---|---|---|---|
-| Argo CD | OIDC, through the Dex broker it bundles | configured; `admin.enabled: "false"` | `argocd.kub.local` |
-| autobrr | OIDC | configured | `autobrr.kub.local` |
-| Calibre-Web Automated | OIDC | configured, verified live 2026-11-15; its own password kept as break-glass | `calibre.kub.local` |
-| CrowdSec Web UI | OIDC | blueprint `app-crowdsec-web-ui`; password form off, Admins only, `unmatchedRole: deny`; no gate, so the app is its own sign-in | `crowdsec.kub.local` |
+| Argo CD | OIDC, through the Dex broker it bundles | configured; `admin.enabled: "false"` | `argocd.kub.internal` |
+| autobrr | OIDC | configured | `autobrr.kub.internal` |
+| Calibre-Web Automated | OIDC | configured, verified live 2026-11-15 under the old `calibre.kub.local` name; its own password kept as break-glass | `calibre.kub.internal` |
+| CrowdSec Web UI | OIDC | blueprint `app-crowdsec-web-ui`; password form off, Admins only, `unmatchedRole: deny`; no gate, so the app is its own sign-in | `crowdsec.kub.internal` |
 | FreshRSS | OIDC | configured 2026-11-19 — its own OIDC through the official image; no gate, `/api` keeps its own login | `freshrss.kub.home.ashudev.com` |
-| Grafana | OIDC | configured; every sign-in lands as a **Viewer** | `grafana.kub.local` |
+| Grafana | OIDC | configured; every sign-in lands as a **Viewer** | `grafana.kub.internal` |
 | Kavita | OIDC | configured 2026-11-15; password login disabled | `kavita.kub.home.ashudev.com` |
-| pgAdmin | OIDC | configured; no local login left | `pgadmin.kub.local` |
-| Radarr | OIDC | configured 2026-11-18 — Radarr 7's own OIDC; the forward-auth gate and the app's login are gone, `/api` exempt | `radarr.kub.local` |
-| Radarr (anime) | OIDC | configured 2026-11-18 — same settings as Radarr, own client id; `/api` exempt | `radarr-anime.kub.local` |
-| Vikunja | OIDC | done 2026-11-16 — gate removed, subject linked to the original account; the blueprint in git describes this provider since 2026-11-20 | `vikunja.kub.local` |
+| pgAdmin | OIDC | configured; no local login left | `pgadmin.kub.internal` |
+| Radarr | OIDC | configured 2026-11-18 — Radarr 7's own OIDC; the forward-auth gate and the app's login are gone, `/api` exempt | `radarr.kub.internal` |
+| Radarr (anime) | OIDC | configured 2026-11-18 — same settings as Radarr, own client id; `/api` exempt | `radarr-anime.kub.internal` |
+| Vikunja | OIDC | done 2026-11-16 — gate removed, subject linked to the original account; the blueprint in git describes this provider since 2026-11-20 | `vikunja.kub.internal` |
 | FileBrowser | OIDC | configured 2026-11-19 — FileBrowser Quantum, password form off, so the browser redirects straight to authentik; `filebrowser-editors` admits the editor, whose folder scope is set inside the app | `filebrowser.kub.home.ashudev.com` |
 | VPN panel (wg-easy) | none, by decision | local login only: no OIDC provider exists and none is created, because the edge must open with the cluster down ([the record](../decisions/2026-11-26-edge-pis-local-auth-only.md)). TLS ends on the Pi itself (Caddy, 8443) | `vpn-rbp0.kub.local:8443`, `vpn-rbp1.kub.local:8443` |
-| Bazarr | forward-auth gate | configured; its own login is off; `/api` exempt | `bazarr.kub.local` |
-| Bazarr (anime) | forward-auth gate | configured; no login of its own; `/api` exempt | `bazarr-anime.kub.local` |
-| Docs site (MkDocs) | forward-auth gate | live since 2026-11-17 — blueprint `app-docs`, Admins only | `docs.kub.local` |
-| Lidarr | forward-auth gate | configured; its own login is off; `/api` exempt | `lidarr.kub.local` |
-| Loki | forward-auth gate | configured 2026-11-22 — blueprint `app-loki`, Admins only; no `/api` exemption, because the query API is exactly what the gate protects; the tile opens Grafana's Logs Drilldown, since Loki serves no page at `/ui` | `loki.kub.local` |
-| Maintainerr | forward-auth gate | **to verify** before the next touch — it has no login of its own; `/api` exempt since 2026-11-15 | `maintainerr.kub.local` |
-| Prowlarr | forward-auth gate | configured; its own login is off; `/api` exempt; its probes carry a `Host` header | `prowlarr.kub.local` |
-| Sonarr | forward-auth gate | configured; its own login is off; `/api` exempt | `sonarr.kub.local` |
-| Tautulli | none | by decision: no gate and no authentik object; `lan-only` stays, and Tautulli's own login is the gate because a gate would collapse per-user history | `tautulli.kub.local` |
+| Bazarr | forward-auth gate | configured; its own login is off; `/api` exempt | `bazarr.kub.internal` |
+| Bazarr (anime) | forward-auth gate | configured; no login of its own; `/api` exempt | `bazarr-anime.kub.internal` |
+| Docs site (MkDocs) | forward-auth gate | live since 2026-11-17 — blueprint `app-docs`, Admins only | `docs.kub.internal` |
+| Lidarr | forward-auth gate | configured; its own login is off; `/api` exempt | `lidarr.kub.internal` |
+| Loki | forward-auth gate | configured 2026-11-22 — blueprint `app-loki`, Admins only; no `/api` exemption, because the query API is exactly what the gate protects; the tile opens Grafana's Logs Drilldown, since Loki serves no page at `/ui` | `loki.kub.internal` |
+| Maintainerr | forward-auth gate | **to verify** before the next touch — it has no login of its own; `/api` exempt since 2026-11-15 | `maintainerr.kub.internal` |
+| Prowlarr | forward-auth gate | configured; its own login is off; `/api` exempt; its probes carry a `Host` header | `prowlarr.kub.internal` |
+| Sonarr | forward-auth gate | configured; its own login is off; `/api` exempt | `sonarr.kub.internal` |
+| Tautulli | none | by decision: no gate and no authentik object; `lan-only` stays, and Tautulli's own login is the gate because a gate would collapse per-user history | `tautulli.kub.internal` |
 | The Lounge | LDAP | configured 2026-11-20 — authentik's LDAP outpost `ashulab-ldap` and provider `thelounge-ldap`; the gate is gone and the app's own form is the credential, so the account is the person's own username | `thelounge.kub.home.ashudev.com` |
 | Dashy | forward-auth gate | configured 2026-11-18 — blueprint `app-dashy`, Admins only; the only application whose gate is the public sign-in page, since `dashy.ashudev.com` answers the internet | `dashy.ashudev.com` |
-| qBittorrent | forward-auth gate | configured 2026-11-18 — blueprint `app-qbittorrent`, Admins only; its own login is bypassed for the pod network so the gate is the only prompt, and port-forward still asks (the break-glass); no `/api` exemption because every API client uses the Service name | `qbittorrent.kub.local` |
+| qBittorrent | forward-auth gate | configured 2026-11-18 — blueprint `app-qbittorrent`, Admins only; its own login is bypassed for the pod network so the gate is the only prompt, and port-forward still asks (the break-glass); no `/api` exemption because every API client uses the Service name | `qbittorrent.kub.internal` |
 | Syncthing | forward-auth gate | configured 2026-11-19 — blueprint `app-syncthing`, Admins only; it has no single sign-on of its own, so the gate is the only user check. Its own GUI login stays until the operator removes it, then Insecure Admin Access is what lets Traefik in | `syncthing.kub.home.ashudev.com` |
-| Sonarr (anime) | forward-auth gate | configured 2026-11-18; its own login is off; `/api` exempt | `sonarr-anime.kub.local` |
+| Sonarr (anime) | forward-auth gate | configured 2026-11-18; its own login is off; `/api` exempt | `sonarr-anime.kub.internal` |
 | Plex | none | no gate and no `lan-only`: Plex clients cannot complete a browser sign-in, so the host answers the internet and Plex login is the gate | `plex.kub.home.ashudev.com` |
 | Seerr | none | no gate and no `lan-only`; Plex login is the gate, and local sign-in is off | `seerr.kub.home.ashudev.com` |
 
@@ -61,6 +61,10 @@ Where the application offers no other way in, the password form is closed as wel
 `admin.enabled: "false"` (that built-in user is its only password login) and **Vikunja** has
 `auth.local.enabled: false`. Both leave one route — authentik — so the break-glass for each is a
 configmap or env flip plus a rollout, written next to the setting in the chart.
+
+**The `Route` column names the zone that serves from 2026-11-27.** Every app in this table also answers
+at its old `<app>.kub.local` address during the soak — one wildcard redirect in `traefik-gate` rewrites
+it to the `kub.internal` name, path and query kept — and stops answering when the soak ends.
 
 ## Traps
 
@@ -204,7 +208,7 @@ The migration is five steps, in this order, and the order is the safety:
    makes the discovery document exist:
    `https://authentik.kub.home.ashudev.com/application/o/vikunja-oidc/.well-known/openid-configuration`.
    The provider is cloned from `autobrr-oidc`: `sub_mode: hashed_user_id`, claims in the ID token,
-   strict redirect to `https://vikunja.kub.local/auth/openid/authentik`.
+   strict redirect to `https://vikunja.kub.internal/auth/openid/authentik`.
 
    **A provider created over the API has `grant_types: []`**, and an empty list means no grant is
    ever allowed: every authorize request comes back `invalid_request — The request is otherwise
@@ -240,7 +244,7 @@ The migration is five steps, in this order, and the order is the safety:
      one subject. Retire the newer one by clearing its subject and renaming it; never leave two.
 5. **Done 2026-11-20.** `cluster/helm/authentik/files/app-vikunja.yaml` now declares what the cluster
    runs — the OAuth2 provider `vikunja-oidc` (client id, strict redirect
-   `https://vikunja.kub.local/auth/openid/authentik`, the `openid` and `profile` scopes plus the local
+   `https://vikunja.kub.internal/auth/openid/authentik`, the `openid` and `profile` scopes plus the local
    `vikunja: email verified` one), the application `vikunja-oidc` whose slug names the issuer, and the
    Admins-only binding. The retired forward-auth proxy provider is gone, so re-applying the blueprint
    can no longer re-point the board at a gate.
@@ -266,19 +270,19 @@ session.
 
 | Tool | Route | Protection | The tool's own login |
 |---|---|---|---|
-| calibre | `https://calibre.kub.local` | **OIDC, no gate** — verified live 2026-11-15 | renamed to the authentik username; the password stays as break-glass |
-| sonarr | `https://sonarr.kub.local` | forward-auth; **`/api` exempt** since 2026-11-15 | off |
-| radarr | `https://radarr.kub.local` | **OIDC, no gate** since 2026-11-18; **`/api` exempt** | OIDC; password login off |
-| lidarr | `https://lidarr.kub.local` | forward-auth; **`/api` exempt** since 2026-11-15 | off |
-| prowlarr | `https://prowlarr.kub.local` | forward-auth; **`/api` exempt** since 2026-11-15 | off, probes fixed |
-| bazarr | `https://bazarr.kub.local` | forward-auth; `/api` exempt | none (always was) |
-| bazarr-anime | `https://bazarr-anime.kub.local` | forward-auth; `/api` exempt | none (always was) |
-| tautulli | `https://tautulli.kub.local` | **no gate** since 2026-11-18; `lan-only` alone | its own login; the Plex-only toggle is not in the official docs |
-| maintainerr | `https://maintainerr.kub.local` | forward-auth; **`/api` exempt** (`lan-only` only) since 2026-11-15 | none exists |
-| autobrr | `https://autobrr.kub.local` | **OIDC, no gate** | replaced by OIDC |
-| qbittorrent | `https://qbittorrent.kub.local` | forward-auth since 2026-11-18, no `/api` exemption | bypassed for `10.42.0.0/16` the same day; still asked on localhost, so port-forward is the break-glass |
-| sonarr-anime | `https://sonarr-anime.kub.local` | forward-auth; **`/api` exempt** since 2026-11-18 | off |
-| radarr-anime | `https://radarr-anime.kub.local` | **OIDC, no gate** since 2026-11-18; **`/api` exempt** | OIDC; password login off |
+| calibre | `https://calibre.kub.internal` | **OIDC, no gate** — verified live 2026-11-15, under the old `calibre.kub.local` name | renamed to the authentik username; the password stays as break-glass |
+| sonarr | `https://sonarr.kub.internal` | forward-auth; **`/api` exempt** since 2026-11-15 | off |
+| radarr | `https://radarr.kub.internal` | **OIDC, no gate** since 2026-11-18; **`/api` exempt** | OIDC; password login off |
+| lidarr | `https://lidarr.kub.internal` | forward-auth; **`/api` exempt** since 2026-11-15 | off |
+| prowlarr | `https://prowlarr.kub.internal` | forward-auth; **`/api` exempt** since 2026-11-15 | off, probes fixed |
+| bazarr | `https://bazarr.kub.internal` | forward-auth; `/api` exempt | none (always was) |
+| bazarr-anime | `https://bazarr-anime.kub.internal` | forward-auth; `/api` exempt | none (always was) |
+| tautulli | `https://tautulli.kub.internal` | **no gate** since 2026-11-18; `lan-only` alone | its own login; the Plex-only toggle is not in the official docs |
+| maintainerr | `https://maintainerr.kub.internal` | forward-auth; **`/api` exempt** (`lan-only` only) since 2026-11-15 | none exists |
+| autobrr | `https://autobrr.kub.internal` | **OIDC, no gate** | replaced by OIDC |
+| qbittorrent | `https://qbittorrent.kub.internal` | forward-auth since 2026-11-18, no `/api` exemption | bypassed for `10.42.0.0/16` the same day; still asked on localhost, so port-forward is the break-glass |
+| sonarr-anime | `https://sonarr-anime.kub.internal` | forward-auth; **`/api` exempt** since 2026-11-18 | off |
+| radarr-anime | `https://radarr-anime.kub.internal` | **OIDC, no gate** since 2026-11-18; **`/api` exempt** | OIDC; password login off |
 
 Every route also carries `lan-only`. That middleware allows `192.168.1.0/24` (LAN), `10.8.0.0/24`
 (WireGuard) and `10.42.0.0/16` (pods — see the first trap below).
@@ -301,11 +305,11 @@ The certificate is the cluster default, `kube-system/local-cert`, from the priva
   per-client commands are in `internal-ca.md`.
 - **The `-redirect` routers carry `lan-only` and nothing else.** Putting the gate there would send a
   plain-HTTP visitor through authentik before the redirect, and authentik would send them back to `http`.
-- **The authentik proxy providers say `https://<tool>.kub.local` in `external_host`**, and autobrr's
-  registered callback is `https://autobrr.kub.local/api/auth/oidc/callback`. The outpost takes its session
+- **The authentik proxy providers say `https://<tool>.kub.internal` in `external_host`**, and autobrr's
+  registered callback is `https://autobrr.kub.internal/api/auth/oidc/callback`. The outpost takes its session
   cookie's `Secure` flag from that scheme, and autobrr builds its callback from `X-Forwarded-Proto`; a
   mismatch shows up as a redirect loop or a refused callback.
-- **Anything calling `http://<tool>.kub.local` from a script now gets a `301`.** That includes API clients
+- **Anything calling `http://<tool>.kub.internal` from a script now gets a `301`.** That includes API clients
   that do not follow redirects; switch them to `https://` and give them the root.
 - **The Servarr apps need `ASPNETCORE_FORWARDEDHEADERS_ENABLED=true`** to trust `X-Forwarded-Proto`. ASP.NET
   builds absolute URLs from the scheme it believes in, so without it the login redirect and any absolute
@@ -336,7 +340,7 @@ curl -s -X POST -H "X-Api-Key: $KEY" -H "Content-Length: 0" \
   existing password hash survives.
 - **Prowlarr is different**: it rejects `0.0.0.0` in `allowedHosts` and wants host names, which
   makes ASP.NET reject the kubelet's probe (pod IP is not a name) and the pod crash-loops. Fix by
-  giving the probes `Host: prowlarr.kub.local` — see `prowlarr/templates/deployment.yaml`.
+  giving the probes `Host: prowlarr.kub.internal` — see `prowlarr/templates/deployment.yaml`.
 - Tautulli has **no API command** for its web auth; it is a UI toggle under Settings → Web
   Interface. That is why it is the one tool still asking for a login.
 - The service route is behind the gate, so this needs `kubectl -n media-stack port-forward
@@ -388,10 +392,10 @@ gate would need an exemption for them; native OIDC needs none.
 **It is the one app here that needs HTTPS.** The OIDC button only renders when *Login type* is `OAuth`, and
 that setting forces `SESSION_COOKIE_SECURE=True` (`cps/__init__.py:134`) — a `Secure` cookie that a
 plain-HTTP browser discards, so the callback would return without its session. Its own dropdown says
-"Use OAuth (requires HTTPS)". So the chart serves `https://calibre.kub.local` on `websecure`, with the
+"Use OAuth (requires HTTPS)". So the chart serves `https://calibre.kub.internal` on `websecure`, with the
 `web` router only redirecting, and the certificate is the cluster default from the `TLSStore`
-(`kube-system/local-cert`, private, SAN `*.kub.local`). Clients without that root show a warning; that is
-expected and accepted.
+(`kube-system/local-cert`, private, SAN `*.kub.internal` with `*.kub.local` until the soak ends). Clients
+without that root show a warning; that is expected and accepted.
 
 **The default certificate had expired on 2026-05-06** and nobody noticed for ten months, because nothing
 could reissue it. `hack/internal-cert.sh` now signs a new leaf from a private CA kept in
@@ -446,7 +450,7 @@ creates nothing:
 
 3. In Calibre-Web, Settings → Basic Configuration → OAuth, generic provider: activate it, then fill in
    the metadata URL `https://authentik.kub.home.ashudev.com/application/o/calibre/.well-known/openid-configuration`,
-   OAuth Redirect Host `https://calibre.kub.local`, client id `calibre`, the secret from step 1, scopes
+   OAuth Redirect Host `https://calibre.kub.internal`, client id `calibre`, the secret from step 1, scopes
    `openid profile email`, username field `preferred_username`, admin group `authentik Admins`. Then in
    Login Settings set *Login type* to **Use OAuth (requires HTTPS)**, and tick **Enable OAuth Group-Based
    Admin Role Management**. Saving restarts Calibre-Web on its own; if the "OpenID Connect" button is

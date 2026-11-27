@@ -35,7 +35,7 @@ helm template maintainerr cluster/helm/media-stack/maintainerr --namespace media
 | `strategy` | Deployment strategy. Must stay `Recreate` with a data volume. | `Recreate` |
 | `service.port` | Port the Service exposes, and what the IngressRoute points at. | `6246` |
 | `container.port` | Only set when the app listens on a different port than the Service. | `null` (falls back to `service.port`) |
-| `ingressRoute.*` | Traefik CRD routing: host, entry points, middlewares, TLS. `apiBypassMiddlewares` renders the `/api` rule and is **set** here — see "The API exemption" below. | `maintainerr.kub.local`, `websecure`, TLS from the cluster default certificate; `web` redirects; `/api` on `lan-only` alone |
+| `ingressRoute.*` | Traefik CRD routing: host, entry points, middlewares, TLS. `apiBypassMiddlewares` renders the `/api` rule and is **set** here — see "The API exemption" below. | `maintainerr.kub.internal`, `websecure`, TLS from the cluster default certificate; `web` redirects; `/api` on `lan-only` alone |
 | `storage.*` | The data claim: class, size, mount path, or reuse an existing claim. | `local-path`, `256Mi`, `/opt/data` |
 | `env` | Non-secret variables, rendered **inline** into the container. Changing one rolls the pod. | `TZ`, `LOG_LEVEL`, `TELEMETRY` |
 | `extraEnv` | Variables sourced from a Secret, as `{ name, valueFrom }`. | `[]` |
@@ -77,8 +77,7 @@ reads that header — there is no auth guard in the tree, `@UseGuards` appears o
 `InternalApiController` is an empty `@Controller('api/maintainerr')` with no routes. So the key
 authenticates the app to itself and nothing else.
 
-So the boundary is the network, not the app. Two routes on `maintainerr.kub.local`, both over TLS
-since 2026-11-15:
+So the boundary is the network, not the app. Two routes on `maintainerr.kub.internal`, both over TLS from the cluster default certificate:
 
 | Route | Middlewares | What it protects |
 |---|---|---|
@@ -86,7 +85,7 @@ since 2026-11-15:
 | `/api` (`priority: 100`) | `lan-only` only | nothing beyond the LAN boundary |
 
 `lan-only` admits `192.168.1.0/24`, WireGuard (`10.8.0.0/24`) and the pod network (`10.42.0.0/16`).
-`kub.local` resolves through the Pi-hole wildcard record; it is not in a public zone. Do not attach a
+`kub.internal` resolves through the Pi-hole wildcard record; it is not in a public zone. Do not attach a
 public host, a TLS block or a cert resolver to this chart. If it ever needs to leave the LAN, put an
 authenticating reverse proxy in front first — upstream documents the options at
 https://docs.maintainerr.info/security/.

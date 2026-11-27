@@ -26,7 +26,7 @@ the OVH API, with Let's Encrypt as the authority. Its state is one file, `acme.j
 | Backing volume | `pv-traefik-nfs`, NFS `192.168.1.41:/mnt/storage/traefik`, reclaim policy `Retain` |
 | Owner | uid/gid `65532`, mode `0600`; the Traefik image runs as that user |
 | Contents | the `ovhresolver` account registration, then one array entry per certificate |
-| Not in it | the internal `*.kub.local` leaf, which is the Secret `kube-system/local-cert` — see [`internal-ca.md`](internal-ca.md) |
+| Not in it | the internal `*.kub.internal` leaf, which is the Secret `kube-system/local-cert` — see [`internal-ca.md`](internal-ca.md) |
 
 The backup reads it through the same export. `/mnt/storage/traefik` maps a client's root to uid/gid
 `65532` rather than the usual `1100`, because the restic job runs as root and a `0600` file owned by
@@ -214,7 +214,7 @@ rebuilt its pair from the anchor route.
 - The router ordered both at start: the four-name `ashudev.com` bundle (only `kub.home.ashudev.com`
   needed a fresh DNS-01 validation; the other three authorizations were still valid) and the
   `ashuvidz.com` + `www` pair over TLS-ALPN. Both finished inside two minutes.
-- All sixteen hostnames completed a TLS handshake with the right certificate, and `*.kub.local` stayed
+- All sixteen hostnames completed a TLS handshake with the right certificate, and `*.kub.internal` stayed
   on the internal CA.
 - One avoidable detour: a filter on `domain.sans` kept zero entries and deleted the wildcard along
   with its duplicate. Nothing was lost — the router re-issued it at once from still-valid
@@ -262,7 +262,7 @@ day both are ordered by one resolver:
 | `ovhresolver` (second order) | `ashuvidz.com`, `www.ashuvidz.com` | the same key; the zone has answered from OVH nameservers since 2026-11-22 |
 
 Only the apex route of each domain carries `tls.certResolver` and `tls.domains`; every other route is
-served from this store by SNI. The store therefore holds exactly **two** entries, and `kub.local` is
+served from this store by SNI. The store therefore holds exactly **two** entries, and `kub.internal` is
 not one of them — the internal leaf is the Secret `kube-system/local-cert`, never in `acme.json`. A
 new application under `ashudev.com` now orders nothing, so two is the number to expect.
 

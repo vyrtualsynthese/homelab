@@ -52,7 +52,7 @@ notes that covered the Secrets deleted on 2026-11-23 were purged from the vault'
   ([the record](decisions/2026-11-26-edge-pis-local-auth-only.md)). The two TLS leaves sit in
   `certs/`, minted with `hack/internal-cert.sh --host <name>`: `tls.pem` and `tls-key.pem` for Caddy
   on 8443, and `pihole.pem` — certificate and key in one file — for Pi-hole's own panel on 443.
-- `local-ca-key.pem` — the internal CA's private key, so a rebuild can reissue the `*.kub.local`
+- `local-ca-key.pem` — the internal CA's private key, so a rebuild can reissue the `*.kub.internal`
   leaf. `homelab-k8s-kube-system-local-cert` — the leaf and key Traefik actually serves, which is the
   pair the copies in `~/.config/secrets/kub-local/` are refreshed from, never the other way round.
 
@@ -108,7 +108,7 @@ keys at all.
   2026-11-22 — gives a middleware with **no users**, which answers `401` to every request, correct
   password included. That looks like a working password prompt, which is why it survived so long.
   Recreate it and prove it in one sitting. The proof passes
-  `--cacert ~/.config/secrets/kub-local/local-ca.pem`, because `traefik.kub.local` is served by the
+  `--cacert ~/.config/secrets/kub-local/local-ca.pem`, because `traefik.kub.internal` is served by the
   cluster's internal CA; `-k` would accept whatever answered and hand it the password:
 
 ```bash
@@ -117,7 +117,7 @@ htpasswd -nbB vronteix '<password>' \
       --from-file=users=/dev/stdin --dry-run=client -o yaml | kubectl apply -f -
 curl -s --cacert ~/.config/secrets/kub-local/local-ca.pem \
   -o /dev/null -w '%{http_code}\n' -u 'vronteix:<password>' \
-  --resolve traefik.kub.local:443:192.168.1.46 https://traefik.kub.local/dashboard/   # 200
+  --resolve traefik.kub.internal:443:192.168.1.46 https://traefik.kub.internal/dashboard/   # 200
 ```
 
 - **`prometheus-basicauth` is a hash per user plus a plaintext copy for the machine callers.** The
@@ -152,9 +152,9 @@ for k, v in {"web-config.yml": cfg,
              "reload-password": sys.argv[3]}.items():
     print(f"  {k}: {base64.b64encode(v.encode()).decode()}")
 EOF
-curl -s -o /dev/null -w '%{http_code}\n' http://prometheus.kub.local/-/healthy        # 401
+curl -s -o /dev/null -w '%{http_code}\n' http://prometheus.kub.internal/-/healthy        # 401
 curl -s -o /dev/null -w '%{http_code}\n' -u "ops:$OPS" \
-  http://prometheus.kub.local/-/healthy                                              # 200
+  http://prometheus.kub.internal/-/healthy                                              # 200
 ```
 
 `traefik-ovh` holds the OVH API credential the DNS-01 resolver uses. The application key is the

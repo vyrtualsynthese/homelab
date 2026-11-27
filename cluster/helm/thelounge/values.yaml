@@ -83,7 +83,7 @@ ingressRoute:
     secretName: ""
     certResolver: ""
     # Rendered by templates/tls-option.yaml into this namespace. Not the shared
-    # `kube-system/internal-tls`: that policy belongs to the `*.kub.local` names.
+    # `kube-system/internal-tls`: that policy belongs to the `*.kub.internal` names.
     options: thelounge-tlsoption
 
 storage:

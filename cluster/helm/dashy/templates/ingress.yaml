@@ -9,7 +9,7 @@
 #
 # The certificate is Let's Encrypt, from the `ashudev.com` wildcard that the
 # `ashudev.com` anchor route orders; `dashy.ashudev.com` is covered by its
-# `*.ashudev.com` name. The internal `*.kub.local` names below cannot have one.
+# `*.ashudev.com` name. The internal `*.kub.internal` names below cannot have one.
 apiVersion: traefik.io/v1alpha1
 kind: IngressRoute
 metadata:

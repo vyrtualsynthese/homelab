@@ -16,7 +16,7 @@ estimated: every figure has the query that produced it, and a change is only "fi
 moved.
 
 Every Grafana call below passes `--cacert ~/.config/secrets/kub-local/local-ca.pem`, because
-`grafana.kub.local` is served by the cluster's internal CA; `-k` would accept whatever answered and
+`grafana.kub.internal` is served by the cluster's internal CA; `-k` would accept whatever answered and
 hand it the token.
 
 ## The day
@@ -41,11 +41,11 @@ rather than the line count:
 ```bash
 curl -sG --cacert ~/.config/secrets/kub-local/local-ca.pem \
   -H "Authorization: Bearer $GRAFANA_TOKEN" \
-  "https://grafana.kub.local/api/datasources/proxy/uid/P8E80F9AEF21F6940/loki/api/v1/query" \
+  "https://grafana.kub.internal/api/datasources/proxy/uid/P8E80F9AEF21F6940/loki/api/v1/query" \
   --data-urlencode 'query=sum by (unit) (count_over_time({source="journal"}[24h]))'
 curl -sG --cacert ~/.config/secrets/kub-local/local-ca.pem \
   -H "Authorization: Bearer $GRAFANA_TOKEN" \
-  "https://grafana.kub.local/api/datasources/proxy/uid/P8E80F9AEF21F6940/loki/api/v1/query" \
+  "https://grafana.kub.internal/api/datasources/proxy/uid/P8E80F9AEF21F6940/loki/api/v1/query" \
   --data-urlencode 'query=sum by (unit) (bytes_over_time({source="journal"}[24h]))'
 ```
 
@@ -74,12 +74,12 @@ journal holds no `sshd` line, fails just as quietly, and the count is what says 
 
 Loki is behind `authentik-forwardauth` since 2026-11-22, so a script asks through Grafana's
 datasource proxy: prefix every path in the table below with
-`https://grafana.kub.local/api/datasources/proxy/uid/P8E80F9AEF21F6940`, and send the token.
+`https://grafana.kub.internal/api/datasources/proxy/uid/P8E80F9AEF21F6940`, and send the token.
 
 ```bash
 curl -sG --cacert ~/.config/secrets/kub-local/local-ca.pem \
   -H "Authorization: Bearer $GRAFANA_TOKEN" \
-  "https://grafana.kub.local/api/datasources/proxy/uid/P8E80F9AEF21F6940/loki/api/v1/query" \
+  "https://grafana.kub.internal/api/datasources/proxy/uid/P8E80F9AEF21F6940/loki/api/v1/query" \
   --data-urlencode 'query=sum(count_over_time({job="fluent-bit"}[24h]))'
 ```
 

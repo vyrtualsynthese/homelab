@@ -2,7 +2,7 @@
 #
 # Measured 2026-11-26 against the live cluster: the pod carries
 # app.kubernetes.io/name: vikunja, listens on 3456, and IngressRoute/vikunja
-# sends vikunja.kub.local there. The same port carries the scrape the pod
+# sends vikunja.kub.internal there. The same port carries the scrape the pod
 # advertises through prometheus.io/port.
 #
 # The reverse direction is not policed here: the pod opens PostgreSQL in

@@ -85,7 +85,7 @@ ingressRoute:
   # -- API group. `traefik.io/v1alpha1` is what the cluster's Traefik
   # 2.x watches today; flip this to `traefik.io/v1alpha1` when Traefik v3 lands.
   apiVersion: traefik.io/v1alpha1
-  # -- Traefik entry points. `web` is plain HTTP on kub.local; `websecure` is TLS.
+  # -- Traefik entry points. `web` is plain HTTP on kub.internal; `websecure` is TLS.
   entryPoints:
     - websecure
   # -- Single host. For a second host, copy the chart.
@@ -105,7 +105,7 @@ ingressRoute:
   labels: {}
   annotations: {}
   tls:
-    # -- Send the router over TLS. On: the cluster serves `*.kub.local` from the
+    # -- Send the router over TLS. On: the cluster serves `*.kub.internal` from the
     # -- default certificate (`kube-system/local-cert`), and the `web` router only
     # -- redirects here. See docs/runbooks/internal-ca.md.
     enabled: true

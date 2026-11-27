@@ -14,7 +14,7 @@ This is the documentation of one K3s homelab: four cluster nodes, two edge Pis, 
 they run. Everything authoritative about it lives here in `docs/`, and where a file elsewhere in the
 repository disagrees with one of these pages, these pages win. The same files render as a site with
 navigation and search at
-[https://docs.kub.local/homelab/develop/](https://docs.kub.local/homelab/develop/).
+[https://docs.kub.internal/homelab/develop/](https://docs.kub.internal/homelab/develop/).
 
 ## Five things worth remembering
 
@@ -47,7 +47,7 @@ keeps the place closed, and [the rules these pages obey](documentation-rules.md)
 written and edited.
 
 Work is not on this list because it is not a page: the board at
-[vikunja.kub.local](https://vikunja.kub.local) is the state of the work, and when a plan's checkboxes
+[vikunja.kub.internal](https://vikunja.kub.internal) is the state of the work, and when a plan's checkboxes
 and the board disagree, the board wins. [How to read a plan](agent-work.md) explains the folder, and
 [the operator↔agent protocol](agent-protocol.md) how a card is written.
 

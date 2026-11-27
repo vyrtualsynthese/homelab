@@ -11,7 +11,7 @@ This is the second Radarr instance in the cluster. It serves the anime library a
 its own SQLite database, quality profile and root folder — so the two instances never share settings.
 The chart is identical to `media-stack/radarr`; only the release-specific values differ, and both
 names (`radarr-anime`, `radarr-anime-config`) derive from the release name. It is internal-only:
-`radarr-anime.kub.local`, over TLS since 2026-11-15, signed in by Radarr 7's own OIDC since
+`radarr-anime.kub.internal`, over TLS from the cluster default certificate, signed in by Radarr 7's own OIDC since
 2026-11-18, and `/api` carries `lan-only` alone (the API checks `X-Api-Key` itself).
 
 ## Upstream
@@ -56,7 +56,7 @@ helm template radarr-anime cluster/helm/media-stack/radarr-anime --namespace med
 | `storage.*` | The config claim: class, size, mount path, or reuse an existing claim. | `local-path`, `128Mi`, `/config` |
 | `downloads.existingClaim`, `downloads.mountPath` | qBittorrent's completed-downloads claim, and where it is mounted. | `pvc-nfs-qbittorrent-download-nfs-subdir-external-provisioner`, `/downloads` |
 | `media.existingClaim`, `media.mountPath` | The Plex media library claim and its mount. This chart only mounts the shared library; the anime root folder inside it is the live app's setting to confirm in the Radarr UI. | `pvc-plex-media`, `/movies` |
-| `ingressRoute.*` | Traefik CRD routing: host, entry points, middlewares, TLS. | `radarr-anime.kub.local`, `websecure`, TLS from the cluster default certificate; `web` redirects |
+| `ingressRoute.*` | Traefik CRD routing: host, entry points, middlewares, TLS. | `radarr-anime.kub.internal`, `websecure`, TLS from the cluster default certificate; `web` redirects |
 | `env` | Non-secret variables, rendered inline into the container. Changing one rolls the pod. | `TZ`, `PUID`, `PGID`, log level |
 | `exportarr.*` | The metrics sidecar. See **Metrics**. | enabled on port 9707 |
 | `probes.{startup,liveness,readiness}` | HTTP probes on `/ping`. | enabled; startup 5s × 60, liveness 20s delay, readiness 10s delay |

@@ -24,7 +24,7 @@ puts data back, Security for identity and certificates, Running it for the rest.
 | Procedure | Tab | Status | Use it when |
 |---|---|---|---|
 | [`authentik-apps.md`](authentik-apps.md) | Security | proved 2026-11-15 | an application needs signing in through authentik: native OIDC where the app speaks it, the forward-auth gate where it does not. The matrix and the traps are in [`reference/sso-applications.md`](../reference/sso-applications.md). |
-| [`internal-ca.md`](internal-ca.md) | Security | proved 2026-11-15; the restore drill is pending | a `*.kub.local` certificate fails to validate, the root must be minted again, or a leaf signed. |
+| [`internal-ca.md`](internal-ca.md) | Security | proved 2026-11-15; the restore drill is pending | a `*.kub.internal` certificate fails to validate, the root must be minted again, or a leaf signed. |
 | [`acme-store.md`](acme-store.md) | Security | proved 2026-11-22 (34 entries → 16) | a Let's Encrypt certificate exists for a hostname no route serves, or a retired name must stop consuming the weekly issuance limit. The store is one file on an NFS claim, edited with the router stopped. |
 | [`restore.md`](restore.md) | Backups | proved 2026-11-21: sections 1–3 restored and read back; the destructive put-back and section 4's etcd restore are proved separately | a file, a claim, a database or the cluster state has to come back out of the OVH bucket, or the monthly restore drill is due. |
 | [`restore-etcd.md`](restore-etcd.md) | Backups | proved 2026-11-22 on a throwaway single-node K3s: a production snapshot restored and its objects read back in 16 s | the control plane is unquorate, a server will not start, or the drill that proves an etcd snapshot restores is due. |

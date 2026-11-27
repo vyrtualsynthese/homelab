@@ -52,7 +52,7 @@ inert. So `vikunja.ingress.main.enabled` is `false` and the route lives in
 
 ## Routing
 
-One host, `vikunja.kub.local`, on `websecure`, with **TLS from the cluster's internal certificate**:
+One host, `vikunja.kub.internal`, on `websecure`, with **TLS from the cluster's internal certificate**:
 the route asks for TLSOption `internal-tls` in `kube-system` and sets neither `secretName` nor
 `certResolver`, so Traefik serves the default `TLSStore` certificate. A second IngressRoute on `web`
 sends plain HTTP to the same host, through `redirect-to-https`, so `http://` always lands on `https://`.

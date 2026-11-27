@@ -38,7 +38,7 @@ cluster and in the password manager, never in a file here.
 | [The security baseline, 2026-11-24](security-baseline-2026-11-24.md) | what crosses each of the six boundaries today, what that costs, and the smallest fix |
 | [Secrets](../secrets.md) | every Secret a chart expects, its keys, its consumer, where the value comes from |
 | [Wire an application to authentik](../runbooks/authentik-apps.md) | the procedure for native OIDC, and the traps |
-| [The internal CA](../runbooks/internal-ca.md) | the `*.kub.local` certificate, its root and the restore drill |
+| [The internal CA](../runbooks/internal-ca.md) | the `*.kub.internal` certificate, its root and the restore drill |
 | [The certificate store](../runbooks/acme-store.md) | the public certificates, the resolver and pruning |
 
 ## What this section does not cover

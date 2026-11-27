@@ -83,7 +83,7 @@ Argo CD has no key in `~/.config/secrets/homelab.env`. The CLI keeps its own ses
 is one command and one paste:
 
 ```bash
-argocd login argocd.kub.local --sso --sso-launch-browser=false --grpc-web
+argocd login argocd.kub.internal --sso --sso-launch-browser=false --grpc-web
 # it prints "To authenticate, copy-and-paste the following URL…" and then waits, on port 8085
 powershell.exe -NoProfile -Command "Start-Process '<the URL that line printed>'"
 ```

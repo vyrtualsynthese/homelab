@@ -92,14 +92,14 @@ identical to a healthy rule. The proof that the selectors still match is two cou
 below wants `~/.config/secrets/homelab.env` loaded first — the Grafana token and, since
 2026-11-26, the Prometheus password, which the calls pass as `-u "ops:$PROMETHEUS_AUTH_PASSWORD"`.
 Every Grafana call below passes `--cacert ~/.config/secrets/kub-local/local-ca.pem`, because
-`grafana.kub.local` is served by the cluster's internal CA; `-k` would accept whatever answered and
+`grafana.kub.internal` is served by the cluster's internal CA; `-k` would accept whatever answered and
 hand it the token:
 
 ```bash
 set -a; . ~/.config/secrets/homelab.env; set +a
-curl -sG -u "ops:$PROMETHEUS_AUTH_PASSWORD" http://prometheus.kub.local/api/v1/query \
+curl -sG -u "ops:$PROMETHEUS_AUTH_PASSWORD" http://prometheus.kub.internal/api/v1/query \
   --data-urlencode 'query=count(probe_success{job="blackbox-http"})'    # 3
-curl -sG -u "ops:$PROMETHEUS_AUTH_PASSWORD" http://prometheus.kub.local/api/v1/query \
+curl -sG -u "ops:$PROMETHEUS_AUTH_PASSWORD" http://prometheus.kub.internal/api/v1/query \
   --data-urlencode 'query=count(probe_success{job="blackbox-dns"})'     # 28
 ```
 
@@ -124,11 +124,11 @@ name's route, certificate or DNS.
 **Check:** which `instance` the alert names, then the series and the certificate clock:
 
 ```bash
-curl -sG -u "ops:$PROMETHEUS_AUTH_PASSWORD" http://prometheus.kub.local/api/v1/query \
+curl -sG -u "ops:$PROMETHEUS_AUTH_PASSWORD" http://prometheus.kub.internal/api/v1/query \
   --data-urlencode 'query=probe_success{job="blackbox-http"}'
-curl -sG -u "ops:$PROMETHEUS_AUTH_PASSWORD" http://prometheus.kub.local/api/v1/query \
+curl -sG -u "ops:$PROMETHEUS_AUTH_PASSWORD" http://prometheus.kub.internal/api/v1/query \
   --data-urlencode 'query=(probe_ssl_earliest_cert_expiry{job="blackbox-http"} - time()) / 86400'
-curl -sG -u "ops:$PROMETHEUS_AUTH_PASSWORD" http://prometheus.kub.local/api/v1/query \
+curl -sG -u "ops:$PROMETHEUS_AUTH_PASSWORD" http://prometheus.kub.internal/api/v1/query \
   --data-urlencode 'query=probe_duration_seconds{job="blackbox-http"}'
 ```
 
@@ -136,7 +136,7 @@ curl -sG -u "ops:$PROMETHEUS_AUTH_PASSWORD" http://prometheus.kub.local/api/v1/q
 rather than was refused. Confirm from outside the LAN with `curl -sSI https://ashudev.com | head -1`
 and, for a resolution problem, `dig +short ashudev.com @86.54.11.100`. Then follow
 [`routes.md`](../reference/routes.md) for the Traefik router and
-[`internal-ca.md`](internal-ca.md) only if the failure is a `*.kub.local` name, which this rule does
+[`internal-ca.md`](internal-ca.md) only if the failure is a `*.kub.internal` name, which this rule does
 not cover.
 
 ### `CloudDnsCheckFailing`
@@ -151,7 +151,7 @@ answered with a record that does not match the assertion. The alert names three 
 whose `ovhcloud` CLI credentials are set out in [§6](#6-the-money-alerts):
 
 ```bash
-curl -sG -u "ops:$PROMETHEUS_AUTH_PASSWORD" http://prometheus.kub.local/api/v1/query \
+curl -sG -u "ops:$PROMETHEUS_AUTH_PASSWORD" http://prometheus.kub.internal/api/v1/query \
   --data-urlencode 'query=probe_success{job="blackbox-dns"} == 0'
 ovhcloud domain-zone record list ashudev.com
 dig +short MX ashudev.com @ns13.ovh.net
@@ -182,7 +182,7 @@ cluster's own Traefik certificates; this one watches what a stranger is served f
 **Check:** which `instance`, then the day count per endpoint:
 
 ```bash
-curl -sG -u "ops:$PROMETHEUS_AUTH_PASSWORD" http://prometheus.kub.local/api/v1/query \
+curl -sG -u "ops:$PROMETHEUS_AUTH_PASSWORD" http://prometheus.kub.internal/api/v1/query \
   --data-urlencode 'query=(probe_ssl_earliest_cert_expiry{job="blackbox-http"} - time()) / 86400'
 ```
 
@@ -195,7 +195,7 @@ certificate store. The read-only rule object:
 ```bash
 curl -s --cacert ~/.config/secrets/kub-local/local-ca.pem \
   -H "Authorization: Bearer $GRAFANA_TOKEN" \
-  https://grafana.kub.local/api/v1/provisioning/alert-rules/b8e24b82-fbe6-4dbb-a2da-897c61673cbb
+  https://grafana.kub.internal/api/v1/provisioning/alert-rules/b8e24b82-fbe6-4dbb-a2da-897c61673cbb
 ```
 
 ## 4. Adding a target
@@ -219,7 +219,7 @@ Then commit, let ArgoCD sync, and confirm within one interval (a minute for HTTP
 the new series exists at all:
 
 ```bash
-curl -sG -u "ops:$PROMETHEUS_AUTH_PASSWORD" http://prometheus.kub.local/api/v1/query \
+curl -sG -u "ops:$PROMETHEUS_AUTH_PASSWORD" http://prometheus.kub.internal/api/v1/query \
   --data-urlencode 'query=probe_success{job="blackbox-http",instance="https://example.com"}'
 ```
 
@@ -330,7 +330,7 @@ leave a rule that can no longer fire behind:
      curl -s --cacert ~/.config/secrets/kub-local/local-ca.pem \
        -o /dev/null -w '%{http_code}\n' -X DELETE \
        -H "Authorization: Bearer $GRAFANA_TOKEN" \
-       "https://grafana.kub.local/api/v1/provisioning/alert-rules/$uid"
+       "https://grafana.kub.internal/api/v1/provisioning/alert-rules/$uid"
    done
    ```
 
@@ -370,5 +370,5 @@ restore there.
 - **The `Cloud` dashboard is the only place these series are drawn**, and it lives in Grafana's
   database like every other dashboard: not in git, and reachable only through a restore of the
   `nodes-nas` stream ([how-it-works/backups.md](../how-it-works/backups.md)).
-- **Three names and these records only.** No other port, no other hostname, no internal `*.kub.local`
+- **Three names and these records only.** No other port, no other hostname, no internal `*.kub.internal`
   name — Traefik's own `CertificateExpiring` covers those.

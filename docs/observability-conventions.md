@@ -116,7 +116,7 @@ hostnames; Prometheus wants a password since 2026-11-26, Grafana has its own sig
 behind the authentik gate since 2026-11-22, so the recipes below carry a credential instead of
 reaching an open port.
 
-**Prometheus** — `http://prometheus.kub.local`, basic auth, and the password is the only thing
+**Prometheus** — `http://prometheus.kub.internal`, basic auth, and the password is the only thing
 standing between a caller and every metric the cluster holds. It is Prometheus's own check
 (`--web.config.file` in `cluster/helm/monitoring/prometheus/values.yaml`), not the route's
 `lan-only` middleware, because that middleware admits the pod network as well as the LAN: a gate on
@@ -129,7 +129,7 @@ The user is `ops`, and the password is `PROMETHEUS_AUTH_PASSWORD` in `~/.config/
 
 ```bash
 source ~/.config/secrets/homelab.env
-curl -sG -u "ops:$PROMETHEUS_AUTH_PASSWORD" http://prometheus.kub.local/api/v1/query \
+curl -sG -u "ops:$PROMETHEUS_AUTH_PASSWORD" http://prometheus.kub.internal/api/v1/query \
   --data-urlencode 'query=count(up==1)'
 ```
 
@@ -145,19 +145,19 @@ Useful endpoints: `/api/v1/query`, `/api/v1/query_range`, `/api/v1/targets`,
 It holds **no alert rules and no Alertmanager** (`alertmanager.enabled: false`,
 `rule_files` empty): alerting lives entirely in Grafana.
 
-**Loki** — `https://loki.kub.local`, behind `kube-system-authentik-forwardauth` on the `websecure`
+**Loki** — `https://loki.kub.internal`, behind `kube-system-authentik-forwardauth` on the `websecure`
 router, Admins only. Loki authenticates nobody itself (`auth_enabled: false`) and keeps 30 days of
 every namespace's logs, so the gate is the only access control, and `/loki/api/v1/*` has no
 exemption: the query API is exactly what it protects. There is no page to open on that host: `/ui/`
 is Loki's operational API (`/ui/api/v1/cluster/nodes` answers JSON) and its frontend is a Grafana
 plugin, so any other `/ui` path answers `307` to `/ui/404?path=…`. Logs are read in Grafana —
-Explore, or Logs Drilldown at `https://grafana.kub.local/a/grafana-lokiexplore-app/explore`, which
+Explore, or Logs Drilldown at `https://grafana.kub.internal/a/grafana-lokiexplore-app/explore`, which
 is where the authentik `Loki` tile points.
 
 Queries from a script go through Grafana's datasource proxy, which holds the Loki datasource and
 authenticates as Grafana does. `GRAFANA_TOKEN` is a Grafana service-account token in
 `~/.config/secrets/homelab.env`. Every call below passes
-`--cacert ~/.config/secrets/kub-local/local-ca.pem`, because `grafana.kub.local` is served by the
+`--cacert ~/.config/secrets/kub-local/local-ca.pem`, because `grafana.kub.internal` is served by the
 cluster's internal CA; `-k` would accept whatever answered and hand it the token. The uid
 `P8E80F9AEF21F6940` is the Loki datasource's, and every path from
 [`reference/log-budget.md`](reference/log-budget.md) appends to it.
@@ -165,7 +165,7 @@ cluster's internal CA; `-k` would accept whatever answered and hand it the token
 ```bash
 curl -sG --cacert ~/.config/secrets/kub-local/local-ca.pem \
   -H "Authorization: Bearer $GRAFANA_TOKEN" \
-  "https://grafana.kub.local/api/datasources/proxy/uid/P8E80F9AEF21F6940/loki/api/v1/query" \
+  "https://grafana.kub.internal/api/datasources/proxy/uid/P8E80F9AEF21F6940/loki/api/v1/query" \
   --data-urlencode 'query={job="fluent-bit"} | detected_level="error"'
 ```
 
@@ -174,9 +174,9 @@ before it is stored (see the exporter notes in
 [`reference/metrics.md`](reference/metrics.md#exporter-quirks)), so a query reads
 `{job="fluent-bit"} | detected_level="error"` with no parser in between.
 
-**Grafana** — `https://grafana.kub.local`, served over the cluster's internal
-certificate (`*.kub.local` from the ashulab internal CA,
-[`runbooks/internal-ca.md`](runbooks/internal-ca.md)); the plain-HTTP router only
+**Grafana** — `https://grafana.kub.internal`, served over the cluster's internal
+certificate (`*.kub.internal`, with `*.kub.local` beside it in the SAN until the soak ends, from the
+ashulab internal CA, [`runbooks/internal-ca.md`](runbooks/internal-ca.md)); the plain-HTTP router only
 redirects, so scripts must use `https` and a client without the root installed
 shows a certificate warning. `server.root_url` is set to that host in the wrapper
 chart, because Grafana builds the Source and Silence links of every Discord alert
@@ -188,7 +188,7 @@ exported by `~/.config/secrets/homelab.env`:
 ```bash
 source ~/.config/secrets/homelab.env
 curl -s -H "Authorization: Bearer $GRAFANA_TOKEN" \
-  https://grafana.kub.local/api/search?type=dash-db
+  https://grafana.kub.internal/api/search?type=dash-db
 ```
 
 The token belongs to a service account with the Admin role; the only interactive
@@ -315,12 +315,12 @@ carries 0.09 GB/day. An evening reads higher; the day's own figure is two querie
 # bytes carried in the trailing 24 h — this is the day's volume
 curl -sG --cacert ~/.config/secrets/kub-local/local-ca.pem \
   -H "Authorization: Bearer $GRAFANA_TOKEN" \
-  "https://grafana.kub.local/api/datasources/proxy/uid/P8E80F9AEF21F6940/loki/api/v1/query" \
+  "https://grafana.kub.internal/api/datasources/proxy/uid/P8E80F9AEF21F6940/loki/api/v1/query" \
   --data-urlencode 'query=sum(bytes_over_time({job="fluent-bit", source="accesslog"}[24h]))'
 # lines in the same window; divide the two for the line size
 curl -sG --cacert ~/.config/secrets/kub-local/local-ca.pem \
   -H "Authorization: Bearer $GRAFANA_TOKEN" \
-  "https://grafana.kub.local/api/datasources/proxy/uid/P8E80F9AEF21F6940/loki/api/v1/query" \
+  "https://grafana.kub.internal/api/datasources/proxy/uid/P8E80F9AEF21F6940/loki/api/v1/query" \
   --data-urlencode 'query=sum(count_over_time({job="fluent-bit", source="accesslog"}[24h]))'
 ```
 

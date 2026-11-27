@@ -196,7 +196,7 @@ asks for:
 
 ```bash
 curl -sG -H "Authorization: Bearer $GRAFANA_TOKEN" \
-  "https://grafana.kub.local/api/datasources/proxy/uid/PBFA97CFB590B2093/api/v1/query_range" \
+  "https://grafana.kub.internal/api/datasources/proxy/uid/PBFA97CFB590B2093/api/v1/query_range" \
   --data-urlencode 'query=100 * sum(rate(traefik_router_requests_total{code=~"4.."}[1h])) / sum(rate(traefik_router_requests_total[1h]))' \
   --data-urlencode "start=$(date -d '7 days ago' +%s)" --data-urlencode "end=$(date +%s)" \
   --data-urlencode 'step=3600'
@@ -223,7 +223,7 @@ that returns a number:
 
 ```bash
 curl -sG -H "Authorization: Bearer $GRAFANA_TOKEN" \
-  "https://grafana.kub.local/api/datasources/proxy/uid/PBFA97CFB590B2093/api/v1/query_range" \
+  "https://grafana.kub.internal/api/datasources/proxy/uid/PBFA97CFB590B2093/api/v1/query_range" \
   --data-urlencode 'query=sum(increase(traefik_router_requests_total[2m]))' \
   --data-urlencode "start=$(date -d '7 days ago' +%s)" --data-urlencode "end=$(date +%s)" \
   --data-urlencode 'step=120'

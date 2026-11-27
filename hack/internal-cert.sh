@@ -168,4 +168,4 @@ printf '    kubectl -n kube-system delete secret local-cert --ignore-not-found\n
 echo "    (delete then create: the existing Secret is Opaque, and a Secret's type is immutable)"
 echo
 echo "==> verify what the cluster now offers:"
-printf '    openssl s_client -connect 192.168.1.46:443 -servername calibre.kub.local \\\n      </dev/null 2>/dev/null | openssl x509 -noout -issuer -dates\n'
+printf '    openssl s_client -connect 192.168.1.46:443 -servername calibre.kub.internal \\\n      </dev/null 2>/dev/null | openssl x509 -noout -issuer -dates\n'

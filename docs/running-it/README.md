@@ -32,9 +32,9 @@ describes an older cluster.
 
 - **How the thing works** — nodes, storage, network, identity, observability, media, and the catalogue
   of applications: start at [How it works](../how-it-works/README.md).
-- **Where the work stands** — the board at [vikunja.kub.local](https://vikunja.kub.local), LAN only.
+- **Where the work stands** — the board at [vikunja.kub.internal](https://vikunja.kub.internal), LAN only.
   How work moves is the contract in `~/.config/opencode/AGENTS.md` §Task board, with the long form on
-  [The board and worktrees](https://docs.kub.local/config/develop/agent/board-and-worktrees/).
+  [The board and worktrees](https://docs.kub.internal/config/develop/agent/board-and-worktrees/).
 - **Why a decision was made** — the dated records: [the decisions](../decisions/README.md) and the
   audit set ([hosts](../audit/ansible-hosts.md), [ArgoCD](../audit/argocd-helm.md),
   [storage](../audit/observability-storage.md)) argue; they do not instruct.

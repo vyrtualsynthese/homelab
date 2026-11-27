@@ -206,7 +206,7 @@ The alternative, when there is nothing to carry over. Order matters:
 
   ```bash
   set -a; . ~/.config/secrets/homelab.env; set +a
-  curl -sG -u "ops:$PROMETHEUS_AUTH_PASSWORD" http://prometheus.kub.local/api/v1/query --data-urlencode \
+  curl -sG -u "ops:$PROMETHEUS_AUTH_PASSWORD" http://prometheus.kub.internal/api/v1/query --data-urlencode \
     'query=max_over_time(container_memory_working_set_bytes{namespace="news",container="freshrss"}[6d])/2^20'
   ```
 

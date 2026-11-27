@@ -187,7 +187,7 @@ ingressRoute:
   # -- host. cross-seed drives the API at `http://qbittorrent:8080` (its log names
   # -- the client as `@qbittorrent:8080`), `qbittorrent-exporter` uses the same
   # -- Service, and every URL autobrr logs is a Service name as well
-  # -- (`radarr:7878`, `sonarr-anime:8989`), with no `kub.local` host anywhere in its
+  # -- (`radarr:7878`, `sonarr-anime:8989`), with no `kub.internal` host anywhere in its
   # -- logs. API clients never cross Traefik, so an `/api` rule would open a hole
   # -- nothing needs. Revisit if a client is ever pointed at the hostname.
   # --

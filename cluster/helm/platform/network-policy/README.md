@@ -104,7 +104,7 @@ curl -s -o /dev/null -w '%{http_code}\n' \
 
 # 3. every scrape survives
 source ~/.config/secrets/homelab.env
-curl -sG -u "ops:$PROMETHEUS_AUTH_PASSWORD" http://prometheus.kub.local/api/v1/query \
+curl -sG -u "ops:$PROMETHEUS_AUTH_PASSWORD" http://prometheus.kub.internal/api/v1/query \
   --data-urlencode 'query=up{namespace="<namespace>"}'
 # expect: one result per exporter, value "1"
 ```

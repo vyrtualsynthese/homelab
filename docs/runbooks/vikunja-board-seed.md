@@ -34,7 +34,7 @@ token below belongs to.
 
 | Thing | Value |
 |---|---|
-| Address | `https://vikunja.kub.local` |
+| Address | `https://vikunja.kub.internal` |
 | Script | `hack/vikunja-seed.sh` |
 | Projects | all seven GitHub repositories — `homelab`, `config`, `ashuvidz-website`, `ashudev-website`, `selfhosted-helmcharts`, `ashuworld`, `ashuvidz-creator` — each with the same six columns |
 | View | one kanban view per project, titled `Board` at position 1 |
@@ -44,12 +44,12 @@ token below belongs to.
 
 ## Preconditions
 
-- The first start is done: the owner account exists, and `https://vikunja.kub.local` answers.
+- The first start is done: the owner account exists, and `https://vikunja.kub.internal` answers.
 - `curl`, `jq` and `python3` are installed on the workstation.
 - The cluster root `~/.config/secrets/kub-local/local-ca.pem` is installed (see
   [`internal-ca.md`](internal-ca.md)). The script verifies the board's certificate against it and
   stops, with exit 2, when the file is missing.
-- The workstation resolves `vikunja.kub.local` to the cluster. Everything here runs from the LAN; the
+- The workstation resolves `vikunja.kub.internal` to the cluster. Everything here runs from the LAN; the
   board's route carries the `lan-only` gate, so a request from outside the house is refused before it
   reaches the API.
 - An operator API token, made in Step 1.
@@ -60,7 +60,7 @@ In the board: **Settings → API Tokens → Create a token**. Name it after the 
 write access, and copy it once — the board does not show it again.
 
 ```bash
-export VIKUNJA_URL=https://vikunja.kub.local
+export VIKUNJA_URL=https://vikunja.kub.internal
 export VIKUNJA_API_TOKEN='<the token>'
 ```
 
@@ -73,7 +73,7 @@ One paragraph about the certificate, because it applies to every call below: the
 is signed by the cluster's private CA, not by a public one, so the script verifies the chain against
 that root — `~/.config/secrets/kub-local/local-ca.pem` by default, and `VIKUNJA_CACERT` points it at
 another copy. `-k` is not a fallback: every request carries the token, so accepting the certificate
-**without checking it** would hand that token to whatever answers for `vikunja.kub.local`. A missing
+**without checking it** would hand that token to whatever answers for `vikunja.kub.internal`. A missing
 file stops the run with exit 2 instead.
 
 ## Step 2 — the dry run
@@ -85,7 +85,7 @@ Always first. It reads the board and prints every call it would make, sending no
 ```
 
 ```text
-Board https://vikunja.kub.local, 1 repositories: homelab
+Board https://vikunja.kub.internal, 1 repositories: homelab
 Dry run: reading the board, sending no write.
 
          -> GET /api/v1/labels

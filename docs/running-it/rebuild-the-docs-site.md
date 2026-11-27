@@ -4,11 +4,13 @@
 > minute of a branch head moving; its index is the only place that says why a page is missing.
 >
 > **Use it when** a page is missing or stale, or a build has to be run by hand · **Verified**
-> 2026-11-17 · **Kind:** living page
+> 2026-11-17 · **Kind:** how-to
+>
+> **Sources** `cluster/helm/docs-site/`, `hack/gen_docs.py`, `mkdocs.yml`
 
 ## What runs
 
-`https://docs.kub.local/` serves one site per repository and ref, at `/<repo>/<ref>/`: this repository
+`https://docs.kub.internal/` serves one site per repository and ref, at `/<repo>/<ref>/`: this repository
 on `develop` is `/homelab/develop/`. The root page is a catalogue: one row per pair, with the verdict.
 
 The builder is a CronJob in namespace `docs` running a Python script in the MkDocs Material image. An
