@@ -93,13 +93,50 @@ class ChartTests(unittest.TestCase):
         # them: the chart's own minting path stays off.
         self.assertFalse(self.crowdsec["lapi"].get("secrets"))
 
-    def test_the_central_api_is_off(self):
-        # Without this the LAPI registers with CrowdSec's central API on first
-        # start and subscribes to the shared blocklist — a decision to take after
-        # measuring our own traffic, and the only part of this that talks to a
-        # company.
+    def test_the_central_api_is_on_and_the_identity_lives_on_the_config_claim(self):
+        # CAPI is the point of the workstream: the blocklist is what refuses an
+        # address before it sends a request. No registration Job is rendered
+        # because the chart only renders one when the config claim is *not*
+        # persistent; with it, the LAPI's start script registers and writes
+        # `online_api_credentials.yaml` to the claim, which the backup matrix
+        # already covers, so a rebuild keeps the identity.
         env = {e["name"]: e.get("value") for e in self.crowdsec["lapi"]["env"]}
-        self.assertEqual(env["DISABLE_ONLINE_API"], "true")
+        self.assertNotIn("DISABLE_ONLINE_API", env)
+        self.assertTrue(self.crowdsec["lapi"]["persistentVolume"]["config"]["enabled"])
+
+    def test_the_blocklist_cannot_insert_a_lan_address(self):
+        # A blocklist decision never passes the postoverflow whitelist: that runs
+        # before a decision exists from a local alert, and CAPI inserts into the
+        # database directly. This file is read at pull time instead, so the
+        # address never enters the table — the only control that keeps the
+        # operator's rule true for a decision nobody here made.
+        raw = self.crowdsec["config"]["capi_whitelists.yaml"]
+        # `%+v` on a string renders the string; on a map it renders Go syntax.
+        self.assertIsInstance(raw, str)
+        capi = yaml.safe_load(raw)
+        self.assertEqual(set(capi["cidrs"]), set(WHITELIST_RANGES))
+        self.assertEqual(
+            set(capi["ips"]),
+            {"192.168.1.41", "192.168.1.27", "192.168.1.46", "192.168.1.48"},
+        )
+
+    def test_the_two_whitelists_name_the_same_addresses(self):
+        post = yaml.safe_load(
+            self.crowdsec["config"]["postoverflows"]["s01-whitelist"]["whitelist-lan.yaml"]
+        )["whitelist"]
+        capi = yaml.safe_load(self.crowdsec["config"]["capi_whitelists.yaml"])
+        self.assertEqual(set(capi["cidrs"]), set(post["cidr"]))
+        self.assertEqual(set(capi["ips"]), set(post["ip"]))
+
+    def test_the_engine_does_not_share_custom_or_tainted_alerts(self):
+        # The official hub scenarios still leave — that is how the full list is
+        # earned, and the design states it (§4.3). A local parser or a modified
+        # scenario counts for nothing upstream and there is no reason to send it.
+        raw = self.crowdsec["config"]["console.yaml"]
+        self.assertIsInstance(raw, str)
+        console = yaml.safe_load(raw)
+        self.assertIs(console["share_custom"], False)
+        self.assertIs(console["share_tainted"], False)
 
     def test_both_workloads_listen_on_6060(self):
         # The chart's probes GET `/metrics` on port 6060 for both workloads, and
