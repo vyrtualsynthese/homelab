@@ -1,0 +1,11 @@
+[Unit]
+Description=Snapshot the wg-easy database every minute
+
+[Timer]
+# A minute is what keeps the copy useful while the authority is down: a peer
+# added in the last minute is the only one a stale copy could lose.
+OnCalendar=*:0/1
+Persistent=true
+
+[Install]
+WantedBy=timers.target

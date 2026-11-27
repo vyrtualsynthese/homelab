@@ -1,0 +1,9 @@
+[Unit]
+Description=Snapshot the wg-easy database for the edge sync
+# The database has to exist before there is anything to copy; the failure of a
+# missing one is the series going to 0, which is what the alert reads.
+After=wg-easy.service
+
+[Service]
+Type=oneshot
+ExecStart=@WG_LIB@/wg-snapshot.sh
