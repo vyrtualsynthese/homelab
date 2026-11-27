@@ -138,7 +138,7 @@ query.
 # 2 = alerting, 1 = watch, 0 = calm. `bool` on every comparison, each term
 # `or vector(0)` so a missing family counts as false, then clamp_max: a sum.
 clamp_max(
-    2 * (delta(sum(fw_bouncer_banned_ips)[1h:1m]) > bool 20 or vector(0))
+    2 * (delta(sum(cs_active_decisions{origin="crowdsec"})[1h:1m]) > bool 20 or vector(0))
   + 2 * (count(homelab_security_ungated_routes > 0)
          or count(homelab_security_public_hosts != 9)
          or count(homelab_security_privileged_workloads != 7) or vector(0))
@@ -153,10 +153,10 @@ clamp_max(
   2)
 ```
 
-**Level 2 means act now**: more than 20 bans in an hour, the posture counts moved, the security
-pipeline is blind (the exporter stale or a family it publishes gone, including the agent's), or
-refusals above 85 % of everything. **Level 1 means watch**: any ban is active, or more than 20
-sign-ins failed in 15 minutes.
+**Level 2 means act now**: more than 20 decisions created here in an hour, the posture counts moved,
+the security pipeline is blind (the exporter stale or a family it publishes gone, including the
+agent's), or refusals above 85 % of everything. **Level 1 means watch**: any ban is active, or more
+than 20 sign-ins failed in 15 minutes.
 
 The first version had a top term that counted `ALERTS{alertname=~"Security.*"}` — and it was dead
 on arrival. **Grafana evaluates every rule in this cluster**, so Prometheus's `ALERTS` family is
