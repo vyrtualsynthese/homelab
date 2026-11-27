@@ -19,8 +19,12 @@ BACKUP = ROOT / "cluster/helm/backup/values.yaml"
 CATALOGUE = ROOT / "docs/how-it-works/applications.md"
 BLUEPRINT = ROOT / "cluster/helm/authentik/files/app-crowdsec-web-ui.yaml"
 
-HOST = "crowdsec.kub.local"
-CALLBACK = f"https://{HOST}/api/auth/oidc/callback"
+HOST = "crowdsec.kub.internal"
+
+# The blueprint's own copies of the host. The zone rename moves the chart first and the
+# authentik blueprints in a later change of its own, so until that lands these assertions follow
+# the blueprint file rather than the chart. Both copies become `kub.internal` in that change.
+BLUEPRINT_HOST = "crowdsec.kub.local"
 
 
 def env(values):
@@ -190,10 +194,14 @@ class BlueprintTests(unittest.TestCase):
         self.text = BLUEPRINT.read_text()
         self.values = yaml.safe_load((CHART / "values.yaml").read_text())
 
-    def test_the_registered_callback_is_the_chart_host(self):
+    def test_the_registered_callback_is_the_blueprint_host(self):
         # The app builds this from the request's Host and X-Forwarded-* headers.
-        # authentik compares the whole string, so both copies are pinned here.
-        self.assertEqual(re.findall(r"^\s+url:\s*(\S+)\s*$", self.text, re.MULTILINE), [CALLBACK])
+        # authentik compares the whole string, so both copies are pinned here. The chart's copy is
+        # `HOST`; this one is the blueprint's until the blueprints move with it.
+        self.assertEqual(
+            re.findall(r"^\s+url:\s*(\S+)\s*$", self.text, re.MULTILINE),
+            [f"https://{BLUEPRINT_HOST}/api/auth/oidc/callback"],
+        )
 
     def test_the_client_id_matches_the_chart(self):
         client_id = self.values["env"]["CONFIG_AUTH_OIDC_CLIENT_ID"]
@@ -208,7 +216,7 @@ class BlueprintTests(unittest.TestCase):
         self.assertNotIn("authentik_providers_proxy.proxyprovider", self.text)
 
     def test_the_application_launches_the_internal_host_for_admins_only(self):
-        self.assertIn("meta_launch_url: https://crowdsec.kub.local/", self.text)
+        self.assertIn(f"meta_launch_url: https://{BLUEPRINT_HOST}/", self.text)
         self.assertIn(
             "group: !Find [authentik_core.group, [name, authentik Admins]]", self.text
         )

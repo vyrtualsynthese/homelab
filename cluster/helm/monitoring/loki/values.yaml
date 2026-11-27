@@ -2,7 +2,7 @@ traefik:
   apiVersion: traefik.io/v1alpha1
 
 ingress:
-  host: loki.kub.local
+  host: loki.kub.internal
   service: loki
   port: 3100
 

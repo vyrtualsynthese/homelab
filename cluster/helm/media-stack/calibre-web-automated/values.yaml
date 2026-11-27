@@ -290,7 +290,7 @@ ingressRoute:
   entryPoints:
     - websecure
   # -- Single host. For a second host, copy the chart.
-  host: calibre.kub.local
+  host: calibre.kub.internal
   # -- Path prefix. `/` matches everything.
   pathPrefix: /
   # -- Render the plain-HTTP router that redirects to this one. It carries the same

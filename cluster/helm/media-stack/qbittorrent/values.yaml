@@ -168,7 +168,7 @@ ingressRoute:
   # -- Traefik entry points. `websecure` carries the route; `web` only redirects.
   entryPoints:
     - websecure
-  host: qbittorrent.kub.local
+  host: qbittorrent.kub.internal
   # -- Path prefix. `/` matches everything.
   pathPrefix: /
   # -- Render the plain-HTTP mirror router.

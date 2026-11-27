@@ -64,7 +64,7 @@ ingressRoute:
   apiVersion: traefik.io/v1alpha1
   entryPoints:
     - websecure
-  host: radarr-anime.kub.local
+  host: radarr-anime.kub.internal
   pathPrefix: /
   # -- Render the plain-HTTP mirror router that redirects to this one.
   redirectToHttps: true
@@ -203,7 +203,7 @@ probes:
     # kubelet would otherwise send the pod IP, which no list can contain.
     httpHeaders:
       - name: Host
-        value: radarr-anime.kub.local
+        value: radarr-anime.kub.internal
     periodSeconds: 5
     timeoutSeconds: 5
     failureThreshold: 60
@@ -214,7 +214,7 @@ probes:
     # kubelet would otherwise send the pod IP, which no list can contain.
     httpHeaders:
       - name: Host
-        value: radarr-anime.kub.local
+        value: radarr-anime.kub.internal
     initialDelaySeconds: 20
     periodSeconds: 30
     timeoutSeconds: 5
@@ -226,7 +226,7 @@ probes:
     # kubelet would otherwise send the pod IP, which no list can contain.
     httpHeaders:
       - name: Host
-        value: radarr-anime.kub.local
+        value: radarr-anime.kub.internal
     initialDelaySeconds: 10
     periodSeconds: 15
     timeoutSeconds: 5

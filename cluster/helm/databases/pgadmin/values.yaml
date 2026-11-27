@@ -4,7 +4,7 @@ traefik:
   apiVersion: traefik.io/v1alpha1
 
 ingress:
-  host: pgadmin.kub.local
+  host: pgadmin.kub.internal
   # Rendered Service of the subchart (pinned by fullnameOverride above), port 80.
   service: pgadmin
   port: 80

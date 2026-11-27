@@ -2,7 +2,7 @@ argo-cd:
   global:
     # -- Default domain used by all components
     ## Used for ingresses, certificates, SSO, notifications, etc.
-    domain: argocd.kub.local
+    domain: argocd.kub.internal
     # Every metrics Service the chart renders carries prometheus.io/scrape and
     # prometheus.io/port, which is how this cluster finds an exporter: there is
     # no Prometheus Operator and no ServiceMonitor. The three Services are the
@@ -93,7 +93,7 @@ argo-cd:
       # `http` value on a browser that reaches the host over TLS rejects every
       # sign-in before authentik is even contacted. Traefik terminates the TLS;
       # the server itself stays plain HTTP behind it (`server.insecure`).
-      url: https://argocd.kub.local
+      url: https://argocd.kub.internal
       # No local account: the built-in `admin` user is the only password login Argo
       # CD offers, and authentik is the only identity source. Break-glass, if SSO is
       # ever broken: kubectl -n argocd patch configmap argocd-cm --type merge -p

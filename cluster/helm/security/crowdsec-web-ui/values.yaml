@@ -80,7 +80,7 @@ ingressRoute:
     - websecure
   # -- Internal only: the host is a .kub.local name, served by the cluster's own
   # certificate, so this UI is never reachable from the internet by name.
-  host: crowdsec.kub.local
+  host: crowdsec.kub.internal
   # -- Path prefix. `/` matches everything.
   pathPrefix: /
   # -- Render the plain-HTTP mirror router that redirects to this one.
