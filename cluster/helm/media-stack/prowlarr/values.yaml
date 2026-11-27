@@ -79,7 +79,7 @@ ingressRoute:
   entryPoints:
     - websecure
   # -- Single host. For a second host, copy the chart.
-  host: prowlarr.kub.local
+  host: prowlarr.kub.internal
   # -- Path prefix. `/` matches everything.
   pathPrefix: /
   # -- Render the plain-HTTP mirror router that redirects to this one.
@@ -261,7 +261,7 @@ probes:
       # once authentication is not `enabled` (see the probes comment above).
       # Presenting the route's own name keeps `/ping` reachable.
       - name: Host
-        value: prowlarr.kub.local
+        value: prowlarr.kub.internal
   liveness:
     enabled: true
     path: /ping
@@ -274,7 +274,7 @@ probes:
       # once authentication is not `enabled` (see the probes comment above).
       # Presenting the route's own name keeps `/ping` reachable.
       - name: Host
-        value: prowlarr.kub.local
+        value: prowlarr.kub.internal
   readiness:
     enabled: true
     path: /ping
@@ -287,4 +287,4 @@ probes:
       # once authentication is not `enabled` (see the probes comment above).
       # Presenting the route's own name keeps `/ping` reachable.
       - name: Host
-        value: prowlarr.kub.local
+        value: prowlarr.kub.internal

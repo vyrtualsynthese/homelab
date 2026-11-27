@@ -92,7 +92,7 @@ ingressRoute:
   entryPoints:
     - websecure
   # -- Single host. For a second host, copy the chart.
-  host: maintainerr.kub.local
+  host: maintainerr.kub.internal
   # -- Path prefix. `/` matches everything.
   pathPrefix: /
   # -- Render the plain-HTTP mirror router that redirects to this one.

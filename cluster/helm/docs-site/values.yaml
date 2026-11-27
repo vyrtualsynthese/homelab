@@ -53,7 +53,7 @@ secret:
 
 traefik:
   apiVersion: traefik.io/v1alpha1
-  host: docs.kub.local
+  host: docs.kub.internal
   entryPoints:
     - websecure
   tls:

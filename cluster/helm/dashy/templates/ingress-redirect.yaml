@@ -12,7 +12,7 @@ spec:
   entryPoints:
     - websecure
   routes:
-    - match: Host(`dashy.kub.local`)
+    - match: Host(`dashy.kub.internal`)
       kind: Rule
       middlewares:
         - name: lan-only
@@ -36,7 +36,7 @@ spec:
   entryPoints:
     - web
   routes:
-    - match: Host(`dashy.kub.local`)
+    - match: Host(`dashy.kub.internal`)
       kind: Rule
       middlewares:
         - name: lan-only

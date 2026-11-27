@@ -182,7 +182,7 @@ traefik:
     dashboard:
       enabled: true
       entryPoints: ["websecure"]
-      matchRule: Host(`traefik.kub.local`) && (PathPrefix(`/dashboard`) || PathPrefix(`/api`))
+      matchRule: Host(`traefik.kub.internal`) && (PathPrefix(`/dashboard`) || PathPrefix(`/api`))
       middlewares:
         - name: lan-only
           namespace: kube-system

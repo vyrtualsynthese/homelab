@@ -2,7 +2,7 @@ traefik:
   apiVersion: traefik.io/v1alpha1
 
 ingress:
-  host: grafana.kub.local
+  host: grafana.kub.internal
   service: grafana
   port: 80
 
@@ -26,8 +26,8 @@ grafana:
       # Must carry the scheme the browser uses. Grafana builds the Source and
       # Silence links of every Discord alert from `root_url`; an `http` value
       # also makes the OAuth redirect disagree with the authentik provider.
-      root_url: https://grafana.kub.local/
-      domain: grafana.kub.local
+      root_url: https://grafana.kub.internal/
+      domain: grafana.kub.internal
     security:
       # Traefik terminates TLS, so Grafana sees plain HTTP on the pod network and
       # marks its session cookie non-secure by default. The browser only ever

@@ -2,7 +2,7 @@ traefik:
   apiVersion: traefik.io/v1alpha1
 
 ingress:
-  host: prometheus.kub.local
+  host: prometheus.kub.internal
   service: prometheus-server
   port: 80
 

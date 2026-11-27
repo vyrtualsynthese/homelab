@@ -44,7 +44,7 @@ vikunja:
       # are API tokens, not logins, and are checked after any change to this key.
       VIKUNJA_AUTH_LOCAL_ENABLED: "false"
       VIKUNJA_AUTH_OPENID_ENABLED: "true"
-      VIKUNJA_AUTH_OPENID_REDIRECTURL: "https://vikunja.kub.local/auth/openid/"
+      VIKUNJA_AUTH_OPENID_REDIRECTURL: "https://vikunja.kub.internal/auth/openid/"
       VIKUNJA_AUTH_OPENID_PROVIDERS_AUTHENTIK_NAME: "authentik"
       VIKUNJA_AUTH_OPENID_PROVIDERS_AUTHENTIK_CLIENTID: "eqfj9awPPBaZSDan6HikbXBYSJgh1nok8ahhVKG4"
       VIKUNJA_AUTH_OPENID_PROVIDERS_AUTHENTIK_AUTHURL: "https://authentik.kub.home.ashudev.com/application/o/vikunja-oidc/"
@@ -102,7 +102,7 @@ vikunja:
         data:
           config.yml: |
             service:
-              publicurl: "https://vikunja.kub.local"
+              publicurl: "https://vikunja.kub.internal"
               enableregistration: false
               interface: ":3456"
               # Paris time, so due dates and reminders read the way the operator does.
@@ -136,7 +136,7 @@ vikunja:
 ingressRoute:
   apiVersion: traefik.io/v1alpha1
   enabled: true
-  host: vikunja.kub.local
+  host: vikunja.kub.internal
   service: vikunja
   port: 3456
   apiPathPrefix: /api
