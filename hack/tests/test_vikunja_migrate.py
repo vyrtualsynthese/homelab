@@ -26,11 +26,11 @@ class TitleTests(unittest.TestCase):
 class SiteUrlTests(unittest.TestCase):
     def test_a_plan(self):
         self.assertEqual(m.site_url("docs/superpowers/plans/x.md"),
-                         "https://docs.kub.local/homelab/develop/superpowers/plans/x/")
+                         "https://docs.kub.internal/homelab/develop/superpowers/plans/x/")
 
     def test_a_page(self):
         self.assertEqual(m.site_url("docs/agent-protocol.md"),
-                         "https://docs.kub.local/homelab/develop/agent-protocol/")
+                         "https://docs.kub.internal/homelab/develop/agent-protocol/")
 
     def test_a_non_docs_path_has_no_page(self):
         self.assertIsNone(m.site_url("cluster/helm/sonarr"))
@@ -42,7 +42,7 @@ class DescriptionTests(unittest.TestCase):
             m.render_description("docs/x.md", "none", "none", ""),
             "repo: [vyrtualsynthese/homelab](https://github.com/vyrtualsynthese/homelab)\n"
             "docs: [X](https://github.com/vyrtualsynthese/homelab/blob/develop/docs/x.md)\n"
-            "site: [Rendered page](https://docs.kub.local/homelab/develop/x/)\n"
+            "site: [Rendered page](https://docs.kub.internal/homelab/develop/x/)\n"
             "branch: none\npr: none")
 
     def test_body_is_kept_under_its_heading(self):
@@ -63,7 +63,7 @@ class DescriptionTests(unittest.TestCase):
         self.assertEqual(text.splitlines()[:3], [
             "repo: [vyrtualsynthese/homelab](https://github.com/vyrtualsynthese/homelab)",
             "docs: [Status](https://github.com/vyrtualsynthese/homelab/blob/develop/docs/status.md)",
-            "site: [Rendered page](https://docs.kub.local/homelab/develop/status/)",
+            "site: [Rendered page](https://docs.kub.internal/homelab/develop/status/)",
         ])
 
     def test_a_plan_is_named_not_pathed(self):

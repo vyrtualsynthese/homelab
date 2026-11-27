@@ -12,7 +12,7 @@ import vikunja_site_backfill as b  # noqa: E402
 
 DOCS = ("docs: https://github.com/vyrtualsynthese/homelab/blob/develop/"
         "docs/superpowers/plans/x.md")
-SITE = ("site: [Rendered page](https://docs.kub.local/homelab/develop/"
+SITE = ("site: [Rendered page](https://docs.kub.internal/homelab/develop/"
         "superpowers/plans/x/)")
 BLOCK = f"repo: vyrtualsynthese/homelab\n{DOCS}\nbranch: feature/a\npr: none"
 
@@ -70,7 +70,7 @@ class AddSiteLineTests(unittest.TestCase):
     def test_a_path_that_is_not_on_develop_says_none(self):
         text = b.add_site_line(BLOCK, on_develop=False)
         self.assertEqual(text.splitlines()[2], "site: none")
-        self.assertNotIn("docs.kub.local", text)
+        self.assertNotIn("docs.kub.internal", text)
 
     def test_a_description_without_a_block_is_left_alone(self):
         self.assertEqual(b.add_site_line("Just a sentence, no block."),

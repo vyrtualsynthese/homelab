@@ -33,7 +33,7 @@
 # Environment:
 #   VIKUNJA_API_TOKEN  required. An operator API token, made in the board under
 #                      Settings -> API Tokens. Never echoed by this script.
-#   VIKUNJA_URL        default https://vikunja.kub.local
+#   VIKUNJA_URL        default https://vikunja.kub.internal
 #   VIKUNJA_CACERT     the CA the board's certificate is checked against.
 #                      Default: ~/.config/secrets/kub-local/local-ca.pem, the
 #                      cluster's own root. The script refuses to run when that
@@ -98,7 +98,7 @@ ROLE_LABELS=(implementer reviewer)
 FILTER_VALIDATION_TITLE="Needs my validation"
 FILTER_DOING_TITLE="Agent work in flight"
 
-VIKUNJA_URL="${VIKUNJA_URL:-https://vikunja.kub.local}"
+VIKUNJA_URL="${VIKUNJA_URL:-https://vikunja.kub.internal}"
 VIKUNJA_URL="${VIKUNJA_URL%/}"
 VIKUNJA_API_TOKEN="${VIKUNJA_API_TOKEN:-}"
 VIKUNJA_CACERT="${VIKUNJA_CACERT:-$HOME/.config/secrets/kub-local/local-ca.pem}"
