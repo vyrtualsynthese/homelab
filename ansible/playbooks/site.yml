@@ -45,7 +45,8 @@
       when: "inventory_hostname == 'streaming'"
     # The ban layer. It needs the LAPI's address, so it is applied after ArgoCD
     # has synced the chart: the ClusterIP the role polls is created by it.
+    # Its key comes from `~/.config/secrets/homelab.env` through the role's
+    # defaults, so `make check` needs no exported variable; see the role's README
+    # section in `ansible/README.MD`.
     - role: crowdsec
       when: "inventory_hostname == 'streaming'"
-      vars:
-        crowdsec_bouncer_key: "{{ lookup('env', 'CROWDSEC_BOUNCER_KEY') }}"

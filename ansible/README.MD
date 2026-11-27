@@ -18,6 +18,12 @@ ansible-core 2.19, and this controller is 2.18, so an unpinned install prints a 
 every run and then uses a collection built against a newer core. Bump a range only after
 `ansible --version` on the machine that runs it.
 
+`make check` and `make apply` read the one secret the roles need — the CrowdSec bouncer key — from
+`~/.config/secrets/homelab.env`, not from your shell: the file is the one copy outside git, mode 600,
+and a terminal that exported nothing still gets a drift report. A missing file reads as an empty key,
+so the run stops at the `crowdsec` role's assert before any host changes; `-e crowdsec_bouncer_key=…`
+overrides the file for a one-off run.
+
 **The rule: `make check` is the drift report, and a host that is correct prints no `changed`.** A
 `changed` line is either a host drifting from this repository or a task that is not idempotent; both
 are defects to read, not noise to tolerate.
@@ -109,6 +115,9 @@ and the system role is the one that collects them after it has named the running
   page.
 - **No secrets.** The Pis' `pihole.env` and `wg-easy.env` are gitignored and the script requires them
   rather than writing them; every other secret is a Kubernetes Secret, listed in `docs/secrets.md`. The
+  one exception is the CrowdSec bouncer key, which the `crowdsec` role reads from
+  `~/.config/secrets/homelab.env` and hands to `streaming` without ever being written here: the host
+  file it lands in is mode 600 and is the Secret's `api-key` value. The
   keys in `trusted_ssh_keys` are public halves: they name a laptop and cannot log in without the private
   half, which never leaves the machine that made it.
 - **No rule for a published container port.** Docker's DNAT and the CNI's portmap are evaluated in NAT

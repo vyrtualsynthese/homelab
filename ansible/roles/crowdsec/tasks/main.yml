@@ -7,13 +7,14 @@
 - name: Refuse to run without the bouncer key
   ansible.builtin.assert:
     that:
-      - lookup('env', 'CROWDSEC_BOUNCER_KEY') | length >= 32
+      - crowdsec_bouncer_key | length >= 32
     fail_msg: >-
-      CROWDSEC_BOUNCER_KEY is empty or too short: it must be exactly the value the
-      `api-key` holds in the crowdsec-bouncer-key Secret. That key is not issued by
-      any command in this repo — the LAPI registers it at start-up from the chart's
-      BOUNCER_KEY_firewall environment variable. Mint a new one with
-      `openssl rand -hex 32` and set the same value in both places.
+      crowdsec_bouncer_key is empty or too short: set CROWDSEC_BOUNCER_KEY in
+      {{ crowdsec_secrets_file }} to exactly the value the `api-key` holds in the
+      crowdsec-bouncer-key Secret. That key is not issued by any command in this
+      repo — the LAPI registers it at start-up from the chart's BOUNCER_KEY_firewall
+      environment variable. Mint a new one with `openssl rand -hex 32` and set the
+      same value in both places, or pass `-e crowdsec_bouncer_key=...` for one run.
 
 # `deb822_repository` is a thin wrapper over python3-debian. Under `--check` this
 # task installs nothing, so the module still fails its import; the first `--check`
