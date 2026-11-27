@@ -73,8 +73,8 @@
     "noDataState": "OK",
     "execErrState": "OK",
     "annotations": {
-      "description": "The nftables bouncer on streaming added {{ $value }} addresses in ten minutes. A few is routine; this many means a CrowdSec scenario matched a lot of traffic. `cscli decisions list` names them, and the dashboard's *Bans active* tile shows the total.",
-      "summary": "{{ $value }} new firewall bans in 10 minutes"
+      "description": "The Local API created {{ $value }} decisions in ten minutes from this installation's own alerts; a blocklist pull is not counted. A few is routine; this many means a CrowdSec scenario matched a lot of traffic. `cscli decisions list` names them, and the dashboard's *Bans active* tile shows the total.",
+      "summary": "{{ $value }} new CrowdSec decisions in 10 minutes"
     },
     "labels": {
       "severity": "warning"
