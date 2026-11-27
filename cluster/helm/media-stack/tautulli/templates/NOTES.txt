@@ -6,7 +6,7 @@ URL:
   http://{{ .Values.ingressRoute.host }}{{ .Values.ingressRoute.pathPrefix }}
 
 That host resolves only inside the LAN: it is the Pi-hole wildcard record for
-`kub.local`, not a public name. The router is on the `web` entry point, so it is
+`kub.internal`, not a public name. The router is on the `web` entry point, so it is
 plain HTTP by design.
 {{- else }}
 
