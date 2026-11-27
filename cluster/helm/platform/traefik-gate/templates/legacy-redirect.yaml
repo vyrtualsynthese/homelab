@@ -1,0 +1,102 @@
+{{- /*
+The old internal zone. From 2026-11-27 every chart serves `*.kub.internal`; this pair is what keeps
+a bookmark, an alert link and a browser history entry written for `*.kub.local` working until the
+soak ends.
+
+`priority: 1` on the general rules is what keeps them underneath the applications. Traefik ranks a
+rule by its length, and `HostRegexp(`^[a-z0-9-]+\.kub\.local$`)` is longer than an exact
+`Host(`sonarr.kub.local`)`: on length alone this wildcard would outrank every application route and
+shadow all of them. With the priority set, an exact route always wins, and a name only falls through
+to the redirect while it has no route of its own. That is also why applying this before the charts are
+renamed changes nothing — each name keeps its application route until ArgoCD switches that chart over,
+instead of being dead in between.
+
+Two middlewares, because the upgrade is not the same for every name. `http://sonarr.kub.local` must
+land on `https://sonarr.kub.internal` in one hop: replaying the scheme would send it to `http`, and
+the application's own `web` router would then redirect a second time. `pgadmin` and `prometheus` are
+the exception — they have no `websecure` router, so they keep `http` and get a rule of their own that
+outranks the general one.
+
+302, not 301: a permanent redirect would teach a client to replay a POST as a GET.
+*/ -}}
+apiVersion: {{ .Values.traefik.apiVersion }}
+kind: IngressRoute
+metadata:
+  name: legacy-internal-redirect
+  namespace: kube-system
+  labels:
+    app.kubernetes.io/name: traefik-gate
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  entryPoints:
+    - web
+  routes:
+    - kind: Rule
+      match: HostRegexp(`^pgadmin\.kub\.local$|^prometheus\.kub\.local$`)
+      priority: 2
+      middlewares:
+        - name: kube-system-lan-only@kubernetescrd
+        - name: kube-system-redirect-to-internal-plain@kubernetescrd
+      services:
+        - name: noop@internal
+          kind: TraefikService
+    - kind: Rule
+      match: HostRegexp(`^[a-z0-9-]+\.kub\.local$`)
+      priority: 1
+      middlewares:
+        - name: kube-system-lan-only@kubernetescrd
+        - name: kube-system-redirect-to-internal-tls@kubernetescrd
+      services:
+        - name: noop@internal
+          kind: TraefikService
+---
+apiVersion: {{ .Values.traefik.apiVersion }}
+kind: IngressRoute
+metadata:
+  name: legacy-internal-redirect-tls
+  namespace: kube-system
+  labels:
+    app.kubernetes.io/name: traefik-gate
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - kind: Rule
+      match: HostRegexp(`^[a-z0-9-]+\.kub\.local$`)
+      priority: 1
+      middlewares:
+        - name: kube-system-lan-only@kubernetescrd
+        - name: kube-system-redirect-to-internal-tls@kubernetescrd
+      services:
+        - name: noop@internal
+          kind: TraefikService
+  tls: {}
+---
+apiVersion: {{ .Values.traefik.apiVersion }}
+kind: Middleware
+metadata:
+  name: redirect-to-internal-tls
+  namespace: kube-system
+  labels:
+    app.kubernetes.io/name: traefik-gate
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  redirectRegex:
+    regex: ^https?://([a-z0-9-]+)\.kub\.local(.*)$
+    replacement: https://${1}.kub.internal${2}
+    permanent: false
+---
+apiVersion: {{ .Values.traefik.apiVersion }}
+kind: Middleware
+metadata:
+  name: redirect-to-internal-plain
+  namespace: kube-system
+  labels:
+    app.kubernetes.io/name: traefik-gate
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  redirectRegex:
+    regex: ^https?://([a-z0-9-]+)\.kub\.local(.*)$
+    replacement: http://${1}.kub.internal${2}
+    permanent: false
