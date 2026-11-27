@@ -2,8 +2,9 @@
 
 2026-11-27.
 
-> **Status: for review.** Workstream A is built on this branch; B and C are not. The plan follows
-> (`docs/superpowers/plans/`), then implementation.
+> **Status: A merged; B and C not planned.** Workstream A is built and live, with the blocklist
+> filter corrected in PR #1672; proof 5 passed on 2026-11-27 and proofs 1–4 are outstanding. The
+> plans for B and C follow (`docs/superpowers/plans/`).
 
 ## Intent
 
