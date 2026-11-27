@@ -46,4 +46,9 @@ data:
     # CoreDNS chains `forward` stanzas in file order, so this one is consulted
     # before the catch-all — which is why the fix lives here: the Corefile is
     # K3s's and is rewritten at every start.
+    #
+    # `kub.internal` is the zone every route serves from 2026-11-27, and a
+    # public resolver in the node's list answers it with NXDOMAIN just as it did
+    # for `kub.local`.
     forward kub.local 192.168.1.22 192.168.1.38
+    forward kub.internal 192.168.1.22 192.168.1.38
