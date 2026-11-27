@@ -1,0 +1,10 @@
+[Unit]
+Description=Install the authority's wg-easy database on the standby
+# The Panel is a compose service, not a unit, so there is nothing to order this
+# after but Docker itself. What protects the swap is the script: it stops the
+# Panel before the file is replaced and starts it again after, and a start that
+# fails is reported rather than left silent.
+
+[Service]
+Type=oneshot
+ExecStart=@WG_LIB@/wg-sync.sh
