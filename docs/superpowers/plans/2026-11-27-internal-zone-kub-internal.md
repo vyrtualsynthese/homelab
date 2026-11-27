@@ -948,6 +948,7 @@ git commit -m "🚀 feat(docs): generate the routes page for kub.internal"
 - Edit `docs/how-it-works/network.md` (a section on `.internal` and Android)
 - Edit the chart prose that still asserts the old zone: `cluster/helm/**/README.md` and the
   `*.yaml` comments found by Step 2b
+- Edit the printed verification example in `hack/internal-cert.sh` (Step 2b)
 
 **Step 1: list the living pages**
 
@@ -1002,7 +1003,11 @@ certificate and one policy for `*.kub.local`". Leave alone:
   zone by design, and its regexes must keep the suffix.
 - `cluster/helm/monitoring/pihole-exporter/**` — `pihole-rbp0.kub.local` and `pihole-rbp1.kub.local`
   are the Pis' own names, outside the cluster's zone.
-- `cluster/helm/authentik/files/**` — Task 8 owns the blueprints.
+- `cluster/helm/authentik/files/**` — Task 8 already swept the blueprints; only the historical note at
+  `outpost-embedded.yaml:11` keeps the old zone, and it stays.
+- `hack/internal-cert.sh` — the SAN line and the leaf file names keep both zones by design (the soak),
+  but the printed `openssl s_client` example at `:171` names `calibre.kub.local` as the name to verify;
+  show `calibre.kub.internal`, the name that now serves the page.
 - Any sentence about the past ("did until 2026-11-17", "was", "used to", the soak).
 
 Edit the chart `README.md` files by hand rather than with a blanket `sed`: they mix history with
@@ -1084,7 +1089,7 @@ each in place; do not silence the check.
 **Step 7: commit**
 
 ```bash
-git add docs mkdocs.yml cluster/helm
+git add docs mkdocs.yml cluster/helm hack/internal-cert.sh
 git commit -m "📝 docs: describe the kub.internal zone and record the decision"
 ```
 
