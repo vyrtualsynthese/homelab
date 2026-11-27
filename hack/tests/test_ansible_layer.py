@@ -528,7 +528,7 @@ def test_every_firewall_rule_names_a_source_set_that_resolves():
     rules = yaml.safe_load((ANSIBLE / "roles/firewall/vars/main.yml").read_text())
     defined = set()
     resolve = (ANSIBLE / "roles/firewall/tasks/resolve.yml").read_text()
-    for name in ("lan", "nodes", "servers", "vpn"):
+    for name in ("lan", "nodes", "servers", "vpn", "panel"):
         assert f"'{name}':" in resolve, f"resolve.yml defines no source set {name!r}"
         defined.add(name)
     for key in ("firewall_rules_cluster", "firewall_rules_edge", "firewall_rules_nas"):

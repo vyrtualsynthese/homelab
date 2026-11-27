@@ -1024,7 +1024,12 @@ def expected_firewall_commands():
     edge = yaml.safe_load(
         (REPO / "ansible/inventory/group_vars/edge.yml").read_text()
     )
-    sources = {"lan": [lan], "nodes": cluster, "vpn": edge["vpn_cidrs"]}
+    sources = {
+        "lan": [lan],
+        "nodes": cluster,
+        "vpn": edge["vpn_cidrs"],
+        "panel": edge["panel_cidrs"],
+    }
     return [
         f"ufw allow from {address} to any port {rule['port']} "
         f"proto {rule['proto']} comment '{rule['comment']}'"
@@ -1049,6 +1054,25 @@ def test_the_edge_rule_set_opens_piholes_https_port():
     )["firewall_rules_edge"]
     https = {(rule["source"], rule["proto"]) for rule in rules if rule["port"] == 443}
     assert https == {("lan", "tcp"), ("vpn", "tcp")}
+
+
+def test_the_edge_rule_set_admits_dns_from_the_panel_network():
+    """wg-easy masquerades a peer's traffic to its own address on the compose
+    network, so ufw sees 172.30.0.2 and the tunnel rules match nothing. Without
+    the panel pair a connected peer has no resolver at all — measured on rbp0 on
+    2026-11-27, where the query was dropped with `SRC=172.30.0.2 DPT=53`."""
+    rules = yaml.safe_load(
+        (REPO / "ansible/roles/firewall/vars/main.yml").read_text()
+    )["firewall_rules_edge"]
+    dns = {(rule["source"], rule["proto"]) for rule in rules if rule["port"] == 53}
+    assert dns == {
+        ("lan", "tcp"),
+        ("lan", "udp"),
+        ("vpn", "tcp"),
+        ("vpn", "udp"),
+        ("panel", "tcp"),
+        ("panel", "udp"),
+    }
 
 
 def test_render_names_the_published_ports_ufw_never_sees():
@@ -1138,7 +1162,7 @@ def test_ensure_firewall_applies_every_rule_and_is_idempotent(tmp_path):
     out = subprocess.run(["bash", "-c", code], capture_output=True, text=True, env=env)
 
     assert out.returncode == 0, out.stderr
-    assert "first=19" in out.stdout, out.stdout  # 17 rules, the defaults, the enable
+    assert "first=21" in out.stdout, out.stdout  # 19 rules, the defaults, the enable
     assert "second=0" in out.stdout, out.stdout
     assert sorted((state / "added").read_text().splitlines()) == sorted(
         firewall_commands()

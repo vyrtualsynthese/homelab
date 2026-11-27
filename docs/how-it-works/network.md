@@ -168,11 +168,14 @@ until 2026-11-26.
 panel is reachable from the LAN and not from outside, the same position Pi-hole's own `443` holds.
 
 Both hosts run `ufw` with default deny incoming and allow routed. The edge rule set opens 22, 80, 443
-and 53 to the LAN, 53, 80 and 443 to the WireGuard tunnel `10.8.0.0/24`, and 9100 and 9323 to the four
-cluster nodes; `ansible/roles/firewall/vars/main.yml` is the record and `ansible/pi/hosts-pi.sh`
-applies it. Pi-hole's `443` is a host-network port and needs its rule. The published container ports
-on this page — the WireGuard listener, Caddy's `8443` and the SMART exporter's `9902` — are DNAT'd
-before `INPUT` and are not filtered by `ufw` at all.
+and 53 to the LAN, 53 from the compose network `172.30.0.0/24`, 53, 80 and 443 to the WireGuard tunnel
+`10.8.0.0/24`, and 9100 and 9323 to the four cluster nodes; `ansible/roles/firewall/vars/main.yml` is
+the record and `ansible/pi/hosts-pi.sh` applies it. The tunnel's own rules match nothing while wg-easy
+masquerades a peer's traffic to its container address, so the `172.30.0.0/24` pair is what lets a peer
+resolve through Pi-hole; before 2026-11-27 no rule admitted that source and the query was dropped.
+Pi-hole's `443` is a host-network port and needs its rule. The published container ports on this page —
+the WireGuard listener, Caddy's `8443` and the SMART exporter's `9902` — are DNAT'd before `INPUT` and
+are not filtered by `ufw` at all.
 
 ## TLS on the public names
 

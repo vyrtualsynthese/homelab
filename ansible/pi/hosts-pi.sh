@@ -118,10 +118,13 @@ PIHOLE_DNS_SERVERS="192.168.1.22, 192.168.1.38"
 # four node addresses are the cluster group in inventory order, because the
 # exporters are host-network and only those four may read them; the tunnel is
 # the subnet inside each wg-easy container's wg0, measured 10.8.0.1/24 on both
-# on 2026-11-26.
+# on 2026-11-26; the panel network is the compose network that container joins,
+# and it is where a peer's traffic arrives from, because wg-easy masquerades it
+# to its own address there (measured on rbp0 on 2026-11-27).
 LAN_CIDR="192.168.1.0/24"
 CLUSTER_ADDRESSES="192.168.1.41 192.168.1.27 192.168.1.46 192.168.1.48"
 VPN_CIDR="10.8.0.0/24"
+PANEL_CIDR="172.30.0.0/24"
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="${PI_ROOT:-}"
 ROOT="${ROOT%/}"
@@ -715,6 +718,10 @@ ensure_sshd_policy() {
 #
 # 443 is here because Pi-hole is the other case: it runs with network_mode: host,
 # so its HTTPS panel reaches INPUT, and `hack/check_pihole_parity.py` dials it.
+# wg-easy masquerades a peer's traffic to its own address on the compose network
+# before it leaves, so ufw sees `172.30.0.2` and the four tunnel rules match
+# nothing today; the two `panel` rules are what let a peer reach Pi-hole, and
+# without them the remote client has no resolver at all.
 # 9100 and 9323 are host-network exporters that Prometheus scrapes from a pod
 # egressing as `nas`; the failure without a rule is silent.
 firewall_rule_table() {
@@ -728,6 +735,8 @@ firewall_rule_table() {
 53|udp|vpn|DNS for clients on the WireGuard tunnel
 80|tcp|vpn|the Pi-hole web interface from the tunnel
 443|tcp|vpn|Pi-hole HTTPS web interface from the tunnel
+53|tcp|panel|DNS from the wg-easy container, the tunnel's source after masquerade
+53|udp|panel|DNS from the wg-easy container, the tunnel's source after masquerade
 9100|tcp|nodes|node-exporter, scraped by a pod that egresses as its node
 9323|tcp|nodes|the Docker metrics endpoint daemon.json opens on 0.0.0.0
 EOF
@@ -740,6 +749,7 @@ firewall_source_addresses() {
         lan) printf '%s\n' "$LAN_CIDR" ;;
         nodes) printf '%s\n' $CLUSTER_ADDRESSES ;;
         vpn) printf '%s\n' "$VPN_CIDR" ;;
+        panel) printf '%s\n' "$PANEL_CIDR" ;;
         *)
             echo "unknown firewall source '$1'" >&2
             exit 1

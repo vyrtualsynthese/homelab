@@ -95,8 +95,14 @@ one record alone fails a test rather than leaving half the fleet on the other.
   from the LAN only, and `sudo` drops `SSH_CLIENT`, so no guard inside the script can see where you
   came from.
 - **What is open:** 22, 80, 443 and 53 from the LAN; 53, 80 and 443 from the WireGuard tunnel
-  `10.8.0.0/24`; 9100 and 9323 from the four cluster nodes. 443 is Pi-hole's own HTTPS panel: it
-  runs with `network_mode: host`, so it reaches `INPUT`, and `hack/check_pihole_parity.py` reads it.
+  `10.8.0.0/24`; 53 from the compose network `172.30.0.0/24`; 9100 and 9323 from the four cluster
+  nodes. 443 is Pi-hole's own HTTPS panel: it runs with `network_mode: host`, so it reaches `INPUT`,
+  and `hack/check_pihole_parity.py` reads it.
+- **The tunnel's own address never reaches ufw.** wg-easy masquerades a peer's traffic to its own
+  address on that compose network before it leaves, so the four `10.8.0.0/24` rules match nothing and
+  the `172.30.0.0/24` pair is what gives a connected peer a resolver. Measured on `rbp0` on
+  2026-11-27: `[UFW BLOCK]` in `/var/log/ufw.log` with `SRC=172.30.0.2` and `DPT=53`. Both sets stay:
+  the tunnel pair is what a packet carrying the tunnel's own address would need.
 - **`allow routed`, not deny.** Docker's containers egress through `FORWARD`; a deny there takes
   every one of them, Pi-hole included, off the network.
 - **What ufw never sees:** the published container ports — `5182x/udp` (wg-easy), `8443/tcp`

@@ -18,7 +18,9 @@
       {%- set nodes = groups['cluster'] | map('extract', hostvars, 'ansible_host') | list -%}
       {%- set servers = groups['servers'] | map('extract', hostvars, 'ansible_host') | list -%}
       {%- set vpn = vpn_cidrs | default([]) -%}
-      {%- set sources = {'lan': lan, 'nodes': nodes, 'servers': servers, 'vpn': vpn} -%}
+      {%- set panel = panel_cidrs | default([]) -%}
+      {%- set sources = {'lan': lan, 'nodes': nodes, 'servers': servers,
+                         'vpn': vpn, 'panel': panel} -%}
       {%- set out = [] -%}
       {%- for rule in firewall_rules -%}
       {%-   for address in sources[rule.source] -%}
