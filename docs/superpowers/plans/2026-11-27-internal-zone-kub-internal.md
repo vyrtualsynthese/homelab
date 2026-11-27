@@ -749,6 +749,8 @@ its redirect from. A native OIDC application's `redirect_uris` must match what t
 **Files:**
 - Edit `hack/tests/test_authentik_blueprints.py`
 - Edit `cluster/helm/authentik/files/app-*.yaml` (12 files)
+- Edit `hack/tests/test_crowdsec_web_ui_chart.py` — the `BLUEPRINT_HOST` transition constant the
+  zone rename left pointing at the old zone, and the test name that still says `kub_local`
 
 **Step 1: write the failing test**
 
@@ -783,6 +785,13 @@ Every `external_host: https://<app>.kub.local`, `meta_launch_url: https://<app>.
 `app-syncthing.yaml`, `app-dashy.yaml` and the authentik sign-in page itself name public hosts and
 are untouched — the test will say so if one is missed or wrongly changed.
 
+`hack/tests/test_crowdsec_web_ui_chart.py` carries the one transition the chart rename left behind:
+its `HOST` is already `crowdsec.kub.internal`, while `BLUEPRINT_HOST` still names the old zone, so the
+suite could stay green before this change. Flip `BLUEPRINT_HOST` to `crowdsec.kub.internal`, delete
+the comment above it that explains the split, and rename
+`test_the_route_is_internal_tls_on_kub_local_and_lan_only` — its `kub_local` is the last stale name in
+that file. `blueprint_half_is_internal`-style wording is enough; keep the assertions as they are.
+
 **Step 4: verify**
 
 ```bash
@@ -793,7 +802,8 @@ helm lint cluster/helm/authentik
 **Step 5: commit**
 
 ```bash
-git add hack/tests/test_authentik_blueprints.py cluster/helm/authentik/files
+git add hack/tests/test_authentik_blueprints.py hack/tests/test_crowdsec_web_ui_chart.py \
+  cluster/helm/authentik/files
 git commit -m "🚀 feat(authentik): move the internal providers to kub.internal"
 ```
 
