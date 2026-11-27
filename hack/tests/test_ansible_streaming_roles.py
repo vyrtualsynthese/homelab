@@ -72,11 +72,30 @@ class BouncerRoleTests(unittest.TestCase):
         tasks = (self.role / "tasks/main.yml").read_text()
         self.assertIn('name: "{{ crowdsec_package }}"', tasks)
 
-    def test_the_key_is_required_and_comes_from_the_environment(self):
+    def test_the_key_is_required_and_comes_from_the_secrets_file(self):
         tasks = (self.role / "tasks/main.yml").read_text()
-        self.assertIn("CROWDSEC_BOUNCER_KEY", tasks)
-        self.assertIn("lookup('env', 'CROWDSEC_BOUNCER_KEY')", tasks)
+        defaults = (self.role / "defaults/main.yml").read_text()
+        site = (ANSIBLE / "playbooks/site.yml").read_text()
+        # The key is a secret the operator keeps in a file outside git, so the
+        # drift report runs from a shell that exported nothing. Reading the
+        # shell again would make `make check` fail on setup, not on drift.
+        self.assertIn("crowdsec_secrets_file", defaults)
+        self.assertIn("/.config/secrets/homelab.env", defaults)
+        self.assertIn("CROWDSEC_BOUNCER_KEY", defaults)
+        self.assertIn("lookup('ansible.builtin.file', crowdsec_secrets_file", defaults)
+        self.assertNotIn("lookup('env', 'CROWDSEC_BOUNCER_KEY')", tasks)
+        self.assertNotIn("lookup('env', 'CROWDSEC_BOUNCER_KEY')", site)
+        self.assertIn("crowdsec_bouncer_key | length >= 32", tasks)
+        self.assertIn("crowdsec_secrets_file", tasks)
         self.assertIn("no_log: true", tasks)
+
+    def test_a_missing_secrets_file_reads_as_an_empty_key(self):
+        # `errors='ignore'` plus the empty default is what keeps the assert, and
+        # not an unhandled lookup error, the thing a run without the file stops
+        # at: the play still reaches the fail_msg, before any host changes.
+        defaults = (self.role / "defaults/main.yml").read_text()
+        self.assertIn("errors='ignore'", defaults)
+        self.assertIn("| default('', true)", defaults)
 
     def test_the_config_file_carries_the_pinned_address_and_no_plaintext_key(self):
         template = (self.role / "templates/bouncer.yaml.j2").read_text()

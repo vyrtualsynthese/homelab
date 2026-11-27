@@ -19,3 +19,16 @@ crowdsec_metrics_port: 60601
 # The only host that scrapes. `ufw` filters the bouncer's listener like any other
 # INPUT port, so this is an allow rule, not a formality.
 crowdsec_scraper: "{{ hostvars['nas'].ansible_host }}"
+
+# The bouncer key, read from the operator's secrets file rather than from the
+# caller's shell: `make check` from a fresh terminal is a drift report, and a
+# variable nobody exported is not drift. The file is outside git (`docs/secrets.md`),
+# mode 600, and its `CROWDSEC_BOUNCER_KEY` line carries the same value as the
+# `api-key` field of the `crowdsec-bouncer-key` Secret. A missing file reads as an
+# empty key, which the role's first assert refuses before any host changes;
+# `-e crowdsec_bouncer_key=...` still wins for a one-off run.
+crowdsec_secrets_file: "{{ lookup('env', 'HOME') }}/.config/secrets/homelab.env"
+crowdsec_bouncer_key: >-
+  {{ (lookup('ansible.builtin.file', crowdsec_secrets_file, errors='ignore')
+      | regex_findall('(?m)^\s*(?:export\s+)?CROWDSEC_BOUNCER_KEY=(.*?)\s*$')
+      | first | default('', true)) }}

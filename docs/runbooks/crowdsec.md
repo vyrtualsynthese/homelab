@@ -123,8 +123,9 @@ the LAPI is unreachable, or when the bouncer's listener is down. In order:
 the bouncer runs, its listener answers, and its request counter is flat, so the ban set is frozen
 while the dashboard reports it healthy. The configuration it reads is
 `/etc/crowdsec/bouncers/crowdsec-firewall-bouncer.yaml` on `streaming`, written by the Ansible role
-from `crowdsec_lapi_url` and `$CROWDSEC_BOUNCER_KEY`; `update_frequency: 10s` is the poll the rule
+from `crowdsec_lapi_url` and the `CROWDSEC_BOUNCER_KEY` line of `~/.config/secrets/homelab.env`;
+`update_frequency: 10s` is the poll the rule
 measures. `kubectl -n security exec deploy/crowdsec-lapi -- cscli bouncers list` names the bouncer's
 last poll, and `journalctl -u crowdsec-firewall-bouncer -n 50` on `streaming` says why it stopped —
-a stale key answers `403`, and an unreachable LAPI names the address. Re-run the role with the key
-present in the environment and the handler restarts the service.
+a stale key answers `403`, and an unreachable LAPI names the address. Re-run the role once the key is
+in that file and the handler restarts the service.
