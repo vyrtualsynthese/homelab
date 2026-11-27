@@ -936,6 +936,8 @@ git commit -m "🚀 feat(docs): generate the routes page for kub.internal"
 - Edit `docs/decisions/README.md` (the records table)
 - Edit every living page that names `*.kub.local` (the list below)
 - Edit `docs/how-it-works/network.md` (a section on `.internal` and Android)
+- Edit the chart prose that still asserts the old zone: `cluster/helm/**/README.md` and the
+  `*.yaml` comments found by Step 2b
 
 **Step 1: list the living pages**
 
@@ -971,6 +973,30 @@ Then read the pages where the old zone is the subject rather than a name:
   old names redirect during the soak.
 - `docs/observability-conventions.md`, `docs/agent-access.md`, `docs/qbittorrent-webui-stalls.md` —
   hostnames only.
+
+**Step 2b: sweep the chart prose**
+
+The charts carry prose that names the served zone: `# --` doc comments in `values.yaml`, header
+comments in templates, and each chart's `README.md`. A comment may explain the old zone; a sentence
+that says the cluster serves `*.kub.local` is now false, and the guard test skips comments by design.
+
+```bash
+grep -rn 'kub\.local' cluster/helm --include='*.yaml' --include='*.md'
+```
+
+Rename a line only when it asserts current behaviour — "`web` is plain HTTP on kub.local", "the
+cluster serves `*.kub.local` from the default certificate", "the host is a `.kub.local` name", "one
+certificate and one policy for `*.kub.local`". Leave alone:
+
+- `cluster/helm/platform/traefik-gate/templates/legacy-redirect.yaml` — the redirect is about the old
+  zone by design, and its regexes must keep the suffix.
+- `cluster/helm/monitoring/pihole-exporter/**` — `pihole-rbp0.kub.local` and `pihole-rbp1.kub.local`
+  are the Pis' own names, outside the cluster's zone.
+- `cluster/helm/authentik/files/**` — Task 8 owns the blueprints.
+- Any sentence about the past ("did until 2026-11-17", "was", "used to", the soak).
+
+Edit the chart `README.md` files by hand rather than with a blanket `sed`: they mix history with
+current state, and the same sentence may be true in one and false in the other.
 
 **Step 3: add the network section**
 
@@ -1045,7 +1071,7 @@ each in place; do not silence the check.
 **Step 7: commit**
 
 ```bash
-git add docs mkdocs.yml
+git add docs mkdocs.yml cluster/helm
 git commit -m "📝 docs: describe the kub.internal zone and record the decision"
 ```
 
