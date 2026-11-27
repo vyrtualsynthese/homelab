@@ -51,10 +51,24 @@ class ChartTests(unittest.TestCase):
         # wrong password.
         self.assertEqual(values["CONFIG_INSTANCES_0_LAPI_URL"], "http://crowdsec-service:8080")
         self.assertEqual(values["CONFIG_INSTANCES_0_LAPI_AUTH_USERNAME"], "crowdsec-web-ui")
-        # A metrics tab would need the LAPI's 6060, which no Service exposes: Prometheus
-        # scrapes that port on the pod IP. Pointing the UI at the Service would leave the
-        # tab permanently empty, so no metrics entry is configured.
-        self.assertNotIn("CONFIG_INSTANCES_0_METRICS_0_URL", values)
+        # The sidebar's Metrics tab reads the LAPI's own Prometheus listener, which
+        # `crowdsec-service` exposes when `lapi.metrics.enabled` is set — the next
+        # test pins that flag. Prometheus itself keeps scraping the pod IP by
+        # annotation, so this entry adds no scrape and no second Service.
+        self.assertEqual(
+            values["CONFIG_INSTANCES_0_METRICS_0_URL"],
+            "http://crowdsec-service:6060/metrics",
+        )
+
+    def test_the_lapi_service_renders_the_metrics_port_the_ui_reads(self):
+        crowdsec = yaml.safe_load(
+            (ROOT / "cluster/helm/security/crowdsec/values.yaml").read_text()
+        )
+        # The UI's URL is only right while this stays true: the upstream chart adds
+        # port 6060 to `crowdsec-service` for `lapi.metrics.enabled`, and the
+        # listener binds it because the LAPI's config says so.
+        self.assertTrue(crowdsec["crowdsec"]["lapi"]["metrics"]["enabled"])
+        self.assertIn("listen_port: 6060", crowdsec["crowdsec"]["config"]["config.yaml.local"])
 
     def test_the_two_secrets_come_from_a_secret_and_never_from_values(self):
         references = {

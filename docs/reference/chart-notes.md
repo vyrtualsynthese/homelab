@@ -585,7 +585,11 @@ claims are the ones the previous chart created and a `local-path` claim cannot s
 As of 2026-11-25: the reference chart's templates, unchanged, with this image's values (pattern A,
 six objects). It is the second view of the CrowdSec stack: it reads the LAPI over the cluster network
 at `http://crowdsec-service:8080` and needs no Prometheus, Loki or Grafana, which is the point — the
-Grafana dashboard is still the trend view, this one has the button that undoes a wrong ban. It
+Grafana dashboard is still the trend view, this one has the button that undoes a wrong ban. Its
+Metrics tab reads the LAPI's own Prometheus listener at `http://crowdsec-service:6060/metrics` — the
+port the upstream chart renders on that Service while `lapi.metrics.enabled` is true — so the tab is
+live while the monitoring stack is not; Prometheus is unaffected, because it still scrapes the pod IP
+by annotation. It
 authenticates with its own OIDC (blueprint `app-crowdsec-web-ui`), the route is `websecure` +
 `internal-tls` + `lan-only` on `crowdsec.kub.local`, and there is no gate in front, because native
 OIDC comes first here. Two credentials it needs are not issued by authentik: the LAPI machine

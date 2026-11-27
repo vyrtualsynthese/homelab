@@ -35,7 +35,9 @@ its SQLite is state, and `nas` is where state is backed up.
 | The web UI | Deployment `crowdsec-web-ui`, node `nuc0` | `https://crowdsec.kub.local` — Admins only, reads the LAPI directly, so it works while Grafana does not |
 
 Two ports, and they are not interchangeable: `60601` is the bouncer's own metrics listener, the one
-Prometheus scrapes from `nas`; `6060` is the metrics listener inside each pod. The LAPI's API is
+Prometheus scrapes from `nas`; `6060` is the metrics listener inside each pod. The web UI reads the
+LAPI's copy through `crowdsec-service:6060` for its Metrics tab, which is why that tab works without
+Grafana. The LAPI's API is
 `8080`, and the bouncer reaches it at a ClusterIP pinned for it in the chart
 (`crowdsec-lapi-host`), not at a NodePort: the NodePort that came first answered on every node's LAN
 address, and a registration endpoint every device in the house can reach is a surface that can be
