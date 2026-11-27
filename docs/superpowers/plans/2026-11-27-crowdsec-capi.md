@@ -420,7 +420,7 @@ kubectl -n security exec deploy/crowdsec-lapi -- cscli decisions list --origin C
   | jq -r '.[].value'
 ```
 
-Expected: a list of public addresses. Any line in `192.168.1.*` or `10.8.0.*` is a failure of Task 1, not a note: stop, and check that `capi_whitelists.yaml` is mounted and that `cscli capi status` names the file.
+Expected: a list of public addresses. Any line in `192.168.1.*`, `10.8.0.*`, `10.42.*` or `10.43.*` — the LAN and node addresses, the tunnel, the pod range and the service range — is a failure of Task 1 and a rollback of the values change, not a note: stop, and check that `capi_whitelists.yaml` is mounted and that `cscli capi status` names the file.
 
 - [ ] **Step 3: Confirm the kernel set moved, and the burst rule stayed quiet**
 
