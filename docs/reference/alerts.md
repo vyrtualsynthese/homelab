@@ -161,7 +161,7 @@ confirmed by the first read-back):**
 | `EdgeVpnSyncDiverged` | `wg_vpn_sync_diverged == 1` — the standby's copy was edited locally and the sync refuses to overwrite it, so the two disagree until somebody decides | 10m | warning | inactive |
 | `CloudDnsCheckFailing` | `1 - probe_success{job="blackbox-dns"}` — a zone's check failed at one authoritative server | 10m | critical | inactive |
 | `CloudTlsCertificateExpiring` | days to the earliest public certificate, firing below 21 | 1h | warning | inactive |
-| `SecurityBanBurst` | more than 20 new bans on the `streaming` bouncer in 10 minutes | 5m | warning | inactive |
+| `SecurityBanBurst` | more than 20 new decisions created here in 10 minutes | 5m | warning | inactive |
 | `AuthentikSignInFailures` | more than 20 failed authentik sign-ins in 15 minutes | 5m | warning | inactive |
 | `AuthentikSignInSuccessAfterBurst` | a sign-in that worked, from a source with more than 20 failures in the same 15 minutes | 5m | critical | inactive |
 | `HostSshBruteForce` | more than 10 failed SSH passwords on one host in 10 minutes | 5m | warning | inactive |
@@ -511,7 +511,7 @@ check.
 
 | Rule | Reads | Why that threshold |
 |---|---|---|
-| `SecurityBanBurst` | `delta(sum(fw_bouncer_banned_ips)[10m:1m])`, Prometheus | one or two bans a day is the normal rate; twenty in ten minutes is a scenario matching a stream |
+| `SecurityBanBurst` | `delta(sum(cs_active_decisions{origin="crowdsec"})[10m:1m])`, Prometheus | one or two bans a day is the normal rate; twenty decisions in ten minutes is a scenario matching a stream. The kernel set is not read: the first blocklist pull raises it by thousands in one step |
 | `AuthentikSignInFailures` | `homelab_authentik_signins_15m{outcome="failure"}` | the exporter's own count, so the rule cannot disagree with the dashboard's tile |
 | `AuthentikSignInSuccessAfterBurst` | `homelab_authentik_signins_15m_by_source{outcome="failure"} > 20` joined on `source` to `outcome="success" > 0` | the same twenty failures, plus the one event that turns a nuisance into a compromise; a measured typo burst is three |
 | `HostSshBruteForce` | `{source="journal", unit="ssh"}` filtered to failed passwords | 4 in 24 hours across the whole cluster on the day it was written |
@@ -623,11 +623,12 @@ reports `firing` on the Health dashboard.
   inside each line (`_HOSTNAME`) is not a stream label, so a rule has to extract it. The other units
   on every node stay unshipped by decision, and the volume is sized in
   [`log-budget.md`](log-budget.md#the-host-journal-first-numbers).
-- **CrowdSec is watched for silence, not for a dead poll.** `SecurityStackBlind` fires when the
-  firewall bouncer, the LAPI or the agent stops exporting its metrics. A bouncer that keeps exporting
-  while it no longer polls the LAPI — the scrape answers, the decision stream is dead — freezes the ban
-  set with every rule green. `rate(cs_lapi_bouncer_requests_total[10m])` read **0.1 req/s** (one poll
-  every 10 s) on 2026-11-26, so zero for ten minutes would name that case; no rule reads it yet.
+- **The bouncer rule proves a poll, not an accepted one.** `SecurityBouncerStalled` fires when
+  `rate(cs_lapi_bouncer_requests_total[10m])` reaches zero, which is the bouncer process gone or
+  hung. The metric carries `bouncer`, `route` and `method` and no status, so a bouncer holding a
+  revoked or wrong key still polls every ten seconds, is refused every time, and bans nothing while
+  the rule stays green. The LAPI's log (`kubectl -n security logs deploy/crowdsec-lapi | grep 401`)
+  is what names that case; no rule reads it.
 - **The success-after-a-burst rule sees one window and one shape.** `AuthentikSignInSuccessAfterBurst`
   reads the exporter's per-source family: a source with more than 20 failures in fifteen minutes that
   also signed in inside the same fifteen minutes. Two cases stay invisible by construction. A slow

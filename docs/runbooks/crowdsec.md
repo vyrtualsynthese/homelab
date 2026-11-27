@@ -6,12 +6,12 @@
 >
 > **Use it when** a chatty address is being refused, a legitimate visitor was banned, or the
 > `SecurityStackBlind` alert says the stack has stopped seeing anything · **Verified** not yet: the
-> four proofs below have not been run · **Kind:** how-to
+> five proofs below have not been run · **Kind:** how-to
 >
 > **Sources** `cluster/helm/security/crowdsec/values.yaml`, `ansible/roles/crowdsec/tasks/main.yml`,
 > `ansible/roles/crowdsec/templates/bouncer.yaml.j2`, `cluster/helm/monitoring/prometheus/values.yaml`
 
-**Status: pending — the four proofs below have not been run.**
+**Status: pending — the five proofs below have not been run.**
 
 Three pieces do the work. The **agent** reads one file and turns a pattern it recognises into a
 **decision** (CrowdSec's instruction to refuse one address for a while). The **LAPI** (CrowdSec's
@@ -27,6 +27,8 @@ its SQLite is state, and `nas` is where state is backed up.
 | Agent | Deployment `crowdsec-agent`, node `streaming` | `kubectl -n security logs deploy/crowdsec-agent` |
 | LAPI | Deployment `crowdsec-lapi`, node `nas` | `kubectl -n security logs deploy/crowdsec-lapi` |
 | Decisions | LAPI's SQLite, `local-path` claim on `nas` | `kubectl -n security exec deploy/crowdsec-lapi -- cscli decisions list` |
+| Blocklist decisions, and whether CAPI is registered | the LAPI | `kubectl -n security exec deploy/crowdsec-lapi -- cscli capi status` |
+| What the blocklist may never insert | `capi_whitelists.yaml` on the config claim | `kubectl -n security exec deploy/crowdsec-lapi -- cat /etc/crowdsec_data/capi_whitelists.yaml` |
 | Bans, as the kernel has them | `nftables` on `streaming`, table `crowdsec` | `nft list set ip crowdsec crowdsec-blacklists` |
 | Bouncer | host service on `streaming` | `systemctl status crowdsec-firewall-bouncer` |
 | Ban count, and the bouncer's liveness | the bouncer's own listener | `curl -s http://127.0.0.1:60601/metrics \| grep fw_bouncer_banned_ips` |
@@ -47,7 +49,7 @@ commands run on `streaming`, not on a laptop; the `kubectl` ones run from a lapt
 kubeconfig. The burst in proof 1 comes from a phone on mobile data; the LAN-side check in proof 2 and
 the burst in proof 3 come from a LAN machine.
 
-## The four proofs, run once when this was built
+## The five proofs, run once when each piece was built
 
 1. **A decision is created.** From an address outside the LAN — a phone on mobile data, against
    `https://ashuvidz.com` — request ten paths that do not exist, inside about ten seconds
@@ -66,12 +68,18 @@ the burst in proof 3 come from a LAN machine.
 4. **A restart keeps the bans.** Restart the agent; the `nft` set is unchanged, because the set lives
    in the kernel and the bouncer, not the agent, owns it. Restart the bouncer too: it re-reads the
    LAPI's decisions and rebuilds the same set, which is the half a naive `nft` script would lose.
+5. **The blocklist cannot reach the LAN.** After the first CAPI pull,
+   `cscli decisions list --origin CAPI -o json` names addresses, and none of them falls in
+   `192.168.1.0/24` or `10.8.0.0/24`; `nft list set ip crowdsec crowdsec-blacklists` holds the same
+   addresses and no LAN one. The file that makes this true is
+   `/etc/crowdsec_data/capi_whitelists.yaml`, read at pull time — a decision already in the table is
+   *not* retroactively removed, which is why the check reads the list and not a count.
 
 ## When these were last run
 
 Not yet. The page ships with the layer, so nothing above has been observed on this cluster: it is
 what the code is meant to do, not a record of a ban. After the stack converges the operator runs the
-four proofs, writes one dated line per proof under the list above with the command and the output it
+five proofs, writes one dated line per proof under the list above with the command and the output it
 gave, and the shelf row's status becomes `proved <date>`; in the same commit this opening sentence
 becomes the dated result, and the banner's **Verified** and this page's **Status:** line are replaced
 by that date, so a `proved` shelf row never sits above a body that still says the proofs were never
