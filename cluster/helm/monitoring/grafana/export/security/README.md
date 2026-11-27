@@ -8,7 +8,7 @@ export beside it states, for the same reason (two sources of truth in one folder
 
 | File | What it holds |
 |---|---|
-| `dashboard.json` | A direct `POST /api/dashboards/db` body: `{dashboard, folderUid: "homelab", overwrite: true}`. Nine panels, uid `homelab-security`, version 9. |
+| `dashboard.json` | A direct `POST /api/dashboards/db` body: `{dashboard, folderUid: "homelab", overwrite: true}`. Nine panels, uid `homelab-security`, version 11. |
 | `rules.json` | The eight security rules, as `GET /api/v1/provisioning/alert-rules` returns them, in that order. Seven are in `homelab-core-fast`, `SecurityExposureDrift` in `homelab-core`. `SecurityAttackSustained` was deleted from the database on 2026-11-26 and is no longer in this copy; `AuthentikSignInSuccessAfterBurst` was added the same day. |
 
 ## What the nine panels read
@@ -34,10 +34,10 @@ answers a parse error for the mixed set.
 `2 = alerting, 1 = watch, 0 = calm`, and each of the three was read on the screen once when the panel
 was created:
 
-- **2** — more than 20 bans in an hour, the posture counts moved, the security pipeline is blind, or
-  refusals above 85 % of everything. Proved by stopping the detector for real: `kubectl -n security
-  scale deploy/crowdsec-agent --replicas=0` took the tile red within a minute of the agent's series
-  going stale, and scaling it back turned it orange again.
+- **2** — more than 20 decisions created here in an hour, the posture counts moved, the security
+  pipeline is blind, or refusals above 85 % of everything. Proved by stopping the detector for real:
+  `kubectl -n security scale deploy/crowdsec-agent --replicas=0` took the tile red within a minute of
+  the agent's series going stale, and scaling it back turned it orange again.
 - **1** — any ban active, or more than 20 failed sign-ins in 15 minutes. Live at creation: three bans
   were in force.
 - **0** — none of the above; the ban term was neutralised and the tile read green.
