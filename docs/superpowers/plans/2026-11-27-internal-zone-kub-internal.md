@@ -1006,7 +1006,10 @@ certificate and one policy for `*.kub.local`". Leave alone:
 - Any sentence about the past ("did until 2026-11-17", "was", "used to", the soak).
 
 Edit the chart `README.md` files by hand rather than with a blanket `sed`: they mix history with
-current state, and the same sentence may be true in one and false in the other.
+current state, and the same sentence may be true in one and false in the other. An operator-facing
+instruction counts as current state even when it reads as prose: a README that says "set the OAuth
+Redirect Host to `https://calibre.kub.local`" would recreate the login loop the blueprint rename
+closed, so that line moves with the value.
 
 **Step 3: add the network section**
 
