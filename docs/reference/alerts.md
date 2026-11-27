@@ -18,7 +18,7 @@ The overview — what runs where, its sizing, and how to query the stack:
 
 Grafana unified alerting, folder `Homelab`, **two rule groups split by cadence
 on 2026-11-18**: `homelab-core-fast` at **60 s** (28 rules) and `homelab-core` at
-**300 s** (31 rules). **59 rules**, **two contact points**, and four child routes: two by severity and
+**300 s** (35 rules). **63 rules**, **two contact points**, and four child routes: two by severity and
 two on `board=card` — one to each contact point.
 
 The split rule is the `for` duration: a rule sits in the fast group when its `for`
@@ -121,6 +121,10 @@ confirmed by the first read-back):**
 | `LokiWriteFailing` | sustained 5xx on the Loki push route | 10m | warning | inactive |
 | `GrafanaAlertEvaluationFailing` | sustained rule-evaluation errors | 10m | warning | inactive |
 | `CloudEndpointDown` | `1 - probe_success{job="blackbox-http"}` — a public name answered something other than 200 | 5m | critical | inactive |
+| `EdgeVpnAddressUnheld` | neither edge host reports `wg_vpn_vrrp_master 1`, so nothing holds `192.168.1.9` and clients have nowhere to dial (`noDataState: Alerting`) | 10m | critical | inactive |
+| `EdgeVpnSnapshotStale` | `time() - wg_vpn_snapshot_timestamp_seconds > 600` on the authority, or the series absent — the copy stops advancing and a failover would serve an old peer set | 10m | warning | inactive |
+| `EdgeVpnStandbyStale` | `time() - maximum(wg_vpn_sync_timestamp_seconds) > 900`, or the series absent on the standby — the pull has stopped; the timestamp only moves on a run that ended current | 10m | warning | inactive |
+| `EdgeVpnSyncDiverged` | `wg_vpn_sync_diverged == 1` — the standby's copy was edited locally and the sync refuses to overwrite it, so the two disagree until somebody decides | 10m | warning | inactive |
 | `CloudDnsCheckFailing` | `1 - probe_success{job="blackbox-dns"}` — a zone's check failed at one authoritative server | 10m | critical | inactive |
 | `CloudTlsCertificateExpiring` | days to the earliest public certificate, firing below 21 | 1h | warning | inactive |
 | `SecurityBanBurst` | more than 20 new bans on the `streaming` bouncer in 10 minutes | 5m | warning | inactive |
@@ -131,6 +135,13 @@ confirmed by the first read-back):**
 | `SecurityExposureDrift` | an ungated route, or the public-host or privileged-controller count off its expected value | 10m | critical | inactive |
 | `SecurityStackBlind` | the exporter stale or a family gone, or no access-log line in 10 minutes (`noDataState: Alerting`) | 5m | critical | inactive |
 | `SecurityBouncerStalled` | the bouncer's decision-stream requests flat for 10 minutes | 5m | critical | inactive |
+
+The **four edge VPN rules** (2026-11-27) are one story in four pieces: two hosts answering for one
+address, a database copy that must keep arriving, and a refusal that must be seen when it fires. Each
+sits in `homelab-core` at `300 s` with `for: 10m`, and `noDataState: Alerting` where the series is the
+signal — a stopped timer writes nothing, so absence is the failure, not a quiet state. The staleness
+rules subtract from `time()` because the timestamp series never ages by itself: a script that stops
+leaves its last value standing, which is what makes the subtraction work.
 
 **`JobFailed`** is the batch-workload rule. Its expression is
 `((kube_job_status_failed > 0) unless on(namespace, job_name) (kube_job_status_succeeded > 0)) and on(namespace, job_name) ((time() - kube_job_status_start_time) < 7200)`:

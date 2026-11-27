@@ -102,6 +102,7 @@ nav:
       - Adopting a laptop for Ansible: runbooks/ansible-laptop-onboarding.md
       - An account on the switches: runbooks/switch-access.md
       - Reflashing an edge Pi: runbooks/pi-reflash.md
+      - Failing the edge VPN over: runbooks/edge-vpn-failover.md
       - Renovate: runbooks/renovate.md
       - The GPU stack: runbooks/gpu-operator.md
       - Cloud monitoring: runbooks/cloud-monitoring.md

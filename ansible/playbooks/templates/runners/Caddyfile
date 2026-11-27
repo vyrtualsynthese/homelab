@@ -17,11 +17,11 @@
 https://@PANEL_HOST@:8443 {
 	tls /certs/tls.pem /certs/tls-key.pem
 
-	# The panel builds its OAuth redirect URI from the host and scheme the
-	# browser used. It trusts them only from the compose network
-	# (TRUSTED_PROXIES), and Caddy replaces both headers rather than appending
-	# to a client-supplied value. Host is set explicitly so the panel sees the
-	# name and port the browser asked for, not the container's.
+	# The panel builds absolute URLs from the host and scheme the browser used.
+	# It trusts them only from the compose network (TRUSTED_PROXIES), and Caddy
+	# replaces both headers rather than appending to a client-supplied value.
+	# Host is set explicitly so the panel sees the name and port the browser
+	# asked for, not the container's.
 	reverse_proxy wg-easy:5000 {
 		header_up Host {http.request.hostport}
 		header_up X-Forwarded-Proto https
