@@ -67,9 +67,11 @@ and RFC 6762 Appendix G, which reserves `.local` for mDNS.
 
 **A — Rename the zone, keep the old names through one wildcard redirect, then remove the old zone
 (chosen).** The new name is primary everywhere; one router at low priority catches `*.kub.local`
-and redirects to the same subdomain under `.kub.internal`, preserving the scheme and path. The
-certificate carries both wildcards while the redirect exists. Old GETs and bookmarks keep working;
-API clients that cannot follow a redirect are updated explicitly (there are few).
+and redirects to the same subdomain under `.kub.internal`, keeping the path and upgrading to
+`https` in the same hop for every name that has a TLS route. The two plain-HTTP names keep their
+scheme, because they have no TLS route to land on. The certificate carries both wildcards while the
+redirect exists. Old GETs and bookmarks keep working; API clients that cannot follow a redirect are
+updated explicitly (there are few).
 
 **B — Hard rename.** One commit changes every host, DNS record and certificate, and the old names
 stop existing. Rejected: a saved URL, an alert link or a phone app on the old name breaks with no
@@ -182,19 +184,26 @@ One new template in `cluster/helm/platform/traefik-gate/templates/legacy-redirec
 shared behaviour stays with the middleware that already owns `lan-only` and `internal-tls`:
 
 - two routers, one per entry point:
-  - `web`: `HostRegexp(\`^[a-z0-9-]+\\.kub\\.local$\`)`, middlewares `lan-only` then
-    `redirect-to-internal`, no TLS;
-  - `websecure`: the same rule, `tls: {}` so the default `local-cert` answers the SNI, same
-    middlewares.
-- explicit `priority: 1` on both, because Traefik's default priority is rule length and the
-  `HostRegexp` rule would otherwise outrank an exact `Host` route.
-- one `redirectRegex` middleware:
-  - `regex: ^http(s?)://([a-z0-9-]+)\.kub\.local(.*)$`
-  - `replacement: http${1}://${2}.kub.internal${3}`
-  - `permanent: false` (302), so a client that retries a POST is not taught to change it to GET.
-  - Capturing the scheme and replaying it matters for the two plain-HTTP names: `pgadmin` and
-    `prometheus` have no TLS route, so an old `http://` bookmark must not be sent to `https://`.
-    The HTTPS-only apps then make their own `web` to `websecure` hop.
+  - `web`: two rules. The first matches only the two plain-HTTP names
+    (`HostRegexp(\`^pgadmin\\.kub\\.local$|^prometheus\\.kub\\.local$\`)`, `priority: 2`); the second
+    matches the rest (`HostRegexp(\`^[a-z0-9-]+\\.kub\\.local$\`)`, `priority: 1`). Both list
+    `lan-only` first and the redirect second, and neither sets TLS;
+  - `websecure`: the general rule with `tls: {}`, so the default `local-cert` answers the SNI.
+- `priority: 1` on the general rules because Traefik's default priority is rule length, and the
+  `HostRegexp` rule would otherwise outrank an exact `Host` route. The plain-name rule carries
+  `priority: 2` so it wins over the general rule on the same entry point, and both stay below every
+  exact `Host` route (whose priority is its own length, twenty or more).
+- two `redirectRegex` middlewares, because the upgrade is not the same for both groups:
+  - `redirect-to-internal-tls`, `regex: ^https?://([a-z0-9-]+)\.kub\.local(.*)$`,
+    `replacement: https://${1}.kub.internal${2}`;
+  - `redirect-to-internal-plain`, the same regex, `replacement: http://${1}.kub.internal${2}`.
+  - `permanent: false` (302) on both, so a client that retries a POST is not taught to change it to
+    GET.
+  - Upgrading in the redirect is what keeps an old `http://` bookmark to one hop. Replaying its
+    scheme would send it to `http://<new>`, where the application's own router answers with a second
+    redirect to `https://<new>`. The two exceptions are `pgadmin` and `prometheus`: they have no
+    `websecure` router, so a scheme upgrade would land on a port that answers nothing, and they are
+    the only names the plain middleware serves.
 
 The redirect is a safety net for GETs and browser history, not a contract for APIs. Every API client
 that holds an old name is updated explicitly; the plan lists them.
@@ -365,7 +374,7 @@ old names are gone by design and a rollback is a new change.
 | Secret replacement error | Traefik serves no default cert for the internal names | keep the old leaf; verify with `openssl s_client`; recreate |
 | CoreDNS ConfigMap not applied | pods get NXDOMAIN for the new zone | apply and restart in the same step; a pod-side `dig` in verification |
 | Wildcard router priority | the redirect could shadow exact hosts | `priority: 1`; browse a specific app in verification |
-| Plain-HTTP names | a scheme-forcing redirect breaks `pgadmin`/`prometheus` | the regex replays the scheme; both are checked |
+| Plain-HTTP names | a scheme upgrade in the redirect breaks `pgadmin`/`prometheus` | they get their own rule and middleware that keep `http`; both are checked |
 | Grafana links in the database | alert and dashboard links point at the old name | API sweep; old links redirect for GETs |
 | Two Pi-holes drift | one host answers the new zone, the other does not | `hosts-pi.sh setup` on both; `check_pihole_parity.py` |
 | The soak is forgotten | the old zone and the dual SAN live forever | the cleanup is a dated card with the soak end in its title |

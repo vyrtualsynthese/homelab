@@ -15,7 +15,8 @@ through one wildcard redirect until the cleanup.
 2. Certificate: the same `*.kub.internal` leaf carries `*.kub.local` for the soak.
 3. Routes: each chart's `ingressRoute.host` becomes the new name.
 4. Safety net: `traefik-gate` gains a wildcard router that 302s `*.kub.local` to the same name
-   under `.kub.internal`, preserving the scheme so `pgadmin` and `prometheus` stay on HTTP.
+   under `.kub.internal`, upgrading to `https` in the same hop except for the two plain-HTTP names
+   (`pgadmin`, `prometheus`), which keep their scheme because they have no TLS route.
 
 Order matters. The redirect is applied **before** any chart is renamed: an exact `Host` route
 outranks the wildcard (which carries `priority: 1`), so applying it early changes nothing, and each
@@ -345,8 +346,9 @@ git commit -m "🚀 feat(pki): sign the internal leaf for kub.internal and kub.l
 
 ```python
 """The legacy redirect is the only route that answers `*.kub.local` once the charts are renamed.
-It is rendered, so it can be read without a cluster; it must stay gated and must keep the scheme,
-because two internal apps are plain HTTP."""
+It is rendered, so it can be read without a cluster; it must stay gated, and it must upgrade to TLS
+in one hop for every name that has a `websecure` router, while leaving the two plain-HTTP names on
+`http`."""
 
 import pathlib
 import subprocess
@@ -369,43 +371,83 @@ def render():
 class RedirectTests(unittest.TestCase):
     def setUp(self):
         self.docs = render()
-        self.routes = [d for d in self.docs if d["kind"] == "IngressRoute"]
+        self.routes = {
+            tuple(d["spec"]["entryPoints"]): d
+            for d in self.docs
+            if d["kind"] == "IngressRoute"
+        }
         self.middlewares = {d["metadata"]["name"]: d for d in self.docs if d["kind"] == "Middleware"}
 
     def test_one_router_per_entry_point(self):
-        entrypoints = {tuple(r["spec"]["entryPoints"]) for r in self.routes}
-        self.assertEqual(entrypoints, {("web",), ("websecure",)})
+        self.assertEqual(set(self.routes), {("web",), ("websecure",)})
 
-    def test_the_router_is_an_exact_one_label_wildcard(self):
-        for route in self.routes:
-            rule = route["spec"]["routes"][0]["match"]
-            self.assertEqual(rule, "HostRegexp(`^[a-z0-9-]+\\.kub\\.local$`)")
+    def test_the_plain_names_have_their_own_rule_and_win(self):
+        rules = self.routes[("web",)]["spec"]["routes"]
+        plain = [r for r in rules if "pgadmin" in r["match"]]
+        self.assertEqual(len(plain), 1)
+        self.assertEqual(
+            plain[0]["match"],
+            "HostRegexp(`^pgadmin\\.kub\\.local$|^prometheus\\.kub\\.local$`)",
+        )
+        general = [r for r in rules if r is not plain[0]]
+        self.assertEqual(len(general), 1)
+        self.assertGreater(plain[0]["priority"], general[0]["priority"])
 
-    def test_the_wildcard_sits_below_every_exact_route(self):
-        for route in self.routes:
-            self.assertEqual(route["spec"]["routes"][0]["priority"], 1)
+    def test_the_general_rule_is_an_exact_one_label_wildcard(self):
+        for entrypoint in (("web",), ("websecure",)):
+            rules = [
+                r for r in self.routes[entrypoint]["spec"]["routes"] if "pgadmin" not in r["match"]
+            ]
+            self.assertEqual(len(rules), 1)
+            self.assertEqual(rules[0]["match"], "HostRegexp(`^[a-z0-9-]+\\.kub\\.local$`)")
 
-    def test_it_is_gated_before_it_redirects(self):
-        for route in self.routes:
-            names = [m["name"] for m in route["spec"]["routes"][0]["middlewares"]]
-            self.assertEqual(names, ["kube-system-lan-only@kubernetescrd",
-                                     "kube-system-redirect-to-internal@kubernetescrd"])
+    def test_the_general_rules_sit_below_every_exact_route(self):
+        for entrypoint in (("web",), ("websecure",)):
+            for rule in self.routes[entrypoint]["spec"]["routes"]:
+                if "pgadmin" not in rule["match"]:
+                    self.assertEqual(rule["priority"], 1)
+
+    def test_every_rule_is_gated_before_it_redirects(self):
+        for router in self.routes.values():
+            for rule in router["spec"]["routes"]:
+                names = [m["name"] for m in rule["middlewares"]]
+                self.assertEqual(names[0], "kube-system-lan-only@kubernetescrd")
+                self.assertIn(
+                    names[1],
+                    {
+                        "kube-system-redirect-to-internal-tls@kubernetescrd",
+                        "kube-system-redirect-to-internal-plain@kubernetescrd",
+                    },
+                )
+
+    def test_the_plain_rule_uses_the_plain_middleware(self):
+        plain = [
+            r for r in self.routes[("web",)]["spec"]["routes"] if "pgadmin" in r["match"]
+        ][0]
+        self.assertEqual(
+            [m["name"] for m in plain["middlewares"]][1],
+            "kube-system-redirect-to-internal-plain@kubernetescrd",
+        )
 
     def test_the_tls_router_uses_the_default_certificate(self):
-        by_entrypoint = {tuple(r["spec"]["entryPoints"]): r for r in self.routes}
-        self.assertNotIn("tls", by_entrypoint[("web",)]["spec"])
-        tls = by_entrypoint[("websecure",)]["spec"]["tls"]
+        self.assertNotIn("tls", self.routes[("web",)]["spec"])
+        tls = self.routes[("websecure",)]["spec"]["tls"]
         self.assertNotIn("secretName", tls)
         self.assertNotIn("certResolver", tls)
 
-    def test_the_redirect_replays_the_scheme_and_the_path(self):
-        middleware = self.middlewares["redirect-to-internal"]
-        redirect = middleware["spec"]["redirectRegex"]
-        self.assertEqual(redirect["regex"],
-                         r"^http(s?)://([a-z0-9-]+)\.kub\.local(.*)$")
-        self.assertEqual(redirect["replacement"],
-                         "http${1}://${2}.kub.internal${3}")
-        self.assertFalse(redirect["permanent"], "a POST client must not be taught to resend as GET")
+    def test_the_redirects_upgrade_to_tls_in_one_hop(self):
+        """`http://sonarr.kub.local` must land on `https://sonarr.kub.internal` directly: replaying
+        the scheme would send it to `http`, and the app's own router would add a second hop."""
+        for name, scheme in (
+            ("redirect-to-internal-tls", "https"),
+            ("redirect-to-internal-plain", "http"),
+        ):
+            redirect = self.middlewares[name]["spec"]["redirectRegex"]
+            self.assertEqual(redirect["regex"], r"^https?://([a-z0-9-]+)\.kub\.local(.*)$")
+            self.assertEqual(redirect["replacement"], f"{scheme}://${{1}}.kub.internal${{2}}")
+            self.assertFalse(
+                redirect["permanent"], "a POST client must not be taught to resend as GET"
+            )
 ```
 
 **Step 2: run it, expect failure**
@@ -424,12 +466,16 @@ The old internal zone. From 2026-11-27 every chart serves `*.kub.internal`; this
 a bookmark, an alert link and a browser history entry written for `*.kub.local` working until the
 soak ends.
 
-Priority 1 on purpose: Traefik ranks a rule by its length, and an exact `Host` route is longer than
-this one. Applying this before the charts are renamed therefore changes nothing, and each name falls
+Priority 1 on the general rules: Traefik ranks a rule by its length, and an exact `Host` route is
+longer. Applying this before the charts are renamed therefore changes nothing, and each name falls
 through to it during ArgoCD's per-Application sync instead of being dead in between.
 
-The scheme is captured and replayed rather than forced to https: `pgadmin` and `prometheus` are
-plain-HTTP routes, and an old `http://` bookmark must not be sent to a port that does not answer.
+Two middlewares, because the upgrade is not the same for every name. `http://sonarr.kub.local` must
+land on `https://sonarr.kub.internal` in one hop: replaying the scheme would send it to `http`, and
+the application's own `web` router would then redirect a second time. `pgadmin` and `prometheus` are
+the exception — they have no `websecure` router, so they keep `http` and get a rule of their own that
+outranks the general one.
+
 302, not 301: a permanent redirect would teach a client to replay a POST as a GET.
 */ -}}
 apiVersion: {{ .Values.traefik.apiVersion }}
@@ -445,11 +491,20 @@ spec:
     - web
   routes:
     - kind: Rule
+      match: HostRegexp(`^pgadmin\.kub\.local$|^prometheus\.kub\.local$`)
+      priority: 2
+      middlewares:
+        - name: kube-system-lan-only@kubernetescrd
+        - name: kube-system-redirect-to-internal-plain@kubernetescrd
+      services:
+        - name: noop@internal
+          kind: TraefikService
+    - kind: Rule
       match: HostRegexp(`^[a-z0-9-]+\.kub\.local$`)
       priority: 1
       middlewares:
         - name: kube-system-lan-only@kubernetescrd
-        - name: kube-system-redirect-to-internal@kubernetescrd
+        - name: kube-system-redirect-to-internal-tls@kubernetescrd
       services:
         - name: noop@internal
           kind: TraefikService
@@ -471,7 +526,7 @@ spec:
       priority: 1
       middlewares:
         - name: kube-system-lan-only@kubernetescrd
-        - name: kube-system-redirect-to-internal@kubernetescrd
+        - name: kube-system-redirect-to-internal-tls@kubernetescrd
       services:
         - name: noop@internal
           kind: TraefikService
@@ -480,15 +535,29 @@ spec:
 apiVersion: {{ .Values.traefik.apiVersion }}
 kind: Middleware
 metadata:
-  name: redirect-to-internal
+  name: redirect-to-internal-tls
   namespace: kube-system
   labels:
     app.kubernetes.io/name: traefik-gate
     app.kubernetes.io/instance: {{ .Release.Name }}
 spec:
   redirectRegex:
-    regex: ^http(s?)://([a-z0-9-]+)\.kub\.local(.*)$
-    replacement: http${1}://${2}.kub.internal${3}
+    regex: ^https?://([a-z0-9-]+)\.kub\.local(.*)$
+    replacement: https://${1}.kub.internal${2}
+    permanent: false
+---
+apiVersion: {{ .Values.traefik.apiVersion }}
+kind: Middleware
+metadata:
+  name: redirect-to-internal-plain
+  namespace: kube-system
+  labels:
+    app.kubernetes.io/name: traefik-gate
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  redirectRegex:
+    regex: ^https?://([a-z0-9-]+)\.kub\.local(.*)$
+    replacement: http://${1}.kub.internal${2}
     permanent: false
 ```
 
@@ -1096,11 +1165,13 @@ The SAN must name both wildcards.
 ```bash
 curl -sS -o /dev/null -w '%{http_code} %{redirect_url}\n' -H 'Host: sonarr.kub.local' http://192.168.1.46/
 curl -sSk -o /dev/null -w '%{http_code} %{redirect_url}\n' -H 'Host: ausente.kub.local' https://192.168.1.46/
+curl -sS -o /dev/null -w '%{http_code} %{redirect_url}\n' -H 'Host: pgadmin.kub.local' http://192.168.1.46/
 ```
 
-The first is a 302 to `http://sonarr.kub.internal/`; the second is a 302 to
-`https://ausente.kub.internal/`. A request to `http://pgadmin.kub.local` must redirect to
-`http://pgadmin.kub.internal`, not to https.
+The first is a 302 straight to `https://sonarr.kub.internal/` — one hop, not two. The second is a
+302 to `https://ausente.kub.internal/`. The third is a 302 to `http://pgadmin.kub.internal/`, not to
+https: `pgadmin` has no `websecure` router, and neither has `prometheus`. Count the hops with
+`curl -sSL -o /dev/null -w '%{num_redirects}'` if a browser behaves differently.
 
 **One sign-in per mechanism**
 
