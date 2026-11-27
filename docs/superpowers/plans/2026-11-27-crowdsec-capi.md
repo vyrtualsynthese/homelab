@@ -457,9 +457,10 @@ Expected: registered, with the same machine id as before the restart (the creden
 Replace the opening sentence of `## When these were last run` — the one that says `Not yet.` — with
 the dated result, one line per proof actually run (1–5), each naming the command and the output it
 gave. Then set the page's banner field `**Verified** not yet: the five proofs below have not been
-run` to `**Verified** <date>: the five proofs were run`, and in `docs/runbooks/README.md` replace the
-`crowdsec.md` row's status cell `pending — the four proofs have not been run` with
-`proved <date>`. Then:
+run` to `**Verified** <date>: the five proofs were run`, replace the page's own line
+`**Status: pending — the five proofs below have not been run.**` with `**Status: proved <date>.**`,
+and in `docs/runbooks/README.md` replace the `crowdsec.md` row's status cell
+`pending — the four proofs have not been run` with `proved <date>`. Then:
 
 ```bash
 git add docs/runbooks/crowdsec.md docs/runbooks/README.md
