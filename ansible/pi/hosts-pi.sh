@@ -735,8 +735,8 @@ firewall_rule_table() {
 53|udp|vpn|DNS for clients on the WireGuard tunnel
 80|tcp|vpn|the Pi-hole web interface from the tunnel
 443|tcp|vpn|Pi-hole HTTPS web interface from the tunnel
-53|tcp|panel|DNS from the wg-easy container, the tunnel's source after masquerade
-53|udp|panel|DNS from the wg-easy container, the tunnel's source after masquerade
+53|tcp|panel|DNS for peers, from the wg-easy container after masquerade
+53|udp|panel|DNS for peers, from the wg-easy container after masquerade
 9100|tcp|nodes|node-exporter, scraped by a pod that egresses as its node
 9323|tcp|nodes|the Docker metrics endpoint daemon.json opens on 0.0.0.0
 EOF
