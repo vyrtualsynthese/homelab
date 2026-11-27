@@ -27,8 +27,8 @@ its SQLite is state, and `nas` is where state is backed up.
 | Agent | Deployment `crowdsec-agent`, node `streaming` | `kubectl -n security logs deploy/crowdsec-agent` |
 | LAPI | Deployment `crowdsec-lapi`, node `nas` | `kubectl -n security logs deploy/crowdsec-lapi` |
 | Decisions | LAPI's SQLite, `local-path` claim on `nas` | `kubectl -n security exec deploy/crowdsec-lapi -- cscli decisions list` |
-| Blocklist decisions, and whether CAPI is registered | the LAPI | `kubectl -n security exec deploy/crowdsec-lapi -- cscli capi status` |
-| What the blocklist may never insert | `capi_whitelists.yaml` on the config claim | `kubectl -n security exec deploy/crowdsec-lapi -- cat /etc/crowdsec_data/capi_whitelists.yaml` |
+| Whether CAPI is registered, and when it last pulled | the LAPI | `kubectl -n security exec deploy/crowdsec-lapi -- cscli capi status` |
+| What the blocklist may never insert | `capi_whitelists.yaml`, mounted at `/etc/crowdsec_data/capi_whitelists.yaml` | `kubectl -n security exec deploy/crowdsec-lapi -- cat /etc/crowdsec_data/capi_whitelists.yaml` |
 | Bans, as the kernel has them | `nftables` on `streaming`, table `crowdsec` | `nft list set ip crowdsec crowdsec-blacklists` |
 | Bouncer | host service on `streaming` | `systemctl status crowdsec-firewall-bouncer` |
 | Ban count, and the bouncer's liveness | the bouncer's own listener | `curl -s http://127.0.0.1:60601/metrics \| grep fw_bouncer_banned_ips` |
@@ -70,8 +70,9 @@ the burst in proof 3 come from a LAN machine.
    LAPI's decisions and rebuilds the same set, which is the half a naive `nft` script would lose.
 5. **The blocklist cannot reach the LAN.** After the first CAPI pull,
    `cscli decisions list --origin CAPI -o json` names addresses, and none of them falls in
-   `192.168.1.0/24` or `10.8.0.0/24`; `nft list set ip crowdsec crowdsec-blacklists` holds the same
-   addresses and no LAN one. The file that makes this true is
+   `192.168.1.0/24`, `10.8.0.0/24`, `10.42.0.0/16` or `10.43.0.0/16` — the LAN, the tunnel, the pods
+   and the services; `nft list set ip crowdsec crowdsec-blacklists` holds the same addresses and no
+   LAN one. The file that makes this true is
    `/etc/crowdsec_data/capi_whitelists.yaml`, read at pull time — a decision already in the table is
    *not* retroactively removed, which is why the check reads the list and not a count.
 
