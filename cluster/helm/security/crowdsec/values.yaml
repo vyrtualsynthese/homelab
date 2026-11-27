@@ -58,6 +58,37 @@ crowdsec:
               - "10.42.0.0/16"
               - "10.43.0.0/16"
 
+    # The blocklist's own LAN boundary, and it is a second file for a reason: a
+    # decision that arrives from CAPI never passes through the postoverflow
+    # above. That one runs before a decision is created from a local alert, and
+    # CAPI inserts into the database directly, so a whitelist written as a
+    # postoverflow would excuse nothing here. This file is read at pull time by
+    # `api.server.capi_whitelists_path`, which the chart points at it, and an
+    # address in it never enters the table at all.
+    #
+    # The ranges repeat `homelab/whitelist-lan` on purpose; a test fails when the
+    # two disagree. Deprecated upstream in favour of the centralized allowlists,
+    # which live in the LAPI database and are therefore state outside git — this
+    # stays until that migration is a decision of its own.
+    capi_whitelists.yaml: |
+      ips:
+        - "192.168.1.41"
+        - "192.168.1.27"
+        - "192.168.1.46"
+        - "192.168.1.48"
+      cidrs:
+        - "192.168.1.0/24"
+        - "10.8.0.0/24"
+        - "10.42.0.0/16"
+        - "10.43.0.0/16"
+
+    # Signals from scenarios that are not the official, unmodified hub set count
+    # for nothing upstream, so they are not sent. The official set still leaves;
+    # that is the price of the list, and §4.3 of the design says so.
+    console.yaml: |
+      share_custom: false
+      share_tainted: false
+
     # The chart's default value here holds the auto-registration block that lets
     # the agent register itself with the LAPI. Overriding this key replaces it,
     # so it is repeated here and the metrics listener is added beside it.
@@ -137,13 +168,17 @@ crowdsec:
           secretKeyRef:
             name: crowdsec-bouncer-key
             key: api-key
-      # CAPI off. Without this the LAPI registers with CrowdSec's central API on
-      # its first start and subscribes to the shared blocklist, which is a
-      # decision to take after a few weeks of measuring our own traffic — and
-      # the only part of this that sends anything to a company. The agent gets
-      # the same variable from the chart itself.
-      - name: DISABLE_ONLINE_API
-        value: "true"
+      # CAPI is on, and this comment is the record of what that means. The LAPI
+      # registers itself on its next start and writes
+      # `online_api_credentials.yaml` to the config claim below, which is a backup
+      # row, so a rebuild keeps the identity instead of registering again. The
+      # chart renders no registration Job when that claim is persistent; the
+      # start script does it.
+      #
+      # What leaves, per alert: the scenario's name and hash, the timestamp, the
+      # machine id, the offending address and its geolocation; at sign-in, the
+      # list of scenarios this engine runs. Nothing else — no URL, no header, no
+      # user name. The design states the trade in §4.3.
     persistentVolume:
       data:
         enabled: true
@@ -223,8 +258,5 @@ crowdsec:
       limits:
         memory: 512Mi
 
-  # CAPI is off: the first weeks measure our own traffic, and switching it on is
-  # one setting to review against what it adds. It is also the only part of this
-  # that talks to a company.
   # tls stays disabled: no cert-manager, no mutual TLS between two pods on the
   # same cluster, and a bouncer outside that would need it has a CA to install.
