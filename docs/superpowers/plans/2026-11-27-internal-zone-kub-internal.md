@@ -1150,15 +1150,24 @@ kubectl -n kube-system rollout status deploy/coredns
 
 **Step 4: the redirect, applied while it is dormant [operator]**
 
-Apply the redirect from the branch **before** merging, so it exists before any chart can sync:
+Apply the redirect from the branch **before** merging, so it exists before any chart can sync. Run it
+in the branch checkout, not in the canonical one: `legacy-redirect.yaml` is on the branch only, and the
+canonical checkout is on `develop`, where the chart renders three objects and no `IngressRoute` at all.
+The count is the check:
 
 ```bash
+cd <the branch worktree>            # the tree that has cluster/helm/platform/traefik-gate/templates/legacy-redirect.yaml
 helm template traefik-gate cluster/helm/platform/traefik-gate \
   -f cluster/helm/platform/traefik-gate/values.yaml \
+  | tee /tmp/traefik-gate.yaml \
   | kubectl apply -f -
+grep -c '^kind: IngressRoute' /tmp/traefik-gate.yaml    # must print 2, not 0
 kubectl -n kube-system get ingressroute legacy-internal-redirect legacy-internal-redirect-tls
 kubectl -n kube-system get middleware redirect-to-internal-tls redirect-to-internal-plain
 ```
+
+A render with no `IngressRoute` means the wrong tree: `kubectl apply` then succeeds for the three
+objects that tree does have and creates nothing that redirects, without printing an error.
 
 It is dormant: every exact `Host` route outranks `priority: 1`, so no live name changes behaviour. The
 release name matches the ArgoCD Application, so the labels are what the sync will render and the
