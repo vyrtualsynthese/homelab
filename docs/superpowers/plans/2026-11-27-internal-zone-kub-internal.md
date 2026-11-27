@@ -1148,17 +1148,35 @@ kubectl -n kube-system rollout restart deploy/coredns
 kubectl -n kube-system rollout status deploy/coredns
 ```
 
-**Step 4: the redirect, while it is dormant [operator]**
+**Step 4: the redirect, applied while it is dormant [operator]**
 
-Merge the branch to `develop`. ArgoCD renders `traefik-gate` with the new template. Sync it:
+Apply the redirect from the branch **before** merging, so it exists before any chart can sync:
+
+```bash
+helm template traefik-gate cluster/helm/platform/traefik-gate \
+  -f cluster/helm/platform/traefik-gate/values.yaml \
+  | kubectl apply -f -
+kubectl -n kube-system get ingressroute legacy-internal-redirect legacy-internal-redirect-tls
+kubectl -n kube-system get middleware redirect-to-internal-tls redirect-to-internal-plain
+```
+
+It is dormant: every exact `Host` route outranks `priority: 1`, so no live name changes behaviour. The
+release name matches the ArgoCD Application, so the labels are what the sync will render and the
+Application adopts the objects rather than reporting them OutOfSync.
+
+Then merge the branch to `develop` and sync the Application:
 
 ```bash
 argocd app sync traefik-gate
 kubectl -n kube-system get ingressroute legacy-internal-redirect legacy-internal-redirect-tls
 ```
 
-At this point every live `*.kub.local` host still reaches its application, because its exact `Host`
-route outranks the wildcard.
+**The commit order does not enforce the sync order.** ArgoCD auto-syncs each Application as the merge
+is seen, and one that syncs before the redirect exists replaces its old `Host` route with the new one
+while nothing answers the old name: the bookmark still resolves and the certificate still validates,
+but Traefik has no router for it and answers 404. The dormant apply above is what closes that window.
+If it was skipped, disable auto-sync on the media-stack Applications, merge, sync `traefik-gate`, sync
+them, then re-enable.
 
 **Step 5: sync the renamed charts**
 
@@ -1169,7 +1187,8 @@ kubectl get applications -n argocd -o wide | grep -v Synced
 ```
 
 A host that is renamed in git but not yet synced answers on its old name; one that is synced answers
-on the new name and the old one redirects. No state has neither.
+on the new name and the old one redirects. That second state is only safe once the redirect objects
+from Step 4 are present, which is why they are applied before the merge rather than after it.
 
 **Step 6: the hand-applied dashboard redirect [operator]**
 
@@ -1316,8 +1335,8 @@ a different subject).
 
 ## Handover checklist
 
-- [ ] The redirect is applied **before** any chart is renamed, and the ordering is visible in the
-      commit history.
+- [ ] The redirect objects are present **before** the first renamed chart syncs, checked with
+      `kubectl -n kube-system get ingressroute` — the commit order alone does not guarantee it.
 - [ ] Every one of the 23 names answers from both Pis and serves the new SAN.
 - [ ] `pgadmin` and `prometheus` still work over plain HTTP, including through the redirect.
 - [ ] One sign-in per mechanism passes (forward-auth, native OIDC, basic auth, no gate).

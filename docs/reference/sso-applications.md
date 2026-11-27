@@ -468,11 +468,13 @@ That only reaches people the application's policy already lets in, which is `aut
 Calibre-Web cannot log the user out of authentik: its OIDC logout clears its own session and nothing
 more, and it has no end-session call. Same limitation as autobrr.
 
-**Verified live 2026-11-15.** `/login` serves the SSO button next to the password form; `/login/generic`
-answers `302` to `https://authentik.kub.home.ashudev.com/application/o/authorize/` carrying
-`client_id=calibre`, `redirect_uri=https://calibre.kub.local/login/generic/authorized` and
-`scope=email openid profile`; authentik's provider points back at that same redirect URI; and signing in
-from the button lands in Calibre-Web as `vyrtualsynthese`.
+**Verified live 2026-11-15, under the old `calibre.kub.local` name.** `/login` serves the SSO button
+next to the password form; `/login/generic` answers `302` to
+`https://authentik.kub.home.ashudev.com/application/o/authorize/` carrying `client_id=calibre`,
+`redirect_uri=https://calibre.kub.local/login/generic/authorized` and `scope=email openid profile`;
+authentik's provider points back at that same redirect URI; and signing in from the button lands in
+Calibre-Web as `vyrtualsynthese`. The redirect URI registered today is the `kub.internal` one, above;
+this is the measurement as it was taken.
 
 **Break-glass over HTTP only works on `localhost`.** With `OAuth` as the login type the session cookie is
 `Secure` everywhere, and browsers accept a `Secure` cookie only on an https origin or on
