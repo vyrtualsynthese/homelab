@@ -147,6 +147,13 @@ KEEPALIVED_CONF="/etc/keepalived/keepalived.conf"
 WG_LIB="/usr/local/lib/wg-vpn"
 VRRP_STATE_FILE="/run/wg-vpn/vrrp.state"
 TEXTFILE_DIR="/var/lib/node-exporter/textfile"
+# The database the edge sync reads while this Pi is down, and the script and
+# units that keep it a minute old. The copy is root:wg-sync 0640: the sync runs
+# as wg-sync and no other local account may read the peers' private keys.
+WG_SYNC_DIR="/var/lib/wg-easy-sync"
+WG_SNAPSHOT_SCRIPT="$WG_LIB/wg-snapshot.sh"
+WG_SNAPSHOT_SERVICE="/etc/systemd/system/wg-vpn-snapshot.service"
+WG_SNAPSHOT_TIMER="/etc/systemd/system/wg-vpn-snapshot.timer"
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="${PI_ROOT:-}"
 ROOT="${ROOT%/}"
@@ -323,6 +330,21 @@ desired_vrrp_notify() {
     sed -e "s|@VRRP_STATE_FILE@|$VRRP_STATE_FILE|g" \
         -e "s|@TEXTFILE_DIR@|$TEXTFILE_DIR|g" \
         "$TEMPLATES/wg-vrrp-notify.sh"
+}
+
+# The snapshot script, the same bytes on both hosts: its two paths are the only
+# values and they are shared, so `verify` compares the same file either way.
+desired_snapshot() {
+    sed -e "s|@WG_SYNC_DIR@|$WG_SYNC_DIR|g" \
+        -e "s|@TEXTFILE_DIR@|$TEXTFILE_DIR|g" \
+        "$TEMPLATES/wg-snapshot.sh"
+}
+
+# The oneshot's unit names the script, so it carries the library path rather than
+# a second copy of it that a move of WG_LIB would leave behind.
+desired_snapshot_service() {
+    sed -e "s|@WG_LIB@|$WG_LIB|g" \
+        "$TEMPLATES/systemd/wg-vpn-snapshot.service"
 }
 
 # The drop-in that closes password logins. It is numbered 00 on purpose: Ubuntu's
@@ -1017,6 +1039,61 @@ ensure_keepalived() {
     fi
 }
 
+# The copy is what the cluster reads while this Pi is gone, and the timer is what
+# keeps it a minute old. The group and the directory are made here rather than by
+# the sync: the script's 0640 root:wg-sync has to point at something on its first
+# run. Under PI_ROOT a fixture has no such group, so only the directory is made.
+ensure_snapshot() {
+    local changed=0
+
+    if [ -z "$ROOT" ]; then
+        if ! getent group wg-sync >/dev/null 2>&1; then
+            groupadd --system wg-sync
+            CHANGED=$((CHANGED + 1))
+            echo "snapshot: created the wg-sync group"
+        fi
+        if [ ! -d "$ROOT$WG_SYNC_DIR" ]; then
+            install -d -m 0750 -o root -g wg-sync "$ROOT$WG_SYNC_DIR"
+            CHANGED=$((CHANGED + 1))
+            echo "snapshot: created $WG_SYNC_DIR"
+        fi
+    elif [ ! -d "$ROOT$WG_SYNC_DIR" ]; then
+        install -d -m 0750 "$ROOT$WG_SYNC_DIR"
+        CHANGED=$((CHANGED + 1))
+        echo "snapshot: created $WG_SYNC_DIR"
+    fi
+
+    write_abs "$ROOT$WG_SNAPSHOT_SCRIPT" "$(desired_snapshot)"
+    if [ "$CHANGED_THIS_WRITE" -eq 1 ]; then
+        chmod 0755 "$ROOT$WG_SNAPSHOT_SCRIPT"
+        [ -n "$ROOT" ] || chown root:root "$ROOT$WG_SNAPSHOT_SCRIPT"
+        changed=1
+        echo "snapshot: wrote $WG_SNAPSHOT_SCRIPT"
+    fi
+
+    write_abs "$ROOT$WG_SNAPSHOT_SERVICE" "$(desired_snapshot_service)"
+    if [ "$CHANGED_THIS_WRITE" -eq 1 ]; then
+        chmod 0644 "$ROOT$WG_SNAPSHOT_SERVICE"
+        [ -n "$ROOT" ] || chown root:root "$ROOT$WG_SNAPSHOT_SERVICE"
+        changed=1
+        echo "snapshot: wrote $WG_SNAPSHOT_SERVICE"
+    fi
+
+    write_abs "$ROOT$WG_SNAPSHOT_TIMER" "$(cat "$TEMPLATES/systemd/wg-vpn-snapshot.timer")"
+    if [ "$CHANGED_THIS_WRITE" -eq 1 ]; then
+        chmod 0644 "$ROOT$WG_SNAPSHOT_TIMER"
+        [ -n "$ROOT" ] || chown root:root "$ROOT$WG_SNAPSHOT_TIMER"
+        changed=1
+        echo "snapshot: wrote $WG_SNAPSHOT_TIMER"
+    fi
+
+    if [ -z "$ROOT" ] && [ "$changed" -eq 1 ]; then
+        systemctl daemon-reload
+        systemctl enable --now wg-vpn-snapshot.timer
+        echo "snapshot: enabled the timer"
+    fi
+}
+
 # What `verify` reads: both files byte for byte, and on a real host the unit that
 # runs them. A unit that is not enabled is the failure a file comparison cannot
 # see: the instance is correct and nothing starts it after a reboot.
@@ -1031,6 +1108,29 @@ keepalived_drift() {
     fi
     if [ -z "$ROOT" ] && ! systemctl is-enabled --quiet keepalived; then
         echo "DIFFERS the keepalived unit is not enabled"
+        problems=1
+    fi
+    return "$problems"
+}
+
+# What `verify` reads: the three files byte for byte, and on a real host the
+# timer. A timer that is not enabled is the failure a file comparison cannot see:
+# the files are right and nothing refreshes the copy after a reboot.
+snapshot_drift() {
+    local problems=0
+
+    if ! check_text "$ROOT$WG_SNAPSHOT_SCRIPT" "$(desired_snapshot)"; then
+        problems=1
+    fi
+    if ! check_text "$ROOT$WG_SNAPSHOT_SERVICE" "$(desired_snapshot_service)"; then
+        problems=1
+    fi
+    if ! check_text "$ROOT$WG_SNAPSHOT_TIMER" \
+        "$(cat "$TEMPLATES/systemd/wg-vpn-snapshot.timer")"; then
+        problems=1
+    fi
+    if [ -z "$ROOT" ] && ! systemctl is-enabled --quiet wg-vpn-snapshot.timer; then
+        echo "DIFFERS the snapshot timer is not enabled"
         problems=1
     fi
     return "$problems"
@@ -1246,6 +1346,12 @@ cmd_render() {
     desired_keepalived "$host"
     echo "--- $WG_LIB/wg-vrrp-notify.sh"
     desired_vrrp_notify
+    echo "--- $WG_SNAPSHOT_SCRIPT"
+    desired_snapshot
+    echo "--- $WG_SNAPSHOT_SERVICE"
+    desired_snapshot_service
+    echo "--- $WG_SNAPSHOT_TIMER"
+    cat "$TEMPLATES/systemd/wg-vpn-snapshot.timer"
     echo "--- the shared address"
     echo "$VIP_ADDRESS/24: held by rbp0, taken by rbp1 when rbp0 stops answering."
     echo "--- /home/$HUMAN_USER/.ssh/authorized_keys"
@@ -1374,6 +1480,7 @@ cmd_setup() {
     ensure_firewall
     ensure_sync_packages
     ensure_keepalived "$host"
+    ensure_snapshot
 
     write_abs "$ROOT$STACK_DIR/docker-compose.yml" "$(desired_compose)"
     # Caddy reads this at start, and it is a bind mount: a file written under a
@@ -1651,6 +1758,8 @@ cmd_verify() {
     firewall_drift || problems=1
 
     keepalived_drift "$host" || problems=1
+
+    snapshot_drift || problems=1
 
     wg_db_drift || problems=1
 

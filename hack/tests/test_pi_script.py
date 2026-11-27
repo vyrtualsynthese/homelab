@@ -101,6 +101,10 @@ def test_the_panel_is_not_published_and_caddy_is_the_only_way_in():
     assert compose["networks"]["panel"]["ipam"]["config"][0]["subnet"] == (
         "172.30.0.0/24"
     )
+    assert (
+        "--collector.textfile.directory=/host/var/lib/node-exporter/textfile"
+        in compose["services"]["node_exporter"]["command"]
+    ), "the series the edge scripts publish are read by no one otherwise"
 
 
 def test_the_pihole_panel_serves_a_leaf_from_the_internal_ca():
@@ -1644,3 +1648,158 @@ def test_setup_places_keepalived_and_refuses_to_guess_its_values(tmp_path):
     conf = root / "etc/keepalived/keepalived.conf"
     assert "state MASTER" in conf.read_text()
     assert (root / "usr/local/lib/wg-vpn/wg-vrrp-notify.sh").exists()
+
+
+SNAPSHOT_HEADER = "--- /usr/local/lib/wg-vpn/wg-snapshot.sh\n"
+
+
+def snapshot_script(tmp_path):
+    block = rendered_section("rbp0", SNAPSHOT_HEADER)
+    path = tmp_path / "wg-snapshot.sh"
+    path.write_text(block)
+    path.chmod(0o755)
+    return path
+
+
+SQLITE_STUB = """#!/bin/bash
+printf '%s\\n' "$*" >> "$SQLITE_LOG"
+case "$*" in
+  *integrity_check*) echo "${SQLITE_INTEGRITY:-ok}" ;;
+  *".backup"*)
+    out="${2#*.backup }"; out="${out#\\'}"; out="${out%\\'}"
+    if [ -f "$1" ]; then cp "$1" "$out"; else : > "$out"; fi
+    if [ -n "${SQLITE_BACKUP_FAIL:-}" ]; then printf 'half a copy' > "$out"; exit 1; fi
+    ;;
+esac
+"""
+
+SNAPSHOT_DB = "home/vronteix/dockers/config/wg-easy.db"
+SNAPSHOT_OUT = "var/lib/wg-easy-sync/wg-easy.db"
+SNAPSHOT_PROM = "var/lib/node-exporter/textfile/wg-vpn-snapshot.prom"
+
+
+def _snapshot_fixture(tmp_path, integrity=None, backup_fails=False):
+    """A WG_ROOT with a live database, a stub sqlite3 first on PATH and the log
+    the stub appends to. The stub copies the live database, so what the script
+    publishes is the bytes it was given and a test can tell them apart from an
+    empty file."""
+    script = snapshot_script(tmp_path)
+    wg_root = tmp_path / "pi"
+    db = wg_root / SNAPSHOT_DB
+    db.parent.mkdir(parents=True)
+    db.write_bytes(b"SQLite format 3\x00the live database")
+    bindir = tmp_path / "bin"
+    bindir.mkdir()
+    stub = bindir / "sqlite3"
+    stub.write_text(SQLITE_STUB)
+    stub.chmod(0o755)
+    log = tmp_path / "sqlite.log"
+    env = dict(
+        os.environ,
+        PATH=f"{bindir}:{os.environ['PATH']}",
+        WG_ROOT=str(wg_root),
+        SQLITE_LOG=str(log),
+    )
+    if integrity is not None:
+        env["SQLITE_INTEGRITY"] = integrity
+    if backup_fails:
+        env["SQLITE_BACKUP_FAIL"] = "1"
+    return script, wg_root, log, env
+
+
+def test_the_snapshot_uses_sqlite_backup_and_renames_atomically(tmp_path):
+    """A copy taken while wg-easy writes can tear; .backup is the consistent read."""
+    script, wg_root, log, env = _snapshot_fixture(tmp_path)
+    out = subprocess.run([str(script)], capture_output=True, text=True, env=env)
+    assert out.returncode == 0, out.stderr
+    assert ".backup" in log.read_text()
+    published = wg_root / SNAPSHOT_OUT
+    assert published.read_bytes() == (wg_root / SNAPSHOT_DB).read_bytes()
+    assert published.stat().st_size > 0
+    prom = wg_root / SNAPSHOT_PROM
+    assert "wg_vpn_snapshot_ok 1" in prom.read_text()
+    assert "wg_vpn_snapshot_timestamp_seconds" in prom.read_text()
+
+
+def test_a_missing_database_publishes_ok_zero_and_writes_no_snapshot(tmp_path):
+    """A fresh host has no database yet. sqlite3 answers a missing one by creating
+    an empty file and exiting 0, and an integrity check on nothing prints ok, so a
+    copy made here would take the place of the last good snapshot."""
+    script, wg_root, log, env = _snapshot_fixture(tmp_path)
+    (wg_root / SNAPSHOT_DB).unlink()
+    out = subprocess.run([str(script)], capture_output=True, text=True, env=env)
+    assert out.returncode == 1
+    assert "wg_vpn_snapshot_ok 0" in (wg_root / SNAPSHOT_PROM).read_text()
+    assert not (wg_root / SNAPSHOT_OUT).exists()
+    assert not log.exists(), "sqlite3 was asked to copy a database that is not there"
+
+
+def test_an_empty_database_publishes_ok_zero_and_writes_no_snapshot(tmp_path):
+    """The zero-byte file is the shape a half-created database has, and `-s` is
+    what catches it without asking sqlite3 to bless it."""
+    script, wg_root, _log, env = _snapshot_fixture(tmp_path)
+    (wg_root / SNAPSHOT_DB).write_bytes(b"")
+    out = subprocess.run([str(script)], capture_output=True, text=True, env=env)
+    assert out.returncode == 1
+    assert "wg_vpn_snapshot_ok 0" in (wg_root / SNAPSHOT_PROM).read_text()
+    assert not (wg_root / SNAPSHOT_OUT).exists()
+
+
+def test_a_failed_integrity_check_publishes_ok_zero_and_keeps_the_old_snapshot(
+    tmp_path,
+):
+    script, wg_root, _log, env = _snapshot_fixture(tmp_path, integrity="corrupt")
+    previous = wg_root / SNAPSHOT_OUT
+    previous.parent.mkdir(parents=True)
+    previous.write_bytes(b"the snapshot from a minute ago")
+    prom = wg_root / SNAPSHOT_PROM
+    prom.parent.mkdir(parents=True)
+    prom.write_text("wg_vpn_snapshot_timestamp_seconds 1700000000\nwg_vpn_snapshot_ok 1\n")
+    out = subprocess.run([str(script)], capture_output=True, text=True, env=env)
+    assert out.returncode == 1
+    assert "wg_vpn_snapshot_ok 0" in prom.read_text()
+    assert previous.read_bytes() == b"the snapshot from a minute ago"
+    assert not previous.with_name("wg-easy.db.tmp").exists()
+
+
+def test_a_failed_snapshot_backup_leaves_no_copy_behind(tmp_path):
+    """The destination of .backup is a key-bearing file; a run that gives up half
+    way through it must not leave it in a shared directory."""
+    script, wg_root, _log, env = _snapshot_fixture(tmp_path, backup_fails=True)
+    previous = wg_root / SNAPSHOT_OUT
+    previous.parent.mkdir(parents=True)
+    previous.write_bytes(b"the snapshot from a minute ago")
+    out = subprocess.run([str(script)], capture_output=True, text=True, env=env)
+    assert out.returncode == 1
+    assert "wg_vpn_snapshot_ok 0" in (wg_root / SNAPSHOT_PROM).read_text()
+    assert previous.read_bytes() == b"the snapshot from a minute ago"
+    assert not previous.with_name("wg-easy.db.tmp").exists()
+
+
+def test_a_failed_snapshot_run_keeps_the_last_good_timestamp(tmp_path):
+    """The staleness rule counts from wg_vpn_snapshot_timestamp_seconds, so a run
+    that fails every minute and stamps the clock every time would hide itself."""
+    script, wg_root, _log, env = _snapshot_fixture(tmp_path, backup_fails=True)
+    prom = wg_root / SNAPSHOT_PROM
+    prom.parent.mkdir(parents=True)
+    prom.write_text("wg_vpn_snapshot_timestamp_seconds 1700000000\nwg_vpn_snapshot_ok 1\n")
+    out = subprocess.run([str(script)], capture_output=True, text=True, env=env)
+    assert out.returncode == 1
+    text = prom.read_text()
+    assert "wg_vpn_snapshot_ok 0" in text
+    assert "wg_vpn_snapshot_timestamp_seconds 1700000000" in text
+
+
+def test_setup_places_the_snapshot_script_its_units_and_its_directory(tmp_path):
+    root = tmp_path / "pi"
+    _pi_fixture(root)
+    out = run("setup", "rbp0", root=root)
+    assert out.returncode == 0, out.stderr
+    script = root / "usr/local/lib/wg-vpn/wg-snapshot.sh"
+    assert script.stat().st_mode & 0o777 == 0o755
+    assert (root / "var/lib/wg-easy-sync").is_dir()
+    service = root / "etc/systemd/system/wg-vpn-snapshot.service"
+    assert "ExecStart=/usr/local/lib/wg-vpn/wg-snapshot.sh" in service.read_text()
+    timer = root / "etc/systemd/system/wg-vpn-snapshot.timer"
+    assert "OnCalendar=*:0/1" in timer.read_text()
+    assert "Persistent=true" in timer.read_text()
