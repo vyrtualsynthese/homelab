@@ -63,6 +63,21 @@ longer forbidden to automation, but a test send is what proves it did not drop t
 Discord accepted the post. That test is also the only way to see the template render, since the
 message itself cannot be read back.
 
+**A backup that stops is a ticket, not a message** (2026-11-27). Six rules carry `board: card`:
+`JobFailed`, `BackupStreamStale`, `BackupJobAbsent`, `PostgresDumpStale`, `PostgresDumpAbsent` and
+`DriveWorn`. The reasoning is the one class of failure whose silence is invisible: nothing on a
+dashboard looks wrong when the nightly dump stops producing files, and a warning that repeats every
+12 h scrolls out of Discord by morning. The `postgres-dump` failure of 2026-11-27 is the specimen —
+three refused pods at 02:30Z, one Discord message, and no work item anywhere, so deciding to fix it
+was a conversation rather than a card waiting in `Backlog`. `JobFailed` carries it for every Job, not
+only the dump, because a batch workload that exhausts its retries is a failure somebody has to look
+at; `DriveWorn` keeps it from before, being the drive rule that asks rather than pages. The cost is
+the same for all six: one notice, `1y` between repeats, and one card per incident that the relay
+never closes — a warning that recovers on its own still leaves its card for a person to move. For
+`JobFailed` that is one card for *all* failing Jobs, not one each: the routes group on
+`[alertname, instance]` and `instance` is kube-state-metrics' own address, so the card is titled
+after the first Job and its body counts the others.
+
 **The second contact point is what writes the card.** `vikunja-alerts` posts to `alert-relay` in
 `monitoring`, which opens one card per incident on the `alerts` board, writes nothing while that card
 sits in Backlog or Doing, opens a fresh card when the newest one is in Validation or Done, and never
