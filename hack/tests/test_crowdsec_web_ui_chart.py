@@ -20,11 +20,7 @@ CATALOGUE = ROOT / "docs/how-it-works/applications.md"
 BLUEPRINT = ROOT / "cluster/helm/authentik/files/app-crowdsec-web-ui.yaml"
 
 HOST = "crowdsec.kub.internal"
-
-# The blueprint's own copies of the host. The zone rename moves the chart first and the
-# authentik blueprints in a later change of its own, so until that lands these assertions follow
-# the blueprint file rather than the chart. Both copies become `kub.internal` in that change.
-BLUEPRINT_HOST = "crowdsec.kub.local"
+BLUEPRINT_HOST = "crowdsec.kub.internal"
 
 
 def env(values):
@@ -103,7 +99,7 @@ class ChartTests(unittest.TestCase):
         self.assertEqual(values["CONFIG_AUTH_PASSWORD_LOGIN_ENABLED"], "false")
         self.assertEqual(values["CONFIG_AUTH_OIDC_AUTO_LOGIN"], "true")
 
-    def test_the_route_is_internal_tls_on_kub_local_and_lan_only(self):
+    def test_the_route_is_internal_tls_on_kub_internal_and_lan_only(self):
         route = self.values["ingressRoute"]
         self.assertEqual(route["host"], HOST)
         self.assertEqual(route["entryPoints"], ["websecure"])
@@ -196,8 +192,8 @@ class BlueprintTests(unittest.TestCase):
 
     def test_the_registered_callback_is_the_blueprint_host(self):
         # The app builds this from the request's Host and X-Forwarded-* headers.
-        # authentik compares the whole string, so both copies are pinned here. The chart's copy is
-        # `HOST`; this one is the blueprint's until the blueprints move with it.
+        # authentik compares the whole string, so both copies are pinned here: the chart's copy is
+        # `HOST`, and the blueprint carries the same one.
         self.assertEqual(
             re.findall(r"^\s+url:\s*(\S+)\s*$", self.text, re.MULTILINE),
             [f"https://{BLUEPRINT_HOST}/api/auth/oidc/callback"],

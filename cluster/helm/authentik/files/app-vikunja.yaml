@@ -10,7 +10,7 @@ entries:
 
   # Vikunja 2.8 authenticates with OIDC itself, so the board has a plain OAuth2
   # provider — not the proxy provider the forward-auth gate needed. The gate is
-  # gone from the route (`cluster/helm/vikunja/values.yaml`); `vikunja.kub.local`
+  # gone from the route (`cluster/helm/vikunja/values.yaml`); `vikunja.kub.internal`
   # keeps `lan-only` and nothing else, because every browser behind a gate
   # arrives as the same identity and the board attributes a card to whoever is
   # signed in.
@@ -70,7 +70,7 @@ entries:
           redirect_uri_type: authorization
           # Vikunja builds this from its own public URL plus the registered
           # redirect path; the route is TLS, so the scheme is `https`.
-          url: https://vikunja.kub.local/auth/openid/authentik
+          url: https://vikunja.kub.internal/auth/openid/authentik
       property_mappings:
         - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-openid]]
         - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-profile]]
@@ -88,7 +88,7 @@ entries:
       name: Vikunja
       slug: vikunja-oidc
       provider: !KeyOf vikunja-oidc-provider
-      meta_launch_url: https://vikunja.kub.local/
+      meta_launch_url: https://vikunja.kub.internal/
       meta_description: Task board, signed in with OIDC
       meta_icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/vikunja.png
       policy_engine_mode: any

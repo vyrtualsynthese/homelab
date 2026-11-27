@@ -22,13 +22,13 @@ entries:
     attrs:
       name: loki
       mode: forward_single
-      # Scheme and host must match the browser: `loki.kub.local` is served on
+      # Scheme and host must match the browser: `loki.kub.internal` is served on
       # `websecure` with the cluster's internal certificate (see
       # cluster/helm/monitoring/loki/templates/ingressroute.yaml), and the
       # outpost takes the session cookie's Secure flag from this scheme. A
       # provider left on `http` against that router sets a weak cookie and the
       # browser loops between two 302s.
-      external_host: https://loki.kub.local
+      external_host: https://loki.kub.internal
       authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
       invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
 
@@ -40,13 +40,13 @@ entries:
       name: Loki
       slug: loki
       provider: !KeyOf loki-provider
-      # Not `https://loki.kub.local/ui`: Loki serves no page there. `/ui/` is its
+      # Not `https://loki.kub.internal/ui`: Loki serves no page there. `/ui/` is its
       # operational API (`/ui/api/v1/cluster/nodes` answers JSON) and its browser
       # frontend is a Grafana plugin, so every `/ui` path that is not that API
       # answers a 307 to `/ui/404?path=…`. Logs are read in Grafana, so the tile
       # opens Grafana's Logs Drilldown, whose route comes from the installed
       # `grafana-lokiexplore-app` plugin's own page include.
-      meta_launch_url: https://grafana.kub.local/a/grafana-lokiexplore-app/explore
+      meta_launch_url: https://grafana.kub.internal/a/grafana-lokiexplore-app/explore
       meta_icon: https://raw.githubusercontent.com/grafana/loki/main/docs/sources/logo.png
       policy_engine_mode: any
 

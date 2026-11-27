@@ -35,7 +35,7 @@ entries:
         - matching_mode: strict
           redirect_uri_type: authorization
           # ASP.NET's default OIDC callback path; Radarr does not override it.
-          url: https://radarr-anime.kub.local/signin-oidc
+          url: https://radarr-anime.kub.internal/signin-oidc
       property_mappings:
         - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-openid]]
         - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-email]]
@@ -49,7 +49,7 @@ entries:
       name: Radarr Anime
       slug: radarr-anime
       provider: !KeyOf radarr-anime-oidc-provider
-      meta_launch_url: https://radarr-anime.kub.local/
+      meta_launch_url: https://radarr-anime.kub.internal/
       # Official logo, served from the dashboard-icons set. The browser
       # loads it, so the grid needs internet; swap to `fa://fa-<name>`
       # if it ever has to work offline.

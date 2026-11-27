@@ -11,7 +11,7 @@ entries:
   # The CrowdSec web UI authenticates with OIDC itself, so this is an OAuth2
   # provider — not a proxy provider, and the route carries no authentik gate.
   # The callback is the app's own string, built from the request's Host and
-  # X-Forwarded-* headers: it must match `crowdsec.kub.local` exactly, and a
+  # X-Forwarded-* headers: it must match `crowdsec.kub.internal` exactly, and a
   # mismatch is a login loop with nothing in the app's log. The host is internal,
   # so the provider is never reachable from the internet by name.
   #
@@ -38,7 +38,7 @@ entries:
       redirect_uris:
         - matching_mode: strict
           redirect_uri_type: authorization
-          url: https://crowdsec.kub.local/api/auth/oidc/callback
+          url: https://crowdsec.kub.internal/api/auth/oidc/callback
       property_mappings:
         - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-openid]]
         - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-email]]
@@ -52,7 +52,7 @@ entries:
       name: CrowdSec
       slug: crowdsec-web-ui
       provider: !KeyOf crowdsec-web-ui-provider
-      meta_launch_url: https://crowdsec.kub.local/
+      meta_launch_url: https://crowdsec.kub.internal/
       # Official logo, served from the dashboard-icons set. The browser loads it,
       # so the grid needs internet; swap to `fa://fa-shield` if it ever has to
       # work offline.
