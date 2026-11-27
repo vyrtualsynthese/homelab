@@ -17,8 +17,8 @@ The overview — what runs where, its sizing, and how to query the stack:
 ## Alerting
 
 Grafana unified alerting, folder `Homelab`, **two rule groups split by cadence
-on 2026-11-18**: `homelab-core-fast` at **60 s** (28 rules) and `homelab-core` at
-**300 s** (35 rules). **63 rules**, **two contact points**, and four child routes: two by severity and
+on 2026-11-18**: `homelab-core-fast` at **60 s** (29 rules) and `homelab-core` at
+**300 s** (35 rules). **64 rules**, **two contact points**, and four child routes: two by severity and
 two on `board=card` — one to each contact point.
 
 The split rule is the `for` duration: a rule sits in the fast group when its `for`
@@ -31,8 +31,8 @@ checked every five minutes: `CertificateExpiring`, `CloudTlsCertificateExpiring`
 `RestoreDrillOverdue` (`for: 1h`), the three disk-fill predictions (`for: 30m`), the temperature and
 SLO-ish checks (`for: 10m` and above). The slowest ratio is the `for: 10m` rules in
 `homelab-core`: half their own `for` between checks, so an alert is delayed by up to five
-minutes and never by more than that. At 58 rules the load is **33.2 evaluations a minute** —
-27 rules every 60 s plus 31 every 300 s — against 35.0 when the split was made, with all 35 rules
+minutes and never by more than that. At 64 rules the load is **36.0 evaluations a minute** —
+29 rules every 60 s plus 35 every 300 s — against 35.0 when the split was made, with all 35 rules
 of that day on the fast cadence.
 
 **Delivery**: contact point `discord-homelab` (type `discord`).
@@ -73,6 +73,7 @@ confirmed by the first read-back):**
 | Rule | Condition | for | Severity | State |
 |---|---|---|---|---|
 | `NodeDown` | `1 - up` for the six node exporters | 5m | critical | inactive |
+| `NodeLinkDown` | the node's kernel journal records `Link is Down` for its NIC — the node cannot be scraped while its only uplink is down | 0s | critical | inactive |
 | `KubeNodeNotReady` | node Ready condition false | 5m | critical | inactive |
 | `CoreDeploymentDown` | 0 available replicas in kube-system/monitoring/argocd | 10m | critical | inactive |
 | `CoreStatefulSetDown` | ready < desired in those namespaces | 10m | critical | inactive |
@@ -356,6 +357,25 @@ or an explicit `> 85` / `> 55` / `> 80` inside the expression. The original set
 had `NodeDown` and `MonitoringDown` silently dead this way, and the retired
 `DriveNeedsReplacement` survived only because the failing drive also reported
 `exit_code = 32`.
+
+**`NodeLinkDown` reads the hosts' journals, because no metric can see the fault
+it watches.** A node's only uplink going down takes its exporter with it, so
+there is no `node_network_carrier` sample to alert on while the link is cut. The
+2026-11-26 switch reboots are the evidence: `nuc0` and `rbp2` (crs326) and then
+`nas` and `streaming` (crs309) lost carrier, and the carrier series have **no
+samples at all** during those windows — 7 days of history hold no zero on a node
+uplink. The kernel does record the event in the node's
+own journal, and Fluent Bit ships the line when the link returns
+([`observability-conventions.md`](../observability-conventions.md#how-metrics-get-in));
+the rule counts `Link is Down` over ten minutes, takes `_HOSTNAME` and the device
+out of the message, and names both in the summary. It is `for: 0s` in the fast
+group, so it fires at the first evaluation after the line reaches Loki — within
+a minute of a flap, or the length of the outage later when the link was really
+cut, which keeps the ten-minute window matched to the delay (a longer outage is
+`NodeDown`'s). It is also the only rule that sees a 40-second drop on a node whose
+own exporter was unreachable, which no scrape ever observes. Planned switch work
+is the one expected fire: silence it for the window rather than weakening the
+rule.
 
 **The drive rules split on 2026-11-25: one asks, one pages.** `DriveWorn` reads
 life under 10 % or smartctl's exit bit 32 — a history of errors, with SMART still passing and no
