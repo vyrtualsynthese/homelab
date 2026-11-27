@@ -137,6 +137,11 @@ class ChartTests(unittest.TestCase):
         console = yaml.safe_load(raw)
         self.assertIs(console["share_custom"], False)
         self.assertIs(console["share_tainted"], False)
+        # Absent keys take CrowdSec's own default when `console.yaml` exists:
+        # false for these two today, which is why they are written out rather
+        # than relied on.
+        self.assertIs(console["share_manual_decisions"], False)
+        self.assertIs(console["share_context"], False)
 
     def test_both_workloads_listen_on_6060(self):
         # The chart's probes GET `/metrics` on port 6060 for both workloads, and
