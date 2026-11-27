@@ -263,7 +263,7 @@ Two things this page teaches by being measured rather than assumed:
   the head can tell the difference:
 
 ```bash
-curl -sG -u "ops:$PROMETHEUS_AUTH_PASSWORD" http://prometheus.kub.local/api/v1/query --data-urlencode \
+curl -sG -u "ops:$PROMETHEUS_AUTH_PASSWORD" http://prometheus.kub.internal/api/v1/query --data-urlencode \
   'query=count({job="kubernetes-nodes-cadvisor", __name__=~"container_(tasks_state|threads|file_descriptors)"})'
 # no result = the drop is working; a number = the regex matches nothing
 ```
@@ -325,14 +325,14 @@ and why: the [Fluent Bit note above](#exporter-quirks). The panels that show
 these numbers are in [`dashboards.md`](dashboards.md).
 
 Verify rather than trust. The Grafana call passes
-`--cacert ~/.config/secrets/kub-local/local-ca.pem`, because `grafana.kub.local` is served by the
+`--cacert ~/.config/secrets/kub-local/local-ca.pem`, because `grafana.kub.internal` is served by the
 cluster's internal CA; `-k` would accept whatever answered and hand it the token:
 
 ```bash
-curl -s -u "ops:$PROMETHEUS_AUTH_PASSWORD" http://prometheus.kub.local/api/v1/status/flags | grep retention
+curl -s -u "ops:$PROMETHEUS_AUTH_PASSWORD" http://prometheus.kub.internal/api/v1/status/flags | grep retention
 curl -s --cacert ~/.config/secrets/kub-local/local-ca.pem \
   -H "Authorization: Bearer $GRAFANA_TOKEN" \
-  "https://grafana.kub.local/api/datasources/proxy/uid/P8E80F9AEF21F6940/config" | sed -n '/limits_config:/,/^[a-z]/p'
+  "https://grafana.kub.internal/api/datasources/proxy/uid/P8E80F9AEF21F6940/config" | sed -n '/limits_config:/,/^[a-z]/p'
 ```
 
 `nas`'s `/mnt/ssd0` holds all `local-path` claims and currently has far more free

@@ -162,8 +162,8 @@ and ingress. Rebuilding it from nothing is [`argocd.md`](argocd.md).
 **The scheme is part of the address.** Argo CD compares the SSO return URL against its own
 `configs.cm.url` and answers `Invalid redirect URL: the protocol and host (including port) must
 match …` on any difference, before authentik is contacted. The browser reaches this host over TLS,
-so `url` is `https://argocd.kub.local`, and the provider in `files/app-argocd.yaml` lists
-`https://argocd.kub.local/api/dex/callback`. A plain-HTTP value here breaks every sign-in, SSO and
+so `url` is `https://argocd.kub.internal`, and the provider in `files/app-argocd.yaml` lists
+`https://argocd.kub.internal/api/dex/callback`. A plain-HTTP value here breaks every sign-in, SSO and
 local form alike, while the page itself still loads.
 
 Traefik terminates that TLS: the chart's core Ingress is disabled (`server.ingress.enabled: false`)
@@ -315,7 +315,7 @@ that does not need the cluster at all.
 ## CrowdSec Web UI (OIDC, configured 2026-11-25)
 
 Its own OIDC, from the `app-crowdsec-web-ui` blueprint: client id `crowdsec-web-ui`, confidential,
-callback `https://crowdsec.kub.local/api/auth/oidc/callback`. The chart disables the password form,
+callback `https://crowdsec.kub.internal/api/auth/oidc/callback`. The chart disables the password form,
 so the first sign-in is the only way in; `/login?local=1` is the way past the automatic redirect.
 
 Unlike every other application here it needs a second credential that authentik does not issue: a

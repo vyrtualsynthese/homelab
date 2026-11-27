@@ -696,7 +696,7 @@ and `/downloads` a local path, the NFS client is out of the picture and what is 
 itself — which is the answer the next catch would be worth having.
 
 **The two complaints, answered separately.** "Unreachable from outside" was the stall, not a routing
-change: `qbittorrent.kub.local` is `lan-only` behind the authentik gate by design, and it answered
+change: `qbittorrent.kub.internal` is `lan-only` behind the authentik gate by design, and it answered
 `302` to the sign-in page throughout. "Downloads are slow" was the app, not the line: over the six
 hours before the last wedge the reported download rate had a median of 28 MB/s with 800 peer
 connections open, and no rate limit set. One `firewalled` sample appeared in that window beside
@@ -719,11 +719,11 @@ would fail a healthy move. Both queries:
 ```bash
 set -a; . ~/.config/secrets/homelab.env; set +a
 # the ceiling over the last day
-curl -sG -u "ops:$PROMETHEUS_AUTH_PASSWORD" http://prometheus.kub.local/api/v1/query --data-urlencode \
+curl -sG -u "ops:$PROMETHEUS_AUTH_PASSWORD" http://prometheus.kub.internal/api/v1/query --data-urlencode \
   'query=max_over_time(scrape_duration_seconds{app_kubernetes_io_instance="qbittorrent-exporter"}[24h])'
 
 # failed scrapes in the same window
-curl -sG -u "ops:$PROMETHEUS_AUTH_PASSWORD" http://prometheus.kub.local/api/v1/query --data-urlencode \
+curl -sG -u "ops:$PROMETHEUS_AUTH_PASSWORD" http://prometheus.kub.internal/api/v1/query --data-urlencode \
   'query=count_over_time(up{app_kubernetes_io_instance="qbittorrent-exporter"}==0[24h])'
 ```
 
@@ -778,25 +778,25 @@ migration. Remove the silence when the card closes, or renew it with a new end d
 ## How to confirm it is happening again
 
 Both Grafana calls pass `--cacert ~/.config/secrets/kub-local/local-ca.pem`, because
-`grafana.kub.local` is served by the cluster's internal CA; `-k` would accept whatever answered and
+`grafana.kub.internal` is served by the cluster's internal CA; `-k` would accept whatever answered and
 hand it the token.
 
 ```bash
 set -a; . ~/.config/secrets/homelab.env; set +a
 # is the API slow right now? (value > 4 means at least one call crossed 5s)
-curl -sG -u "ops:$PROMETHEUS_AUTH_PASSWORD" http://prometheus.kub.local/api/v1/query \
+curl -sG -u "ops:$PROMETHEUS_AUTH_PASSWORD" http://prometheus.kub.internal/api/v1/query \
   --data-urlencode 'query=max(scrape_duration_seconds{app_kubernetes_io_instance="qbittorrent-exporter"})'
 
 # how many timeouts in the last 30 minutes (Loki is gated; ask through Grafana's datasource proxy)
 curl -sG --cacert ~/.config/secrets/kub-local/local-ca.pem \
   -H "Authorization: Bearer $GRAFANA_TOKEN" \
-  "https://grafana.kub.local/api/datasources/proxy/uid/P8E80F9AEF21F6940/loki/api/v1/query_range" \
+  "https://grafana.kub.internal/api/datasources/proxy/uid/P8E80F9AEF21F6940/loki/api/v1/query_range" \
   --data-urlencode 'query=sum(count_over_time({namespace="media-stack",container="qbittorrent-exporter"} |= "timing out" [30m]))'
 
 # the same symptom seen from another consumer
 curl -sG --cacert ~/.config/secrets/kub-local/local-ca.pem \
   -H "Authorization: Bearer $GRAFANA_TOKEN" \
-  "https://grafana.kub.local/api/datasources/proxy/uid/P8E80F9AEF21F6940/loki/api/v1/query_range" \
+  "https://grafana.kub.internal/api/datasources/proxy/uid/P8E80F9AEF21F6940/loki/api/v1/query_range" \
   --data-urlencode 'query={namespace="media-stack",container="cross-seed"} |= "fetch failed"'
 ```
 

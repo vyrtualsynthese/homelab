@@ -98,7 +98,7 @@ The metrics side:
 
 ```bash
 set -a; . ~/.config/secrets/homelab.env; set +a
-curl -sG -u "ops:$PROMETHEUS_AUTH_PASSWORD" http://prometheus.kub.local/api/v1/query \
+curl -sG -u "ops:$PROMETHEUS_AUTH_PASSWORD" http://prometheus.kub.internal/api/v1/query \
   --data-urlencode 'query=DCGM_FI_DEV_GPU_TEMP'
 ```
 

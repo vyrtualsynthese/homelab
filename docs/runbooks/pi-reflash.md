@@ -300,7 +300,7 @@ It answers at `https://vpn-rbp0.kub.local:8443` on `rbp0` and `https://vpn-rbp1.
   which is why `TRUSTED_PROXIES` names it.
 - **The certificate is this host's own leaf.** `hack/internal-cert.sh --host vpn-rbp0.kub.local` signs
   it with the same root every client already trusts, and the pair is copied to `~/dockers/certs/tls.pem`
-  and `tls-key.pem`. It is not the shared `*.kub.local` leaf: that key on an edge host would be a key to
+  and `tls-key.pem`. It is not the shared `*.kub.internal` leaf: that key on an edge host would be a key to
   every internal name. The leaf lasts two years; re-issue it before it expires, or a reflash restores an
   expired pair with the rest of the stack.
 - **The panel has no gate, by decision.** It signs in with its own account and password, and nothing on

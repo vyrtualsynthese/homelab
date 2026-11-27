@@ -114,5 +114,5 @@ Health.
 
 The full list, its evidence and re-check commands: [known gaps](../reference/alerts.md#known-gaps).
 What is broken right now is not a page either: the firing list on
-[Homelab · Health](https://grafana.kub.local/d/homelab-health) and ArgoCD's application list are the
+[Homelab · Health](https://grafana.kub.internal/d/homelab-health) and ArgoCD's application list are the
 answer, and [Every day](../running-it/every-day.md) is the sweep that reads them.

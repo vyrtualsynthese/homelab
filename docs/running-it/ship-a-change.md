@@ -116,9 +116,9 @@ kubectl -n <ns> logs deploy/<name> --tail=50
 `Synced` and `Healthy` with `REV` at the merge commit is the proof. A pod older than that commit
 means no rollout — but only when the change altered the pod template; a route, hostname or gate
 change rolls nothing, so open the URL and read the IngressRoute.
-[Homelab · Applications](https://grafana.kub.local/d/homelab-applications) shows the app's row over
+[Homelab · Applications](https://grafana.kub.internal/d/homelab-applications) shows the app's row over
 time — replicas ready, restarts, memory — and
-[Homelab · Health](https://grafana.kub.local/d/homelab-health) whether anything fired.
+[Homelab · Health](https://grafana.kub.internal/d/homelab-health) whether anything fired.
 
 ## If the sync stops
 

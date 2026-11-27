@@ -4,13 +4,15 @@
 > column is that answer, and only your last move makes anything accepted.
 >
 > **Use it when** filing a card, picking one up, or validating what an agent handed you ·
-> **Verified** 2026-11-17 · **Kind:** living page
+> **Verified** 2026-11-17 · **Kind:** how-to
+>
+> **Sources** `cluster/helm/vikunja/`, `hack/vikunja-seed.sh`, `~/.config/opencode/AGENTS.md`
 
-The board is Vikunja at [vikunja.kub.local](https://vikunja.kub.local), LAN only. It is the state of
+The board is Vikunja at [vikunja.kub.internal](https://vikunja.kub.internal), LAN only. It is the state of
 the work; a plan is not. The rules — which column may hold what, who may move a card, what a card
 carries and where it sits in its column — are the contract every session reads,
 `~/.config/opencode/AGENTS.md` §Task board, with the long form on
-[The board and worktrees](https://docs.kub.local/config/develop/agent/board-and-worktrees/). This
+[The board and worktrees](https://docs.kub.internal/config/develop/agent/board-and-worktrees/). This
 page is the walkthrough: what you will see, and what your own moves are.
 
 ## Columns
@@ -75,7 +77,7 @@ Every description opens with the same block, so the same facts sit in the same p
 ```text
 repo: [owner/repository](https://github.com/owner/repository)
 docs: [Plan — <title>](https://github.com/owner/repository/blob/develop/docs/superpowers/plans/<plan>.md)
-site: [Rendered page](https://docs.kub.local/homelab/develop/superpowers/plans/<plan>/)
+site: [Rendered page](https://docs.kub.internal/homelab/develop/superpowers/plans/<plan>/)
 branch: feature/<branch>
 pr: [#<number>](https://github.com/owner/repository/pull/<number>)
 ```
@@ -88,7 +90,7 @@ pr: [#<number>](https://github.com/owner/repository/pull/<number>)
   distinguishable from "not filled in". A change that landed without one carries `commit:` instead.
 
 The shapes to copy, and the rule behind them, are on
-[The board and worktrees](https://docs.kub.local/config/develop/agent/board-and-worktrees/).
+[The board and worktrees](https://docs.kub.internal/config/develop/agent/board-and-worktrees/).
 
 ## The saved filters
 

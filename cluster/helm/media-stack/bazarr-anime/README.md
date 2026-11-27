@@ -1,8 +1,8 @@
 # bazarr-anime
 
 The second Bazarr instance, for the anime library. Same image and shape as `bazarr`, with its own
-config claim, host and API key. It is internal-only: `bazarr-anime.kub.local` on the `web` entry
-point over TLS since 2026-11-15, no authentication in front of it.
+config claim, host and API key. It is internal-only: `bazarr-anime.kub.internal` on the `web` entry
+point, over TLS from the cluster default certificate, no authentication in front of it.
 
 It is a separate chart rather than a shared one because the repo contract forbids a shared/library
 chart: each instance keeps its own values and can diverge without leaking into the other.

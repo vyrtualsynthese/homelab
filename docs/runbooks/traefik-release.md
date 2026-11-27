@@ -145,7 +145,7 @@ file records no `automated` block, and adding one is a regression — a root-app
 Application to match git and the automation silently disappears.
 
 ```bash
-argocd login argocd.kub.local --sso          # authentik; there is no local admin
+argocd login argocd.kub.internal --sso          # authentik; there is no local admin
 argocd app diff traefik                      # read this before anything else
 argocd app sync traefik
 ```
@@ -368,12 +368,12 @@ means the certificate store was not loaded:
 for h in plex.kub.home.ashudev.com ashudev.com ashuvidz.com dashy.ashudev.com; do
   curl -s -o /dev/null -w "$h %{http_code}\n" --resolve $h:443:192.168.1.46 https://$h/
 done
-curl -s -o /dev/null -w 'dashboard http %{http_code}\n' --resolve traefik.kub.local:80:192.168.1.46 http://traefik.kub.local/dashboard/
+curl -s -o /dev/null -w 'dashboard http %{http_code}\n' --resolve traefik.kub.internal:80:192.168.1.46 http://traefik.kub.internal/dashboard/
 curl -s --cacert ~/.config/secrets/kub-local/local-ca.pem \
-  -o /dev/null -w 'dashboard https %{http_code}\n' --resolve traefik.kub.local:443:192.168.1.46 https://traefik.kub.local/dashboard/
+  -o /dev/null -w 'dashboard https %{http_code}\n' --resolve traefik.kub.internal:443:192.168.1.46 https://traefik.kub.internal/dashboard/
 curl -s --cacert ~/.config/secrets/kub-local/local-ca.pem \
   -o /dev/null -w 'dashboard with password %{http_code}\n' \
-  -u 'vronteix:<password>' --resolve traefik.kub.local:443:192.168.1.46 https://traefik.kub.local/dashboard/
+  -u 'vronteix:<password>' --resolve traefik.kub.internal:443:192.168.1.46 https://traefik.kub.internal/dashboard/
 timeout 5 bash -c '</dev/tcp/192.168.1.46/22000' && echo "syncthing tcp open"
 ```
 
@@ -567,9 +567,9 @@ line to look for in the pod log is `The ACME resolve is skipped`.
 | every gate stops resolving, or routes are rejected | `providers.kubernetesCRD.allowCrossNamespace` is off; every gate is referenced as `kube-system-<name>@kubernetescrd` |
 | a K3s node does not come back after the config edit | a second top-level `disable:` key; K3s refuses the file. Restore `/root/config.yaml.bak-*` |
 | `minecraft-minecraft-server-public … subset not found` | the minecraft Deployment is scaled to `0/0`; the error predates any upgrade |
-| the dashboard answers `404` on `http://traefik.kub.local` | the chart route lives on `websecure` only; `cluster/infrastructure/traefik/dashboard/redirect.yaml` is the `web` twin that sends the browser to TLS with a `301` |
+| the dashboard answers `404` on `http://traefik.kub.internal` | the chart route lives on `websecure` only; `cluster/infrastructure/traefik/dashboard/redirect.yaml` is the `web` twin that sends the browser to TLS with a `301` |
 | the dashboard answers `401` on plain HTTP, no TLS | before 2026-11-21 the route was on `web` with basic auth, so the password crossed the LAN in clear; move it to `websecure` with `tls.options: internal-tls` |
-| `https://traefik.kub.local` fails the certificate | the route has no `tls.options: internal-tls`, so it gets no certificate from `kube-system/local-cert` |
+| `https://traefik.kub.internal` fails the certificate | the route has no `tls.options: internal-tls`, so it gets no certificate from `kube-system/local-cert` |
 | `acme.json` grows with names nothing serves | certificates stay in the store after their route is deleted, and Traefik renews everything it holds; the orphans are listed in `docs/audit/traefik-2026-11-21.md` |
 | every public host serves `CN = kub.local`, and one name fails the handshake with `tlsv1 unrecognized name` | `/data/acme.json` is owned by a uid other than `65532`, so Traefik cannot read its ACME account, skips the resolver and falls back to the default certificate. Fix the owner on `nas`; see *Moving to chart `43.0.0`* |
 | the log says `Unable to create access logger … permission denied`, and no line reaches Loki | hostPath `/var/log/traefik` on `streaming` is root-owned `0755`, so Traefik (`65532`) cannot create the file. Run the `traefik_logs` Ansible role on that host: it sets the directory `2770` `65532:65532` with the setgid bit and installs the rotation rule |

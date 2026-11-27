@@ -1,6 +1,6 @@
 {{- /*
 Redirect every plain-HTTP request to the TLS router. Shared by every media-stack
-chart that serves a `kub.local` host, so the redirect lives in one place instead
+chart that serves a `kub.internal` host, so the redirect lives in one place instead
 of one copy per chart.
 
 Order matters: the middleware that consumes it always lists `lan-only` first, so
@@ -18,14 +18,14 @@ spec:
   redirectScheme:
     scheme: https
     # Permanent: browsers cache it and stop asking over HTTP. Traefik builds the
-    # Location from the request's own host, so every `*.kub.local` name lands on
+    # Location from the request's own host, so every `*.kub.internal` name lands on
     # the TLS router of the same name.
     permanent: true
 ---
 {{/*
 The TLS policy for the cluster's internal names. One object, referenced from
 each router as `kube-system-internal-tls`. It is deliberately not a per-app
-object: there is one certificate and one policy for `*.kub.local`, and a copy per
+object: there is one certificate and one policy for `*.kub.internal`, and a copy per
 chart would only let them drift.
 */ -}}
 apiVersion: {{ .Values.traefik.apiVersion }}

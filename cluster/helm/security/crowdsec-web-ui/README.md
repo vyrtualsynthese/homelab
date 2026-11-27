@@ -58,7 +58,7 @@ is worse, because the pod is `Running` and the UI is simply empty.
 
 The app authenticates by itself; the route carries no `authentik-forwardauth`. Client id
 `crowdsec-web-ui`, issuer `https://authentik.kub.home.ashudev.com/application/o/crowdsec-web-ui/`,
-callback `https://crowdsec.kub.local/api/auth/oidc/callback`. The callback is built from the
+callback `https://crowdsec.kub.internal/api/auth/oidc/callback`. The callback is built from the
 `Host` and `X-Forwarded-*` headers, so the provider's registered URI and this host must match
 exactly — a mismatch is a login loop with nothing in the log.
 

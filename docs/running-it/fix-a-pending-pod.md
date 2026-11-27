@@ -122,7 +122,7 @@ kubectl describe node <node> | grep -A6 'Allocated resources'
 node counts; another node is no candidate until `nodeSelector` changes, and the claim stays on
 the old node, so a move means a fresh claim and leaves the configuration behind
 ([nodes.md](../how-it-works/nodes.md)). Lower the request to what
-[Homelab · Applications](https://grafana.kub.local/d/homelab-applications) measured. Disk pressure
+[Homelab · Applications](https://grafana.kub.internal/d/homelab-applications) measured. Disk pressure
 is a node fault: the `nas` SSD behind the `nas`-pinned configuration claims is dying
 ([every-day.md](every-day.md)).
 
@@ -137,7 +137,7 @@ kubectl -n <ns> logs <pod> --previous
 ```
 
 Read its last words, then the restarts panel on
-[Health](https://grafana.kub.local/d/homelab-health) and one namespace in
-[Applications](https://grafana.kub.local/d/homelab-applications). Usual causes: a configuration it
+[Health](https://grafana.kub.internal/d/homelab-health) and one namespace in
+[Applications](https://grafana.kub.internal/d/homelab-applications). Usual causes: a configuration it
 cannot write, a database it cannot reach, and a claim its UID does not own
 ([the UID trap](../charts/README.md#changing-the-uid-breaks-the-config-volume)).

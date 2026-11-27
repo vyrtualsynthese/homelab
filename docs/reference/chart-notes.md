@@ -101,8 +101,8 @@ upstream chart cannot turn that off without an `extraObjects` manifest.
 ### tautulli
 
 As of 2026-11-13: the first chart in the media stack with **no public route at all**. One
-IngressRoute at `tautulli.kub.local`, LAN-only — and since 2026-11-15 that means two of them, a
-`websecure` route and a `web` redirect, like every other `kub.local` route in the namespace. It also carries the second deliberate readiness exception: Tautulli reports Plex
+IngressRoute at `tautulli.kub.internal`, LAN-only — and since 2026-11-15 that means two of them, a
+`websecure` route and a `web` redirect, like every other `kub.internal` route in the namespace. It also carries the second deliberate readiness exception: Tautulli reports Plex
 reachability and SQLite integrity only in a JSON body with HTTP 200, which the kubelet cannot read,
 so readiness is disabled rather than pointed at liveness. Its image starts as root and drops to
 `PUID`/`PGID`, so the capability set is `ALL` dropped plus the three calls that init makes. Since
@@ -139,7 +139,7 @@ and the boilerplate that came with it — `authenticationMethod: none`, `disable
 trusted ranges — are gone: with `Enabled`, the local bypass would let a forwarded request in as the
 admin user without passing authentik at all.
 
-`Allowed Hosts` is set on both, `radarr.kub.local, radarr, radarr.media-stack.svc.cluster.local` and
+`Allowed Hosts` is set on both, `radarr.kub.internal, radarr, radarr.media-stack.svc.cluster.local` and
 the anime equivalent, which is what `AllowedHostsCheck` was warning about while `0.0.0.0` stood in for
 "any host". ASP.NET enforces that list through host filtering, so the probes send a `Host` header of
 their own (`probes.*.httpHeaders`), the way `prowlarr` already did: the kubelet would otherwise send
@@ -227,11 +227,11 @@ on NFS. The same rollout showed the capability set was a second defect of its ow
 `/app` and on `app.db` before any chown could help, and `sqlite3` reports that as `attempt to write a
 readonly database`. Both containers carry them now; nothing else was added and `privileged` stays
 false. Its access control is the LAN allow list plus a sign-in: the UI can delete books and
-rewrite files, and `calibre.kub.local` is only a DNS entry, so the shared `kube-system-lan-only`
+rewrite files, and `calibre.kub.internal` is only a DNS entry, so the shared `kube-system-lan-only`
 Middleware is what stops an outside request with `403` before the app sees it, and Calibre-Web asks
 authentik for a sign-in itself over OIDC (v4.0.8's generic provider, 2026-11-15). There is no proxy gate
 in front of it: `/opds` and Kobo sync use basic auth and cannot follow a redirect. It was the first media
-tool on HTTPS — `https://calibre.kub.local`, because its OAuth login forces a `Secure` session cookie and
+tool on HTTPS — `https://calibre.kub.internal`, because its OAuth login forces a `Secure` session cookie and
 cannot complete a sign-in over plain HTTP — and on 2026-11-15 the whole namespace followed it, one shared
 `redirect-to-https` Middleware and one shared `internal-tls` TLSOption from the `traefik-gate` chart.
 
@@ -368,7 +368,7 @@ second prompt that carries no identity. The app's local passwords stop working a
 password replaces them. The two chart-local Middlewares (`thelounge-security`,
 `thelounge-redirect-https`) are replaced by the shared `kube-system-*` copies; the `TLSOption` stays
 per-app, because it belongs to the `*.kub.home.ashudev.com` certificate, not to the internal
-`*.kub.local` policy.
+`*.kub.internal` policy.
 
 Sizing came from the pod that had run 98 days: p95 76Mi, peak 81Mi working set, CPU peak 2m. Request
 64Mi → 80Mi, limit 128Mi unchanged. There is no log-level knob — console output follows the `debug`
@@ -591,7 +591,7 @@ port the upstream chart renders on that Service while `lapi.metrics.enabled` is 
 live while the monitoring stack is not; Prometheus is unaffected, because it still scrapes the pod IP
 by annotation. It
 authenticates with its own OIDC (blueprint `app-crowdsec-web-ui`), the route is `websecure` +
-`internal-tls` + `lan-only` on `crowdsec.kub.local`, and there is no gate in front, because native
+`internal-tls` + `lan-only` on `crowdsec.kub.internal`, and there is no gate in front, because native
 OIDC comes first here. Two credentials it needs are not issued by authentik: the LAPI machine
 (watcher) it logs in as, and the client secret; both are keys of the `crowdsec-web-ui` Secret, made
 by hand. Liveness and readiness share `/api/health` — it reports the HTTP listener, not the LAPI,
@@ -649,7 +649,7 @@ Pi presents its own leaf from the ashulab internal CA, for `pihole-rbp0.kub.loca
 and `pihole-rbp1.kub.local`. The exporter dials those names and trusts the root
 through `SSL_CERT_FILE`, pointed at a ConfigMap that carries it: the peer is
 authenticated, and `SKIP_TLS_VERIFICATION` is gone. The names are Pi-hole's own
-records in `02-my-wildcard-dns.conf`, above the `*.kub.local` wildcard that points
+records in `02-my-wildcard-dns.conf`, above the `*.kub.internal` wildcard that points
 at the router, and they are also written into the pod's `/etc/hosts` from
 `pihole.addresses`: cluster DNS forwards to the node's `resolv.conf`, and `nuc0`,
 where this pod runs, listed `1.1.1.1` beside the Pi-hole — so roughly one

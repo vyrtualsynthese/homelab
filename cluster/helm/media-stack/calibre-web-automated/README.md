@@ -41,7 +41,7 @@ helm template calibre-web-automated cluster/helm/media-stack/calibre-web-automat
 | PersistentVolumeClaim | `calibre-web-automated-config`, 10Gi, `local-path` |
 | PersistentVolumeClaim | `calibre-web-automated-ingest`, 1Gi, `local-path` |
 | Middleware | none of its own; the routes use `kube-system-lan-only` and `kube-system-redirect-to-https` from the `traefik-gate` chart |
-| IngressRoute | `calibre-web-automated`, `websecure` entry point, `Host(calibre.kub.local) && PathPrefix(/)`, TLS from the cluster default certificate |
+| IngressRoute | `calibre-web-automated`, `websecure` entry point, `Host(calibre.kub.internal) && PathPrefix(/)`, TLS from the cluster default certificate |
 | IngressRoute | `calibre-web-automated-redirect`, `web` entry point, same host, sends the browser to HTTPS |
 | TLSOption | none of its own; `kube-system/internal-tls` from the `traefik-gate` chart |
 
@@ -186,7 +186,7 @@ behaviour.
 
 ## Route and access control
 
-The chart renders two `IngressRoute` objects for **`https://calibre.kub.local`**:
+The chart renders two `IngressRoute` objects for **`https://calibre.kub.internal`**:
 
 - one on the `websecure` entry point, which is the real route, carrying one `Middleware`:
   `kube-system-lan-only@kubernetescrd`;
@@ -197,9 +197,9 @@ The chart renders two `IngressRoute` objects for **`https://calibre.kub.local`**
 WireGuard (`10.8.0.0/24`) and the pod network (`10.42.0.0/16`); everything else gets `403 Forbidden`. It is
 defined in the `traefik-gate` chart, not in this one.
 
-**The name is not a boundary; the allow list is.** `calibre.kub.local` is only a DNS entry: anyone who can
+**The name is not a boundary; the allow list is.** `calibre.kub.internal` is only a DNS entry: anyone who can
 resolve it reaches Traefik, and the proxy answers only if the client address sits inside a listed range.
-Reading a `.kub.local` name as a boundary is how an internal app ends up reachable from outside the LAN.
+Reading a `.kub.internal` name as a boundary is how an internal app ends up reachable from outside the LAN.
 
 ### Why this one is HTTPS
 
@@ -210,9 +210,9 @@ it away, so the callback would arrive without the session it started with, and e
 would stop sticking. Its own settings page says it in the dropdown: *Use OAuth (requires HTTPS)*.
 
 The certificate is **the cluster's default one**, `kube-system/local-cert` via the default `TLSStore` — a
-private certificate whose subject alternative names are `*.kub.local`, `*.app.local`, `localhost` and
-`127.0.0.1`. The chart sets neither `secretName` nor `certResolver`: ACME cannot issue for a `.local` name,
-because public CAs have been barred from internal names since 2015. A client without the root installed
+private certificate whose subject alternative names are `*.kub.internal`, `*.kub.local`, `*.app.local`,
+`localhost` and `127.0.0.1`. The chart sets neither `secretName` nor `certResolver`: ACME cannot issue
+for an internal name, because public CAs have been barred from them since 2015. A client without the root installed
 shows a certificate warning, which is accepted here; installing the root on the phone or laptop removes it.
 
 **The certificate that was there expired on 2026-05-06** and went unnoticed for ten months, because nothing
@@ -231,7 +231,7 @@ Delete then create, not `apply`: the Secret in place is `Opaque`, and a Secret's
 `apply` that adds `type: kubernetes.io/tls` is refused with `field is immutable`.
 
 Traefik serves the new certificate as soon as that Secret changes, without a restart, and every
-`kub.local` route in the namespace uses it — the TLS selector is the shared `kube-system/internal-tls`
+`kub.internal` route in the namespace uses it — the TLS selector is the shared `kube-system/internal-tls`
 TLSOption from the `traefik-gate` chart, not an object of this chart's own.
 
 The root is `~/.config/secrets/kub-local/local-ca.pem`, installed once per client. Backup rules, the
@@ -248,14 +248,14 @@ Configuration → OAuth, provider `generic`, with *Login type* set to `OAuth` in
 | Setting | Value |
 |---|---|
 | OAuth Metadata URL | `https://authentik.kub.home.ashudev.com/application/o/calibre/.well-known/openid-configuration` |
-| OAuth Redirect Host | `https://calibre.kub.local` |
+| OAuth Redirect Host | `https://calibre.kub.internal` |
 | OAuth Client Id | `calibre` |
 | OAuth Client Secret | the value of `CALIBRE_CLIENT_SECRET` in the `authentik-sso` Secret |
 | OAuth Scopes | `openid profile email` |
 | Username Field | `preferred_username` |
 | OAuth group for Admin | `authentik Admins` |
 
-The callback authentik has to allow is `https://calibre.kub.local/login/generic/authorized`; it is
+The callback authentik has to allow is `https://calibre.kub.internal/login/generic/authorized`; it is
 declared in the `authentik` chart's `files/app-calibre.yaml`.
 
 Why not a proxy gate, when most of the media stack has one: a gate would put a login page in front of

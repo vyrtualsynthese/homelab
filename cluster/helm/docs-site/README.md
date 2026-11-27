@@ -1,7 +1,7 @@
 # docs-site
 
 Every repository under `vyrtualsynthese` that carries a `docs/` folder, rendered as a MkDocs
-Material site and served on the intranet at `https://docs.kub.local`.
+Material site and served on the intranet at `https://docs.kub.internal`.
 
 This chart is self-contained (pattern A): there is no upstream chart for it. The builder is a Python
 script shipped in the chart (`files/build.py`), rendered into a ConfigMap, and run by a CronJob every
@@ -87,7 +87,7 @@ Cluster writes are the operator's, not an agent's: the site is not an agent's ou
 
 ## Why the route is LAN-only and behind authentik
 
-`docs.kub.local` carries `kube-system-lan-only@kubernetescrd` and then
+`docs.kub.internal` carries `kube-system-lan-only@kubernetescrd` and then
 `kube-system-authentik-forwardauth@kubernetescrd`, in that order. The content is private repository
 documentation — paths, hostnames, the odd credential-shaped string if a repository is careless — so
 it is not a public page: the LAN check refuses an off-LAN request before authentik is asked anything,

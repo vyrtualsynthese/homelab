@@ -31,7 +31,7 @@ not change.
 
 ```bash
 set -a; . ~/.config/secrets/homelab.env; set +a
-B=https://grafana.kub.local
+B=https://grafana.kub.internal
 CA=~/.config/secrets/kub-local/local-ca.pem
 
 curl -s --cacert "$CA" -X POST -H "Authorization: Bearer $GRAFANA_TOKEN" \
@@ -39,7 +39,7 @@ curl -s --cacert "$CA" -X POST -H "Authorization: Bearer $GRAFANA_TOKEN" \
 
 python3 - <<'EOF'
 import json, os, ssl, urllib.request
-B = "https://grafana.kub.local"
+B = "https://grafana.kub.internal"
 T = os.environ["GRAFANA_TOKEN"]
 CA = os.path.expanduser("~/.config/secrets/kub-local/local-ca.pem")
 ctx = ssl.create_default_context(cafile=CA)

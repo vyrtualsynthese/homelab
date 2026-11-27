@@ -2,7 +2,7 @@
 
 A second Sonarr instance, dedicated to the anime library. It runs the same image and the same chart
 shape as [`../sonarr`](../sonarr), with its own config claim, host, API key and memory size. It is
-internal-only: `sonarr-anime.kub.local`, over TLS since 2026-11-15, behind the authentik
+internal-only: `sonarr-anime.kub.internal`, over TLS from the cluster default certificate, behind the authentik
 forward-auth gate, with the instance's own login off and `/api` carrying `lan-only` alone (the API
 checks `X-Api-Key` itself).
 
@@ -30,7 +30,7 @@ PersistentVolumeClaim (`sonarr-anime-config`) and one IngressRoute (`sonarr-anim
 | sonarr | Here | Why |
 |---|---|---|
 | `sonarr-config` | **`sonarr-anime-config`** | Derived from the release name, so the two instances never share a database |
-| `sonarr.kub.local` | **`sonarr-anime.kub.local`** | One host per instance |
+| `sonarr.kub.internal` | **`sonarr-anime.kub.internal`** | One host per instance |
 | request `256Mi`, limit `768Mi` | **request `1.125Gi`, limit `3Gi`** | This library is larger: p95 1109Mi, peak 1911Mi over the five days Prometheus retains |
 | Secret `sonarr` | **Secret `sonarr-anime`** | Separate API key, separate exporter identity |
 

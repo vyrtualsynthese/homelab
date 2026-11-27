@@ -4,7 +4,10 @@
 > the API checks that showed the board was up and closed to the internet.
 >
 > **Use it when** the board is built again from nothing, or you need to know what its first start
-> proved · **Kind:** completed record 2026-11-16
+> proved · **Verified** 2026-11-16 · **Kind:** record
+>
+> **Sources** `cluster/helm/vikunja/`, [`vikunja-database.md`](vikunja-database.md),
+> [`internal-ca.md`](internal-ca.md)
 
 Date: 2026-11-15
 
@@ -27,7 +30,7 @@ database, so a pod that never becomes ready is more likely a missing database th
 | Application (ArgoCD) | `vikunja`, in namespace `argocd` |
 | Chart | `cluster/helm/vikunja` |
 | Deployment, Service | `vikunja`, `vikunja` on port `3456` |
-| Address | `https://vikunja.kub.local` |
+| Address | `https://vikunja.kub.internal` |
 | Certificate | the default `kube-system/local-cert` (identity `CN=kub.local`) |
 | Gate | `lan-only` middleware, then authentik on everything but `/api` |
 | Board owner | created in Step 8, in the web form |
@@ -42,7 +45,7 @@ database, so a pod that never becomes ready is more likely a missing database th
   # expect: vikunja
   ```
 
-- The workstation resolves `vikunja.kub.local` to the cluster. Every command below runs from the LAN;
+- The workstation resolves `vikunja.kub.internal` to the cluster. Every command below runs from the LAN;
   Step 10 is the only one that runs from outside it.
 - `curl` and `openssl` on the workstation.
 - The window for the first run is short but real: between the board starting and Step 8, anybody who
@@ -115,8 +118,8 @@ kubectl -n vikunja logs deploy/vikunja --tail=40
 ## Step 4 — plain HTTP redirects
 
 ```bash
-curl -sI http://vikunja.kub.local/ | grep -i '^location\|^HTTP'
-# expect: HTTP/1.1 301 and Location: https://vikunja.kub.local/
+curl -sI http://vikunja.kub.internal/ | grep -i '^location\|^HTTP'
+# expect: HTTP/1.1 301 and Location: https://vikunja.kub.internal/
 ```
 
 The plain-HTTP address answers with **301**, a permanent redirect, to the HTTPS address. That code
@@ -141,7 +144,7 @@ deliberately omits `-k`.
 
 ```bash
 curl -s -o /dev/null -w '%{http_code}\n' \
-  --cacert ~/.config/secrets/kub-local/local-ca.pem https://vikunja.kub.local/api/v1/info
+  --cacert ~/.config/secrets/kub-local/local-ca.pem https://vikunja.kub.internal/api/v1/info
 # expect: 200
 ```
 
@@ -150,16 +153,17 @@ connection means the chain the board presents leads back to that authority. Then
 certificate:
 
 ```bash
-openssl s_client -connect vikunja.kub.local:443 -servername vikunja.kub.local </dev/null 2>/dev/null \
+openssl s_client -connect vikunja.kub.internal:443 -servername vikunja.kub.internal </dev/null 2>/dev/null \
   | openssl x509 -noout -subject -issuer
 # expect: subject=CN = kub.local
 #         issuer=CN = ashulab internal CA
 ```
 
-`subject` is who the certificate claims to be — `kub.local`, the cluster's internal name, which
-covers `vikunja.kub.local` as a subdomain. `issuer` is who signed it: `ashulab internal CA`, minted
-by [`internal-ca.md`](internal-ca.md). Because that CA is in each workstation's trust store, a
-browser shows no warning on `kub.local`; a warning there means the certificate being served is not
+`subject` is who the certificate claims to be — still `kub.local`, because the leaf's common name was
+never changed when the zone moved. Its SAN carries `*.kub.internal` and `*.kub.local`, so
+`vikunja.kub.internal` validates. `issuer` is who signed it: `ashulab internal CA`, minted by
+[`internal-ca.md`](internal-ca.md). Because that CA is in each workstation's trust store, a browser
+shows no warning on `vikunja.kub.internal`; a warning there means the certificate being served is not
 the cluster's own. `internal-tls` selects no certificate — it sets only minVersion, cipher suites and
 curve preferences — so check the default `TLSStore` certificate `kube-system/local-cert` first, then
 whether the router matches this host at all: a request whose `Host` no router claims falls back to the
@@ -170,12 +174,12 @@ default certificate too, and that is the other way here to get a name mismatch.
 The point of the gate is one rule: `/api` is open to machines, everything else needs a session.
 
 ```bash
-curl -sk https://vikunja.kub.local/api/v1/info | head -c 120
+curl -sk https://vikunja.kub.internal/api/v1/info | head -c 120
 # expect: JSON containing "version":"v2.8.0" or later
 ```
 
 ```bash
-curl -sk -o /dev/null -w '%{http_code} %{redirect_url}\n' https://vikunja.kub.local/
+curl -sk -o /dev/null -w '%{http_code} %{redirect_url}\n' https://vikunja.kub.internal/
 # expect: 302 followed by the authentik sign-in address
 ```
 
@@ -193,7 +197,7 @@ provider exists but its policy refused this account.
 ## Step 7 — metrics
 
 ```bash
-curl -sk https://vikunja.kub.local/api/v1/metrics | head -5
+curl -sk https://vikunja.kub.internal/api/v1/metrics | head -5
 # expect: # HELP and # TYPE lines, and metric names
 ```
 
@@ -216,7 +220,7 @@ chart, the `/api/v1/metrics` path answering something other than text, or the po
 
 ## Step 8 — the owner account
 
-Open `https://vikunja.kub.local` in a browser. The sign-in gate sends you to authentik; sign in there
+Open `https://vikunja.kub.internal` in a browser. The sign-in gate sends you to authentik; sign in there
 with the operator account, and authentik returns you to the board. Vikunja's own first-run form then
 asks for a username, an email address and a password.
 
@@ -230,12 +234,12 @@ first-run form refuses to create a second one.
 ## Step 9 — registration stays closed
 
 ```bash
-curl -sk -o /dev/null -w '%{http_code}\n' https://vikunja.kub.local/api/v1/register
+curl -sk -o /dev/null -w '%{http_code}\n' https://vikunja.kub.internal/api/v1/register
 # expect: 405
 ```
 
 ```bash
-curl -sk -X POST -o /dev/null -w '%{http_code}\n' https://vikunja.kub.local/api/v1/register
+curl -sk -X POST -o /dev/null -w '%{http_code}\n' https://vikunja.kub.internal/api/v1/register
 # expect: 404
 ```
 
@@ -256,8 +260,8 @@ what is being checked. It runs from a network outside the house, or from the sam
 the WireGuard tunnel down.
 
 ```bash
-curl -sk -o /dev/null -w '%{http_code}\n' https://vikunja.kub.local/
-curl -sk -o /dev/null -w '%{http_code}\n' https://vikunja.kub.local/api/v1/info
+curl -sk -o /dev/null -w '%{http_code}\n' https://vikunja.kub.internal/
+curl -sk -o /dev/null -w '%{http_code}\n' https://vikunja.kub.internal/api/v1/info
 # expect: 403
 # expect: 403
 ```
@@ -280,7 +284,7 @@ pastes the outputs back.
 
 - `Synced Healthy` on the Application, one pod `1/1` with no restarts.
 - The log shows the migration text and a database connection line, with no error either side of them.
-- `http://` answers 301 with `Location: https://vikunja.kub.local/`.
+- `http://` answers 301 with `Location: https://vikunja.kub.internal/`.
 - The certificate validates against `local-ca.pem`, `subject CN=kub.local`, `issuer CN=ashulab internal CA`.
 - `/api/v1/info` answers without a session and reports `v2.8.0` or later; `/` redirects to authentik.
 - `/api/v1/metrics` returns text, and `up{namespace="vikunja"}` is `1`.

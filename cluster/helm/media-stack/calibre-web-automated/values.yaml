@@ -266,7 +266,7 @@ affinity: {}
 # The route, in the reference chart's shape. It is deliberately LAN-only: CWA
 # administers the library, so it is reachable from the local network and from nowhere
 # else. The restriction is enforced by a Middleware at the proxy, not by the
-# `kub.local` name, which is only a DNS entry.
+# `kub.internal` name, which is only a DNS entry.
 #
 # There is no forward-auth gate here on purpose. CWA v4.0.8 signs users in over OIDC
 # itself (Settings → Basic Configuration → OAuth, provider "generic"), so it is its own
@@ -316,11 +316,11 @@ ingressRoute:
     enabled: true
     # -- Use a pre-existing certificate instead of the cluster default. Empty here on
     # purpose: the certificate comes from the default TLSStore, `kube-system/local-cert`,
-    # which `hack/internal-cert.sh` signs as a private `*.kub.local` certificate. Clients
+    # which `hack/internal-cert.sh` signs as a private `*.kub.internal` certificate. Clients
     # that do not have that root installed show a warning, which is accepted: the
     # alternative is no sign-in at all.
     secretName: ""
-    # -- Traefik ACME resolver name. Empty: ACME cannot issue for a `.kub.local`
+    # -- Traefik ACME resolver name. Empty: ACME cannot issue for a `.kub.internal`
     # name, which is not publicly resolvable.
     certResolver: ""
     # -- TLSOption resource name, from the `traefik-gate` chart.

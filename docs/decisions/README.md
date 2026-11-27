@@ -48,6 +48,7 @@ would cost — but the four above are what every record has.
 | [No host is attached to Ubuntu Pro](2026-11-25-no-ubuntu-pro.md) | The six hosts stay un-attached: the security cover is the release they land on, 26.04 LTS to May 2031, and Canonical is a UK company, which the EU-only provider rule puts out | 2026-11-25 |
 | [Nothing on the edge Pis goes through authentik](2026-11-26-edge-pis-local-auth-only.md) | `rbp0` and `rbp1` carry DNS and the VPN, so their panels sign in with local accounts only: a cluster that is down must not lock the operator out of the way back in | 2026-11-26 |
 | [Pi-hole answers first; public DNS is DNS4EU unfiltered](2026-11-27-public-dns-is-dns4eu-unfiltered.md) | Every name in the house goes through the two edge Pi-holes, except qbittorrent's, which leaves through its AirVPN tunnel and is answered by `10.4.0.1`; a caller that cannot ask the Pi-holes resolves through `86.54.11.100` and `86.54.11.200`, and through no Cloudflare, Google or Quad9 address, nor a filtered DNS4EU variant | 2026-11-27 |
+| [The internal zone is `kub.internal`](2026-11-27-internal-zone-is-kub-internal.md) | Every Traefik-served internal name is `<app>.kub.internal`, because Android sends `.local` to mDNS and never to the Pi-holes; `*.kub.local` redirects to it for a 30-day soak, then the redirect, the old SAN and the old DNS wildcard go together | 2026-11-27 |
 
 Below 80 °C on a one-hour soak at 50 % CPU is how the `streaming` record ends; a replacement
 node is how the `nuc0` one does. Until then both are facts about the hardware, not open tickets.

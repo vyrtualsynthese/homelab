@@ -21,7 +21,7 @@ exception, and it is written down [below](#the-edge-pis-are-the-one-exception). 
 Kubernetes `LoadBalancer` Service in
 `kube-system`, with no cloud load balancer behind the name: the house router forwards 80 and 443
 (TCP), 25565 (TCP), 22000 (TCP and UDP) and 21027 (UDP) to **one** cluster address, `192.168.1.46`
-(`streaming`), which is also what the edge Pi-hole answers for `*.kub.local`. The 25565 and
+(`streaming`), which is also what the edge Pi-hole answers for `*.kub.internal`. The 25565 and
 22000/21027 entries are Minecraft and Syncthing, which Traefik owns as entry points; the 25565 rule
 was narrowed to TCP on 2026-11-26, because the `Service` publishes nothing on UDP.
 
@@ -59,8 +59,10 @@ flowchart LR
 
 ## Names
 
-`*.kub.local` is the internal space. The edge Pi-hole answers that whole wildcard with one address,
-`192.168.1.46`, and public DNS has no entry, so they never resolve for an off-LAN client.
+`*.kub.internal` is the internal space. The edge Pi-hole answers that whole wildcard with one address,
+`192.168.1.46`, and public DNS has no entry, so those names never resolve for an off-LAN client. The
+old zone, `*.kub.local`, still resolves to the same address and is answered by one wildcard redirect
+in `traefik-gate` until the soak ends; why it moved has its own section below.
 
 The public set is the allowlist in `hack/check_exposure.py`, listed host by host in
 [`reference/routes.md`](../reference/routes.md): `plex.kub.home.ashudev.com`,
@@ -92,8 +94,20 @@ The addresses, the rejections and the cost of being wrong are in
 The node's resolver is owned by `ansible/roles/resolver`: netplan names the two Pis and refuses DHCP's
 nameservers, systemd-resolved keeps its stub listener off, and `/etc/resolv.conf` is the list that
 results. For the pods that inherit a node's file — CoreDNS among them —
-`cluster/infrastructure/coredns/custom.yaml` forwards `*.kub.local` to the same pair, so the wildcard
-never reaches a resolver that would answer NXDOMAIN.
+`cluster/infrastructure/coredns/custom.yaml` forwards `*.kub.internal` and `*.kub.local` to the same
+pair, so neither wildcard reaches a resolver that would answer NXDOMAIN.
+
+## Why the internal zone is `kub.internal`
+
+Android 12 and later resolve every name ending in `.local` through mDNS: the query goes to
+`224.0.0.251:5353` and never to the DNS server of the Wi-Fi network. AOSP documents that VPN and
+mobile-data connections are excluded from that treatment, which is why the same name worked over
+WireGuard and timed out on the house Wi-Fi. RFC 6762 reserves `.local` for exactly that use.
+
+`.internal` is reserved for private use by ICANN and is not delegated, so no public resolver answers
+it and no client special-cases it. A device resolves it by asking its configured DNS server, which
+must be a Pi-hole. The old zone still answers through one wildcard redirect in `traefik-gate` until
+the soak ends.
 
 ## Three layers that look alike
 
@@ -145,11 +159,12 @@ the floor landed, and its allow was added. `media-stack` is where a missing pair
 every one of its 51 pairs was probed from the calling pod and the download path was tested through the
 apps' own APIs afterwards; the chart's README holds the checks, the numbers and the story.
 
-## TLS on `kub.local`
+## TLS on `kub.internal`
 
 Internal routes set neither `secretName` nor `certResolver`. They fall through to
-`kube-system/local-cert`, the default certificate: `*.kub.local`, signed by the ashulab internal CA,
-selected through the `internal-tls` TLSOption that `traefik-gate` applies. A `web` twin router with the
+`kube-system/local-cert`, the default certificate: `*.kub.internal`, with `*.kub.local` beside it in
+the SAN until the soak ends, signed by the ashulab internal CA and selected through the `internal-tls`
+TLSOption that `traefik-gate` applies. A `web` twin router with the
 same host only redirects to it, and carries `lan-only` and nothing else — putting the gate on the
 redirect would send a plain-HTTP visitor through authentik and back to plain HTTP.
 
@@ -163,8 +178,8 @@ The two Pi-holes serve their own admin surfaces from the host, not through this 
 present per-host leaves from the same internal CA: Pi-hole's panel and API on 443 as
 `pihole-rbp0.kub.local` and `pihole-rbp1.kub.local`, and the wg-easy VPN panel on 8443 behind a Caddy
 container as `vpn-rbp0.kub.local` and `vpn-rbp1.kub.local`. All four names are mapped by Pi-hole's own
-`02-my-wildcard-dns.conf` above its `*.kub.local` wildcard. The leaf is per host on purpose: the shared
-`*.kub.local` key on an edge host would be a key to every internal name.
+`02-my-wildcard-dns.conf` above its `kub.internal` and `kub.local` wildcards. The leaf is per host on purpose: the shared
+`*.kub.internal` key on an edge host would be a key to every internal name.
 
 Neither is a Traefik route, and that is the point: the VPN panel has to open when the cluster is down,
 which is also why it signs in with its own account. Nothing on an edge host goes through authentik

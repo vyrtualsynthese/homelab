@@ -1,10 +1,13 @@
 # First run of the docs site
 
-> **In one line.** The first start of `https://docs.kub.local`: the token, the chart, one manual run
+> **In one line.** The first start of `https://docs.kub.internal`: the token, the chart, one manual run
 > of the builder, and what it rendered.
 >
 > **Use it when** the docs site is rebuilt from nothing, or you want the first run as measured ·
-> **Kind:** completed record 2026-11-17
+> **Verified** 2026-11-17 · **Kind:** record
+>
+> **Sources** `cluster/helm/docs-site/`,
+> [`rebuild-the-docs-site.md`](../running-it/rebuild-the-docs-site.md), `hack/gen_docs.py`
 
 Date: 2026-11-16
 
@@ -12,7 +15,7 @@ Date: 2026-11-16
 [Rollback](#rollback) for how all of it is removed again.
 
 The docs site renders every repository's `docs/` folder as a MkDocs Material site and serves it at
-`https://docs.kub.local`. This procedure is the first start: it creates the GitHub token the builder
+`https://docs.kub.internal`. This procedure is the first start: it creates the GitHub token the builder
 reads with, deploys the chart, runs the builder by hand once, and proves the result over the route.
 
 Run it once, from the LAN. The builder needs a token before its first pod can start, so Steps 1 to 3
@@ -28,14 +31,14 @@ come before any sync.
 | CronJob, manual Job | `docs-site-build`; `docs-first-1` below |
 | Deployment, Service | `docs-site`, `docs-site` on port `8080` |
 | Claim | `docs-site-site`, 2Gi, `local-path`, on `nuc0` |
-| Address | `https://docs.kub.local` |
+| Address | `https://docs.kub.internal` |
 | Certificate | the default `kube-system/local-cert` (identity `CN=kub.local`) |
 | Gate | `lan-only`, then `authentik-forwardauth` (provider `docs`, `authentik Admins` only) |
 | Secret | `github-docs-ro`, key `token` |
 
 ## Preconditions
 
-- The workstation resolves `docs.kub.local` to the cluster.
+- The workstation resolves `docs.kub.internal` to the cluster.
 - `curl` and `openssl` on the workstation; `kubectl` against the cluster.
 - `~/.config/secrets/kub-local/local-ca.pem` present (the cluster's internal CA, minted by
   [`internal-ca.md`](internal-ca.md)).
@@ -103,7 +106,7 @@ kubectl -n argocd get application docs-site \
 
 The route is gated by authentik, and the provider it names comes from the `authentik` Application,
 not this one: sync `authentik` too, or wait for its blueprint scan. Until `app-docs.yaml` has been
-applied, `https://docs.kub.local/` answers authentik's 404 instead of a sign-in redirect (Step 6).
+applied, `https://docs.kub.internal/` answers authentik's 404 instead of a sign-in redirect (Step 6).
 
 ## Step 4 — the nginx pod is up
 
@@ -120,7 +123,7 @@ The route is gated, so an unauthenticated request never reaches the placeholder 
 authentik instead. That 302 is Step 6's first check; here it only proves the pod serves something:
 
 ```bash
-curl -sk -o /dev/null -w '%{http_code}\n' https://docs.kub.local/
+curl -sk -o /dev/null -w '%{http_code}\n' https://docs.kub.internal/
 # expect: 302
 ```
 
@@ -157,7 +160,7 @@ First run measured under 2 minutes for ten pairs; the job's own deadline is 900s
 The gate first. Without a session, the route answers a redirect to authentik's sign-in page:
 
 ```bash
-curl -sk -o /dev/null -w '%{http_code} %{redirect_url}\n' https://docs.kub.local/
+curl -sk -o /dev/null -w '%{http_code} %{redirect_url}\n' https://docs.kub.internal/
 # expect: 302 followed by the authentik sign-in address
 ```
 
@@ -168,22 +171,22 @@ answers the same 404. Sync the `authentik` Application (or wait for its next blu
 repeat. A **200** means the gate is missing from the route — the site is then protected by `lan-only`
 alone.
 
-Then sign in. Open `https://docs.kub.local/` in a browser; authentik asks for the operator account,
+Then sign in. Open `https://docs.kub.internal/` in a browser; authentik asks for the operator account,
 returns you to the index, and the site renders:
 
 ```bash
-curl -sk -o /dev/null -w '%{http_code}\n' https://docs.kub.local/
+curl -sk -o /dev/null -w '%{http_code}\n' https://docs.kub.internal/
 # expect: 200 once the browser holds a session (the cookie is what the check needs)
 ```
 
 ```bash
-curl -sk https://docs.kub.local/ | sed -n '1,60p'
+curl -sk https://docs.kub.internal/ | sed -n '1,60p'
 # expect: the documentation hub — one card per repository, a row per branch with
 # its last build, and the brand mark at the top
 ```
 
 ```bash
-curl -sk https://docs.kub.local/homelab/develop/ | head -20
+curl -sk https://docs.kub.internal/homelab/develop/ | head -20
 # expect: the Material page for this repository's docs, with the AshuLab header and
 # the branch bar under it (main | develop, develop marked as current)
 ```
@@ -202,14 +205,17 @@ about what the site answers, not who signed it. The chain is checked once, here.
 
 ```bash
 curl -s -o /dev/null -w '%{http_code}\n' \
-  --cacert ~/.config/secrets/kub-local/local-ca.pem https://docs.kub.local/
+  --cacert ~/.config/secrets/kub-local/local-ca.pem https://docs.kub.internal/
 # expect: 200
 
-openssl s_client -connect docs.kub.local:443 -servername docs.kub.local </dev/null 2>/dev/null \
+openssl s_client -connect docs.kub.internal:443 -servername docs.kub.internal </dev/null 2>/dev/null \
   | openssl x509 -noout -subject -issuer
 # expect: subject=CN = kub.local
 #         issuer=CN = ashulab internal CA
 ```
+
+`subject` stays `kub.local` because the leaf's common name was never changed when the zone moved; its
+SAN carries `*.kub.internal` and `*.kub.local`, so `docs.kub.internal` validates against it.
 
 The TLS router sets `tls.options.name: internal-tls` and deliberately no `secretName` and no
 `certResolver`: `kube-system/local-cert` is the default certificate, and `internal-tls` is the
@@ -238,11 +244,11 @@ changes.
 
 ## Success, in one place
 
-- `Synced Healthy`, one nginx pod `1/1`, and `https://docs.kub.local/` answers `200` after the
+- `Synced Healthy`, one nginx pod `1/1`, and `https://docs.kub.internal/` answers `200` after the
   authentik sign-in.
 - Without a session the same address answers `302` to authentik, and from outside the LAN a `403`.
 - The hub lists every repository with docs, and names the ones without, with each branch's last build.
-- `https://docs.kub.local/homelab/develop/` shows the Material site, and the branch bar under the
+- `https://docs.kub.internal/homelab/develop/` shows the Material site, and the branch bar under the
   header switches to `main` without leaving the page being read.
 - The certificate validates against `local-ca.pem`, `subject CN=kub.local`, `issuer CN=ashulab internal CA`.
 - The first job's log has one line per pair, a closing summary, and no traceback and no token.

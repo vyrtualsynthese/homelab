@@ -90,7 +90,7 @@ ingressRoute:
   labels: {}
   annotations: {}
   tls:
-    # -- Send the router over TLS. On: the cluster serves `*.kub.local` from the
+    # -- Send the router over TLS. On: the cluster serves `*.kub.internal` from the
     # -- default certificate (`kube-system/local-cert`), and the `web` router only
     # -- redirects here. See docs/runbooks/internal-ca.md.
     enabled: true

@@ -11,7 +11,7 @@
 
 The board rules are written once, in the contract every session reads: §Task board of
 `~/.config/opencode/AGENTS.md`. The long form — a card's shape, a handover, a refusal, a blocked
-task — is [The board and worktrees](https://docs.kub.local/config/develop/agent/board-and-worktrees/)
+task — is [The board and worktrees](https://docs.kub.internal/config/develop/agent/board-and-worktrees/)
 in the `config` repository, and the API calls that work against the running instance are the
 `vikunja-board` skill of the workstation's OpenCode config.
 

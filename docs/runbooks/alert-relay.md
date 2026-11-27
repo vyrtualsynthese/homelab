@@ -79,7 +79,7 @@ repository board, and the alert card waits on it:
 
 ```bash
 # as bot-opencode, which holds read+write on `alerts` and the repository boards
-curl -s -X POST "https://vikunja.kub.local/api/v2/tasks/<alert>/relations" \
+curl -s -X POST "https://vikunja.kub.internal/api/v2/tasks/<alert>/relations" \
   -H "Authorization: Bearer $VIKUNJA_MCP_TOKEN" -H 'Content-Type: application/json' \
   -d '{"relation_kind":"blocked","other_task_id":<fix>}'
 ```
@@ -158,7 +158,7 @@ need `VIKUNJA_API_TOKEN`, the operator's token, never the bot token an agent use
 share and `PUT` changes an existing one:
 
 ```bash
-B=https://vikunja.kub.local/api/v2
+B=https://vikunja.kub.internal/api/v2
 # bot-opencode: read+write on alerts
 curl -s -X POST "$B/projects/9/users" -H "Authorization: Bearer $VIKUNJA_API_TOKEN" \
   -H 'Content-Type: application/json' -d '{"username":"bot-opencode","permission":1}'
@@ -235,7 +235,7 @@ set -a; . ~/.config/secrets/homelab.env; set +a
 curl -s --cacert ~/.config/secrets/kub-local/local-ca.pem \
   -X POST -H "Authorization: Bearer $GRAFANA_TOKEN" -H "Content-Type: application/json" \
   -d '{"integration":{"type":"webhook","settings":{"url":"http://alert-relay.monitoring.svc.cluster.local:8080/alert"}}}' \
-  "https://grafana.kub.local/apis/notifications.alerting.grafana.app/v0alpha1/namespaces/default/receivers/dmlrdW5qYS1hbGVydHM/test"
+  "https://grafana.kub.internal/apis/notifications.alerting.grafana.app/v0alpha1/namespaces/default/receivers/dmlrdW5qYS1hbGVydHM/test"
 ```
 
 Expected: `{"status":"success",…}`, a `…: opened #N` line in `kubectl -n monitoring logs deploy/alert-relay`,
@@ -266,7 +266,7 @@ kubectl -n monitoring port-forward svc/alert-relay 8080:8080 &
 curl -s -X POST localhost:8080/alert -H 'Content-Type: application/json' -d '{
   "status":"firing","groupKey":"test/diskfull/nas",
   "alerts":[{"status":"firing","fingerprint":"test1","startsAt":"2026-11-16T20:00:00Z",
-    "generatorURL":"https://grafana.kub.local/alerting/rule/1",
+    "generatorURL":"https://grafana.kub.internal/alerting/rule/1",
     "labels":{"alertname":"TestDiskFull","severity":"critical","instance":"nas"},
     "annotations":{"summary":"synthetic test"}}]}'
 ```
@@ -285,7 +285,7 @@ token.
 
 ```bash
 set -a; . ~/.config/secrets/homelab.env; set +a
-B=https://vikunja.kub.local/api/v2
+B=https://vikunja.kub.internal/api/v2
 FIX=$(curl -s --cacert ~/.config/secrets/kub-local/local-ca.pem \
   -X POST "$B/projects/2/tasks?format=markdown" \
   -H "Authorization: Bearer $VIKUNJA_MCP_TOKEN" -H 'Content-Type: application/json' \
