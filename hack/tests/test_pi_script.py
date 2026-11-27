@@ -453,7 +453,10 @@ root	ALL=(ALL:ALL) ALL
 def _pi_fixture(root):
     """A Pi as the 2026-11-24 measurement found it: a key in the human account,
     cloud-init's sshd drop-in ahead of the main file's own `no`, the `%admins`
-    grant, and cloud-init's grant for the retired `ubuntu` account."""
+    grant, and cloud-init's grant for the retired `ubuntu` account. The files the
+    operator supplies are there too — `pihole.env`, the three certificates and the
+    sync key half this host holds — because `setup` refuses without them and
+    writes none of them."""
     stack = root / "home/vronteix/dockers"
     stack.mkdir(parents=True)
     (stack / "pihole.env").write_text("FTLCONF_webserver_api_password=x\n")
@@ -483,14 +486,16 @@ def _pi_fixture(root):
         "RESTIC_PASSWORD=test\nAWS_ACCESS_KEY_ID=test\nAWS_SECRET_ACCESS_KEY=test\n"
     )
     env_file.chmod(0o600)
+    _plant_sync_keys(root)
     return stack
 
 
 def _plant_sync_keys(root):
     """Both halves of the pair, where the operator puts them: the private key the
     standby dials with, and the authorized_keys line the authority accepts. `setup`
-    never writes either, and `verify` names the one its host is missing, so a
-    fixture that wants `verify` to pass has to plant them first."""
+    refuses without its own half and never writes either; `_pi_fixture` plants both
+    so the other tests see a host that is ready, and a test about the drift deletes
+    one to see it named."""
     key = root / "etc/wg-sync/id_ed25519"
     key.parent.mkdir(parents=True, exist_ok=True)
     key.write_text("-----BEGIN OPENSSH PRIVATE KEY-----\n")
@@ -1633,6 +1638,7 @@ def test_verify_names_a_missing_env_file_and_a_legacy_cron(tmp_path):
 
 KEEPALIVED_HEADER = "--- /etc/keepalived/keepalived.conf\n"
 NOTIFY_HEADER = "--- /usr/local/lib/wg-vpn/wg-vrrp-notify.sh\n"
+TRACK_HEADER = "--- /usr/local/lib/wg-vpn/wg-easy-running.sh\n"
 
 
 def test_the_master_and_the_backup_differ_only_in_state_and_priority():
@@ -1651,6 +1657,22 @@ def test_the_master_and_the_backup_differ_only_in_state_and_priority():
         assert "preempt_delay 300" in block
         assert "wg_easy_running" in block
         assert "@VRRP_STATE@" not in block
+        # keepalived runs `script` as an argv, so a pipeline in the conf is
+        # arguments to docker inspect and the check fails every run: both hosts
+        # would go FAULT and nobody would hold the address.
+        assert 'script "/usr/local/lib/wg-vpn/wg-easy-running.sh"' in block
+        script_line = next(l for l in block.splitlines() if l.strip().startswith("script "))
+        assert "|" not in script_line, script_line
+
+
+def test_the_track_script_is_a_file_that_runs_the_check():
+    """The wrapper is the shell keepalived never provides. Its own body is where
+    the pipeline belongs, and the test names both halves so a later edit cannot
+    move one without the other."""
+    checked = rendered_section("rbp0", TRACK_HEADER)
+    assert "docker inspect -f" in checked
+    assert "wg-easy" in checked
+    assert "grep -qx true" in checked
 
 
 def test_the_notify_script_records_the_state_and_the_series(tmp_path):
@@ -2073,16 +2095,24 @@ def test_the_vpn_sync_verb_refuses_the_authority(tmp_path):
 
 def test_the_key_drift_names_the_half_each_host_needs(tmp_path):
     """Neither half is written here. The private key belongs on the standby, the
-    authorized_keys line on the authority, and verify names the one that is
-    missing rather than both."""
+    authorized_keys line on the authority; `setup` refuses without its own half,
+    and `verify` names the one that is missing rather than both."""
     for host, missing, present in (
         ("rbp0", "var/lib/wg-sync/.ssh/authorized_keys", "etc/wg-sync/id_ed25519"),
         ("rbp1", "etc/wg-sync/id_ed25519", "var/lib/wg-sync/.ssh/authorized_keys"),
     ):
         root = tmp_path / host
         _pi_fixture(root)
-        assert run("setup", host, root=root).returncode == 0
+        (root / missing).unlink()
 
+        # A setup that ran anyway would leave a half-configured host: the reason
+        # the design makes this a refusal and not a warning.
+        out = run("setup", host, root=root)
+        assert out.returncode == 1
+        assert f"MISSING {root / missing}" in out.stdout, out.stdout
+
+        _plant_sync_keys(root)
+        assert run("setup", host, root=root).returncode == 0
         if host == "rbp1":  # only the standby carries the pull
             script = root / "usr/local/lib/wg-vpn/wg-sync.sh"
             assert script.stat().st_mode & 0o777 == 0o755
@@ -2090,6 +2120,7 @@ def test_the_key_drift_names_the_half_each_host_needs(tmp_path):
             assert "OnCalendar=*:0/1" in timer.read_text()
         assert (root / "etc/wg-sync").stat().st_mode & 0o777 == 0o700
 
+        (root / missing).unlink()
         out = run("verify", host, root=root)
         assert out.returncode == 1
         assert f"MISSING {root / missing}" in out.stdout, out.stdout
