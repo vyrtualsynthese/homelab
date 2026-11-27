@@ -2,7 +2,7 @@
 
 2026-11-27.
 
-> **Status: for review.** Nothing is built until this is approved. The plan follows
+> **Status: for review.** Workstream A is built on this branch; B and C are not. The plan follows
 > (`docs/superpowers/plans/`), then implementation.
 
 ## Intent
