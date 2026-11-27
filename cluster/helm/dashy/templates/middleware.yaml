@@ -1,6 +1,8 @@
 # yaml-language-server: $schema=https://raw.githubusercontent.com/datreeio/CRDs-catalog/refs/heads/main/traefik.io/middleware_v1alpha1.json
-# Both retired Dashy names funnel here, path and query kept, one hop, permanent.
-# Only those two hosts match: an application's own hostname is never rewritten.
+# Every retired Dashy name funnels here, path and query kept, one hop, permanent.
+# Only those hosts match: an application's own hostname is never rewritten. The
+# dots are escaped in the regex, which is how `dashy.kub.internal` escaped the
+# 2026-11-27 rename and answered 418 through `noop@internal` for a day.
 apiVersion: traefik.io/v1alpha1
 kind: Middleware
 metadata:
@@ -8,6 +10,6 @@ metadata:
   namespace: dashy
 spec:
   redirectRegex:
-    regex: "^https?://(?:dashy\\.kub\\.local|kub\\.home\\.ashudev\\.com)(/.*)?$"
+    regex: "^https?://(?:dashy\\.kub\\.(?:internal|local)|kub\\.home\\.ashudev\\.com)(/.*)?$"
     replacement: "https://dashy.ashudev.com$1"
     permanent: true

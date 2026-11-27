@@ -43,6 +43,41 @@ def test_the_edge_pi_names_stay_on_the_old_zone():
         assert name in exporter
 
 
+# Writing the dot escaped is how a name survives a search for the suffix: Dashy's
+# `redirect-to-dashy` carried `dashy\.kub\.local` through the 2026-11-27 rename, so its new
+# internal name matched no redirect and answered 418 through `noop@internal`. A double-quoted
+# YAML scalar holds `\\.`, so the backslashes are stripped before the suffix is looked for.
+ALLOWED_OLD_ZONE = {
+    # the soak itself: the wildcard that keeps the old names alive until 2027-01-01
+    "platform/traefik-gate/templates/legacy-redirect.yaml",
+}
+EDGE_DIRS = ("monitoring/pihole-exporter/",)
+EDGE_LINE_NAMES = EDGE_NAMES + (
+    "vpn-rbp0.kub.local",
+    "vpn-rbp1.kub.local",
+    "rbp0.kub.local",
+    "rbp1.kub.local",
+)
+
+
+def test_no_chart_file_names_the_old_zone():
+    offenders = []
+    for path in sorted(HELM.rglob("*")):
+        if not path.is_file() or path.suffix not in {".yaml", ".yml", ".txt", ".json"}:
+            continue
+        relative = path.relative_to(HELM).as_posix()
+        if relative in ALLOWED_OLD_ZONE or relative.startswith(EDGE_DIRS):
+            continue
+        for number, line in active_lines(path):
+            normalized = line.replace("\\", "")
+            if ".kub.local" not in normalized:
+                continue
+            if any(edge in normalized for edge in EDGE_LINE_NAMES):
+                continue
+            offenders.append(f"cluster/helm/{relative}:{number}: {line.strip()}")
+    assert offenders == [], "\n".join(offenders)
+
+
 EXTRA = [
     REPO / "cluster/helm/dashy/files/conf.yml",
     REPO / "cluster/infrastructure/traefik/dashboard/redirect.yaml",
