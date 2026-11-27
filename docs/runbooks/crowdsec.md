@@ -72,7 +72,7 @@ the burst in proof 3 come from a LAN machine.
    `cscli decisions list --origin CAPI -o json` names addresses, and none of them falls in
    `192.168.1.0/24`, `10.8.0.0/24`, `10.42.0.0/16` or `10.43.0.0/16` — the LAN, the tunnel, the pods
    and the services; `nft list set ip crowdsec crowdsec-blacklists` holds the same addresses and no
-   LAN one. The file that makes this true is
+   local one. The file that makes this true is
    `/etc/crowdsec_data/capi_whitelists.yaml`, read at pull time — a decision already in the table is
    *not* retroactively removed, which is why the check reads the list and not a count.
 
