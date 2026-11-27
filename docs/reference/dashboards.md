@@ -172,7 +172,7 @@ Three habits in the expression were found by running it, not by reading it. Ever
 first *defined* operand rather than the first *true* one, so the `or` chain answered `Calm` while
 three bans were in force. And each term ends in `or vector(0)` so a family that has never been
 scraped reads `0` instead of emptying the sum; `delta` on a subquery rather than `increase`, because
-the bouncer's family is a gauge.
+the families the panel reads are gauges.
 
 **Top addresses refused shows who was *answered* 401–499, not who the bouncer dropped.** A dropped
 request never reaches Traefik and has no line in the access log, so an address that is banned and an
