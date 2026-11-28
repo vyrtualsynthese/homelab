@@ -391,6 +391,102 @@
           "x": 0,
           "y": 18
         },
+        "id": 16,
+        "panels": [],
+        "title": "Request record",
+        "type": "row"
+      },
+      {
+        "datasource": {
+          "type": "loki",
+          "uid": "P8E80F9AEF21F6940"
+        },
+        "description": "Access-log lines with a 4xx or 5xx status. The URL is not logged: RequestPath is dropped and query parameters with it, because Loki has no authentication and URLs carry Plex tokens and FileBrowser share capabilities. A failure Traefik answers itself shows OriginStatus 0. A line reaches Loki a few seconds after the request, through Fluent Bit's flush interval.",
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 19
+        },
+        "id": 17,
+        "options": {
+          "dedupStrategy": "none",
+          "enableLogDetails": true,
+          "prettifyLogMessage": true,
+          "showCommonLabels": false,
+          "showLabels": false,
+          "showTime": true,
+          "sortOrder": "Descending",
+          "wrapLogMessage": false
+        },
+        "targets": [
+          {
+            "datasource": {
+              "type": "loki",
+              "uid": "P8E80F9AEF21F6940"
+            },
+            "expr": "{job=\"fluent-bit\", container=\"traefik\"} | json | DownstreamStatus >= 400",
+            "queryType": "range",
+            "refId": "A"
+          }
+        ],
+        "title": "Failed requests (4xx/5xx)",
+        "type": "logs"
+      },
+      {
+        "datasource": {
+          "type": "loki",
+          "uid": "P8E80F9AEF21F6940"
+        },
+        "description": "Count of access-log lines whose Duration passed one second, per router, in the trailing five minutes at each step. Duration is nanoseconds in the JSON format. A Plex stream runs for the length of the film and belongs here; read the router name before treating a bar as a fault. The p95 panel above is the alerting view, this one is per-request. Lines reach Loki a few seconds late, through Fluent Bit.",
+        "fieldConfig": {
+          "defaults": {
+            "decimals": 0,
+            "unit": "short"
+          },
+          "overrides": []
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 19
+        },
+        "id": 18,
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom",
+            "showLegend": true
+          },
+          "tooltip": {
+            "mode": "multi",
+            "sort": "desc"
+          }
+        },
+        "targets": [
+          {
+            "datasource": {
+              "type": "loki",
+              "uid": "P8E80F9AEF21F6940"
+            },
+            "expr": "sum by (RouterName) (count_over_time({job=\"fluent-bit\", container=\"traefik\"} | json | Duration > 1000000000 [5m]))",
+            "legendFormat": "{{RouterName}}",
+            "queryType": "range",
+            "refId": "A"
+          }
+        ],
+        "title": "Requests slower than 1 s, by router",
+        "type": "timeseries"
+      },
+      {
+        "collapsed": false,
+        "gridPos": {
+          "h": 1,
+          "w": 24,
+          "x": 0,
+          "y": 27
+        },
         "id": 7,
         "panels": [],
         "title": "Volume",
@@ -422,7 +518,7 @@
           "h": 7,
           "w": 12,
           "x": 0,
-          "y": 19
+          "y": 28
         },
         "id": 8,
         "options": {
@@ -488,7 +584,7 @@
           "h": 7,
           "w": 12,
           "x": 12,
-          "y": 19
+          "y": 28
         },
         "id": 9,
         "options": {
@@ -527,7 +623,7 @@
           "h": 1,
           "w": 24,
           "x": 0,
-          "y": 26
+          "y": 35
         },
         "id": 10,
         "panels": [],
@@ -583,7 +679,7 @@
           "h": 8,
           "w": 12,
           "x": 0,
-          "y": 27
+          "y": 36
         },
         "id": 11,
         "options": {
@@ -662,7 +758,7 @@
           "type": "prometheus",
           "uid": "PBFA97CFB590B2093"
         },
-        "description": "Age of the newest successful configuration load. Routes change several times an hour here, so a day without a reload means the provider went silent or the router is stuck; the orange line is the rule's 24 h.",
+        "description": "Age of the newest successful configuration load. A quiet cluster reloads nothing, so hours or a day without a reload is normal; it does not mean the router is stuck. A refused object is reported by TraefikConfigReloadFailing from the router's error log, and this age does not show it.",
         "fieldConfig": {
           "defaults": {
             "color": {
@@ -689,7 +785,7 @@
           "h": 4,
           "w": 4,
           "x": 12,
-          "y": 27
+          "y": 36
         },
         "id": 12,
         "options": {
@@ -727,7 +823,7 @@
           "type": "prometheus",
           "uid": "PBFA97CFB590B2093"
         },
-        "description": "Configuration loads in the last hour. Traefik v3 exports no failure counter: a refused config shows as the last-success age climbing and as a failed reload in the log.",
+        "description": "Configuration loads in the last hour. Traefik v3 exports no failure counter, and it advances traefik_config_last_reload_success on any applied configuration, so a refused object does not show here; TraefikConfigReloadFailing reads the router error log for that.",
         "fieldConfig": {
           "defaults": {
             "color": {
@@ -750,7 +846,7 @@
           "h": 4,
           "w": 4,
           "x": 16,
-          "y": 27
+          "y": 36
         },
         "id": 13,
         "options": {
@@ -815,7 +911,7 @@
           "h": 4,
           "w": 4,
           "x": 20,
-          "y": 27
+          "y": 36
         },
         "id": 14,
         "options": {
@@ -860,9 +956,9 @@
       "to": "now"
     },
     "timezone": "browser",
-    "title": "Homelab \u00b7 Traefik",
+    "title": "Homelab · Traefik",
     "uid": "homelab-traefik",
-    "version": 7
+    "version": 12
   },
   "folderUid": "homelab",
   "overwrite": true

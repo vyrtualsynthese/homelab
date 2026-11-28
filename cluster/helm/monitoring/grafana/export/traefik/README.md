@@ -1,31 +1,37 @@
 # Traefik dashboard and rules: an export, not a source
 
 Grafana's database is the authority for the `Homelab · Traefik` dashboard and for its three alert
-rules. These two files are a **snapshot taken on 2026-11-21**, with the dashboard re-exported on
-2026-11-22, committed so the panels and expressions can be read in a pull request and recovered by
+rules. These two files are a **snapshot first taken on 2026-11-21 and re-exported on 2026-11-22 and
+2026-11-28**, committed so the panels and expressions can be read in a pull request and recovered by
 hand if the database is lost. Nothing in this repository applies them: there is no configmap, no
 sidecar and no provisioning entry, and Grafana never reads this directory.
 
-Why not provision them: the other ten dashboards and the other 39 rules live in the same database.
+Why not provision them: the other eleven dashboards and the other 57 rules live in the same database.
 Provisioning two objects from git would give that folder two sources of truth, and the next person to
 edit a panel would have to know which one wins. The exception is recorded in
 [`docs/reference/dashboards.md`](../../../../../../docs/reference/dashboards.md).
 
 | File | What it holds |
 |---|---|
-| `dashboard.json` | A direct `POST /api/dashboards/db` body: `{dashboard, folderUid: "homelab", overwrite: true}`. Eleven panels in four rows, uid `homelab-traefik`, version 7. |
-| `rules.json` | The three rules as `GET /api/v1/provisioning/alert-rules` returns them, in group `homelab-core` (300 s), severity `warning`. |
+| `dashboard.json` | A direct `POST /api/dashboards/db` body: `{dashboard, folderUid: "homelab", overwrite: true}`. Thirteen panels in five rows, uid `homelab-traefik`, version 12. |
+| `rules.json` | The three rules as `GET /api/v1/provisioning/alert-rules` returns them, in group `homelab-core` (300 s), severity `warning`; `TraefikConfigReloadFailing` also carries `board: card`. |
 
 Both files were re-exported the same day, after the v3 move, because the v3 router stops exporting two
 names they used: `traefik_router_open_connections` is now `traefik_open_connections` (labelled by
 entry point) and `traefik_config_reloads_failure_total` does not exist at all. The connections panel
-follows the rename; the failure panel became "Reloads, 1 h", and `TraefikConfigReloadFailing` now reads
-`traefik_config_last_reload_success == 0`, which is what a refused configuration leaves behind.
+follows the rename; the failure panel became "Reloads, 1 h". On 2026-11-28 `TraefikConfigReloadFailing`
+stopped reading Prometheus entirely: v3 has no failure counter, and a refused dynamic configuration
+does **not** leave `traefik_config_last_reload_success` at zero — the metric listener runs on every
+applied configuration, including one whose router failed to build. The rule now counts the router's
+configuration-error lines in Loki. Its 24 h no-successful-reload branch was removed the same day,
+after it fired following 29 quiet hours on a healthy router.
 
 The dashboard was re-exported again on 2026-11-22, version 7, when the configuration audit turned on
 `metrics.prometheus.addEntryPointsLabels` and added `Requests per second by entry point`
-([the audit](../../../../../../docs/runbooks/traefik-release.md#the-37-configuration-audit-2026-11-22-revision-12)). The rules did
-not change.
+([the audit](../../../../../../docs/runbooks/traefik-release.md#the-37-configuration-audit-2026-11-22-revision-12)). It was
+re-exported once more on 2026-11-28, version 12: that snapshot catches up the *Request record* row
+(the two Loki panels that read the access log, added on 2026-11-25) and corrects the two reload panel
+descriptions, which had repeated the false 24 h premise. The rules changed with it.
 
 ## Re-applying after a wipe
 

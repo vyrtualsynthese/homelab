@@ -184,20 +184,42 @@
     "data": [
       {
         "refId": "A",
-        "queryType": "",
+        "queryType": "instant",
         "relativeTimeRange": {
-          "from": 600,
+          "from": 900,
           "to": 0
         },
-        "datasourceUid": "PBFA97CFB590B2093",
+        "datasourceUid": "P8E80F9AEF21F6940",
         "model": {
           "editorMode": "code",
-          "expr": "max(traefik_config_last_reload_success) == 0 or (time() - max(traefik_config_last_reload_success)) > 86400",
+          "expr": "sum(count_over_time({job=\"fluent-bit\", container=\"traefik\"} |~ \"does not exist|nonexistent certificate resolver|invalid rule|error while building|failed to load\" [15m]))",
           "instant": true,
           "intervalMs": 1000,
           "maxDataPoints": 43200,
+          "queryType": "instant",
           "range": false,
           "refId": "A"
+        }
+      },
+      {
+        "refId": "B",
+        "queryType": "",
+        "relativeTimeRange": {
+          "from": 0,
+          "to": 0
+        },
+        "datasourceUid": "__expr__",
+        "model": {
+          "datasource": {
+            "type": "__expr__",
+            "uid": "__expr__"
+          },
+          "expression": "A",
+          "intervalMs": 1000,
+          "maxDataPoints": 43200,
+          "reducer": "last",
+          "refId": "B",
+          "type": "reduce"
         }
       },
       {
@@ -222,7 +244,7 @@
               },
               "query": {
                 "params": [
-                  "A"
+                  "B"
                 ]
               },
               "reducer": {
@@ -235,7 +257,7 @@
             "type": "__expr__",
             "uid": "__expr__"
           },
-          "expression": "A",
+          "expression": "B",
           "intervalMs": 1000,
           "maxDataPoints": 43200,
           "refId": "C",
@@ -243,14 +265,15 @@
         }
       }
     ],
-    "updated": "2026-11-21T22:27:41Z",
+    "updated": "2026-11-28T12:42:33Z",
     "noDataState": "OK",
     "execErrState": "OK",
     "annotations": {
-      "description": "Two faults sit behind this rule. A failed reload leaves traefik_config_last_reload_success at 0 until the next good one, which is how a refused dynamic configuration shows up since Traefik v3 no longer exports a failure counter: a Middleware or IngressRoute it cannot resolve. Traefik keeps serving the last good config, so the routes still answer and the log line is the only other evidence; read it with kubectl -n kube-system logs deploy/traefik --tail=100. The 10-minute hold means a failure that is corrected within that window passes silently, and the log is the record. No successful reload for 24 h is the other shape: the provider delivered nothing for a day, which is not normal here (routes change several times an hour), so the watch is dead or the router is stuck mid-build. It does not cover a Helm values file that fails to render, or the /metrics endpoint being unreachable: the first never reaches Traefik, and ScrapeTargetDown owns the second.",
-      "summary": "Traefik is not reloading its configuration"
+      "description": "Traefik logged a dynamic-configuration error — a Middleware, IngressRoute or certificate resolver it could not resolve. The router keeps serving the last good configuration, so the routes may still answer while the object you just applied is not in effect; the log line is the evidence. Read it with `kubectl -n kube-system logs deploy/traefik --tail=100`. This rule counts the router's own configuration-error lines in Loki over 15 minutes, because Traefik v3 exposes no reload-failure counter and advances `traefik_config_last_reload_success` even when part of the configuration fails to build. The old no-successful-reload-in-24-h branch was removed on 2026-11-28: it fired after 29 quiet hours on a healthy router, because a cluster with no route changes legitimately reloads nothing. It does not cover a Helm values file that fails to render, which never reaches Traefik, or an unreachable /metrics endpoint, which ScrapeTargetDown owns.",
+      "summary": "Traefik refused a configuration reload"
     },
     "labels": {
+      "board": "card",
       "severity": "warning"
     },
     "provenance": "api",
