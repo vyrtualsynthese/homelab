@@ -5,10 +5,10 @@
 > nobody watches.
 >
 > **Use it when** an alert fired and you want to know what it means, you are writing or editing a
-> rule, or you are asking whether something is monitored at all · **Verified** 2026-11-27 · **Kind:** reference
+> rule, or you are asking whether something is monitored at all · **Verified** 2026-11-28 · **Kind:** reference
 >
-> **Sources** the live rules and the two contact points, read from Grafana's API on 2026-11-26 and
-> 2026-11-27 ·
+> **Sources** the live rules and the two contact points, read from Grafana's API on 2026-11-26,
+> 2026-11-27 and 2026-11-28 ·
 > `cluster/helm/monitoring/grafana/values.yaml`, `docs/observability-conventions.md`, and the two
 > exports under `cluster/helm/monitoring/grafana/export/{traefik,security}/rules.json`
 
@@ -19,7 +19,7 @@ The overview — what runs where, its sizing, and how to query the stack:
 
 Grafana unified alerting, folder `Homelab`, **two rule groups split by cadence
 on 2026-11-18**: `homelab-core-fast` at **60 s** (29 rules) and `homelab-core` at
-**300 s** (35 rules). **64 rules**, **two contact points**, and four child routes: two by severity and
+**300 s** (31 rules). **60 rules**, **two contact points**, and four child routes: two by severity and
 two on `board=card` — one to each contact point.
 
 The split rule is the `for` duration: a rule sits in the fast group when its `for`
@@ -32,8 +32,8 @@ checked every five minutes: `CertificateExpiring`, `CloudTlsCertificateExpiring`
 `RestoreDrillOverdue` (`for: 1h`), the three disk-fill predictions (`for: 30m`), the temperature and
 SLO-ish checks (`for: 10m` and above). The slowest ratio is the `for: 10m` rules in
 `homelab-core`: half their own `for` between checks, so an alert is delayed by up to five
-minutes and never by more than that. At 64 rules the load is **36.0 evaluations a minute** —
-29 rules every 60 s plus 35 every 300 s — against 35.0 when the split was made, with all 35 rules
+minutes and never by more than that. At 60 rules the load is **35.2 evaluations a minute** —
+29 rules every 60 s plus 31 every 300 s — just above 35.0 when the split was made, with all 35 rules
 of that day on the fast cadence.
 
 **Delivery**: contact point `discord-homelab` (type `discord`).
@@ -51,7 +51,11 @@ became twenty lines, half of them kube-state-metrics labels. The contact point n
 five-line message — status with the rule's severity, the rule's own `summary`, its `description` in
 italics, and a link to that rule — so a person reads what fired, on what, and what to do, without
 opening Grafana to find out which of the eleven labels mattered. `summary` and `description` are
-what the template reads, which is why a new rule without them sends a near-empty message.
+what the template reads, which is why a new rule without them sends a near-empty message. The link
+comes from the alert's own `GeneratorURL`, not from the `__alert_rule_uid__` label: Grafana strips
+reserved `__` labels from `.CommonLabels`, so the first version's lookup always fell through to
+`/alerting/list` (measured on 2026-11-28 against the Traefik message). `GeneratorURL` already
+carries `/alerting/grafana/<rule uid>/view`, which is the page a reader wants.
 
 Grafana 13 removed the receivers config API that used to edit this (`410`, pointing at the app
 platform), so the contact point is read and written through
@@ -63,20 +67,23 @@ longer forbidden to automation, but a test send is what proves it did not drop t
 Discord accepted the post. That test is also the only way to see the template render, since the
 message itself cannot be read back.
 
-**A backup that stops is a ticket, not a message** (2026-11-27). Six rules carry `board: card`:
-`JobFailed`, `BackupStreamStale`, `BackupJobAbsent`, `PostgresDumpStale`, `PostgresDumpAbsent` and
-`DriveWorn`. The reasoning is the one class of failure whose silence is invisible: nothing on a
-dashboard looks wrong when the nightly dump stops producing files, and a warning that repeats every
-12 h scrolls out of Discord by morning. The `postgres-dump` failure of 2026-11-27 is the specimen —
-three refused pods at 02:30Z, one Discord message, and no work item anywhere, so deciding to fix it
-was a conversation rather than a card waiting in `Backlog`. `JobFailed` carries it for every Job, not
-only the dump, because a batch workload that exhausts its retries is a failure somebody has to look
-at; `DriveWorn` keeps it from before, being the drive rule that asks rather than pages. The cost is
-the same for all six: one notice, `1y` between repeats, and one card per incident that the relay
-never closes — a warning that recovers on its own still leaves its card for a person to move. For
-`JobFailed` that is one card for *all* failing Jobs, not one each: the routes group on
-`[alertname, instance]` and `instance` is kube-state-metrics' own address, so the card is titled
-after the first Job and its body counts the others.
+**A failure that leaves no work item is a ticket, not a message** (2026-11-27; the Traefik rule
+joined on 2026-11-28). Seven rules carry `board: card`: `JobFailed`, `BackupStreamStale`,
+`BackupJobAbsent`, `PostgresDumpStale`, `PostgresDumpAbsent`, `DriveWorn` and
+`TraefikConfigReloadFailing`. The reasoning is the one class of failure whose silence is invisible:
+nothing on a dashboard looks wrong when the nightly dump stops producing files, and a warning that
+repeats every 12 h scrolls out of Discord by morning. The `postgres-dump` failure of 2026-11-27 is
+the specimen — three refused pods at 02:30Z, one Discord message, and no work item anywhere, so
+deciding to fix it was a conversation rather than a card waiting in `Backlog`. `JobFailed` carries
+it for every Job, not only the dump, because a batch workload that exhausts its retries is a failure
+somebody has to look at; `DriveWorn` keeps it from before, being the drive rule that asks rather than
+pages; and a refused Traefik configuration keeps serving the last good one, so the card is where the
+refusal waits for a person even though the router logs it. The cost is the same for all seven: one
+notice, `1y` between repeats, and one card per incident that the relay never closes — a warning that
+recovers on its own still leaves its card for a person to move. For `JobFailed` that is one card for
+*all* failing Jobs, not one each: the routes group on `[alertname, instance]` and `instance` is
+kube-state-metrics' own address, so the card is titled after the first Job and its body counts the
+others.
 
 **The second contact point is what writes the card.** `vikunja-alerts` posts to `alert-relay` in
 `monitoring`, which opens one card per incident on the `alerts` board, writes nothing while that card
@@ -143,7 +150,7 @@ confirmed by the first read-back):**
 | `CertificateExpiring` | newest Traefik cert per SAN <21 days | 1h | warning | inactive |
 | `TraefikRouterErrorRate` | 5xx share above 10 % per router, with a 0.01 req/s floor so one failed probe on an idle router cannot fire it | 10m | warning | inactive |
 | `TraefikRouterLatencyHigh` | p95 above 1 s per router, same request floor | 10m | warning | inactive |
-| `TraefikConfigReloadFailing` | any reload failure in 15 min, or no successful reload in 24 h | 10m | warning | inactive |
+| `TraefikConfigReloadFailing` | at least one Traefik configuration-error line in Loki over 15 min | 10m | warning, `board: card` | inactive |
 | `PodCrashLooping` | CrashLoopBackOff | 15m | warning | **firing, silenced** ×3 |
 | `PodPending` | Pending, created <2 h ago | 15m | warning | **firing** on `databases/pgadmin-67c5f5c85` (missing Secret, 2026-11-14) |
 | `PodNotStarting` | Scheduled, container still not started, older than 2 h | 5m | warning | inactive |
@@ -468,7 +475,7 @@ explains why.
 
 **Three rules added on 2026-11-21 watch the router in front of everything.** They came out of the
 Traefik audit ([`audit/traefik-2026-11-21.md`](../audit/traefik-2026-11-21.md), card 542) and are the
-first rules that read the router's own traffic rather than the workload behind it. `CertificateExpiring`
+first rules that read the router itself rather than the workload behind it. `CertificateExpiring`
 was the only Traefik rule before them.
 
 - **`TraefikRouterErrorRate`** is the 5xx share per router. The ratio is built inside the PromQL and
@@ -484,19 +491,32 @@ was the only Traefik rule before them.
   and the number was chosen the same evening the buckets first arrived. Re-read the panel after a
   week. Traefik itself adds microseconds, so a firing here is the app behind the route, not the
   router.
-- **`TraefikConfigReloadFailing`** covers two faults that look the same from outside. A reload
-  failure in the last 15 minutes is a **dynamic** configuration Traefik read and refused — a
-  `Middleware` or `IngressRoute` it cannot resolve — and Traefik goes on serving the last good
-  configuration, so the routes still answer and the log line is the only evidence. No successful
-  reload for 24 h is the other shape: the provider delivered nothing for a day. That is not a quiet
-  night here — routes change several times an hour — so it means a dead watch or a router stuck
-  mid-build.
+- **`TraefikConfigReloadFailing`** reads the router's own error log in Loki, not Prometheus, and this
+  is the part that changed on 2026-11-28. A refused configuration is a **dynamic** object Traefik
+  read and could not resolve — a `Middleware`, an `IngressRoute` or a certificate resolver — and
+  Traefik goes on serving the last good configuration, so the routes can still answer while the
+  object that was just applied is not in effect. Traefik v3 exposes no failure counter, and
+  `traefik_config_last_reload_success` is **not** left at zero by a refused object: the metric
+  listener runs on every applied configuration, including one whose router failed to build, so the
+  gauge advances and the Prometheus shape the rule used before could not see the fault at all. The
+  evidence is the `ERR` line. The rule therefore counts the router's configuration-error lines —
+  `does not exist`, `nonexistent certificate resolver`, `invalid rule`, `error while building`,
+  `failed to load` — over 15 minutes, and `for: 10m` keeps one that is corrected quickly from
+  paging.
 
-  It does **not** cover the two faults the audit found in 2023, and the record should say so: a Helm
-  values file that fails to render never reaches Traefik (that is the deploy step's error, and until
-  2026-11-21 it failed silently; item 9 of `AGENTS.md` §7), and the `/metrics` endpoint answering `404`
-  (card 531) leaves this rule with no data, which `noDataState: OK` reports as healthy. `ScrapeTargetDown`
-  is what watches for a scrape target that answers nothing.
+  The **24 h no-successful-reload branch is gone**, and the measurement is why. On 2026-11-28 the
+  rule fired at 07:50Z after `traefik_config_last_reload_success` had stood at
+  `2026-11-27T07:38:28Z` for 29 hours. Nothing was wrong: the router had simply received no
+  configuration change since the internal-zone migration finished, and 142 successful reloads had
+  happened since the pod started. A quiet cluster reloads nothing, so the branch reported idleness
+  as a dead watch. The gap it was trying to cover — a provider that stops delivering while the
+  apiserver stays healthy — is recorded under *Known gaps* rather than kept as a false page.
+
+  The rule carries `board: card`: a refusal leaves the router on a stale configuration, so the card
+  is where the fix waits, with one Discord notice and no repeat for a year. It does **not** cover a
+  Helm values file that fails to render, which never reaches Traefik (that is the deploy step's
+  error, and until 2026-11-21 it failed silently; item 9 of `AGENTS.md` §7), or the `/metrics`
+  endpoint being unreachable (card 531), which `ScrapeTargetDown` owns.
 
 None of the three carries a `TraefikDown` twin, and none needs one: the `Deployment` is in
 `kube-system`, so `CoreDeploymentDown` covers a router that stops running, and `ScrapeTargetDown`
@@ -653,6 +673,14 @@ reports `firing` on the Health dashboard.
   K3s the same day ([`../runbooks/restore-etcd.md`](../runbooks/restore-etcd.md)).
   `RestoreDrillOverdue` makes the habit fail loudly when it stops, but it reads a date the operator
   writes, so it does not prove a drill happened.
+- **A Traefik provider that stops delivering is not watched.** `TraefikConfigReloadFailing`
+  reads the router's error log, so it sees a refused object and nothing when the Kubernetes watch
+  merely stops feeding one. Traefik v3 publishes no failure counter and leaves
+  `traefik_config_last_reload_success` advancing on every applied configuration, so an idle router
+  and a dead watch look the same from Prometheus; the 24 h branch that tried to tell them apart
+  fired on 2026-11-28 after 29 quiet hours and was removed. A route change that fails to apply is
+  visible in the log; a watch that never delivers is not. `ScrapeTargetDown` covers the metrics
+  endpoint, not the watch.
 - **No vulnerability scanning.** Nothing reports which CVEs affect the running
   images, so there is no metric to alert on. Design and cost are recorded in
   [`superpowers/specs/2026-11-14-vulnerability-alerting-design.md`](../superpowers/specs/2026-11-14-vulnerability-alerting-design.md);
